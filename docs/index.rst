@@ -20,7 +20,6 @@ backends are also available.
    apiref
    indices
    license
+   quickstart
 
-
-.. commented_out quickstart
 .. commented_out gtscript

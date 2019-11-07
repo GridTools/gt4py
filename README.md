@@ -41,12 +41,15 @@ contained in the package. The complete installation procedure is thus:
 
     # First, clone the repository
     git clone https://github.com/gridtools/gt4py.git
+    
+    #Make sure that the wheel package is in your pip list, otherwise install it with
+    pip install wheel
 
     # Then install the Python package
     # add the '-e' flag if you want an editable installation
     # add the '[cudaXX]' extra if you want to install the GPU backends
     # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
-    pip install gt4py/  # pip install gt4py/[cudaXX]
+    pip install ./gt4py  # pip install ./gt4py[cudaXX]
 
     # Finally run the command to install GridTools C++ sources
     python gt4py/setup.py install_gt_sources
@@ -61,8 +64,17 @@ before:
 Documentation
 -------------
 
-A proper documentation is in the works. Please refer to the jupyter notebooks in the examples folder of this
-repository for examples how GT4Py can be used.
+A proper documentation is in the works. Please refer to the jupyter notebooks
+in the examples folder of this repository for examples how GT4Py can be
+used or the quickstart page of the documentation.
+To build it, install the additional development requirements with
+
+    pip install -r ./gt4py/requirements_dev.txt
+
+and then build the docs with
+
+    cd gt4py
+    ./build.sh
 
 Development roadmap
 -------------------
