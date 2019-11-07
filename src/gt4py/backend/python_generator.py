@@ -62,7 +62,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
         self.impl_node = impl_node
         self.domain = impl_node.domain
-        self.stage_info = types.SimpleNamespace()
+        self.block_info = types.SimpleNamespace()
 
         k_ax = self.domain.sequential_axis.name
         k_ax_idx = self.domain.axes_names.index(k_ax)
@@ -105,9 +105,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
         return source_lines
 
-    def make_stage_source(
-        self, node: gt_ir.Stage, iteration_order: gt_ir.IterationOrder, regions: list
-    ):
+    def make_stage_source(self, iteration_order: gt_ir.IterationOrder, regions: list):
         raise NotImplementedError()
 
     # ---- Visitor handlers ----
@@ -128,7 +126,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
     def visit_VarRef(self, node: gt_ir.VarRef):
         assert (
-            node.name in self.stage_info.symbols or node.name in self.param_names
+            node.name in self.block_info.symbols or node.name in self.param_names
         ), "Unknown variable '{}'".format(node.name)
 
         idx = ", ".join(str(i) for i in node.index) if node.index else ""
@@ -216,18 +214,17 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
     def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
         interval_definition = self.visit(node.interval)
-        self.declared_symbols = set()
-        self.stage_info.symbols = set(node.local_symbols.keys())
+        self.block_info.interval = interval_definition
+        self.block_info.symbols = set(node.local_symbols.keys())
         body_sources = self.visit(node.body)
 
         return interval_definition, body_sources
 
     def visit_Stage(self, node: gt_ir.Stage, *, iteration_order):
         # Initialize symbols for the generation of references in this stage
-        self.stage_info.accessors = {accessor.symbol for accessor in node.accessors}
-        # self.stage_info.symbols = set(node.local_symbols.keys())
-        self.stage_info.iteration_order = iteration_order
-        self.stage_info.extent = node.compute_extent
+        self.block_info.accessors = {accessor.symbol for accessor in node.accessors}
+        self.block_info.iteration_order = iteration_order
+        self.block_info.extent = node.compute_extent
 
         # Create regions and computations
         regions = []
@@ -236,7 +233,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
         # Final assembly of the stage source
         self.sources += "# {}:".format(node.name)
-        self.sources.extend(self.make_stage_source(node, iteration_order, regions))
+        self.sources.extend(self.make_stage_source(iteration_order, regions))
 
     def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
         # Splitters declarations

@@ -63,10 +63,8 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
-    def make_stage_source(
-        self, node: gt_ir.Stage, iteration_order: gt_ir.IterationOrder, regions: list
-    ):
-        extent = node.compute_extent
+    def make_stage_source(self, iteration_order: gt_ir.IterationOrder, regions: list):
+        extent = self.block_info.extent
         lower_extent = extent.lower_indices
         upper_extent = extent.upper_indices
         seq_axis_name = self.impl_node.domain.sequential_axis.name
@@ -104,7 +102,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
     # ---- Visitor handlers ----
     def visit_FieldRef(self, node: gt_ir.FieldRef):
-        assert node.name in self.stage_info.accessors
+        assert node.name in self.block_info.accessors
         index = []
         for ax in self.domain.axes_names:
             offset = "{:+d}".format(node.offset[ax]) if ax in node.offset else ""

@@ -82,9 +82,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
-    def make_stage_source(
-        self, node: gt_ir.Stage, iteration_order: gt_ir.IterationOrder, regions: list
-    ):
+    def make_stage_source(self, iteration_order: gt_ir.IterationOrder, regions: list):
         source_lines = []
 
         # Computations body is split in different vertical regions
@@ -100,10 +98,10 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
     # ---- Visitor handlers ----
     def visit_FieldRef(self, node: gt_ir.FieldRef):
-        assert node.name in self.stage_info.accessors
+        assert node.name in self.block_info.accessors
 
-        is_parallel = self.stage_info.iteration_order == gt_ir.IterationOrder.PARALLEL
-        extent = self.stage_info.extent
+        is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
+        extent = self.block_info.extent
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
 
@@ -128,21 +126,19 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 )
             )
 
+        k_ax = self.domain.sequential_axis.name
+        k_offset = node.offset.get(k_ax, 0)
         if is_parallel:
-            k_ax = self.domain.sequential_axis.name
-            k_offset = node.offset.get(k_ax, 0)
             start_expr = self.interval_k_start_name
-            start_expr += " {:+d}".format(lower_extent[2]) if lower_extent[2] != 0 else ""
+            start_expr += " {:+d}".format(k_offset) if k_offset else ""
             end_expr = self.interval_k_end_name
-            end_expr += " {:+d}".format(upper_extent[2]) if upper_extent[2] != 0 else ""
+            end_expr += " {:+d}".format(k_offset) if k_offset else ""
             index.append(
                 "{name}{marker}[2] + {start}:{name}{marker}[2] + {stop}".format(
                     name=node.name, start=start_expr, marker=self.origin_marker, stop=end_expr
                 )
             )
         else:
-            k_ax = self.domain.sequential_axis.name
-            k_offset = node.offset.get(k_ax, 0)
             idx = "{:+d}".format(k_offset) if k_offset else ""
             index.append(
                 "{name}{marker}[{d}] + {ax}{idx}".format(

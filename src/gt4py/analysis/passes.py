@@ -594,14 +594,11 @@ class ComputeExtentsPass(TransformPass):
                     ij_block.compute_extent |= access_extents[name]
                 for int_block in ij_block.interval_blocks:
                     for name, extent in int_block.inputs.items():
+                        extent = Extent(
+                            list(extent[:seq_axis]) + [(0, 0)]
+                        )  # exclude sequential axis
                         accumulated_extent = ij_block.compute_extent + extent
                         access_extents[name] |= accumulated_extent
-
-        # Exclude sequential axis
-        for name, extent in access_extents.items():
-            adjusted = list(extent)
-            adjusted[seq_axis] = (0, 0)
-            access_extents[name] = Extent(adjusted)
 
         transform_data.implementation_ir.fields_extents = {
             name: Extent(extent) for name, extent in access_extents.items()
