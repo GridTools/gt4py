@@ -132,7 +132,7 @@ class TestParametricMix(gt_testing.StencilTestSuite):
 
         with computation(PARALLEL), interval(...):
             factor = field_a  # TODO remove once scalar assignment issue is fixed
-            if USE_ALPHA:
+            if __INLINED(USE_ALPHA):
                 factor = alpha_factor
             else:
                 factor = 1.0 + 0.0 * (alpha_factor)  # ?? won't compile for just factor = 0.0
@@ -287,7 +287,7 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
 
         with computation(PARALLEL), interval(...):
             laplacian = lap_op(u=u)
-            if BRANCH:
+            if __INLINED(BRANCH):
                 flux_i = fwd_diff_op_x(field=laplacian)
                 flux_j = fwd_diff_op_y(field=laplacian)
             else:
@@ -311,7 +311,7 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
 def fwd_diff_op_xy_varargin(field1, field2=None):
     from __externals__ import BRANCH
 
-    if BRANCH:
+    if __INLINED(BRANCH):
         dx = field1[1, 0, 0] - field1[0, 0, 0]
         dy = field2[0, 1, 0] - field2[0, 0, 0]
         return dx, dy
@@ -340,7 +340,7 @@ class TestHorizontalDiffusionSubroutines3(gt_testing.StencilTestSuite):
         with computation(PARALLEL), interval(...):
             laplacian = lap_op(u=u)
             laplacian2 = lap_op(u=u)
-            if BRANCH:
+            if __INLINED(BRANCH):
                 flux_i, flux_j = fwd_diff(field1=laplacian, field2=laplacian2)
             else:
                 flux_i = fwd_diff(field1=laplacian)

@@ -350,6 +350,91 @@ class CallInliner(ast.NodeTransformer):
         return result_node
 
 
+class CompiledIfInliner(ast.NodeTransformer):
+    @classmethod
+    def apply(cls, ast_object, context):
+        preprocessor = cls(context)
+        preprocessor(ast_object)
+
+    def __init__(self, context):
+        self.context = context
+
+    def __call__(self, ast_object):
+        self.visit(ast_object)
+
+    def visit_If(self, node: ast.If):
+        # Compile-time evaluation of "if" conditions
+        node = self.generic_visit(node)
+        if (
+            isinstance(node.test, ast.Call)
+            and isinstance(node.test.func, ast.Name)
+            and node.test.func.id == "__INLINED"
+            and len(node.test.args) == 1
+        ):
+            eval_node = node.test.args[0]
+            condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
+            if condition_value is not NOTHING:
+                node = node.body if condition_value else node.orelse
+            else:
+                raise GTScriptSyntaxError(
+                    "Evaluation of compile-time 'IF' condition failed at the preprocessing step"
+                )
+
+        return node if node else None
+
+
+#
+# class Cleaner(gt_ir.IRNodeVisitor):
+#     @classmethod
+#     def apply(cls, ast_object):
+#         cleaner = cls()
+#         cleaner(ast_object)
+#
+#     def __init__(self):
+#         self.defines = {}
+#         self.writes = {}
+#         self.reads = {}
+#         self.aliases = {}
+#
+#     def __call__(self, ast_object):
+#         self.visit(ast_object)
+#
+#     def visit_FieldRef(self, node: gt_ir.FieldRef):
+#         assert node.name in self.defines
+#         self.reads[node.name] = self.reads.get(node.name, 0) + 1
+#
+#     def visit_FieldDecl(self, node: gt_ir.FieldDecl):
+#         assert node.is_api is False
+#         self.defines[node.name] = "temp"
+#
+#     def visit_Assign(self, node: gt_ir.Assign):
+#         if isinstance(node.target, gt_ir.FieldRef):
+#             for alias in self.aliases.get(node.target.name, set()):
+#                 self.aliases[alias] -= {node.target.name}
+#                 self.aliases[node.target.name] = set()
+#
+#             if isinstance(node.value, gt_ir.FieldRef):
+#                 if node.target.name not in itertools.chain(self.writes.keys(), self.reads.keys()):
+#                     aliases = set(self.aliases.setdefault(node.value.name, set()))
+#                     self.aliases.setdefault(node.target.name, set())
+#                     self.aliases[node.target.name] |= aliases | {node.value.name}
+#                     for alias in self.aliases[node.target.name]:
+#                         self.aliases[alias] |= {node.target.name}
+#
+#         self.visit(node.value)
+#         self.writes[node.target.name] = self.reads.get(node.target.name, 0) + 1
+#
+#     def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
+#         for decl in node.api_fields:
+#             self.defines[decl.name] = "api"
+#         for computation in node.computations:
+#             self.visit(computation)
+#
+#         for a in ["defines", "reads", "writes"]:
+#             print(f"{a}: ", getattr(self, a))
+#
+
+
 @enum.unique
 class ParsingContext(enum.Enum):
     CONTROL_FLOW = 1
@@ -363,7 +448,6 @@ class IRMaker(ast.NodeVisitor):
         fields: dict,
         parameters: dict,
         local_symbols: dict,
-        externals: dict,
         *,
         domain: gt_ir.Domain,
         extra_temp_decls: dict,
@@ -375,13 +459,10 @@ class IRMaker(ast.NodeVisitor):
         assert all(isinstance(name, str) for name in local_symbols.keys()) and all(
             isinstance(value, (type, np.dtype)) for value in local_symbols.values()
         )
-        externals = externals or {}
-        assert all(isinstance(name, str) for name in externals.keys())
 
         self.fields = fields
         self.parameters = parameters
         self.local_symbols = local_symbols
-        self.externals = externals
         self.domain = domain or gt_ir.Domain.LatLonGrid()
         self.extra_temp_decls = extra_temp_decls or {}
         self.parsing_context = None
@@ -409,16 +490,8 @@ class IRMaker(ast.NodeVisitor):
     def _is_local_symbol(self, name: str):
         return name in self.local_symbols
 
-    def _is_external(self, name: str):
-        return name in self.externals
-
     def _is_known(self, name: str):
-        return (
-            self._is_field(name)
-            or self._is_parameter(name)
-            or self._is_local_symbol(name)
-            or self._is_external(name)
-        )
+        return self._is_field(name) or self._is_parameter(name) or self._is_local_symbol(name)
 
     def _get_qualified_name(self, node: ast.AST, *, joiner="."):
         if isinstance(node, ast.Name):
@@ -561,8 +634,6 @@ class IRMaker(ast.NodeVisitor):
             result = gt_ir.VarRef(name=symbol)
         elif self._is_local_symbol(symbol):
             assert False  # result = gt_ir.VarRef(name=symbol)
-        elif self._is_external(symbol):
-            assert False  # result = gt_ir.utils.make_expr(self.externals[symbol])
         else:
             assert False, "Missing '{}' symbol definition".format(symbol)
 
@@ -697,35 +768,22 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_If(self, node: ast.If) -> gt_ir.If:
-        condition_value = gt_utils.meta.ast_eval(node.test, self.externals, default=NOTHING)
-        if condition_value is not NOTHING:
-            # Compile-time evaluation
-            stmts = []
-            if condition_value:
-                for stmt in node.body:
-                    stmts.extend(gt_utils.listify(self.visit(stmt)))
-            elif node.orelse:
-                for stmt in node.orelse:
-                    stmts.extend(gt_utils.listify(self.visit(stmt)))
-            result = stmts
-        else:
-            # run-time evaluation
-            main_stmts = []
-            for stmt in node.body:
-                main_stmts.extend(gt_utils.listify(self.visit(stmt)))
-            assert all(isinstance(item, gt_ir.Statement) for item in main_stmts)
+        main_stmts = []
+        for stmt in node.body:
+            main_stmts.extend(gt_utils.listify(self.visit(stmt)))
+        assert all(isinstance(item, gt_ir.Statement) for item in main_stmts)
 
-            else_stmts = []
-            if node.orelse:
-                for stmt in node.orelse:
-                    else_stmts.extend(gt_utils.listify(self.visit(stmt)))
-                assert all(isinstance(item, gt_ir.Statement) for item in else_stmts)
+        else_stmts = []
+        if node.orelse:
+            for stmt in node.orelse:
+                else_stmts.extend(gt_utils.listify(self.visit(stmt)))
+            assert all(isinstance(item, gt_ir.Statement) for item in else_stmts)
 
-            result = gt_ir.If(
-                condition=gt_ir.utils.make_expr(self.visit(node.test)),
-                main_body=gt_ir.BlockStmt(stmts=main_stmts),
-                else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
-            )
+        result = gt_ir.If(
+            condition=gt_ir.utils.make_expr(self.visit(node.test)),
+            main_body=gt_ir.BlockStmt(stmts=main_stmts),
+            else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
+        )
 
         return result
 
@@ -1139,13 +1197,16 @@ class GTScriptParser(ast.NodeVisitor):
         # Inline function calls
         CallInliner.apply(main_func_node, context=local_context)
 
+        # Evaluate and inline compile-time conditionals
+        CompiledIfInliner.apply(main_func_node, context=local_context)
+        # Cleaner.apply(self.definition_ir)
+
         # Generate definition IR
         domain = gt_ir.Domain.LatLonGrid()
         computations = IRMaker(
             fields=fields_decls,
             parameters=parameter_decls,
             local_symbols={},  # Not used
-            externals=local_context,
             domain=domain,
             extra_temp_decls={},  # Not used
         )(self.ast_root)

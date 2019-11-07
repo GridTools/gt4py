@@ -154,6 +154,7 @@ builtins = {
     "interval",
     "__gtscript__",
     "__externals__",
+    "__INLINED",
 }
 
 __all__ = list(builtins) + ["function", "stencil"]
@@ -265,4 +266,9 @@ def computation(order):
 
 def interval(start, end):
     """Define the interval of computation in the 'K' sequential axis."""
+    pass
+
+
+def __INLINED(compile_if_expression):
+    """Evaluate condition at compile time and inline statements from selected branch."""
     pass

@@ -37,7 +37,7 @@ def a_stencil(
 
     with computation(PARALLEL), interval(...):
 
-        if BRANCH:
+        if __INLINED(BRANCH):
             arg1 = arg1 * par1 * par2
         else:
             arg1 = arg2 + arg3 * par1 * par2 * par3
