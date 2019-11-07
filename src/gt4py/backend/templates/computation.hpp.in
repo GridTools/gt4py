@@ -1,0 +1,101 @@
+{#
+
+ # GT4Py - GridTools4Py - GridTools for Python
+ #
+ # Copyright (c) 2014-2019, ETH Zurich
+ # All rights reserved.
+ #
+ # This file is part the GT4Py project and the GridTools framework.
+ # GT4Py is free software: you can redistribute it and/or modify it under
+ # the terms of the GNU General Public License as published by the
+ # Free Software Foundation, either version 3 of the License, or any later
+ # version. See the LICENSE.txt file at the top-level directory of this
+ # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+ #
+ # SPDX-License-Identifier: GPL-3.0-or-later
+
+ ---- Template variables ----
+
+    - stencil_unique_name: str
+    - backend: str
+    - halo_sizes: [int]
+    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - parameters: [{ "name": str, "dtype": str }]
+#}
+
+
+{%- if backend == "cuda" %}
+#define GT_USE_GPU
+{%- endif %}
+
+#include <gridtools/common/defs.hpp>
+#include <gridtools/common/gt_math.hpp>
+#include <gridtools/stencil_composition/stencil_composition.hpp>
+
+#include <boost/cstdfloat.hpp> {# #include <numpy/npy_common.h> #}
+
+#include <array>
+#include <cstdint>
+#include <vector>
+
+
+using boost::float32_t; {# using float32_t = npy_float32; #}
+using boost::float64_t; {# using float64_t = npy_float64; #}
+
+using py_size_t = std::intptr_t;
+
+struct BufferInfo {
+    py_size_t ndim;
+    std::vector<py_size_t> shape;
+    std::vector<py_size_t> strides;
+    void* ptr;
+};
+
+
+namespace gt = ::gridtools;
+
+namespace {{ stencil_unique_name }} {
+
+// Backend
+using backend_t = gt::backend::{{ backend }};
+
+// These halo sizes are used to determine the sizes of the temporaries
+static constexpr gt::uint_t halo_size_i = {{ halo_sizes[0] }};
+static constexpr gt::uint_t halo_size_j = {{ halo_sizes[1] }};
+static constexpr gt::uint_t halo_size_k = {{ halo_sizes[2] }};
+
+// Storage definitions
+template <int Id>
+using storage_info_t =
+    gt::storage_traits<backend_t>::storage_info_t<
+        Id, 3,
+        gt::halo<halo_size_i, halo_size_j, 0 /* not used */>>;
+
+template<typename T, int Id>
+using data_store_t =
+    gt::storage_traits<backend_t>::data_store_t<T, storage_info_t<Id>>;
+
+// Placeholder definitions
+{%- for field in arg_fields %}
+using p_{{ field.name }} = gt::arg<{{ loop.index0 }}, data_store_t<{{ field.dtype }}, {{ field.layout_id }}>>;
+{%- endfor %}
+{% for param in parameters %}
+using p_{{ param.name }} = gt::arg<{{ loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
+{%- endfor %}
+
+// Computation
+using computation_t =
+    gt::computation<p_{{ (arg_fields|list + parameters|list)|map(attribute='name')|join(", p_")}}>;
+
+void run(const std::array<gt::uint_t, 3>& domain,
+{%- set comma = joiner(", ") %}
+{%- for field in arg_fields -%}
+         {{- comma() }}
+         const BufferInfo& bi_{{ field.name }} {{- comma() -}} const std::array<gt::uint_t, 3>& {{ field.name }}_origin
+{%- endfor %}
+{%- for param in parameters %}
+         {{- comma() }}
+         {{ param.dtype }} {{ param.name }}
+{%- endfor %});
+
+}  // namespace {{ stencil_unique_name }}

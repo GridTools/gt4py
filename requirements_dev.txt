@@ -1,0 +1,4 @@
+pre-commit>=1.18.3
+sphinx>=2.0.0
+sphinx_rtd_theme>=0.4.2
+tox>=3.14

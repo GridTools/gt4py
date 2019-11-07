@@ -1,0 +1,251 @@
+{#
+
+ # GT4Py - GridTools4Py - GridTools for Python
+ #
+ # Copyright (c) 2014-2019, ETH Zurich
+ # All rights reserved.
+ #
+ # This file is part the GT4Py project and the GridTools framework.
+ # GT4Py is free software: you can redistribute it and/or modify it under
+ # the terms of the GNU General Public License as published by the
+ # Free Software Foundation, either version 3 of the License, or any later
+ # version. See the LICENSE.txt file at the top-level directory of this
+ # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+ #
+ # SPDX-License-Identifier: GPL-3.0-or-later
+
+ ---- Template variables ----
+
+    - stencil_unique_name: str
+    - backend: str
+    - max_ndim: int
+    - k_axis: { "n_intervals": int, "offset_limit": int}
+    - halo_sizes: [int]
+    - constants: { name:str : str }
+    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - tmp_fields: [{ "name": str, "dtype": str }]
+    - parameters: [{ "name": str, "dtype": str }]
+    - stage_functors: {
+        name:str : {
+            "args": [
+                {
+                    "name": str
+                    "access_type": str
+                    "extent": [int] | None
+                }
+            ]
+            "regions": [
+                {
+                    "interval_start": (level:int, offset:int),
+                    "interval_end": (level:int, offset:int),
+                    "body": str
+                }
+            ]
+        }
+    }
+    - multi_stages: [{ "exec": str, "steps": [[str]]]
+#}
+
+#include "computation.hpp"
+#include <gridtools/stencil_composition/stencil_composition.hpp>
+
+#include <array>
+#include <cassert>
+#include <stdexcept>
+
+namespace {{ stencil_unique_name }} {
+
+namespace {
+
+// Axis
+static constexpr gt::uint_t level_offset_limit = {{ k_axis.offset_limit }};
+
+using axis_t =
+    gridtools::axis<{{ k_axis.n_intervals }}, /* NIntervals */
+                    gt::axis_config::offset_limit<level_offset_limit>>;
+
+// Constants
+{% for name, value in constants.items() %}
+static constexpr auto {{ name }} = {{ value }};
+{%- endfor %}
+
+// Functors
+{% for name, stage in stage_functors.items() %}
+struct {{ name }}_func {
+    {%- for arg in stage.args %}
+    using {{ arg.name }} = gt::{{ arg.access_type }}_accessor<{{ loop.index0 }}
+                {%- if arg.extent is not none %}, gt::extent<{{ arg.extent|join(", ")}}>{% endif -%}>;
+    {%- endfor %}
+
+    using param_list = gt::make_param_list<{{ stage.args|map(attribute='name')|join(", ")}} >;
+
+    {% for region in stage.regions %}
+    template <typename Evaluation>
+{%- if backend == "cuda" %}
+    GT_FUNCTION_DEVICE static void apply(Evaluation eval,
+{%- else %}
+    GT_FUNCTION static void apply(Evaluation eval,
+{%- endif %}
+                                  gt::interval<gt::level<{{ region.interval_start|join(", ") }}, level_offset_limit>,
+                                               gt::level<{{ region.interval_end|join(", ") }}, level_offset_limit>>)
+    {
+{%- filter indent(width=8) %}
+{{ region.body }}
+
+{%- endfilter %}
+    }
+    {%- endfor %}
+};
+{% endfor %}
+
+// Grids and halos
+gt::halo_descriptor make_halo_descriptor(gt::uint_t compute_domain_shape) {
+    return {0, 0, 0, compute_domain_shape - 1,
+            compute_domain_shape};
+}
+
+auto make_grid(const std::array<gt::uint_t, 3>& compute_domain_shape) {
+    return gt::make_grid(make_halo_descriptor(compute_domain_shape[0]),
+                         make_halo_descriptor(compute_domain_shape[1]),
+                         axis_t(compute_domain_shape[2]));
+}
+
+{% if tmp_fields -%}
+// Placeholder definitions
+{%- for field in tmp_fields %}
+using p_{{ field.name }} = gt::tmp_arg<{{ loop.index0 }}, data_store_t<{{ field.dtype }}, 0>>;
+{%- endfor %}
+{%- endif %}
+
+
+template<typename T, int Id>
+data_store_t<T, Id> make_data_store(const BufferInfo& bi,
+                                    const std::array<gt::uint_t, 3>& compute_domain_shape,
+                                    const std::array<gt::uint_t, 3>& origin)
+{
+    if (bi.ndim != 3) {
+        throw std::runtime_error("Wrong number of dimensions [" +
+                                 std::to_string(bi.ndim) +
+                                 " != " + std::to_string(3) + "]");
+    }
+
+    for (int i = 0; i < 2 /*3*/; ++i) {
+        if (2*origin[i] + compute_domain_shape[i] > bi.shape[i])
+            throw std::runtime_error(
+                "Given shape and origin exceed buffer dimension");
+    }
+
+    // ptr, dims and strides are "outer domain" (i.e., compute domain + halo
+    // region). The halo region is only defined through `make_grid` (and
+    // currently, in the storage info)
+    gt::array<gt::uint_t, 3> dims{};
+    gt::array<gt::uint_t, 3> strides{};
+    T* ptr = static_cast<T*>(bi.ptr);
+    for (int i = 0; i < 3; ++i) {
+        strides[i] = bi.strides[i] / sizeof(T);
+        ptr += strides[i] * origin[i];
+        dims[i] = compute_domain_shape[i]+2*origin[i];
+    }
+    return data_store_t<T, Id>{storage_info_t<Id>{dims, strides}, ptr,
+{%- if backend == "cuda" %}
+                           gt::ownership::external_gpu};
+{%- else %}
+                           gt::ownership::external_cpu};
+{%- endif %}
+}
+
+}  // namespace
+
+
+{% if parameters -%}
+// Global parameters
+{% for param in parameters -%}
+gt::global_parameter<{{ param.dtype }}> {{ param.name }}_param = gt::make_global_parameter<backend_t>({{ param.dtype }}{});
+{%- endfor %}
+{%- endif %}
+
+
+// Run actual computation
+void run(const std::array<gt::uint_t, 3>& domain,
+{%- set comma = joiner(", ") %}
+{%- for field in arg_fields -%}
+         {{- comma() }}
+         const BufferInfo& bi_{{ field.name }} {{- comma() -}} const std::array<gt::uint_t, 3>& {{ field.name }}_origin
+{%- endfor %}
+{%- for param in parameters %}
+         {{- comma() }}
+         {{ param.dtype }} {{ param.name }}
+{%- endfor %})
+{
+{#-
+        // TODO the halo_size will not be compile-time anymore at a certain
+        // point. Currently we just want the user to pass it to verify if he is
+        // really doing what he intends to do. In fact, I think we don't care
+        // that much about this, because we can calculate the halo size when we
+        // create the computation. There is nothing we can gain when passing a
+        // different halo size every time. This number will be internal anyway.
+        //
+        // Currently, we require that halo_sizes the same on both sides, i.e.,
+        // halo_left == halo_right and halo_front == halo_back. This restriction
+        // will disappear when the halo region is only controlled by the halo
+        // descriptors. But again, this is only an internal requirement (with
+        // very small limitations from user perspective).
+        assert(halo_i == halo_size_i);
+        assert(halo_j == halo_size_j);
+        assert(halo_k == halo_size_k);
+#}
+    // Initialize data stores from input buffers
+{%- for field in arg_fields %}
+    auto ds_{{ field.name }} = make_data_store<{{ field.dtype }}, {{ field.layout_id }}>(bi_{{ field.name }}, domain, {{ field.name }}_origin);
+{%- endfor %}
+
+    // Update global parameters
+{%- for param in parameters %}
+    gt::update_global_parameter({{ param.name }}_param, {{ param.name }});
+{%- endfor %}
+
+    // Run computation and wait for the synchronization of the output stores
+    computation_t gt_computation = gt::make_computation<backend_t>(
+        make_grid(domain),
+
+{%- set multi_comma = joiner(",") %}
+{%- for multi in multi_stages %}
+        {{- multi_comma() }}
+        gt::make_multistage(gt::execute::{{ multi.exec }}(),
+    {%- set step_comma = joiner(",") %}
+    {%- for step in multi.steps %}
+        {{- step_comma() }}
+        {%- if step|length > 1 %}
+            gt::make_independent(
+            {%- set extra_indent=4 %}
+        {%- else %}
+            {%- set extra_indent=0 %}
+        {%- endif %}
+        {%- set stage_comma = joiner(",") -%}
+        {%- for stage in step %}
+            {%- filter indent(width=extra_indent) %}
+            {{- stage_comma() }}
+            gt::make_stage<{{ stage }}_func>(
+                p_{{ stage_functors[stage].args|map(attribute="name")|join("(), p_")}}()
+            )
+            {%- endfilter %}
+        {%- endfor %}
+        {%- if step|length > 1 %}
+            )
+        {%- endif %}
+    {%- endfor %}
+        )
+{%- endfor %}
+    );
+
+    gt_computation.run({%- set comma = joiner(", ") %}
+{%- for field in arg_fields -%}
+                     {{ comma() }}p_{{ field.name }}()=ds_{{ field.name }}
+{%- endfor %}
+{%- for param in parameters -%}
+                     {{ comma() }}p_{{ param.name }}()={{ param.name }}_param
+{%- endfor %});
+        // computation_.sync_bound_data_stores();
+}
+
+}  // namespace {{ stencil_unique_name }}

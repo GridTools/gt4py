@@ -1,0 +1,126 @@
+{#
+
+ # GT4Py - GridTools4Py - GridTools for Python
+ #
+ # Copyright (c) 2014-2019, ETH Zurich
+ # All rights reserved.
+ #
+ # This file is part the GT4Py project and the GridTools framework.
+ # GT4Py is free software: you can redistribute it and/or modify it under
+ # the terms of the GNU General Public License as published by the
+ # Free Software Foundation, either version 3 of the License, or any later
+ # version. See the LICENSE.txt file at the top-level directory of this
+ # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+ #
+ # SPDX-License-Identifier: GPL-3.0-or-later
+
+ ---- Template variables ----
+
+    - stencil_unique_name: str
+    - module_name: str
+    - backend: str
+    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - parameters: [{ "name": str, "dtype": str }]
+#}
+
+#include "computation.hpp"
+
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
+#include <vector>
+#include <chrono>
+
+namespace py = ::pybind11;
+
+namespace {
+
+BufferInfo make_buffer_info(py::object& b) {
+{%- if backend == "cuda" %}
+//    py_size_t ndim = static_cast<py_size_t>(b.attr("ndim").cast<int>());
+//    auto shape_tuple = b.attr("shape").cast<std::tuple<int, int, int>>();
+//    std::vector<py_size_t> shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple), std::get<2>(shape_tuple)};
+//    auto strides_tuple = b.attr("strides").cast<std::tuple<int, int, int>>();
+//    std::vector<py_size_t> strides = {std::get<0>(strides_tuple), std::get<1>(strides_tuple), std::get<2>(strides_tuple)};
+//    void* ptr =  reinterpret_cast<void*>(b.attr("data").attr("ptr").cast<std::size_t>());
+    py_size_t ndim = 3;
+    py::dict __cuda_array_interface__ = b.attr("__cuda_array_interface__").cast<py::dict>();
+    auto shape_tuple =  __cuda_array_interface__["shape"].cast<std::tuple<int, int, int>>();
+    std::vector<py_size_t> shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple), std::get<2>(shape_tuple)};
+    auto strides_tuple = __cuda_array_interface__["strides"].cast<std::tuple<int, int, int>>();
+    std::vector<py_size_t> strides = {std::get<0>(strides_tuple), std::get<1>(strides_tuple), std::get<2>(strides_tuple)};
+    void* ptr =  reinterpret_cast<void*>(std::get<0>(__cuda_array_interface__["data"].cast<std::tuple<std::size_t, bool>>()));
+{%- else %}
+    auto buffer_info = static_cast<py::buffer&>(b).request();
+
+    py_size_t ndim = static_cast<py_size_t>(buffer_info.ndim);
+    std::vector<py_size_t>& shape = buffer_info.shape;
+    std::vector<py_size_t>& strides = buffer_info.strides;
+    void* ptr = static_cast<void*>(buffer_info.ptr);
+{%- endif %}
+
+    if (ndim != 3) {
+        throw std::runtime_error("Wrong number of dimensions [" +
+                                 std::to_string(ndim) +
+                                 " != " + std::to_string(3) + "]");
+    }
+
+    return BufferInfo{ndim, shape, strides, ptr};
+}
+
+void run_computation(const std::array<gt::uint_t, 3>& domain,
+{%- set comma = joiner(", ") -%}
+{%- for field in arg_fields -%}
+                     {{- comma() }}
+                     py::object {{ field.name }}, const std::array<gt::uint_t, 3>& {{ field.name }}_origin
+{%- endfor -%}
+{%- for param in parameters -%}
+                     {{- comma() }}
+                     {{ param.dtype }} {{ param.name }}
+{%- endfor -%}, py::object& exec_info)
+{
+    if (!exec_info.is(py::none()))
+    {
+        auto exec_info_dict = exec_info.cast<py::dict>();
+        exec_info_dict["start_run_cpp_time"] = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+    }
+
+{%- for field in arg_fields %}
+    auto bi_{{ field.name }} = make_buffer_info({{ field.name }});
+{%- endfor %}
+
+    {{ stencil_unique_name }}::run(domain,
+{%- set comma = joiner(", ") -%}
+{%- for field in arg_fields -%}
+        {{- comma() }}
+        bi_{{ field.name }}, {{ field.name }}_origin
+{%- endfor -%}
+{%- for param in parameters -%}
+        {{- comma() }}
+        {{ param.name }}
+{%- endfor %});
+
+    if (!exec_info.is(py::none()))
+    {
+        auto exec_info_dict = exec_info.cast<py::dict>();
+        exec_info_dict["end_run_cpp_time"] = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
+    }
+}
+
+}  // namespace
+
+
+PYBIND11_MODULE({{ module_name }}, m) {
+    m.def("run_computation", &run_computation, "Runs the given computation",
+          py::arg("domain"),
+{%- set comma = joiner(", ") -%}
+{%- for field in arg_fields -%}
+          {{- comma() }}
+          py::arg("{{ field.name }}") {{- comma() }} py::arg("{{ field.name }}_origin") {{- zero_origin }}
+{%- endfor -%}
+{%- for param in parameters -%}
+          {{- comma() }}
+          py::arg("{{ param.name }}")
+{%- endfor -%}, py::arg("exec_info"));
+
+}
