@@ -463,7 +463,7 @@ class MergeBlocksPass(TransformPass):
                 merged, candidate, transform_data.has_sequential_axis
             ):
                 merged.id = transform_data.id_generator.new
-                self._merge_blocks(merged, candidate, "ij")
+                self._merge_domain_blocks(merged, candidate)
             else:
                 merged_blocks.append(candidate)
 
@@ -477,33 +477,11 @@ class MergeBlocksPass(TransformPass):
                     merged, ij_candidate, transform_data.min_k_interval_sizes
                 ):
                     merged.id = transform_data.id_generator.new
-                    self._merge_blocks(merged, ij_candidate, "interval")
+                    self._merge_ij_blocks(merged, ij_candidate, transform_data)
                 else:
                     merged_ijs.append(ij_candidate)
 
             block.ij_blocks = merged_ijs
-
-        # Greedy strategy to merge apply methods
-        for block in merged_blocks:
-            for ij_block in block.ij_blocks:
-                merged_ints = [ij_block.interval_blocks[0]]
-                for int_candidate in ij_block.interval_blocks[1:]:
-                    merged_int = merged_ints[-1]
-                    if int_candidate.interval == merged_int.interval:
-                        merged_int.id = transform_data.id_generator.new
-                        merged_int.stmts.append(int_candidate.stmts)
-                        for name, extent in int_candidate.inputs.items():
-                            if name in merged_int.inputs:
-                                merged_int.inputs[name] |= extent
-                            else:
-                                merged_int.inputs[name] = extent
-
-                        merged_int.outputs |= int_candidate.outputs
-
-                    else:
-                        merged_ints.append(int_candidate)
-
-                ij_block.interval_blocks = merged_ints
 
         transform_data.blocks = merged_blocks
 
@@ -527,12 +505,17 @@ class MergeBlocksPass(TransformPass):
     def _are_compatible_stages(
         self, target: IJBlockInfo, candidate: IJBlockInfo, min_k_interval_sizes: list
     ):
+        # Check that the two stages have the same compute extent
+        if not (target.compute_extent == candidate.compute_extent):
+            return False
+
         result = True
-        assert len(candidate.intervals) == 1
         # Check that there is not overlap between stage intervals
         for interval in target.intervals:
             for candidate_interval in candidate.intervals:
-                if interval.overlaps(candidate_interval, min_k_interval_sizes):
+                if interval != candidate_interval and interval.overlaps(
+                    candidate_interval, min_k_interval_sizes
+                ):
                     result = False
 
         # Check that there are not data dependencies between stages
@@ -552,19 +535,45 @@ class MergeBlocksPass(TransformPass):
                                 break
         return result
 
-    def _merge_blocks(self, target, candidate, level: str):
+    def _merge_domain_blocks(self, target, candidate):
+        target.ij_blocks.extend(candidate.ij_blocks)
         target.intervals |= candidate.intervals
-        new_blocks = getattr(candidate, "{}_blocks".format(level))
-        target_blocks = getattr(target, "{}_blocks".format(level))
-        target_blocks.extend(new_blocks)
-
+        target.outputs |= candidate.outputs
         for name, extent in candidate.inputs.items():
             if name in target.inputs:
                 target.inputs[name] |= extent
             else:
                 target.inputs[name] = extent
 
+    def _merge_ij_blocks(self, target, candidate, transform_data):
+        target_intervals = {
+            target_int_block.interval: target_int_block
+            for target_int_block in target.interval_blocks
+        }
+        for candidate_int_block in candidate.interval_blocks:
+            if candidate_int_block.interval in target_intervals:
+                merged_int_block = target_intervals[candidate_int_block.interval]
+                merged_int_block.id = transform_data.id_generator.new
+                merged_int_block.stmts.extend(candidate_int_block.stmts)
+
+                for name, extent in candidate_int_block.inputs.items():
+                    if name in merged_int_block.inputs:
+                        merged_int_block.inputs[name] |= extent
+                    else:
+                        merged_int_block.inputs[name] = extent
+
+                merged_int_block.outputs |= candidate_int_block.outputs
+
+            else:
+                target.interval_blocks.append(candidate_int_block)
+
+        target.intervals |= candidate.intervals
         target.outputs |= candidate.outputs
+        for name, extent in candidate.inputs.items():
+            if name in target.inputs:
+                target.inputs[name] |= extent
+            else:
+                target.inputs[name] = extent
 
 
 class ComputeExtentsPass(TransformPass):

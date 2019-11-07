@@ -90,13 +90,13 @@ class IRTransformer:
         normalize_blocks_pass = NormalizeBlocksPass()
         normalize_blocks_pass.apply(self.transform_data)
 
-        # Merge compatible blocks
-        merge_blocks_pass = MergeBlocksPass()
-        merge_blocks_pass.apply(self.transform_data)
-
         # Compute stage extents
         compute_extent_pass = ComputeExtentsPass()
         compute_extent_pass.apply(self.transform_data)
+
+        # Merge compatible blocks
+        merge_blocks_pass = MergeBlocksPass()
+        merge_blocks_pass.apply(self.transform_data)
 
         # Compute used symbols
         compute_used_symbols_pass = ComputeUsedSymbolsPass()

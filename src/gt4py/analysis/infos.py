@@ -19,7 +19,7 @@
 
 import abc
 
-from gt4py.definitions import Extent, BuildOptions, NumericTuple
+from gt4py.definitions import CartesianSpace, Extent, NumericTuple, BuildOptions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.utils.attrib import (
@@ -236,11 +236,11 @@ class TransformData:
 
     @property
     def sequential_axis(self):
-        return "k"
+        return str(CartesianSpace.Axis.K)
 
     @property
     def has_sequential_axis(self):
-        return "k" in self.axes_names
+        return self.sequential_axis in self.axes_names
 
 
 class TransformPass(abc.ABC):
