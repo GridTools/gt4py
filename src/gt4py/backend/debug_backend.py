@@ -34,7 +34,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
-    def _make_regional_computation(self, iteration_order, interval_definition, body_sources):
+    def _make_regional_computation(self, iteration_order, interval_definition):
         source_lines = []
         loop_bounds = [None, None]
 
@@ -51,7 +51,6 @@ class DebugSourceGenerator(PythonSourceGenerator):
         range_expr = "range({args})".format(args=", ".join(a for a in range_args))
         seq_axis = self.impl_node.domain.sequential_axis.name
         source_lines.append("for {ax} in {range_expr}:".format(ax=seq_axis, range_expr=range_expr))
-        source_lines.extend(" " * self.indent_size + line for line in body_sources)
 
         return source_lines
 
@@ -70,33 +69,36 @@ class DebugSourceGenerator(PythonSourceGenerator):
         seq_axis_name = self.impl_node.domain.sequential_axis.name
         axes_names = self.impl_node.domain.axes_names
 
-        source_lines = []
+        # Create IJ for-loops
+        ij_loop_lines = []
         for d in range(extent.ndims):
             axis_name = axes_names[d]
-
-            # Computations body is split in different vertical regions
-            if axis_name == seq_axis_name:
-                regions = sorted(regions)
-                if iteration_order == gt_ir.IterationOrder.BACKWARD:
-                    regions = reversed(regions)
-
-                for bounds, body in regions:
-                    region_lines = self._make_regional_computation(iteration_order, bounds, body)
-                    source_lines.extend(
-                        [" " * self.indent_size * d + line for line in region_lines]
-                    )
-
-            else:
+            if axis_name != seq_axis_name:
+                i = d + 1
                 start_expr = "{:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
                 size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
                 size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
                 range_expr = "range({args})".format(
                     args=", ".join(a for a in (start_expr, size_expr, "") if a)
                 )
-                source_lines.append(
-                    " " * self.indent_size * d
+                ij_loop_lines.append(
+                    " " * self.indent_size * i
                     + "for {ax} in {range_expr}:".format(ax=axis_name, range_expr=range_expr)
                 )
+
+        # Create K for-loop: computation body is split in different vertical regions
+        source_lines = []
+        regions = sorted(regions)
+        if iteration_order == gt_ir.IterationOrder.BACKWARD:
+            regions = reversed(regions)
+
+        for bounds, body_sources in regions:
+            region_lines = self._make_regional_computation(iteration_order, bounds)
+            source_lines.extend(region_lines)
+            source_lines.extend(ij_loop_lines)
+            source_lines.extend(
+                " " * self.indent_size * extent.ndims + line for line in body_sources
+            )
 
         return source_lines
 
@@ -154,6 +156,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
                 body_sources.extend(self.visit(stmt))
             body_sources.dedent()
         return ["".join([str(item) for item in line]) for line in body_sources.lines]
+
 
 class DebugGenerator(gt_backend.BaseGenerator):
     def __init__(self, backend_class, options):
