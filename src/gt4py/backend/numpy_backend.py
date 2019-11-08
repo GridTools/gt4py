@@ -186,6 +186,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return source
 
+    def visit_If(self, node: gt_ir.If):
+        raise NotImplementedError("The numpy backend does not support runtime if statements.")
+
 
 class NumPyGenerator(gt_backend.BaseGenerator):
     def __init__(self, backend_class, options):

@@ -62,6 +62,17 @@ def copy_stencil_plus_one(field_a: Field3D, field_b: Field3D):
 
 
 @register
+def runtime_if(field_a: Field3D, field_b: Field3D):
+    with computation(BACKWARD), interval(...):
+        if field_a > 0.0:
+            field_b = -1
+            field_a = -field_a
+        else:
+            field_b = 1
+            field_a = field_a
+
+
+@register
 def simple_horizontal_diffusion(in_field: Field3D, coeff: Field3D, out_field: Field3D):
     with computation(PARALLEL), interval(...):
         lap_field = 4.0 * in_field[0, 0, 0] - (

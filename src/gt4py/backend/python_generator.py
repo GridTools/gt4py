@@ -281,18 +281,3 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
                     self.visit(stage, iteration_order=multi_stage.iteration_order)
                     self.sources.append("")
 
-    def visit_If(self, node: gt_ir.If):
-        body_sources = gt_text.TextBlock()
-        body_sources.append("if {condition}:".format(condition=self.visit(node.condition)))
-        body_sources.indent()
-        for stmt in node.main_body.stmts:
-            body_sources.extend(self.visit(stmt))
-        body_sources.dedent()
-        if node.else_body:
-            body_sources.append("else:")
-            body_sources.indent()
-
-            for stmt in node.else_body.stmts:
-                body_sources.extend(self.visit(stmt))
-            body_sources.dedent()
-        return ["".join([str(item) for item in line]) for line in body_sources.lines]
