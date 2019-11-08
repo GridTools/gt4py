@@ -42,7 +42,7 @@ contained in the package. The complete installation procedure is thus:
     # First, clone the repository
     git clone https://github.com/gridtools/gt4py.git
     
-    #Make sure that the wheel package is in your pip list, otherwise install it with
+    # Make sure that the wheel package is in your pip list, otherwise install it with
     pip install wheel
 
     # Then install the Python package

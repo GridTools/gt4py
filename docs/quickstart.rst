@@ -186,9 +186,10 @@ regular function call receiving the definition function:
 Run-time parameters are a powerful way to customize the computation with scalar values that may be different for every
 call. However, sometimes a structural modification of the kernel definition is required depending on the context. For
 example, when we are testing an extension to a existing model, we might want to perform some additional computations
-when running the extended versions and compare the results against the regular one. For this purpose we can use a
-**constant symbol** definition that would be only evaluated at the generation step,
-and that might affect the kernel definition in a more drastic way.
+when running the extended versions and compare the results against the regular one. For this purpose we can force a
+*compile-time* evaluation of a conditional ``if`` statement whose test condition depends only on **constant symbol**
+definitions. The condition will be thus evaluated at the generation step and only the statements in the
+selected branch will be actually compiled, allowing more drastic changes in the kernel definition.
 
 For example, the previous definition could be modified in the following way:
 
@@ -208,7 +209,7 @@ For example, the previous definition could be modified in the following way:
         weight: np.float64 = 2.0,
     ):
         with computation(PARALLEL), interval(...):
-            if USE_ALPHA:
+            if __INLINED(USE_ALPHA):
                 result = field_a[0, 0, 0] - (1 - alpha) * (
                     field_b[0, 0, 0] - weight * field_c[0, 0, 0]
                 )
@@ -216,9 +217,10 @@ For example, the previous definition could be modified in the following way:
                 result = field_a[0, 0, 0] - (field_b[0, 0, 0] - weight * field_c[0, 0, 0])
 
 
-Where ``USE_ALPHA`` is an external symbol that must be defined explicitly before the ``gtscript.stencil()`` decorator
-processes the definition function. For `C` programmers, external symbols could be considered a bit like preprocessor
-definitions.
+The ``__INLINED()`` call is used to force the compile-time evaluation of ``USE_ALPHA``, which is an external symbol
+that must be defined explicitly before the ``gtscript.stencil()`` decorator processes the definition function.
+For `C` programmers, compile-time evaluation of conditional statements could be considered a bit like preprocessor
+``#IF`` definitions.
 
 Alternatively, the actual values of *constant* symbols might be defined in the ``gtscript.stencil()`` call as a
 dictionary passed to the ``externals`` keyword. This allows an even more flexible way to parametrize kernel definitions.
@@ -240,7 +242,7 @@ In this case, the symbol must further be imported from ``__externals__`` in the 
         from __externals__ import USE_ALPHA
 
         with computation(PARALLEL), interval(...):
-            if USE_ALPHA:
+            if __INLINED(USE_ALPHA):
                 result = field_a[0, 0, 0] - (1 - alpha) * (
                     field_b[0, 0, 0] - weight * field_c[0, 0, 0]
                 )
