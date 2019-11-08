@@ -22,6 +22,7 @@ import os
 import jinja2
 
 from gt4py import backend as gt_backend
+from gt4py import config as gt_config
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
@@ -498,7 +499,14 @@ class BaseGTBackend(gt_backend.BaseBackend):
     @classmethod
     def build(cls, stencil_id, performance_ir, definition_func, options):
         cls._check_options(options)
-        # Generate the Python binary extension
+
+        # Generate the Python binary extension (checking if GridTools sources are installed)
+        if not os.path.isfile(
+            os.path.join(gt_config.GT_INCLUDE_PATH, "gridtools", "common", "defs.hpp")
+        ):
+            raise RuntimeError(
+                "Missing GridTools sources. Run 'python setup.py install_gt_sources'."
+            )
         pyext_module_name, pyext_file_path = cls.generate_extension(
             stencil_id, performance_ir, options
         )
