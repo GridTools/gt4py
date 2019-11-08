@@ -286,16 +286,9 @@ class CallInliner(ast.NodeTransformer):
             if isinstance(value, ast.Name) and name not in assigned_symbols
         }
 
-        template_fmt = (
-            "_gt_inlined_"
-            + call_name
-            + "_"
-            + str(node.lineno)
-            + "_"
-            + str(node.col_offset)
-            + "_"
-            + "{name}__"
-        )
+        call_id = gt_utils.shashed_id(call_name)[:3]
+        call_id_suffix = f"{call_id}_{node.lineno}_{node.col_offset}"
+        template_fmt = "{name}__" + call_id_suffix
 
         gt_meta.map_symbol_names(
             call_ast, name_mapping, template_fmt=template_fmt, skip_names=self.all_skip_names
