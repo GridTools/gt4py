@@ -7,7 +7,7 @@ WARNING!
 GT4Py is still under development and is in an incomplete state. While 
 GT4Py has been proven to work for some basic applications already, we are
 working actively on making GT4Py suitable for more use cases by adding 
-Features, improving performance as well as reliability, adding a thorough
+features, improving performance as well as reliability and adding a thorough
 documentation. GT4Py will be changing for the time being. New features will
 be implemented, APIs may change and dependencies will be added.
 
