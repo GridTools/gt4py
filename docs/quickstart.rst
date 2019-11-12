@@ -276,16 +276,19 @@ except the last.
         rhs: gtscript.Field[np.float64],
         out: gtscript.Field[np.float64],
     ):
-        with computation(FORWARD), interval(0, 1):
-            sup = sup / diag
-            rhs = rhs / diag
-        with computation(FORWARD), interval(1, None):
-            sup = sup / (diag - sup[0, 0, -1] * inf)
-            rhs = (rhs - inf * rhs[0, 0, -1]) / (diag - sup[0, 0, -1] * inf)
-        with computation(BACKWARD), interval(0, -1):
-            out = rhs - sup * out[0, 0, 1]
-        with computation(BACKWARD), interval(-1, None):
-            out = rhs
+        with computation(FORWARD):
+            with interval(0, 1):
+                sup = sup / diag
+                rhs = rhs / diag
+            with interval(1, None):
+                sup = sup / (diag - sup[0, 0, -1] * inf)
+                rhs = (rhs - inf * rhs[0, 0, -1]) / (diag - sup[0, 0, -1] * inf)
+
+        with computation(BACKWARD):
+            with interval(0, -1):
+                out = rhs - sup * out[0, 0, 1]
+            with interval(-1, None):
+                out = rhs
 
 
 
@@ -302,17 +305,17 @@ To reuse code elements and to structure your code, subroutines are a useful tool
 .. code:: python
 
     @gtscript.function
-    def ddx(v: gtscript.Field[np.float64], h: np.float64 = 0.1):
+    def ddx(v, h = 0.1):
         v2 = v[-1, 0, 0] + v[1, 0, 0] - 2 * v[0, 0, 0]
         return v2 / (h * h)
 
     @gtscript.function
-    def ddy(v: gtscript.Field[np.float64], h: np.float64 = 0.1):
+    def ddy(v, h = 0.1):
         v2 = v[-1, 0, 0] + v[1, 0, 0] - 2 * v[0, 0, 0]
         return v2 / (h * h)
 
     @gtscript.function
-    def ddz(v: gtscript.Field[np.float64], h: np.float64 = 0.1):
+    def ddz(v, h = 0.1):
         v2 = v[-1, 0, 0] + v[1, 0, 0] - 2 * v[0, 0, 0]
         return v2 / (h * h)
 
