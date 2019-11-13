@@ -41,9 +41,8 @@ A Simple Example
 ----------------
 Suppose we want to write a simple stencil computing a parametrized linear combination of multiple 3D fields. The stencil
 would have some parameters to change the relative weights of the input fields in the linear combination. As an example,
-we could define this stencil with three input fields
-(``field_a``, ``field_b`` and ``field_c``) and two parameters (``alpha`` and
-``weight``) in the following way:
+we could define this stencil with three input fields (``field_a``, ``field_b`` and ``field_c``) and two parameters
+(``alpha`` and ``weight``) in the following way:
 
 .. code:: python
 
@@ -119,43 +118,8 @@ Currently, the following backends are available:
 * ``"gtmc"``: a GridTools backend targeting many core architectures
 * ``"gtcuda"``: a GridTools backend targeting GPUs
 
-The decorator
-further replaces the stencil definition function (here ``stencil_example``) by a callable object that can be used as a
-function to call the generated code which modifies the passed data in place.
-
-.. code:: python
-
-    import gt4py.storage as gt_storage
-
-    field_a = gt_storage.from_array(
-        data=np.random.randn(10, 10, 10),
-        backend=backend,
-        dtype=np.float64,
-        default_origin=(0, 0, 0),
-    )
-    field_b = gt_storage.ones(
-        backend=backend, shape=(10, 10, 10), dtype=np.float64, default_origin=(0, 0, 0)
-    )
-    field_c = gt_storage.zeros(
-        backend=backend, shape=(10, 10, 10), dtype=np.float64, default_origin=(0, 0, 0)
-    )
-    result = gt_storage.empty(
-        backend=backend, shape=(10, 10, 10), dtype=np.float64, default_origin=(0, 0, 0)
-    )
-
-    stencil_example(field_a, field_b, field_c, result, alpha=0.5)
-
-
-Since some of the backends require your data to be in a certain layout in memory, we allocate storage containers through
-the routines ``from_array``, ``ones``, ``zeros`` and ``empty``. The ``default_origin`` parameter plays two roles:
-
-#. If when calling the stencil, no other `origin` is specified, this value is where the `iteration domain` begins, i.e.
-   the grid point with the lowest index where a value is written.
-
-#. The data is allocated such that memory address of the point specified in ``default_origin`` is `aligned` to  a
-   backend-dependent value. This is a performance concern. Ideally, you set this to the value to a point which is the
-   corner of the iteration domain with the lowest coordinates for most of your stencils.
-
+The decorator further replaces the stencil definition function (here ``stencil_example``) by a callable object that
+can be used as a function to call the generated code which modifies the passed data in place.
 
 If for any reason we cannot (or we do not want to) use the ``stencil`` decorator, it is also possible to call it as a
 regular function call receiving the definition function:
@@ -181,80 +145,48 @@ regular function call receiving the definition function:
     another_example_implementation = gtscript.stencil(backend="gtmc", definition=stencil_example)
 
 
+--------
+Storages
+--------
+Since some of the backends require your data to be in a certain layout in memory, GT4Py provides a special `NumPy`-like
+multidimensional array implementation called ``storage``. Storage containers can be allocated through the same familiar
+set of routines used in `NumPy` for allocation: ``from_array``, ``ones``, ``zeros`` and ``empty``.
 
+The ``default_origin`` parameter plays two roles:
 
-Run-time parameters are a powerful way to customize the computation with scalar values that may be different for every
-call. However, sometimes a structural modification of the kernel definition is required depending on the context. For
-example, when we are testing an extension to a existing model, we might want to perform some additional computations
-when running the extended versions and compare the results against the regular one. For this purpose we can force a
-*compile-time* evaluation of a conditional ``if`` statement whose test condition depends only on **constant symbol**
-definitions. The condition will be thus evaluated at the generation step and only the statements in the
-selected branch will be actually compiled, allowing more drastic changes in the kernel definition.
+#. If when calling the stencil, no other `origin` is specified, this value is where the `iteration domain` begins, i.e.
+   the grid point with the lowest index where a value is written.
 
-For example, the previous definition could be modified in the following way:
-
-
-.. code:: python
-
-    USE_ALPHA = True
-
-    @gtscript.stencil(backend=backend)
-    def stencil_example(
-        field_a: gtscript.Field[np.float64],
-        field_b: gtscript.Field[np.float64],
-        field_c: gtscript.Field[np.float64],
-        result: gtscript.Field[np.float64],
-        *,
-        alpha: np.float64,
-        weight: np.float64 = 2.0,
-    ):
-        with computation(PARALLEL), interval(...):
-            if __INLINED(USE_ALPHA):
-                result = field_a[0, 0, 0] - (1 - alpha) * (
-                    field_b[0, 0, 0] - weight * field_c[0, 0, 0]
-                )
-            else:
-                result = field_a[0, 0, 0] - (field_b[0, 0, 0] - weight * field_c[0, 0, 0])
-
-
-The ``__INLINED()`` call is used to force the compile-time evaluation of ``USE_ALPHA``, which is an external symbol
-that must be defined explicitly before the ``gtscript.stencil()`` decorator processes the definition function.
-For `C` programmers, compile-time evaluation of conditional statements could be considered a bit like preprocessor
-``#IF`` definitions.
-
-Alternatively, the actual values of *constant* symbols might be defined in the ``gtscript.stencil()`` call as a
-dictionary passed to the ``externals`` keyword. This allows an even more flexible way to parametrize kernel definitions.
-In this case, the symbol must further be imported from ``__externals__`` in the body of the function definition.
-
+#. The data is allocated such that memory address of the point specified in ``default_origin`` is `aligned` to  a
+   backend-dependent value. This is a performance concern. Ideally, you set this to the value to a point which is the
+   corner of the iteration domain with the lowest coordinates for most of your stencils.
 
 .. code:: python
 
-    @gtscript.stencil(backend=backend, externals={"USE_ALPHA": True})
-    def stencil_example(
-        field_a: gtscript.Field[np.float64],
-        field_b: gtscript.Field[np.float64],
-        field_c: gtscript.Field[np.float64],
-        result: gtscript.Field[np.float64],
-        *,
-        alpha: np.float64,
-        weight: np.float64 = 2.0,
-    ):
-        from __externals__ import USE_ALPHA
+    import gt4py.storage as gt_storage
 
-        if __INLINED(USE_ALPHA):
-            with computation(PARALLEL), interval(...):
-                result = field_a[0, 0, 0] - (1 - alpha) * (
-                    field_b[0, 0, 0] - weight * field_c[0, 0, 0]
-                )
-        else:
-            with computation(PARALLEL), interval(...):
-                result = field_a[0, 0, 0] - (field_b[0, 0, 0] - weight * field_c[0, 0, 0])
+    field_a = gt_storage.from_array(
+        data=np.random.randn(10, 10, 10),
+        backend=backend,
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+    )
+    field_b = gt_storage.ones(
+        backend=backend, shape=(10, 10, 10), dtype=np.float64, default_origin=(0, 0, 0)
+    )
+    field_c = gt_storage.zeros(
+        backend=backend, shape=(10, 10, 10), dtype=np.float64, default_origin=(0, 0, 0)
+    )
+    result = gt_storage.empty(
+        backend=backend, shape=(10, 10, 10), dtype=np.float64, default_origin=(0, 0, 0)
+    )
+
+    stencil_example(field_a, field_b, field_c, result, alpha=0.5)
 
 
 --------------------------
 Computations and Intervals
 --------------------------
-
 We have already seen the stencil interface for fields and parameters, as well as externals and compile-time conditions.
 Let's now look at `computations` and `intervals`. The `computation` context determines in which order the vertical
 dimension is iterated over. ``FORWARD`` stands for an iteration from low to high index, while ``BACKWARD`` is an
@@ -295,6 +227,7 @@ except the last.
 However, the ``PARALLEL`` and other orders differ in more ways. For parallel regions, we can assume that each statement
 (i.e. each assign) is applied to the full domain, before the next one starts. If an iteration order is specified
 however, all statements are applied to each slice with the same ``K``, one after each other, before moving to ``K+1``.
+
 
 -----------
 Subroutines
@@ -346,3 +279,74 @@ the ``return`` statement. That is, in the above example, ``v`` is not modified. 
         with computation(PARALLEL), interval(...):
             x, y, z = ddxyz(v, h)
             lap = x + y + z
+
+
+-------------------------
+Compile-time conditionals
+-------------------------
+Run-time parameters are a powerful way to customize the computation with scalar values that may be different for every
+call. However, sometimes a structural modification of the kernel definition is required depending on the context. For
+example, when we are testing an extension to a existing model, we might want to perform some additional computations
+when running the extended versions and compare the results against the regular one. For this purpose we can force a
+*compile-time* evaluation of a conditional ``if`` statement whose test condition depends only on **constant symbol**
+definitions. The condition will be thus evaluated at the generation step and only the statements in the
+selected branch will be actually compiled, allowing more drastic changes in the kernel definition.
+
+For example, the previous definition could be modified in the following way:
+
+.. code:: python
+
+    USE_ALPHA = True
+
+    @gtscript.stencil(backend=backend)
+    def stencil_example(
+        field_a: gtscript.Field[np.float64],
+        field_b: gtscript.Field[np.float64],
+        field_c: gtscript.Field[np.float64],
+        result: gtscript.Field[np.float64],
+        *,
+        alpha: np.float64,
+        weight: np.float64 = 2.0,
+    ):
+        if __INLINED(USE_ALPHA):
+            with computation(PARALLEL), interval(...):
+                result = field_a[0, 0, 0] - (1 - alpha) * (
+                    field_b[0, 0, 0] - weight * field_c[0, 0, 0]
+                )
+        else:
+            with computation(PARALLEL), interval(...):
+                result = field_a[0, 0, 0] - (field_b[0, 0, 0] - weight * field_c[0, 0, 0])
+
+
+The ``__INLINED()`` call is used to force the compile-time evaluation of ``USE_ALPHA``, which is an external symbol
+that must be defined explicitly before the ``gtscript.stencil()`` decorator processes the definition function.
+For `C` programmers, compile-time evaluation of conditional statements could be considered a bit like preprocessor
+``#IF`` definitions.
+
+Alternatively, the actual values of *constant* symbols might be defined in the ``gtscript.stencil()`` call as a
+dictionary passed to the ``externals`` keyword. This allows an even more flexible way to parametrize kernel definitions.
+In this case, the symbol must further be imported from ``__externals__`` in the body of the function definition.
+
+.. code:: python
+
+    @gtscript.stencil(backend=backend, externals={"USE_ALPHA": True})
+    def stencil_example(
+        field_a: gtscript.Field[np.float64],
+        field_b: gtscript.Field[np.float64],
+        field_c: gtscript.Field[np.float64],
+        result: gtscript.Field[np.float64],
+        *,
+        alpha: np.float64,
+        weight: np.float64 = 2.0,
+    ):
+        from __externals__ import USE_ALPHA
+
+        if __INLINED(USE_ALPHA):
+            with computation(PARALLEL), interval(...):
+                result = field_a[0, 0, 0] - (1 - alpha) * (
+                    field_b[0, 0, 0] - weight * field_c[0, 0, 0]
+                )
+        else:
+            with computation(PARALLEL), interval(...):
+                result = field_a[0, 0, 0] - (field_b[0, 0, 0] - weight * field_c[0, 0, 0])
+
