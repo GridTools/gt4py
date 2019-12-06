@@ -331,6 +331,7 @@ class DataType(enum.Enum):
 
 DataType.NATIVE_TYPE_TO_NUMPY = {
     DataType.DEFAULT: "float_",
+    DataType.BOOL: "bool",
     DataType.INT8: "int8",
     DataType.INT16: "int16",
     DataType.INT32: "int32",

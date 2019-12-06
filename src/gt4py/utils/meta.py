@@ -74,17 +74,21 @@ def get_ast(func_or_source_or_ast):
     return ast_root
 
 
-def ast_dump(value, *, skip_decorators=True):
-    def _dump(node: ast.AST):
+def ast_dump(definition, *, skip_annotations=True, skip_decorators=True):
+    def _dump(node: ast.AST, excluded_names):
         if isinstance(node, ast.AST):
-            if skip_decorators:
+            if excluded_names:
                 fields = [
-                    (name, _dump(value))
+                    (name, _dump(value, excluded_names))
                     for name, value in sorted(ast.iter_fields(node))
-                    if name != "decorator_list"
+                    if name not in excluded_names
                 ]
             else:
-                fields = [(name, _dump(value)) for name, value in sorted(ast.iter_fields(node))]
+                fields = [
+                    (name, _dump(value, excluded_names))
+                    for name, value in sorted(ast.iter_fields(node))
+                ]
+
             return "".join(
                 [
                     node.__class__.__name__,
@@ -95,13 +99,19 @@ def ast_dump(value, *, skip_decorators=True):
             )
 
         elif isinstance(node, list):
-            lines = ["[", *[_dump(i) + "," for i in node], "]"]
+            lines = ["[", *[_dump(i, excluded_names) + "," for i in node], "]"]
             return "\n".join(lines)
 
         else:
             return repr(node)
 
-    dumped_ast = _dump(get_ast(value))
+    skip_node_names = set()
+    if skip_decorators:
+        skip_node_names.add("decorator_list")
+    if skip_annotations:
+        skip_node_names.add("annotation")
+
+    dumped_ast = _dump(get_ast(definition), skip_node_names)
 
     return dumped_ast
 
