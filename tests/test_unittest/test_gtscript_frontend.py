@@ -33,17 +33,29 @@ frontend = gt_frontend.GTScriptFrontend
 
 
 def compile_definition(
-    definition_func, name: str, module: str, *, externals: dict, rebuild=False, **kwargs
+    definition_func,
+    name: str,
+    module: str,
+    *,
+    externals: dict = None,
+    dtypes: dict = None,
+    rebuild=False,
+    **kwargs,
 ):
+    gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
     build_options = gt_definitions.BuildOptions(
         name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=None
     )
 
     options_id = gt_utils.shashed_id(build_options)
-    _ = frontend.get_stencil_id(
+    stencil_id = frontend.get_stencil_id(
         build_options.qualified_name, definition_func, externals, options_id
     )
-    gt_frontend.GTScriptParser(definition_func, externals=externals, options=build_options).run()
+    gt_frontend.GTScriptParser(
+        definition_func, externals=externals or {}, options=build_options
+    ).run()
+
+    return stencil_id
 
 
 # ---- Tests-----
@@ -287,7 +299,7 @@ class TestImports:
         )
 
     @pytest.mark.parametrize(
-        "case_id,import_line",
+        "id_case,import_line",
         list(
             enumerate(
                 [
@@ -301,7 +313,7 @@ class TestImports:
             )
         ),
     )
-    def test_wrong_imports(self, case_id, import_line):
+    def test_wrong_imports(self, id_case, import_line, id_version):
         module = f"TestImports_test_module_{id_version}"
         externals = {}
 
@@ -322,66 +334,67 @@ class TestImports:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
             compile_definition(
-                definition_func, f"test_wrong_imports_{case_id}", module, externals=externals
+                definition_func, f"test_wrong_imports_{id_case}", module, externals=externals
             )
 
 
-class TestSyntax:
-    def test_context_handlers(self, id_version):
-        module = f"TestSyntax_test_module_{id_version}"
-        externals = {}
+class TestDTypes:
+    @pytest.mark.parametrize(
+        "id_case,test_dtype",
+        list(enumerate([bool, np.bool, int, np.int32, np.int64, float, np.float32, np.float64])),
+    )
+    def test_all_legal_dtypes(self, id_case, test_dtype, id_version):
+        def definition_func(
+            in_field: gtscript.Field[test_dtype],
+            out_field: gtscript.Field[test_dtype],
+            param: test_dtype,
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field + param
+
+        module = f"TestImports_test_module_{id_version}"
+        compile_definition(
+            definition_func, "test_all_legal_dtypes", module,
+        )
 
         def definition_func(
-            in_field: gtscript.Field[float],
-            out_field: gtscript.Field[float],
-            *,
-            parameter: float = 1.0,
+            in_field: gtscript.Field["dtype"], out_field: gtscript.Field["dtype"], param: "dtype"
         ):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL, FORWARD, BACKWARD
-
             with computation(PARALLEL), interval(...):
-                out_field = in_field + parameter
+                out_field = in_field + param
 
-            with computation(FORWARD), interval(0, None):
-                out_field = in_field + parameter + 2.0
+        module = f"TestImports_test_module_{id_version}"
+        compile_definition(
+            definition_func, "test_all_legal_dtypes", module, dtypes={"dtype": test_dtype}
+        )
 
-            with computation(BACKWARD), interval(1, -1):
-                out_field = in_field + parameter + 2.0
+    @pytest.mark.parametrize(
+        "id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes])),
+    )
+    def test_invalid_inlined_dtypes(self, id_case, test_dtype, id_version):
+        with pytest.raises(ValueError, match=r".*data type descriptor.*"):
 
-            with computation(FORWARD):
-                with interval(...):
-                    out_field = in_field + parameter + 2.0
+            def definition_func(
+                in_field: gtscript.Field[test_dtype],
+                out_field: gtscript.Field[test_dtype],
+                param: test_dtype,
+            ):
+                with computation(PARALLEL), interval(...):
+                    out_field = in_field + param
 
-            with computation(BACKWARD):
-                with interval(0, None):
-                    out_field = in_field + parameter + 2.0
+    @pytest.mark.parametrize(
+        "id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes])),
+    )
+    def test_invalid_external_dtypes(self, id_case, test_dtype, id_version):
+        def definition_func(
+            in_field: gtscript.Field["dtype"], out_field: gtscript.Field["dtype"], param: "dtype"
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field + param
 
-            with computation(PARALLEL):
-                with interval(1, -1):
-                    out_field = in_field + parameter + 2.0
+        module = f"TestImports_test_module_{id_version}"
 
-            with computation(BACKWARD):
-                with interval(...):
-                    out_field = in_field + parameter + 2.0
-                with interval(...):
-                    out_field = in_field + parameter + 2.0
-                with interval(...):
-                    out_field = in_field + parameter + 2.0
-
-            with computation(PARALLEL):
-                with interval(0, None):
-                    out_field = in_field + parameter + 2.0
-                with interval(...):
-                    out_field = in_field + parameter + 2.0
-                with interval(1, -1):
-                    out_field = in_field + parameter + 2.0
-
-            with computation(FORWARD):
-                with interval(1, -1):
-                    out_field = in_field + parameter + 2.0
-                with interval(0, None):
-                    out_field = in_field + parameter + 2.0
-                with interval(...):
-                    out_field = in_field + parameter + 2.0
-
-        compile_definition(definition_func, "test_context_handlers", module, externals=externals)
+        with pytest.raises(ValueError, match=r".*data type descriptor.*"):
+            compile_definition(
+                definition_func, "test_invalid_external_dtypes", module, dtypes={"dtype": test_dtype}
+            )

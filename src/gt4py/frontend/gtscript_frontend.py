@@ -47,7 +47,7 @@ class GTScriptSymbolError(GTScriptSyntaxError):
                 message = "Unknown symbol '{name}' symbol in '{scope}' (line: {line}, col: {col})".format(
                     name=name, scope=loc.scope, line=loc.line, col=loc.column
                 )
-        super().__init__(name, loc=loc)
+        super().__init__(message, loc=loc)
         self.name = name
 
 
@@ -60,7 +60,7 @@ class GTScriptDefinitionError(GTScriptSyntaxError):
                 message = "Invalid definition for '{name}' symbol in '{scope}' (line: {line}, col: {col})".format(
                     name=name, scope=loc.scope, line=loc.line, col=loc.column
                 )
-        super().__init__(name, loc=loc)
+        super().__init__(message, loc=loc)
         self.name = name
         self.value = value
 
@@ -867,20 +867,7 @@ class IRMaker(ast.NodeVisitor):
 
 class GTScriptParser(ast.NodeVisitor):
 
-    PARAM_TYPES = (
-        bool,
-        np.bool,
-        int,
-        np.int32,
-        np.uint32,
-        np.int64,
-        np.uint64,
-        float,
-        np.float32,
-        np.float64,
-    )
-
-    CONST_VALUE_TYPES = (*PARAM_TYPES, types.FunctionType, type(None))
+    CONST_VALUE_TYPES = (*gtscript._VALID_DATA_TYPES, types.FunctionType, type(None))
 
     def __init__(self, definition, *, options, externals=None):
         assert isinstance(definition, types.FunctionType)
@@ -931,16 +918,31 @@ class GTScriptParser(ast.NodeVisitor):
                         raise GTScriptValueError(
                             name=param.name,
                             value=param.default,
-                            message="Invalid default value for argument '{name}': {value}".format(
-                                name=param.name, value=param.default
-                            ),
+                            message=f"Invalid default value for argument '{param.name}': {param.default}",
                         )
                     default = param.default
+
+                if isinstance(param.annotation, (str, gtscript._FieldDescriptor)):
+                    dtype_annotation = param.annotation
+                elif (
+                    isinstance(param.annotation, type)
+                    and param.annotation in gtscript._VALID_DATA_TYPES
+                ):
+                    dtype_annotation = np.dtype(param.annotation)
+                elif param.annotation is inspect.Signature.empty:
+                    dtype_annotation = None
+                else:
+                    raise GTScriptValueError(
+                        name=param.name,
+                        value=param.annotation,
+                        message=f"Invalid annotated dtype value for argument '{param.name}': {param.annotation}",
+                    )
 
                 api_signature.append(
                     gt_ir.ArgumentInfo(name=param.name, is_keyword=is_keyword, default=default)
                 )
-                api_annotations.append(param.annotation)
+
+                api_annotations.append(dtype_annotation)
 
         nonlocal_symbols, imported_symbols = GTScriptParser.collect_external_symbols(definition)
         canonical_ast = gt_meta.ast_dump(definition)
@@ -1089,11 +1091,11 @@ class GTScriptParser(ast.NodeVisitor):
 
         for arg_info, arg_annotation in zip(api_signature, api_annotations):
             try:
-                assert arg_annotation in self.PARAM_TYPES or isinstance(
+                assert arg_annotation in gtscript._VALID_DATA_TYPES or isinstance(
                     arg_annotation, (gtscript._SequenceDescriptor, gtscript._FieldDescriptor)
                 ), "Invalid parameter annotation"
 
-                if arg_annotation in self.PARAM_TYPES:
+                if arg_annotation in gtscript._VALID_DATA_TYPES:
                     dtype = np.dtype(arg_annotation)
                     if arg_info.default not in [gt_ir.Empty, None]:
                         assert np.dtype(type(arg_info.default)) == dtype
@@ -1128,9 +1130,7 @@ class GTScriptParser(ast.NodeVisitor):
                 raise GTScriptDefinitionError(
                     name=arg_info.name,
                     value=arg_annotation,
-                    message="Invalid definition of argument '{name}': {value}".format(
-                        name=arg_info.name, value=arg_annotation
-                    ),
+                    message=f"Invalid definition of argument '{arg_info.name}': {arg_annotation}",
                 ) from e
 
         for item in itertools.chain(fields_decls.values(), parameter_decls.values()):
@@ -1242,7 +1242,10 @@ class GTScriptFrontend(gt_frontend.Frontend):
         )
         definition._gtscript_["externals"] = resolved_externals
 
-        fingerprint = {"__main__": definition._gtscript_["canonical_ast"]}
+        fingerprint = {
+            "__main__": definition._gtscript_["canonical_ast"],
+            "api_annotations": f"[{', '.join(str(item) for item in definition._gtscript_['api_annotations'])}]",
+        }
         for name, value in resolved_externals.items():
             fingerprint[name] = (
                 value._gtscript_["canonical_ast"] if hasattr(value, "_gtscript_") else value

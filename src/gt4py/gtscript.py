@@ -23,8 +23,67 @@ definitions for the keywords of the DSL.
 import collections
 import functools
 import inspect
+import types
+
+import numpy as np
 
 from gt4py import definitions as gt_definitions
+from gt4py import utils as gt_utils
+
+
+# GTScript builtins
+builtins = {
+    "I",
+    "J",
+    "K",
+    "IJ",
+    "IK",
+    "JK",
+    "IJK",
+    "FORWARD",
+    "BACKWARD",
+    "PARALLEL",
+    "Field",
+    "Sequence",
+    "externals",
+    "computation",
+    "interval",
+    "__gtscript__",
+    "__externals__",
+    "__INLINED",
+}
+
+__all__ = list(builtins) + ["function", "stencil"]
+
+
+_VALID_DATA_TYPES = (
+    bool,
+    np.bool,
+    int,
+    np.int32,
+    np.int64,
+    float,
+    np.float32,
+    np.float64,
+)
+
+
+def _set_arg_dtypes(definition, dtypes):
+    assert isinstance(definition, types.FunctionType)
+    annotations = getattr(definition, "__annotations__", {})
+    for arg, value in annotations.items():
+        if isinstance(value, _FieldDescriptor) and isinstance(value.dtype, str):
+            if value.dtype in dtypes:
+                annotations[arg] = _FieldDescriptor(dtypes[value.dtype], value.axes)
+            else:
+                raise ValueError(f"Missing '{value.dtype}' dtype definition for arg '{arg}'")
+        elif isinstance(value, str):
+            if value in dtypes:
+                annotations[arg] = dtypes[value]
+            else:
+                raise ValueError(f"Missing '{value}' dtype definition for arg '{arg}'")
+
+    return definition
 
 
 def function(func):
@@ -42,6 +101,7 @@ def stencil(
     definition=None,
     *,
     build_info=None,
+    dtypes=None,
     externals=None,
     name=None,
     rebuild=False,
@@ -62,6 +122,9 @@ def stencil(
         build_info : `dict`, optional
             Dictionary used to store information about the stencil generation.
             (`None` by default).
+
+        dtypes: `dict`['str`, dtype_definition], optional
+            Specify dtypes for string keys in the argument annotations.
 
         externals: `dict`, optional
             Specify values for otherwise unbound symbols.
@@ -100,6 +163,8 @@ def stencil(
 
     if build_info is not None and not isinstance(build_info, dict):
         raise ValueError(f"Invalid 'build_info' dictionary ('{build_info}')")
+    if dtypes is not None and not isinstance(dtypes, dict):
+        raise ValueError(f"Invalid 'dtypes' dictionary ('{dtypes}')")
     if externals is not None and not isinstance(externals, dict):
         raise ValueError(f"Invalid 'externals' dictionary ('{externals}')")
     if name is not None and not isinstance(name, str):
@@ -122,42 +187,16 @@ def stencil(
         name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=build_info
     )
 
-    if definition is None:
-        return functools.partial(
-            gt_loader.gtscript_loader,
-            backend=backend,
-            build_options=build_options,
-            externals=externals or {},
-        )
-    else:
+    def _decorator(def_func):
+        _set_arg_dtypes(def_func, dtypes or {})
         return gt_loader.gtscript_loader(
-            definition, backend=backend, build_options=build_options, externals=externals or {}
+            def_func, backend=backend, build_options=build_options, externals=externals or {}
         )
 
-
-# GTScript builtins
-builtins = {
-    "I",
-    "J",
-    "K",
-    "IJ",
-    "IK",
-    "JK",
-    "IJK",
-    "FORWARD",
-    "BACKWARD",
-    "PARALLEL",
-    "Field",
-    "Sequence",
-    "externals",
-    "computation",
-    "interval",
-    "__gtscript__",
-    "__externals__",
-    "__INLINED",
-}
-
-__all__ = list(builtins) + ["function", "stencil"]
+    if definition is None:
+        return _decorator
+    else:
+        return _decorator(definition)
 
 
 # GTScript builtins: domain axes
@@ -165,6 +204,12 @@ class _Axis:
     def __init__(self, name: str):
         assert name
         self.name = name
+
+    def __repr__(self):
+        return f"_Axis(name={self.name})"
+
+    def __str__(self):
+        return self.name
 
 
 I = _Axis("I")
@@ -191,7 +236,6 @@ IJK = (I, J, K)
 
 def mask_from_axes(axes):
     if isinstance(axes, _Axis):
-        axes
         axes = (axes,)
     axes = list(a.name for a in axes)
     return list(a in axes for a in list(a.name for a in IJK))
@@ -210,17 +254,29 @@ PARALLEL = 0
 
 class _FieldDescriptor:
     def __init__(self, dtype, axes):
-        self.dtype = dtype
+        if isinstance(dtype, str):
+            self.dtype = dtype
+        else:
+            if dtype not in _VALID_DATA_TYPES:
+                raise ValueError("Invalid data type descriptor")
+            self.dtype = np.dtype(dtype)
         self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
+
+    def __repr__(self):
+        return f"_FieldDescriptor(dtype={repr(self.dtype)}, axes={repr(self.axes)})"
+
+    def __str__(self):
+        return f"Field<{str(self.dtype)}, [{', '.join(str(ax) for ax in self.axes)}]>"
 
 
 class _FieldDescriptorMaker:
     def __getitem__(self, dtype_and_axes):
-        dtype, axes = (
-            dtype_and_axes
-            if isinstance(dtype_and_axes, collections.abc.Collection)
-            else [dtype_and_axes, IJK]
-        )
+        if isinstance(dtype_and_axes, collections.abc.Collection) and not isinstance(
+            dtype_and_axes, str
+        ):
+            dtype, axes = dtype_and_axes
+        else:
+            dtype, axes = [dtype_and_axes, IJK]
         return _FieldDescriptor(dtype, axes)
 
 
