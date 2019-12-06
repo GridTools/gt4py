@@ -176,7 +176,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         then_fmt = "({})" if isinstance(node.then_expr, gt_ir.CompositeExpr) else "{}"
         else_fmt = "({})" if isinstance(node.else_expr, gt_ir.CompositeExpr) else "{}"
 
-        source = "VectorizedTernaryOp(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
+        source = "vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
             condition=self.visit(node.condition),
             then_expr=then_fmt.format(self.visit(node.then_expr)),
             else_expr=else_fmt.format(self.visit(node.else_expr)),
@@ -195,11 +195,17 @@ class NumPySourceGenerator(PythonSourceGenerator):
             )
         )
 
-        for stmt in node.main_body.stmts:
+        stmts = [
+            *[(True, stmt) for stmt in node.main_body.stmts],
+            *[(False, stmt) for stmt in node.else_body.stmts],
+        ]
+
+        for is_if, stmt in stmts:
+
             if isinstance(stmt, gt_ir.Assign):
-                sources.append(
-                    "{target} = VectorizedTernaryOp(condition={condition}, then_expr={then_expr}, else_expr={target}, dtype={np}.{dtype})".format(
-                        condition="{np}.logical_and(".format(np=self.numpy_prefix)
+                condition = (
+                    (
+                        "{np}.logical_and(".format(np=self.numpy_prefix)
                         + ", ".join(
                             [
                                 "__condition_{level}".format(level=i + 1)
@@ -207,35 +213,21 @@ class NumPySourceGenerator(PythonSourceGenerator):
                             ]
                         )
                         + ")"
-                        if self.conditions_depth > 1
-                        else "__condition_1",
-                        target=self.visit(stmt.target),
-                        then_expr=self.visit(stmt.value),
-                        dtype=stmt.target.data_type.dtype.name,
-                        np=self.numpy_prefix,
+                    )
+                    if self.conditions_depth > 1
+                    else "__condition_1"
+                )
+
+                condition = (
+                    condition
+                    if is_if
+                    else "{np}.logical_not({condition})".format(
+                        np=self.numpy_prefix, condition=condition
                     )
                 )
-            else:
-                stmt_sources = self.visit(stmt)
-                if isinstance(stmt_sources, list):
-                    sources.extend(stmt_sources)
-                else:
-                    sources.append(stmt_sources)
-
-        for stmt in node.else_body.stmts:
-            if isinstance(stmt, gt_ir.Assign):
                 sources.append(
-                    "{target} = VectorizedTernaryOp(condition={np}.logical_not({condition}), then_expr={then_expr}, else_expr={target}, dtype={np}.{dtype})".format(
-                        condition="{np}.logical_and(".format(np=self.numpy_prefix)
-                        + ", ".join(
-                            [
-                                "__condition_{level}".format(level=i + 1)
-                                for i in range(self.conditions_depth)
-                            ]
-                        )
-                        + ")"
-                        if self.conditions_depth > 1
-                        else "__condition_1",
+                    "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={target}, dtype={np}.{dtype})".format(
+                        condition=condition,
                         target=self.visit(stmt.target),
                         then_expr=self.visit(stmt.value),
                         dtype=stmt.target.data_type.dtype.name,
@@ -272,7 +264,7 @@ class NumPyGenerator(gt_backend.BaseGenerator):
 
     def generate_module_members(self):
         source = """       
-def VectorizedTernaryOp(*, condition, then_expr, else_expr, dtype):
+def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
     return np.choose(
         condition,
         [else_expr, then_expr],
