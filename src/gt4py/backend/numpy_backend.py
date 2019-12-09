@@ -218,18 +218,14 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     else "__condition_1"
                 )
 
-                condition = (
-                    condition
-                    if is_if
-                    else "{np}.logical_not({condition})".format(
-                        np=self.numpy_prefix, condition=condition
-                    )
-                )
+                target = self.visit(stmt.target)
+                value = self.visit(stmt.value)
                 sources.append(
-                    "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={target}, dtype={np}.{dtype})".format(
+                    "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
                         condition=condition,
-                        target=self.visit(stmt.target),
-                        then_expr=self.visit(stmt.value),
+                        target=target,
+                        then_expr=value if is_if else target,
+                        else_expr=target if is_if else value,
                         dtype=stmt.target.data_type.dtype.name,
                         np=self.numpy_prefix,
                     )

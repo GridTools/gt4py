@@ -443,7 +443,6 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
 
 class TestTernaryOp(gt_testing.StencilTestSuite):
 
-
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
     backends = ["numpy", "gtx86", "gtmc"]
