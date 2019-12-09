@@ -19,6 +19,7 @@ import os
 import numpy as np
 
 from gt4py import backend as gt_backend
+from gt4py import storage as gt_storage
 from . import pyext_builder
 
 
@@ -47,6 +48,10 @@ def cuda_is_compatible_layout(field):
     return True
 
 
+def cuda_is_compatible_type(field):
+    return isinstance(field, gt_storage.storage.GPUStorage)
+
+
 @gt_backend.register
 class GTCUDABackend(gt_backend.BaseGTBackend):
     GENERATOR_CLASS = PythonGTCUDAGenerator
@@ -57,6 +62,7 @@ class GTCUDABackend(gt_backend.BaseGTBackend):
         "device": "gpu",
         "layout_map": cuda_layout,
         "is_compatible_layout": cuda_is_compatible_layout,
+        "is_compatible_type": cuda_is_compatible_type,
     }
 
     @classmethod
