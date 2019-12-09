@@ -96,14 +96,14 @@ def test_default_arguments(backend):
     tmp = np.asarray(arg3)
     tmp *= 2
 
-    branch_true(arg1, arg2=None, par1=2.0, par2=5, par3=3.0)
+    branch_true(arg1, arg2=None, par1=2.0, par2=5.0, par3=3.0)
     np.testing.assert_equal(arg1, 10 * np.ones((3, 3, 3)))
-    branch_true(arg1, arg2=None, par1=2.0, par2=5)
+    branch_true(arg1, arg2=None, par1=2.0, par2=5.0)
     np.testing.assert_equal(arg1, 100 * np.ones((3, 3, 3)))
-    branch_false(arg1, arg2, arg3, par1=2.0, par2=5, par3=3.0)
+    branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0, par3=3.0)
     np.testing.assert_equal(arg1, 60 * np.ones((3, 3, 3)))
     try:
-        branch_false(arg1, arg2, arg3, par1=2.0, par2=5)
+        branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0)
     except ValueError:
         pass
     else:
