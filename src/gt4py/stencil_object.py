@@ -151,7 +151,14 @@ class StencilObject(abc.ABC):
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
         used_arg_fields = {
-            name: field for name, field in field_args.items() if self.field_info[name] is not None
+            name: field
+            for name, field in field_args.items()
+            if name in self.field_info and self.field_info[name] is not None
+        }
+        used_arg_params = {
+            name: param
+            for name, param in parameter_args.items()
+            if name in self.parameter_info and self.parameter_info[name] is not None
         }
         for name, field_info in self.field_info.items():
             if field_info is not None and field_args[name] is None:
@@ -174,6 +181,12 @@ class StencilObject(abc.ABC):
                         field=name, type=type(field), backend=self.backend
                     )
                 )
+            if not field.dtype == self.field_info[name].dtype:
+                raise TypeError(
+                    "The dtype of field '{field}' is '{is_dtype}' instead of '{should_dtype}'".format(
+                        field=name, is_dtype=field.dtype, should_dtype=self.field_info[name].dtype
+                    )
+                )
             # ToDo: check if mask is correct: need mask info in stencil object.
 
             if not field.is_stencil_view:
@@ -189,15 +202,23 @@ class StencilObject(abc.ABC):
                             )
                         )
 
+        # assert compatibility of parameters with stencil
+        for name, parameter in used_arg_params.items():
+            if not type(parameter) == self.parameter_info[name].dtype:
+                raise TypeError(
+                    "The type of parameter '{field}' is '{is_dtype}' instead of '{should_dtype}'".format(
+                        field=name,
+                        is_dtype=type(parameter),
+                        should_dtype=self.parameter_info[name].dtype,
+                    )
+                )
+
         assert isinstance(field_args, dict) and isinstance(parameter_args, dict)
 
         # Shapes
         shapes = {}
 
         for name, field in used_arg_fields.items():
-            # if hasattr(field, "grid_group"):
-            #     # Extract ndarray from gt.storage object
-            #     field = field.data
             shapes[name] = Shape(field.shape)
         # Origins
         if origin is None:
@@ -206,28 +227,6 @@ class StencilObject(abc.ABC):
             origin = normalize_origin_mapping(origin)
         for name, field in used_arg_fields.items():
             origin.setdefault(name, origin["_all_"] if "_all_" in origin else field.default_origin)
-
-        for name, field in field_args.items():
-            if not gt_backend.from_name(self.backend).storage_info["is_compatible_type"](field):
-                raise TypeError(
-                    "Field '{name}' is of incompatible type {type}.".format(
-                        name=name, type=type(field)
-                    )
-                )
-            if not gt_backend.from_name(self.backend).storage_info["is_compatible_layout"](field):
-                raise ValueError("Field '{name}' has an incompatible layout.".format(name=name))
-
-        # all_origin = Shape(origin["_all_"]) if "_all_" in origin else None
-        # for name in field_args.keys():
-        #     min_origin = Shape(self.field_info[name].boundary.lower_indices)
-        #     if name not in origin:
-        #         origin[name] = all_origin if all_origin else min_origin
-        #     else:
-        #         origin[name] = Shape(origin[name])
-        #     if not origin[name] >= min_origin:
-        #         raise ValueError(
-        #             "Origin value smaller than global boundary for field '{}'".format(name)
-        #         )
 
         # Domain
         max_domain = Shape([sys.maxsize] * self.domain_info.ndims)
@@ -270,11 +269,6 @@ class StencilObject(abc.ABC):
                         name, field.shape, min_shape
                     )
                 )
-
-        # if domain != max_domain:
-        #     warnings.warn("Input fields do not match default domain size!", UserWarning)
-
-        # field_args = {k: v.view(np.ndarray) for k, v in field_args.items()}
 
         self.run(
             **field_args, **parameter_args, _domain_=domain, _origin_=origin, exec_info=exec_info

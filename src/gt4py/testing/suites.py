@@ -22,7 +22,7 @@ import pytest
 import gt4py as gt
 from gt4py import gtscript
 from gt4py import storage as gt_storage
-
+from gt4py.stencil_object import StencilObject
 from .input_strategies import *
 from .utils import *
 
@@ -387,7 +387,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         for k, v in externals_dict.items():
             implementation._gt_constants_[k] = v
 
-        assert isinstance(implementation, gt.StencilObject)
+        assert isinstance(implementation, StencilObject)
         assert implementation.backend == test["backend"]
         assert all(
             cls.global_boundaries[name] == field_info.boundary
@@ -411,7 +411,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 "Cannot perform validation tests, since there are no valid implementations."
             )
         for implementation in implementation_list:
-            if not isinstance(implementation, gt.StencilObject):
+            if not isinstance(implementation, StencilObject):
                 raise RuntimeError("Wrong function got from implementations_db cache!")
 
             fields, exec_info = parameters_dict
