@@ -26,6 +26,7 @@ from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import frontend as gt_frontend
+from gt4py.stencil_object import StencilObject
 
 
 def load_stencil(frontend_name, backend_name, definition_func, externals, options):
@@ -58,7 +59,7 @@ def load_stencil(frontend_name, backend_name, definition_func, externals, option
 
 
 def gtscript_loader(definition_func, backend, build_options, externals):
-    if isinstance(definition_func, gt_definitions.StencilObject):
+    if isinstance(definition_func, StencilObject):
         definition_func = definition_func.definition_func
     if not isinstance(definition_func, types.FunctionType):
         raise ValueError("Invalid stencil definition object ({obj})".format(obj=definition_func))

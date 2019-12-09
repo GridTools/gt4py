@@ -47,6 +47,10 @@ def x86_is_compatible_layout(field):
     return True
 
 
+def gtcpu_is_compatible_type(field):
+    return isinstance(field, np.ndarray)
+
+
 def make_mc_layout_map(mask):
     ctr = reversed(range(sum(mask)))
     if len(mask) < 3:
@@ -136,6 +140,7 @@ class GTX86Backend(GTCPUBackend):
         "device": "cpu",
         "layout_map": make_x86_layout_map,
         "is_compatible_layout": x86_is_compatible_layout,
+        "is_compatible_type": gtcpu_is_compatible_type,
     }
 
     _CPU_ARCHITECTURE = "x86"
@@ -151,6 +156,7 @@ class GTMCBackend(GTCPUBackend):
         "device": "cpu",
         "layout_map": make_mc_layout_map,
         "is_compatible_layout": mc_is_compatible_layout,
+        "is_compatible_type": gtcpu_is_compatible_type,
     }
 
     _CPU_ARCHITECTURE = "mc"

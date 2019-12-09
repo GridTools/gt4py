@@ -39,7 +39,6 @@ from .definitions import (
     Grid,
     ParameterInfo,
     CartesianSpace,
-    StencilObject,
 )
 
 from . import config
