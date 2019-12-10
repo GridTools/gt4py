@@ -280,4 +280,3 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
                 for stage in group.stages:
                     self.visit(stage, iteration_order=multi_stage.iteration_order)
                     self.sources.append("")
-

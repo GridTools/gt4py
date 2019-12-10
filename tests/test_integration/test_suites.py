@@ -358,3 +358,103 @@ class TestHorizontalDiffusionSubroutines3(gt_testing.StencilTestSuite):
         diffusion[...] = u[2:-2, 2:-2, :] - weight * (
             flux_i[1:, :, :] - flux_i[:-1, :, :] + flux_j[:, 1:, :] - flux_j[:, :-1, :]
         )
+
+
+class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
+    """Tests runtime ifs.
+    """
+
+    dtypes = (np.float_,)
+    domain_range = [(1, 15), (1, 15), (1, 15)]
+    backends = ["debug", "numpy", "gtx86"]
+    symbols = dict(
+        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+    )
+
+    def definition(outfield):
+
+        with computation(PARALLEL), interval(...):
+
+            if 1:
+                outfield = 1
+            else:
+                outfield = 2
+
+    def validation(outfield, *, domain, origin, **kwargs):
+        outfield[...] = 1
+
+
+class TestRuntimeIfNested(gt_testing.StencilTestSuite):
+    """Tests nested runtime ifs
+    """
+
+    dtypes = (np.float_,)
+    domain_range = [(1, 15), (1, 15), (1, 15)]
+    backends = ["debug", "numpy", "gtx86"]
+    symbols = dict(
+        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+    )
+
+    def definition(outfield):
+
+        with computation(PARALLEL), interval(...):
+
+            if 1:
+                if 0:
+                    outfield = 1
+                else:
+                    outfield = 2
+            else:
+                outfield = 3
+
+    def validation(outfield, *, domain, origin, **kwargs):
+        outfield[...] = 2
+
+
+class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
+    """Tests nested runtime ifs, where not the same branch is used for all data points.
+    """
+
+    dtypes = (np.float_,)
+    domain_range = [(1, 15), (1, 15), (1, 15)]
+    backends = ["debug", "numpy", "gtx86"]
+    symbols = dict(
+        infield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+    )
+
+    def definition(infield, outfield):
+
+        with computation(PARALLEL), interval(...):
+
+            if infield > 0:
+                if infield < 0.5:
+                    outfield = 1
+                else:
+                    outfield = 2
+            else:
+                outfield = 3
+
+    def validation(infield, outfield, *, domain, origin, **kwargs):
+        outfield[...] = 3
+        outfield[...] = np.choose(infield > 0, [outfield, 2])
+        outfield[...] = np.choose(np.logical_and(infield > 0, infield < 0.5), [outfield, 1])
+
+
+class TestTernaryOp(gt_testing.StencilTestSuite):
+
+    dtypes = (np.float_,)
+    domain_range = [(1, 15), (2, 15), (1, 15)]
+    backends = ["numpy", "gtx86", "gtmc"]
+    symbols = dict(
+        infield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 1), (0, 0)]),
+        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+    )
+
+    def definition(infield, outfield):
+
+        with computation(PARALLEL), interval(...):
+            outfield = (infield > 0.0) * infield + (infield <= 0.0) * (-infield[0, 1, 0])
+
+    def validation(infield, outfield, *, domain, origin, **kwargs):
+        outfield[...] = np.choose(infield[:, :-1, :] > 0, [-infield[:, 1:, :], infield[:, :-1, :]])

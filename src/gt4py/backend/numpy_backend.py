@@ -27,6 +27,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         super().__init__(*args, **kwargs)
         self.interval_k_start_name = interval_k_start_name
         self.interval_k_end_name = interval_k_end_name
+        self.conditions_depth = 0
 
     def _make_field_origin(self, name: str, origin=None):
         if origin is None:
@@ -174,9 +175,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
     def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr):
         then_fmt = "({})" if isinstance(node.then_expr, gt_ir.CompositeExpr) else "{}"
         else_fmt = "({})" if isinstance(node.else_expr, gt_ir.CompositeExpr) else "{}"
-        # source = "np.vectorize(lambda cond, then_expr, else_expr:then_expr if cond else else_expr)({condition}, {then_expr}, {else_expr})".format(
 
-        source = "{np}.choose({condition},[{else_expr}, {then_expr}], out={np}.empty({np}.max(({np}.asanyarray({condition}).shape,{np}.asanyarray({then_expr}).shape,{np}.asanyarray({else_expr}).shape),axis=0), dtype={np}.{dtype}))".format(
+        source = "vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
             condition=self.visit(node.condition),
             then_expr=then_fmt.format(self.visit(node.then_expr)),
             else_expr=else_fmt.format(self.visit(node.else_expr)),
@@ -187,7 +187,59 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return source
 
     def visit_If(self, node: gt_ir.If):
-        raise NotImplementedError("The numpy backend does not support runtime if statements.")
+        sources = []
+        self.conditions_depth += 1
+        sources.append(
+            "__condition_{level} = {condition}".format(
+                level=self.conditions_depth, condition=self.visit(node.condition)
+            )
+        )
+
+        stmts = [
+            *[(True, stmt) for stmt in node.main_body.stmts],
+            *[(False, stmt) for stmt in node.else_body.stmts],
+        ]
+
+        for is_if, stmt in stmts:
+
+            if isinstance(stmt, gt_ir.Assign):
+                condition = (
+                    (
+                        "{np}.logical_and(".format(np=self.numpy_prefix)
+                        + ", ".join(
+                            [
+                                "__condition_{level}".format(level=i + 1)
+                                for i in range(self.conditions_depth)
+                            ]
+                        )
+                        + ")"
+                    )
+                    if self.conditions_depth > 1
+                    else "__condition_1"
+                )
+
+                target = self.visit(stmt.target)
+                value = self.visit(stmt.value)
+                sources.append(
+                    "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
+                        condition=condition,
+                        target=target,
+                        then_expr=value if is_if else target,
+                        else_expr=target if is_if else value,
+                        dtype=stmt.target.data_type.dtype.name,
+                        np=self.numpy_prefix,
+                    )
+                )
+            else:
+                stmt_sources = self.visit(stmt)
+                if isinstance(stmt_sources, list):
+                    sources.extend(stmt_sources)
+                else:
+                    sources.append(stmt_sources)
+
+        self.conditions_depth -= 1
+        # return "\n".join(sources)
+        return sources
 
 
 class NumPyGenerator(gt_backend.BaseGenerator):
@@ -205,6 +257,27 @@ class NumPyGenerator(gt_backend.BaseGenerator):
             interval_k_start_name="interval_k_start",
             interval_k_end_name="interval_k_end",
         )
+
+    def generate_module_members(self):
+        source = """       
+def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
+    return np.choose(
+        condition,
+        [else_expr, then_expr],
+        out=np.empty(
+            np.max(
+                (
+                    np.asanyarray(condition).shape,
+                    np.asanyarray(then_expr).shape,
+                    np.asanyarray(else_expr).shape,
+                ),
+                axis=0,
+            ),
+            dtype=dtype,
+        ),
+    )
+"""
+        return source
 
     def generate_implementation(self):
         sources = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
