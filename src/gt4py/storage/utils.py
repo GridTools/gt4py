@@ -14,8 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import numpy as np
 import math
+import numbers
+import numpy as np
 import gt4py.utils as gt_util
 import collections
 
@@ -49,14 +50,14 @@ def normalize_shape(shape, mask=None):
             "len(shape) must be equal to len(mask) or the number of 'True' entries in mask."
         )
 
-    if not gt_util.is_iterable_of(shape, int):
+    if not gt_util.is_iterable_of(shape, numbers.Integral):
         raise TypeError("shape must be a tuple of ints or pairs of ints.")
     if any(o <= 0 for o in shape):
         raise ValueError("shape ({}) contains non-positive value.".format(shape))
 
     new_shape = list(shape)
     if sum(mask) < len(shape):
-        new_shape = [h for i, h in enumerate(new_shape) if mask[i]]
+        new_shape = [int(h) for i, h in enumerate(new_shape) if mask[i]]
 
     return tuple(new_shape)
 
@@ -75,7 +76,7 @@ def normalize_default_origin(default_origin, mask=None):
             "len(default_origin) must be equal to len(mask) or the number of 'True' entries in mask."
         )
 
-    if not gt_util.is_iterable_of(default_origin, int):
+    if not gt_util.is_iterable_of(default_origin, numbers.Integral):
         raise TypeError("default_origin must be a tuple of ints or pairs of ints.")
     if any(o < 0 for o in default_origin):
         raise ValueError("default_origin ({}) contains negative value.".format(default_origin))

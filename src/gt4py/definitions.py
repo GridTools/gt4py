@@ -64,7 +64,7 @@ class NumericTuple(tuple):
 
     @classmethod
     def is_valid(cls, value, *, ndims=(1, CartesianSpace.ndims)):
-        if isinstance(ndims, int):
+        if isinstance(ndims, numbers.Integral):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
@@ -241,7 +241,7 @@ class Index(NumericTuple):
     @classmethod
     def _check_value(cls, value, ndims):
         assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
-        assert all(isinstance(d, int) for d in value)
+        assert all(isinstance(d, numbers.Integral) for d in value)
         assert ndims[0] <= len(value) <= ndims[1]
 
 
@@ -253,7 +253,7 @@ class Shape(NumericTuple):
     @classmethod
     def _check_value(cls, value, ndims):
         assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
-        assert all(isinstance(d, int) and d >= 0 for d in value)
+        assert all(isinstance(d, numbers.Integral) and d >= 0 for d in value)
         assert ndims[0] <= len(value) <= ndims[1]
 
 
@@ -734,8 +734,8 @@ def normalize_domain(domain):
 
 def normalize_origin(origin):
     if origin is not None:
-        if isinstance(origin, int):
-            origin = Shape.from_k(origin)
+        if isinstance(origin, numbers.Integral):
+            origin = Shape.from_k(int(origin))
         elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin):
             origin = Shape.from_value(origin)
         else:

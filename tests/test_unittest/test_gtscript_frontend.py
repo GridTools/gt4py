@@ -396,5 +396,8 @@ class TestDTypes:
 
         with pytest.raises(ValueError, match=r".*data type descriptor.*"):
             compile_definition(
-                definition_func, "test_invalid_external_dtypes", module, dtypes={"dtype": test_dtype}
+                definition_func,
+                "test_invalid_external_dtypes",
+                module,
+                dtypes={"dtype": test_dtype},
             )
