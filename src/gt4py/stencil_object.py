@@ -1,6 +1,8 @@
 import sys
 import abc
 import time
+import warnings
+import numpy as np
 import gt4py.backend as gt_backend
 from gt4py.definitions import (
     AccessKind,
@@ -192,6 +194,11 @@ class StencilObject(abc.ABC):
                     "Field '{field}' has type '{type}', which is not compatible with the '{backend}' backend.".format(
                         field=name, type=type(field), backend=self.backend
                     )
+                )
+            elif isinstance(field, np.ndarray):
+                warnings.warn(
+                    "NumPy ndarray passed as field. This is discouraged and only works with constraints and only for certain backends.",
+                    RuntimeWarning,
                 )
             if not field.dtype == self.field_info[name].dtype:
                 raise TypeError(
