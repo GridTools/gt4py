@@ -1,6 +1,18 @@
+import sys
 import abc
+import time
 import gt4py.backend as gt_backend
-from gt4py.definitions import *
+from gt4py.definitions import (
+    AccessKind,
+    Boundary,
+    DomainInfo,
+    FieldInfo,
+    ParameterInfo,
+    normalize_domain,
+    normalize_origin_mapping,
+    Shape,
+    Index,
+)
 
 
 class StencilObject(abc.ABC):
@@ -99,7 +111,7 @@ class StencilObject(abc.ABC):
     def __call__(self, *args, **kwargs):
         pass
 
-    def call_run(self, field_args, parameter_args, domain, origin, exec_info=None):
+    def _call_run(self, field_args, parameter_args, domain, origin, exec_info=None):
         """Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
 
         Note that this function will always try to expand simple parameter values to

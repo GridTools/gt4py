@@ -40,6 +40,7 @@ from .definitions import (
     ParameterInfo,
     CartesianSpace,
 )
+from .stencil_object import StencilObject
 
 from . import config
 from . import gtscript

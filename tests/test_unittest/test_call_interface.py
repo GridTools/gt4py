@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
+import pytest
 
 import gt4py.gtscript as gtscript
 from gt4py.gtscript import Field
@@ -194,3 +195,172 @@ def test_domain_selection():
     assert np.all(A == 4)
     assert np.all(B == 7)
     assert np.all(C == 21)
+
+
+def a_stencil(
+    arg1: Field[np.float64],
+    arg2: Field[np.float64],
+    arg3: Field[np.float64] = None,
+    *,
+    par1: np.float64,
+    par2: np.float64 = 7.0,
+    par3: np.float64 = None,
+):
+    from __externals__ import BRANCH
+
+    with computation(PARALLEL), interval(...):
+
+        if __INLINED(BRANCH):
+            arg1 = arg1 * par1 * par2
+        else:
+            arg1 = arg2 + arg3 * par1 * par2 * par3
+
+
+def avg_stencil(in_field: Field[np.float64], out_field: Field[np.float64]):
+    with computation(PARALLEL), interval(...):
+        out_field = 0.25 * (
+            +in_field[0, 1, 0] + in_field[0, -1, 0] + in_field[1, 0, 0] + in_field[-1, 0, 0]
+        )
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        name
+        for name in gt_backend.REGISTRY.names
+        if gt_backend.from_name(name).storage_info["device"] == "cpu"
+    ],
+)
+def test_default_arguments(backend):
+    branch_true = gtscript.stencil(
+        backend=backend, definition=a_stencil, externals={"BRANCH": True}, rebuild=True
+    )
+    branch_false = gtscript.stencil(
+        backend=backend, definition=a_stencil, externals={"BRANCH": False}, rebuild=True
+    )
+
+    arg1 = gt_storage.ones(
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+    )
+    arg2 = gt_storage.zeros(
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+    )
+    arg3 = gt_storage.ones(
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+    )
+    tmp = np.asarray(arg3)
+    tmp *= 2
+
+    branch_true(arg1, None, arg3, par1=2.0)
+    np.testing.assert_equal(arg1, 14 * np.ones((3, 3, 3)))
+    branch_true(arg1, None, par1=2.0)
+    np.testing.assert_equal(arg1, 196 * np.ones((3, 3, 3)))
+    branch_false(arg1, arg2, arg3, par1=2.0, par3=2.0)
+    np.testing.assert_equal(arg1, 56 * np.ones((3, 3, 3)))
+    try:
+        branch_false(arg1, arg2, par1=2.0, par3=2.0)
+    except ValueError:
+        pass
+    else:
+        assert False
+
+    arg1 = gt_storage.ones(
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+    )
+    arg2 = gt_storage.zeros(
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+    )
+    arg3 = gt_storage.ones(
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+    )
+    tmp = np.asarray(arg3)
+    tmp *= 2
+
+    branch_true(arg1, arg2=None, par1=2.0, par2=5.0, par3=3.0)
+    np.testing.assert_equal(arg1, 10 * np.ones((3, 3, 3)))
+    branch_true(arg1, arg2=None, par1=2.0, par2=5.0)
+    np.testing.assert_equal(arg1, 100 * np.ones((3, 3, 3)))
+    branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0, par3=3.0)
+    np.testing.assert_equal(arg1, 60 * np.ones((3, 3, 3)))
+    try:
+        branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0)
+    except ValueError:
+        pass
+    else:
+        assert False
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        name
+        for name in gt_backend.REGISTRY.names
+        if gt_backend.from_name(name).storage_info["device"] != "gpu"
+    ],
+)
+def test_halo_checks(backend):
+    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
+
+    # test default works
+    in_field = gt_storage.ones(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    out_field = gt_storage.zeros(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    stencil(in_field=in_field, out_field=out_field)
+    assert (out_field[1:-1, 1:-1, :] == 1).all()
+
+    # test setting arbitrary, small domain works
+    in_field = gt_storage.ones(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    out_field = gt_storage.zeros(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(10, 10, 10))
+    assert (out_field[2:12, 2:12, :] == 1).all()
+
+    # test setting domain+origin too large raises
+    in_field = gt_storage.ones(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    out_field = gt_storage.zeros(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    with pytest.raises(ValueError):
+        stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
+
+    # test 2*origin+domain does not raise if still fits (c.f. previous bug in c++ check.)
+    in_field = gt_storage.ones(
+        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    out_field = gt_storage.zeros(
+        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
+
+
+def test_np_int_types():
+    backend = "numpy"
+    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
+
+    # test numpy int types are accepted
+    in_field = gt_storage.ones(
+        backend=backend,
+        shape=(np.int8(23), np.int16(23), np.int32(10)),
+        default_origin=(np.int64(1), int(1), 0),
+        dtype=np.float64,
+    )
+    out_field = gt_storage.zeros(
+        backend=backend,
+        shape=(np.int8(23), np.int16(23), np.int32(10)),
+        default_origin=(np.int64(1), int(1), 0),
+        dtype=np.float64,
+    )
+    stencil(
+        in_field=in_field,
+        out_field=out_field,
+        origin=(np.int8(2), np.int16(2), np.int32(0)),
+        domain=(np.int64(20), int(20), 10),
+    )

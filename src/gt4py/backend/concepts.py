@@ -276,8 +276,8 @@ import numpy as np
 from numpy import dtype
 {{ imports }}
 
-from gt4py import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo
-from gt4py.stencil_object import StencilObject
+from gt4py.stencil_object import StencilObject, AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo
+
 {{ module_members }}
 
 class {{ class_name }}(StencilObject):
@@ -339,7 +339,7 @@ class {{ class_name }}(StencilObject):
 {{synchronization}}
 {%- endfilter %}
 
-        self.call_run(
+        self._call_run(
             field_args=field_args,
             parameter_args=parameter_args,
             domain=domain,
