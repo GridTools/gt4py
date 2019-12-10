@@ -129,12 +129,6 @@ data_store_t<T, Id> make_data_store(const BufferInfo& bi,
                                  " != " + std::to_string(3) + "]");
     }
 
-    for (int i = 0; i < 2 /*3*/; ++i) {
-        if (2*origin[i] + compute_domain_shape[i] > bi.shape[i])
-            throw std::runtime_error(
-                "Given shape and origin exceed buffer dimension");
-    }
-
     // ptr, dims and strides are "outer domain" (i.e., compute domain + halo
     // region). The halo region is only defined through `make_grid` (and
     // currently, in the storage info)
