@@ -43,6 +43,13 @@ def a_stencil(
             arg1 = arg2 + arg3 * par1 * par2 * par3
 
 
+def avg_stencil(in_field: Field[np.float64], out_field: Field[np.float64]):
+    with computation(PARALLEL), interval(...):
+        out_field = 0.25 * (
+            +in_field[0, 1, 0] + in_field[0, -1, 0] + in_field[1, 0, 0] + in_field[-1, 0, 0]
+        )
+
+
 @pytest.mark.parametrize(
     "backend",
     [
@@ -108,3 +115,54 @@ def test_default_arguments(backend):
         pass
     else:
         assert False
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        name
+        for name in gt_backend.REGISTRY.names
+        if gt_backend.from_name(name).storage_info["device"] != "gpu"
+    ],
+)
+def test_halo_checks(backend):
+    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
+
+    # test default works
+    in_field = gt_storage.ones(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    out_field = gt_storage.zeros(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    stencil(in_field=in_field, out_field=out_field)
+    assert (out_field[1:-1, 1:-1, :] == 1).all()
+
+    # test setting arbitrary, small domain works
+    in_field = gt_storage.ones(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    out_field = gt_storage.zeros(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(10, 10, 10))
+    assert (out_field[2:12, 2:12, :] == 1).all()
+
+    # test setting domain+origin too large raises
+    in_field = gt_storage.ones(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    out_field = gt_storage.zeros(
+        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    with pytest.raises(ValueError):
+        stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
+
+    # test 2*origin+domain does not raise if still fits (c.f. previous bug in c++ check.)
+    in_field = gt_storage.ones(
+        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    out_field = gt_storage.zeros(
+        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
