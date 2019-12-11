@@ -176,24 +176,20 @@ class StencilObject(abc.ABC):
         }
         for name, field_info in self.field_info.items():
             if field_info is not None and field_args[name] is None:
-                raise ValueError("Field '{field_name}' is None.".format(field_name=name))
+                raise ValueError(f"Field '{name}' is None.")
         for name, parameter_info in self.parameter_info.items():
             if parameter_info is not None and parameter_args[name] is None:
-                raise ValueError(
-                    "Parameter '{parameter_name}' is None.".format(parameter_name=name)
-                )
+                raise ValueError(f"Parameter '{name}' is None.")
         # assert compatibility of fields with stencil
         for name, field in used_arg_fields.items():
             if not gt_backend.from_name(self.backend).storage_info["is_compatible_layout"](field):
                 raise ValueError(
-                    "The layout of the field {} is not compatible with the backend.".format(name)
+                    f"The layout of the field {name} is not compatible with the backend."
                 )
 
             if not gt_backend.from_name(self.backend).storage_info["is_compatible_type"](field):
                 raise ValueError(
-                    "Field '{field}' has type '{type}', which is not compatible with the '{backend}' backend.".format(
-                        field=name, type=type(field), backend=self.backend
-                    )
+                    f"Field '{name}' has type '{type(field)}', which is not compatible with the '{self.backend}' backend."
                 )
             elif isinstance(field, np.ndarray):
                 warnings.warn(
@@ -202,34 +198,26 @@ class StencilObject(abc.ABC):
                 )
             if not field.dtype == self.field_info[name].dtype:
                 raise TypeError(
-                    "The dtype of field '{field}' is '{is_dtype}' instead of '{should_dtype}'".format(
-                        field=name, is_dtype=field.dtype, should_dtype=self.field_info[name].dtype
-                    )
+                    f"The dtype of field '{name}' is '{field.dtype}' instead of '{self.field_info[name].dtype}'"
                 )
             # ToDo: check if mask is correct: need mask info in stencil object.
 
             if not field.is_stencil_view:
                 raise ValueError(
-                    "An incompatible view was passed for field " + name + " to the stencil. "
+                    f"An incompatible view was passed for field {name} to the stencil. "
                 )
             for name_other, field_other in used_arg_fields.items():
                 if field_other.mask == field.mask:
                     if not field_other.shape == field.shape:
                         raise ValueError(
-                            "The fields {} and {} have the same mask but different shapes.".format(
-                                name, name_other
-                            )
+                            f"The fields {name} and {name_other} have the same mask but different shapes."
                         )
 
         # assert compatibility of parameters with stencil
         for name, parameter in used_arg_params.items():
             if not type(parameter) == self.parameter_info[name].dtype:
                 raise TypeError(
-                    "The type of parameter '{field}' is '{is_dtype}' instead of '{should_dtype}'".format(
-                        field=name,
-                        is_dtype=type(parameter),
-                        should_dtype=self.parameter_info[name].dtype,
-                    )
+                    f"The type of parameter '{name}' is '{type(parameter)}' instead of '{self.parameter_info[name].dtype}'"
                 )
 
         assert isinstance(field_args, dict) and isinstance(parameter_args, dict)
@@ -258,23 +246,21 @@ class StencilObject(abc.ABC):
         else:
             domain = normalize_domain(domain)
             if len(domain) != self.domain_info.ndims:
-                raise ValueError("Invalid 'domain' value ({})".format(domain))
+                raise ValueError(f"Invalid 'domain' value '{domain}'")
 
         # check domain+halo vs field size
         if not domain > Shape.zeros(self.domain_info.ndims):
-            raise ValueError("Compute domain contains zero sizes ({})".format(domain))
+            raise ValueError(f"Compute domain contains zero sizes '{domain}')")
 
         if not domain <= max_domain:
             raise ValueError(
-                "Compute domain too large (provided: {}, maximum: {})".format(domain, max_domain)
+                f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
         for name, field in used_arg_fields.items():
             min_origin = self.field_info[name].boundary.lower_indices
             if origin[name] < min_origin:
                 raise ValueError(
-                    "Origin for field {} too small. Must be at least {}, is {}".format(
-                        name, min_origin, origin[name]
-                    )
+                    f"Origin for field {name} too small. Must be at least {min_origin}, is {origin[name]}"
                 )
             min_shape = tuple(
                 o + d + h
@@ -284,9 +270,7 @@ class StencilObject(abc.ABC):
             )
             if min_shape > field.shape:
                 raise ValueError(
-                    "Shape of field {} is {} but must be at least {} for given domain and origin.".format(
-                        name, field.shape, min_shape
-                    )
+                    f"Shape of field {name} is {field.shape} but must be at least {min_shape} for given domain and origin."
                 )
 
         self.run(

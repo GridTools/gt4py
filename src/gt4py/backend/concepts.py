@@ -276,7 +276,7 @@ import numpy as np
 from numpy import dtype
 {{ imports }}
 
-from gt4py.stencil_object import StencilObject, AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo
+from gt4py.stencil_object import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo, StencilObject
 
 {{ module_members }}
 
