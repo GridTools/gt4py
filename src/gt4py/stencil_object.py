@@ -4,6 +4,7 @@ import time
 import warnings
 import numpy as np
 import gt4py.backend as gt_backend
+import gt4py.storage as gt_storage
 from gt4py.definitions import (
     AccessKind,
     Boundary,
@@ -191,7 +192,7 @@ class StencilObject(abc.ABC):
                 raise ValueError(
                     f"Field '{name}' has type '{type(field)}', which is not compatible with the '{self.backend}' backend."
                 )
-            elif isinstance(field, np.ndarray):
+            elif type(field) is np.ndarray:
                 warnings.warn(
                     "NumPy ndarray passed as field. This is discouraged and only works with constraints and only for certain backends.",
                     RuntimeWarning,
@@ -202,16 +203,17 @@ class StencilObject(abc.ABC):
                 )
             # ToDo: check if mask is correct: need mask info in stencil object.
 
-            if not field.is_stencil_view:
-                raise ValueError(
-                    f"An incompatible view was passed for field {name} to the stencil. "
-                )
-            for name_other, field_other in used_arg_fields.items():
-                if field_other.mask == field.mask:
-                    if not field_other.shape == field.shape:
-                        raise ValueError(
-                            f"The fields {name} and {name_other} have the same mask but different shapes."
-                        )
+            if isinstance(field, gt_storage.storage.Storage):
+                if not field.is_stencil_view:
+                    raise ValueError(
+                        f"An incompatible view was passed for field {name} to the stencil. "
+                    )
+                for name_other, field_other in used_arg_fields.items():
+                    if field_other.mask == field.mask:
+                        if not field_other.shape == field.shape:
+                            raise ValueError(
+                                f"The fields {name} and {name_other} have the same mask but different shapes."
+                            )
 
         # assert compatibility of parameters with stencil
         for name, parameter in used_arg_params.items():
