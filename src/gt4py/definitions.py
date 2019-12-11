@@ -724,6 +724,8 @@ class GTSemanticError(GTError):
 
 
 def normalize_domain(domain):
+    if domain is not None:
+        domain = tuple(domain)
     if not isinstance(domain, Shape):
         if not Shape.is_valid(domain):
             raise ValueError("Invalid 'domain' value ({})".format(domain))
@@ -734,6 +736,7 @@ def normalize_domain(domain):
 
 def normalize_origin(origin):
     if origin is not None:
+        origin = tuple(origin)
         if isinstance(origin, numbers.Integral):
             origin = Shape.from_k(int(origin))
         elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin):
@@ -745,7 +748,7 @@ def normalize_origin(origin):
 
 
 def normalize_origin_mapping(origin_mapping):
-    origin_mapping = origin_mapping or {}
+    origin_mapping = origin_mapping if origin_mapping is not None else {}
     if isinstance(origin_mapping, collections.abc.Mapping):
         origin_mapping = {
             key: normalize_origin(value)
