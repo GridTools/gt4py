@@ -52,13 +52,13 @@ contained in the package. The complete installation procedure is thus:
     pip install ./gt4py  # pip install ./gt4py[cudaXX]
 
     # Finally run the command to install GridTools C++ sources
-    python gt4py/setup.py install_gt_sources
+    python -m gt4py.gt_src_manager install
 
 Note that pip will not delete the GridTools C++ sources when
 uninstalling the package, so make sure you run the remove command
 before:
 
-    python gt4py/setup.py remove_gt_sources
+    python -m gt4py.gt_src_manager remove
     pip uninstall gt4py
 
 Documentation
