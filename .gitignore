@@ -4,7 +4,6 @@ _local_
 ### GridTools ####
 src/gt4py/_external_src/gridtools
 .gt_cache/
-src/gt4py/_external_src
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

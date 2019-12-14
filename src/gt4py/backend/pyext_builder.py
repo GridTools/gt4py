@@ -133,8 +133,11 @@ def build_gtcpu_ext(
     clean=False,
     debug_mode=False,
     add_profile_info=False,
+    extra_include_dirs: list = None,
 ):
     include_dirs = [gt_config.build_settings["boost_include_path"]]
+    if extra_include_dirs:
+        include_dirs.extend(extra_include_dirs)
     extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
     if isinstance(extra_compile_args_from_config, dict):
         extra_compile_args_from_config = extra_compile_args_from_config["cxx"]
