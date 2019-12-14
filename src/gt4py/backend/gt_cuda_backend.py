@@ -19,7 +19,6 @@ import os
 import numpy as np
 
 from gt4py import backend as gt_backend
-from gt4py import storage as gt_storage
 from . import pyext_builder
 
 
@@ -49,7 +48,10 @@ def cuda_is_compatible_layout(field):
 
 
 def cuda_is_compatible_type(field):
-    return isinstance(field, gt_storage.storage.GPUStorage)
+    # ToDo: find a better way to remove the import cycle
+    from gt4py.storage.storage import GPUStorage
+
+    return isinstance(field, GPUStorage)
 
 
 @gt_backend.register

@@ -18,7 +18,6 @@ import math
 import numbers
 import numpy as np
 import gt4py.utils as gt_util
-import collections
 
 try:
     import cupy as cp

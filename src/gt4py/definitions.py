@@ -15,16 +15,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import abc
 import collections
 import enum
 import numbers
 import operator
-import sys
-import time
-import warnings
 
-import gt4py as gt
 from gt4py import utils as gt_utils
 from gt4py.utils.attrib import (
     attribute,

@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import copy
 import numpy as np
 
 try:
