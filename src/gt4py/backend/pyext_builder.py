@@ -129,10 +129,10 @@ def build_gtcpu_ext(
     build_path: str,
     target_path: str,
     *,
-    verbose=False,
-    clean=False,
-    debug_mode=False,
-    add_profile_info=False,
+    verbose: bool = False,
+    clean: bool = False,
+    debug_mode: bool = False,
+    add_profile_info: bool = False,
     extra_include_dirs: list = None,
 ):
     include_dirs = [gt_config.build_settings["boost_include_path"]]
@@ -221,15 +221,18 @@ def build_gtcuda_ext(
     build_path: str,
     target_path: str,
     *,
-    verbose=False,
-    clean=False,
-    debug_mode=False,
-    add_profile_info=False,
+    verbose: bool = False,
+    clean: bool = False,
+    debug_mode: bool = False,
+    add_profile_info: bool = False,
+    extra_include_dirs: list = None,
 ):
     include_dirs = [
         gt_config.build_settings["boost_include_path"],
         gt_config.build_settings["cuda_include_path"],
     ]
+    if extra_include_dirs:
+        include_dirs.extend(extra_include_dirs)
 
     library_dirs = [gt_config.build_settings["cuda_library_path"]]
     libraries = ["cudart"]
@@ -293,7 +296,7 @@ def build_gtcuda_ext(
         sources,
         build_path,
         target_path,
-        verbose=True,
+        verbose=verbose,
         clean=clean,
         include_dirs=include_dirs,
         library_dirs=library_dirs,
