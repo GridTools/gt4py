@@ -14,8 +14,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#include "../../src/gt4py/_external_src/gridtools/regression/horizontal_diffusion_repository.hpp"
-#include "../../src/gt4py/_external_src/gridtools/regression/vertical_advection_repository.hpp"
+#include "gridtools/regression/horizontal_diffusion_repository.hpp"
+#include "gridtools/regression/vertical_advection_repository.hpp"
 #include <iostream>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>

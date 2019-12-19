@@ -20,16 +20,20 @@ __copyright__ = "ETH Zurich"
 __license__ = "gpl3"
 
 
-# from . import config
-# from . import utils
-# from . import definitions
-#
-# from . import backend
-# from . import gtscript
-# from . import ir
-# from . import loader
-# from . import storage
-# from . import testing
+from . import config
+from . import utils
+
+from . import definitions
+from . import gtscript
+
+from . import ir
+from . import analysis
+from . import frontend
+from . import backend
+from . import stencil_object
+from . import loader
+from . import storage
+from . import testing
 
 from .definitions import (
     AccessKind,
@@ -41,10 +45,6 @@ from .definitions import (
     CartesianSpace,
 )
 from .stencil_object import StencilObject
-
-from . import config
-from . import gtscript
-from . import storage
 
 from pkg_resources import get_distribution, DistributionNotFound
 
