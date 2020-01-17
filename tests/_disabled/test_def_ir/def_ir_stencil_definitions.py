@@ -148,10 +148,10 @@ def make_tridiagonal_solver():
         with gt.region(iteration=gt.FORWARD, k_interval=(1, None)):
             sup = sup / (diag - sup[0, 0, -1] * inf)
             rhs = (rhs - inf * rhs[0, 0, -1]) / (diag - sup[0, 0, -1] * inf)
-        with gt.region(iteration=gt.BACKWARD, k_interval=(0, -1)):
-            out = rhs - sup * out[0, 0, 1]
         with gt.region(iteration=gt.BACKWARD, k_interval=(-1, None)):
             out = rhs
+        with gt.region(iteration=gt.BACKWARD, k_interval=(0, -1)):
+            out = rhs - sup * out[0, 0, 1]
 
     definition = gt_ir.utils.make_definition(
         "tridiagonal_solver",

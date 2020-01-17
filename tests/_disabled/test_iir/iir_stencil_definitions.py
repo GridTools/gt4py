@@ -372,10 +372,10 @@ def make_tridiagonal_solver():
 
     # Backward
     def backward_thomas(inf, diag, sup, rhs, out):
-        with gt.region(iteration=gt.BACKWARD, k_interval=(0, -1)):
-            out = rhs - sup * out[0, 0, 1]
         with gt.region(iteration=gt.BACKWARD, k_interval=(-1, None)):
             out = rhs
+        with gt.region(iteration=gt.BACKWARD, k_interval=(0, -1)):
+            out = rhs - sup * out[0, 0, 1]
 
     backward_stage = gt_ir.utils.make_stage(
         backward_thomas,
