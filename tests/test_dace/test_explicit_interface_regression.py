@@ -64,7 +64,7 @@ def run_horizontal_diffusion(backend, domain):
 
     # testmodule = generate_test_module("horizontal_diffusion")
     testmodule = build_dace_stencil(
-        name, gt_definitions.BuildOptions(name=name, module="_test_module." + name)
+        name, gt_definitions.BuildOptions(name=name, module="_test_module." + name, rebuild=True)
     )
     for k in arg_fields:
         if hasattr(arg_fields[k], "host_to_device"):

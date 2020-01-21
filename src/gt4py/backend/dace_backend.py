@@ -45,6 +45,7 @@ import functools
 from gt4py.backend.dace_backend import load_dace_program
 
 dace_program = load_dace_program("{self.options.dace_build_path}", "{self.options.dace_ext_lib}", "{self.options.dace_module_name}")
+# dace_program = load_dace_program("{self.options.dace_ext_lib}", "{self.options.name}")
         """
         return source
 
