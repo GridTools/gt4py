@@ -517,13 +517,13 @@ def make_vertical_advection_dycore():
     )
 
     def u_backward_function(utens_stage, u_pos, ccol, dcol, data_col, *, dtr_stage):
-        with gt.region(iteration=gt.BACKWARD, k_interval=(0, -1)):
-            datacol = dcol[0, 0, 0] - ccol[0, 0, 0] * data_col[0, 0, 1]
-            data_col = datacol
-            utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
 
         with gt.region(iteration=gt.BACKWARD, k_interval=(-1, None)):
             datacol = dcol[0, 0, 0]
+            data_col = datacol
+            utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
+        with gt.region(iteration=gt.BACKWARD, k_interval=(0, -1)):
+            datacol = dcol[0, 0, 0] - ccol[0, 0, 0] * data_col[0, 0, 1]
             data_col = datacol
             utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
 
@@ -684,13 +684,12 @@ def make_vertical_advection_dycore_with_scalar_storage():
     )
 
     def u_backward_function(utens_stage, u_pos, dtr_stage, ccol, dcol, data_col):
-        with gt.region(iteration=gt.BACKWARD, k_interval=(0, -1)):
-            datacol = dcol[0, 0, 0] - ccol[0, 0, 0] * data_col[0, 0, 1]
-            data_col = datacol
-            utens_stage = dtr_stage[0, 0, 0] * (datacol - u_pos[0, 0, 0])
-
         with gt.region(iteration=gt.BACKWARD, k_interval=(-1, None)):
             datacol = dcol[0, 0, 0]
+            data_col = datacol
+            utens_stage = dtr_stage[0, 0, 0] * (datacol - u_pos[0, 0, 0])
+        with gt.region(iteration=gt.BACKWARD, k_interval=(0, -1)):
+            datacol = dcol[0, 0, 0] - ccol[0, 0, 0] * data_col[0, 0, 1]
             data_col = datacol
             utens_stage = dtr_stage[0, 0, 0] * (datacol - u_pos[0, 0, 0])
 
