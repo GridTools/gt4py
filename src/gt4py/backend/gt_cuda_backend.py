@@ -49,9 +49,9 @@ def cuda_is_compatible_layout(field):
 
 def cuda_is_compatible_type(field):
     # ToDo: find a better way to remove the import cycle
-    from gt4py.storage.storage import GPUStorage
+    from gt4py.storage.storage import GPUStorage, ExplicitlySyncedGPUStorage
 
-    return isinstance(field, GPUStorage)
+    return isinstance(field, (GPUStorage, ExplicitlySyncedGPUStorage))
 
 
 @gt_backend.register

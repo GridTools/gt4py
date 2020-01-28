@@ -491,6 +491,7 @@ def run_test_slices(backend):
     )
     sliced = stor[::2, ::2, ::2]
     assert (sliced.view(np.ndarray) == array[::2, ::2, ::2]).all()
+    sliced[...] = array[::2, ::2, ::2]
 
 
 def test_slices_cpu():
@@ -500,6 +501,111 @@ def test_slices_cpu():
 @pytest.mark.requires_gpu
 def test_slices_gpu():
     run_test_slices(backend="gtcuda")
+
+    import cupy as cp
+
+    default_origin = (1, 1, 1)
+    shape = (10, 10, 10)
+    array = cp.random.randn(*shape)
+    stor = gt_store.from_array(
+        array, backend="gtcuda", dtype=np.float64, default_origin=default_origin, shape=shape
+    )
+    sliced = stor[::2, ::2, ::2]
+    # assert (sliced == array[::2, ::2, ::2]).all()
+    sliced[...] = array[::2, ::2, ::2]
+
+    import cupy as cp
+
+    default_origin = (1, 1, 1)
+    shape = (10, 10, 10)
+    array = cp.random.randn(*shape)
+    stor = gt_store.from_array(
+        array, backend="gtcuda", dtype=np.float64, default_origin=default_origin, shape=shape
+    )
+    ref = gt_store.from_array(
+        array, backend="gtcuda", dtype=np.float64, default_origin=default_origin, shape=shape
+    )
+    # assert (sliced == array[::2, ::2, ::2]).all()
+    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
+
+    import cupy as cp
+    import copy
+
+    default_origin = (1, 1, 1)
+    shape = (10, 10, 10)
+    array = cp.random.randn(*shape)
+    stor = gt_store.from_array(
+        array, backend="gtcuda", dtype=np.float64, default_origin=default_origin, shape=shape
+    )
+    ref = copy.deepcopy(stor)
+    # assert (sliced == array[::2, ::2, ::2]).all()
+    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
+
+    import cupy as cp
+
+    default_origin = (1, 1, 1)
+    shape = (10, 10, 10)
+    array = cp.random.randn(*shape)
+    stor = gt_store.from_array(
+        array,
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=default_origin,
+        shape=shape,
+        managed_memory=True,
+    )
+    ref = gt_store.from_array(
+        array,
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=default_origin,
+        shape=shape,
+        managed_memory=True,
+    )
+    # assert (sliced == array[::2, ::2, ::2]).all()
+    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
+
+    import cupy as cp
+    import copy
+
+    default_origin = (1, 1, 1)
+    shape = (10, 10, 10)
+    array = cp.random.randn(*shape)
+    stor = gt_store.from_array(
+        array,
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=default_origin,
+        shape=shape,
+        managed_memory=True,
+    )
+    ref = copy.deepcopy(stor)
+    # assert (sliced == array[::2, ::2, ::2]).all()
+    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
+
+    import cupy as cp
+
+    default_origin = (1, 1, 1)
+    shape = (10, 10, 10)
+    array = cp.random.randn(*shape)
+    stor = gt_store.from_array(
+        array,
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=default_origin,
+        shape=shape,
+        managed_memory=False,
+    )
+    ref = gt_store.from_array(
+        array,
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=default_origin,
+        shape=shape,
+        managed_memory=False,
+    )
+    # assert (sliced == array[::2, ::2, ::2]).all()
+    stor[::2, ::2, ::2] = ref[::2, ::2, ::2] + ref[::2, ::2, ::2]
 
 
 def test_transpose(backend="gtmc"):

@@ -390,6 +390,7 @@ def test_np_array_int_types():
         domain=np.asarray((20, 20, 10), dtype=np.int64),
     )
 
+
 def test_ndarray_warning():
     """test that proper warnings are raised depending on field type."""
     backend = "numpy"

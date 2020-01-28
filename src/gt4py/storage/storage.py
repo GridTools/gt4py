@@ -442,7 +442,7 @@ class ExplicitlySyncedGPUStorage(Storage):
                 value._is_clean or value._is_device_modified
             ):
                 self._set_device_modified()
-                self._device_field[...] = value._device_field
+                self._device_field[key] = value._device_field
                 return value
             elif (self._is_clean or self._is_host_modified) and (
                 value._is_clean or value._is_host_modified
