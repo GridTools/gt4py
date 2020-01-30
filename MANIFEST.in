@@ -2,4 +2,4 @@ include *.md
 include *.rst
 include *.toml
 include requirements*.txt
-include src/gridtools/backend/templates/*
+graft src/gt4py/backend/templates

@@ -31,35 +31,64 @@ which implements a DSL embedded in C++ for stencils and stencil-like
 patterns. Further, GridTools provides modules for halo exchanges,
 boundary conditions, data management and bindings to C and Fortran.
 
+
 Installation instructions
 -------------------------
 
 GT4Py contains a standard `setup.py` installation script that might be
-installed as usual with *pip*. Two additional `setup.py` commands are
-provided to install and remove the GridTools C++ sources, which are not
-contained in the package. The complete installation procedure is thus:
+installed as usual with *pip*. Additional commands are provided to
+install and remove the GridTools C++ sources, which are not
+contained in the package. 
+
+As usual in Python, we strongly recommended to create a new virtual environment for
+any project:
+
+    # Create a virtual environment using the 'venv' module
+    python -m venv path_for_the_new_venv
+
+    # Activate the virtual environment and make sure that 'wheel' is installed
+    source path_for_the_new_venv/bin/activate
+    pip install --upgrade wheel
+
+
+### Recommended installation for regular users
+
+If you are not planning to modify GT4Py sources, the easiest way to complete the installation
+procedure would be:
+
+    # Install the package directly from github:
+    # For the CUDA backends add the '[cudaXX]' optional dependency 
+    # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
+    pip install git+https://github.com/gridtools/gt4py.git
+    # pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cudaXX]
+    
+    # Run the command to install GridTools C++ sources
+    python -m gt4py.gt_src_manager install
+
+Note that `pip` will not delete the GridTools C++ sources when
+uninstalling the package, so make sure you run the remove command
+in advance:
+
+    python -m gt4py.gt_src_manager remove
+    pip uninstall gt4py
+
+
+### Recommended installation for developers
+
+For GT4Py developers, it is recommended to use and _editable_ installation of GT4Py:
 
     # First, clone the repository
     git clone https://github.com/gridtools/gt4py.git
     
-    # Make sure that the wheel package is in your pip list, otherwise install it with
-    pip install wheel
-
-    # Then install the Python package
-    # add the '-e' flag if you want an editable installation
-    # add the '[cudaXX]' extra if you want to install the GPU backends
+    # Then install the Python package directly from the local repository
+    # adding the '-e' flag to get an editable installation
+    # For the CUDA backends add the '[cudaXX]' optional dependency 
     # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
-    pip install ./gt4py  # pip install ./gt4py[cudaXX]
+    pip install -e ./gt4py     # pip install -e ./gt4py[cudaXX]
+    
+    # Run the command to install GridTools C++ sources
+    python -m gt4py.gt_src_manager install
 
-    # Finally run the command to install GridTools C++ sources
-    python gt4py/setup.py install_gt_sources
-
-Note that pip will not delete the GridTools C++ sources when
-uninstalling the package, so make sure you run the remove command
-before:
-
-    python gt4py/setup.py remove_gt_sources
-    pip uninstall gt4py
 
 Documentation
 -------------
@@ -73,8 +102,9 @@ To build it, install the additional development requirements with
 
 and then build the docs with
 
-    cd gt4py
+    cd gt4py/docs
     ./build.sh
+
 
 Development roadmap
 -------------------
