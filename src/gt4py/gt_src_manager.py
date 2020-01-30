@@ -22,7 +22,8 @@ from . import config as gt_config
 
 
 def install_gt_sources():
-    if not has_gt_sources():
+    is_ok = has_gt_sources()
+    if not is_ok:
         GIT_BRANCH = "release_v1.1"
         GIT_REPO = "https://github.com/GridTools/gridtools.git"
 
@@ -34,24 +35,39 @@ def install_gt_sources():
             subprocess.check_call(git_cmd.split(), stderr=subprocess.STDOUT)
 
         is_ok = has_gt_sources()
-        if not is_ok:
+        if is_ok:
+            print("Success!!")
+        else:
             print(
                 f"\nOooops! GridTools sources have not been installed!\n"
-                f"Install them manually in '{os.path.dirname(__file__)}/_external_src/'\n\n"
+                f"Install them manually in '{install_path}/_external_src/'\n\n"
                 f"\tExample: git clone --depth 1 -b {GIT_BRANCH} {GIT_REPO}\n"
             )
 
-        return is_ok
+    return is_ok
 
 
 def remove_gt_sources():
     install_path = os.path.dirname(__file__)
     target_path = os.path.abspath(os.path.join(install_path, "_external_src", "gridtools"))
 
-    if os.path.exists(target_path):
+    is_ok = not os.path.exists(target_path)
+    if not is_ok:
         rm_cmd = f"rm -Rf {target_path}"
         print(f"Deleting sources...\n$ {rm_cmd}")
         subprocess.run(rm_cmd.split())
+
+        is_ok = not os.path.exists(target_path)
+        if is_ok:
+            print("Success!!")
+        else:
+            print(
+                f"\nOooops! Something went wrong. GridTools sources may have not been removed!\n"
+                f"Remove them manually from '{install_path}/_external_src/'\n\n"
+                f"\tExample: rm -Rf {target_path}"
+            )
+
+    return is_ok
 
 
 def has_gt_sources():
@@ -62,9 +78,9 @@ def has_gt_sources():
 
 def _print_status():
     if has_gt_sources():
-        print("\nGridTools are properly installed\n")
+        print("\nGridTools sources are installed\n")
     else:
-        print("\nGridTools are NOT properly installed in the current environment!\n")
+        print("\nGridTools are missing (GT compiled backends will not work)\n")
 
 
 if __name__ == "__main__":
