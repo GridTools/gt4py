@@ -20,6 +20,8 @@
 import hypothesis as hyp
 import pytest
 
+collect_ignore_glob = [".*"]  # ignore hidden folders
+
 
 def pytest_configure(config):
     # HealthCheck.too_slow causes more trouble than good -- especially in CIs.

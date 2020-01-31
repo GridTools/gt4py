@@ -53,21 +53,34 @@ any project:
 
 ### Recommended installation for regular users
 
-If you are not planning to modify GT4Py sources, the easiest way to complete the installation
-procedure would be:
+If you are not planning to modify GT4Py sources, the easiest way to complete
+the installation would be:
 
-    # Install the package directly from github:
+    # First, clone the repository
+    git clone https://github.com/gridtools/gt4py.git
+    
+    # Then install the Python package directly from the local repository
+    # For the CUDA backends add the '[cudaXX]' optional dependency 
+    # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
+    pip install -e ./gt4py     # pip install -e ./gt4py[cudaXX]
+
+Alternatively, if you do not need to build the documentation or look at the
+examples, you could install GT4Py directly from the GitHub repository:
+  
+    # Install the package directly from GitHub:
     # For the CUDA backends add the '[cudaXX]' optional dependency 
     # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
     pip install git+https://github.com/gridtools/gt4py.git
     # pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cudaXX]
-    
+
+In either case, you need to run a post-installation script to install
+GridTools C++ sources:
+
     # Run the command to install GridTools C++ sources
     python -m gt4py.gt_src_manager install
 
-Note that `pip` will not delete the GridTools C++ sources when
-uninstalling the package, so make sure you run the remove command
-in advance:
+Note that `pip` will not delete GridTools C++ sources when uninstalling
+the package, so make sure you run the remove command in advance:
 
     python -m gt4py.gt_src_manager remove
     pip uninstall gt4py
@@ -75,7 +88,8 @@ in advance:
 
 ### Recommended installation for developers
 
-For GT4Py developers, it is recommended to use and _editable_ installation of GT4Py:
+For GT4Py developers and advanced users, it is recommended to clone the
+repository and use an _editable_ installation of GT4Py:
 
     # First, clone the repository
     git clone https://github.com/gridtools/gt4py.git
@@ -94,13 +108,15 @@ Documentation
 -------------
 
 A proper documentation is in the works. Please refer to the jupyter notebooks
-in the examples folder of this repository for examples how GT4Py can be
-used or the quickstart page of the documentation.
-To build it, install the additional development requirements with
+in the examples folder of this repository for examples of how GT4Py can be
+used, or the _Quickstart_ page of the documentation.
+To build it, you need to clone the repository first (follow the instructions
+in [_Recommended installation for developers_](#recommended-installation-for-developers))
+and then install the additional development requirements with:
 
     pip install -r ./gt4py/requirements_dev.txt
 
-and then build the docs with
+and then build the docs with:
 
     cd gt4py/docs
     ./build.sh
