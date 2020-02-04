@@ -123,6 +123,38 @@ class SDFGBuilder:
             # )
             # self.generic_visit(node)
 
+    class GenerateTaskletInfoPass(gt_ir.IRNodeVisitor):
+        @classmethod
+        def apply(cls, iir: gt_ir.StencilImplementation):
+            transormer = cls()
+            transormer.visit(iir)
+
+        def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
+            self.parameters = node.parameters
+            self.generic_visit(node)
+
+        def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
+            self.tasklet_targets = set()
+            self.visit(node.body)
+            self.tasklet_targets = None
+
+        def visit_Assign(self, node: gt_ir.Assign):
+            self.visit(node.target, is_target=True)
+            self.visit(node.value)
+
+        def visit_FieldRef(self, node: gt_ir.FieldRef, is_target=False):
+            key = (node.name, tuple((k, v) for k, v in node.offset.items()))
+            if is_target:
+                self.tasklet_targets.add(key)
+            node.was_output = key in self.tasklet_targets
+            node.local_name = local_name(node.name, node.offset, node.was_output)
+
+        def visit_VarRef(self, node: gt_ir.VarRef, is_target=False):
+            if is_target:
+                self.tasklet_targets.add((node.name, None))
+            node.was_output = (node.name, None) in self.tasklet_targets
+            node.local_name = local_name(node.name, None, node.was_output)
+
     class GenerateMappedMemletsPass(gt_ir.IRNodeVisitor):
         @classmethod
         def apply(cls, iir: gt_ir.StencilImplementation):
@@ -130,6 +162,11 @@ class SDFGBuilder:
             transformer.input_memlets = None
             transformer.output_memlets = None
             transformer.visit(iir)
+
+        def visit_Assign(self, node: gt_ir.Assign):
+            assert isinstance(node.target, (gt_ir.FieldRef, gt_ir.VarRef))
+            self.visit(node.target)
+            self.visit(node.value)
 
         def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
             self.fields = node.fields
@@ -160,18 +197,12 @@ class SDFGBuilder:
 
             self.input_memlets = None
             self.output_memlets = None
+            self.tasklet_targets = None
 
-        def visit_Assign(self, node: gt_ir.Assign):
-            assert isinstance(node.target, (gt_ir.FieldRef, gt_ir.VarRef))
-            self.visit(node.target, is_target=True)
-            self.visit(node.value)
-
-        def visit_FieldRef(self, node: gt_ir.FieldRef, is_target=False):
-            key = local_name(node.name, node.offset, is_target)
-            memlet_dict = self.output_memlets if is_target else self.input_memlets
-            if key in memlet_dict:
-                memlet_dict[key].num += 1
-            else:
+        def visit_FieldRef(self, node: gt_ir.FieldRef):
+            key = node.local_name
+            memlet_dict = self.output_memlets if node.was_output else self.input_memlets
+            if key not in memlet_dict:
                 subset_list = []
                 itervar = dict(I="i", J="j", K="k")
                 itervar_idx = dict(I=0, J=1, K=2)
@@ -188,14 +219,11 @@ class SDFGBuilder:
                     offset=node.offset,
                 )
 
-        def visit_VarRef(self, node: gt_ir.VarRef, is_target=False):
+        def visit_VarRef(self, node: gt_ir.VarRef):
             if node.name in self.parameters:
-                key = local_name(node.name, None, is_target)
-                memlet_dict = self.output_memlets if is_target else self.input_memlets
-                if key in memlet_dict:
-                    memlet_dict[key].num += 1
-                else:
-
+                key = node.local_name
+                memlet_dict = self.output_memlets if node.was_output else self.input_memlets
+                if key not in memlet_dict:
                     memlet_dict[key] = MappedMemletInfo(
                         num=0, outer_name=node.name, local_name=key, subset_str="0", offset=dict()
                     )
@@ -214,13 +242,15 @@ class SDFGBuilder:
             transformer.visit(iir)
 
         def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
+            self.tasklet_targets = set()
             sources = self.visit(node.body)
             node.tasklet_code = sources.text
+            self.tasklet_targets = None
 
         ###from debug backend
         def visit_Assign(self, node: gt_ir.Assign):
             assert isinstance(node.target, (gt_ir.FieldRef, gt_ir.VarRef))
-            lhs = self.visit(node.target, is_target=True)
+            lhs = self.visit(node.target)
             rhs = self.visit(node.value)
             source = f"{lhs} = {rhs}"
 
@@ -240,11 +270,11 @@ class SDFGBuilder:
         def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral):
             return str(node.value)
 
-        def visit_VarRef(self, node: gt_ir.VarRef, is_target=False):
-            return local_name(node.name, None, is_target and node.name in self.parameters)
+        def visit_VarRef(self, node: gt_ir.VarRef):
+            return node.local_name
 
-        def visit_FieldRef(self, node: gt_ir.FieldRef, is_target=False):
-            return local_name(node.name, node.offset, is_target)
+        def visit_FieldRef(self, node: gt_ir.FieldRef):
+            return node.local_name
 
         def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr):
             fmt = "({})" if isinstance(node.arg, gt_ir.CompositeExpr) else "{}"
@@ -444,7 +474,9 @@ class SDFGBuilder:
                     add_to_sdfg = self.sdfg.add_array
                 else:
                     assert field.name in node.temporary_fields
-                    add_to_sdfg = self.sdfg.add_transient
+                    add_to_sdfg = lambda *args, **kwargs: self.sdfg.add_transient(
+                        *args, toplevel=True, **kwargs
+                    )
                 shape = [
                     d + f
                     for d, f in zip(
@@ -459,6 +491,7 @@ class SDFGBuilder:
     @classmethod
     def apply(cls, iir):
         cls.GenerateIterationRangePass.apply(iir)
+        cls.GenerateTaskletInfoPass.apply(iir)
         cls.GenerateMappedMemletsPass.apply(iir)
         cls.GenerateTaskletSourcePass.apply(iir)
         sdfg = cls.GenerateSDFGPass.apply(iir)
@@ -550,9 +583,12 @@ class DaceBackend(gt_backend.BaseBackend):
 
         with open("tmp.sdfg", "w") as sdfgfile:
             json.dump(sdfg.to_json(), sdfgfile)
-
-        sdfg.validate()
         sdfg.apply_strict_transformations()
+        with open("tmp.sdfg", "w") as sdfgfile:
+            json.dump(sdfg.to_json(), sdfgfile)
+        # import dace.graph.labeling
+        # dace.graph.labeling.propagate_labels_sdfg(sdfg)
+        sdfg.validate()
 
         dace_build_path = os.path.relpath(cls.get_dace_module_path(stencil_id))
         os.makedirs(dace_build_path, exist_ok=True)
