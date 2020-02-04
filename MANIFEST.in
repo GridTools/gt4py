@@ -1,5 +1,5 @@
 include *.md
 include *.rst
 include *.toml
-include requirements*.txt
+include *.txt
 graft src/gt4py/backend/templates

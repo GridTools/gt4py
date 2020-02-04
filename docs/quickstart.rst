@@ -244,19 +244,19 @@ To reuse code elements and to structure your code, subroutines are a useful tool
 
     @gtscript.function
     def ddy(v, h = 0.1):
-        v2 = v[-1, 0, 0] + v[1, 0, 0] - 2 * v[0, 0, 0]
+        v2 = v[0, -1, 0] + v[0, 1, 0] - 2 * v[0, 0, 0]
         return v2 / (h * h)
 
     @gtscript.function
     def ddz(v, h = 0.1):
-        v2 = v[-1, 0, 0] + v[1, 0, 0] - 2 * v[0, 0, 0]
+        v2 = v[0, 0, -1] + v[0, 0, 1] - 2 * v[0, 0, 0]
         return v2 / (h * h)
 
     @gtscript.stencil(backend=backend)
     def laplace(
         v: gtscript.Field[np.float64], lap: gtscript.Field[np.float64], *, h: np.float64 = 0.1
     ):
-        with computation(PARALLEL), interval(...):
+        with computation(PARALLEL), interval(1, -1):
             lap = ddx(v, h) + ddy(v, h) + ddz(v, h)
 
 
@@ -276,7 +276,7 @@ the ``return`` statement. That is, in the above example, ``v`` is not modified. 
     def laplace(
         v: gtscript.Field[np.float64], lap: gtscript.Field[np.float64], *, h: np.float64 = 0.1
     ):
-        with computation(PARALLEL), interval(...):
+        with computation(PARALLEL), interval(1, -1):
             x, y, z = ddxyz(v, h)
             lap = x + y + z
 
