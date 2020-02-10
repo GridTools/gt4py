@@ -186,7 +186,7 @@ def run_vertical_advection_dycore(backend, id_version, domain):
     }
 
     testmodule = generate_test_module(
-        "vertical_advection_dycore", backend, id_version=id_version, rebuild=False
+        "vertical_advection_dycore", backend, id_version="id_version", rebuild=True
     )
     for k in arg_fields:
         if hasattr(arg_fields[k], "host_to_device"):

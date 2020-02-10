@@ -208,7 +208,10 @@ class SDFGBuilder:
                 itervar_idx = dict(I=0, J=1, K=2)
                 origin = self.field_extents[node.name].lower_indices
                 for k, v in node.offset.items():
-                    subset_list.append(itervar[k] + "{:+d}".format(v - origin[itervar_idx[k]]))
+                    if k != "K":
+                        subset_list.append(itervar[k] + "{:+d}".format(v - origin[itervar_idx[k]]))
+                    else:
+                        subset_list.append(itervar[k] + "{:+d}".format(v))
                 subset_str = ", ".join(subset_list) if subset_list else "0"
 
                 memlet_dict[key] = MappedMemletInfo(
@@ -560,9 +563,20 @@ if {name} is not None:
                         name=field_name,
                         slice=",".join(
                             f'_origin_["{field_name}"][{i}] - {-self.performance_ir.fields_extents[field_name][i][0]}:_origin_["{field_name}"][{i}] - {-self.performance_ir.fields_extents[field_name][i][0]}+_domain_[{i}] + {self.performance_ir.fields_extents[field_name].frame_size[i]}'
+                            if self.performance_ir.fields[field_name].axes[i]
+                            != self.performance_ir.domain.sequential_axis.name
+                            else ":"
                             for i in range(len(self.performance_ir.fields[field_name].axes))
                         ),
-                        shape=self.performance_ir.sdfg.arrays[field_name].shape,
+                        shape=tuple(
+                            s
+                            if self.performance_ir.fields[field_name].axes[i]
+                            != self.performance_ir.domain.sequential_axis.name
+                            else dace.symbol("K")
+                            for i, s in enumerate(
+                                self.performance_ir.sdfg.arrays[field_name].shape
+                            )
+                        ),
                         strides=self.performance_ir.sdfg.arrays[field_name].strides,
                     )
                 )
