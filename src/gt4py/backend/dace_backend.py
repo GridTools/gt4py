@@ -139,8 +139,8 @@ class SDFGBuilder:
             self.tasklet_targets = None
 
         def visit_Assign(self, node: gt_ir.Assign):
-            self.visit(node.target, is_target=True)
             self.visit(node.value)
+            self.visit(node.target, is_target=True)
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, is_target=False):
             key = (node.name, tuple((k, v) for k, v in node.offset.items()))
@@ -165,8 +165,8 @@ class SDFGBuilder:
 
         def visit_Assign(self, node: gt_ir.Assign):
             assert isinstance(node.target, (gt_ir.FieldRef, gt_ir.VarRef))
-            self.visit(node.target)
             self.visit(node.value)
+            self.visit(node.target)
 
         def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
             self.fields = node.fields
@@ -212,7 +212,7 @@ class SDFGBuilder:
                 subset_str = ", ".join(subset_list) if subset_list else "0"
 
                 memlet_dict[key] = MappedMemletInfo(
-                    num=0,
+                    num=1,
                     outer_name=node.name,
                     local_name=key,
                     subset_str=subset_str,
@@ -225,7 +225,7 @@ class SDFGBuilder:
                 memlet_dict = self.output_memlets if node.was_output else self.input_memlets
                 if key not in memlet_dict:
                     memlet_dict[key] = MappedMemletInfo(
-                        num=0, outer_name=node.name, local_name=key, subset_str="0", offset=dict()
+                        num=1, outer_name=node.name, local_name=key, subset_str="0", offset=dict()
                     )
 
     class GenerateTaskletSourcePass(gt_ir.IRNodeVisitor):
@@ -368,18 +368,21 @@ class SDFGBuilder:
             )
             map_entry, map_exit = state.add_map(name=self.new_map_name(), ndrange=range)
 
-            in_field_accessors = dict()
+            # in_field_accessors = dict()
             for memlet_info in node.mapped_input_memlet_infos.values():
                 name = memlet_info.outer_name
-                if name not in in_field_accessors:
-                    in_field_accessors[name] = state.add_read(name)
+                # if name not in in_field_accessors:
+                #     in_field_accessors[name] = state.add_read(name)
                 state.add_memlet_path(
-                    in_field_accessors[name],
+                    state.add_read(name),
                     map_entry,
                     tasklet,
                     memlet=node.mapped_input_memlets[memlet_info.local_name],
                     dst_conn=memlet_info.local_name,
                 )
+            if len(node.mapped_input_memlet_infos) == 0:
+                state.add_edge(map_entry, None, tasklet, None, dace.EmptyMemlet())
+
             out_field_accessors = dict()
             for memlet_info in node.mapped_output_memlet_infos.values():
                 name = memlet_info.outer_name
@@ -392,6 +395,9 @@ class SDFGBuilder:
                     memlet=node.mapped_output_memlets[memlet_info.local_name],
                     src_conn=memlet_info.local_name,
                 )
+            if len(node.mapped_output_memlet_infos) == 0:
+                state.add_edge(tasklet, None, map_exit, None, dace.EmptyMemlet())
+
             return state, state
 
         def _make_ij_computation(self, node: gt_ir.ApplyBlock):
@@ -471,7 +477,12 @@ class SDFGBuilder:
 
             for field in node.fields.values():
                 if field.name in node.arg_fields:
-                    add_to_sdfg = self.sdfg.add_array
+                    I = dace.symbol(f"_{field.name}_I")
+                    J = dace.symbol(f"_{field.name}_J")
+                    K = dace.symbol(f"_{field.name}_K")
+                    add_to_sdfg = lambda *args, **kwargs: self.sdfg.add_array(
+                        *args, strides=(J * K, K, 1), **kwargs
+                    )
                 else:
                     assert field.name in node.temporary_fields
                     add_to_sdfg = lambda *args, **kwargs: self.sdfg.add_transient(
@@ -534,15 +545,79 @@ dace_program = load_dace_program("{self.options.dace_build_path}", "{self.option
                 args.append(arg.name)
                 # if arg.name in self.implementation_ir.fields:
                 #     args.append("list(_origin_['{}'])".format(arg.name))
+        field_slices = []
 
-        source = """
-dace_program({run_args}, I=np.int32(_domain_[0]), J=np.int32(_domain_[1]), K=np.int32(_domain_[2]))
+        for field_name in self.performance_ir.arg_fields:
+            if field_name not in self.performance_ir.unreferenced:
+                field_slices.append(
+                    """#{name}_copy = np.array({name}[{slice}], copy=True)
+#assert {name}_copy.shape=={shape}, str({name}_copy.shape)+'!='+str({shape})
+#assert {name}_copy.strides==tuple({name}_copy.itemsize*s for s in {strides}), str({name}_copy.strides)+'!='+str(tuple({name}.itemsize*s for s in {strides}))
+{name} = {name}[{slice}] if {name} is not None else None
+if {name} is not None:
+    assert {name}.shape=={shape}, str({name}.shape)+'!='+str({shape})
+    assert {name}.strides==tuple({name}.itemsize*s for s in {strides}), str({name}.strides)+'!='+str(tuple({name}.itemsize*s for s in {strides}))""".format(
+                        name=field_name,
+                        slice=",".join(
+                            f'_origin_["{field_name}"][{i}] - {-self.performance_ir.fields_extents[field_name][i][0]}:_origin_["{field_name}"][{i}] - {-self.performance_ir.fields_extents[field_name][i][0]}+_domain_[{i}] + {self.performance_ir.fields_extents[field_name].frame_size[i]}'
+                            for i in range(len(self.performance_ir.fields[field_name].axes))
+                        ),
+                        shape=self.performance_ir.sdfg.arrays[field_name].shape,
+                        strides=self.performance_ir.sdfg.arrays[field_name].strides,
+                    )
+                )
+        total_field_sizes = []
+        for field_name in self.performance_ir.arg_fields:
+            if field_name not in self.performance_ir.unreferenced:
+                total_field_sizes.append(
+                    f"_{field_name}_K = np.int32({field_name}.strides[1])/{field_name}.itemsize if not {field_name} is None else 0.0"
+                )
+                total_field_sizes.append(
+                    f"_{field_name}_J = np.int32({field_name}.strides[0]/_{field_name}_K)/{field_name}.itemsize if not {field_name} is None else 0.0"
+                )
+                total_field_sizes.append(
+                    f"_{field_name}_I = np.int32({field_name}.strides[0]/_{field_name}_K)/{field_name}.itemsize if not {field_name} is None else 0.0"
+                )
+        total_field_sizes = "\n".join(total_field_sizes)
+        source = (
+            (
+                "\nI=np.int32(_domain_[0])\nJ=np.int32(_domain_[1])\nK=np.int32(_domain_[2])\n"
+                + total_field_sizes
+                + "\n"
+                + "\n".join(field_slices)
+                + """
+dace_program({run_args}, I=I, J=J, K=K, {total_field_sizes})
 """.format(
-            run_args=", ".join([f"{n}={n}" for n in args])
+                    run_args=", ".join(
+                        [
+                            f"{n}={n}" if n in self.performance_ir.arg_fields else f"{n}={n}"
+                            for n in args
+                        ]
+                    ),
+                    total_field_sizes=", ".join(
+                        f"_{field_name}_I=np.int32(_{field_name}_I), _{field_name}_J=np.int32(_{field_name}_J), _{field_name}_K=np.int32(_{field_name}_K)"
+                        for field_name in self.performance_ir.arg_fields
+                        if field_name not in self.performance_ir.unreferenced
+                    ),
+                )
+            )
+            + "\n".join(
+                [
+                    "#{name}[{slice}] = {name}_copy".format(
+                        name=name,
+                        slice=",".join(
+                            f'_origin_["{name}"][{i}] - {-self.performance_ir.fields_extents[name][i][0]}:_origin_["{name}"][{i}] - {-self.performance_ir.fields_extents[name][i][0]}+_domain_[{i}] + {self.performance_ir.fields_extents[name].frame_size[i]}'
+                            for i in range(len(self.performance_ir.fields[name].axes))
+                        ),
+                    )
+                    for name in self.performance_ir.arg_fields
+                ]
+            )
         )
 
         source = source + (
-            """if exec_info is not None:
+            """
+if exec_info is not None:
     exec_info["run_end_time"] = time.perf_counter()
 """
         )
@@ -586,10 +661,12 @@ class DaceBackend(gt_backend.BaseBackend):
         sdfg.apply_strict_transformations()
         with open("tmp.sdfg", "w") as sdfgfile:
             json.dump(sdfg.to_json(), sdfgfile)
-        # import dace.graph.labeling
-        # dace.graph.labeling.propagate_labels_sdfg(sdfg)
+        import dace.graph.labeling
+
+        dace.graph.labeling.propagate_labels_sdfg(sdfg)
         sdfg.validate()
 
+        performance_ir.sdfg = sdfg
         dace_build_path = os.path.relpath(cls.get_dace_module_path(stencil_id))
         os.makedirs(dace_build_path, exist_ok=True)
 
