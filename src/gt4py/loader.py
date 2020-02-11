@@ -22,9 +22,7 @@ a high-level stencil function definition using a specific code generating backen
 
 import types
 
-from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
-from gt4py import definitions as gt_definitions
 from gt4py import frontend as gt_frontend
 from gt4py.stencil_object import StencilObject
 

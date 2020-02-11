@@ -20,7 +20,7 @@
 import hypothesis as hyp
 import pytest
 
-collect_ignore_glob = [".*"]  # ignore hidden folders
+collect_ignore_glob = [".*", "_disabled*"]  # ignore hidden folders and disabled tests
 
 
 def pytest_configure(config):
