@@ -50,7 +50,7 @@ def build_iir_stencil(name, options, backend="gtx86", *, id_version="xxxxxx"):
         stencil_class = backend.load(stencil_id, None, options)
 
     if stencil_class is None:
-        stencil_class = backend.build(stencil_id, iir, None, options)
+        stencil_class = backend.generate(stencil_id, iir, None, options)
 
     stencil_implementation = stencil_class()
 

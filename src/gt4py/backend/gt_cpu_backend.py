@@ -84,7 +84,7 @@ def mc_is_compatible_layout(field):
 
 class GTCPUBackend(gt_backend.BaseGTBackend):
     @classmethod
-    def generate_extension(cls, stencil_id, performance_ir, options):
+    def generate_extension(cls, stencil_id, implementation_ir, options):
         pyext_opts = dict(
             verbose=options.backend_opts.pop("verbose", False),
             clean=options.backend_opts.pop("clean", False),
@@ -99,7 +99,7 @@ class GTCPUBackend(gt_backend.BaseGTBackend):
             cls._CPU_ARCHITECTURE,
             options,
         )
-        gt_pyext_sources = gt_pyext_generator(performance_ir)
+        gt_pyext_sources = gt_pyext_generator(implementation_ir)
 
         # Build extension module
         pyext_build_path = os.path.relpath(cls.get_pyext_build_path(stencil_id))

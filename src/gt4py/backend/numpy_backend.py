@@ -244,7 +244,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return sources
 
 
-class NumPyGenerator(gt_backend.BaseGenerator):
+class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
     def __init__(self, backend_class, options):
         super().__init__(backend_class, options)
         assert len(self.options.backend_opts) == 0
@@ -283,7 +283,7 @@ def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
 
     def generate_implementation(self):
         sources = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
-        self.source_generator(self.performance_ir, sources)
+        self.source_generator(self.implementation_ir, sources)
 
         return sources.text
 
@@ -314,4 +314,4 @@ class NumPyBackend(gt_backend.BaseBackend):
         "is_compatible_type": numpy_is_compatible_type,
     }
 
-    GENERATOR_CLASS = NumPyGenerator
+    GENERATOR_CLASS = NumPyModuleGenerator

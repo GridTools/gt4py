@@ -24,6 +24,7 @@ import types
 
 import jinja2
 
+from gt4py import analysis as gt_analysis
 from gt4py import config as gt_config
 from gt4py import definitions as gt_definitions
 from gt4py import utils as gt_utils
@@ -77,7 +78,7 @@ class Backend(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def build(cls, stencil_id, performance_ir, definition_func, options):
+    def generate(cls, stencil_id, definition_ir, definition_func, options):
         pass
 
 
@@ -230,12 +231,11 @@ class BaseBackend(Backend):
         return stencil_class
 
     @classmethod
-    def _build(
-        cls, stencil_id, performance_ir, definition_func, generator_options, extra_cache_info
+    def _generate_module(
+        cls, stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info
     ):
-
         generator = cls.GENERATOR_CLASS(cls, options=generator_options)
-        module_source = generator(stencil_id, performance_ir)
+        module_source = generator(stencil_id, implementation_ir)
 
         file_name = cls.get_stencil_module_path(stencil_id)
         os.makedirs(os.path.dirname(file_name), exist_ok=True)
@@ -246,14 +246,15 @@ class BaseBackend(Backend):
         return cls._load(stencil_id, definition_func)
 
     @classmethod
-    def build(cls, stencil_id, performance_ir, definition_func, options):
+    def generate(cls, stencil_id, definition_ir, definition_func, options):
         cls._check_options(options)
-        return cls._build(
-            stencil_id, performance_ir, definition_func, copy.deepcopy(options.as_dict()), {}
+        implementation_ir = gt_analysis.transform(definition_ir, options)
+        return cls._generate_module(
+            stencil_id, implementation_ir, definition_func, copy.deepcopy(options.as_dict()), {}
         )
 
 
-class BaseGenerator(abc.ABC):
+class BaseModuleGenerator(abc.ABC):
 
     SOURCE_LINE_LENGTH = 120
     TEMPLATE_INDENT_SIZE = 4
@@ -261,128 +262,32 @@ class BaseGenerator(abc.ABC):
     ORIGIN_ARG_NAME = "_origin_"
     SPLITTERS_NAME = "_splitters_"
 
-    CLASS_TEMPLATE = jinja2.Template(
-        """
-{# ---- Template variables ----
-
-imports, module_members, class_name, class_members, stencil_signature, implementation
-gt_backend, gt_source, gt_domain_info, gt_field_info, gt_parameter_info, gt_constants, gt_default_domain,
-gt_default_origin, gt_options
-
--#}
-import time
-
-import numpy as np
-from numpy import dtype
-{{ imports }}
-
-from gt4py.stencil_object import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo, StencilObject
-
-{{ module_members }}
-
-class {{ class_name }}(StencilObject):
-
-{%- filter indent(width=4) %}
-{{- class_members }}
-{%- endfilter %}
-
-    _gt_backend_ = "{{ gt_backend }}"
-
-    _gt_source_ = {{ gt_source }}
-
-    _gt_domain_info_ = {{ gt_domain_info }}
-
-    _gt_field_info_ = {{ gt_field_info }}
-
-    _gt_parameter_info_ = {{ gt_parameter_info }}
-
-    _gt_constants_ = {{ gt_constants }}
-
-    _gt_options_ = {{ gt_options }}
-
-    @property
-    def backend(self):
-        return type(self)._gt_backend_
-
-    @property
-    def source(self):
-        return type(self)._gt_source_
-
-    @property
-    def domain_info(self):
-        return type(self)._gt_domain_info_
-
-    @property
-    def field_info(self) -> dict:
-        return type(self)._gt_field_info_
-
-    @property
-    def parameter_info(self) -> dict:
-        return type(self)._gt_parameter_info_
-
-    @property
-    def constants(self) -> dict:
-        return type(self)._gt_constants_
-
-    @property
-    def options(self) -> dict:
-        return type(self)._gt_options_
-
-    def __call__(self, {{ stencil_signature }}, domain=None, origin=None, exec_info=None):
-        if exec_info is not None:
-            exec_info["call_start_time"] = time.perf_counter()
-        field_args={{ fields_dict_call }}
-        parameter_args={{ params_dict_call }}
-        # assert that all required values have been provided
-
-{%- filter indent(width=8) %}
-{{synchronization}}
-{%- endfilter %}
-
-        self._call_run(
-            field_args=field_args,
-            parameter_args=parameter_args,
-            domain=domain,
-            origin=origin,
-            exec_info=exec_info
-        )
-
-{%- filter indent(width=8) %}
-{{mark_modified}}
-{%- endfilter %}
-    def run(self, _domain_, _origin_, exec_info, {{ stencil_signature }}):
-        if exec_info is not None:
-            exec_info["domain"] = _domain_
-            exec_info["origin"] = _origin_
-            exec_info["run_start_time"] = time.perf_counter()
-{%- filter indent(width=8) %}
-{{- implementation }}
-{%- endfilter %}
-        """
-    )
+    TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "stencil_module.py.in")
 
     def __init__(self, backend_class, options):
         assert issubclass(backend_class, BaseBackend)
         self.backend_class = backend_class
         self.options = types.SimpleNamespace(**options)
         self.stencil_id = None
-        self.performance_ir = None
+        self.implementation_ir = None
+        with open(self.TEMPLATE_PATH, "r") as f:
+            self.template = jinja2.Template(f.read())
 
-    def __call__(self, stencil_id, performance_ir):
+    def __call__(self, stencil_id, implementation_ir):
         self.stencil_id = stencil_id
-        self.performance_ir = performance_ir
+        self.implementation_ir = implementation_ir
 
         stencil_signature = self.generate_signature()
 
         sources = {}
-        if performance_ir.sources is not None:
+        if implementation_ir.sources is not None:
             sources = {
                 key: gt_utils.text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
-                for key, value in performance_ir.sources
+                for key, value in implementation_ir.sources
             }
 
-        parallel_axes = performance_ir.domain.parallel_axes or []
-        sequential_axis = performance_ir.domain.sequential_axis.name
+        parallel_axes = implementation_ir.domain.parallel_axes or []
+        sequential_axis = implementation_ir.domain.sequential_axis.name
         domain_info = repr(
             gt_definitions.DomainInfo(
                 parallel_axes=tuple(ax.name for ax in parallel_axes),
@@ -392,13 +297,13 @@ class {{ class_name }}(StencilObject):
         )
 
         field_info = {}
-        fields_dict_call = []
+        field_names = []
         parameter_info = {}
-        params_dict_call = []
+        param_names = []
 
         # Collect access type per field
         out_fields = set()
-        for ms in performance_ir.multi_stages:
+        for ms in implementation_ir.multi_stages:
             for sg in ms.groups:
                 for st in sg.stages:
                     for acc in st.accessors:
@@ -408,40 +313,38 @@ class {{ class_name }}(StencilObject):
                         ):
                             out_fields.add(acc.symbol)
 
-        for arg in performance_ir.api_signature:
-            if arg.name in performance_ir.fields:
+        for arg in implementation_ir.api_signature:
+            if arg.name in implementation_ir.fields:
                 access = (
                     gt_definitions.AccessKind.READ_WRITE
                     if arg.name in out_fields
                     else gt_definitions.AccessKind.READ_ONLY
                 )
-                if arg.name not in performance_ir.unreferenced:
+                if arg.name not in implementation_ir.unreferenced:
                     field_info[arg.name] = gt_definitions.FieldInfo(
                         access=access,
-                        dtype=performance_ir.fields[arg.name].data_type.dtype,
-                        boundary=performance_ir.fields_extents[arg.name].to_boundary(),
+                        dtype=implementation_ir.fields[arg.name].data_type.dtype,
+                        boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
                     )
                 else:
                     field_info[arg.name] = None
-                fields_dict_call.append("{name}={name}".format(name=arg.name))
+                field_names.append(arg.name)
             else:
-                if arg.name not in performance_ir.unreferenced:
+                if arg.name not in implementation_ir.unreferenced:
                     parameter_info[arg.name] = gt_definitions.ParameterInfo(
-                        dtype=performance_ir.parameters[arg.name].data_type.dtype
+                        dtype=implementation_ir.parameters[arg.name].data_type.dtype
                     )
                 else:
-                    field_info[arg.name] = None
-                params_dict_call.append("{name}={name}".format(name=arg.name))
+                    parameter_info[arg.name] = None
+                param_names.append(arg.name)
 
         field_info = repr(field_info)
-        fields_dict_call = "dict({})".format(", ".join(fields_dict_call))
         parameter_info = repr(parameter_info)
-        params_dict_call = "dict({})".format(", ".join(params_dict_call))
 
-        if performance_ir.externals:
+        if implementation_ir.externals:
             gt_constants = {
                 name: repr(value)
-                for name, value in performance_ir.externals.items()
+                for name, value in implementation_ir.externals.items()
                 if isinstance(value, numbers.Number)
             }
         else:
@@ -457,7 +360,7 @@ class {{ class_name }}(StencilObject):
         class_members = self.generate_class_members()
         implementation = self.generate_implementation()
 
-        module_source = self.CLASS_TEMPLATE.render(
+        module_source = self.template.render(
             imports=imports,
             module_members=module_members,
             class_name=self.stencil_class_name,
@@ -470,22 +373,22 @@ class {{ class_name }}(StencilObject):
             gt_constants=gt_constants,
             gt_options=gt_options,
             stencil_signature=stencil_signature,
-            fields_dict_call=fields_dict_call,
-            params_dict_call=params_dict_call,
+            field_names=field_names,
+            param_names=param_names,
             synchronization=self.generate_synchronization(
                 [
                     k
-                    for k in performance_ir.fields.keys()
-                    if k not in performance_ir.temporary_fields
-                    and k not in performance_ir.unreferenced
+                    for k in implementation_ir.fields.keys()
+                    if k not in implementation_ir.temporary_fields
+                    and k not in implementation_ir.unreferenced
                 ]
             ),
             mark_modified=self.generate_mark_modified(
                 [
                     k
                     for k in out_fields
-                    if k not in performance_ir.temporary_fields
-                    and k not in performance_ir.unreferenced
+                    if k not in implementation_ir.temporary_fields
+                    and k not in implementation_ir.unreferenced
                 ]
             ),
             implementation=implementation,
@@ -513,7 +416,7 @@ class {{ class_name }}(StencilObject):
     def generate_signature(self):
         args = []
         keyword_args = ["*"]
-        for arg in self.performance_ir.api_signature:
+        for arg in self.implementation_ir.api_signature:
             if arg.is_keyword:
                 if arg.default is not gt_ir.Empty:
                     keyword_args.append(

@@ -14,15 +14,18 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import typing
+
 import attr
 
-# ---- AttribClasses: dataclass-like using attr.s ----
+
 class _TypeDescriptor:
-    def __init__(self, name, args, make_validator_func):
+    def __init__(self, name, args, make_validator_func, type_hint):
         self.name = name
         assert args is None or isinstance(args, tuple)
         self.args = args
         self.make_validator_func = make_validator_func
+        self.type_hint = type_hint
 
     def __repr__(self):
         args = self.args if self.args is not None else []
@@ -41,7 +44,7 @@ class _TypeDescriptor:
 
 
 class _GenericTypeDescriptor:
-    def __init__(self, name, n_args, make_validator_func):
+    def __init__(self, name, n_args, make_validator_func, generic_type_hint):
         self.name = name
 
         if not isinstance(n_args, tuple):
@@ -52,6 +55,7 @@ class _GenericTypeDescriptor:
 
         assert callable(make_validator_func)
         self.make_validator_func = make_validator_func
+        self.generic_type_hint = generic_type_hint
 
     def __getitem__(self, type_list):
         if not isinstance(type_list, tuple):
@@ -60,8 +64,18 @@ class _GenericTypeDescriptor:
         assert (self.n_args[0] is None or self.n_args[0] <= len(type_list)) and (
             self.n_args[1] is None or self.n_args[1] <= self.n_args[1]
         )
+        hint_list = []
+        for t in type_list:
+            if isinstance(t, type):
+                hint_list.append(t)
+            else:
+                hint_list.append(getattr(t, "type_hint", typing.Any))
+
         return _TypeDescriptor(
-            self.name, args=tuple(type_list), make_validator_func=self.make_validator_func
+            self.name,
+            args=tuple(type_list),
+            make_validator_func=self.make_validator_func,
+            type_hint=self.generic_type_hint[tuple(hint_list)],
         )
 
 
@@ -189,27 +203,32 @@ def _make_nothing_validator(type_list):
     return _is_nothing_validator
 
 
-Any = _TypeDescriptor("Any", None, _make_any_validator)
+Any = _TypeDescriptor("Any", None, _make_any_validator, typing.Any)
 
-Sequence = _GenericTypeDescriptor("Sequence", 1, _make_sequence_validator)
-List = _GenericTypeDescriptor("List", 1, _make_list_validator)
-Dict = _GenericTypeDescriptor("Dict", 2, _make_dict_validator)
-Set = _GenericTypeDescriptor("Set", 1, _make_set_validator)
-Tuple = _GenericTypeDescriptor("Tuple", (1, None), _make_tuple_validator)
-Union = _GenericTypeDescriptor("Union", (2, None), _make_union_validator)
+Sequence = _GenericTypeDescriptor("Sequence", 1, _make_sequence_validator, typing.Sequence)
+List = _GenericTypeDescriptor("List", 1, _make_list_validator, typing.List)
+Dict = _GenericTypeDescriptor("Dict", 2, _make_dict_validator, typing.Dict)
+Set = _GenericTypeDescriptor("Set", 1, _make_set_validator, typing.Set)
+Tuple = _GenericTypeDescriptor("Tuple", (1, None), _make_tuple_validator, typing.Tuple)
+Union = _GenericTypeDescriptor("Union", (2, None), _make_union_validator, typing.Union)
 
 Optional = _GenericTypeDescriptor(
-    "Optional", (1, None), lambda type_list: _make_union_validator([*type_list, type(None)])
+    "Optional",
+    (1, None),
+    lambda type_list: _make_union_validator([*type_list, type(None)]),
+    typing.Optional,
 )
 
 
 def attribute(of, optional=False, **kwargs):
     if isinstance(of, _TypeDescriptor):
         attr_validator = of.validator
+        attr_type_hint = of.type_hint
 
     elif isinstance(of, type):
         # assert of in (bool, float, str, int, enum.Enum)
         attr_validator = attr.validators.instance_of(of)
+        attr_type_hint = of
 
     else:
         raise ValueError("Invalid attribute type '{}'".format(of))
@@ -219,11 +238,7 @@ def attribute(of, optional=False, **kwargs):
         kwargs.setdefault("default", None)
         # kwargs["kw_only"] = True
 
-    # attr_type = _make_typing(of)
-    # return attr.ib(
-    #     validator=attr_validator, type=attr_type, **kwargs
-
-    return attr.ib(validator=attr_validator, **kwargs)
+    return attr.ib(validator=attr_validator, type=attr_type_hint, **kwargs)
 
 
 class AttributeClassLike:

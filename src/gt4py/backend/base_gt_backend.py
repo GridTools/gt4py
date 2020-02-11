@@ -21,8 +21,8 @@ import os
 
 import jinja2
 
+from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
-from gt4py import config as gt_config
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
@@ -48,9 +48,9 @@ class _MaxKOffsetExtractor(gt_ir.IRNodeVisitor):
 _extract_max_k_offset = _MaxKOffsetExtractor.apply
 
 
-class GTSourceGenerator(gt_ir.IRNodeVisitor):
+class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
-    TEMPLATE_DIR = os.path.dirname(__file__) + "/templates"
+    TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
     TEMPLATE_FILES = {
         "computation.hpp": "computation.hpp.in",
         "computation.src": "computation.src.in",
@@ -76,7 +76,7 @@ class GTSourceGenerator(gt_ir.IRNodeVisitor):
         gt_ir.BinaryOperator.NE: "!=",
     }
 
-    NATIVE_TYPE_TO_CPP = {
+    DATA_TYPE_TO_CPP = {
         gt_ir.DataType.INT8: "int8_t",
         gt_ir.DataType.INT16: "int16_t",
         gt_ir.DataType.INT32: "int32_t",
@@ -132,18 +132,18 @@ class GTSourceGenerator(gt_ir.IRNodeVisitor):
         return result
 
     def _make_cpp_type(self, data_type: gt_ir.DataType):
-        result = self.NATIVE_TYPE_TO_CPP[data_type]
+        result = self.DATA_TYPE_TO_CPP[data_type]
 
         return result
 
     def _make_cpp_variable(self, decl: gt_ir.VarDecl):
-        result = "{t} {name}:".format(t=self.NATIVE_TYPE_TO_CPP[decl.data_type], name=decl.name)
+        result = "{t} {name}:".format(t=self.DATA_TYPE_TO_CPP[decl.data_type], name=decl.name)
 
         return result
 
     def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral):
         source = "{dtype}{{{value}}}".format(
-            dtype=self.NATIVE_TYPE_TO_CPP[node.data_type], value=node.value
+            dtype=self.DATA_TYPE_TO_CPP[node.data_type], value=node.value
         )
 
         return source
@@ -359,17 +359,17 @@ class GTSourceGenerator(gt_ir.IRNodeVisitor):
             multi_stages.append({"exec": str(multi_stage.iteration_order).lower(), "steps": steps})
 
         template_args = dict(
-            stencil_unique_name=self.class_name,
-            module_name=self.module_name,
-            backend=self.backend,
-            k_axis=k_axis,
-            halo_sizes=halo_sizes,
-            constants=constants,
             arg_fields=arg_fields,
-            tmp_fields=tmp_fields,
+            constants=constants,
+            gt_backend=self.backend,
+            halo_sizes=halo_sizes,
+            k_axis=k_axis,
+            module_name=self.module_name,
+            multi_stages=multi_stages,
             parameters=parameters,
             stage_functors=stage_functors,
-            multi_stages=multi_stages,
+            stencil_unique_name=self.class_name,
+            tmp_fields=tmp_fields,
         )
 
         sources = {}
@@ -379,7 +379,7 @@ class GTSourceGenerator(gt_ir.IRNodeVisitor):
         return sources
 
 
-class PythonGTGenerator(gt_backend.BaseGenerator):
+class GTPyModuleGenerator(gt_backend.BaseModuleGenerator):
 
     DEFAULT_GTCACHE_SIZE = 2
 
@@ -402,13 +402,13 @@ pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_fil
         return source
 
     def generate_implementation(self):
-        sources = gt_text.TextBlock(indent_size=gt_backend.BaseGenerator.TEMPLATE_INDENT_SIZE)
+        sources = gt_text.TextBlock(indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
 
         args = []
-        for arg in self.performance_ir.api_signature:
-            if arg.name not in self.performance_ir.unreferenced:
+        for arg in self.implementation_ir.api_signature:
+            if arg.name not in self.implementation_ir.unreferenced:
                 args.append(arg.name)
-                if arg.name in self.performance_ir.fields:
+                if arg.name in self.implementation_ir.fields:
                     args.append("list(_origin_['{}'])".format(arg.name))
 
         source = """
@@ -436,9 +436,9 @@ cupy.cuda.Device(0).synchronize()
 
 class BaseGTBackend(gt_backend.BaseBackend):
 
-    GENERATOR_CLASS = PythonGTGenerator
+    GENERATOR_CLASS = GTPyModuleGenerator
 
-    PYEXT_GENERATOR_CLASS = GTSourceGenerator
+    PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
     GT_BACKEND_OPTS = {
         "verbose": {"versioning": False},
@@ -468,7 +468,7 @@ class BaseGTBackend(gt_backend.BaseBackend):
         return path
 
     @classmethod
-    def generate_extension(cls, stencil_id, performance_ir, options):
+    def generate_extension(cls, stencil_id, implementation_ir, options):
         raise NotImplementedError(
             "'generate_extension()' method must be implemented by subclasses"
         )
@@ -497,16 +497,17 @@ class BaseGTBackend(gt_backend.BaseBackend):
         return result
 
     @classmethod
-    def build(cls, stencil_id, performance_ir, definition_func, options):
+    def generate(cls, stencil_id, definition_ir, definition_func, options):
         from gt4py import gt_src_manager
 
         cls._check_options(options)
+        implementation_ir = gt_analysis.transform(definition_ir, options)
 
         # Generate the Python binary extension (checking if GridTools sources are installed)
         if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
         pyext_module_name, pyext_file_path = cls.generate_extension(
-            stencil_id, performance_ir, options
+            stencil_id, implementation_ir, options
         )
 
         # Generate and return the Python wrapper class
@@ -516,6 +517,6 @@ class BaseGTBackend(gt_backend.BaseBackend):
 
         extra_cache_info = {"pyext_file_path": pyext_file_path}
 
-        return super(BaseGTBackend, cls)._build(
-            stencil_id, performance_ir, definition_func, generator_options, extra_cache_info
+        return super(BaseGTBackend, cls)._generate_module(
+            stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info
         )

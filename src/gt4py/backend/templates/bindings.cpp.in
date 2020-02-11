@@ -16,11 +16,11 @@
 
  ---- Template variables ----
 
-    - stencil_unique_name: str
-    - module_name: str
-    - backend: str
     - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - gt_backend: str
+    - module_name: str
     - parameters: [{ "name": str, "dtype": str }]
+    - stencil_unique_name: str
 #}
 
 #include "computation.hpp"
@@ -36,7 +36,7 @@ namespace py = ::pybind11;
 namespace {
 
 BufferInfo make_buffer_info(py::object& b) {
-{%- if backend == "cuda" %}
+{%- if gt_backend == "cuda" %}
 //    py_size_t ndim = static_cast<py_size_t>(b.attr("ndim").cast<int>());
 //    auto shape_tuple = b.attr("shape").cast<std::tuple<int, int, int>>();
 //    std::vector<py_size_t> shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple), std::get<2>(shape_tuple)};

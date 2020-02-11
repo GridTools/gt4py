@@ -1,0 +1,122 @@
+{#
+
+ # GT4Py - GridTools4Py - GridTools for Python
+ #
+ # Copyright (c) 2014-2019, ETH Zurich
+ # All rights reserved.
+ #
+ # This file is part the GT4Py project and the GridTools framework.
+ # GT4Py is free software: you can redistribute it and/or modify it under
+ # the terms of the GNU General Public License as published by the
+ # Free Software Foundation, either version 3 of the License, or any later
+ # version. See the LICENSE.txt file at the top-level directory of this
+ # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+ #
+ # SPDX-License-Identifier: GPL-3.0-or-later
+
+ ---- Template variables ----
+
+    - stencil_unique_name: str
+    - module_name: str
+    - backend: str
+    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - parameters: [{ "name": str, "dtype": str }]
+
+imports, module_members, class_name, class_members, stencil_signature, implementation
+gt_backend, gt_source, gt_domain_info, gt_field_info, gt_parameter_info, gt_constants, gt_default_domain,
+gt_default_origin, gt_options
+
+#}
+
+import time
+
+import numpy as np
+from numpy import dtype
+{{ imports }}
+
+from gt4py.stencil_object import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo, StencilObject
+
+{{ module_members }}
+
+class {{ class_name }}(StencilObject):
+
+{%- filter indent(width=4) %}
+{{- class_members }}
+{%- endfilter %}
+
+    _gt_backend_ = "{{ gt_backend }}"
+
+    _gt_source_ = {{ gt_source }}
+
+    _gt_domain_info_ = {{ gt_domain_info }}
+
+    _gt_field_info_ = {{ gt_field_info }}
+
+    _gt_parameter_info_ = {{ gt_parameter_info }}
+
+    _gt_constants_ = {{ gt_constants }}
+
+    _gt_options_ = {{ gt_options }}
+
+    @property
+    def backend(self):
+        return type(self)._gt_backend_
+
+    @property
+    def source(self):
+        return type(self)._gt_source_
+
+    @property
+    def domain_info(self):
+        return type(self)._gt_domain_info_
+
+    @property
+    def field_info(self) -> dict:
+        return type(self)._gt_field_info_
+
+    @property
+    def parameter_info(self) -> dict:
+        return type(self)._gt_parameter_info_
+
+    @property
+    def constants(self) -> dict:
+        return type(self)._gt_constants_
+
+    @property
+    def options(self) -> dict:
+        return type(self)._gt_options_
+
+    def __call__(self, {{ stencil_signature }}, domain=None, origin=None, exec_info=None):
+        if exec_info is not None:
+            exec_info["call_start_time"] = time.perf_counter()
+        field_args=dict(
+{%- set comma = joiner(", ") -%}{%- for field in field_names -%} {{- comma() }} {{ field }}={{ field }}{%- endfor -%}
+        )
+        parameter_args=dict(
+{%- set comma = joiner(", ") -%}{%- for param in param_names -%} {{- comma() }} {{ param }}={{ param }}{%- endfor -%}
+        )
+        # assert that all required values have been provided
+
+{%- filter indent(width=8) %}
+{{ synchronization }}
+{%- endfilter %}
+
+        self._call_run(
+            field_args=field_args,
+            parameter_args=parameter_args,
+            domain=domain,
+            origin=origin,
+            exec_info=exec_info
+        )
+
+{%- filter indent(width=8) %}
+{{ mark_modified }}
+{%- endfilter %}
+    def run(self, _domain_, _origin_, exec_info, *, {{- field_names|join(", ") -}}, {{- param_names|join(", ") -}}):
+        if exec_info is not None:
+            exec_info["domain"] = _domain_
+            exec_info["origin"] = _origin_
+            exec_info["run_start_time"] = time.perf_counter()
+{%- filter indent(width=8) %}
+{{- implementation }}
+{%- endfilter %}
