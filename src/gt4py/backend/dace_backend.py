@@ -565,7 +565,7 @@ if {name} is not None:
                             f'_origin_["{field_name}"][{i}] - {-self.performance_ir.fields_extents[field_name][i][0]}:_origin_["{field_name}"][{i}] - {-self.performance_ir.fields_extents[field_name][i][0]}+_domain_[{i}] + {self.performance_ir.fields_extents[field_name].frame_size[i]}'
                             if self.performance_ir.fields[field_name].axes[i]
                             != self.performance_ir.domain.sequential_axis.name
-                            else ":"
+                            else f'_origin_["{field_name}"][{i}]:_origin_["{field_name}"][{i}]+_domain_[{i}]'
                             for i in range(len(self.performance_ir.fields[field_name].axes))
                         ),
                         shape=tuple(
