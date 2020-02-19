@@ -10,6 +10,7 @@ from gt4py.utils import text as gt_text
 import gt4py.ir as gt_ir
 import dace
 from dace.codegen.compiler import CompiledSDFG, ReloadableDLL
+from dace.codegen.codegen import generate_code
 from dace.sdfg import SDFG
 from gt4py.utils.attrib import (
     attribute,
@@ -27,7 +28,7 @@ LOADED_REGISTRY = dict()
 
 
 def local_name(name, offset, is_target):
-    CONFIG = dict(local_name_prefix="_gt_loc_", local_name_prefix_out="_gt_loc_out_")
+    CONFIG = dict(local_name_prefix="_gt_loc__", local_name_prefix_out="_gt_loc_out__")
     prefix = CONFIG["local_name_prefix_out"] if is_target else CONFIG["local_name_prefix"]
 
     offset_strs = []
@@ -190,7 +191,6 @@ class SDFGBuilder:
                     memlet_info.outer_name, memlet_info.subset_str, num_accesses=memlet_info.num
                 )
             for memlet_name, memlet_info in self.output_memlets.items():
-
                 node.mapped_output_memlets[memlet_name] = dace.Memlet.simple(
                     memlet_info.outer_name, memlet_info.subset_str, num_accesses=memlet_info.num
                 )
@@ -353,8 +353,7 @@ class SDFGBuilder:
             self.sdfg.add_edge(self.tail_state, entry_state, dace.InterstateEdge())
             self.tail_state = exit_state
 
-        #
-        def _make_parallel_computation(self, node: gt_ir.ApplyBlock):
+        def _make_mapped_computation(self, node: gt_ir.ApplyBlock, map_range):
             state = self.sdfg.add_state()
 
             tasklet = state.add_tasklet(
@@ -364,18 +363,10 @@ class SDFGBuilder:
                 code=node.tasklet_code,
             )
 
-            range = dict(
-                i="{:d}:I{:+d}".format(*node.i_range,),
-                j="{:d}:J{:+d}".format(*node.j_range),
-                k="{}:{}".format(*node.k_range),
-            )
-            map_entry, map_exit = state.add_map(name=self.new_map_name(), ndrange=range)
+            map_entry, map_exit = state.add_map(name=self.new_map_name(), ndrange=map_range)
 
-            # in_field_accessors = dict()
             for memlet_info in node.mapped_input_memlet_infos.values():
                 name = memlet_info.outer_name
-                # if name not in in_field_accessors:
-                #     in_field_accessors[name] = state.add_read(name)
                 state.add_memlet_path(
                     state.add_read(name),
                     map_entry,
@@ -401,51 +392,22 @@ class SDFGBuilder:
             if len(node.mapped_output_memlet_infos) == 0:
                 state.add_edge(tasklet, None, map_exit, None, dace.EmptyMemlet())
 
-            return state, state
-
-        def _make_ij_computation(self, node: gt_ir.ApplyBlock):
-            state = self.sdfg.add_state()
-
-            tasklet = state.add_tasklet(
-                name=self.new_tasklet_name(),
-                inputs=node.mapped_input_memlets,
-                outputs=node.mapped_output_memlets,
-                code=node.tasklet_code,
-            )
-
-            range = dict(
-                i="{:d}:I{:+d}".format(*node.i_range,), j="{:d}:J{:+d}".format(*node.j_range)
-            )
-            map_entry, map_exit = state.add_map(name=self.new_map_name(), ndrange=range)
-
-            in_field_accessors = dict()
-            for memlet_info in node.mapped_input_memlet_infos.values():
-                name = memlet_info.outer_name
-                if name not in in_field_accessors:
-                    in_field_accessors[name] = state.add_read(name)
-                state.add_memlet_path(
-                    in_field_accessors[name],
-                    map_entry,
-                    tasklet,
-                    memlet=node.mapped_input_memlets[memlet_info.local_name],
-                    dst_conn=memlet_info.local_name,
-                )
-            out_field_accessors = dict()
-            for memlet_info in node.mapped_output_memlet_infos.values():
-                name = memlet_info.outer_name
-                if name not in out_field_accessors:
-                    out_field_accessors[name] = state.add_write(name)
-                state.add_memlet_path(
-                    tasklet,
-                    map_exit,
-                    out_field_accessors[name],
-                    memlet=node.mapped_output_memlets[memlet_info.local_name],
-                    src_conn=memlet_info.local_name,
-                )
             return state
 
+        def _make_parallel_computation(self, node: gt_ir.ApplyBlock):
+            map_range = dict(
+                i="{:d}:I{:+d}".format(*node.i_range),
+                j="{:d}:J{:+d}".format(*node.j_range),
+                k="{}:{}".format(*node.k_range),
+            )
+            state = self._make_mapped_computation(node, map_range)
+            return state, state
+
         def _make_forward_computation(self, node: gt_ir.ApplyBlock):
-            state = self._make_ij_computation(node)
+            map_range = dict(
+                i="{:d}:I{:+d}".format(*node.i_range), j="{:d}:J{:+d}".format(*node.j_range),
+            )
+            state = self._make_mapped_computation(node, map_range)
             loop_start, _, loop_end = self.sdfg.add_loop(
                 None, state, None, "k", str(node.k_range[0]), f"k<{node.k_range[1]}", "k+1"
             )
@@ -453,7 +415,10 @@ class SDFGBuilder:
             return loop_start, loop_end
 
         def _make_backward_computation(self, node: gt_ir.ApplyBlock):
-            state = self._make_ij_computation(node)
+            map_range = dict(
+                i="{:d}:I{:+d}".format(*node.i_range), j="{:d}:J{:+d}".format(*node.j_range),
+            )
+            state = self._make_mapped_computation(node, map_range)
             loop_start, _, loop_end = self.sdfg.add_loop(
                 None, state, None, "k", str(node.k_range[1]) + "-1", f"k>={node.k_range[0]}", "k-1"
             )
@@ -540,7 +505,9 @@ dace_program = load_dace_program("{self.options.dace_build_path}", "{self.option
         return source
 
     def generate_implementation(self):
-        sources = gt_text.TextBlock(indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
+        sources = gt_text.TextBlock(
+            indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE
+        )
 
         args = []
         for arg in self.implementation_ir.api_signature:
@@ -550,39 +517,42 @@ dace_program = load_dace_program("{self.options.dace_build_path}", "{self.option
                 #     args.append("list(_origin_['{}'])".format(arg.name))
         field_slices = []
 
-        for field_name in self.performance_ir.arg_fields:
-            if field_name not in self.performance_ir.unreferenced:
+        for field_name in self.implementation_ir.arg_fields:
+            if field_name not in self.implementation_ir.unreferenced:
                 field_slices.append(
-                    """#{name}_copy = np.array({name}[{slice}], copy=True)
-#assert {name}_copy.shape=={shape}, str({name}_copy.shape)+'!='+str({shape})
-#assert {name}_copy.strides==tuple({name}_copy.itemsize*s for s in {strides}), str({name}_copy.strides)+'!='+str(tuple({name}.itemsize*s for s in {strides}))
+                    """#{name}_copy = np.array({name}.view(np.ndarray)[{slice}], copy=True) if {name} is not None else None
+#_{name}_I, _{name}_J, _{name}_K = {name}_copy.shape
+#if {name} is not None:
+#    assert {name}_copy.shape=={shape}, str({name}_copy.shape)+'!='+str({shape})
+#    assert {name}_copy.strides==tuple({name}_copy.itemsize*_gt_s_ for _gt_s_ in {strides}), str({name}_copy.strides)+'!='+str(tuple({name}.itemsize*_gt_s_ for _gt_s_ in {strides}))
 {name} = {name}[{slice}] if {name} is not None else None
-if {name} is not None:
-    assert {name}.shape=={shape}, str({name}.shape)+'!='+str({shape})
-    assert {name}.strides==tuple({name}.itemsize*s for s in {strides}), str({name}.strides)+'!='+str(tuple({name}.itemsize*s for s in {strides}))""".format(
+#if {name} is not None:
+#   assert {name}.shape=={shape}, str({name}.shape)+'!='+str({shape})
+#   assert {name}.strides==tuple({name}.itemsize*_gt_s_ for _gt_s_ in {strides}), str({name}.strides)+'!='+str(tuple({name}.itemsize*_gt_s_ for _gt_s_ in {strides}))""".format(
                         name=field_name,
                         slice=",".join(
-                            f'_origin_["{field_name}"][{i}] - {-self.performance_ir.fields_extents[field_name][i][0]}:_origin_["{field_name}"][{i}] - {-self.performance_ir.fields_extents[field_name][i][0]}+_domain_[{i}] + {self.performance_ir.fields_extents[field_name].frame_size[i]}'
-                            if self.performance_ir.fields[field_name].axes[i]
-                            != self.performance_ir.domain.sequential_axis.name
+                            f'_origin_["{field_name}"][{i}] - {-self.implementation_ir.fields_extents[field_name][i][0]}:_origin_["{field_name}"][{i}] - {-self.implementation_ir.fields_extents[field_name][i][0]}+_domain_[{i}] + {self.implementation_ir.fields_extents[field_name].frame_size[i]}'
+                            if self.implementation_ir.fields[field_name].axes[i]
+                            != self.implementation_ir.domain.sequential_axis.name
                             else f'_origin_["{field_name}"][{i}]:_origin_["{field_name}"][{i}]+_domain_[{i}]'
-                            for i in range(len(self.performance_ir.fields[field_name].axes))
+                            # else ":"
+                            for i in range(len(self.implementation_ir.fields[field_name].axes))
                         ),
                         shape=tuple(
                             s
-                            if self.performance_ir.fields[field_name].axes[i]
-                            != self.performance_ir.domain.sequential_axis.name
+                            if self.implementation_ir.fields[field_name].axes[i]
+                            != self.implementation_ir.domain.sequential_axis.name
                             else dace.symbol("K")
                             for i, s in enumerate(
-                                self.performance_ir.sdfg.arrays[field_name].shape
+                                self.implementation_ir.sdfg.arrays[field_name].shape
                             )
                         ),
-                        strides=self.performance_ir.sdfg.arrays[field_name].strides,
+                        strides=self.implementation_ir.sdfg.arrays[field_name].strides,
                     )
                 )
         total_field_sizes = []
-        for field_name in self.performance_ir.arg_fields:
-            if field_name not in self.performance_ir.unreferenced:
+        for field_name in self.implementation_ir.arg_fields:
+            if field_name not in self.implementation_ir.unreferenced:
                 total_field_sizes.append(
                     f"_{field_name}_K = np.int32({field_name}.strides[1])/{field_name}.itemsize if not {field_name} is None else 0.0"
                 )
@@ -590,7 +560,8 @@ if {name} is not None:
                     f"_{field_name}_J = np.int32({field_name}.strides[0]/_{field_name}_K)/{field_name}.itemsize if not {field_name} is None else 0.0"
                 )
                 total_field_sizes.append(
-                    f"_{field_name}_I = np.int32({field_name}.strides[0]/_{field_name}_K)/{field_name}.itemsize if not {field_name} is None else 0.0"
+                    # f"_{field_name}_I = np.int32({field_name}.strides[0]/_{field_name}_K)/{field_name}.itemsize if not {field_name} is None else 0.0"
+                    f"_{field_name}_I = np.int32({field_name}.shape[0]) if not {field_name} is None else 0.0"
                 )
         total_field_sizes = "\n".join(total_field_sizes)
         source = (
@@ -604,14 +575,17 @@ dace_program({run_args}, I=I, J=J, K=K, {total_field_sizes})
 """.format(
                     run_args=", ".join(
                         [
-                            f"{n}={n}" if n in self.performance_ir.arg_fields else f"{n}={n}"
+                            f"{n}={n}"
+                            if n in self.implementation_ir.arg_fields
+                            else f"{n}=np.{self.implementation_ir.parameters[n].data_type.dtype.name}({n})"
                             for n in args
                         ]
                     ),
                     total_field_sizes=", ".join(
                         f"_{field_name}_I=np.int32(_{field_name}_I), _{field_name}_J=np.int32(_{field_name}_J), _{field_name}_K=np.int32(_{field_name}_K)"
-                        for field_name in self.performance_ir.arg_fields
-                        if field_name not in self.performance_ir.unreferenced
+                        # f"_{field_name}_I=np.int32({field_name}.shape[0]), _{field_name}_J=np.int32({field_name}.shape[1]), _{field_name}_K=np.int32({field_name}.shape[2])"
+                        for field_name in self.implementation_ir.arg_fields
+                        if field_name not in self.implementation_ir.unreferenced
                     ),
                 )
             )
@@ -620,11 +594,11 @@ dace_program({run_args}, I=I, J=J, K=K, {total_field_sizes})
                     "#{name}[{slice}] = {name}_copy".format(
                         name=name,
                         slice=",".join(
-                            f'_origin_["{name}"][{i}] - {-self.performance_ir.fields_extents[name][i][0]}:_origin_["{name}"][{i}] - {-self.performance_ir.fields_extents[name][i][0]}+_domain_[{i}] + {self.performance_ir.fields_extents[name].frame_size[i]}'
-                            for i in range(len(self.performance_ir.fields[name].axes))
+                            f'_origin_["{name}"][{i}] - {-self.implementation_ir.fields_extents[name][i][0]}:_origin_["{name}"][{i}] - {-self.implementation_ir.fields_extents[name][i][0]}+_domain_[{i}] + {self.implementation_ir.fields_extents[name].frame_size[i]}'
+                            for i in range(len(self.implementation_ir.fields[name].axes))
                         ),
                     )
-                    for name in self.performance_ir.arg_fields
+                    for name in self.implementation_ir.arg_fields
                 ]
             )
         )
@@ -672,22 +646,20 @@ class DaceBackend(gt_backend.BaseBackend):
 
         with open("tmp.sdfg", "w") as sdfgfile:
             json.dump(sdfg.to_json(), sdfgfile)
-        sdfg.apply_strict_transformations()
+        sdfg.apply_strict_transformations(validate=False)
         with open("tmp.sdfg", "w") as sdfgfile:
             json.dump(sdfg.to_json(), sdfgfile)
         import dace.graph.labeling
 
         dace.graph.labeling.propagate_labels_sdfg(sdfg)
-        sdfg.validate()
+        # sdfg.validate()
 
-        performance_ir.sdfg = sdfg
+        implementation_ir.sdfg = sdfg
         dace_build_path = os.path.relpath(cls.get_dace_module_path(stencil_id))
         os.makedirs(dace_build_path, exist_ok=True)
 
         program_folder = dace.codegen.compiler.generate_program_folder(
-            sdfg=sdfg,
-            code_objects=dace.codegen.codegen.generate_code(sdfg),
-            out_path=dace_build_path,
+            sdfg=sdfg, code_objects=generate_code(sdfg), out_path=dace_build_path,
         )
         assert program_folder == dace_build_path
         dace_ext_lib = dace.codegen.compiler.configure_and_compile(program_folder)
