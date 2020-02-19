@@ -629,15 +629,6 @@ class CenteredExtent(Extent):
         return Boundary([(-1 * min(d[0], 0), max(d[1], 0)) for d in self])
 
 
-class Grid:
-    pass
-
-
-class Namespace(dict):
-    def __getattr__(self, item):
-        return self[item]
-
-
 @enum.unique
 class AccessKind(enum.Enum):
     READ_ONLY = 0
@@ -665,15 +656,6 @@ class ParameterInfo(collections.namedtuple("ParameterInfoNamedTuple", ["dtype"])
     pass
 
 
-@attribclass(frozen=True)
-class StencilID:
-    qualified_name = attribute(of=str)
-    version = attribute(of=str)
-
-    def __iter__(self):
-        return iter([self.qualified_name, self.version])
-
-
 @attribkwclass
 class BuildOptions:
     """Build options."""
@@ -696,6 +678,15 @@ class BuildOptions:
         )
 
         return result
+
+
+@attribclass(frozen=True)
+class StencilID:
+    qualified_name = attribute(of=str)
+    version = attribute(of=str)
+
+    def __iter__(self):
+        return iter([self.qualified_name, self.version])
 
 
 class GTError(Exception):

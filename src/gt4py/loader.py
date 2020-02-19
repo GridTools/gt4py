@@ -22,9 +22,7 @@ a high-level stencil function definition using a specific code generating backen
 
 import types
 
-from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
-from gt4py import definitions as gt_definitions
 from gt4py import frontend as gt_frontend
 from gt4py.stencil_object import StencilObject
 
@@ -52,8 +50,7 @@ def load_stencil(frontend_name, backend_name, definition_func, externals, option
     stencil_class = None if options.rebuild else backend.load(stencil_id, definition_func, options)
     if stencil_class is None:
         definition_ir = frontend.generate(definition_func, externals, options)
-        implementation_ir = gt_analysis.transform(definition_ir, options)
-        stencil_class = backend.build(stencil_id, implementation_ir, definition_func, options)
+        stencil_class = backend.generate(stencil_id, definition_ir, definition_func, options)
 
     return stencil_class
 

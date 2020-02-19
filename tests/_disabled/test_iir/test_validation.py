@@ -68,7 +68,7 @@ def compile_and_run_vertical_regions(backend, id_version):
 
     stencil_class = backend.load(stencil_id, None, options)
     if stencil_class is None:
-        stencil_class = backend.build(stencil_id, iir, None, options)
+        stencil_class = backend.generate(stencil_id, iir, None, options)
 
     stencil_implementation = stencil_class()
 
@@ -184,7 +184,7 @@ def compile_and_run_average_stencil(backend, id_version, origin_in, origin_out, 
 
     stencil_class = backend.load(stencil_id, None, options)
     if stencil_class is None:
-        stencil_class = backend.build(stencil_id, iir, None, options)
+        stencil_class = backend.generate(stencil_id, iir, None, options)
 
     stencil_implementation = stencil_class()
 

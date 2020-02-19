@@ -61,7 +61,7 @@ def generate(def_ir, backend, *, id_version):
         stencil_class = backend.load(stencil_id, None, options)
 
     if stencil_class is None:
-        stencil_class = backend.build(stencil_id, def_ir, None, options)
+        stencil_class = backend.generate(stencil_id, def_ir, None, options)
 
     stencil_implementation = stencil_class()
 

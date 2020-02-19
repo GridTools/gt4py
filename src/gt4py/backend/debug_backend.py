@@ -160,7 +160,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
         return ["".join([str(item) for item in line]) for line in body_sources.lines]
 
 
-class DebugGenerator(gt_backend.BaseGenerator):
+class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
     def __init__(self, backend_class, options):
         super().__init__(backend_class, options)
         assert len(self.options.backend_opts) == 0
@@ -194,7 +194,7 @@ class _Accessor:
 
     def generate_implementation(self):
         sources = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
-        self.source_generator(self.performance_ir, sources)
+        self.source_generator(self.implementation_ir, sources)
 
         return sources.text
 
@@ -225,4 +225,4 @@ class DebugBackend(gt_backend.BaseBackend):
         "is_compatible_type": debug_is_compatible_type,
     }
 
-    GENERATOR_CLASS = DebugGenerator
+    GENERATOR_CLASS = DebugModuleGenerator

@@ -27,7 +27,7 @@ def cuda_layout(mask):
     return tuple([next(ctr) if m else None for m in mask])
 
 
-class PythonGTCUDAGenerator(gt_backend.PythonGTGenerator):
+class GTCUDAPyModuleGenerator(gt_backend.GTPyModuleGenerator):
     def generate_synchronization(self, field_names):
         return "\n".join([f + ".host_to_device()" for f in field_names])
 
@@ -56,7 +56,7 @@ def cuda_is_compatible_type(field):
 
 @gt_backend.register
 class GTCUDABackend(gt_backend.BaseGTBackend):
-    GENERATOR_CLASS = PythonGTCUDAGenerator
+    GENERATOR_CLASS = GTCUDAPyModuleGenerator
     name = "gtcuda"
     options = gt_backend.BaseGTBackend.GT_BACKEND_OPTS
     storage_info = {
@@ -68,7 +68,7 @@ class GTCUDABackend(gt_backend.BaseGTBackend):
     }
 
     @classmethod
-    def generate_extension(cls, stencil_id, performance_ir, options):
+    def generate_extension(cls, stencil_id, implementation_ir, options):
         pyext_opts = dict(
             verbose=options.backend_opts.pop("verbose", True),
             clean=options.backend_opts.pop("clean", False),
@@ -83,7 +83,7 @@ class GTCUDABackend(gt_backend.BaseGTBackend):
             "cuda",
             options,
         )
-        gt_pyext_sources = gt_pyext_generator(performance_ir)
+        gt_pyext_sources = gt_pyext_generator(implementation_ir)
 
         # Build extension module
         pyext_build_path = cls.get_pyext_build_path(stencil_id)

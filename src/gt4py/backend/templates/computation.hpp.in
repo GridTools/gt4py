@@ -16,21 +16,14 @@
 
  ---- Template variables ----
 
-    - stencil_unique_name: str
-    - backend: str
-    - halo_sizes: [int]
     - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
     - parameters: [{ "name": str, "dtype": str }]
+    - stencil_unique_name: str
 #}
 
 
-{%- if backend == "cuda" %}
-#define GT_USE_GPU
-{%- endif %}
-
 #include <gridtools/common/defs.hpp>
 #include <gridtools/common/gt_math.hpp>
-#include <gridtools/stencil_composition/stencil_composition.hpp>
 
 #include <boost/cstdfloat.hpp> {# #include <numpy/npy_common.h> #}
 
@@ -55,37 +48,6 @@ struct BufferInfo {
 namespace gt = ::gridtools;
 
 namespace {{ stencil_unique_name }} {
-
-// Backend
-using backend_t = gt::backend::{{ backend }};
-
-// These halo sizes are used to determine the sizes of the temporaries
-static constexpr gt::uint_t halo_size_i = {{ halo_sizes[0] }};
-static constexpr gt::uint_t halo_size_j = {{ halo_sizes[1] }};
-static constexpr gt::uint_t halo_size_k = {{ halo_sizes[2] }};
-
-// Storage definitions
-template <int Id>
-using storage_info_t =
-    gt::storage_traits<backend_t>::storage_info_t<
-        Id, 3,
-        gt::halo<halo_size_i, halo_size_j, 0 /* not used */>>;
-
-template<typename T, int Id>
-using data_store_t =
-    gt::storage_traits<backend_t>::data_store_t<T, storage_info_t<Id>>;
-
-// Placeholder definitions
-{%- for field in arg_fields %}
-using p_{{ field.name }} = gt::arg<{{ loop.index0 }}, data_store_t<{{ field.dtype }}, {{ field.layout_id }}>>;
-{%- endfor %}
-{% for param in parameters %}
-using p_{{ param.name }} = gt::arg<{{ loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
-{%- endfor %}
-
-// Computation
-using computation_t =
-    gt::computation<p_{{ (arg_fields|list + parameters|list)|map(attribute='name')|join(", p_")}}>;
 
 void run(const std::array<gt::uint_t, 3>& domain,
 {%- set comma = joiner(", ") %}

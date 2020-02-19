@@ -16,14 +16,13 @@
 
  ---- Template variables ----
 
-    - stencil_unique_name: str
-    - backend: str
-    - max_ndim: int
-    - k_axis: { "n_intervals": int, "offset_limit": int}
-    - halo_sizes: [int]
-    - constants: { name:str : str }
     - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
-    - tmp_fields: [{ "name": str, "dtype": str }]
+    - constants: { name:str : str }
+    - gt_backend: str
+    - halo_sizes: [int]
+    - k_axis: { "n_intervals": int, "offset_limit": int}
+    - max_ndim: int
+    - multi_stages: [{ "exec": str, "steps": [[str]]]
     - parameters: [{ "name": str, "dtype": str }]
     - stage_functors: {
         name:str : {
@@ -43,10 +42,16 @@
             ]
         }
     }
-    - multi_stages: [{ "exec": str, "steps": [[str]]]
+    - stencil_unique_name: str
+    - tmp_fields: [{ "name": str, "dtype": str }]
 #}
 
+{%- if gt_backend == "cuda" %}
+#define GT_USE_GPU
+{%- endif %}
+
 #include "computation.hpp"
+
 #include <gridtools/stencil_composition/stencil_composition.hpp>
 
 #include <array>
@@ -57,12 +62,44 @@ namespace {{ stencil_unique_name }} {
 
 namespace {
 
+// Backend
+using backend_t = gt::backend::{{ gt_backend }};
+
 // Axis
 static constexpr gt::uint_t level_offset_limit = {{ k_axis.offset_limit }};
 
 using axis_t =
     gridtools::axis<{{ k_axis.n_intervals }}, /* NIntervals */
                     gt::axis_config::offset_limit<level_offset_limit>>;
+
+// These halo sizes are used to determine the sizes of the temporaries
+static constexpr gt::uint_t halo_size_i = {{ halo_sizes[0] }};
+static constexpr gt::uint_t halo_size_j = {{ halo_sizes[1] }};
+static constexpr gt::uint_t halo_size_k = {{ halo_sizes[2] }};
+
+// Storage definitions
+template <int Id>
+using storage_info_t =
+    gt::storage_traits<backend_t>::storage_info_t<
+        Id, 3,
+        gt::halo<0, 0, 0 /* not used */>>;
+
+template<typename T, int Id>
+using data_store_t =
+    gt::storage_traits<backend_t>::data_store_t<T, storage_info_t<Id>>;
+
+// Placeholder definitions
+{%- for field in arg_fields %}
+using p_{{ field.name }} = gt::arg<{{ loop.index0 }}, data_store_t<{{ field.dtype }}, {{ field.layout_id }}>>;
+{%- endfor %}
+{% for param in parameters %}
+using p_{{ param.name }} = gt::arg<{{ loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
+{%- endfor %}
+
+// Computation
+using computation_t =
+    gt::computation<p_{{ (arg_fields|list + parameters|list)|map(attribute='name')|join(", p_")}}>;
+
 
 // Constants
 {% for name, value in constants.items() %}
@@ -81,7 +118,7 @@ struct {{ name }}_func {
 
     {% for region in stage.regions %}
     template <typename Evaluation>
-{%- if backend == "cuda" %}
+{%- if gt_backend == "cuda" %}
     GT_FUNCTION_DEVICE static void apply(Evaluation eval,
 {%- else %}
     GT_FUNCTION static void apply(Evaluation eval,
@@ -141,7 +178,7 @@ data_store_t<T, Id> make_data_store(const BufferInfo& bi,
         dims[i] = compute_domain_shape[i]+2*origin[i];
     }
     return data_store_t<T, Id>{storage_info_t<Id>{dims, strides}, ptr,
-{%- if backend == "cuda" %}
+{%- if gt_backend == "cuda" %}
                            gt::ownership::external_gpu};
 {%- else %}
                            gt::ownership::external_cpu};
