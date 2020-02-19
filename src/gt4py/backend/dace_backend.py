@@ -1,4 +1,5 @@
 import os
+import ctypes
 
 import itertools
 
@@ -57,14 +58,15 @@ def dace_is_compatible_type(field):
 
 
 def load_dace_program(dace_build_path, dace_ext_lib, module_name):
-    if dace_ext_lib in LOADED_REGISTRY:
-        return LOADED_REGISTRY[dace_ext_lib]
-    else:
-        dll = ReloadableDLL(dace_ext_lib, module_name)
-        sdfg = SDFG.from_file(dace_build_path + "/program.sdfg")
-        compiled_sdfg = CompiledSDFG(sdfg, dll)
-        LOADED_REGISTRY[dace_ext_lib] = compiled_sdfg
-        return compiled_sdfg
+    #    if dace_ext_lib in LOADED_REGISTRY:
+    #        return LOADED_REGISTRY[dace_ext_lib]
+    #    else:
+    #    dll = ReloadableDLL(dace_ext_lib, module_name)
+    #    sdfg = SDFG.from_file(dace_build_path + "/program.sdfg")
+    #    compiled_sdfg = CompiledSDFG(sdfg, dll)
+    #    LOADED_REGISTRY[dace_ext_lib] = compiled_sdfg
+    #    return compiled_sdfg
+    return ctypes.CDLL(dace_ext_lib)
 
 
 @attribclass
@@ -497,9 +499,11 @@ class PythonDaceGenerator(gt_backend.BaseModuleGenerator):
     def generate_imports(self):
         source = f"""
 import functools
+import ctypes
+
 from gt4py.backend.dace_backend import load_dace_program
 
-dace_program = load_dace_program("{self.options.dace_build_path}", "{self.options.dace_ext_lib}", "{self.options.dace_module_name}")
+dace_lib = load_dace_program("{self.options.dace_build_path}", "{self.options.dace_ext_lib}", "{self.options.dace_module_name}")
 # dace_program = load_dace_program("{self.options.dace_ext_lib}", "{self.options.name}")
         """
         return source
@@ -551,19 +555,57 @@ dace_program = load_dace_program("{self.options.dace_build_path}", "{self.option
                     )
                 )
         total_field_sizes = []
+        symbol_ctype_strs = dict(I="ctypes.c_int(I)", J="ctypes.c_int(J)", K="ctypes.c_int(K)")
         for field_name in self.implementation_ir.arg_fields:
             if field_name not in self.implementation_ir.unreferenced:
                 total_field_sizes.append(
                     f"_{field_name}_K = np.int32({field_name}.strides[1])/{field_name}.itemsize if not {field_name} is None else 0.0"
                 )
+                symbol_ctype_strs[f"_{field_name}_K"] = f"ctypes.c_int(np.int32(_{field_name}_K))"
                 total_field_sizes.append(
                     f"_{field_name}_J = np.int32({field_name}.strides[0]/_{field_name}_K)/{field_name}.itemsize if not {field_name} is None else 0.0"
                 )
+                symbol_ctype_strs[f"_{field_name}_J"] = f"ctypes.c_int(np.int32(_{field_name}_J))"
                 total_field_sizes.append(
                     # f"_{field_name}_I = np.int32({field_name}.strides[0]/_{field_name}_K)/{field_name}.itemsize if not {field_name} is None else 0.0"
                     f"_{field_name}_I = np.int32({field_name}.shape[0]) if not {field_name} is None else 0.0"
                 )
         total_field_sizes = "\n".join(total_field_sizes)
+        run_args_names = sorted(args)
+        run_args_strs = []
+        for arg in run_args_names:
+            if not arg in self.implementation_ir.unreferenced:
+                if arg in self.implementation_ir.arg_fields:
+                    run_args_strs.append(f"ctypes.c_void_p({arg}.ctypes.data)")
+                else:
+                    run_args_strs.append(
+                        "ctypes.{ctype_name}({par_name})".format(
+                            ctype_name=np.ctypeslib.as_ctypes_type(
+                                self.implementation_ir.parameters[arg].data_type.dtype
+                            ).__name__,
+                            par_name=arg,
+                        )
+                    )
+
+        # for str in []:
+        #             field_run_args=", ".join(
+        #                 [
+        #                     f"ctypes.c_void_p({n}.ctypes.data)"
+        #                     # f"np.ctypeslib.as_ctypes({n})"
+        #                     for n in args
+        #                     if n in self.implementation_ir.arg_fields
+        #                 ]
+        #             ),
+        #             scalar_run_args=", ".join(
+        #                 [
+        #                     "ctypes.{ctype_name}({par_name})".format(
+        #                         ctype_name=np.ctypeslib.as_ctypes_type(
+        #                             self.implementation_ir.parameters[n].data_type.dtype
+        #                         ).__name__,
+        #                         par_name=n,
+        #                     )
+        #                     for n in sorted(self.implementation_ir.parameters)
+        #                 ]
         source = (
             (
                 "\nI=np.int32(_domain_[0])\nJ=np.int32(_domain_[1])\nK=np.int32(_domain_[2])\n"
@@ -571,22 +613,17 @@ dace_program = load_dace_program("{self.options.dace_build_path}", "{self.option
                 + "\n"
                 + "\n".join(field_slices)
                 + """
-dace_program({run_args}, I=I, J=J, K=K, {total_field_sizes})
+dace_lib['__program_{program_name}']({run_args}, {total_field_sizes})
 """.format(
-                    run_args=", ".join(
-                        [
-                            f"{n}={n}"
-                            if n in self.implementation_ir.arg_fields
-                            else f"{n}=np.{self.implementation_ir.parameters[n].data_type.dtype.name}({n})"
-                            for n in args
-                        ]
-                    ),
-                    total_field_sizes=", ".join(
-                        f"_{field_name}_I=np.int32(_{field_name}_I), _{field_name}_J=np.int32(_{field_name}_J), _{field_name}_K=np.int32(_{field_name}_K)"
-                        # f"_{field_name}_I=np.int32({field_name}.shape[0]), _{field_name}_J=np.int32({field_name}.shape[1]), _{field_name}_K=np.int32({field_name}.shape[2])"
-                        for field_name in self.implementation_ir.arg_fields
-                        if field_name not in self.implementation_ir.unreferenced
-                    ),
+                    program_name=self.implementation_ir.sdfg.name,
+                    run_args=", ".join(run_args_strs),
+                    # total_field_sizes=", ".join(
+                    #     f"_{field_name}_I=np.int32(_{field_nam e}_I), _{field_name}_J=np.int32(_{field_name}_J), _{field_name}_K=np.int32(_{field_name}_K)"
+                    #     # f"_{field_name}_I=np.int32({field_name}.shape[0]), _{field_name}_J=np.int32({field_name}.shape[1]), _{field_name}_K=np.int32({field_name}.shape[2])"
+                    #     for field_name in self.implementation_ir.arg_fields
+                    #     if field_name not in self.implementation_ir.unreferenced
+                    # ),
+                    total_field_sizes=",".join(v for k, v in sorted(symbol_ctype_strs.items())),
                 )
             )
             + "\n".join(
