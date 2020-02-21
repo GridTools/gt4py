@@ -681,15 +681,14 @@ class DaceBackend(gt_backend.BaseBackend):
 
         import json
 
+        from dace.transformation.dataflow.merge_arrays import MergeArrays
+
+        sdfg.apply_transformations_repeated(MergeArrays)
         with open("tmp.sdfg", "w") as sdfgfile:
             json.dump(sdfg.to_json(), sdfgfile)
         sdfg.apply_strict_transformations(validate=False)
-        with open("tmp.sdfg", "w") as sdfgfile:
-            json.dump(sdfg.to_json(), sdfgfile)
-        import dace.graph.labeling
 
-        dace.graph.labeling.propagate_labels_sdfg(sdfg)
-        # sdfg.validate()
+        sdfg.validate()
 
         implementation_ir.sdfg = sdfg
         dace_build_path = os.path.relpath(cls.get_dace_module_path(stencil_id))
