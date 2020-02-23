@@ -192,14 +192,7 @@ def run_vertical_advection_dycore(backend, id_version, domain):
         if hasattr(arg_fields[k], "host_to_device"):
             arg_fields[k].host_to_device()
     testmodule.run(
-        **arg_fields,
-        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
-        _domain_=domain,
-        _origin_=origins,
-        # _origin_={
-        #    k: [oo[0] if isinstance(oo, tuple) else oo for oo in o] for k, o in origins.items()
-        # },
-        exec_info=None,
+        **arg_fields, _domain_=domain, _origin_=origins, exec_info=None,
     )
 
     for k in validate_field_names:

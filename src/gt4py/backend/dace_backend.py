@@ -446,25 +446,27 @@ class SDFGBuilder:
         def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
 
             for field in node.fields.values():
-                if field.name in node.arg_fields:
-                    I = dace.symbol(f"_{field.name}_I")
-                    J = dace.symbol(f"_{field.name}_J")
-                    K = dace.symbol(f"_{field.name}_K")
-                    add_to_sdfg = lambda *args, **kwargs: self.sdfg.add_array(
-                        *args, strides=(J * K, K, 1), **kwargs
-                    )
-                else:
-                    assert field.name in node.temporary_fields
-                    add_to_sdfg = lambda *args, **kwargs: self.sdfg.add_transient(
-                        *args, toplevel=True, **kwargs
-                    )
                 shape = [
                     d + f
                     for d, f in zip(
                         self.symbolic_domain, node.fields_extents[field.name].frame_size
                     )
                 ]
-                add_to_sdfg(field.name, shape=shape, dtype=field.data_type.dtype.type)
+                if field.name in node.arg_fields:
+                    I = dace.symbol(f"_{field.name}_I")
+                    J = dace.symbol(f"_{field.name}_J")
+                    K = dace.symbol(f"_{field.name}_K")
+                    self.sdfg.add_array(
+                        field.name,
+                        strides=(J * K, K, 1),
+                        shape=shape,
+                        dtype=field.data_type.dtype.type,
+                    )
+                else:
+                    assert field.name in node.temporary_fields
+                    self.sdfg.add_transient(
+                        field.name, shape=shape, dtype=field.data_type.dtype.type, toplevel=True
+                    )
             for k, v in node.parameters.items():
                 self.sdfg.add_scalar(k, v.data_type.dtype.type)
             self.generic_visit(node)
@@ -492,7 +494,7 @@ class SDFGBuilder:
 # dll.__dace_exit(*args)
 
 
-class PythonDaceGenerator(gt_backend.BaseModuleGenerator):
+class DacePyModuleGenerator(gt_backend.BaseModuleGenerator):
     def __init__(self, backend_class, options):
         super().__init__(backend_class, options)
 
@@ -576,13 +578,15 @@ dace_lib = load_dace_program("{self.options.dace_build_path}", "{self.options.da
         for arg in run_args_names:
             if not arg in self.implementation_ir.unreferenced:
                 if arg in self.implementation_ir.arg_fields:
-                    run_args_strs.append(f"ctypes.c_void_p({arg}.ctypes.data)")
+                    run_args_strs.append(f"ctypes.c_void_p({self.generate_field_ptr_str(arg)})")
                 else:
                     run_args_strs.append(
-                        "ctypes.{ctype_name}({par_name})".format(
-                            ctype_name=np.ctypeslib.as_ctypes_type(
-                                self.implementation_ir.parameters[arg].data_type.dtype
-                            ).__name__,
+                        "np.ctypeslib.as_ctypes(np.{dtype}({par_name}))".format(
+                            # "ctypes.{ctype_name}({par_name})".format(
+                            # ctype_name=self.NUMPY_TO_CTYPES[
+                            #     self.implementation_ir.parameters[arg].data_type
+                            # ],
+                            dtype=self.implementation_ir.parameters[arg].data_type.dtype.name,
                             par_name=arg,
                         )
                     )
@@ -651,7 +655,16 @@ if exec_info is not None:
         return sources.text
 
 
-@gt_backend.register
+class CPUDacePyModuleGenerator(DacePyModuleGenerator):
+    def generate_field_ptr_str(self, arg):
+        return f"{arg}.ctypes.data"
+
+
+class GPUDacePyModuleGenerator(DacePyModuleGenerator):
+    def generate_field_ptr_str(self, arg):
+        return f"{arg}.data.data.ptr"
+
+
 class DaceBackend(gt_backend.BaseBackend):
     name = "dace"
     options = {}
@@ -663,7 +676,7 @@ class DaceBackend(gt_backend.BaseBackend):
         "is_compatible_type": dace_is_compatible_type,
     }
 
-    GENERATOR_CLASS = PythonDaceGenerator
+    GENERATOR_CLASS = DacePyModuleGenerator
 
     @classmethod
     def get_dace_module_path(cls, stencil_id):
@@ -684,9 +697,10 @@ class DaceBackend(gt_backend.BaseBackend):
         from dace.transformation.dataflow.merge_arrays import MergeArrays
 
         sdfg.apply_transformations_repeated(MergeArrays)
-        with open("tmp.sdfg", "w") as sdfgfile:
-            json.dump(sdfg.to_json(), sdfgfile)
         sdfg.apply_strict_transformations(validate=False)
+
+        cls.transform_to_device(sdfg)
+        cls.transform_optimize(sdfg)
 
         sdfg.validate()
 
@@ -725,3 +739,51 @@ class DaceBackend(gt_backend.BaseBackend):
         return super(DaceBackend, cls)._generate_module(
             stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info
         )
+
+
+@gt_backend.register
+class CPUDaceBackend(DaceBackend):
+    name = "dacex86"
+    options = {}
+    storage_info = {
+        "alignment": 1,
+        "device": "cpu",
+        "layout_map": dace_layout,
+        "is_compatible_layout": dace_is_compatible_layout,
+        "is_compatible_type": dace_is_compatible_type,
+    }
+    GENERATOR_CLASS = CPUDacePyModuleGenerator
+
+    @classmethod
+    def transform_to_device(cls, sdfg):
+        pass
+
+    @classmethod
+    def transform_optimize(cls, sdfg):
+        pass
+
+
+@gt_backend.register
+class GPUDaceBackend(DaceBackend):
+    name = "dacecuda"
+    options = {}
+    storage_info = {
+        "alignment": 1,
+        "device": "gpu",
+        "layout_map": dace_layout,
+        "is_compatible_layout": dace_is_compatible_layout,
+        "is_compatible_type": dace_is_compatible_type,
+    }
+    GENERATOR_CLASS = GPUDacePyModuleGenerator
+
+    @classmethod
+    def transform_to_device(cls, sdfg):
+        for name, array in sdfg.arrays.items():
+            array.storage = dace.dtypes.StorageType.GPU_Global
+        sdfg.apply_transformations(
+            [dace.transformation.interstate.gpu_transform_sdfg.GPUTransformSDFG], validate=False
+        )
+
+    @classmethod
+    def transform_optimize(cls, sdfg):
+        pass
