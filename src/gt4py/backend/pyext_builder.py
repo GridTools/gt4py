@@ -254,6 +254,7 @@ def build_gtcuda_ext(
             "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
             "-DBOOST_PP_VARIADICS",
             "-fPIC",
+            "-march=haswell",
             *cxx_extra_compile_args_from_config,
         ],
         "nvcc": [

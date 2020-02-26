@@ -57,7 +57,7 @@
 #include <array>
 #include <cassert>
 #include <stdexcept>
-
+#include <chrono>
 namespace {{ stencil_unique_name }} {
 
 namespace {
@@ -197,7 +197,7 @@ gt::global_parameter<{{ param.dtype }}> {{ param.name }}_param = gt::make_global
 
 
 // Run actual computation
-void run(const std::array<gt::uint_t, 3>& domain,
+std::array<double, 2>  run(const std::array<gt::uint_t, 3>& domain,
 {%- set comma = joiner(", ") %}
 {%- for field in arg_fields -%}
          {{- comma() }}
@@ -268,7 +268,8 @@ void run(const std::array<gt::uint_t, 3>& domain,
         )
 {%- endfor %}
     );
-
+    std::array<double, 2> res = {0.0,0.0};
+    res[0] = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
     gt_computation.run({%- set comma = joiner(", ") %}
 {%- for field in arg_fields -%}
                      {{ comma() }}p_{{ field.name }}()=ds_{{ field.name }}
@@ -276,6 +277,9 @@ void run(const std::array<gt::uint_t, 3>& domain,
 {%- for param in parameters -%}
                      {{ comma() }}p_{{ param.name }}()={{ param.name }}_param
 {%- endfor %});
+
+    res[1] = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+    return res;
         // computation_.sync_bound_data_stores();
 }
 

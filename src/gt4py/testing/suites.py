@@ -384,7 +384,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
             backend=test["backend"],
             definition=test["definition"],
             name=f"{test['suite']}_{test['backend']}_{test['test_id']}",
-            rebuild=True,
+            rebuild=False,
             externals=externals_dict,
         )
 

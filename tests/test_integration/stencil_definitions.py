@@ -199,10 +199,10 @@ def horizontal_diffusion(in_field: Field3D, out_field: Field3D, coeff: Field3D):
         lap_field = 4.0 * in_field[0, 0, 0] - (
             in_field[1, 0, 0] + in_field[-1, 0, 0] + in_field[0, 1, 0] + in_field[0, -1, 0]
         )
-        res = lap_field[1, 0, 0] - lap_field[0, 0, 0]
-        flx_field = 0 if (res * (in_field[1, 0, 0] - in_field[0, 0, 0])) > 0 else res
-        res = lap_field[0, 1, 0] - lap_field[0, 0, 0]
-        fly_field = 0 if (res * (in_field[0, 1, 0] - in_field[0, 0, 0])) > 0 else res
+        res1 = lap_field[1, 0, 0] - lap_field[0, 0, 0]
+        flx_field = 0 if (res1 * (in_field[1, 0, 0] - in_field[0, 0, 0])) > 0 else res1
+        res2 = lap_field[0, 1, 0] - lap_field[0, 0, 0]
+        fly_field = 0 if (res2 * (in_field[0, 1, 0] - in_field[0, 0, 0])) > 0 else res2
         out_field = in_field[0, 0, 0] - coeff[0, 0, 0] * (
             flx_field[0, 0, 0] - flx_field[-1, 0, 0] + fly_field[0, 0, 0] - fly_field[0, -1, 0]
         )

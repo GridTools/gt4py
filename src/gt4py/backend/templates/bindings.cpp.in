@@ -89,7 +89,7 @@ void run_computation(const std::array<gt::uint_t, 3>& domain,
     auto bi_{{ field.name }} = make_buffer_info({{ field.name }});
 {%- endfor %}
 
-    {{ stencil_unique_name }}::run(domain,
+    auto timestamps = {{ stencil_unique_name }}::run(domain,
 {%- set comma = joiner(", ") -%}
 {%- for field in arg_fields -%}
         {{- comma() }}
@@ -103,7 +103,9 @@ void run_computation(const std::array<gt::uint_t, 3>& domain,
     if (!exec_info.is(py::none()))
     {
         auto exec_info_dict = exec_info.cast<py::dict>();
-        exec_info_dict["run_cpp_end_time"] = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
+        exec_info_dict["end_run_cpp_time"] = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
+        exec_info_dict["start_run_cpp_time_inner"] = timestamps[0];
+        exec_info_dict["end_run_cpp_time_inner"] = timestamps[1];
     }
 }
 

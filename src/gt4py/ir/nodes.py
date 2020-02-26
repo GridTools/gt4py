@@ -328,6 +328,10 @@ class DataType(enum.Enum):
         result = cls(max(arg.value for arg in args))
         return result
 
+    @property
+    def ctypes_str(self):
+        return self.NATIVE_TYPE_TO_CTYPES[self]
+
 
 DataType.NATIVE_TYPE_TO_NUMPY = {
     DataType.DEFAULT: "float_",
@@ -344,6 +348,20 @@ DataType.NUMPY_TO_NATIVE_TYPE = {
     value: key for key, value in DataType.NATIVE_TYPE_TO_NUMPY.items() if key != DataType.DEFAULT
 }
 
+DataType.NATIVE_TYPE_TO_CTYPES = {
+    DataType.DEFAULT: "c_double",
+    DataType.BOOL: "c_bool",
+    DataType.INT8: "c_byte",
+    DataType.INT16: "c_short",
+    DataType.INT32: "c_int",
+    DataType.INT64: "c_long",
+    DataType.FLOAT32: "c_float",
+    DataType.FLOAT64: "c_double",
+}
+
+DataType.CTYPES_TO_NATIVE_TYPE = {
+    value: key for key, value in DataType.NATIVE_TYPE_TO_CTYPES.items() if key != DataType.DEFAULT
+}
 
 # ---- IR: expressions ----
 class Expr(Node):

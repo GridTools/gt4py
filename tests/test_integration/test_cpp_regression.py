@@ -191,9 +191,7 @@ def run_vertical_advection_dycore(backend, id_version, domain):
     for k in arg_fields:
         if hasattr(arg_fields[k], "host_to_device"):
             arg_fields[k].host_to_device()
-    testmodule.run(
-        **arg_fields, _domain_=domain, _origin_=origins, exec_info=None,
-    )
+    testmodule.run(**arg_fields, _domain_=domain, _origin_=origins, exec_info=None)
 
     for k in validate_field_names:
         if hasattr(arg_fields[k], "synchronize"):
