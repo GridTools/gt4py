@@ -14,12 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from .concepts import *
+from .base import *
 
 from .debug_backend import *
 from .numpy_backend import *
 from .base_gt_backend import *
 from .gt_cpu_backend import *
 from .gt_cuda_backend import *
+from .dawn_backend import *
 
 from . import python_generator

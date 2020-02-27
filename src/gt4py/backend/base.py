@@ -16,11 +16,13 @@
 
 import abc
 import copy
+import hashlib
 import numbers
 import os
 import pickle
 import sys
 import types
+from typing import Any, Dict, Optional, Type
 
 import jinja2
 
@@ -53,16 +55,26 @@ def register(backend_cls):
 
 
 class Backend(abc.ABC):
+    #: Backend name: str
     name = None
 
+    #: Backend-specific options:
+    #:  Dict[name: str, info: Dict[str, Any]]]
+    #:      + info:
+    #:          - versioning: bool
+    #:          - description [optional]: str
     options = None
-    # Dict[str, info: Dict[str, Any]]]
-    #   + info:
-    #       - versioning: bool
-    #       - description [optional]: str
+
+    #: Backend-specific storage parametrization: Dict[str, Any]
+    #:  - "alignment": int (in bytes)
+    #:  - "device": str ("cpu" | "gpu")
+    #:  - "layout_map": Tuple[bool] -> Tuple[Union[int, None]]
+    #:  - "is_compatible_layout": StorageLikeInstance -> bool
+    #:  - "is_compatible_type": StorageLikeInstance -> bool
+    storage_info = None
 
     @classmethod
-    def get_options_id(cls, options):
+    def get_options_id(cls, options: gt_definitions.BuildOptions):
         filtered_options = copy.deepcopy(options)
         id_names = set(name for name, info in cls.options.items() if info["versioning"])
         non_id_names = set(filtered_options.backend_opts.keys()) - id_names
@@ -73,34 +85,47 @@ class Backend(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def load(cls, stencil_id, definition_func, options):
+    def load(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        definition_func: types.FunctionType,
+        options: gt_definitions.BuildOptions,
+    ):
         pass
 
     @classmethod
     @abc.abstractmethod
-    def generate(cls, stencil_id, definition_ir, definition_func, options):
+    def generate(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        definition_ir: gt_ir.StencilDefinition,
+        definition_func: types.FunctionType,
+        options: gt_definitions.BuildOptions,
+    ):
         pass
 
 
 class BaseBackend(Backend):
 
-    GENERATOR_CLASS = None
+    MODULE_GENERATOR_CLASS = None
 
     @classmethod
-    def get_stencil_package_name(cls, stencil_id):
+    def get_stencil_package_name(cls, stencil_id: gt_definitions.StencilID):
         components = stencil_id.qualified_name.split(".")
         package_name = ".".join([gt_config.code_settings["root_package_name"]] + components[:-1])
         return package_name
 
     @classmethod
-    def get_stencil_module_name(cls, stencil_id, *, qualified=False):
+    def get_stencil_module_name(
+        cls, stencil_id: gt_definitions.StencilID, *, qualified: bool = False
+    ):
         module_name = "m_{}".format(cls.get_stencil_class_name(stencil_id))
         if qualified:
             module_name = "{}.{}".format(cls.get_stencil_package_name(stencil_id), module_name)
         return module_name
 
     @classmethod
-    def get_stencil_class_name(cls, stencil_id):
+    def get_stencil_class_name(cls, stencil_id: gt_definitions.StencilID):
         components = stencil_id.qualified_name.split(".")
         class_name = "{name}__{backend}_{id}".format(
             name=components[-1], backend=gt_utils.slugify(cls.name), id=stencil_id.version
@@ -123,13 +148,13 @@ class BaseBackend(Backend):
         return base_path
 
     @classmethod
-    def get_stencil_package_path(cls, stencil_id):
+    def get_stencil_package_path(cls, stencil_id: gt_definitions.StencilID):
         components = stencil_id.qualified_name.split(".")
         path = os.path.join(cls.get_base_path(), *components[:-1])
         return path
 
     @classmethod
-    def get_stencil_module_path(cls, stencil_id):
+    def get_stencil_module_path(cls, stencil_id: gt_definitions.StencilID):
         components = stencil_id.qualified_name.split(".")
         path = os.path.join(
             cls.get_base_path(), *components[:-1], cls.get_stencil_module_name(stencil_id) + ".py"
@@ -137,12 +162,14 @@ class BaseBackend(Backend):
         return path
 
     @classmethod
-    def get_cache_info_path(cls, stencil_id):
+    def get_cache_info_path(cls, stencil_id: gt_definitions.StencilID):
         path = str(cls.get_stencil_module_path(stencil_id))[:-3] + ".cacheinfo"
         return path
 
     @classmethod
-    def generate_cache_info(cls, stencil_id, extra_cache_info):
+    def generate_cache_info(
+        cls, stencil_id: gt_definitions.StencilID, extra_cache_info: Dict[str, Any]
+    ):
         module_file_name = cls.get_stencil_module_path(stencil_id)
         with open(module_file_name, "r") as f:
             source = f.read()
@@ -158,7 +185,7 @@ class BaseBackend(Backend):
         return cache_info
 
     @classmethod
-    def update_cache(cls, stencil_id, extra_cache_info):
+    def update_cache(cls, stencil_id: gt_definitions.StencilID, extra_cache_info: Dict[str, Any]):
         cache_info = cls.generate_cache_info(stencil_id, extra_cache_info)
         cache_file_name = cls.get_cache_info_path(stencil_id)
         os.makedirs(os.path.dirname(cache_file_name), exist_ok=True)
@@ -166,7 +193,7 @@ class BaseBackend(Backend):
             pickle.dump(cache_info, f)
 
     @classmethod
-    def validate_cache_info(cls, stencil_id, cache_info):
+    def validate_cache_info(cls, stencil_id: gt_definitions.StencilID, cache_info: Dict[str, Any]):
         try:
             cache_info = types.SimpleNamespace(**cache_info)
 
@@ -188,7 +215,7 @@ class BaseBackend(Backend):
         return result
 
     @classmethod
-    def check_cache(cls, stencil_id):
+    def check_cache(cls, stencil_id: gt_definitions.StencilID):
         try:
             cache_file_name = cls.get_cache_info_path(stencil_id)
             with open(cache_file_name, "rb") as f:
@@ -202,14 +229,14 @@ class BaseBackend(Backend):
         return result
 
     @classmethod
-    def _check_options(cls, options):
+    def _check_options(cls, options: gt_definitions.BuildOptions):
         assert cls.options is not None
         unknown_options = set(options.backend_opts.keys()) - set(cls.options.keys())
         if unknown_options:
             raise ValueError("Unknown backend options: '{}'".format(unknown_options))
 
     @classmethod
-    def _load(cls, stencil_id, definition_func):
+    def _load(cls, stencil_id: gt_definitions.StencilID, definition_func: types.FunctionType):
         stencil_class_name = cls.get_stencil_class_name(stencil_id)
         file_name = cls.get_stencil_module_path(stencil_id)
         stencil_module = gt_utils.make_module_from_file(stencil_class_name, file_name)
@@ -221,7 +248,12 @@ class BaseBackend(Backend):
         return stencil_class
 
     @classmethod
-    def load(cls, stencil_id, definition_func, options):
+    def load(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        definition_func: types.FunctionType,
+        options: gt_definitions.BuildOptions,
+    ):
         stencil_class = None
         if stencil_id is not None:
             cls._check_options(options)
@@ -232,26 +264,94 @@ class BaseBackend(Backend):
 
     @classmethod
     def _generate_module(
-        cls, stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        definition_ir: gt_ir.StencilDefinition,
+        definition_func: types.FunctionType,
+        options: gt_definitions.BuildOptions,
+        *,
+        extra_cache_info: Optional[Dict[str, Any]] = None,
+        **kwargs,
     ):
-        generator = cls.GENERATOR_CLASS(cls, options=generator_options)
-        module_source = generator(stencil_id, implementation_ir)
+        generator = cls.MODULE_GENERATOR_CLASS(cls, options, **kwargs)
+        module_source = generator(stencil_id, definition_ir)
 
         file_name = cls.get_stencil_module_path(stencil_id)
         os.makedirs(os.path.dirname(file_name), exist_ok=True)
         with open(file_name, "w") as f:
             f.write(module_source)
+        extra_cache_info = extra_cache_info or {}
         cls.update_cache(stencil_id, extra_cache_info)
 
         return cls._load(stencil_id, definition_func)
 
     @classmethod
-    def generate(cls, stencil_id, definition_ir, definition_func, options):
+    def generate(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        definition_ir: gt_ir.StencilDefinition,
+        definition_func: types.FunctionType,
+        options: gt_definitions.BuildOptions,
+    ):
         cls._check_options(options)
-        implementation_ir = gt_analysis.transform(definition_ir, options)
-        return cls._generate_module(
-            stencil_id, implementation_ir, definition_func, copy.deepcopy(options.as_dict()), {}
+        return cls._generate_module(stencil_id, definition_ir, definition_func, options)
+
+
+class BasePyExtBackend(BaseBackend):
+    @classmethod
+    def get_pyext_module_name(cls, stencil_id: gt_definitions.StencilID, *, qualified=False):
+        module_name = cls.get_stencil_module_name(stencil_id, qualified=qualified) + "_pyext"
+        return module_name
+
+    @classmethod
+    def get_pyext_class_name(cls, stencil_id: gt_definitions.StencilID):
+        module_name = cls.get_stencil_class_name(stencil_id) + "_pyext"
+        return module_name
+
+    @classmethod
+    def get_pyext_build_path(cls, stencil_id: gt_definitions.StencilID):
+        path = os.path.join(
+            cls.get_stencil_package_path(stencil_id),
+            cls.get_pyext_module_name(stencil_id) + "_BUILD",
         )
+
+        return path
+
+    @classmethod
+    def generate_cache_info(
+        cls, stencil_id: gt_definitions.StencilID, extra_cache_info: Dict[str, Any]
+    ):
+        cache_info = super(BasePyExtBackend, cls).generate_cache_info(stencil_id, {})
+
+        cache_info["pyext_file_path"] = extra_cache_info["pyext_file_path"]
+        cache_info["pyext_md5"] = hashlib.md5(
+            open(cache_info["pyext_file_path"], "rb").read()
+        ).hexdigest()
+
+        return cache_info
+
+    @classmethod
+    def validate_cache_info(cls, stencil_id: gt_definitions.StencilID, cache_info: Dict[str, Any]):
+        try:
+            assert super(BasePyExtBackend, cls).validate_cache_info(stencil_id, cache_info)
+            pyext_md5 = hashlib.md5(open(cache_info["pyext_file_path"], "rb").read()).hexdigest()
+            result = pyext_md5 == cache_info["pyext_md5"]
+
+        except Exception:
+            result = False
+
+        return result
+
+    @classmethod
+    @abc.abstractmethod
+    def generate(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        definition_ir: gt_ir.StencilDefinition,
+        definition_func: types.FunctionType,
+        options: gt_definitions.BuildOptions,
+    ):
+        pass
 
 
 class BaseModuleGenerator(abc.ABC):
@@ -264,31 +364,108 @@ class BaseModuleGenerator(abc.ABC):
 
     TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "stencil_module.py.in")
 
-    def __init__(self, backend_class, options):
+    def __init__(
+        self, backend_class: Type[Backend], options: gt_definitions.BuildOptions, **kwargs,
+    ):
         assert issubclass(backend_class, BaseBackend)
         self.backend_class = backend_class
-        self.options = types.SimpleNamespace(**options)
+        self.options = options
+        self.kwargs = kwargs
         self.stencil_id = None
-        self.implementation_ir = None
+        self.definition_ir = None
+        self._implementation_ir = kwargs.get("implementation_ir", None)
+        self._meta_info = kwargs.get("meta_info", None)
         with open(self.TEMPLATE_PATH, "r") as f:
             self.template = jinja2.Template(f.read())
 
-    def __call__(self, stencil_id, implementation_ir):
+    def __call__(
+        self, stencil_id: gt_definitions.StencilID, definition_ir: gt_ir.StencilDefinition
+    ):
         self.stencil_id = stencil_id
-        self.implementation_ir = implementation_ir
+        self.definition_ir = definition_ir
 
+        meta_info = self.meta_info
         stencil_signature = self.generate_signature()
+        imports = self.generate_imports()
+        module_members = self.generate_module_members()
+        class_members = self.generate_class_members()
+        implementation = self.generate_implementation()
+        pre_run = self.generate_pre_run()
+        post_run = self.generate_post_run()
 
-        sources = {}
-        if implementation_ir.sources is not None:
-            sources = {
-                key: gt_utils.text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
-                for key, value in implementation_ir.sources
-            }
+        module_source = self.template.render(
+            imports=imports,
+            module_members=module_members,
+            class_name=self.stencil_class_name,
+            class_members=class_members,
+            gt_backend=self.backend_name,
+            gt_source=meta_info["sources"],
+            gt_domain_info=meta_info["domain_info"],
+            gt_field_info=repr(meta_info["field_info"]),
+            gt_parameter_info=repr(meta_info["parameter_info"]),
+            gt_constants=meta_info["gt_constants"],
+            gt_options=meta_info["gt_options"],
+            stencil_signature=stencil_signature,
+            field_names=meta_info["field_info"].keys(),
+            param_names=meta_info["parameter_info"].keys(),
+            pre_run=pre_run,
+            post_run=post_run,
+            implementation=implementation,
+        )
+        module_source = gt_utils.text.format_source(
+            module_source, line_length=self.SOURCE_LINE_LENGTH
+        )
 
+        return module_source
+
+    @property
+    def implementation_ir(self):
+        if self._implementation_ir is None:
+            self._implementation_ir = gt_analysis.transform(self.definition_ir, self.options)
+        return self._implementation_ir
+
+    @property
+    def meta_info(self) -> Dict[str, Any]:
+        if self._meta_info is None:
+            self._meta_info = self.generate_meta_info()
+        return self._meta_info
+
+    @property
+    def backend_name(self) -> str:
+        return self.backend_class.name
+
+    @property
+    def stencil_class_name(self) -> str:
+        return self.backend_class.get_stencil_class_name(self.stencil_id)
+
+    def generate_imports(self) -> str:
+        source = ""
+        return source
+
+    def generate_module_members(self) -> str:
+        source = ""
+        return source
+
+    def generate_class_members(self) -> str:
+        source = ""
+        return source
+
+    def generate_meta_info(self) -> Dict[str, Any]:
+        info = {}
+
+        info["sources"] = {}
+        if self.definition_ir.sources is not None:
+            info["sources"].update(
+                {
+                    key: gt_utils.text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
+                    for key, value in self.definition_ir.sources
+                }
+            )
+
+        implementation_ir = self.implementation_ir
         parallel_axes = implementation_ir.domain.parallel_axes or []
         sequential_axis = implementation_ir.domain.sequential_axis.name
-        domain_info = repr(
+        info["domain_info"] = repr(
             gt_definitions.DomainInfo(
                 parallel_axes=tuple(ax.name for ax in parallel_axes),
                 sequential_axis=sequential_axis,
@@ -296,10 +473,8 @@ class BaseModuleGenerator(abc.ABC):
             )
         )
 
-        field_info = {}
-        field_names = []
-        parameter_info = {}
-        param_names = []
+        info["field_info"] = field_info = {}
+        info["parameter_info"] = parameter_info = {}
 
         # Collect access type per field
         out_fields = set()
@@ -328,7 +503,6 @@ class BaseModuleGenerator(abc.ABC):
                     )
                 else:
                     field_info[arg.name] = None
-                field_names.append(arg.name)
             else:
                 if arg.name not in implementation_ir.unreferenced:
                     parameter_info[arg.name] = gt_definitions.ParameterInfo(
@@ -336,87 +510,28 @@ class BaseModuleGenerator(abc.ABC):
                     )
                 else:
                     parameter_info[arg.name] = None
-                param_names.append(arg.name)
-
-        field_info = repr(field_info)
-        parameter_info = repr(parameter_info)
 
         if implementation_ir.externals:
-            gt_constants = {
+            info["gt_constants"] = {
                 name: repr(value)
                 for name, value in implementation_ir.externals.items()
                 if isinstance(value, numbers.Number)
             }
         else:
-            gt_constants = {}
+            info["gt_constants"] = {}
 
-        gt_options = dict(self.options.__dict__)
-        if "build_info" in gt_options:
-            del gt_options["build_info"]
+        info["gt_options"] = {
+            key: value
+            for key, value in self.options.as_dict().items()
+            if key not in ["build_info"]
+        }
 
-        # Concrete implementation in the subclasses
-        imports = self.generate_imports()
-        module_members = self.generate_module_members()
-        class_members = self.generate_class_members()
-        implementation = self.generate_implementation()
+        return info
 
-        module_source = self.template.render(
-            imports=imports,
-            module_members=module_members,
-            class_name=self.stencil_class_name,
-            class_members=class_members,
-            gt_backend=self.backend_name,
-            gt_source=sources,
-            gt_domain_info=domain_info,
-            gt_field_info=field_info,
-            gt_parameter_info=parameter_info,
-            gt_constants=gt_constants,
-            gt_options=gt_options,
-            stencil_signature=stencil_signature,
-            field_names=field_names,
-            param_names=param_names,
-            synchronization=self.generate_synchronization(
-                [
-                    k
-                    for k in implementation_ir.fields.keys()
-                    if k not in implementation_ir.temporary_fields
-                    and k not in implementation_ir.unreferenced
-                ]
-            ),
-            mark_modified=self.generate_mark_modified(
-                [
-                    k
-                    for k in out_fields
-                    if k not in implementation_ir.temporary_fields
-                    and k not in implementation_ir.unreferenced
-                ]
-            ),
-            implementation=implementation,
-        )
-        module_source = gt_utils.text.format_source(
-            module_source, line_length=self.SOURCE_LINE_LENGTH
-        )
-
-        return module_source
-
-    @property
-    def backend_name(self):
-        return self.backend_class.name
-
-    @property
-    def stencil_class_name(self):
-        return self.backend_class.get_stencil_class_name(self.stencil_id)
-
-    def generate_synchronization(self, field_names):
-        return ""
-
-    def generate_mark_modified(self, output_field_names):
-        return ""
-
-    def generate_signature(self):
+    def generate_signature(self) -> str:
         args = []
         keyword_args = ["*"]
-        for arg in self.implementation_ir.api_signature:
+        for arg in self.definition_ir.api_signature:
             if arg.is_keyword:
                 if arg.default is not gt_ir.Empty:
                     keyword_args.append(
@@ -436,18 +551,14 @@ class BaseModuleGenerator(abc.ABC):
 
         return signature
 
-    def generate_imports(self):
+    def generate_pre_run(self) -> str:
         source = ""
         return source
 
-    def generate_module_members(self):
-        source = ""
-        return source
-
-    def generate_class_members(self):
+    def generate_post_run(self) -> str:
         source = ""
         return source
 
     @abc.abstractmethod
-    def generate_implementation(self):
+    def generate_implementation(self) -> str:
         pass

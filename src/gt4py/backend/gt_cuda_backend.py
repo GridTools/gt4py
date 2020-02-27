@@ -19,6 +19,7 @@ import os
 import numpy as np
 
 from gt4py import backend as gt_backend
+from gt4py import definitions as gt_definitions
 from . import pyext_builder
 
 
@@ -28,10 +29,18 @@ def cuda_layout(mask):
 
 
 class GTCUDAPyModuleGenerator(gt_backend.GTPyModuleGenerator):
-    def generate_synchronization(self, field_names):
+    def generate_pre_run(self) -> str:
+        field_names = self.meta_info["field_info"].keys()
+
         return "\n".join([f + ".host_to_device()" for f in field_names])
 
-    def generate_mark_modified(self, output_field_names):
+    def generate_post_run(self) -> str:
+        output_field_names = [
+            name
+            for name, info in self.meta_info["field_info"].items()
+            if info.access == gt_definitions.AccessKind.READ_WRITE
+        ]
+
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])
 
 
@@ -56,7 +65,7 @@ def cuda_is_compatible_type(field):
 
 @gt_backend.register
 class GTCUDABackend(gt_backend.BaseGTBackend):
-    GENERATOR_CLASS = GTCUDAPyModuleGenerator
+    MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
     name = "gtcuda"
     options = gt_backend.BaseGTBackend.GT_BACKEND_OPTS
     storage_info = {

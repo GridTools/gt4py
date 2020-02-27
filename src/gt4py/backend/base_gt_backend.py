@@ -14,10 +14,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import abc
 import functools
-import hashlib
 import numbers
 import os
+import types
 
 import jinja2
 
@@ -380,14 +381,16 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
 
 class GTPyModuleGenerator(gt_backend.BaseModuleGenerator):
+    def __init__(
+        self, backend_class, options, **kwargs,
+    ):
+        super().__init__(backend_class, options, **kwargs)
+        self.pyext_module_name = kwargs["pyext_module_name"]
+        self.pyext_file_path = kwargs["pyext_file_path"]
+        with open(self.TEMPLATE_PATH, "r") as f:
+            self.template = jinja2.Template(f.read())
 
-    DEFAULT_GTCACHE_SIZE = 2
-
-    def __init__(self, backend_class, options):
-        super().__init__(backend_class, options)
-        self.options.backend_opts.setdefault("gtcache_size", self.DEFAULT_GTCACHE_SIZE)
-
-    def generate_imports(self):
+    def generate_imports(self) -> str:
         source = """
 import functools
 
@@ -395,13 +398,12 @@ from gt4py import utils as gt_utils
 
 pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_file_path}", public_import=True)
         """.format(
-            pyext_module_name=self.options.pyext_module_name,
-            pyext_file_path=self.options.pyext_file_path,
+            pyext_module_name=self.pyext_module_name, pyext_file_path=self.pyext_file_path,
         )
 
         return source
 
-    def generate_implementation(self):
+    def generate_implementation(self) -> str:
         sources = gt_text.TextBlock(
             indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE
         )
@@ -436,70 +438,28 @@ cupy.cuda.Device(0).synchronize()
         return sources.text
 
 
-class BaseGTBackend(gt_backend.BaseBackend):
+class BaseGTBackend(gt_backend.BasePyExtBackend):
 
-    GENERATOR_CLASS = GTPyModuleGenerator
+    MODULE_GENERATOR_CLASS = GTPyModuleGenerator
 
     PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
     GT_BACKEND_OPTS = {
         "verbose": {"versioning": False},
         "clean": {"versioning": False},
-        "gtcache_size": {"versioning": True},
         "debug_mode": {"versioning": True},
         "add_profile_info": {"versioning": True},
     }
 
     @classmethod
-    def get_pyext_module_name(cls, stencil_id, *, qualified=False):
-        module_name = cls.get_stencil_module_name(stencil_id, qualified=qualified) + "_pyext"
-        return module_name
-
-    @classmethod
-    def get_pyext_class_name(cls, stencil_id):
-        module_name = cls.get_stencil_class_name(stencil_id) + "_pyext"
-        return module_name
-
-    @classmethod
-    def get_pyext_build_path(cls, stencil_id):
-        path = os.path.join(
-            cls.get_stencil_package_path(stencil_id),
-            cls.get_pyext_module_name(stencil_id) + "_BUILD",
-        )
-
-        return path
-
-    @classmethod
-    def generate_extension(cls, stencil_id, implementation_ir, options):
-        raise NotImplementedError(
-            "'generate_extension()' method must be implemented by subclasses"
-        )
-
-    @classmethod
-    def generate_cache_info(cls, stencil_id, extra_cache_info):
-        cache_info = super(BaseGTBackend, cls).generate_cache_info(stencil_id, {})
-
-        cache_info["pyext_file_path"] = extra_cache_info["pyext_file_path"]
-        cache_info["pyext_md5"] = hashlib.md5(
-            open(cache_info["pyext_file_path"], "rb").read()
-        ).hexdigest()
-
-        return cache_info
-
-    @classmethod
-    def validate_cache_info(cls, stencil_id, cache_info):
-        try:
-            assert super(BaseGTBackend, cls).validate_cache_info(stencil_id, cache_info)
-            pyext_md5 = hashlib.md5(open(cache_info["pyext_file_path"], "rb").read()).hexdigest()
-            result = pyext_md5 == cache_info["pyext_md5"]
-
-        except Exception:
-            result = False
-
-        return result
-
-    @classmethod
-    def generate(cls, stencil_id, definition_ir, definition_func, options):
+    def generate(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        definition_ir: gt_ir.StencilDefinition,
+        definition_func: types.FunctionType,
+        options: gt_definitions.BuildOptions,
+    ):
+        # TODO: move this import to the top and find a better way to avoid circular imports
         from gt4py import gt_src_manager
 
         cls._check_options(options)
@@ -513,12 +473,23 @@ class BaseGTBackend(gt_backend.BaseBackend):
         )
 
         # Generate and return the Python wrapper class
-        generator_options = options.as_dict()
-        generator_options["pyext_module_name"] = pyext_module_name
-        generator_options["pyext_file_path"] = pyext_file_path
-
-        extra_cache_info = {"pyext_file_path": pyext_file_path}
-
         return super(BaseGTBackend, cls)._generate_module(
-            stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info
+            stencil_id,
+            implementation_ir,
+            definition_func,
+            options,
+            extra_cache_info={"pyext_file_path": pyext_file_path},
+            implementation_ir=implementation_ir,
+            pyext_module_name=pyext_module_name,
+            pyext_file_path=pyext_file_path,
         )
+
+    @classmethod
+    @abc.abstractmethod
+    def generate_extension(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        implementation_ir: gt_ir.StencilImplementation,
+        options: gt_definitions.BuildOptions,
+    ):
+        pass

@@ -98,7 +98,7 @@ class {{ class_name }}(StencilObject):
         # assert that all required values have been provided
 
 {%- filter indent(width=8) %}
-{{ synchronization }}
+{{ pre_run }}
 {%- endfilter %}
 
         self._call_run(
@@ -110,8 +110,9 @@ class {{ class_name }}(StencilObject):
         )
 
 {%- filter indent(width=8) %}
-{{ mark_modified }}
+{{ post_run }}
 {%- endfilter %}
+
     def run(self, _domain_, _origin_, exec_info, *, {{- field_names|join(", ") -}}, {{- param_names|join(", ") -}}):
         if exec_info is not None:
             exec_info["domain"] = _domain_

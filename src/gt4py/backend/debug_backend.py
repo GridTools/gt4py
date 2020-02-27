@@ -161,8 +161,8 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
 
 class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
-    def __init__(self, backend_class, options):
-        super().__init__(backend_class, options)
+    def __init__(self, backend_class, options, **kwargs):
+        super().__init__(backend_class, options, **kwargs)
         assert len(self.options.backend_opts) == 0
 
         self.source_generator = DebugSourceGenerator(
@@ -225,4 +225,4 @@ class DebugBackend(gt_backend.BaseBackend):
         "is_compatible_type": debug_is_compatible_type,
     }
 
-    GENERATOR_CLASS = DebugModuleGenerator
+    MODULE_GENERATOR_CLASS = DebugModuleGenerator
