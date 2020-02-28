@@ -22,15 +22,16 @@ import os
 import pickle
 import sys
 import types
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
 import jinja2
 
 from gt4py import analysis as gt_analysis
 from gt4py import config as gt_config
 from gt4py import definitions as gt_definitions
-from gt4py import utils as gt_utils
 from gt4py import ir as gt_ir
+from gt4py import utils as gt_utils
+from . import pyext_builder
 
 
 REGISTRY = gt_utils.Registry()
@@ -343,6 +344,55 @@ class BasePyExtBackend(BaseBackend):
         return result
 
     @classmethod
+    def build_extension_module(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        pyext_sources: Dict[str, str],
+        pyext_build_opts: Dict[str, str],
+        *,
+        pyext_extra_include_dirs: List[str] = None,
+        uses_cuda: bool = False,
+    ):
+
+        # Build extension module
+        pyext_build_path = os.path.relpath(cls.get_pyext_build_path(stencil_id))
+        os.makedirs(pyext_build_path, exist_ok=True)
+        sources = []
+        for key, source in pyext_sources.items():
+            src_file_name = os.path.join(pyext_build_path, key)
+            src_ext = src_file_name.split(".")[-1]
+            if src_ext not in ["h", "hpp"]:
+                sources.append(src_file_name)
+
+            with open(src_file_name, "w") as f:
+                f.write(source)
+
+        pyext_target_path = cls.get_stencil_package_path(stencil_id)
+        qualified_pyext_name = cls.get_pyext_module_name(stencil_id, qualified=True)
+
+        if uses_cuda:
+            module_name, file_path = pyext_builder.build_gtcuda_ext(
+                qualified_pyext_name,
+                sources=sources,
+                build_path=pyext_build_path,
+                target_path=pyext_target_path,
+                extra_include_dirs=pyext_extra_include_dirs,
+                **pyext_build_opts,
+            )
+        else:
+            module_name, file_path = pyext_builder.build_gtcpu_ext(
+                qualified_pyext_name,
+                sources=sources,
+                build_path=pyext_build_path,
+                target_path=pyext_target_path,
+                extra_include_dirs=pyext_extra_include_dirs,
+                **pyext_build_opts,
+            )
+        assert module_name == qualified_pyext_name
+
+        return module_name, file_path
+
+    @classmethod
     @abc.abstractmethod
     def generate(
         cls,
@@ -453,7 +503,6 @@ class BaseModuleGenerator(abc.ABC):
     def generate_meta_info(self) -> Dict[str, Any]:
         info = {}
 
-        info["sources"] = {}
         if self.definition_ir.sources is not None:
             info["sources"].update(
                 {
@@ -461,6 +510,8 @@ class BaseModuleGenerator(abc.ABC):
                     for key, value in self.definition_ir.sources
                 }
             )
+        else:
+            info["sources"] = {}
 
         implementation_ir = self.implementation_ir
         parallel_axes = implementation_ir.domain.parallel_axes or []
@@ -562,3 +613,59 @@ class BaseModuleGenerator(abc.ABC):
     @abc.abstractmethod
     def generate_implementation(self) -> str:
         pass
+
+
+class PyExtModuleGenerator(BaseModuleGenerator):
+    def __init__(
+        self, backend_class, options, **kwargs,
+    ):
+        super().__init__(backend_class, options, **kwargs)
+        self.pyext_module_name = kwargs["pyext_module_name"]
+        self.pyext_file_path = kwargs["pyext_file_path"]
+        with open(self.TEMPLATE_PATH, "r") as f:
+            self.template = jinja2.Template(f.read())
+
+    def generate_imports(self) -> str:
+        source = """
+import functools
+
+from gt4py import utils as gt_utils
+
+pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_file_path}", public_import=True)
+        """.format(
+            pyext_module_name=self.pyext_module_name, pyext_file_path=self.pyext_file_path,
+        )
+
+        return source
+
+    def generate_implementation(self) -> str:
+        sources = gt_utils.text.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
+
+        args = []
+        for arg in self.implementation_ir.api_signature:
+            if arg.name not in self.implementation_ir.unreferenced:
+                args.append(arg.name)
+                if arg.name in self.implementation_ir.fields:
+                    args.append("list(_origin_['{}'])".format(arg.name))
+
+        source = """
+# Load or generate a GTComputation object for the current domain size
+pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
+""".format(
+            run_args=", ".join(args)
+        )
+        if self.backend_name == "gtcuda":
+            source = (
+                source
+                + """import cupy
+cupy.cuda.Device(0).synchronize()
+"""
+            )
+        source = source + (
+            """if exec_info is not None:
+    exec_info["run_end_time"] = time.perf_counter()
+"""
+        )
+        sources.extend(source.splitlines())
+
+        return sources.text

@@ -14,8 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.backend.gt_cpu_backend import make_x86_layout_map, make_mc_layout_map
-from gt4py.backend.gt_cuda_backend import cuda_layout
+from gt4py.backend.gt_backends import make_x86_layout_map, make_mc_layout_map, cuda_layout
 
 
 def test_x86_layout():
