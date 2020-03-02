@@ -2,6 +2,8 @@ name: gt4py-tox
 
 on:
   push:
+    branches: 
+      - master
   pull_request:
     branches:
       - master
