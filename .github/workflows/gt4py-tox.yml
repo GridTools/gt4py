@@ -22,8 +22,6 @@ jobs:
     - name: Test with tox
       run: |
         pyversion_no_dot="${{ matrix.python-version }}"
-        pyversion_no_dot="${pyversion_no_dot/.//}"
-        echo $pyversion_no_dot
-        echo "::set-env name=pyversion_no_dot::$pyversion_no_dot"
-        #pip install tox
-        #tox -r -e <TOX_PRESET>
+        pyversion_no_dot="${pyversion_no_dot/./}"
+        pip install tox
+        tox -r -e py${pyversion_no_dot}-cpu
