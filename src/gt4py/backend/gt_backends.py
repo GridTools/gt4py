@@ -467,16 +467,18 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
 class BaseGTBackend(gt_backend.BasePyExtBackend):
 
-    MODULE_GENERATOR_CLASS = gt_backend.PyExtModuleGenerator
-
-    PYEXT_GENERATOR_CLASS = GTPyExtGenerator
-
     GT_BACKEND_OPTS = {
         "add_profile_info": {"versioning": True},
         "clean": {"versioning": False},
         "debug_mode": {"versioning": True},
         "verbose": {"versioning": False},
     }
+
+    GT_BACKEND_T = None
+
+    MODULE_GENERATOR_CLASS = gt_backend.PyExtModuleGenerator
+
+    PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
     @classmethod
     def generate(
@@ -513,6 +515,40 @@ class BaseGTBackend(gt_backend.BasePyExtBackend):
         )
 
     @classmethod
+    def _generic_generate_extension(
+        cls, stencil_id, definition_ir, options, *, uses_cuda=False, **kwargs
+    ):
+        implementation_ir = kwargs["implementation_ir"]
+
+        # Generate source
+        gt_pyext_generator = cls.PYEXT_GENERATOR_CLASS(
+            cls.get_pyext_class_name(stencil_id),
+            cls.get_pyext_module_name(stencil_id),
+            cls.GT_BACKEND_T,
+            options,
+        )
+        gt_pyext_sources = gt_pyext_generator(implementation_ir)
+
+        final_ext = ".cu" if uses_cuda else ".cpp"
+        keys = list(gt_pyext_sources.keys())
+        for key in keys:
+            if key.split(".")[-1] == "src":
+                new_key = key.replace(".src", final_ext)
+                gt_pyext_sources[new_key] = gt_pyext_sources.pop(key)
+
+        # Build extension module
+        pyext_opts = dict(
+            verbose=options.backend_opts.pop("verbose", False),
+            clean=options.backend_opts.pop("clean", False),
+            debug_mode=options.backend_opts.pop("debug_mode", False),
+            add_profile_info=options.backend_opts.pop("add_profile_info", False),
+        )
+
+        return cls.build_extension_module(
+            stencil_id, gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda,
+        )
+
+    @classmethod
     @abc.abstractmethod
     def generate_extension(
         cls,
@@ -524,41 +560,42 @@ class BaseGTBackend(gt_backend.BasePyExtBackend):
         pass
 
 
-class GTCPUBackend(BaseGTBackend):
-
-    GT_BACKEND_T = None
-
-    @classmethod
-    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
-        implementation_ir = kwargs["implementation_ir"]
-
-        # Generate source
-        gt_pyext_generator = cls.PYEXT_GENERATOR_CLASS(
-            cls.get_pyext_class_name(stencil_id),
-            cls.get_pyext_module_name(stencil_id),
-            cls.GT_BACKEND_T,
-            options,
-        )
-        gt_pyext_sources = gt_pyext_generator(implementation_ir)
-        keys = list(gt_pyext_sources.keys())
-        for key in keys:
-            if key.split(".")[-1] == "src":
-                new_key = key.replace(".src", ".cpp")
-                gt_pyext_sources[new_key] = gt_pyext_sources.pop(key)
-
-        # Build extension module
-        pyext_opts = dict(
-            verbose=options.backend_opts.pop("verbose", False),
-            clean=options.backend_opts.pop("clean", False),
-            debug_mode=options.backend_opts.pop("debug_mode", False),
-            add_profile_info=options.backend_opts.pop("add_profile_info", False),
-        )
-
-        return cls.build_extension_module(stencil_id, gt_pyext_sources, pyext_opts)
+# class GTCPUBackend(BaseGTBackend):
+#
+#     GT_BACKEND_T = None
+#
+#     @classmethod
+#     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
+#         implementation_ir = kwargs["implementation_ir"]
+#
+#         # Generate source
+#         gt_pyext_generator = cls.PYEXT_GENERATOR_CLASS(
+#             cls.get_pyext_class_name(stencil_id),
+#             cls.get_pyext_module_name(stencil_id),
+#             cls.GT_BACKEND_T,
+#             options,
+#         )
+#         gt_pyext_sources = gt_pyext_generator(implementation_ir)
+#         keys = list(gt_pyext_sources.keys())
+#         for key in keys:
+#             if key.split(".")[-1] == "src":
+#                 new_key = key.replace(".src", ".cpp")
+#                 gt_pyext_sources[new_key] = gt_pyext_sources.pop(key)
+#
+#         # Build extension module
+#         pyext_opts = dict(
+#             verbose=options.backend_opts.pop("verbose", False),
+#             clean=options.backend_opts.pop("clean", False),
+#             debug_mode=options.backend_opts.pop("debug_mode", False),
+#             add_profile_info=options.backend_opts.pop("add_profile_info", False),
+#         )
+#
+#         return cls.build_extension_module(stencil_id, gt_pyext_sources, pyext_opts)
+#
 
 
 @gt_backend.register
-class GTX86Backend(GTCPUBackend):
+class GTX86Backend(BaseGTBackend):
 
     GT_BACKEND_T = "x86"
 
@@ -572,9 +609,15 @@ class GTX86Backend(GTCPUBackend):
         "is_compatible_type": gtcpu_is_compatible_type,
     }
 
+    @classmethod
+    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
+        return cls._generic_generate_extension(
+            stencil_id, definition_ir, options, uses_cuda=False, **kwargs
+        )
+
 
 @gt_backend.register
-class GTMCBackend(GTCPUBackend):
+class GTMCBackend(BaseGTBackend):
 
     GT_BACKEND_T = "mc"
 
@@ -587,6 +630,12 @@ class GTMCBackend(GTCPUBackend):
         "is_compatible_layout": mc_is_compatible_layout,
         "is_compatible_type": gtcpu_is_compatible_type,
     }
+
+    @classmethod
+    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
+        return cls._generic_generate_extension(
+            stencil_id, definition_ir, options, uses_cuda=False, **kwargs
+        )
 
 
 class GTCUDAPyModuleGenerator(gt_backend.PyExtModuleGenerator):
@@ -624,28 +673,6 @@ class GTCUDABackend(BaseGTBackend):
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
-        implementation_ir = kwargs["implementation_ir"]
-
-        # Generate source
-        gt_pyext_generator = cls.PYEXT_GENERATOR_CLASS(
-            cls.get_pyext_class_name(stencil_id),
-            cls.get_pyext_module_name(stencil_id),
-            cls.GT_BACKEND_T,
-            options,
+        return cls._generic_generate_extension(
+            stencil_id, definition_ir, options, uses_cuda=True, **kwargs
         )
-        gt_pyext_sources = gt_pyext_generator(implementation_ir)
-        keys = list(gt_pyext_sources.keys())
-        for key in keys:
-            if key.split(".")[-1] == "src":
-                new_key = key.replace(".src", ".cu")
-                gt_pyext_sources[new_key] = gt_pyext_sources.pop(key)
-
-        # Build extension module
-        pyext_opts = dict(
-            verbose=options.backend_opts.pop("verbose", False),
-            clean=options.backend_opts.pop("clean", False),
-            debug_mode=options.backend_opts.pop("debug_mode", False),
-            add_profile_info=options.backend_opts.pop("add_profile_info", False),
-        )
-
-        return cls.build_extension_module(stencil_id, gt_pyext_sources, pyext_opts, uses_cuda=True)

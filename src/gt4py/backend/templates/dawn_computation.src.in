@@ -28,12 +28,12 @@
 
 {# #define GRIDTOOLS_CLANG_HALO_EXTEND {{user_value} #}
 
-#define DAWN_GT_BACKEND gt::backend::{{ gt_backend }}
-
-using backend_t = DAWN_GT_BACKEND;
 
 #include "{{ header_file }}"
 #include <gridtools/stencil_composition/stencil_composition.hpp>
+
+#define DAWN_GT_BACKEND gt::backend::{{ gt_backend }}
+using backend_t = DAWN_GT_BACKEND;
 
 #include "_dawn_{{ stencil_short_name }}.hpp"
 

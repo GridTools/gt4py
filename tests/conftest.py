@@ -23,11 +23,16 @@ import shutil
 import hypothesis as hyp
 import pytest
 
-# Ignore hidden folders and disabled tests
-collect_ignore_glob = [".*", "_disabled*"]
+from gt4py import config as gt_config
 
 # Delete cache folder
-shutil.rmtree(os.path.join(os.path.dirname(__file__), ".gt_cache"), ignore_errors=True)
+shutil.rmtree(
+    os.path.join(gt_config.cache_settings["root_path"], gt_config.cache_settings["dir_name"]),
+    ignore_errors=True,
+)
+
+# Ignore hidden folders and disabled tests
+collect_ignore_glob = [".*", "_disabled*"]
 
 
 def pytest_configure(config):
