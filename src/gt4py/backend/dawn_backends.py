@@ -136,12 +136,10 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         right = self.visit(node.else_expr)
         return sir_utils.make_ternary_operator(cond, left, right)
 
-    def visit_BlockStmt(self, node: gt_ir.BlockStmt, **kwargs):
-        stmt_defs = []
-        for stmt in node.stmts:
-            stmt_defs.append(self.visit(stmt))
-        # stmt_defs = [self.visit(stmt) for stmt in node.stmts]
-        stmts = sir_utils.make_block_stmt(stmt for stmt in stmt_defs if stmt is not None)
+    def visit_BlockStmt(self, node: gt_ir.BlockStmt, *, make_block=True, **kwargs):
+        stmts = [self.visit(stmt) for stmt in node.stmts if not isinstance(stmt, gt_ir.FieldDecl)]
+        if make_block:
+            stmts = sir_utils.make_block_stmt(stmts)
         return stmts
 
     def visit_Assign(self, node: gt_ir.Assign, **kwargs):
@@ -171,7 +169,7 @@ class SIRConverter(gt_ir.IRNodeVisitor):
     def visit_ComputationBlock(self, node: gt_ir.ComputationBlock, **kwargs):
         interval = self.visit(node.interval)
 
-        body_ast = sir_utils.make_ast(self.visit(node.body))
+        body_ast = sir_utils.make_ast(self.visit(node.body, make_block=False))
 
         loop_order = (
             SIR.VerticalRegion.Backward
@@ -212,6 +210,8 @@ convert_to_SIR = SIRConverter.apply
 
 class BaseDawnBackend(gt_backend.BasePyExtBackend):
 
+    DAWN_BACKEND_NS = None
+    DAWN_BACKEND_NAME = None
     DAWN_BACKEND_OPTS = {
         "add_profile_info": {"versioning": True},
         "clean": {"versioning": False},
@@ -277,6 +277,9 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         stencil_short_name = sir.stencils[0].name
 
         backend_opts = dict(**options.backend_opts)
+        backend_opts["backend"] = cls.DAWN_BACKEND_NAME
+        dawn_backend = cls.DAWN_BACKEND_NS
+
         dump_sir_opt = backend_opts.pop("dump_sir", False)
         if dump_sir_opt:
             if isinstance(dump_sir_opt, str):
@@ -288,12 +291,10 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             with open(dump_sir_file, "w") as f:
                 f.write(sir_utils.to_json(sir))
 
-        # Generate sources
         source = dawn4py.compile(sir, **backend_opts)
         stencil_unique_name = cls.get_pyext_class_name(stencil_id)
         module_name = cls.get_pyext_module_name(stencil_id)
         pyext_sources = {f"_dawn_{stencil_short_name}.hpp": source}
-        dawn_backend = "gt"
 
         arg_fields = [
             {"name": field.name, "dtype": cls._DATA_TYPE_TO_CPP[field.data_type], "layout_id": i}
@@ -475,6 +476,8 @@ _DAWN_BACKEND_OPTIONS = {
 @gt_backend.register
 class DawnGTX86Backend(BaseDawnBackend):
 
+    DAWN_BACKEND_NS = "gt"
+    DAWN_BACKEND_NAME = "gridtools"
     GT_BACKEND_T = "x86"
 
     name = "dawn:gtx86"
@@ -491,6 +494,8 @@ class DawnGTX86Backend(BaseDawnBackend):
 @gt_backend.register
 class DawnGTMCBackend(BaseDawnBackend):
 
+    DAWN_BACKEND_NS = "gt"
+    DAWN_BACKEND_NAME = "gridtools"
     GT_BACKEND_T = "mc"
 
     name = "dawn:gtmc"
@@ -507,6 +512,8 @@ class DawnGTMCBackend(BaseDawnBackend):
 @gt_backend.register
 class DawnGTCUDABackend(BaseDawnBackend):
 
+    DAWN_BACKEND_NS = "gt"
+    DAWN_BACKEND_NAME = "gridtools"
     GT_BACKEND_T = "cuda"
 
     MODULE_GENERATOR_CLASS = gt_backend.CUDAPyExtModuleGenerator
@@ -519,4 +526,22 @@ class DawnGTCUDABackend(BaseDawnBackend):
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
         return cls._generic_generate_extension(
             stencil_id, definition_ir, options, uses_cuda=True, **kwargs
+        )
+
+
+@gt_backend.register
+class DawnNaiveBackend(BaseDawnBackend):
+
+    DAWN_BACKEND_NS = "cxxnaive"
+    DAWN_BACKEND_NAME = "c++-naive"
+    GT_BACKEND_T = "x86"
+
+    name = "dawn:naive"
+    options = _DAWN_BACKEND_OPTIONS
+    storage_info = gt_backend.GTX86Backend.storage_info
+
+    @classmethod
+    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
+        return cls._generic_generate_extension(
+            stencil_id, definition_ir, options, uses_cuda=False, **kwargs
         )
