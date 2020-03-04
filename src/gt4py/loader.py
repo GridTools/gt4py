@@ -27,7 +27,7 @@ from gt4py import frontend as gt_frontend
 from gt4py.stencil_object import StencilObject
 
 
-def load_stencil(frontend_name, backend_name, definition_func, externals, options):
+def load_stencil(frontend_name, backend_name, definition_func, externals, build_options):
     """Generate a new class object implementing the provided definition.
     """
 
@@ -41,16 +41,16 @@ def load_stencil(frontend_name, backend_name, definition_func, externals, option
         raise ValueError("Invalid frontend specification ({name})".format(name=frontend_name))
 
     # Create ID
-    options_id = backend.get_options_id(options)
+    options_id = backend.get_options_id(build_options)
     stencil_id = frontend.get_stencil_id(
-        options.qualified_name, definition_func, externals, options_id
+        build_options.qualified_name, definition_func, externals, options_id
     )
 
     # Load or generate class
-    stencil_class = None if options.rebuild else backend.load(stencil_id, definition_func, options)
+    stencil_class = None if build_options.rebuild else backend.load(stencil_id, definition_func, build_options)
     if stencil_class is None:
-        definition_ir = frontend.generate(definition_func, externals, options)
-        stencil_class = backend.generate(stencil_id, definition_ir, definition_func, options)
+        definition_ir = frontend.generate(definition_func, externals, build_options)
+        stencil_class = backend.generate(stencil_id, definition_ir, definition_func, build_options)
 
     return stencil_class
 

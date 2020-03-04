@@ -274,8 +274,8 @@ class BaseBackend(Backend):
         extra_cache_info: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
-        generator = cls.MODULE_GENERATOR_CLASS(cls, options, **kwargs)
-        module_source = generator(stencil_id, definition_ir)
+        generator = cls.MODULE_GENERATOR_CLASS(cls)
+        module_source = generator(stencil_id, definition_ir, options, **kwargs)
 
         file_name = cls.get_stencil_module_path(stencil_id)
         os.makedirs(os.path.dirname(file_name), exist_ok=True)
@@ -414,25 +414,30 @@ class BaseModuleGenerator(abc.ABC):
 
     TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "stencil_module.py.in")
 
-    def __init__(
-        self, backend_class: Type[Backend], options: gt_definitions.BuildOptions, **kwargs,
-    ):
+    def __init__(self, backend_class: Type[Backend]):
         assert issubclass(backend_class, BaseBackend)
         self.backend_class = backend_class
-        self.options = options
-        self.kwargs = kwargs
+        self.options = None
         self.stencil_id = None
         self.definition_ir = None
-        self._implementation_ir = kwargs.get("implementation_ir", None)
-        self._meta_info = kwargs.get("meta_info", None)
         with open(self.TEMPLATE_PATH, "r") as f:
             self.template = jinja2.Template(f.read())
 
+        self._implementation_ir = None
+        self._meta_info = None
+
     def __call__(
-        self, stencil_id: gt_definitions.StencilID, definition_ir: gt_ir.StencilDefinition
+        self,
+        stencil_id: gt_definitions.StencilID,
+        definition_ir: gt_ir.StencilDefinition,
+        options: gt_definitions.BuildOptions,
+        **kwargs,
     ):
+        self.options = options
         self.stencil_id = stencil_id
         self.definition_ir = definition_ir
+        self._implementation_ir = kwargs.get("implementation_ir", None)
+        self._meta_info = kwargs.get("meta_info", None)
 
         meta_info = self.meta_info
         stencil_signature = self.generate_signature()
@@ -616,19 +621,24 @@ class BaseModuleGenerator(abc.ABC):
 
 
 class PyExtModuleGenerator(BaseModuleGenerator):
-    def __init__(
-        self, backend_class, options, **kwargs,
+    def __init__(self, backend_class: Type[Backend]):
+        super().__init__(backend_class)
+        self.pyext_module_name = None
+        self.pyext_file_path = None
+
+    def __call__(
+        self,
+        stencil_id: gt_definitions.StencilID,
+        definition_ir: gt_ir.StencilDefinition,
+        options: gt_definitions.BuildOptions,
+        **kwargs,
     ):
-        super().__init__(backend_class, options, **kwargs)
         self.pyext_module_name = kwargs["pyext_module_name"]
         self.pyext_file_path = kwargs["pyext_file_path"]
-        with open(self.TEMPLATE_PATH, "r") as f:
-            self.template = jinja2.Template(f.read())
+        return super().__call__(stencil_id, definition_ir, options, **kwargs)
 
     def generate_imports(self) -> str:
         source = """
-import functools
-
 from gt4py import utils as gt_utils
 
 pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_file_path}", public_import=True)
@@ -654,18 +664,26 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 """.format(
             run_args=", ".join(args)
         )
-        if self.backend_name == "gtcuda":
-            source = (
-                source
-                + """import cupy
-cupy.cuda.Device(0).synchronize()
-"""
-            )
-        source = source + (
-            """if exec_info is not None:
-    exec_info["run_end_time"] = time.perf_counter()
-"""
-        )
         sources.extend(source.splitlines())
 
         return sources.text
+
+
+class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
+    def generate_imports(self) -> str:
+        source = (
+            """
+    import cupy
+"""
+            + super().generate_imports()
+        )
+        return source
+
+    def generate_implementation(self) -> str:
+        source = (
+            super().generate_implementation()
+            + """
+cupy.cuda.Device(0).synchronize()
+"""
+        )
+        return source

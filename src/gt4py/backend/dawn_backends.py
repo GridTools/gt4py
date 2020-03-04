@@ -15,9 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import abc
-import hashlib
 import inspect
-import json
 import numbers
 import os
 import types
@@ -30,12 +28,9 @@ from dawn4py.serialization import SIR
 from dawn4py.serialization import utils as sir_utils
 
 from gt4py import backend as gt_backend
-from gt4py import config as gt_config
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
-from gt4py.utils import text as gt_text
-from .gt_backends import BaseGTBackend
-from . import pyext_builder
+from gt4py import utils as gt_utils
 
 DOMAIN_AXES = gt_definitions.CartesianSpace.names
 
@@ -266,7 +261,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         )
 
         # Generate and return the Python wrapper class
-        return super(BaseDawnBackend, cls)._generate_module(
+        return cls._generate_module(
             stencil_id,
             definition_ir,
             definition_func,
@@ -281,7 +276,8 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         sir = convert_to_SIR(definition_ir)
         stencil_short_name = sir.stencils[0].name
 
-        dump_sir_opt = options.backend_opts.get("dump_sir", False)
+        backend_opts = dict(**options.backend_opts)
+        dump_sir_opt = backend_opts.pop("dump_sir", False)
         if dump_sir_opt:
             if isinstance(dump_sir_opt, str):
                 dump_sir_file = dump_sir_opt
@@ -293,7 +289,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
                 f.write(sir_utils.to_json(sir))
 
         # Generate sources
-        source = dawn4py.compile(sir)
+        source = dawn4py.compile(sir, **backend_opts)
         stencil_unique_name = cls.get_pyext_class_name(stencil_id)
         module_name = cls.get_pyext_module_name(stencil_id)
         pyext_sources = {f"_dawn_{stencil_short_name}.hpp": source}
@@ -340,7 +336,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         return pyext_sources
 
     @classmethod
-    def _generate_module_WIP(
+    def _generate_module(
         cls,
         stencil_id,
         definition_ir,
@@ -350,7 +346,16 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         extra_cache_info=None,
         **kwargs,
     ):
-        generator = cls.MODULE_GENERATOR_CLASS(cls, options, **kwargs)
+        info = {}
+        if definition_ir.sources is not None:
+            info["sources"].update(
+                {
+                    key: gt_utils.text.format_source(value, line_length=100)
+                    for key, value in definition_ir.sources
+                }
+            )
+        else:
+            info["sources"] = {}
 
         parallel_axes = definition_ir.domain.parallel_axes or []
         sequential_axis = definition_ir.domain.sequential_axis.name
@@ -359,17 +364,19 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             sequential_axis=sequential_axis,
             ndims=len(parallel_axes) + (1 if sequential_axis else 0),
         )
+        info["domain_info"] = repr(domain_info)
 
-        field_info = {}
-        parameter_info = {}
+        info["field_info"] = field_info = {}
+        info["parameter_info"] = parameter_info = {}
+
         fields = {item.name: item for item in definition_ir.api_fields}
         parameters = {item.name: item for item in definition_ir.parameters}
-        halo_size = generator_options["backend_opts"].get(
-            "max_halo_points", dawn4py.Options().max_halo_points
-        )
+        halo_size = dawn4py.Options().max_halo_points
+
         boundary = gt_definitions.Boundary(
             [(halo_size, halo_size) for _ in domain_info.parallel_axes] + [(0, 0)]
         )
+
         for arg in definition_ir.api_signature:
             if arg.name in fields:
                 field_info[arg.name] = gt_definitions.FieldInfo(
@@ -382,20 +389,27 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
                     dtype=parameters[arg.name].data_type.dtype
                 )
 
-        module_source = generator(
-            stencil_id,
-            domain_info,
-            field_info,
-            parameter_info,
-            definition_ir.api_signature,
-            definition_ir.sources,
-            definition_ir.externals,
-        )
+        if definition_ir.externals:
+            info["gt_constants"] = {
+                name: repr(value)
+                for name, value in definition_ir.externals.items()
+                if isinstance(value, numbers.Number)
+            }
+        else:
+            info["gt_constants"] = {}
+
+        info["gt_options"] = {
+            key: value for key, value in options.as_dict().items() if key not in ["build_info"]
+        }
+
+        generator = cls.MODULE_GENERATOR_CLASS(cls)
+        module_source = generator(stencil_id, definition_ir, options, meta_info=info, **kwargs)
 
         file_name = cls.get_stencil_module_path(stencil_id)
         os.makedirs(os.path.dirname(file_name), exist_ok=True)
         with open(file_name, "w") as f:
             f.write(module_source)
+        extra_cache_info = extra_cache_info or {}
         cls.update_cache(stencil_id, extra_cache_info)
 
         return cls._load(stencil_id, definition_func)
@@ -449,19 +463,22 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         pass
 
 
+_DAWN_BACKEND_OPTIONS = {
+    "add_profile_info": {"versioning": True},
+    "clean": {"versioning": False},
+    "debug_mode": {"versioning": True},
+    "dump_sir": {"versioning": False},
+    "verbose": {"versioning": False},
+}
+
+
 @gt_backend.register
 class DawnGTX86Backend(BaseDawnBackend):
 
     GT_BACKEND_T = "x86"
 
     name = "dawn:gtx86"
-    options = {
-        "add_profile_info": {"versioning": True},
-        "clean": {"versioning": False},
-        "debug_mode": {"versioning": True},
-        "dump_sir": {"versioning": False},
-        "verbose": {"versioning": False},
-    }
+    options = _DAWN_BACKEND_OPTIONS
     storage_info = gt_backend.GTX86Backend.storage_info
 
     @classmethod
@@ -477,13 +494,7 @@ class DawnGTMCBackend(BaseDawnBackend):
     GT_BACKEND_T = "mc"
 
     name = "dawn:gtmc"
-    options = {
-        "add_profile_info": {"versioning": True},
-        "clean": {"versioning": False},
-        "debug_mode": {"versioning": True},
-        "dump_sir": {"versioning": False},
-        "verbose": {"versioning": False},
-    }
+    options = _DAWN_BACKEND_OPTIONS
     storage_info = gt_backend.GTMCBackend.storage_info
 
     @classmethod
@@ -498,14 +509,10 @@ class DawnGTCUDABackend(BaseDawnBackend):
 
     GT_BACKEND_T = "cuda"
 
+    MODULE_GENERATOR_CLASS = gt_backend.CUDAPyExtModuleGenerator
+
     name = "dawn:gtcuda"
-    options = {
-        "add_profile_info": {"versioning": True},
-        "clean": {"versioning": False},
-        "debug_mode": {"versioning": True},
-        "dump_sir": {"versioning": False},
-        "verbose": {"versioning": False},
-    }
+    options = _DAWN_BACKEND_OPTIONS
     storage_info = gt_backend.GTCUDABackend.storage_info
 
     @classmethod

@@ -503,7 +503,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend):
         )
 
         # Generate and return the Python wrapper class
-        return super(BaseGTBackend, cls)._generate_module(
+        return cls._generate_module(
             stencil_id,
             definition_ir,
             definition_func,
@@ -560,40 +560,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend):
         pass
 
 
-# class GTCPUBackend(BaseGTBackend):
-#
-#     GT_BACKEND_T = None
-#
-#     @classmethod
-#     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
-#         implementation_ir = kwargs["implementation_ir"]
-#
-#         # Generate source
-#         gt_pyext_generator = cls.PYEXT_GENERATOR_CLASS(
-#             cls.get_pyext_class_name(stencil_id),
-#             cls.get_pyext_module_name(stencil_id),
-#             cls.GT_BACKEND_T,
-#             options,
-#         )
-#         gt_pyext_sources = gt_pyext_generator(implementation_ir)
-#         keys = list(gt_pyext_sources.keys())
-#         for key in keys:
-#             if key.split(".")[-1] == "src":
-#                 new_key = key.replace(".src", ".cpp")
-#                 gt_pyext_sources[new_key] = gt_pyext_sources.pop(key)
-#
-#         # Build extension module
-#         pyext_opts = dict(
-#             verbose=options.backend_opts.pop("verbose", False),
-#             clean=options.backend_opts.pop("clean", False),
-#             debug_mode=options.backend_opts.pop("debug_mode", False),
-#             add_profile_info=options.backend_opts.pop("add_profile_info", False),
-#         )
-#
-#         return cls.build_extension_module(stencil_id, gt_pyext_sources, pyext_opts)
-#
-
-
 @gt_backend.register
 class GTX86Backend(BaseGTBackend):
 
@@ -638,7 +604,7 @@ class GTMCBackend(BaseGTBackend):
         )
 
 
-class GTCUDAPyModuleGenerator(gt_backend.PyExtModuleGenerator):
+class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
     def generate_pre_run(self) -> str:
         field_names = self.meta_info["field_info"].keys()
 

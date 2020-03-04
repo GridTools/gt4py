@@ -161,10 +161,8 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
 
 class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
-    def __init__(self, backend_class, options, **kwargs):
-        super().__init__(backend_class, options, **kwargs)
-        assert len(self.options.backend_opts) == 0
-
+    def __init__(self, backend_class):
+        super().__init__(backend_class)
         self.source_generator = DebugSourceGenerator(
             indent_size=self.TEMPLATE_INDENT_SIZE,
             origin_marker="_at",
