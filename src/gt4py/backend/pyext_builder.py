@@ -89,6 +89,7 @@ def build_pybind_ext(
             # "--parallel={}".format(gt_config.build_settings["parallel_jobs"]),
             "--build-temp={}".format(build_path),
             "--build-lib={}".format(build_path),
+            "--force",
         ],
     )
     if build_ext_class is not None:
