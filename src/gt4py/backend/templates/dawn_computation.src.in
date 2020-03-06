@@ -30,7 +30,10 @@
 
 
 #include "{{ header_file }}"
-#include <gridtools/stencil_composition/stencil_composition.hpp>
+
+{%- if gt_backend == "cuda" %}
+#define GRIDTOOLS_DAWN_CUDA
+{%- endif %}
 
 #define DAWN_GT_BACKEND gt::backend::{{ gt_backend }}
 using backend_t = DAWN_GT_BACKEND;

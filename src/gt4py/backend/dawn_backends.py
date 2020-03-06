@@ -257,7 +257,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         # Generate the Python binary extension (checking if GridTools sources are installed)
         if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
-        module_kwargs = {}
+        module_kwargs = {"implementation_ir": None}
         pyext_module_name, pyext_file_path = cls.generate_extension(
             stencil_id, definition_ir, options, module_kwargs=module_kwargs
         )
@@ -356,6 +356,10 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         **kwargs,
     ):
         if options.dev_opts.get("code-generation", True):
+            # Dawn backends do not use the internal analysis pipeline, so a custom
+            # wrapper_info object should be passed to the module generator
+            assert "implementation_ir" in kwargs
+
             info = {}
             if definition_ir.sources is not None:
                 info["sources"].update(
@@ -412,8 +416,12 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
                 key: value for key, value in options.as_dict().items() if key not in ["build_info"]
             }
 
+            info["unreferenced"] = {}
+
             generator = cls.MODULE_GENERATOR_CLASS(cls)
-            module_source = generator(stencil_id, definition_ir, options, meta_info=info, **kwargs)
+            module_source = generator(
+                stencil_id, definition_ir, options, wrapper_info=info, **kwargs
+            )
 
             file_name = cls.get_stencil_module_path(stencil_id)
             os.makedirs(os.path.dirname(file_name), exist_ok=True)

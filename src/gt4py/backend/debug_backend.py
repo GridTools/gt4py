@@ -172,6 +172,7 @@ class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
             numpy_prefix="np",
         )
 
+
     def generate_module_members(self):
         source = """       
 class _Accessor:

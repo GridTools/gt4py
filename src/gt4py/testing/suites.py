@@ -22,6 +22,7 @@ import pytest
 import gt4py as gt
 from gt4py import gtscript
 from gt4py import storage as gt_storage
+import gt4py.definitions as gt_defs
 from gt4py.stencil_object import StencilObject
 from .input_strategies import *
 from .utils import *
@@ -383,19 +384,22 @@ class StencilTestSuite(metaclass=SuiteMeta):
         implementation = gtscript.stencil(
             backend=test["backend"],
             definition=test["definition"],
-            name=f"{test['suite']}_{test['backend']}_{test['test_id']}",
+            name=f"{test['suite']}_{gt_utils.slugify(test['backend'], valid_symbols='')}_{test['test_id']}",
             rebuild=True,
             externals=externals_dict,
+            # debug_mode=True,
+            # _dev_opts={"cache-validation": False, "code-generation": False},
         )
 
         for k, v in externals_dict.items():
-            implementation._gt_constants_[k] = v
+            implementation.constants[k] = v
 
         assert isinstance(implementation, StencilObject)
         assert implementation.backend == test["backend"]
+
         assert all(
-            cls.global_boundaries[name] == field_info.boundary
-            for name, field_info in implementation._gt_field_info_.items()
+            field_info.boundary >= cls.global_boundaries[name]
+            for name, field_info in implementation.field_info.items()
         )
 
         test["implementations"].append(implementation)
@@ -420,44 +424,80 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
             fields, exec_info = parameters_dict
 
-            for k, v in implementation._gt_constants_.items():
+            # Domain
+            from gt4py.definitions import Shape
+            from gt4py.ir.nodes import Index
+
+            origin = cls.origin
+
+            shapes = {}
+            for name, field in [(k, v) for k, v in fields.items() if isinstance(v, np.ndarray)]:
+                shapes[name] = Shape(field.shape)
+            max_domain = Shape([sys.maxsize] * implementation.domain_info.ndims)
+            for name, shape in shapes.items():
+                upper_boundary = Index([b[1] for b in cls.symbols[name].boundary])
+                max_domain &= shape - (Index(origin) + upper_boundary)
+            domain = max_domain
+
+            max_boundary = ((0, 0), (0, 0), (0, 0))
+            for name, info in implementation.field_info.items():
+                if isinstance(info, gt_defs.FieldInfo):
+                    max_boundary = tuple(
+                        (max(m[0], abs(b[0])), max(m[1], b[1]))
+                        for m, b in zip(max_boundary, info.boundary)
+                    )
+
+            new_boundary = tuple(
+                (max(abs(b[0]), abs(mb[0])), max(abs(b[1]), abs(mb[1])))
+                for b, mb in zip(cls.max_boundary, max_boundary)
+            )
+
+            shape = None
+            for name, field in fields.items():
+                if isinstance(field, np.ndarray):
+                    assert field.shape == (shape if shape is not None else field.shape)
+                    shape = field.shape
+
+            patched_origin = tuple(nb[0] for nb in new_boundary)
+            patching_origin = tuple(po - o for po, o in zip(patched_origin, origin))
+            patched_shape = tuple(nb[0] + nb[1] + d for nb, d in zip(new_boundary, domain))
+            patching_slices = [slice(po, po + s) for po, s in zip(patching_origin, shape)]
+
+            for k, v in implementation.constants.items():
                 sys.modules[self.__module__].__dict__[k] = v
 
             inputs = {}
             for k, f in fields.items():
                 if isinstance(f, np.ndarray):
-
+                    patched_f = np.empty(shape=patched_shape)
+                    patched_f[patching_slices] = f
                     inputs[k] = gt_storage.from_array(
-                        f,
+                        patched_f,
                         dtype=test["definition"].__annotations__[k],
-                        shape=f.shape,
-                        default_origin=cls.origin,
+                        shape=patched_f.shape,
+                        default_origin=patched_origin,
                         backend=test["backend"],
                     )
 
                 else:
                     inputs[k] = f
-            validation_fields = {name: np.array(field) for name, field in fields.items()}
+            validation_fields = {
+                name: np.array(field, copy=True) for name, field in inputs.items()
+            }
 
-            implementation(**inputs, origin=cls.origin, exec_info=exec_info)
+            implementation(**inputs, origin=patched_origin, exec_info=exec_info)
             domain = exec_info["domain"]
 
             validation_origins = {
                 name: tuple(
-                    b[0] - g[0]
-                    for b, g in zip(cls.max_boundary, implementation.field_info[name].boundary)
+                    nb[0] - g[0] for nb, g in zip(new_boundary, cls.symbols[name].boundary)
                 )
-                for name in fields.keys()
-                if name in implementation.field_info
+                for name in implementation.field_info.keys()
             }
 
             validation_shapes = {
-                name: tuple(
-                    d + g[0] + g[1]
-                    for d, g in zip(domain, implementation.field_info[name].boundary)
-                )
-                for name, field in fields.items()
-                if name in implementation.field_info
+                name: tuple(d + g[0] + g[1] for d, g in zip(domain, cls.symbols[name].boundary))
+                for name in implementation.field_info.keys()
             }
 
             validation_field_views = {
@@ -475,7 +515,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 **validation_field_views,
                 domain=domain,
                 origin={
-                    name: implementation.field_info[name].boundary.lower_indices
+                    name: tuple(b[0] for b in cls.symbols[name].boundary)
                     for name in validation_fields
                     if name in implementation.field_info
                 },
@@ -486,10 +526,13 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 inputs.items(), validation_fields.items()
             ):
                 if isinstance(fields[name], np.ndarray):
-
+                    domain_slice = [
+                        slice(new_boundary[d][0], new_boundary[d][0] + domain[d])
+                        for d in range(len(domain))
+                    ]
                     np.testing.assert_allclose(
-                        value.data,
-                        expected_value,
+                        value.data[domain_slice],
+                        expected_value[domain_slice],
                         rtol=RTOL,
                         atol=ATOL,
                         equal_nan=EQUAL_NAN,

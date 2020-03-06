@@ -14,21 +14,22 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# import gt4py.storage as gt_storage
-from gt4py.storage.utils import *
-import numpy as np
-import math
-import random
+import itertools
 
-import pytest
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
-import gt4py.storage as gt_store
-import gt4py.storage.utils as gt_storage_utils
-import gt4py.backend as gt_backend
-import gt4py.utils as gt_utils
+import numpy as np
+import pytest
+try:
+    import cupy as cp
+except ImportError:
+    pass
 
-import itertools
+# import gt4py.storage as gt_storage
+import gt4py.backend as gt_backend
+import gt4py.storage as gt_store
+import gt4py.utils as gt_utils
+import gt4py.storage.utils as gt_storage_utils
 
 
 # ---- Hypothesis strategies ----
@@ -118,7 +119,9 @@ def test_allocate_cpu(param_dict):
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
 
-    raw_buffer, field = allocate_cpu(default_origin, shape, layout_map, dtype, alignment_bytes)
+    raw_buffer, field = gt_storage_utils.allocate_cpu(
+        default_origin, shape, layout_map, dtype, alignment_bytes
+    )
 
     # check that field is a view of raw_buffer
     assert field.base is raw_buffer
@@ -180,7 +183,9 @@ def test_allocate_gpu(param_dict):
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
 
-    raw_buffer, field = allocate_gpu(default_origin, shape, layout_map, dtype, alignment_bytes)
+    raw_buffer, field = gt_storage_utils.allocate_gpu(
+        default_origin, shape, layout_map, dtype, alignment_bytes
+    )
 
     # check that memory of field is contained in raw_buffer
     assert (
@@ -238,7 +243,7 @@ def test_allocate_gpu_unmanaged(param_dict):
     default_origin = param_dict["default_origin"]
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
-    raw_buffer, field, device_raw_buffer, device_field = allocate_gpu_unmanaged(
+    raw_buffer, field, device_raw_buffer, device_field = gt_storage_utils.allocate_gpu_unmanaged(
         default_origin, shape, layout_map, dtype, alignment_bytes
     )
 
@@ -314,26 +319,26 @@ def test_normalize_default_origin():
 
     assert normalize_shape(None) is None
     assert gt_utils.is_iterable_of(
-        normalize_default_origin([1, 2, 3]), iterable_class=tuple, item_class=int
+        gt_storage_utils.normalize_default_origin([1, 2, 3]), iterable_class=tuple, item_class=int
     )
 
     # test that exceptions are raised for invalid inputs.
     try:
-        normalize_default_origin("1")
+        gt_storage_utils.normalize_default_origin("1")
     except TypeError:
         pass
     else:
         assert False
 
     try:
-        normalize_default_origin(1)
+        gt_storage_utils.normalize_default_origin(1)
     except TypeError:
         pass
     else:
         assert False
 
     try:
-        normalize_default_origin((-1,))
+        gt_storage_utils.normalize_default_origin((-1,))
     except ValueError:
         pass
     else:
