@@ -521,13 +521,17 @@ class BaseGTBackend(gt_backend.BasePyExtBackend):
         implementation_ir = kwargs["implementation_ir"]
 
         # Generate source
-        gt_pyext_generator = cls.PYEXT_GENERATOR_CLASS(
-            cls.get_pyext_class_name(stencil_id),
-            cls.get_pyext_module_name(stencil_id),
-            cls.GT_BACKEND_T,
-            options,
-        )
-        gt_pyext_sources = gt_pyext_generator(implementation_ir)
+        if options.dev_opts.get("code-generation", True):
+            gt_pyext_generator = cls.PYEXT_GENERATOR_CLASS(
+                cls.get_pyext_class_name(stencil_id),
+                cls.get_pyext_module_name(stencil_id),
+                cls.GT_BACKEND_T,
+                options,
+            )
+            gt_pyext_sources = gt_pyext_generator(implementation_ir)
+        else:
+            # Pass NOTHING to the builder means try to reuse the source code files
+            gt_pyext_sources = {key: gt_utils.NOTHING for key in cls.TEMPLATE_FILES.keys()}
 
         final_ext = ".cu" if uses_cuda else ".cpp"
         keys = list(gt_pyext_sources.keys())
@@ -538,14 +542,14 @@ class BaseGTBackend(gt_backend.BasePyExtBackend):
 
         # Build extension module
         pyext_opts = dict(
-            verbose=options.backend_opts.pop("verbose", False),
-            clean=options.backend_opts.pop("clean", False),
-            debug_mode=options.backend_opts.pop("debug_mode", False),
-            add_profile_info=options.backend_opts.pop("add_profile_info", False),
+            verbose=options.backend_opts.get("verbose", False),
+            clean=options.backend_opts.get("clean", False),
+            debug_mode=options.backend_opts.get("debug_mode", False),
+            add_profile_info=options.backend_opts.get("add_profile_info", False),
         )
 
         return cls.build_extension_module(
-            stencil_id, gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda,
+            stencil_id, gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda
         )
 
     @classmethod

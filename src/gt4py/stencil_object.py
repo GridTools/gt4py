@@ -1,8 +1,10 @@
-import sys
 import abc
+import sys
 import time
 import warnings
+
 import numpy as np
+
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_storage
 from gt4py.definitions import (

@@ -194,7 +194,14 @@ class BaseBackend(Backend):
             pickle.dump(cache_info, f)
 
     @classmethod
-    def validate_cache_info(cls, stencil_id: gt_definitions.StencilID, cache_info: Dict[str, Any]):
+    def validate_cache_info(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        cache_info: Dict[str, Any],
+        *,
+        validate_hash: bool = True,
+    ):
+        result = True
         try:
             cache_info = types.SimpleNamespace(**cache_info)
 
@@ -203,12 +210,13 @@ class BaseBackend(Backend):
                 source = f.read()
             module_shash = gt_utils.shash(source)
 
-            result = (
-                cache_info.backend == cls.name
-                and cache_info.stencil_name == stencil_id.qualified_name
-                and cache_info.stencil_version == stencil_id.version
-                and cache_info.module_shash == module_shash
-            )
+            if validate_hash:
+                result = (
+                    cache_info.backend == cls.name
+                    and cache_info.stencil_name == stencil_id.qualified_name
+                    and cache_info.stencil_version == stencil_id.version
+                    and cache_info.module_shash == module_shash
+                )
 
         except Exception:
             result = False
@@ -216,13 +224,13 @@ class BaseBackend(Backend):
         return result
 
     @classmethod
-    def check_cache(cls, stencil_id: gt_definitions.StencilID):
+    def check_cache(cls, stencil_id: gt_definitions.StencilID, *, validate_hash: bool = True):
         try:
             cache_file_name = cls.get_cache_info_path(stencil_id)
             with open(cache_file_name, "rb") as f:
                 cache_info = pickle.load(f)
             assert isinstance(cache_info, dict)
-            result = cls.validate_cache_info(stencil_id, cache_info)
+            result = cls.validate_cache_info(stencil_id, cache_info, validate_hash=validate_hash)
 
         except Exception:
             result = False
@@ -258,7 +266,8 @@ class BaseBackend(Backend):
         stencil_class = None
         if stencil_id is not None:
             cls._check_options(options)
-            if cls.check_cache(stencil_id):
+            validate_hash = options.dev_opts.get("cache-validation", True)
+            if cls.check_cache(stencil_id, validate_hash=validate_hash):
                 stencil_class = cls._load(stencil_id, definition_func)
 
         return stencil_class
@@ -274,15 +283,16 @@ class BaseBackend(Backend):
         extra_cache_info: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
+        file_name = cls.get_stencil_module_path(stencil_id)
         generator = cls.MODULE_GENERATOR_CLASS(cls)
         module_source = generator(stencil_id, definition_ir, options, **kwargs)
 
-        file_name = cls.get_stencil_module_path(stencil_id)
-        os.makedirs(os.path.dirname(file_name), exist_ok=True)
-        with open(file_name, "w") as f:
-            f.write(module_source)
-        extra_cache_info = extra_cache_info or {}
-        cls.update_cache(stencil_id, extra_cache_info)
+        if options.dev_opts.get("code-generation", True):
+            os.makedirs(os.path.dirname(file_name), exist_ok=True)
+            with open(file_name, "w") as f:
+                f.write(module_source)
+            extra_cache_info = extra_cache_info or {}
+            cls.update_cache(stencil_id, extra_cache_info)
 
         return cls._load(stencil_id, definition_func)
 
@@ -332,11 +342,21 @@ class BasePyExtBackend(BaseBackend):
         return cache_info
 
     @classmethod
-    def validate_cache_info(cls, stencil_id: gt_definitions.StencilID, cache_info: Dict[str, Any]):
+    def validate_cache_info(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        cache_info: Dict[str, Any],
+        *,
+        validate_hash: bool = True,
+    ):
+        result = True
         try:
-            assert super(BasePyExtBackend, cls).validate_cache_info(stencil_id, cache_info)
+            assert super(BasePyExtBackend, cls).validate_cache_info(
+                stencil_id, cache_info, validate_hash=validate_hash
+            )
             pyext_md5 = hashlib.md5(open(cache_info["pyext_file_path"], "rb").read()).hexdigest()
-            result = pyext_md5 == cache_info["pyext_md5"]
+            if validate_hash:
+                result = pyext_md5 == cache_info["pyext_md5"]
 
         except Exception:
             result = False
@@ -364,8 +384,9 @@ class BasePyExtBackend(BaseBackend):
             if src_ext not in ["h", "hpp"]:
                 sources.append(src_file_name)
 
-            with open(src_file_name, "w") as f:
-                f.write(source)
+            if source is not gt_utils.NOTHING:
+                with open(src_file_name, "w") as f:
+                    f.write(source)
 
         pyext_target_path = cls.get_stencil_package_path(stencil_id)
         qualified_pyext_name = cls.get_pyext_module_name(stencil_id, qualified=True)
@@ -643,7 +664,7 @@ from gt4py import utils as gt_utils
 
 pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_file_path}", public_import=True)
         """.format(
-            pyext_module_name=self.pyext_module_name, pyext_file_path=self.pyext_file_path,
+            pyext_module_name=self.pyext_module_name, pyext_file_path=self.pyext_file_path
         )
 
         return source

@@ -21,7 +21,6 @@ definitions for the keywords of the DSL.
 """
 
 import collections
-import functools
 import inspect
 import types
 
@@ -96,6 +95,7 @@ def stencil(
     externals=None,
     name=None,
     rebuild=False,
+    _dev_opts=None,
     **kwargs,
 ):
     """Generate an implementation of the stencil definition with the specified backend.
@@ -128,6 +128,10 @@ def stencil(
         rebuild : `bool`, optional
             Force rebuild of the :class:`gt4py.StencilObject` even if it is
             found in the cache. (`False` by default).
+
+        _dev_opts : `dict`[`str`, `bool`], optional
+            Switch on/off different parts of the pipeline. Everything is turned on
+            by default. Keys: ["code-generation", "cache-validation"] (`None` by default).
 
         **kwargs: `dict`, optional
             Extra backend-specific options. Check the specific backend
@@ -162,6 +166,8 @@ def stencil(
         raise ValueError(f"Invalid 'name' string ('{name}')")
     if not isinstance(rebuild, bool):
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
+    if _dev_opts is not None and not isinstance(_dev_opts, dict):
+        raise ValueError(f"Invalid '_dev_opts' dictionary ('{_dev_opts}')")
 
     module = None
     if name:
@@ -175,13 +181,27 @@ def stencil(
     )  # definition_func.__globals__["__name__"] ??,
 
     build_options = gt_definitions.BuildOptions(
-        name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=build_info
+        name=name,
+        module=module,
+        rebuild=rebuild,
+        dev_opts=_dev_opts or {},
+        backend_opts=kwargs,
+        build_info=build_info,
     )
 
-    def _decorator(def_func):
-        _set_arg_dtypes(def_func, dtypes or {})
+    def _decorator(definition_func):
+        if not isinstance(definition_func, types.FunctionType):
+            if hasattr(definition_func, "definition_func"):  # StencilObject
+                definition_func = definition_func.definition_func
+            elif callable(definition_func):  # General callable
+                definition_func = definition_func.__call__
+
+        _set_arg_dtypes(definition_func, dtypes or {})
         return gt_loader.gtscript_loader(
-            def_func, backend=backend, build_options=build_options, externals=externals or {}
+            definition_func,
+            backend=backend,
+            build_options=build_options,
+            externals=externals or {},
         )
 
     if definition is None:

@@ -47,7 +47,10 @@ def load_stencil(frontend_name, backend_name, definition_func, externals, build_
     )
 
     # Load or generate class
-    stencil_class = None if build_options.rebuild else backend.load(stencil_id, definition_func, build_options)
+    stencil_class = (
+        None if build_options.rebuild else backend.load(stencil_id, definition_func, build_options)
+    )
+
     if stencil_class is None:
         definition_ir = frontend.generate(definition_func, externals, build_options)
         stencil_class = backend.generate(stencil_id, definition_ir, definition_func, build_options)
@@ -56,8 +59,6 @@ def load_stencil(frontend_name, backend_name, definition_func, externals, build_
 
 
 def gtscript_loader(definition_func, backend, build_options, externals):
-    if isinstance(definition_func, StencilObject):
-        definition_func = definition_func.definition_func
     if not isinstance(definition_func, types.FunctionType):
         raise ValueError("Invalid stencil definition object ({obj})".format(obj=definition_func))
 
