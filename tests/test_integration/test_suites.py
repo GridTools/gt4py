@@ -25,6 +25,8 @@ ALL_BACKENDS = list(gt_backend.REGISTRY.keys())
 CPU_BACKENDS = [name for name in ALL_BACKENDS if "cuda" not in name]
 GPU_BACKENDS = list(set(ALL_BACKENDS) - set(CPU_BACKENDS))
 
+CPU_BACKENDS = ["dawn:gtx86"]
+#CPU_BACKENDS = ["debug", "gtx86"]
 
 # ---- Identity stencil ----
 class TestIdentity(gt_testing.StencilTestSuite):

@@ -380,19 +380,22 @@ class StencilTestSuite(metaclass=SuiteMeta):
         implementation = gtscript.stencil(
             backend=test["backend"],
             definition=test["definition"],
-            name=f"{test['suite']}_{test['backend']}_{test['test_id']}",
+            name=f"{test['suite']}_{gt_utils.slugify(test['backend'], valid_symbols='')}_{test['test_id']}",
             rebuild=True,
             externals=externals_dict,
+            # verbose=True,
         )
 
         for k, v in externals_dict.items():
-            implementation._gt_constants_[k] = v
+            implementation.constants[k] = v
 
         assert isinstance(implementation, StencilObject)
         assert implementation.backend == test["backend"]
+        print("STENCIL:", implementation.field_info)
+        print("CLS", cls.global_boundaries)
         assert all(
-            cls.global_boundaries[name] == field_info.boundary
-            for name, field_info in implementation._gt_field_info_.items()
+            field_info.boundary >= cls.global_boundaries[name]
+            for name, field_info in implementation.field_info.items()
         )
 
         test["implementations"].append(implementation)
@@ -428,7 +431,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 shapes[name] = Shape(field.shape)
             max_domain = Shape([sys.maxsize] * implementation.domain_info.ndims)
             for name, shape in shapes.items():
-                upper_boundary = Index(implementation.field_info[name].boundary.upper_indices)
+                upper_boundary = Index([b[1] for b in cls.symbols[name].boundary])
                 max_domain &= shape - (Index(origin) + upper_boundary)
             domain = max_domain
 
@@ -456,7 +459,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
             patched_shape = tuple(nb[0] + nb[1] + d for nb, d in zip(new_boundary, domain))
             patching_slices = [slice(po, po + s) for po, s in zip(patching_origin, shape)]
 
-            for k, v in implementation._gt_constants_.items():
+            for k, v in implementation.constants.items():
                 sys.modules[self.__module__].__dict__[k] = v
 
             inputs = {}
@@ -525,9 +528,11 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 inputs.items(), validation_fields.items()
             ):
                 if isinstance(fields[name], np.ndarray):
-
+                    domain_slice = [
+                        slice(new_boundary[d][0], new_boundary[d][0] + domain[d]) for d in range(len(domain))
+                    ]
                     np.testing.assert_allclose(
-                        value.data,
+                        value.data[domain_slice],
                         expected_value,
                         rtol=RTOL,
                         atol=ATOL,
