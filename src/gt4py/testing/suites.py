@@ -477,29 +477,23 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
                 else:
                     inputs[k] = f
-            validation_fields = {name: np.array(field) for name, field in fields.items()}
+            validation_fields = {
+                name: np.array(field, copy=True) for name, field in inputs.items()
+            }
 
             implementation(**inputs, origin=patched_origin, exec_info=exec_info)
             domain = exec_info["domain"]
 
             validation_origins = {
                 name: tuple(
-                    nb[0] - g
-                    for nb, g in zip(
-                        new_boundary, implementation.field_info[name].boundary.lower_indices,
-                    )
+                    nb[0] - g[0] for nb, g in zip(new_boundary, cls.symbols[name].boundary)
                 )
-                for name in fields.keys()
-                if name in implementation.field_info
+                for name in implementation.field_info.keys()
             }
 
             validation_shapes = {
-                name: tuple(
-                    d + g[0] + g[1]
-                    for d, g in zip(domain, implementation.field_info[name].boundary)
-                )
-                for name, field in fields.items()
-                if name in implementation.field_info
+                name: tuple(d + g[0] + g[1] for d, g in zip(domain, cls.symbols[name].boundary))
+                for name in implementation.field_info.keys()
             }
 
             validation_field_views = {
@@ -529,11 +523,12 @@ class StencilTestSuite(metaclass=SuiteMeta):
             ):
                 if isinstance(fields[name], np.ndarray):
                     domain_slice = [
-                        slice(new_boundary[d][0], new_boundary[d][0] + domain[d]) for d in range(len(domain))
+                        slice(new_boundary[d][0], new_boundary[d][0] + domain[d])
+                        for d in range(len(domain))
                     ]
                     np.testing.assert_allclose(
                         value.data[domain_slice],
-                        expected_value,
+                        expected_value[domain_slice],
                         rtol=RTOL,
                         atol=ATOL,
                         equal_nan=EQUAL_NAN,
