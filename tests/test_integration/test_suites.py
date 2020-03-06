@@ -17,8 +17,13 @@
 
 import numpy as np
 
+from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import testing as gt_testing
+
+ALL_BACKENDS = list(gt_backend.REGISTRY.keys())
+CPU_BACKENDS = [name for name in ALL_BACKENDS if "cuda" not in name]
+GPU_BACKENDS = list(set(ALL_BACKENDS) - set(CPU_BACKENDS))
 
 
 # ---- Identity stencil ----
@@ -28,7 +33,7 @@ class TestIdentity(gt_testing.StencilTestSuite):
 
     dtypes = {("field_a",): (np.float64, np.float32)}
     domain_range = [(1, 25), (1, 25), (1, 25)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(field_a):
@@ -46,7 +51,7 @@ class TestCopy(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 25), (1, 25), (1, 25)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         field_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -67,7 +72,7 @@ class TestGlobalScale(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         SCALE_FACTOR=gt_testing.global_name(one_of=(1.0, 1e3, 1e6)),
         field_a=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -90,7 +95,7 @@ class TestParametricScale(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         scale=gt_testing.parameter(in_range=(-100, 100)),
@@ -116,7 +121,7 @@ class TestParametricMix(gt_testing.StencilTestSuite):
         ("weight", "alpha_factor"): np.float_,
     }
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         USE_ALPHA=gt_testing.global_name(one_of=(True, False)),
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -155,7 +160,7 @@ class TestParametricMix(gt_testing.StencilTestSuite):
 class TestHeatEquation_FTCS_3D(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         u=gt_testing.field(in_range=(-10, 10), extent=[(-1, 1), (0, 0), (0, 0)]),
         v=gt_testing.field(in_range=(-10, 10), extent=[(0, 0), (-1, 1), (0, 0)]),
@@ -181,7 +186,7 @@ class TestHorizontalDiffusion(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (2, 2), (0, 0)]),
         diffusion=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -238,7 +243,7 @@ class TestHorizontalDiffusionSubroutines(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         fwd_diff=gt_testing.global_name(singleton=fwd_diff_op_xy),
         u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (2, 2), (0, 0)]),
@@ -273,7 +278,7 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         fwd_diff=gt_testing.global_name(singleton=fwd_diff_op_xy),
         BRANCH=gt_testing.global_name(one_of=(True, False)),
@@ -325,7 +330,7 @@ class TestHorizontalDiffusionSubroutines3(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         fwd_diff=gt_testing.global_name(singleton=fwd_diff_op_xy_varargin),
         BRANCH=gt_testing.global_name(one_of=(False,)),
@@ -366,7 +371,7 @@ class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)])
     )
@@ -390,7 +395,7 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)])
     )
@@ -417,7 +422,7 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = CPU_BACKENDS
     symbols = dict(
         infield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -445,7 +450,7 @@ class TestTernaryOp(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
-    backends = ["numpy", "gtx86", "gtmc"]
+    backends = CPU_BACKENDS
     symbols = dict(
         infield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 1), (0, 0)]),
         outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
