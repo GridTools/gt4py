@@ -30,6 +30,8 @@ from .utils import generate_test_module
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS, id_version
 from ..reference_cpp_regression import reference_module
 
+INTERNAL_CPU_BACKENDS = list(set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
+
 REGISTRY = list()
 
 
@@ -211,12 +213,16 @@ def run_vertical_advection_dycore(backend, id_version, domain):
         )
 
 
-@pytest.mark.parametrize(["backend", "function"], itertools.product(CPU_BACKENDS, REGISTRY))
+@pytest.mark.parametrize(
+    ["backend", "function"], itertools.product(INTERNAL_CPU_BACKENDS, REGISTRY)
+)
 def test_cpp_regression_cpu(backend, id_version, function):
     function(gt_backend.from_name(backend), id_version)
 
 
 @pytest.mark.requires_gpu
-@pytest.mark.parametrize(["backend", "function"], itertools.product(GPU_BACKENDS, REGISTRY))
+@pytest.mark.parametrize(
+    ["backend", "function"], itertools.product(INTERNAL_CPU_BACKENDS, REGISTRY)
+)
 def test_cpp_regression_gpu(backend, id_version, function):
     function(gt_backend.from_name(backend), id_version)

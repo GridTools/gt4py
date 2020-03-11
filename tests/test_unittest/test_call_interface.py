@@ -24,6 +24,8 @@ import gt4py.storage as gt_storage
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
 
+INTERNAL_CPU_BACKENDS = list(set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
+
 
 @gtscript.stencil(backend="numpy")
 def stencil(
@@ -225,7 +227,7 @@ def avg_stencil(in_field: Field[np.float64], out_field: Field[np.float64]):
         )
 
 
-@pytest.mark.parametrize("backend", set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
+@pytest.mark.parametrize("backend", INTERNAL_CPU_BACKENDS)
 def test_default_arguments(backend):
     branch_true = gtscript.stencil(
         backend=backend, definition=a_stencil, externals={"BRANCH": True}, rebuild=True
@@ -285,7 +287,7 @@ def test_default_arguments(backend):
         assert False
 
 
-@pytest.mark.parametrize("backend", set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
+@pytest.mark.parametrize("backend", INTERNAL_CPU_BACKENDS)
 def test_halo_checks(backend):
     stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
 
