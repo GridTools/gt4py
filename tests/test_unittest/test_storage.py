@@ -20,6 +20,10 @@ import hypothesis as hyp
 import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
+try:
+    import cupy as cp
+except ImportError:
+    pass
 
 # import gt4py.storage as gt_storage
 import gt4py.backend as gt_backend

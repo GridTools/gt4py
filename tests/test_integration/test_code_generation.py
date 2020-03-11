@@ -97,6 +97,29 @@ def test_generation_cpu(name, backend):
     stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3))
 
 
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize(
+    ["name", "backend"], itertools.product(stencil_definitions.names, GPU_BACKENDS)
+)
+def test_generation_gpu(name, backend):
+    stencil_definition = stencil_definitions[name]
+    externals = externals_registry[name]
+    stencil = gtscript.stencil(backend, stencil_definition, externals=externals)
+    args = {}
+    for k, v in stencil_definition.__annotations__.items():
+        if isinstance(v, gtscript._FieldDescriptor):
+            args[k] = gt_storage.ones(
+                dtype=v.dtype,
+                mask=gtscript.mask_from_axes(v.axes),
+                backend=backend,
+                shape=(23, 23, 23),
+                default_origin=(10, 10, 10),
+            )
+        else:
+            args[k] = v(1.5)
+    stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3))
+
+
 # import gt4py as gt
 # import gt4py.storage as gt_storage
 # import numpy as np
