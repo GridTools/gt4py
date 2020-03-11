@@ -9,24 +9,43 @@ This document will guide you through the basic steps to get started with GT4Py.
 Installation
 ------------
 
-GT4Py contains a standard ``setup.py`` installation script. As usual, the first step is to clone the repository (with submodules):
+GT4Py contains a standard ``setup.py`` installation script and thus it might be
+installed as usual with *pip*. Additional commands are provided to install
+and remove the GridTools C++ sources, which are not contained in the package.
+
+We strongly recommended to create a virtual environment for any new project:
 
 .. code:: bash
 
-  git clone https://github.com/GridTools/gt4py.git
+    python -m venv path_for_the_new_venv
+    source path_for_the_new_venv/bin/activate
+    pip install --upgrade wheel
 
 
-After cloning the repository, you can install it in your working environment using pip: 
+Then clone the GT4Py repository and install the local copy or install it
+directly from GitHub with ``pip``. For the CUDA backends add the
+`[cudaXX]` optional dependency, where `XX` takes the values `90`, `91`,
+`92`, `100` or `101` depending on the CUDA version installed in your system
+(CUDA version 9.0, 9.1, ..., 10.1).
 
 .. code:: bash
 
-  pip install ./gt4py
+    git clone https://github.com/GridTools/gt4py.git
+    pip install ./gt4py     # pip install ./gt4py[cuda101]
 
-Or, if you plan to change the GT4Py sources, install it in editable/developer mode:
+Or
 
 .. code:: bash
 
-  pip install -e  gt4py
+    pip install git+https://github.com/gridtools/gt4py.git
+    # pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cuda101]
+
+Finally, the last step to install the required GridTools C++ sources:
+
+.. code:: bash
+
+    python -m gt4py.gt_src_manager install
+
 
 ------------
 Introduction
