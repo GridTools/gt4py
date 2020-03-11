@@ -444,8 +444,8 @@ class BaseModuleGenerator(abc.ABC):
         with open(self.TEMPLATE_PATH, "r") as f:
             self.template = jinja2.Template(f.read())
 
-        self._implementation_ir = None
-        self._meta_info = None
+        self.implementation_ir = None
+        self.meta_info = None
 
     def __call__(
         self,
@@ -457,8 +457,14 @@ class BaseModuleGenerator(abc.ABC):
         self.options = options
         self.stencil_id = stencil_id
         self.definition_ir = definition_ir
-        self._implementation_ir = kwargs.get("implementation_ir", None)
-        self._meta_info = kwargs.get("meta_info", None)
+        self.implementation_ir = (
+            kwargs["implementation_ir"]
+            if "implementation_ir" in kwargs
+            else self._generate_implementation_ir()
+        )
+        self.meta_info = (
+            kwargs["meta_info"] if "meta_info" in kwargs else self._generate_meta_info()
+        )
 
         meta_info = self.meta_info
         stencil_signature = self.generate_signature()
@@ -495,18 +501,6 @@ class BaseModuleGenerator(abc.ABC):
         return module_source
 
     @property
-    def implementation_ir(self):
-        if self._implementation_ir is None:
-            self._implementation_ir = gt_analysis.transform(self.definition_ir, self.options)
-        return self._implementation_ir
-
-    @property
-    def meta_info(self) -> Dict[str, Any]:
-        if self._meta_info is None:
-            self._meta_info = self.generate_meta_info()
-        return self._meta_info
-
-    @property
     def backend_name(self) -> str:
         return self.backend_class.name
 
@@ -514,19 +508,11 @@ class BaseModuleGenerator(abc.ABC):
     def stencil_class_name(self) -> str:
         return self.backend_class.get_stencil_class_name(self.stencil_id)
 
-    def generate_imports(self) -> str:
-        source = ""
-        return source
+    def _generate_implementation_ir(self) -> gt_ir.StencilImplementation:
+        implementation_ir = gt_analysis.transform(self.definition_ir, self.options)
+        return implementation_ir
 
-    def generate_module_members(self) -> str:
-        source = ""
-        return source
-
-    def generate_class_members(self) -> str:
-        source = ""
-        return source
-
-    def generate_meta_info(self) -> Dict[str, Any]:
+    def _generate_meta_info(self) -> Dict[str, Any]:
         info = {}
 
         if self.definition_ir.sources is not None:
@@ -603,7 +589,21 @@ class BaseModuleGenerator(abc.ABC):
             if key not in ["build_info"]
         }
 
+        info["unreferenced"] = self.implementation_ir.unreferenced
+
         return info
+
+    def generate_imports(self) -> str:
+        source = ""
+        return source
+
+    def generate_module_members(self) -> str:
+        source = ""
+        return source
+
+    def generate_class_members(self) -> str:
+        source = ""
+        return source
 
     def generate_signature(self) -> str:
         args = []
@@ -673,10 +673,11 @@ pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_fil
         sources = gt_utils.text.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
 
         args = []
-        for arg in self.implementation_ir.api_signature:
-            if arg.name not in self.implementation_ir.unreferenced:
+        api_fields = set(field.name for field in self.definition_ir.api_fields)
+        for arg in self.definition_ir.api_signature:
+            if arg.name not in self.meta_info["unreferenced"]:
                 args.append(arg.name)
-                if arg.name in self.implementation_ir.fields:
+                if arg.name in api_fields:
                     args.append("list(_origin_['{}'])".format(arg.name))
 
         source = """

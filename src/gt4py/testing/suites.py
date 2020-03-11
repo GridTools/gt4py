@@ -383,7 +383,8 @@ class StencilTestSuite(metaclass=SuiteMeta):
             name=f"{test['suite']}_{gt_utils.slugify(test['backend'], valid_symbols='')}_{test['test_id']}",
             rebuild=True,
             externals=externals_dict,
-            # verbose=True,
+            # debug_mode=True,
+            # _dev_opts={"cache-validation": False, "code-generation": False},
         )
 
         for k, v in externals_dict.items():
@@ -391,8 +392,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
         assert isinstance(implementation, StencilObject)
         assert implementation.backend == test["backend"]
-        print("STENCIL:", implementation.field_info)
-        print("CLS", cls.global_boundaries)
+
         assert all(
             field_info.boundary >= cls.global_boundaries[name]
             for name, field_info in implementation.field_info.items()

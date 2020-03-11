@@ -70,21 +70,13 @@ from gt4py import gtscript
 from gt4py import backend as gt_backend
 from gt4py import storage as gt_storage
 
-
 from .stencil_definitions import REGISTRY as stencil_definitions
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
 
 
 @pytest.mark.parametrize(
-    ["name", "backend"],
-    itertools.product(
-        stencil_definitions.names,
-        [
-            name
-            for name in gt_backend.REGISTRY.names
-            if gt_backend.from_name(name).storage_info["device"] == "cpu"
-        ],
-    ),
+    ["name", "backend"], itertools.product(stencil_definitions.names, CPU_BACKENDS)
 )
 def test_generation_cpu(name, backend):
     stencil_definition = stencil_definitions[name]

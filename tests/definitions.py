@@ -17,7 +17,18 @@
 import pytest
 import datetime
 
+import gt4py.backend as gt_backend
 import gt4py.utils as gt_utils
+
+ALL_BACKENDS = list(gt_backend.REGISTRY.keys())
+CPU_BACKENDS = [
+    name for name in ALL_BACKENDS if gt_backend.from_name(name).storage_info["device"] == "cpu"
+]
+GPU_BACKENDS = list(set(ALL_BACKENDS) - set(CPU_BACKENDS))
+INTERNAL_BACKENDS = ["debug", "numpy"] + [name for name in ALL_BACKENDS if name.startswith("gt")]
+
+# CPU_BACKENDS = ["dawn:gtx86"]
+# CPU_BACKENDS = ["debug", "numpy", "gtx86", "gtmc"]
 
 
 @pytest.fixture()

@@ -17,16 +17,11 @@
 
 import numpy as np
 
-from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import testing as gt_testing
 
-ALL_BACKENDS = list(gt_backend.REGISTRY.keys())
-CPU_BACKENDS = [name for name in ALL_BACKENDS if "cuda" not in name]
-GPU_BACKENDS = list(set(ALL_BACKENDS) - set(CPU_BACKENDS))
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
 
-CPU_BACKENDS = ["dawn:gtx86"]
-# CPU_BACKENDS = ["debug", "gtx86"]
 
 # ---- Identity stencil ----
 class TestIdentity(gt_testing.StencilTestSuite):
@@ -123,7 +118,7 @@ class TestParametricMix(gt_testing.StencilTestSuite):
         ("weight", "alpha_factor"): np.float_,
     }
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = CPU_BACKENDS
+    backends = list(set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
     symbols = dict(
         USE_ALPHA=gt_testing.global_name(one_of=(True, False)),
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -138,11 +133,10 @@ class TestParametricMix(gt_testing.StencilTestSuite):
         from __externals__ import USE_ALPHA
 
         with computation(PARALLEL), interval(...):
-            factor = field_a  # TODO remove once scalar assignment issue is fixed
             if __INLINED(USE_ALPHA):
                 factor = alpha_factor
             else:
-                factor = 1.0 + 0.0 * (alpha_factor)  # ?? won't compile for just factor = 0.0
+                factor = 1.0
             field_out = factor * field_a[0, 0, 0] - (1 - factor) * (
                 field_b[0, 0, 0] - weight * field_c[0, 0, 0]
             )

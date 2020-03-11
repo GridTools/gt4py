@@ -25,7 +25,7 @@ from gt4py import definitions as gt_definitions
 from gt4py.frontend import gtscript_frontend as gt_frontend
 from gt4py import utils as gt_utils
 
-from ..utils import id_version
+from ..definitions import id_version
 
 
 # ---- Utilities -----

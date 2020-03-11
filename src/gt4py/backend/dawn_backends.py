@@ -257,7 +257,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         # Generate the Python binary extension (checking if GridTools sources are installed)
         if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
-        module_kwargs = {}
+        module_kwargs = {"implementation_ir": None}
         pyext_module_name, pyext_file_path = cls.generate_extension(
             stencil_id, definition_ir, options, module_kwargs=module_kwargs
         )
@@ -411,6 +411,8 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             info["gt_options"] = {
                 key: value for key, value in options.as_dict().items() if key not in ["build_info"]
             }
+
+            info["unreferenced"] = {}
 
             generator = cls.MODULE_GENERATOR_CLASS(cls)
             module_source = generator(stencil_id, definition_ir, options, meta_info=info, **kwargs)
