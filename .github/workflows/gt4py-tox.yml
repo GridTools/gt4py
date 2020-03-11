@@ -15,6 +15,7 @@ jobs:
     strategy:
       matrix:
         python-version: [3.6, 3.7]
+        tox-env-tag: ["-dawn-", "-"]
 
     steps:
     - uses: actions/checkout@v2
@@ -39,4 +40,4 @@ jobs:
         pyversion_no_dot="${{ matrix.python-version }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
         pip install tox
-        tox -r -e py${pyversion_no_dot}-dawn-cpu
+        tox -r -e py${pyversion_no_dot}${tox-env-tag}cpu
