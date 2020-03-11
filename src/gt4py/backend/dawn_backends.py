@@ -356,6 +356,10 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         **kwargs,
     ):
         if options.dev_opts.get("code-generation", True):
+            # Dawn backends do not use the internal analysis pipeline, so a custom
+            # wrapper_info object should be passed to the module generator
+            assert "implementation_ir" in kwargs
+
             info = {}
             if definition_ir.sources is not None:
                 info["sources"].update(
@@ -415,7 +419,9 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             info["unreferenced"] = {}
 
             generator = cls.MODULE_GENERATOR_CLASS(cls)
-            module_source = generator(stencil_id, definition_ir, options, meta_info=info, **kwargs)
+            module_source = generator(
+                stencil_id, definition_ir, options, wrapper_info=info, **kwargs
+            )
 
             file_name = cls.get_stencil_module_path(stencil_id)
             os.makedirs(os.path.dirname(file_name), exist_ok=True)
