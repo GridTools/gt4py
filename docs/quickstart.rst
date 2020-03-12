@@ -10,7 +10,7 @@ Installation
 ------------
 
 GT4Py contains a standard ``setup.py`` installation script and thus it might be
-installed as usual with *pip*. Additional commands are provided to install
+installed as usual with `pip`. Additional commands are provided to install
 and remove the GridTools C++ sources, which are not contained in the package.
 
 We strongly recommended to create a virtual environment for any new project:
@@ -23,7 +23,7 @@ We strongly recommended to create a virtual environment for any new project:
 
 
 Then clone the GT4Py repository and install the local copy or install it
-directly from GitHub with ``pip``. For the CUDA backends add the
+directly from GitHub with `pip`. For the CUDA backends add the
 `[cudaXX]` optional dependency, where `XX` takes the values `90`, `91`,
 `92`, `100` or `101` depending on the CUDA version installed in your system
 (CUDA version 9.0, 9.1, ..., 10.1).
