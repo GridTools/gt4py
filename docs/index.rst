@@ -21,5 +21,6 @@ backends are also available.
    indices
    license
    quickstart
+   GDPs/index
 
 .. commented_out gtscript
