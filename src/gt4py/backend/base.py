@@ -702,7 +702,7 @@ class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
     def generate_imports(self) -> str:
         source = (
             """
-    import cupy
+import cupy
 """
             + super().generate_imports()
         )
