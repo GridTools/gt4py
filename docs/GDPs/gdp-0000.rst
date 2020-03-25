@@ -98,7 +98,7 @@ mark the PR as a Draft/WIP PR).
 Review and Resolution
 ^^^^^^^^^^^^^^^^^^^^^
 
-GDPs are discussed on the mailing list. The possible paths of the
+GDPs are discussed on the pull request review. The possible paths of the
 status of GDPs are as follows:
 
 .. image:: _static/gdp-0000/workflow.svg
@@ -106,7 +106,7 @@ status of GDPs are as follows:
 All GDPs should be created with the ``Draft`` status.
 
 Eventually, after discussion, there may be a consensus that the GDP
-should be accepteds—see the next section for details. At this point
+should be accepted—see the next section for details. At this point
 the status becomes ``Accepted``.
 
 Once a GDP has been ``Accepted``, the reference implementation must be
@@ -134,9 +134,9 @@ is a better alternative. It is still important to have a record of these
 facts and the discussion which led to that decision.
 
 When a GDP is ``Accepted`` or ``Declined``, the GDP should be updated
-accordingly. In addition to updating the status field, at the very
-least the ``Resolution`` header should be added with a link to the relevant
-thread in the mailing list archives.
+accordingly, which means updating, at the very least, the ``Status`` field
+and the ``Discussion PR`` header with a link to the relevant pull request
+comment discussion.
 
 GDPs can also be ``Replaced`` or superseded by a different GDP, rendering
 the original obsolete. The ``Replaced-By`` and ``Replaces`` headers
@@ -151,8 +151,9 @@ How a GDP becomes Accepted
 
 A GDP is ``Accepted`` by consensus of all interested contributors. We
 need a concrete way to tell whether consensus has been reached. When
-you think a GDP is ready to be accepted, post a message to the GT4Py
-slack channel with a subject line like:
+you think a GDP is ready to be accepted, post a message both to the
+pull request discussion and to the GT4Py slack channel with a subject
+line like:
 
   Proposal to accept GDP #<number>: <title>
 
@@ -167,7 +168,7 @@ In the body of the message, you should:
   within 7 days from this message, then the GDP will be accepted; see
   GDP 0 for more details."
 
-Generally the GDP author will be the one to send this mesage, but
+Generally the GDP author will be the one to send this message, but
 anyone can do it—the important thing is to make sure that everyone
 knows when a GDP is on the verge of acceptance, and give them a final
 chance to respond. If there's some special reason to extend this final
@@ -250,11 +251,11 @@ a separate line.
 References and Footnotes
 ------------------------
 
-.. _`GitHub pull request`: https://github.com/GT4Py/GT4Py/pulls
+.. _`GitHub pull request`: https://github.com/GridTools/gt4py/pulls
 
 .. _slack: https://gridtools.slack.com/archives/C0E0R7LQK
 
-.. _repo: https://github.com/GT4Py/GT4Py
+.. _repo: https://github.com/GridTools/gt4py
 
 .. _reStructuredText: http://docutils.sourceforge.net/rst.html
 
