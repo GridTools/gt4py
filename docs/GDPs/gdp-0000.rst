@@ -6,7 +6,7 @@ GDP 0 — Purpose and Process
 :Status: Draft
 :Type: Process
 :Created: 24-03-2020
-:Discussion PR: ...
+:Discussion PR: `https://github.com/GridTools/gt4py/pull/18 <https://github.com/GridTools/gt4py/pull/18>`_
 
 
 What is a GDP?
@@ -58,18 +58,18 @@ The GDP process begins with a new idea for GT4Py. It is highly
 recommended that a single GDP contains a single key proposal or new
 idea. Small enhancements or patches often don't need a GDP and can be
 injected into the GT4Py development workflow with a pull request to
-the GT4Py `repo`_. The more focused the GDP, the more successful it tends
+the `GT4Py repo`_. The more focused the GDP, the more successful it tends
 to be. If in doubt, split a large GDP into several well-focused ones.
 
 Each GDP must have a champion—someone who writes the GDP using the style
 and format described below, shepherds the discussions in the appropriate
 forums, and attempts to build community consensus around the idea. The GDP
 champion (a.k.a. Author) should first attempt to ascertain whether the idea is
-suitable for a GDP. Posting to the GT4Py `slack`_  channel is the best
+suitable for a GDP. Posting to the `GT4Py Slack channel`_ is the best
 way to start.
 
-The proposal should be submitted as a draft GDP via a `GitHub pull
-request`_ to the ``doc/wiki/GDPs`` directory with the name ``gdp-<n>.rst``
+The proposal should be submitted as a draft GDP via a `GitHub pull request`_
+(PR) to the ``doc/wiki/GDPs`` directory with the name ``gdp-<n>.rst``
 where ``<n>`` is an appropriately assigned four-digit number (e.g.,
 ``gdp-0000.rst``). The draft must use the :doc:`gdp-template` file.
 The GT4Py core developers may reject a draft GDP (and thus avoiding any
@@ -78,9 +78,9 @@ out of the scope of the project or if the PR does not follow the
 conventions documented here.
 
 Once the PR for the GDP is in place, a message should be post to the
-`slack`_  channel to announce the start of the discussion on the new feature.
-The full GDP discussion should happen on the pull request, also including
-additional implementation details.
+`GT4Py Slack channel`_  channel to announce the start of the discussion
+on the new feature. The full GDP discussion should happen on the pull
+request, also including additional implementation details.
 
 After the discussion is finished, the PR should be merged regardless of
 whether it is accepted or not, to preserve the discussion and the outcome
@@ -248,14 +248,14 @@ if the address is not given. If there are multiple authors, each should be on
 a separate line.
 
 
-References and Footnotes
-------------------------
+.. disabled References and Footnotes
+.. disabled ------------------------
 
 .. _`GitHub pull request`: https://github.com/GridTools/gt4py/pulls
 
-.. _slack: https://gridtools.slack.com/archives/C0E0R7LQK
+.. _`GT4Py Slack channel`: https://gridtools.slack.com/archives/C0E0R7LQK
 
-.. _repo: https://github.com/GridTools/gt4py
+.. _`GT4Py repo`: https://github.com/GridTools/gt4py
 
 .. _reStructuredText: http://docutils.sourceforge.net/rst.html
 
