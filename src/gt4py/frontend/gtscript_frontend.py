@@ -276,10 +276,8 @@ class CallInliner(ast.NodeTransformer):
 
         # Rename local names in subroutine to avoid conflicts with caller context names
         assign_targets = gt_meta.collect_assign_targets(call_ast)
-        assert all(
-            len(target) == 1 and isinstance(target[0], ast.Name) for target in assign_targets
-        )
-        assigned_symbols = set(target[0].id for target in assign_targets)
+        assert all(isinstance(target, ast.Name) for target in assign_targets)
+        assigned_symbols = set(target.id for target in assign_targets)
         name_mapping = {
             name: value.id
             for name, value in call_args.items()

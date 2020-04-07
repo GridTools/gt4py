@@ -367,7 +367,27 @@ class AssignTargetsCollector(ASTPass):
         return self.assign_targets
 
     def visit_Assign(self, node: ast.Assign):
-        self.assign_targets.append(node.targets)
+        if len(node.targets) > 1:
+            from gt4py.frontend.gtscript_frontend import GTScriptSyntaxError
+
+            raise GTScriptSyntaxError(
+                message="Assignment to more than one target is not supported.", loc=node
+            )
+
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                self.assign_targets.append(target)
+            elif isinstance(target, ast.Tuple):
+                for t in target.elts:
+                    assert isinstance(t, ast.Name)
+                    self.assign_targets.append(t)
+            else:
+                from gt4py.frontend.gtscript_frontend import GTScriptSyntaxError
+
+                raise GTScriptSyntaxError(
+                    message="Assignment to subscripts is not supported.", loc=target
+                )
+        # self.assign_targets.append(node.targets)
 
 
 collect_assign_targets = AssignTargetsCollector.apply
