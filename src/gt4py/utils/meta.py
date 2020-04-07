@@ -375,18 +375,14 @@ class AssignTargetsCollector(ASTPass):
             )
 
         for target in node.targets:
+            assert isinstance(target, (ast.Name, ast.Tuple))
             if isinstance(target, ast.Name):
                 self.assign_targets.append(target)
-            elif isinstance(target, ast.Tuple):
+            else:
                 for t in target.elts:
                     assert isinstance(t, ast.Name)
                     self.assign_targets.append(t)
-            else:
-                from gt4py.frontend.gtscript_frontend import GTScriptSyntaxError
 
-                raise GTScriptSyntaxError(
-                    message="Assignment to subscripts is not supported.", loc=target
-                )
         # self.assign_targets.append(node.targets)
 
 
