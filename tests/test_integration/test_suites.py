@@ -221,6 +221,12 @@ def fwd_diff_op_xy(field):
 
 
 @gtscript.function
+def wrap1arg2return(field):
+    dx, dy = fwd_diff_op_xy(field=field)
+    return dx, dy
+
+
+@gtscript.function
 def fwd_diff_op_x(field):
     dx = field[1, 0, 0] - field[0, 0, 0]
     return dx
@@ -240,7 +246,7 @@ class TestHorizontalDiffusionSubroutines(gt_testing.StencilTestSuite):
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ["debug", "numpy", "gtx86"]
     symbols = dict(
-        fwd_diff=gt_testing.global_name(singleton=fwd_diff_op_xy),
+        fwd_diff=gt_testing.global_name(singleton=wrap1arg2return),
         u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (2, 2), (0, 0)]),
         diffusion=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         weight=gt_testing.parameter(in_range=(0, 0.5)),
