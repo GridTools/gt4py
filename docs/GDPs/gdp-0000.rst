@@ -77,7 +77,7 @@ discussion on the topic) if the draft GDP is considered as completely
 out of the scope of the project or if the PR does not follow the
 conventions documented here.
 
-Once the PR for the GDP is in place, a message should be post to the
+Once the PR for the GDP is in place, a message should be posted to the
 `GT4Py Slack channel`_  channel to announce the start of the discussion
 on the new feature. The full GDP discussion should happen on the pull
 request, also including additional implementation details.
