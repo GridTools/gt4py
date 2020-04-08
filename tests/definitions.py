@@ -27,9 +27,6 @@ CPU_BACKENDS = [
 GPU_BACKENDS = list(set(ALL_BACKENDS) - set(CPU_BACKENDS))
 INTERNAL_BACKENDS = ["debug", "numpy"] + [name for name in ALL_BACKENDS if name.startswith("gt")]
 
-# CPU_BACKENDS = ["dawn:gtx86"]
-# CPU_BACKENDS = ["debug", "numpy", "gtx86", "gtmc"]
-
 
 @pytest.fixture()
 def id_version():

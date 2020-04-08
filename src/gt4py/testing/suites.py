@@ -381,10 +381,11 @@ class StencilTestSuite(metaclass=SuiteMeta):
         instance, to avoid duplication of (potentially expensive) compilations.
         """
         cls = type(self)
+        backend_slug = gt_utils.slugify(test['backend'], valid_symbols='')
         implementation = gtscript.stencil(
             backend=test["backend"],
             definition=test["definition"],
-            name=f"{test['suite']}_{gt_utils.slugify(test['backend'], valid_symbols='')}_{test['test_id']}",
+            name=f"{test['suite']}_{backend_slug}_{test['test_id']}",
             rebuild=True,
             externals=externals_dict,
             # debug_mode=True,
