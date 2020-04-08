@@ -22,4 +22,6 @@ backends are also available.
    license
    quickstart
 
+   GDPs/gdp-index
+
 .. commented_out gtscript
