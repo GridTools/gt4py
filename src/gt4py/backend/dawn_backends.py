@@ -84,16 +84,6 @@ class SIRConverter(gt_ir.IRNodeVisitor):
             elif param.data_type in [gt_ir.DataType.FLOAT32, gt_ir.DataType.FLOAT64]:
                 global_variables.map[param.name].double_value = param.init or 0.0
 
-        # for key, value in externals.items():
-        #     if isinstance(value, numbers.Number):
-        #         global_variables.map[key].is_constexpr = True
-        #         if isinstance(value, bool):
-        #             global_variables.map[key].boolean_value = value
-        #         elif isinstance(value, int):
-        #             global_variables.map[key].integer_value = value
-        #         elif isinstance(value, float):
-        #             global_variables.map[key].double_value = value
-
         return global_variables
 
     def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral, **kwargs):

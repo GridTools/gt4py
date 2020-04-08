@@ -85,6 +85,9 @@ def function(func):
     return func
 
 
+__DEV_OPTS_KEYS = ["code-generation", "cache-validation"]
+
+
 # Interface functions
 def stencil(
     backend,
@@ -98,7 +101,7 @@ def stencil(
     _dev_opts=None,
     **kwargs,
 ):
-    """Generate an implementation of the stencil definition with the specified backend.
+    f"""Generate an implementation of the stencil definition with the specified backend.
 
     It can be used as a parametrized function decorator or as a regular function.
 
@@ -131,7 +134,7 @@ def stencil(
 
         _dev_opts : `dict`[`str`, `bool`], optional
             Switch on/off different parts of the pipeline. Everything is turned on
-            by default. Keys: ["code-generation", "cache-validation"] (`None` by default).
+            by default. Keys: {__DEV_OPTS_KEYS} (`None` by default).
 
         **kwargs: `dict`, optional
             Extra backend-specific options. Check the specific backend
@@ -166,8 +169,11 @@ def stencil(
         raise ValueError(f"Invalid 'name' string ('{name}')")
     if not isinstance(rebuild, bool):
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
-    if _dev_opts is not None and not isinstance(_dev_opts, dict):
-        raise ValueError(f"Invalid '_dev_opts' dictionary ('{_dev_opts}')")
+    if _dev_opts is not None:
+        if not isinstance(_dev_opts, dict) or (
+            isinstance(_dev_opts, dict) and not set(_dev_opts.keys()) <= set(__DEV_OPTS_KEYS)
+        ):
+            raise ValueError(f"Invalid '_dev_opts' dictionary ('{_dev_opts}')")
 
     module = None
     if name:

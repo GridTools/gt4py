@@ -30,7 +30,7 @@ from gt4py import config as gt_config
 
 
 def clean_build_flags(config_vars):
-    for key, value in distutils.sysconfig._config_vars.items():
+    for key, value in config_vars.items():
         if type(value) == str:
             value = " " + value + " "
             for s in value.split(" "):
@@ -40,7 +40,7 @@ def clean_build_flags(config_vars):
                     or s.startswith("-g")
                 ):
                     value = value.replace(" " + s + " ", " ")
-            distutils.sysconfig._config_vars[key] = " ".join(value.split())
+            config_vars[key] = " ".join(value.split())
 
 
 def build_pybind_ext(
