@@ -78,7 +78,7 @@ out of the scope of the project or if the PR does not follow the
 conventions documented here.
 
 Once the PR for the GDP is in place, a message should be posted to the
-`GT4Py Slack channel`_  channel to announce the start of the discussion
+`GT4Py Slack channel`_  to announce the start of the discussion
 on the new feature. The full GDP discussion should happen on the pull
 request, also including additional implementation details.
 
@@ -152,7 +152,7 @@ How a GDP becomes Accepted
 A GDP is ``Accepted`` by consensus of all interested contributors. We
 need a concrete way to tell whether consensus has been reached. When
 you think a GDP is ready to be accepted, post a message both to the
-pull request discussion and to the GT4Py slack channel with a subject
+pull request discussion and to the GT4Py Slack channel with a subject
 line like:
 
   Proposal to accept GDP #<number>: <title>
@@ -192,7 +192,7 @@ If there *are* substantive objections, then the GDP remains in
 proposed for acceptance again later once the objections are resolved.
 
 In controversial cases, the GT4Py core developers may decide whether a
-controversial GDP is finally ``Accepted`` or not.
+GDP is finally ``Accepted`` or not.
 
 
 Maintenance
