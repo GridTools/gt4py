@@ -303,34 +303,42 @@ class InitInfoPass(TransformPass):
                         stmt_inputs_with_ij_offset.add(input)
 
                 # Add statement to current stage when possible, otherwise, open a new stage
-                if group_outputs.isdisjoint(stmt_inputs_with_ij_offset):
-                    shadow_outputs -= set(stmt_info.inputs.keys())
-
-                    interval_block.stmts.insert(0, stmt_info)
-                    interval_block.outputs |= stmt_info.outputs
-                    for name, extent in stmt_info.inputs.items():
-                        if name in interval_block.inputs:
-                            interval_block.inputs[name] |= extent
-                        else:
-                            interval_block.inputs[name] = extent
-                else:
+                if not group_outputs.isdisjoint(stmt_inputs_with_ij_offset):
                     # If some output field is read with an offset it likely implies different compute extent
+                    if self.current_block_info.intervals == gt_ir.IterationOrder.BACKWARD:
+                        self.current_block_info.ij_blocks.append(
+                            self._make_ij_block(interval, interval_block)
+                        )
+                    else:
+                        self.current_block_info.ij_blocks.insert(
+                            0, self._make_ij_block(interval, interval_block)
+                        )
+
                     stmt_group = []
                     group_outputs = set()
                     shadow_outputs = set(stmt_info.outputs)
-
-                    self.current_block_info.ij_blocks.append(
-                        self._make_ij_block(interval, interval_block)
-                    )
-
+                    interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
+                interval_block.stmts.insert(0, stmt_info)
+                interval_block.outputs |= stmt_info.outputs
+                for name, extent in stmt_info.inputs.items():
+                    if name in interval_block.inputs:
+                        interval_block.inputs[name] |= extent
+                    else:
+                        interval_block.inputs[name] = extent
                 shadow_outputs -= set(stmt_info.inputs.keys())
+
                 group_outputs |= stmt_info.outputs
                 stmt_group.insert(0, stmt_info)
 
             if interval_block.stmts:
-                self.current_block_info.ij_blocks.append(
-                    self._make_ij_block(interval, interval_block)
-                )
+                if self.current_block_info.intervals == gt_ir.IterationOrder.BACKWARD:
+                    self.current_block_info.ij_blocks.append(
+                        self._make_ij_block(interval, interval_block)
+                    )
+                else:
+                    self.current_block_info.ij_blocks.insert(
+                        0, self._make_ij_block(interval, interval_block)
+                    )
 
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
             assert node.computations  # non-empty definition
@@ -634,6 +642,8 @@ class DataTypePass(TransformPass):
                     "Symbol '{}' used with inconsistent data types.".format(node.target.name)
                 )
             node.target.data_type = getattr(node.value, "data_type", gt_ir.DataType.AUTO)
+            if self.fields[node.target.name].data_type == gt_ir.DataType.AUTO:
+                self.fields[node.target.name].data_type = node.value.data_type
             self.visit(node.target, **kwargs)
 
         def visit_VarRef(self, node: gt_ir.Node, apply_block_symbols={}, **kwargs):
