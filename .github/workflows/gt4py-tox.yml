@@ -22,7 +22,6 @@ jobs:
       run: |
         wget https://dl.bintray.com/boostorg/release/1.72.0/source/boost_1_72_0.tar.gz
         echo c66e88d5786f2ca4dbebb14e06b566fb642a1a6947ad8cc9091f9f445134143f boost_1_72_0.tar.gz > boost_hash.txt
-        sha256sum boost_1_72_0.tar.gz
         sha256sum -c boost_hash.txt
         tar xzf boost_1_72_0.tar.gz
         mkdir -p boost/include
