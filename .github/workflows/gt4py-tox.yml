@@ -1,8 +1,8 @@
-name: gt4py-tox
+name: Tox (CPU only)
 
 on:
   push:
-    branches: 
+    branches:
       - master
   pull_request:
     branches:
@@ -18,11 +18,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Install boost
+      run: |
+        wget https://dl.bintray.com/boostorg/release/1.72.0/source/boost_1_72_0.tar.gz
+        echo c66e88d5786f2ca4dbebb14e06b566fb642a1a6947ad8cc9091f9f445134143f boost_1_72_0.tar.gz > boost_hash.txt
+        sha256sum boost_1_72_0.tar.gz
+        sha256sum -c boost_hash.txt
+        tar xzf boost_1_72_0.tar.gz
+        mkdir -p boost/include
+        mv boost_1_72_0/boost boost/include/
+        echo ::set-env name=BOOST_ROOT::${PWD}/boost
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v1
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
+    - name: Install python dependencies
       run: |
         python -m pip install --upgrade pip setuptools wheel
     - name: Test with tox
