@@ -368,7 +368,7 @@ class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ["debug", "numpy", "gtx86"]
     symbols = dict(
-        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)])
     )
 
     def definition(outfield):
@@ -392,7 +392,7 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ["debug", "numpy", "gtx86"]
     symbols = dict(
-        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)])
     )
 
     def definition(outfield):

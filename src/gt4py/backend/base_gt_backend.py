@@ -402,7 +402,9 @@ pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_fil
         return source
 
     def generate_implementation(self):
-        sources = gt_text.TextBlock(indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
+        sources = gt_text.TextBlock(
+            indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE
+        )
 
         args = []
         for arg in self.implementation_ir.api_signature:

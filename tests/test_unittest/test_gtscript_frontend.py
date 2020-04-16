@@ -353,9 +353,7 @@ class TestDTypes:
                 out_field = in_field + param
 
         module = f"TestImports_test_module_{id_version}"
-        compile_definition(
-            definition_func, "test_all_legal_dtypes", module,
-        )
+        compile_definition(definition_func, "test_all_legal_dtypes", module)
 
         def definition_func(
             in_field: gtscript.Field["dtype"], out_field: gtscript.Field["dtype"], param: "dtype"
@@ -369,7 +367,7 @@ class TestDTypes:
         )
 
     @pytest.mark.parametrize(
-        "id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes])),
+        "id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes]))
     )
     def test_invalid_inlined_dtypes(self, id_case, test_dtype, id_version):
         with pytest.raises(ValueError, match=r".*data type descriptor.*"):
@@ -383,7 +381,7 @@ class TestDTypes:
                     out_field = in_field + param
 
     @pytest.mark.parametrize(
-        "id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes])),
+        "id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes]))
     )
     def test_invalid_external_dtypes(self, id_case, test_dtype, id_version):
         def definition_func(
