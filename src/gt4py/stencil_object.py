@@ -276,5 +276,5 @@ class StencilObject(abc.ABC):
                 )
 
         self.run(
-            _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args,
+            _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
         )
