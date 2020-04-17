@@ -1,4 +1,4 @@
-![](https://github.com/GridTools/gt4py/workflows/gt4py-tox/badge.svg?branch=master)
+![](https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?branch=master)
 
 GT4Py: GridTools for Python
 ===========================
