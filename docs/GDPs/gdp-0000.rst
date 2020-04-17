@@ -27,7 +27,7 @@ dissenting opinions.
 Because the GDPs are maintained as text files in a versioned
 repository, their revision history is the historical record of the
 feature proposal, which is available by the normal git commands for
-retrieving older revisions from the ``doc/wiki/GDPs`` folder.
+retrieving older revisions from the ``docs/GDPs`` folder.
 
 
 Types
@@ -69,7 +69,7 @@ suitable for a GDP. Posting to the `GT4Py Slack channel`_ is the best
 way to start.
 
 The proposal should be submitted as a draft GDP via a `GitHub pull request`_
-(PR) to the ``doc/wiki/GDPs`` directory with the name ``gdp-<n>.rst``
+(PR) to the ``docs/GDPs`` directory with the name ``gdp-<n>.rst``
 where ``<n>`` is an appropriately assigned four-digit number (e.g.,
 ``gdp-0000.rst``). The draft must use the :doc:`gdp-template` file.
 The GT4Py core developers may reject a draft GDP (and thus avoiding any
