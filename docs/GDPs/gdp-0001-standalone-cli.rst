@@ -27,13 +27,18 @@ The command will take a python file and the name of the GridTools backend as inp
 backend specific code file. Depending on the backend and other options this might be python, c++,
 cuda or object code (This part of the design is very much WIP as of now).
 
+Limited Scope
++++++++++++++
+
 In order to support the usecases listed below the input python files must be written in
 gtscript DSL without explicitly importing GT4Py. Instead of the decorators provided by the
 `gtscript` module, comments may be used, or functions may be inferred to be a `stencil` or `submodule`
 depending on whether they return something or not. In order to stay maintainable `gtpyc`
-will at most inject names from the `gtscript` module into the namespace of the input python module
-before running the input code through the same process applied to on-line compilation of stencils
-and submodules.
+will not add any new logic beyond reading input python code and command line options.
+
+Possible exceptions might be 
+ * The minimum amount of logic to distinguish subroutines from stencils in the input python code
+ * A mechanism to decide via CLI option whether to create python extensions or not
 
 Other language projects
 +++++++++++++++++++++++
@@ -59,63 +64,87 @@ allows to use a licence other than GPL3 in said project without the express perm
 Usage and Impact
 ----------------
 
-This section describes how users of GT4Py will use features described in this
-GDP. It should be comprised mainly of code examples that wouldn't be possible
-without acceptance and implementation of this GDP, as well as the impact the
-proposed changes would have on the ecosystem. This section should be written
-from the perspective of the users of GT4Py, and the benefits it will provide
-them; and as such, it should include implementation details only if
-necessary to explain the functionality.
+The usage is envisioned as follows::
+
+   $ gtpyc -b mc stencils.py -o stencils
+   $ ls
+   > stencils.py stencils.so
+
+builds a shared library from python source
+::
+
+   $ gtpyc -b mc -f cpp stencils.py -o stencils
+   $ ls
+   > stencils.py stencils.cpp stencils.hpp
+
+builds GT code from python source
+::
+
+   $ gtpyc -b mc -f py stencils.py -o stencils_module
+   $ ls
+   > stencils.py stencils_module.so stencils_module.py
+
+builds a python extension
+
+Additional Commandline options will mostly correspond to the keyword arguments of
+the `gtscript.stencil` decorator.
+
+This should be easy to incorporate into existing build systems as an additional
+step from `.py` source files to `.cpp` or `.cu` sources before building and linking
+or as an alternative step to build `.py` sources into ready to link libraries.
 
 Backward compatibility
 ----------------------
 
-This section describes the ways in which the GDP breaks backward compatibility.
+This GDP is aimed to be fully backward-compatible.
 
 
 Detailed description
 --------------------
 
-This section should provide a detailed description of the proposed change.
-It should include examples of how the new functionality would be used,
-intended use-cases and pseudo-code illustrating its use.
-
+This section will be updated as the reference implementation progresses.
 
 Related Work
 ------------
 
-This section should list relevant and/or similar technologies, possibly in other
-libraries. It does not need to be comprehensive, just list the major examples of
-prior and relevant art.
-
+CLIs of well-known compilers (Provide CLI conventions):
+ * `clang`_
+ * `gcc`_
+ * `gfortran`_
 
 Implementation
 --------------
 
-This section lists the major steps required to implement the GDP.  Where
-possible, it should be noted where one step is dependent on another, and which
-steps may be optionally omitted.  Where it makes sense, each step should
-include a link to related pull requests as the implementation progresses.
+Implementation will start with a proof-of-concept CLI with an absolutely mninimal
+feature set, taking a single function in an input `.py` file and outputting
+the result of the stencil compilation in a separate file.
 
-Any pull requests or development branches containing work on this GDP should
-be linked to from here.  (A GDP does not need to be implemented in a single
-pull request if it makes sense to implement it in discrete phases).
+If it becomes apparent at that stage that changes to the internal structure
+would become necessary these will likely be treated in separate GDPs.
 
+The PoC will utilize the `click`_ framework for the CLI, since it encourages
+separation and reuse of CLI argument / option handling and documentation code
+from program logic. None of the known limitations of `click`_ are foreseen to
+be detrimental to what this GDP wants to achieve.
 
 Alternatives
 ------------
 
-If there were any alternative solutions to solving the same problem, they should
-be discussed here, along with a justification for the chosen approach.
+Using `argparse` for the CLI
+++++++++++++++++++++++++++++
 
+Using `argparse`_ has been rejected. although it is not impossible to separate
+option handling code from program logic, any attempt to do so consistently would
+lead to partially reinventing one of the more advanced frameworks like `click`_.
+
+The author of this GDP does believe the additional requirement of a small
+pure-python framework like `click`_ to be outweighed by the benefits.
 
 Discussion
 ----------
 
-This section may just be a bullet list including links to any discussions
-regarding the GDP:
-
-- This includes links to relevant GitHub issues and publicly available discussions.
+The discussion for this GDP will be in the draft PR for it, which has yet
+to be generated.
 
 
 References and Footnotes
@@ -125,6 +154,12 @@ References and Footnotes
    this GDP as an example) or licensed under the `Open Publication License`_.
 
 .. _Open Publication License: https://www.opencontent.org/openpub/
+
+.. _click: https://click.palletsprojects.com/en/7.x/
+.. _argparse: https://docs.python.org/3/library/argparse.html
+.. _clang: https://clang.llvm.org/docs/ClangCommandLineReference.html
+.. _gcc: https://gcc.gnu.org/onlinedocs/gcc/Invoking-GCC.html
+.. _gfortran: https://gcc.gnu.org/onlinedocs/gfortran/Invoking-GNU-Fortran.html#Invoking-GNU-Fortran
 
 
 Copyright
