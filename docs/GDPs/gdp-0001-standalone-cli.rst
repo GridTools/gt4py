@@ -6,7 +6,7 @@ GDP 1 — Standalone Compiler CLI
 :Status: Draft
 :Type: Feature
 :Created: 17.04.2020
-:Discussion PR: <PR url>
+:Discussion PR: `<https://github.com/GridTools/gt4py/pull/21>`
 
 
 Abstract
@@ -143,8 +143,8 @@ pure-python framework like `click`_ to be outweighed by the benefits.
 Discussion
 ----------
 
-The discussion for this GDP will be in the draft PR for it, which has yet
-to be generated.
+The discussion for this GDP will be in the draft PR for it, which is to be found
+`here <https://github.com/GridTools/gt4py/pull/21>`_.
 
 
 References and Footnotes
@@ -160,6 +160,7 @@ References and Footnotes
 .. _clang: https://clang.llvm.org/docs/ClangCommandLineReference.html
 .. _gcc: https://gcc.gnu.org/onlinedocs/gcc/Invoking-GCC.html
 .. _gfortran: https://gcc.gnu.org/onlinedocs/gfortran/Invoking-GNU-Fortran.html#Invoking-GNU-Fortran
+.. _discussion_pr: https://github.com/GridTools/gt4py/pull/21
 
 
 Copyright
