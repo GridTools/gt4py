@@ -188,6 +188,44 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return source
 
+    def _visit_branch_stmt(self, stmt):
+        sources = []
+        if isinstance(stmt, gt_ir.Assign):
+            condition = (
+                (
+                    "{np}.logical_and(".format(np=self.numpy_prefix)
+                    + ", ".join(
+                        [
+                            "__condition_{level}".format(level=i + 1)
+                            for i in range(self.conditions_depth)
+                        ]
+                    )
+                    + ")"
+                )
+                if self.conditions_depth > 1
+                else "__condition_1"
+            )
+
+            target = self.visit(stmt.target)
+            value = self.visit(stmt.value)
+            sources.append(
+                "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
+                    condition=condition,
+                    target=target,
+                    then_expr=value,  # value if is_if else target,
+                    else_expr=target,  # if is_if else value,
+                    dtype=stmt.target.data_type.dtype.name,
+                    np=self.numpy_prefix,
+                )
+            )
+        else:
+            stmt_sources = self.visit(stmt)
+            if isinstance(stmt_sources, list):
+                sources.extend(stmt_sources)
+            else:
+                sources.append(stmt_sources)
+        return sources
+
     def visit_If(self, node: gt_ir.If):
         sources = []
         self.conditions_depth += 1
@@ -197,47 +235,16 @@ class NumPySourceGenerator(PythonSourceGenerator):
             )
         )
 
-        stmts = [
-            *[(True, stmt) for stmt in node.main_body.stmts],
-            *[(False, stmt) for stmt in node.else_body.stmts],
-        ]
-
-        for is_if, stmt in stmts:
-
-            if isinstance(stmt, gt_ir.Assign):
-                condition = (
-                    (
-                        "{np}.logical_and(".format(np=self.numpy_prefix)
-                        + ", ".join(
-                            [
-                                "__condition_{level}".format(level=i + 1)
-                                for i in range(self.conditions_depth)
-                            ]
-                        )
-                        + ")"
-                    )
-                    if self.conditions_depth > 1
-                    else "__condition_1"
+        for stmt in node.main_body.stmts:
+            sources.extend(self._visit_branch_stmt(stmt))
+        if node.else_body is not None:
+            sources.append(
+                "__condition_{level} = np.logical_not(__condition_{level})".format(
+                    level=self.conditions_depth, condition=self.visit(node.condition)
                 )
-
-                target = self.visit(stmt.target)
-                value = self.visit(stmt.value)
-                sources.append(
-                    "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
-                        condition=condition,
-                        target=target,
-                        then_expr=value if is_if else target,
-                        else_expr=target if is_if else value,
-                        dtype=stmt.target.data_type.dtype.name,
-                        np=self.numpy_prefix,
-                    )
-                )
-            else:
-                stmt_sources = self.visit(stmt)
-                if isinstance(stmt_sources, list):
-                    sources.extend(stmt_sources)
-                else:
-                    sources.append(stmt_sources)
+            )
+            for stmt in node.else_body.stmts:
+                sources.extend(self._visit_branch_stmt(stmt))
 
         self.conditions_depth -= 1
         # return "\n".join(sources)

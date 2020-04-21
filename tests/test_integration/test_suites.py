@@ -418,33 +418,38 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
 
 
 class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
-    """Tests nested runtime ifs, where not the same branch is used for all data points.
-    """
 
     dtypes = (np.float_,)
-    domain_range = [(1, 15), (1, 15), (1, 15)]
+    domain_range = [(3, 3), (3, 3), (3, 3)]
     backends = ["debug", "numpy", "gtx86"]
     symbols = dict(
-        infield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        # factor=gt_testing.global_name(one_of=(-1., 0., 1.)),
+        factor=gt_testing.parameter(in_range=(-100, 100)),
+        field_a=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]),
+        field_b=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]),
+        field_c=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]),
     )
 
-    def definition(infield, outfield):
-
+    def definition(field_a, field_b, field_c, *, factor):
+        # from __externals__ import factor
         with computation(PARALLEL), interval(...):
-
-            if infield > 0:
-                if infield < 0.5:
-                    outfield = 1
+            if factor > 0:
+                if field_a < 0:
+                    field_b = -field_a
                 else:
-                    outfield = 2
+                    field_b = field_a
             else:
-                outfield = 3
+                if field_a < 0:
+                    field_c = -field_a
+                else:
+                    field_c = field_a
 
-    def validation(infield, outfield, *, domain, origin, **kwargs):
-        outfield[...] = 3
-        outfield[...] = np.choose(infield > 0, [outfield, 2])
-        outfield[...] = np.choose(np.logical_and(infield > 0, infield < 0.5), [outfield, 1])
+    def validation(field_a, field_b, field_c, *, factor, domain, origin, **kwargs):
+
+        if factor > 0:
+            field_b[...] = np.abs(field_a)
+        else:
+            field_c[...] = np.abs(field_a)
 
 
 class TestTernaryOp(gt_testing.StencilTestSuite):
