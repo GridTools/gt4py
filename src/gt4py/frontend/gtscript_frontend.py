@@ -202,12 +202,13 @@ class CallInliner(ast.NodeTransformer):
 
     def _process_stmts(self, stmts):
         new_stmts = []
+        outer_block = self.current_block
         self.current_block = new_stmts
         for s in stmts:
             if not isinstance(s, (ast.Import, ast.ImportFrom)):
                 if self.visit(s):
                     new_stmts.append(s)
-        self.current_block = None
+        self.current_block = outer_block
 
         return new_stmts
 

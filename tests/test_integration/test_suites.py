@@ -416,6 +416,11 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
         outfield[...] = 2
 
 
+@gtscript.function
+def add_one(field_in):
+    return field_in + 1
+
+
 class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
@@ -443,12 +448,15 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
                 else:
                     field_c = field_a
 
+            field_a = add_one(field_a)
+
     def validation(field_a, field_b, field_c, *, factor, domain, origin, **kwargs):
 
         if factor > 0:
             field_b[...] = np.abs(field_a)
         else:
             field_c[...] = np.abs(field_a)
+        field_a += 1
 
 
 class TestTernaryOp(gt_testing.StencilTestSuite):
