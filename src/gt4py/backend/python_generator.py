@@ -138,7 +138,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
     def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr):
         fmt = "({})" if isinstance(node.arg, gt_ir.CompositeExpr) else "{}"
-        source = "{op}{expr}".format(
+        source = "{op} {expr}".format(
             op=self.OP_TO_PYTHON[node.op], expr=fmt.format(self.visit(node.arg))
         )
 
