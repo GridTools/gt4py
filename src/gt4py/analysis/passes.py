@@ -17,7 +17,7 @@
 """Definitions and utilities used by all the analysis pipeline components.
 """
 
-import collections
+import functools
 import itertools
 
 from gt4py import definitions as gt_definitions
@@ -243,10 +243,9 @@ class InitInfoPass(TransformPass):
             assert False
 
         def visit_Decl(self, node: gt_ir.Decl):
-            name = node.name
             assert node.is_api is False
-            assert name in self.data.symbols
-            return StatementInfo(self.data.id_generator.new, node)
+            assert node.name in self.data.symbols
+            return None
 
         def visit_Assign(self, node: gt_ir.Assign):
             target_name = node.target.name
@@ -287,58 +286,43 @@ class InitInfoPass(TransformPass):
             interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
 
             assert node.body.stmts  # non-empty computation
-            stmt_infos = [self.visit(stmt) for stmt in node.body.stmts]
+            stmt_infos = [
+                info for info in [self.visit(stmt) for stmt in node.body.stmts] if info is not None
+            ]
             group_outputs = set()
-            shadow_outputs = set()
-            stmt_group = []
-            # Traverse computation statements backwards from end to start
-            for stmt_info in reversed(stmt_infos):
-                if shadow_outputs.issuperset(stmt_info.outputs):
-                    # Delete the statement if all its outputs are going to be overwritten
-                    # before they are used as inputs
-                    continue
-                stmt_inputs_with_ij_offset = set()
-                for input, extent in stmt_info.inputs.items():
-                    if extent[:2] != ((0, 0), (0, 0)):
-                        stmt_inputs_with_ij_offset.add(input)
 
-                # Add statement to current stage when possible, otherwise, open a new stage
+            # Traverse computation statements
+            for stmt_info in stmt_infos:
+                stmt_inputs_with_ij_offset = set(
+                    [
+                        input
+                        for input, extent in stmt_info.inputs.items()
+                        if extent[:2] != ((0, 0), (0, 0))
+                    ]
+                )
+
+                # Open a new stage when it is not possible to use the current one
                 if not group_outputs.isdisjoint(stmt_inputs_with_ij_offset):
+                    assert interval_block.stmts
+                    assert interval_block.outputs
                     # If some output field is read with an offset it likely implies different compute extent
-                    if self.current_block_info.intervals == gt_ir.IterationOrder.BACKWARD:
-                        self.current_block_info.ij_blocks.append(
-                            self._make_ij_block(interval, interval_block)
-                        )
-                    else:
-                        self.current_block_info.ij_blocks.insert(
-                            0, self._make_ij_block(interval, interval_block)
-                        )
-
-                    stmt_group = []
-                    group_outputs = set()
-                    shadow_outputs = set(stmt_info.outputs)
-                    interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
-                interval_block.stmts.insert(0, stmt_info)
-                interval_block.outputs |= stmt_info.outputs
-                for name, extent in stmt_info.inputs.items():
-                    if name in interval_block.inputs:
-                        interval_block.inputs[name] |= extent
-                    else:
-                        interval_block.inputs[name] = extent
-                shadow_outputs -= set(stmt_info.inputs.keys())
-
-                group_outputs |= stmt_info.outputs
-                stmt_group.insert(0, stmt_info)
-
-            if interval_block.stmts:
-                if self.current_block_info.intervals == gt_ir.IterationOrder.BACKWARD:
                     self.current_block_info.ij_blocks.append(
                         self._make_ij_block(interval, interval_block)
                     )
-                else:
-                    self.current_block_info.ij_blocks.insert(
-                        0, self._make_ij_block(interval, interval_block)
-                    )
+                    interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
+                    group_outputs = set()
+
+                interval_block.stmts.append(stmt_info)
+                interval_block.outputs |= stmt_info.outputs
+                for name, extent in stmt_info.inputs.items():
+                    interval_block.inputs[name] = interval_block.inputs.get(name, extent) | extent
+
+                group_outputs |= stmt_info.outputs
+
+            if interval_block.stmts:
+                self.current_block_info.ij_blocks.append(
+                    self._make_ij_block(interval, interval_block)
+                )
 
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
             assert node.computations  # non-empty definition
@@ -482,7 +466,10 @@ class MergeBlocksPass(TransformPass):
             for ij_candidate in block.ij_blocks[1:]:
                 merged = merged_ijs[-1]
                 if self._are_compatible_stages(
-                    merged, ij_candidate, transform_data.min_k_interval_sizes
+                    merged,
+                    ij_candidate,
+                    transform_data.min_k_interval_sizes,
+                    block.iteration_order,
                 ):
                     merged.id = transform_data.id_generator.new
                     self._merge_ij_blocks(merged, ij_candidate, transform_data)
@@ -511,19 +498,25 @@ class MergeBlocksPass(TransformPass):
         return result
 
     def _are_compatible_stages(
-        self, target: IJBlockInfo, candidate: IJBlockInfo, min_k_interval_sizes: list
+        self,
+        target: IJBlockInfo,
+        candidate: IJBlockInfo,
+        min_k_interval_sizes: list,
+        iteration_order: gt_ir.IterationOrder,
     ):
         # Check that the two stages have the same compute extent
         if not (target.compute_extent == candidate.compute_extent):
             return False
 
         result = True
-        # Check that there is not overlap between stage intervals
+        # Check that there is not overlap between stage intervals and that
+        # merging stages will not imply a reordering of the execution order
         for interval in target.intervals:
             for candidate_interval in candidate.intervals:
-                if interval != candidate_interval and interval.overlaps(
-                    candidate_interval, min_k_interval_sizes
-                ):
+                if (
+                    interval != candidate_interval
+                    and interval.overlaps(candidate_interval, min_k_interval_sizes)
+                ) or interval.precedes(candidate_interval, min_k_interval_sizes, iteration_order):
                     result = False
 
         # Check that there are not data dependencies between stages
