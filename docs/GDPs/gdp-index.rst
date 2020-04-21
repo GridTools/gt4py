@@ -14,6 +14,7 @@ Process GDPs (GDPs about GDPs or Processes)
    :maxdepth: 1
 
    gdp-0000
+   gdp-0002
    gdp-template
 
 
@@ -22,6 +23,8 @@ Open GDPs (under consideration)
 
 .. toctree::
    :maxdepth: 1
+
+   gdp-0002
 
 
 Provisional GDPs (provisionally accepted; interface may change)
