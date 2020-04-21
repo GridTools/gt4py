@@ -244,8 +244,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
                     condition=condition,
                     target=target,
-                    then_expr=value,  # value if is_if else target,
-                    else_expr=target,  # if is_if else value,
+                    then_expr=value,
+                    else_expr=target,
                     dtype=stmt.target.data_type.dtype.name,
                     np=self.numpy_prefix,
                 )
