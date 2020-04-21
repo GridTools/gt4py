@@ -275,9 +275,20 @@ class CallInliner(ast.NodeTransformer):
             )
 
         # Rename local names in subroutine to avoid conflicts with caller context names
-        assign_targets = gt_meta.collect_assign_targets(call_ast)
-        assert all(isinstance(target, ast.Name) for target in assign_targets)
-        assigned_symbols = set(target.id for target in assign_targets)
+        try:
+            assign_targets = gt_meta.collect_assign_targets(call_ast, allow_multiple_targets=False)
+        except RuntimeError as e:
+            raise GTScriptSyntaxError(
+                message="Assignment to more than one target is not supported."
+            ) from e
+
+        assigned_symbols = set()
+        for target in assign_targets:
+            if not isinstance(target, ast.Name):
+                raise GTScriptSyntaxError(message="Unsupported assignment target.", loc=target)
+
+            assigned_symbols.add(target.id)
+
         name_mapping = {
             name: value.id
             for name, value in call_args.items()
@@ -502,6 +513,14 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
+    @staticmethod
+    def _sort_blocks_key(comp_block):
+        start = comp_block.interval.start
+        assert isinstance(start.level, gt_ir.LevelMarker)
+        key = 0 if start.level == gt_ir.LevelMarker.START else 100000
+        key += start.offset
+        return key
+
     def _visit_computation_node(self, node: ast.With) -> list:
         loc = gt_ir.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
@@ -545,6 +564,12 @@ class IRMaker(ast.NodeVisitor):
             block.iteration_order = iteration_order
             result.append(block)
         self.parsing_context = ParsingContext.CONTROL_FLOW
+
+        if len(result) > 1:
+            # Vertical regions with variable references are not supported yet
+            result.sort(key=self._sort_blocks_key)
+            if iteration_order == gt_ir.IterationOrder.BACKWARD:
+                result.reverse()
 
         return result
 

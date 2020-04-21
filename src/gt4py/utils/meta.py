@@ -354,12 +354,13 @@ collect_function_defs = FunctionDefCollector.apply
 
 class AssignTargetsCollector(ASTPass):
     @classmethod
-    def apply(cls, func_or_source_or_ast):
-        collector = cls()
+    def apply(cls, func_or_source_or_ast, *, allow_multiple_targets=True):
+        collector = cls(allow_multiple_targets=allow_multiple_targets)
         return collector(func_or_source_or_ast)
 
-    def __init__(self):
+    def __init__(self, *, allow_multiple_targets):
         self.assign_targets = []
+        self.allow_multiple_targets = allow_multiple_targets
 
     def __call__(self, func_or_source_or_ast):
         self.defs = []
@@ -367,23 +368,16 @@ class AssignTargetsCollector(ASTPass):
         return self.assign_targets
 
     def visit_Assign(self, node: ast.Assign):
-        if len(node.targets) > 1:
-            from gt4py.frontend.gtscript_frontend import GTScriptSyntaxError
-
-            raise GTScriptSyntaxError(
-                message="Assignment to more than one target is not supported.", loc=node
-            )
+        if len(node.targets) > 1 and not self.allow_multiple_targets:
+            raise RuntimeError(f"Multiple targets found in assignment ({node})")
 
         for target in node.targets:
-            assert isinstance(target, (ast.Name, ast.Tuple))
-            if isinstance(target, ast.Name):
-                self.assign_targets.append(target)
-            else:
+            if isinstance(target, ast.Tuple):
                 for t in target.elts:
                     assert isinstance(t, ast.Name)
                     self.assign_targets.append(t)
-
-        # self.assign_targets.append(node.targets)
+            else:
+                self.assign_targets.append(target)
 
 
 collect_assign_targets = AssignTargetsCollector.apply
