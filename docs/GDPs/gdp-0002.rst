@@ -1,19 +1,12 @@
-=================================
-GDP X — Template and Instructions
-=================================
+============================
+GDP 2 — Boundary Computation
+============================
 
-:Authors:
-- Rhea George <rheag@vulcan.com>
-- Tobias Wicky <tobiasw@vulcan.com>
-- Johann Dahm <johannd@vulcan.com>
-- Eddie Davis <eddied@vulcam.com>
-- Jeremy McGibbon <jeremym@vulcam.com>
-- Mark Cheeseman <markc@vulcan.com>
-- Oliver Elbert <olivere@vulcan.com>
+:Author: Rhea George <rheag@vulcan.com>
 :Status: Draft
 :Type: Feature
-:Created: 03-27-2020
-:Discussion PR: <PR url>
+:Created: 21-04-2020
+:Discussion PR: https://github.com/GridTools/gt4py/pull/22
 
 
 Abstract
