@@ -61,6 +61,7 @@ Licensing
 Using only the GT4Py generated stencils in a project without depending on GT4Py at runtime
 allows to use a licence other than GPL3 in said project without the express permission of CSCS.
 
+
 Usage and Impact
 ----------------
 
@@ -126,6 +127,14 @@ The PoC will utilize the `click`_ framework for the CLI, since it encourages
 separation and reuse of CLI argument / option handling and documentation code
 from program logic. None of the known limitations of `click`_ are foreseen to
 be detrimental to what this GDP wants to achieve.
+
+Reasons for choosing `click`_
++++++++++++++++++++++++++++++
+ * separation of concerns
+ * ease of reuse of CLI components
+ * built in command completion for bash, zsh etc
+ * built-in testing api
+
 
 Alternatives
 ------------
