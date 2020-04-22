@@ -23,8 +23,8 @@ Motivation and Scope
 --------------------
 
 This GDP proposes adding a CLI command named `gtpyc` (naming rationale documented somewhere below).
-The command will take a python file and the name of the GridTools backend as input and output a
-backend specific code file. Depending on the backend and other options this might be python, c++,
+The command will take a python file and the name of one of the available backends as input and output
+backend specific source code. Depending on the backend and other options this might be python, c++,
 cuda or object code (This part of the design is very much WIP as of now).
 
 Limited Scope
@@ -103,6 +103,8 @@ This GDP is aimed to be fully backward-compatible.
 Detailed description
 --------------------
 
+Any description of design ideas and implementation refers to the
+`reference implementation <https://github.com/GridTools/gt4py/pull/23>`_.
 This section will be updated as the reference implementation progresses.
 
 Related Work
@@ -155,6 +157,9 @@ Discussion
 The discussion for this GDP will be in the draft PR for it, which is to be found
 `here <https://github.com/GridTools/gt4py/pull/21>`_.
 
+The discussion around the reference implementation is located in it's separate
+`pull request <https://github.com/GridTools/gt4py/pull/23>`_.
+
 
 References and Footnotes
 ------------------------
@@ -170,6 +175,7 @@ References and Footnotes
 .. _gcc: https://gcc.gnu.org/onlinedocs/gcc/Invoking-GCC.html
 .. _gfortran: https://gcc.gnu.org/onlinedocs/gfortran/Invoking-GNU-Fortran.html#Invoking-GNU-Fortran
 .. _discussion_pr: https://github.com/GridTools/gt4py/pull/21
+.. _reference_impl_pr: https://github.com/GridTools/gt4py/pull/23
 
 
 Copyright
