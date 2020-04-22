@@ -1,6 +1,6 @@
-============================
-GDP 2 — Boundary Computation
-============================
+==========================================
+GDP 2 — Horizontal Iteration Specification
+==========================================
 
 :Author: Rhea George <rheag@vulcan.com> - Vulcan Climate Modeling
 :Status: Draft
@@ -12,25 +12,102 @@ GDP 2 — Boundary Computation
 Abstract
 --------
 
-GT4Py has a limited ability to compute on sub-regions of the horizontal iteration space using the `domain` and `origin` keyword arguments to a stencil call.
-This however requires that separate stencils are written for boundaries, and limits the possibilities for backend optimization through fusion.
+GT4Py has a limited ability to compute on sub-regions of the horizontal iteration space using the `domain` and `origin` keyword arguments to stencil calls.
+However, this feature requires that separate stencils are written for boundaries, and limits the possibilities for backend optimization.
 
-We propose a mechanism to push the horizontal iteration bounds down to the level of the `interval()`, which then allows for code-generation backends greater flexilibilty.
+Here we propose a mechanism to push the horizontal iteration bounds down to the level of the `with interval()` clause, as well as adding abstractions capable of running such stencils on domain-decomposed iterations spaces.
 This additionally has the benefit of locating stencil-specific boundary calculation adjacent to the main stencil code, resulting in a friendlier interface and fewer opportunities for errors.
 
 Motivation and Scope
 --------------------
 
 Numerical models, especially finite difference methods, commonly have specialized computation near boundaries to facilitate boundary conditions or grid-specific requirements.
-We are developing a weather model on the cubed-sphere grid, and have many stencils that require such specific treatment on the cube-face boundaries.
+We are developing a weather model on the cubed-sphere multi-block structured grid, and have many stencils that require such specific treatment on the internal block boundaries.
 
-GT4Py is a a young project, and is still missing a language abstraction to express these computations.
-We are working around the lack of a feature by using `domain` and `origin`, but this leads to inefficient code that is located far apart.
+GT4Py is a young project, so it is understandable that such a language abstraction is not yet present.
+We are currently working around it using `domain` and `origin`, but doing so leads to inefficient code that is difficult for model developers to read.
+To illustrate the need for such a feature, consider a snippet of the model that computes a variable `ub` different based on location in the grid:
+
+.. code-block:: python
+
+    FIELD_TYPE=gtscript.Field[np.float]​
+    @gtscript.stencil(backend=backend_type)​
+    def main_ub(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, dt5: float):​
+        with computation(PARALLEL), interval(...):​
+            ub = dt5 * (uc[0, -1, 0] + uc - ​(vc[-1, 0, 0] + vc) * cosa) * rsina​
+
+    @gtscript.stencil(backend=backend_type)​
+    def x_edge_ub(ut: FIELD_TYPE, ub: FIELD_TYPE, dt5: float)::
+        with computation(PARALLEL), interval(...):​
+            ub = dt5 * (ut[0, -1, 0] + ut)​
+
+    @gtscript.stencil(backend=backend_type)​
+    def y_edge_ub(ut: FIELD_TYPE, ub: FIELD_TYPE, *, dt4: float):
+        with computation(PARALLEL), interval(...):
+            ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
+
+    # Requires new python function to call stencils on each region
+    def compute_ub(uc, vc, ut, ub, dt5, dt4, grid):​
+        domain_y_edge = (grid.ni, 1, grid.nz)
+        domain_x_edge = (1, grid.nj, grid.nz)
+        main_ub(uc, vc, grid.cosa, grid.rsina, ub, dt5=dt5, ​
+                origin=(grid.local_istart, grid.local_jstart, 0),
+                domain=(grid.ni, grid.nj, grid.nz))​
+        if grid.west_edge:​
+            x_edge_ub(ut, ub, dt5=dt5, ​origin=(grid.local_istart, grid.local_jstart, 0), ​domain=domain_x_edge)​
+        if grid.south_edge:
+            y_edge(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jstart, 0), domain=domain_y_edge)
+        if grid.north_edge:
+            y_edge_ub(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jend, 0), domain=domain_y_edge)
+        if grid.east_edge:
+            x_edge_ub(ut, ub, dt5=dt5, origin=(grid.local_iend, grid.local_jstart, 0), domain=domain_x_edge)
+
+These stencils can be expressed together as a single stencil using the new feature set:
+
+.. code-block:: python
+    :emphasize-lines: 6-9
+
+    @gtscript.stencil(backend=backend_type, partitioner=part_type) # Single stencil
+    def ubke(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ut: FIELD_TYPE, ub: FIELD_TYPE, dt5: float, dt4: float):
+        with computation(PARALLEL):
+            with interval(...): # applies to the compute domain as it does now
+                ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina
+            with region((WestEdge(0, 1), EastEdge(0, 1)), interval(...):
+                # Executes on regions defined by the Box objects
+                ub = dt5 * (ut[0, -1, 0] + ut)​
+            with region((SouthEdge, 0, 1), (NorthEdge, 0, 1)), interval(...):
+                ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
+
+    # Python wrapper to unpack arguments
+    def compute(uc, vc, ut, ub, dt5, dt4, grid):​
+        ubke(uc, vc, grid.cosa, grid.rsina, ub, ut, dt5, dt4)
+
+The changes are a light touch from what exists today in the language, and maintain backward compatibility.
+Even so, this has all the necessary features for execution on arbitrary sub-domains and specializing regions for domain-decomposed methods.
+
+The new `region()` specifier accepts what are essentially slices that describe the horizontal iteration space in a way that describes the process local space, as well as the global space if the space is domain decomposed and computed by a set of processes.
+
+Usage and Impact
+----------------
+
+All users specifying any non-periodic boundary condition would benefit from this added specifier.
+
+
 We would like to formalize such a feature so that we may use it in our work and contribute back the feature so others can build on the common framework.
 
-Our use-case also employs domain-decomposition parallelism using distributed memory parallelism, so such a feature must be robust to handle the full spectrum of cases.
+​Users who want to group together a category of operations would benefit, with edge/corner handling directly adjacent within the stencil. Here is one proposed way we'd be able to represent the code above by introducing a 'boundary' keyword:
+
+# edge abstraction specific to a model, defined once by domain scientist and reused throughout model. Perhaps gt4py provides a Box abstraction? In some way the user would be able to define e.g. WestEdge with arguments of indices relative to the compute domain 'edge' of a full tile
+ - WestEdge(start, end) -> Box(slice(start + grid.global_istart, end + grid.global_istart), slice(0, None))​
+ - SouthEdge(start, end) -> Box(slice(0, None), slice(start + grid.global_jstart, end + grid.global_jstart))​
+ - EastEdge(start, end) -> Box(slice(start + grid.global_iend, end + grid.global_iend), slice(0, None))​
+ - NorthEdge(start, end) -> Box(slice(0, None), slice(start + grid.global_jend, end + grid.global_jend))​
 
 
+This drastically reduces the complexity of the code and consolidates operations on ub. It is readable and understandable to the user what is happening. Since they already will understand the idea of offsets with the stencil notation of e.g. uc[0, -1, 0], it is not a big leap to understand box offsets from an edge.
+
+
+.. MOTIVATION AND SCOPE
 .. There are a number of cases to consider, which are best illustrated by the diagram below.
 
 .. .. image:: /_static/processor_tiles.jpg
@@ -46,50 +123,8 @@ Our use-case also employs domain-decomposition parallelism using distributed mem
 
 .. In the case of the cubed-sphere grid that we are considering, each of the faces of the cube require special handling of their edges and corners for a consistent numerical method.
 
-.. Currently we use `origin` and `domain` when calling boundary stencils, but this has the restrictions outlined above.
-
-
-
 .. We also need code outside of the stencil to check whether the current subdomain being operated on (due to domain decomposition/parallelization) includes the relevant boundary, and trigger calling the specialty stencils.
 .. This works for getting the right answer, but there are a couple of reasons why it would be helpful to be able to specify these inside the stencil as can be done with the vertical direction (e.g. using 'interval'), and to be able to specify global regions:
-
-..  -  Some backends would be able to optimize more effectively if more calculations are specified inside the stencil -- e.g. more fusing and automatic decisions can be made
-
-..  - With the current solution, to understand the model you need to jump back and forth between the function that calls the stencil and the separate stencils that define the main compute domain and the stencils that compute edge/corner conditions. This makes it difficult to keep track of what is happening in the model. For example, here is how a variable 'ub' that has special global edge stencils can be computed now:
-
-.. .. code-block:: python
-
-..    FIELD_TYPE=gtscript.Field[np.float]​
-..    @gtscript.stencil(backend=backend)​
-..    def main_ub(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, dt5: float):​
-..        with computation(PARALLEL), interval(...):​
-..           ub = dt5 * (uc[0, -1, 0] + uc - ​(vc[-1, 0, 0] + vc) * cosa) * rsina​
-
-..    @gtscript.stencil(backend=backend)​
-..    def x_edge_ub(ut: FIELD_TYPE, ub: FIELD_TYPE, dt5: float)::
-..       with computation(PARALLEL), interval(...):​
-..         ub = dt5 * (ut[0, -1, 0] + ut)​
-
-..    @gtscript.stencil(backend=backend)​
-..    def y_edge_ub(ut: FIELD_TYPE, ub: FIELD_TYPE, *, dt4: float):
-..       with computation(PARALLEL), interval(...):
-..          ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
-
-..    def compute(uc, vc, ut, ub, dt5, dt4, grid):​
-..       domain_y = (grid.ni, 1, grid.nz)
-..       domain_x = (1, grid.nj, grid.nz)
-..       main_ub(uc, vc, grid.cosa, grid.rsina, ub, dt5=dt5, ​
-..               origin=(grid.local_istart, grid.local_jstart, 0),
-..               domain=(grid.ni, grid.nj, grid.nz))​
-..       if grid.west_edge:​
-..          x_edge_ub(ut, ub, dt5=dt5, ​origin=(grid.local_istart, grid.local_jstart, 0), ​domain=domain_x_edge)​
-..       if grid.south_edge:
-..          y_edge(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jstart, 0), domain=domain_y_edge)
-..       if grid.north_edge:
-..          y_edge_ub(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jend, 0), domain=domain_y_edge)
-..       if grid.east_edge:
-..          x_edge_ub(ut, ub, dt5=dt5, origin=(grid.local_iend, grid.local_jstart, 0), domain=domain_x_edge)
-
 
 .. To understand what is happening to ub, you need to flip back and forth to the different stencils, and include many conditionals checking if the local domain includes the cube face edges. And this is a relatively simple example, there are similar mechanisms for corners, and some edge calculations are applied to one or more row or column adjacent to the edge, either in the halo or in the compute domain. This also is a lot of code when you need something similar for almost every calculation, and thus obscures the main thing being accomplished --  the main_ub stencil. The user must always explicitly check -- am I on an edge? Ok, run this edge stencil. If this could be abstracted a little, it would reduce code volume and make it easier to follow.
 
@@ -102,35 +137,6 @@ Our use-case also employs domain-decomposition parallelism using distributed mem
 ..  - We should be able to easily operate on cells adjacent to compute domain edges/corners
 ..  - It should be possible to specify multiple horizontal ranges for the same stencil (e.g. when the stencil is the same for both the left and the right edges of a domain, do not require duplicating the stencil)
 ..  - It would be helpful to have a capability for offsets to global indices to be variables (could be imported externals if needed). Currently the interval() for the vertical dimension only allows hard coded values. This is a secondary request in the framework of this proposal.
-
-
-Usage and Impact
-----------------
-​Users who want to group together a category of operations would benefit, with edge/corner handling directly adjacent within the stencil. Here is one proposed way we'd be able to represent the code above by introducing a 'boundary' keyword:
-
-# edge abstraction specific to a model, defined once by domain scientist and reused throughout model. Perhaps gt4py provides a Box abstraction? In some way the user would be able to define e.g. WestEdge with arguments of indices relative to the compute domain 'edge' of a full tile
- - WestEdge(start, end) -> Box(slice(start + grid.global_istart, end + grid.global_istart), slice(0, None))​
- - SouthEdge(start, end) -> Box(slice(0, None), slice(start + grid.global_jstart, end + grid.global_jstart))​
- - EastEdge(start, end) -> Box(slice(start + grid.global_iend, end + grid.global_iend), slice(0, None))​
- - NorthEdge(start, end) -> Box(slice(0, None), slice(start + grid.global_jend, end + grid.global_jend))​
-
-.. code-block:: python
-
-  # their stencil
-  @gtscript.stencil(backend="dawn:gtmc", partitioner=partitioner)
-  def ubke(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ut: FIELD_TYPE, ub: FIELD_TYPE, dt5: float, dt4: float):
-    with computation(PARALLEL), interval(...): # applies to the compute domain as it does now
-        ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina
-    with boundary((WestEdge(0, 1), EastEdge(0, 1)), interval(...):
-        ub = dt5 * (ut[0, -1, 0] + ut)​
-    with boundary((SouthEdge, 0, 1), (NorthEdge, 0, 1)), interval(...):
-        ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
-
-​  # calling the stencil
-  def compute(uc, vc, ut, ub, dt5, dt4, grid):​
-    ubke(uc, vc, grid.cosa, grid.rsina, ub, ut, dt5, dt4)
-
-This drastically reduces the complexity of the code and consolidates operations on ub. It is readable and understandable to the user what is happening. Since they already will understand the idea of offsets with the stencil notation of e.g. uc[0, -1, 0], it is not a big leap to understand box offsets from an edge.
 
 
 
