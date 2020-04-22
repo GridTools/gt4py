@@ -12,12 +12,39 @@ GDP 2 — Boundary Computation
 Abstract
 --------
 
-We propose a mechanism to enable specification of horizontal bounds of a global iteration space inside a stencil definition. This will 1) enable more potential optimization by the backend and 2) Enable expressing boundary computations adjacent to the code specifying the main compute domain calculations, which may make this library more user-friendly for domain scientists.
+GT4Py has a limited ability to compute on sub-regions of the horizontal iteration space using the `domain` and `origin` keyword arguments to a stencil call.
+This however requires that separate stencils are written for boundaries, and limits the possibilities for backend optimization through fusion.
+
+We propose a mechanism to push the horizontal iteration bounds down to the level of the `interval()`, which then allows for code-generation backends greater flexilibilty.
+This additionally has the benefit of locating stencil-specific boundary calculation adjacent to the main stencil code, resulting in a friendlier interface and fewer opportunities for errors.
 
 Motivation and Scope
 --------------------
 
-A model over a geographic domain often has different (or additional adjustment) computations applied to the global horizontal boundaries of the domain. There may be boundary conditions to be met, or grid specific needs in certain parts of the domain. For example, in the case of the cubed-sphere grid, each of the 6 cube faces requires special handling of their edges and corners to avoid discontinuities that would otherwise cause the model to crash. Currently with GT4py we can handle such specific domain calculations by using the optional arguments of 'origin' and 'domain' when calling a stencil. This restricts the region over which calculations happen on the data arrays passed in on the local iteration space. We also need code outside of the stencil to check whether the current subdomain being operated on (due to domain decomposition/parallelization) includes the relevant boundary, and trigger calling the specialty stencils. This works for getting the right answer, but there are a couple of reasons why it would be helpful to be able to specify these inside the stencil as can be done with the vertical direction (e.g. using 'interval'), and to be able to specify global regions:
+Numerical models, especially finite difference methods, commonly have different computation near boundaries, for example using non-centered finite difference stencils, boundary conditions, or other grid-specific needs in certain parts of the domain.
+
+Coupled with distributed memory parallelism, the requirements become clear.
+There are a number of cases to consider, which are best illustrated by the diagram below.
+
+.. image:: /_static/processor_tiles.jpg
+  :width: 300px
+  :alt: alternate text
+  :align: center
+
+**Remark 1**: There is a difference between a local iteration space on a process, and the iteration space of the domain (or in our case, one of the 6 cubed-sphere faces).
+For example, the process-local indices `(0,0,*)` could be `(I,J,*)` globally.
+
+**Remark 2**: Codes will need to distinguish between process boundaries and external boundaries.
+For example, the first row of
+
+In the case of the cubed-sphere grid that we are considering, each of the faces of the cube require special handling of their edges and corners for a consistent numerical method.
+
+Currently we use `origin` and `domain` when calling boundary stencils, but this has the restrictions outlined above.
+
+
+
+We also need code outside of the stencil to check whether the current subdomain being operated on (due to domain decomposition/parallelization) includes the relevant boundary, and trigger calling the specialty stencils.
+This works for getting the right answer, but there are a couple of reasons why it would be helpful to be able to specify these inside the stencil as can be done with the vertical direction (e.g. using 'interval'), and to be able to specify global regions:
 
  -  Some backends would be able to optimize more effectively if more calculations are specified inside the stencil -- e.g. more fusing and automatic decisions can be made
 
