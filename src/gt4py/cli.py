@@ -8,6 +8,7 @@ import pathlib
 import gt4py
 from gt4py.backend import REGISTRY as backend_options
 
+
 def eval_arg_types(definition):
     """
     Call `eval()` on the function's type annotations after importing `Field`.
@@ -19,6 +20,7 @@ def eval_arg_types(definition):
     support input modules that do not import gt4py.
     """
     from gt4py.gtscript import Field
+
     assert isinstance(definition, types.FunctionType)
     annotations = getattr(definition, "__annotations__", {})
     for arg, value in annotations.items():
@@ -52,15 +54,17 @@ def files_from_def(function_definition, frontend, backend):
     To avoid that in cases where it is not necessary will require refactoring
     of the backend concept.
     """
-    module = getattr(function_definition, '__module__', '')
+    module = getattr(function_definition, "__module__", "")
     name = function_definition.__name__
     externals = {}
-    qualified_name = f'{module}.{name}'
+    qualified_name = f"{module}.{name}"
     build_options = gt4py.definitions.BuildOptions(name=name, module=module)
     build_options_id = backend.get_options_id(build_options)
     stencil_def = eval_arg_types(function_definition)
     stencil_id = frontend.get_stencil_id(qualified_name, stencil_def, externals, build_options_id)
-    stencil_ir = frontend.generate(definition=function_definition, externals=externals, options=build_options)
+    stencil_ir = frontend.generate(
+        definition=function_definition, externals=externals, options=build_options
+    )
     stencil_obj = backend.generate(stencil_id, stencil_ir, stencil_def, build_options)
 
     package_path = pathlib.Path(backend.get_stencil_package_path(stencil_id))
@@ -68,9 +72,21 @@ def files_from_def(function_definition, frontend, backend):
 
 
 @click.command()
-@click.option('--backend', '-b', type=click.Choice(backend_options.keys()), help='Choose a backend', required=True)
-@click.option('--output-path', '-o', default='.', type=click.Path(file_okay=False), help='output path for the compiled source.')
-@click.argument('input_file', type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option(
+    "--backend",
+    "-b",
+    type=click.Choice(backend_options.keys()),
+    help="Choose a backend",
+    required=True,
+)
+@click.option(
+    "--output-path",
+    "-o",
+    default=".",
+    type=click.Path(file_okay=False),
+    help="output path for the compiled source.",
+)
+@click.argument("input_file", type=click.Path(file_okay=True, dir_okay=False, exists=True))
 def gtpyc(input_file, backend, output_path):
     """
     GT4Py (GridTools for Python) stencil compiler.
@@ -79,13 +95,16 @@ def gtpyc(input_file, backend, output_path):
     input_file = pathlib.Path(input_file)
     output_path = pathlib.Path(output_path)
     input_module = module_from_path(input_file)
-    functions = [v for k, v in input_module.__dict__.items()
-                 if k.startswith != '_' and isinstance(v, types.FunctionType)]
+    functions = [
+        v
+        for k, v in input_module.__dict__.items()
+        if k.startswith != "_" and isinstance(v, types.FunctionType)
+    ]
 
-    frontend = gt4py.frontend.from_name('gtscript')
+    frontend = gt4py.frontend.from_name("gtscript")
     backend = gt4py.backend.from_name(backend)
 
-    default_out_path_name = f'{input_file.stem}_out'
+    default_out_path_name = f"{input_file.stem}_out"
 
     if output_path.exists() and output_path.name != default_out_path_name:
         output_path /= default_out_path_name
