@@ -24,8 +24,8 @@ Motivation and Scope
 Numerical models, especially finite difference methods, commonly have specialized computation near boundaries to facilitate boundary conditions or grid-specific requirements.
 We are developing a weather model on the cubed-sphere grid, and have many stencils that require such specific treatment on the cube-face boundaries.
 
-GT4Py is missing such a language abstraction to express these computations, instead allowing the stencil caller to offset memory and specify custom bounds using `domain` and `origin`.
-We are currently working around this by using these features, but it leads to inefficient code and switch-case like statements that call stencil functions.
+GT4Py is a a young project, and is still missing a language abstraction to express these computations.
+We are working around the lack of a feature by using `domain` and `origin`, but this leads to inefficient code that is located far apart.
 We would like to formalize such a feature so that we may use it in our work and contribute back the feature so others can build on the common framework.
 
 Our use-case also employs domain-decomposition parallelism using distributed memory parallelism, so such a feature must be robust to handle the full spectrum of cases.
