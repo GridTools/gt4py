@@ -21,80 +21,87 @@ This additionally has the benefit of locating stencil-specific boundary calculat
 Motivation and Scope
 --------------------
 
-Numerical models, especially finite difference methods, commonly have different computation near boundaries, for example using non-centered finite difference stencils, boundary conditions, or other grid-specific needs in certain parts of the domain.
+Numerical models, especially finite difference methods, commonly have specialized computation near boundaries to facilitate boundary conditions or grid-specific requirements.
+We are developing a weather model on the cubed-sphere grid, and have many stencils that require such specific treatment on the cube-face boundaries.
 
-Coupled with distributed memory parallelism, the requirements become clear.
-There are a number of cases to consider, which are best illustrated by the diagram below.
+GT4Py is missing such a language abstraction to express these computations, instead allowing the stencil caller to offset memory and specify custom bounds using `domain` and `origin`.
+We are currently working around this by using these features, but it leads to inefficient code and switch-case like statements that call stencil functions.
+We would like to formalize such a feature so that we may use it in our work and contribute back the feature so others can build on the common framework.
 
-.. image:: /_static/processor_tiles.jpg
-  :width: 300px
-  :alt: alternate text
-  :align: center
-
-**Remark 1**: There is a difference between a local iteration space on a process, and the iteration space of the domain (or in our case, one of the 6 cubed-sphere faces).
-For example, the process-local indices `(0,0,*)` could be `(I,J,*)` globally.
-
-**Remark 2**: Codes will need to distinguish between process boundaries and external boundaries.
-For example, the first row of
-
-In the case of the cubed-sphere grid that we are considering, each of the faces of the cube require special handling of their edges and corners for a consistent numerical method.
-
-Currently we use `origin` and `domain` when calling boundary stencils, but this has the restrictions outlined above.
+Our use-case also employs domain-decomposition parallelism using distributed memory parallelism, so such a feature must be robust to handle the full spectrum of cases.
 
 
+.. There are a number of cases to consider, which are best illustrated by the diagram below.
 
-We also need code outside of the stencil to check whether the current subdomain being operated on (due to domain decomposition/parallelization) includes the relevant boundary, and trigger calling the specialty stencils.
-This works for getting the right answer, but there are a couple of reasons why it would be helpful to be able to specify these inside the stencil as can be done with the vertical direction (e.g. using 'interval'), and to be able to specify global regions:
+.. .. image:: /_static/processor_tiles.jpg
+..   :width: 300px
+..   :alt: alternate text
+..   :align: center
 
- -  Some backends would be able to optimize more effectively if more calculations are specified inside the stencil -- e.g. more fusing and automatic decisions can be made
+.. **Remark 1**: There is a difference between a local iteration space on a process, and the iteration space of the domain (or in our case, one of the 6 cubed-sphere faces).
+.. For example, the process-local indices `(0,0,*)` could be `(I,J,*)` globally.
 
- - With the current solution, to understand the model you need to jump back and forth between the function that calls the stencil and the separate stencils that define the main compute domain and the stencils that compute edge/corner conditions. This makes it difficult to keep track of what is happening in the model. For example, here is how a variable 'ub' that has special global edge stencils can be computed now:
+.. **Remark 2**: Codes will need to distinguish between process boundaries and external boundaries.
+.. For example, the first row of
 
-.. code-block:: python
+.. In the case of the cubed-sphere grid that we are considering, each of the faces of the cube require special handling of their edges and corners for a consistent numerical method.
 
-   FIELD_TYPE=gtscript.Field[np.float]​
-   @gtscript.stencil(backend=backend)​
-   def main_ub(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, dt5: float):​
-       with computation(PARALLEL), interval(...):​
-          ub = dt5 * (uc[0, -1, 0] + uc - ​(vc[-1, 0, 0] + vc) * cosa) * rsina​
-
-   @gtscript.stencil(backend=backend)​
-   def x_edge_ub(ut: FIELD_TYPE, ub: FIELD_TYPE, dt5: float)::
-      with computation(PARALLEL), interval(...):​
-        ub = dt5 * (ut[0, -1, 0] + ut)​
-
-   @gtscript.stencil(backend=backend)​
-   def y_edge_ub(ut: FIELD_TYPE, ub: FIELD_TYPE, *, dt4: float):
-      with computation(PARALLEL), interval(...):
-         ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
-
-   def compute(uc, vc, ut, ub, dt5, dt4, grid):​
-      domain_y = (grid.ni, 1, grid.nz)
-      domain_x = (1, grid.nj, grid.nz)
-      main_ub(uc, vc, grid.cosa, grid.rsina, ub, dt5=dt5, ​
-              origin=(grid.local_istart, grid.local_jstart, 0),
-              domain=(grid.ni, grid.nj, grid.nz))​
-      if grid.west_edge:​
-         x_edge_ub(ut, ub, dt5=dt5, ​origin=(grid.local_istart, grid.local_jstart, 0), ​domain=domain_x_edge)​
-      if grid.south_edge:
-         y_edge(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jstart, 0), domain=domain_y_edge)
-      if grid.north_edge:
-         y_edge_ub(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jend, 0), domain=domain_y_edge)
-      if grid.east_edge:
-         x_edge_ub(ut, ub, dt5=dt5, origin=(grid.local_iend, grid.local_jstart, 0), domain=domain_x_edge)
+.. Currently we use `origin` and `domain` when calling boundary stencils, but this has the restrictions outlined above.
 
 
-To understand what is happening to ub, you need to flip back and forth to the different stencils, and include many conditionals checking if the local domain includes the cube face edges. And this is a relatively simple example, there are similar mechanisms for corners, and some edge calculations are applied to one or more row or column adjacent to the edge, either in the halo or in the compute domain. This also is a lot of code when you need something similar for almost every calculation, and thus obscures the main thing being accomplished --  the main_ub stencil. The user must always explicitly check -- am I on an edge? Ok, run this edge stencil. If this could be abstracted a little, it would reduce code volume and make it easier to follow.
 
-The current method of implementing corner and edge logic impacts readability for users/developers making use of the GT4py and prevents the backend from optimizing/scheduling as well as it could (because each edge specification is in a separate blocking stencil call). Our proposal here of allowing this specification be in the stencil definition should help both of these points, as well as reduce coding errors specifying boundaries.
+.. We also need code outside of the stencil to check whether the current subdomain being operated on (due to domain decomposition/parallelization) includes the relevant boundary, and trigger calling the specialty stencils.
+.. This works for getting the right answer, but there are a couple of reasons why it would be helpful to be able to specify these inside the stencil as can be done with the vertical direction (e.g. using 'interval'), and to be able to specify global regions:
 
-Key requirements:
- - A user can specify horizontal subdomains in the global iteration space with different blocks inside a stencil
- - The specification of boundaries should ideally be flexible to specifying subregions arbitrarily, and also easy to make clean with abstraction to e.g. objects named things like WestEdge
- - If a stencil is applied to a region wider than the compute domain(into the halo, if there is a halo), it should still be easy to specify that as it is now
- - We should be able to easily operate on cells adjacent to compute domain edges/corners
- - It should be possible to specify multiple horizontal ranges for the same stencil (e.g. when the stencil is the same for both the left and the right edges of a domain, do not require duplicating the stencil)
- - It would be helpful to have a capability for offsets to global indices to be variables (could be imported externals if needed). Currently the interval() for the vertical dimension only allows hard coded values. This is a secondary request in the framework of this proposal.
+..  -  Some backends would be able to optimize more effectively if more calculations are specified inside the stencil -- e.g. more fusing and automatic decisions can be made
+
+..  - With the current solution, to understand the model you need to jump back and forth between the function that calls the stencil and the separate stencils that define the main compute domain and the stencils that compute edge/corner conditions. This makes it difficult to keep track of what is happening in the model. For example, here is how a variable 'ub' that has special global edge stencils can be computed now:
+
+.. .. code-block:: python
+
+..    FIELD_TYPE=gtscript.Field[np.float]​
+..    @gtscript.stencil(backend=backend)​
+..    def main_ub(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, dt5: float):​
+..        with computation(PARALLEL), interval(...):​
+..           ub = dt5 * (uc[0, -1, 0] + uc - ​(vc[-1, 0, 0] + vc) * cosa) * rsina​
+
+..    @gtscript.stencil(backend=backend)​
+..    def x_edge_ub(ut: FIELD_TYPE, ub: FIELD_TYPE, dt5: float)::
+..       with computation(PARALLEL), interval(...):​
+..         ub = dt5 * (ut[0, -1, 0] + ut)​
+
+..    @gtscript.stencil(backend=backend)​
+..    def y_edge_ub(ut: FIELD_TYPE, ub: FIELD_TYPE, *, dt4: float):
+..       with computation(PARALLEL), interval(...):
+..          ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
+
+..    def compute(uc, vc, ut, ub, dt5, dt4, grid):​
+..       domain_y = (grid.ni, 1, grid.nz)
+..       domain_x = (1, grid.nj, grid.nz)
+..       main_ub(uc, vc, grid.cosa, grid.rsina, ub, dt5=dt5, ​
+..               origin=(grid.local_istart, grid.local_jstart, 0),
+..               domain=(grid.ni, grid.nj, grid.nz))​
+..       if grid.west_edge:​
+..          x_edge_ub(ut, ub, dt5=dt5, ​origin=(grid.local_istart, grid.local_jstart, 0), ​domain=domain_x_edge)​
+..       if grid.south_edge:
+..          y_edge(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jstart, 0), domain=domain_y_edge)
+..       if grid.north_edge:
+..          y_edge_ub(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jend, 0), domain=domain_y_edge)
+..       if grid.east_edge:
+..          x_edge_ub(ut, ub, dt5=dt5, origin=(grid.local_iend, grid.local_jstart, 0), domain=domain_x_edge)
+
+
+.. To understand what is happening to ub, you need to flip back and forth to the different stencils, and include many conditionals checking if the local domain includes the cube face edges. And this is a relatively simple example, there are similar mechanisms for corners, and some edge calculations are applied to one or more row or column adjacent to the edge, either in the halo or in the compute domain. This also is a lot of code when you need something similar for almost every calculation, and thus obscures the main thing being accomplished --  the main_ub stencil. The user must always explicitly check -- am I on an edge? Ok, run this edge stencil. If this could be abstracted a little, it would reduce code volume and make it easier to follow.
+
+.. The current method of implementing corner and edge logic impacts readability for users/developers making use of the GT4py and prevents the backend from optimizing/scheduling as well as it could (because each edge specification is in a separate blocking stencil call). Our proposal here of allowing this specification be in the stencil definition should help both of these points, as well as reduce coding errors specifying boundaries.
+
+.. Key requirements:
+..  - A user can specify horizontal subdomains in the global iteration space with different blocks inside a stencil
+..  - The specification of boundaries should ideally be flexible to specifying subregions arbitrarily, and also easy to make clean with abstraction to e.g. objects named things like WestEdge
+..  - If a stencil is applied to a region wider than the compute domain(into the halo, if there is a halo), it should still be easy to specify that as it is now
+..  - We should be able to easily operate on cells adjacent to compute domain edges/corners
+..  - It should be possible to specify multiple horizontal ranges for the same stencil (e.g. when the stencil is the same for both the left and the right edges of a domain, do not require duplicating the stencil)
+..  - It would be helpful to have a capability for offsets to global indices to be variables (could be imported externals if needed). Currently the interval() for the vertical dimension only allows hard coded values. This is a secondary request in the framework of this proposal.
 
 
 Usage and Impact
