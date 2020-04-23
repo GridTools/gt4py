@@ -47,7 +47,7 @@ To illustrate the need for such a feature, consider a snippet of the model that 
             ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
 
     # Requires new python function to call stencils on each region
-    def compute_ub(uc, vc, ut, ub, dt5, dt4, grid):​
+    def ubke(uc, vc, ut, ub, dt5, dt4, grid):​
         domain_y_edge = (grid.ni, 1, grid.nz)
         domain_x_edge = (1, grid.nj, grid.nz)
         main_ub(uc, vc, grid.cosa, grid.rsina, ub, dt5=dt5, ​
@@ -69,8 +69,12 @@ This example motivates a number of requirements for the feature. It must be able
 3. specify cleanly regions at and near the edge of compute domains
 4. read from and write to fields inside halo regions
 
-In the `detailed description` section below we offer a few alternatives, but all these involve adding a `region()` specifier that allows for specifying subsets of the horizontal iteration space.
-Using this, the example above is transformed into:
+The specific feature that we are proposing is the addition of a `region()` specifier that complements the `interval()`, but treats the horizontal instead of the vertical.
+In its simplest form, `region()` accepts a tuple `(slice(), slice())` where the cartesian product of the slices is the horizontal index space that will be processed for each vertical level.
+In order to make this friendlier for applications, they can provide methods or classes that provide these tuples.
+These application-specific objects are evaluated at stencil parse time, so that the calls themselves do not have to be mapped to devices at run time.
+
+Using this concept, the example above is transformed into:
 
 .. code-block:: python
 
@@ -89,7 +93,7 @@ Using this, the example above is transformed into:
     def compute(uc, vc, ut, ub, dt5, dt4, grid):​
         ubke(uc, vc, grid.cosa, grid.rsina, ub, ut, dt5, dt4)
 
-This drastically reduces the complexity of the code and consolidates operations on `ub` - it is now clear what the stencil is doing to `ub` everywhere.
+This reduces the complexity of the code and consolidates operations on `ub` - it is now clear what the stencil is doing to `ub` everywhere.
 Model developers already understand the idea of offsets with the stencil notation of e.g. `uc[0, -1, 0]`, which is analogous to specifying offsets from an edge of the horizontal domain.
 
 All that needs to be changed in the frontend is adding the `region()` specifier, **so all existing GT4Py code will continue to work as before.**
@@ -111,7 +115,7 @@ Backward Compatibility
 This GDP aims to be fully backward-compatible.
 
 
-Detailed description
+Detailed Description
 --------------------
 
 The intent of this GDP is to a specify horizontal bounds inside the stencil in a similar fashion to how vertical intervals are specified.
