@@ -187,13 +187,34 @@ For example, `WestEdge(-2,0)` will access two lines of halo points.
 Corner Cases and Warnings
 +++++++++++++++++++++++++
 
-It may be the case that a part of the iteration space is accessed twice by different `with` blocks.
-These should ideally be scheduled and run in the order they appear, but as a first implementation GT4Py could throw an error in this case.
+It may be the case that a part of the iteration space is accessed more than once by different `with` blocks.
+These should ideally be scheduled and run in the order they appear, but as a first implementation GT4Py could throw an error.
 An option should be added to determine if this should be an error.
 
-There could also be an option to warn the user if they have not covered the entire iteration space in a stencil.
-This could be useful for debugging.
+This could happen, for example, when a stencil has both advection and diffusion together:
 
+.. code-block:: python
+
+  with computation(PARALLEL), interval(...):
+        adv_u, adv_v = advection(dx=dx, dy=dy, u=in_u_tmp, v=in_v_tmp)
+        diff_u, diff_v = diffusion(dx=dx, dy=dy, u=in_u_tmp, v=in_v_tmp)
+
+If both advection and diffusion stencils have horizontal domain handling at boundaries, it would have to look like:
+
+.. code-block:: python
+
+  with computation(PARALLEL):
+      with interval(...):
+        adv_u, adv_v = advection(dx=dx, dy=dy, u=in_u_tmp, v=in_v_tmp)
+      with boundary(Edges):
+        adv_u, adv_v = advection_edges (dx=dx, dy=dy, u=in_u_tmp, v=in_v_tmp)
+      with interval(...):
+        diff_u, diff_v = diffusion(dx=dx, dy=dy, u=in_u_tmp, v=in_v_tmp)
+      with boundary(Edges):
+        diff_u, diff_v = diffusion_edges(dx=dx, dy=dy, u=in_u_tmp, v=in_v_tmp)
+
+Obviously both the advection and diffusion have to happen for this to be correctly executed.
+These should be exposed as two multi-stages to allow the backend to decide whether it can fuse the operations.
 
 Related Work
 ------------
