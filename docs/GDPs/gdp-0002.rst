@@ -1,0 +1,342 @@
+==========================================
+GDP 2 — Horizontal Iteration Specification
+==========================================
+
+:Author: Rhea George <rheag@vulcan.com> - Vulcan Climate Modeling
+:Status: Draft
+:Type: Feature
+:Created: 21-04-2020
+:Discussion PR: https://github.com/GridTools/gt4py/pull/22
+
+
+Abstract
+--------
+
+GT4Py treats the vertical domain specially so that top and bottom boundary conditions can easily be applied.
+It also has a limited ability to compute on sub-regions of the horizontal iteration space using the `domain` and `origin` keyword arguments to stencil calls, which offset and limit the compute region.
+However, this feature requires that separate stencils are written for boundaries, limiting the possibilities for backend optimization.
+
+Here we propose a mechanism to push the horizontal iteration bounds down to the level of the `with interval()` clause, as well as adding abstractions capable of running such stencils on domain-decomposed iterations spaces.
+This additionally has the benefit of locating stencil-specific boundary calculation adjacent to the main stencil code, resulting in a friendlier interface and fewer opportunities for errors.
+
+Motivation and Scope
+--------------------
+
+Numerical models, especially finite difference methods, commonly have specialized computation near boundaries to facilitate boundary conditions or grid-specific requirements.
+We are developing a weather model on the cubed-sphere multi-block structured grid, and have many stencils that require such specific treatment on the internal block boundaries.
+
+We are currently working around the lack of a first-class feature by using the `domain` and `origin` keyword arguments to stencil calls, but doing so leads to inefficient code that is difficult for model developers to read.
+To illustrate the need for such a feature, consider a snippet of the model that computes a variable `ub` different based on location in the grid:
+
+.. code-block:: python
+
+    FIELD_TYPE=gtscript.Field[np.float]​
+    @gtscript.stencil(backend=backend_type)​
+    def main_ub(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, dt5: float):​
+        with computation(PARALLEL), interval(...):​
+            ub = dt5 * (uc[0, -1, 0] + uc - ​(vc[-1, 0, 0] + vc) * cosa) * rsina​
+
+    @gtscript.stencil(backend=backend_type)​
+    def x_edge_ub(ut: FIELD_TYPE, ub: FIELD_TYPE, dt5: float)::
+        with computation(PARALLEL), interval(...):​
+            ub = dt5 * (ut[0, -1, 0] + ut)​
+
+    @gtscript.stencil(backend=backend_type)​
+    def y_edge_ub(ut: FIELD_TYPE, ub: FIELD_TYPE, *, dt4: float):
+        with computation(PARALLEL), interval(...):
+            ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
+
+    # Requires new python function to call stencils on each region
+    def compute_ub(uc, vc, ut, ub, dt5, dt4, grid):​
+        domain_y_edge = (grid.ni, 1, grid.nz)
+        domain_x_edge = (1, grid.nj, grid.nz)
+        main_ub(uc, vc, grid.cosa, grid.rsina, ub, dt5=dt5, ​
+                origin=(grid.local_istart, grid.local_jstart, 0),
+                domain=(grid.ni, grid.nj, grid.nz))​
+        if grid.west_edge:​
+            x_edge_ub(ut, ub, dt5=dt5, ​origin=(grid.local_istart, grid.local_jstart, 0), ​domain=domain_x_edge)​
+        if grid.south_edge:
+            y_edge(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jstart, 0), domain=domain_y_edge)
+        if grid.north_edge:
+            y_edge_ub(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jend, 0), domain=domain_y_edge)
+        if grid.east_edge:
+            x_edge_ub(ut, ub, dt5=dt5, origin=(grid.local_iend, grid.local_jstart, 0), domain=domain_x_edge)
+
+This example motivates a number of requirements for the feature. It must be able to
+
+1. specify regions in the context of a global iteration space (for global boundary conditions) using different `with` blocks inside a single stencil
+2. specify arbitrary sub-regions using a clean abstraction
+3. specify cleanly regions at and near the edge of compute domains
+4. read from and write to fields inside halo regions
+
+In the `detailed description` section below we offer a few alternatives, but all these involve adding a `region()` specifier that allows for specifying subsets of the horizontal iteration space.
+Using this, the example above is transformed into:
+
+.. code-block:: python
+
+    @gtscript.stencil(backend=backend_type, partitioner=part_type) # Single stencil
+    def ubke(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ut: FIELD_TYPE, ub: FIELD_TYPE, dt5: float, dt4: float):
+        with computation(PARALLEL):
+            with interval(...): # applies to the compute domain as it does now
+                ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina
+            with region((WestEdge(0, 1), EastEdge(0, 1)), interval(...):
+                # Executes on regions defined by the Box objects
+                ub = dt5 * (ut[0, -1, 0] + ut)​
+            with region((SouthEdge, 0, 1), (NorthEdge, 0, 1)), interval(...):
+                ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
+
+    # Python wrapper to unpack arguments
+    def compute(uc, vc, ut, ub, dt5, dt4, grid):​
+        ubke(uc, vc, grid.cosa, grid.rsina, ub, ut, dt5, dt4)
+
+This drastically reduces the complexity of the code and consolidates operations on `ub` - it is now clear what the stencil is doing to `ub` everywhere.
+Model developers already understand the idea of offsets with the stencil notation of e.g. `uc[0, -1, 0]`, which is analogous to specifying offsets from an edge of the horizontal domain.
+
+All that needs to be changed in the frontend is adding the `region()` specifier, **so all existing GT4Py code will continue to work as before.**
+The new `region()` specifier accepts what are essentially slices that describe the horizontal iteration space in a way that describes the process' local iteration space, and can also represent the global space if the space is domain decomposed and computed by a set of processes.
+
+It may not be immediately obvious that this supports the notion of a global iteration space, but the object passed to `region()` is constructed by the specific application, and can embed details about the domain partitioning.
+The processes that do not have an global iteration space index intersection with the provided slices simply see the empty set for the region and simply skip the loops.
+
+
+Usage and Impact
+----------------
+
+This is an optional feature, but should help nearly every application of GT4Py, since almost all partial differential equations at some point have a non-periodic boundary condition or require special treatment somewhere in the domain.
+
+
+Backward Compatibility
+----------------------
+
+This GDP aims to be fully backward-compatible.
+
+
+Detailed description
+--------------------
+
+The intent of this GDP is to a specify horizontal bounds inside the stencil in a similar fashion to how vertical intervals are specified.
+However, the fact that there are multiple dimensions in the horizontal, halos, and domain decomposition imply the feature needs to be more complex than a simple index range used for the vertical.
+
+As introduced above, we propose adding a new gtscript `region()` specifier that applies the stencil on a region of the space when a non-zero intersection with the global region specified occurs.
+The idea behind using the Box classes is that they can incorporate both the iteration space a process sees and the global partitioning that an application must handle, all while hiding the complexity at the stencil level for model developers.
+In this proposal, the application remains in control of the partitioning data so **the partitioner is entirely transparent to both GT4Py and its backend.**
+
+To explain how this works, consider part of the example above with a domain of size N by N by K points, decomposed by three processes using vertical strips of the domain:
+
+.. math:: \mathrm{proc}\, 0: [0,n) \times [0,N) \times [0,K),\quad \mathrm{proc}\, 1: [n,2n) \times [0,N) \times [0,K),\quad \mathrm{proc}\, 2: [2n,N) \times [0,N) \times [0,K).
+
+.. code-block:: python
+
+    with region((WestEdge(0, 1), EastEdge(0, 1)), interval(...):
+
+This part of the example neatly indicates that it is intended to be run on both the east and west edges of horizontal plane for each `k`, with an index strip `1` wide.
+The construction and evaluation of these application-specific objects, `WestEdge(0,1)` and `EastEdge(0,1)`, are done before code generation, call into user-provided code, and each return a tuple of slice objects defining the iteration space in the horizontal plane `i` and `j`.
+
+The edge objects are wrappers that provide ranges to a `Box` class:
+
+.. code-block:: python
+
+    with region(Box(slice(0+grid.global_istart, 1+grid.global_istart), slice(0, N))), interval(...):
+
+When GT4Py asks for the iteration space from the Box, it sees different slices on each process using the local iteration space indices:
+
+.. code-block:: python
+
+    proc 0:    ((slice(0, 1), slice(0, N)),)
+    proc 1:    (,)
+    proc 2:    ((slice(n-1, n), slice(0, N)),)
+
+The result of the evaluation is inserted directly into code, so GT4Py and its backend never deal with partitioning.
+Translation to the local indices is done within the Box object specialization from the application.
+
+Note that if this example had only one process, the local and global iteration spaces coincide, so the slices set simply get passed on to GT4Py unmodified.
+
+
+Compilation-Time Evaluation
++++++++++++++++++++++++++++
+
+The expression `expr` inside `region(expr)` is evaluated at compile-time, and the resulting index ranges are stored in the library module created.
+Importantly, this means that GT4Py does not need to create objects to mirror these expression at call-time, as they may call partitioners or other application-specific code.
+
+
+Box Objects
++++++++++++
+
+The `Box` slice data could be coverted into a `local_origin` and a `local_domain`, to mirror the existing implementation and stay compatible with GridTools boundary conditions.
+If the `local_domain` is of size `0` in any dimension, the block will not execute.
+This information could be utilized by the backend to optimize not computing unnecessary stencils.
+Note that `region(*args)` so the same sub-stencil can execute on any number of boxes passed, as was shown in the motivating example.
+
+Application developers will create their own specializations of Box for their particular uses.
+For example, since our use case has edges and corners, we may have specific `Corner` specializations as well.
+
+When using `region()`, the stencil caller should avoid using `origin` and `domain` as this would change the iteration space and would be very error prone.
+
+Halo Regions
+++++++++++++
+
+It is important for our application that halo regions can be accessed by the stencils.
+This falls out naturally from the `region()` by passing negative integers to the `Edge` boxes.
+For example, `WestEdge(-2,0)` will access two lines of halo points.
+
+
+Corner Cases and Warnings
++++++++++++++++++++++++++
+
+It may be the case that a part of the iteration space is accessed twice by different `with` blocks.
+These should ideally be scheduled and run in the order they appear, but as a first implementation GT4Py could throw an error in this case.
+An option should be added to determine if this should be an error.
+
+There could also be an option to warn the user if they have not covered the entire iteration space in a stencil.
+This could be useful for debugging.
+
+
+Related Work
+------------
+
+The dawn compiler accepts regions of the horizontal iteration space in its stencil intermediate representation.
+
+
+Implementation
+--------------
+
+The implementation on the GT4Py side should be relatively light. We will need to
+
+1. add the `region()` specifier parsing to the AST visitor in IRMaker_
+2. add the reduced iteration space to the internal IR
+3. ensure backends parse this information correctly
+4. add a few corresponding tests for the feature
+
+.. _IRMaker: https://github.com/GridTools/gt4py/blob/master/src/gt4py/frontend/gtscript_frontend.py#L454
+
+Implementation on the application side is to setup specializations of the Box class for its needs.
+
+It would be interesting to perform math operations like `intersection()` and `union()` of boxes.
+This can be implemented in a later step purely on the GT4Py side.
+
+
+Alternatives
+------------
+
+There are a number of slight modifications possible to how this is expressed in the front-end.
+
+1. Multidimensional Intervals
+
+This alternative expands the `interval()` specifier to include both vertical and horizontal ranges with the Box objects.
+This may be not quite consistent because the `with computation()` still refers to the ordering of the vertical direction, while `with interval()` would specify the whole 3D iteration space.
+To correct this we could rename 'with computation' to 'with vertical_computation', or something similar, at the expense of backward compatibility.
+With this idea, the interval could specify an arbitrary number of box bounds.
+
+.. code-block:: python
+
+  Vertical(start, end) -> Column(k=slice(start, end))​
+  @gtscript.stencil(backend=dawn, partitioner=partitioner)​
+  def ubke(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, ut:
+  FIELD_TYPE, dt4: float, dt5: float):​
+    with computation(gtscript.PARALLEL):​
+      with interval(...): # indicates compute domain specified with 'origin' and 'domain'
+        ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina​
+      with interval(Vertical(0, None), (WestEdge(0, 1), EastEdge(0, 1)):​
+        ub = dt5 * (ut[0, -1, 0] + ut)​
+      with interval((SouthEdge(0, 1), NorthEdge(0, 1))):​
+        ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])​
+
+In this case we would have special `Vertical` objects for slicing the vertical direction.
+This might lend itself more naturally to expanding to an arbitrary Nd array.
+
+2. Explicit Indices
+
+This proposal is similar to the first, but more explicit.
+This will be more familiar to Fortran model developers, but it is more tedious than some of the other solutions, so a python developer may be tempted to add another translation layer to allow abstraction of duplicated patterns.
+Instead of offsets from a compute domain, absolute global indices are within the `interval()` as scalar variables. e.g. `i_s` and `i_e`, that the application defines and magically get passed into the stencil.
+
+A major problem with this approach is that it requires the backend to know about the global iteration space. We may be able to implement handling for Dawn, but this would not work for most backends, and would be hard to generalize.
+
+.. code-block:: python
+
+  @gtscript.stencil()
+  def ubke(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, *, dt4: float, dt5: float):
+    with computation(gtscript.PARALLEL),
+      with interval(i_s:i_e, j_s:j_e, k_s:k_e):
+        ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina
+      # West edge
+      with interval(i_e-1:i_e, :, :):
+        ub = dt5 * (ut[0, -1, 0] + ut)
+      # East edge
+      with interval(i_e:i_e+1, :, :):
+        ub = dt5 * (ut[0, -1, 0] + ut)
+      # South edge
+      with interval(:,j_s:j_s+1, :):
+        ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
+      # North edge
+      with interval(:, j_e:j_e+1, :):
+        ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
+
+3. Partitioner outside stencil
+Have a partitioner object that has awareness of the model decomposition make the calls.
+Use methods it has to specify subdomains.
+
+.. code-block:: python
+
+  def ub(uc, vc, ub, dt4, dt5, partitioner):  # new SubtilePartitioner object
+    with partitioner.center(uc) as domain:
+        main_ub(uc,vc,grid.cosa,grid.rsina,ub,dt5=dt5,origin=domain.origin, domain=domain.extent,)
+    with partitioner.tile_west(ut, start=0, end=1) as domain:
+        x_edge(ut, ub, dt5=dt5, origin=domain.origin, domain=domain.extent)
+    with partitioner.tile_south(ut, start=0, end=1) as domain:
+        y_edge(ut, ub, dt4=dt4, origin=domain.origin, domain=domain.extent)
+    with partitioner.tile_north(ut, start=-1, end=0) as domain:
+        y_edge(ut, ub, dt4=dt4, origin=domain.origin, domain=domain.extent)
+    with partitioner.tile_east(ut, start=-1, end=0) as domain:
+        x_edge(ut, ub, dt5=dt5, origin=domain.origin, domain=domain.extent)
+
+This is similar to the idea of a region object, but is more directly utilizing a user defined object rather than a special boundary keyword.
+It is unclear how this would translate to the backend.
+
+
+Discussion
+----------
+
+This issue is related to this discussion, a precursor to this proposal:
+https://github.com/GridTools/gt4py/issues/9
+It is an alternative approach to the backend optimization of corners and edges.
+
+References and Footnotes
+------------------------
+
+.. [1] Each GDP must either be explicitly labeled as placed in the public domain (see
+   this GDP as an example) or licensed under the `Open Publication License`_.
+
+.. _Open Publication License: https://www.opencontent.org/openpub/
+
+
+Copyright
+---------
+
+This document has been placed in the public domain. [1]_
+
+Additional Examples
+-------------------
+
+Here are additional examples that may be helpful for discussion as we review this proposal.
+
+Special corner handling
++++++++++++++++++++++++
+
+.. code-block:: python
+
+  SWCorner(starti, endi, startj, endj) -> Box(slice(starti + global_istart, endi + global_istart), slice(startj + global_jstart, endj + global_jstart))​
+  SECorner(starti, endi, startj, endj) -> Box(slice(starti + global_iend, endi + global_iend), slice(startj + global_jstart, endj + global_jstart))​
+  NWCorner(starti, endi, startj, endj) -> Box(slice(starti + global_istart, endi + global_istart), slice(startj + global_jend, endj + global_jend))​
+  NECorner(starti, endi, startj, endj) -> Box(slice(starti + global_iend, endi + global_iend), slice(startj + global_jend, endj + global_jend))​
+
+  @gtscript.stencil(backend="dawn:gtmc", partitioner=partitioner)
+  def brbl_stencil(q: FIELD_TYPE, al: FIELD_TYPE, br: FIELD_TYPE, bl: FIELD_TYPE):
+    with computation(PARALLEL), interval(...):
+        br = al[0, 1, 0] - q
+    with boundary(SWCorner(-1, 0, 0, 1), SECorner(0, 1, 0, 1), NWCorner(-1, 0, 1, 2), NECorner(0, 1, 1, 2)), interval(...):
+        br = 0
+    with computation(PARALLEL), interval(...):
+        bl = br[-1, 0, 1]  + al
+
+  brbl_stencil(al, q, br, origin=(local_istart - 1, local_jstart, 0), domain=(local_ni + 1, local_nj, nk))
