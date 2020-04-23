@@ -158,8 +158,8 @@ The expression `expr` inside `region(expr)` is evaluated at compile-time, and th
 Importantly, this means that GT4Py does not need to create objects to mirror these expression at call-time, as they may call partitioners or other application-specific code.
 
 
-Box Objects
-+++++++++++
+Region Objects
+++++++++++++++
 
 The attributes provided by the region objects, `local_origin` and `extent`, mirror the existing implementation which accepts `origin` and `domain`.
 This stays compatible with GridTools boundary conditions.
