@@ -14,52 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-
-# import pytest
-# import itertools
-# import numpy as np
-#
-# import hypothesis as hyp
-# import hypothesis.strategies as hyp_st
-#
-# from gt4py import backend as gt_backend
-# from gt4py import storage as gt_store
-# from .iir_stencil_definitions import REGISTRY as iir_registry
-# from .utils import generate_test_module
-#
-# from .utils import id_version
-#
-#
-# @pytest.mark.parametrize(
-#     ["name", "backend"],
-#     itertools.product(
-#         iir_registry.names,
-#         [
-#             gt_backend.from_name(name)
-#             for name in gt_backend.REGISTRY.names
-#             if gt_backend.from_name(name).storage_info["device"] == "cpu"
-#         ],
-#     ),
-# )
-# def test_generation_cpu(name, backend, *, id_version):
-#     generate_test_module(name, backend, id_version=id_version)
-#
-#
-# @pytest.mark.requires_cudatoolkit
-# @pytest.mark.parametrize(
-#     ["name", "backend"],
-#     itertools.product(
-#         iir_registry.names,
-#         [
-#             gt_backend.from_name(name)
-#             for name in gt_backend.REGISTRY.names
-#             if gt_backend.from_name(name).storage_info["device"] == "gpu"
-#         ],
-#     ),
-# )
-# def test_generation_gpu(name, backend, *, id_version):
-#     generate_test_module(name, backend, id_version=id_version)
-
 import itertools
 
 import numpy as np
@@ -105,31 +59,17 @@ def test_generation_cpu(name, backend):
     stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3))
 
 
-# import gt4py as gt
-# import gt4py.storage as gt_storage
-# import numpy as np
-#
-# descr = gt_storage.StorageDescriptor(dtype=np.int_, mask=[True, True, True], grid_group="1")
-#
-#
-# backend = "gtmc"
-#
-#
-# @gt.stencil(backend=backend)
-# def copy_stencil(in_field: descr, out_field: descr, *, p: float):
-#     if p > 0:
-#         out_field = in_field[0, 0, 0] + p
-#     else:
-#         out_field = in_field[0, 0, 0]
-#
-#
-# field_in = gt_storage.ones(
-#     descriptor=descr, backend=backend, halo=(0, 0, 0), iteration_domain=(2, 2, 2)
-# )
-#
-# field_out = gt_storage.zeros(
-#     descriptor=descr, backend=backend, halo=(0, 0, 0), iteration_domain=(2, 2, 2)
-# )
-#
-# copy_stencil(in_field=field_in, out_field=field_out, p=3.5)
-# print(field_out.data)
+def test_temporary_field_declared_in_if_raises():
+
+    from gt4py.frontend.gtscript_frontend import GTScriptSymbolError
+
+    with pytest.raises(GTScriptSymbolError):
+
+        @gtscript.stencil(backend="debug")
+        def definition(field_a: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                if field_a < 0:
+                    field_b = -field_a
+                else:
+                    field_b = field_a
+                field_a = field_b

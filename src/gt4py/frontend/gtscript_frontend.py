@@ -476,6 +476,7 @@ class IRMaker(ast.NodeVisitor):
         self.domain = domain or gt_ir.Domain.LatLonGrid()
         self.extra_temp_decls = extra_temp_decls or {}
         self.parsing_context = None
+        self.in_if = False
 
     def __call__(self, ast_root: ast.AST):
         assert (
@@ -792,6 +793,7 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_If(self, node: ast.If) -> gt_ir.If:
+        self.in_if = True
         main_stmts = []
         for stmt in node.body:
             main_stmts.extend(gt_utils.listify(self.visit(stmt)))
@@ -808,6 +810,7 @@ class IRMaker(ast.NodeVisitor):
             main_body=gt_ir.BlockStmt(stmts=main_stmts),
             else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
         )
+        self.in_if = False
 
         return result
 
@@ -826,6 +829,11 @@ class IRMaker(ast.NodeVisitor):
         for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
             if isinstance(t, ast.Name):
                 if not self._is_known(t.id):
+                    if self.in_if:
+                        raise GTScriptSymbolError(
+                            name=t.id,
+                            message="Temporary field {name} implicitly defined within run-time if-else region.",
+                        )
                     field_decl = gt_ir.FieldDecl(
                         name=t.id,
                         data_type=gt_ir.DataType.AUTO,
