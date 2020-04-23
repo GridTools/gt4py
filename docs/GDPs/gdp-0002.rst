@@ -163,7 +163,7 @@ Region Objects
 
 The attributes provided by the region objects, `local_origin` and `extent`, mirror the existing implementation which accepts `origin` and `domain`.
 This stays compatible with GridTools boundary conditions.
-If the `local_domain` is of size `0` in any dimension, the block will not execute.
+If the `extent` is of size `0` in any dimension, the block will not execute.
 This information could be utilized by the backend to optimize not computing unnecessary stencils.
 Note that `region` takes in an arbitrary number of arguments (`region(*args)`) so the same sub-stencil can execute on any number of rectangular areas specified, as was shown in the motivating example.
 
