@@ -121,7 +121,7 @@ The intent of this GDP is to a specify horizontal bounds inside the stencil in a
 However, the fact that there are multiple dimensions in the horizontal, halos, and domain decomposition imply the feature needs to be more complex than a simple index range used for the vertical.
 
 As introduced above, we propose adding a new gtscript `region()` specifier that applies the stencil on a region of the space when a non-zero intersection with the global region specified occurs.
-The idea behind using the Box classes is that they can incorporate both the iteration space a process sees and the global partitioning that an application must handle, all while hiding the complexity at the stencil level for model developers.
+The idea behind using the region objects is that they can incorporate both the iteration space a process sees and the global partitioning that an application must handle, all while hiding the complexity at the stencil level for model developers.
 In this proposal, the application remains in control of the partitioning data so **the partitioner is entirely transparent to both GT4Py and its backend.**
 
 To explain how this works, consider part of the example above with a domain of size N by N by K points, decomposed by three processes using vertical strips of the domain:
