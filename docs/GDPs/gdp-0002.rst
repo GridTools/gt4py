@@ -170,7 +170,7 @@ Box Objects
 The `Box` slice data could be coverted into a `local_origin` and a `local_domain`, to mirror the existing implementation and stay compatible with GridTools boundary conditions.
 If the `local_domain` is of size `0` in any dimension, the block will not execute.
 This information could be utilized by the backend to optimize not computing unnecessary stencils.
-Note that `region(*args)` so the same sub-stencil can execute on any number of boxes passed, as was shown in the motivating example.
+Note that `region` takes in an arbitrary number of arguments (`region(*args)`) so the same sub-stencil can execute on any number of rectangular areas specified, as was shown in the motivating example.
 
 Application developers will create their own specializations of Box for their particular uses.
 For example, since our use case has edges and corners, we may have specific `Corner` specializations as well.
