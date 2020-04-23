@@ -133,7 +133,9 @@ To explain how this works, consider part of the example above with a domain of s
     with region((WestEdge(0, 1), EastEdge(0, 1)), interval(...):
 
 This part of the example neatly indicates that it is intended to be run on both the east and west edges of horizontal plane for each `k`, with an index strip `1` wide.
-The construction and evaluation of these application-specific objects, `WestEdge(0,1)` and `EastEdge(0,1)`, are done before code generation, call into user-provided code, and each return a tuple of slice objects defining the iteration space in the horizontal plane `i` and `j`.
+The construction and evaluation of these application-specific objects, `WestEdge(0,1)` and `EastEdge(0,1)`, are done before code generation, and can call into user-provided code.
+These objects have attributes `local_origin` and `extent` which define the iteration space in the horizontal plane `i` and `j`.
+The union of the boxes defined by each of these objects is used for iteration.
 
 The edge objects are wrappers that provide ranges to a `Box` class:
 
