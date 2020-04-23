@@ -532,8 +532,11 @@ class MergeBlocksPass(TransformPass):
                             next(iter(candidate.intervals)).as_tuple(min_k_interval_sizes)
                             + extent[-2]
                         )
-                        for merged_interval in target.interval_blocks:
-                            if merged_interval.interval.overlaps(
+                        for merged_interval_block in target.interval_blocks:
+                            merged_interval = merged_interval_block.interval
+                            if merged_interval.as_tuple(
+                                min_k_interval_sizes
+                            ) != read_interval and merged_interval.overlaps(
                                 read_interval, min_k_interval_sizes
                             ):
                                 result = False
