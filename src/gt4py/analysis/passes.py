@@ -258,7 +258,11 @@ class InitInfoPass(TransformPass):
         def visit_If(self, node: gt_ir.If):
             inputs = {}
             outputs = set()
-            for stmt in [*node.main_body.stmts, *node.else_body.stmts]:
+
+            stmts = list(node.main_body.stmts)
+            if node.else_body is not None:
+                stmts.extend(node.else_body.stmts)
+            for stmt in stmts:
                 stmt_info = self.visit(stmt)
                 inputs = self._merge_extents(list(inputs.items()) + list(stmt_info.inputs.items()))
                 outputs |= stmt_info.outputs

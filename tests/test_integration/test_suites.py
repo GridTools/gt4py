@@ -421,6 +421,27 @@ def add_one(field_in):
     return field_in + 1
 
 
+class Test3FoldNestedIf(gt_testing.StencilTestSuite):
+
+    dtypes = (np.float_,)
+    domain_range = [(3, 3), (3, 3), (3, 3)]
+    backends = ["debug", "numpy", "gtx86"]
+    symbols = dict(field_a=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]))
+
+    def definition(field_a):
+        with computation(PARALLEL), interval(...):
+            if field_a >= 0.0:
+                field_a = 0.0
+                if field_a > 1:
+                    field_a = 1
+                    if field_a > 2:
+                        field_a = 2
+
+    def validation(field_a, domain, origin):
+        for v in range(3):
+            field_a[np.where(field_a > v)] = v
+
+
 class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
