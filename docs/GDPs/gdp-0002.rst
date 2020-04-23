@@ -96,7 +96,7 @@ This reduces the complexity of the code and consolidates operations on `ub` - it
 Model developers already understand the idea of offsets with the stencil notation of e.g. `uc[0, -1, 0]`, which is analogous to specifying offsets from an edge of the horizontal domain.
 
 All that needs to be changed in the frontend is adding the `region()` specifier, **so all existing GT4Py code will continue to work as before.**
-The new `region()` specifier accepts `local_origin` and `extent` that describe the horizontal iteration space in a way that describes the process' local iteration space, and can also represent the global space if the space is domain decomposed and computed by a set of processes.
+The new `region()` specifier accepts `local_origin` and `extent` that describe the horizontal iteration space in a way that describes the process-local iteration space, and can also represent the global space if the space is domain decomposed and computed by a set of processes.
 
 It may not be immediately obvious that this supports the notion of a global iteration space, but the object passed to `region()` is constructed by the user, and can embed details about the domain partitioning. It is the responsibility of this object to translate from a global index provided by the user to a local index used by gt4py.
 The processes that do not have an global iteration space index intersection with the provided regions simply skip this computation altogether.
