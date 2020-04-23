@@ -70,15 +70,14 @@ This example motivates a number of requirements for the feature. It must be able
 4. read from and write to fields inside halo regions
 
 The specific feature that we are proposing is the addition of a `region()` specifier that complements the `interval()`, but treats the horizontal instead of the vertical.
-In its simplest form, `region()` accepts a tuple `(slice(), slice())` where the cartesian product of the slices is the horizontal index space that will be processed for each vertical level.
-In order to make this friendlier for applications, they can provide methods or classes that provide these tuples.
-These application-specific objects are evaluated at stencil parse time, so that the calls themselves do not have to be mapped to devices at run time.
+Arguments passed to the `region()` specifier can be arbitrary Python expressions resolved at compile time, which result in objects specifying the local index region for the contained computation.
+In order to make this friendlier for applications, they can provide methods or classes that provide these objects specifying the local index region.
 
 Using this concept, the example above is transformed into:
 
 .. code-block:: python
 
-    @gtscript.stencil(backend=backend_type, partitioner=part_type) # Single stencil
+    @gtscript.stencil(backend=backend_type) # Single stencil
     def ubke(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ut: FIELD_TYPE, ub: FIELD_TYPE, dt5: float, dt4: float):
         with computation(PARALLEL):
             with interval(...): # applies to the compute domain as it does now
@@ -255,7 +254,7 @@ With this idea, the interval could specify an arbitrary number of box bounds.
 .. code-block:: python
 
   Vertical(start, end) -> Column(k=slice(start, end))​
-  @gtscript.stencil(backend=dawn, partitioner=partitioner)​
+  @gtscript.stencil(backend=dawn)​
   def ubke(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, ut:
   FIELD_TYPE, dt4: float, dt5: float):​
     with computation(gtscript.PARALLEL):​
