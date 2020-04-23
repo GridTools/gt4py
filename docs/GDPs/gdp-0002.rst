@@ -96,10 +96,10 @@ This reduces the complexity of the code and consolidates operations on `ub` - it
 Model developers already understand the idea of offsets with the stencil notation of e.g. `uc[0, -1, 0]`, which is analogous to specifying offsets from an edge of the horizontal domain.
 
 All that needs to be changed in the frontend is adding the `region()` specifier, **so all existing GT4Py code will continue to work as before.**
-The new `region()` specifier accepts what are essentially slices (converted a to an orig)that describe the horizontal iteration space in a way that describes the process' local iteration space, and can also represent the global space if the space is domain decomposed and computed by a set of processes.
+The new `region()` specifier accepts `local_origin` and `extent` that describe the horizontal iteration space in a way that describes the process' local iteration space, and can also represent the global space if the space is domain decomposed and computed by a set of processes.
 
 It may not be immediately obvious that this supports the notion of a global iteration space, but the object passed to `region()` is constructed by the user, and can embed details about the domain partitioning. It is the responsibility of this object to translate from a global index provided by the user to a local index used by gt4py.
-The processes that do not have an global iteration space index intersection with the provided slices simply see the empty set for the region and simply skip the loops.
+The processes that do not have an global iteration space index intersection with the provided regions simply skip this computation altogether.
 
 
 Usage and Impact
@@ -148,7 +148,7 @@ When GT4Py asks for the iteration space from the region objects, it sees differe
 The result of the evaluation is inserted directly into code, so GT4Py and its backend never deal with partitioning.
 Translation to the local indices is done within the Box object specialization from the application.
 
-Note that if this example had only one process, the local and global iteration spaces coincide, so the slices set simply get passed on to GT4Py unmodified.
+Note that if this example had only one process, the local and global iteration spaces coincide, so the `local_origin` and `extent` set simply get passed on to GT4Py unmodified.
 
 
 Compilation-Time Evaluation
@@ -224,11 +224,12 @@ Implementation
 The implementation on the GT4Py side should be relatively light. We will need to
 
 1. add the `region()` specifier parsing to the AST visitor in IRMaker_
-2. add the reduced iteration space to the internal IR
+2. add the reduced iteration space to the `internal IR`_
 3. ensure backends parse this information correctly
 4. add a few corresponding tests for the feature
 
 .. _IRMaker: https://github.com/GridTools/gt4py/blob/master/src/gt4py/frontend/gtscript_frontend.py#L454
+.. _internal IR: https://github.com/GridTools/gt4py/blob/master/src/gt4py/ir/nodes.py
 
 Implementation on the application side is to define region classes for its needs.
 
