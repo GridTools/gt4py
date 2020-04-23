@@ -85,7 +85,7 @@ Using this concept, the example above is transformed into:
             with region((WestEdge(0, 1), EastEdge(0, 1)), interval(...):
                 # Executes on regions defined by the Box objects
                 ub = dt5 * (ut[0, -1, 0] + ut)​
-            with region((SouthEdge, 0, 1), (NorthEdge, 0, 1)), interval(...):
+            with region(SouthEdge(0, 1), NorthEdge(0, 1)), interval(...):
                 ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
 
     # Python wrapper to unpack arguments
