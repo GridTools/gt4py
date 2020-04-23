@@ -141,9 +141,9 @@ When GT4Py asks for the iteration space from the region objects, it sees differe
 
 .. code-block:: python
 
-    proc 0:    ((slice(0, 1), slice(0, N)),)
-    proc 1:    (,)
-    proc 2:    ((slice(n-1, n), slice(0, N)),)
+    proc 0:    local_origin=(0, 0), extent=(1, N)
+    proc 1:    local_origin=(0, 0), extent=(0, 0)
+    proc 2:    local_origin=(n-1, 0), extent=(1, N)
 
 The result of the evaluation is inserted directly into code, so GT4Py and its backend never deal with partitioning.
 Translation to the local indices is done within the Box object specialization from the application.
