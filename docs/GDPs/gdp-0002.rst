@@ -96,7 +96,7 @@ This reduces the complexity of the code and consolidates operations on `ub` - it
 Model developers already understand the idea of offsets with the stencil notation of e.g. `uc[0, -1, 0]`, which is analogous to specifying offsets from an edge of the horizontal domain.
 
 All that needs to be changed in the frontend is adding the `region()` specifier, **so all existing GT4Py code will continue to work as before.**
-The new `region()` specifier accepts what are essentially slices that describe the horizontal iteration space in a way that describes the process' local iteration space, and can also represent the global space if the space is domain decomposed and computed by a set of processes.
+The new `region()` specifier accepts what are essentially slices (converted a to an orig)that describe the horizontal iteration space in a way that describes the process' local iteration space, and can also represent the global space if the space is domain decomposed and computed by a set of processes.
 
 It may not be immediately obvious that this supports the notion of a global iteration space, but the object passed to `region()` is constructed by the user, and can embed details about the domain partitioning. It is the responsibility of this object to translate from a global index provided by the user to a local index used by gt4py.
 The processes that do not have an global iteration space index intersection with the provided slices simply see the empty set for the region and simply skip the loops.
@@ -130,18 +130,12 @@ To explain how this works, consider part of the example above with a domain of s
 
 .. code-block:: python
 
-    with region((WestEdge(0, 1), EastEdge(0, 1)), interval(...):
+    with region(WestEdge(0, 1), EastEdge(0, 1)), interval(...):
 
 This part of the example neatly indicates that it is intended to be run on both the east and west edges of horizontal plane for each `k`, with an index strip `1` wide.
 The construction and evaluation of these application-specific objects, `WestEdge(0,1)` and `EastEdge(0,1)`, are done before code generation, and can call into user-provided code.
 These objects have attributes `local_origin` and `extent` which define the iteration space in the horizontal plane `i` and `j`.
 The union of the boxes defined by each of these objects is used for iteration.
-
-The edge objects are wrappers that provide ranges to a `Box` class:
-
-.. code-block:: python
-
-    with region(Box(slice(0+grid.global_istart, 1+grid.global_istart), slice(0, N))), interval(...):
 
 When GT4Py asks for the iteration space from the Box, it sees different slices on each process using the local iteration space indices:
 
