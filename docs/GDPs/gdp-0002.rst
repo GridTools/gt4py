@@ -137,7 +137,7 @@ The construction and evaluation of these application-specific objects, `WestEdge
 These objects have attributes `local_origin` and `extent` which define the iteration space in the horizontal plane `i` and `j`.
 The union of the boxes defined by each of these objects is used for iteration.
 
-When GT4Py asks for the iteration space from the Box, it sees different slices on each process using the local iteration space indices:
+When GT4Py asks for the iteration space from the region objects, it sees different `local_origin` and `extent` on each process using the local iteration space indices:
 
 .. code-block:: python
 
