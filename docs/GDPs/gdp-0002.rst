@@ -230,7 +230,7 @@ The implementation on the GT4Py side should be relatively light. We will need to
 
 .. _IRMaker: https://github.com/GridTools/gt4py/blob/master/src/gt4py/frontend/gtscript_frontend.py#L454
 
-Implementation on the application side is to setup specializations of the Box class for its needs.
+Implementation on the application side is to define region classes for its needs.
 
 
 
