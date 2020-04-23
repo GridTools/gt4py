@@ -232,8 +232,6 @@ The implementation on the GT4Py side should be relatively light. We will need to
 
 Implementation on the application side is to setup specializations of the Box class for its needs.
 
-It would be interesting to perform math operations like `intersection()` and `union()` of boxes.
-This can be implemented in a later step purely on the GT4Py side.
 
 
 Alternatives
