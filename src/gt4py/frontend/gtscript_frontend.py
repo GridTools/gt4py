@@ -275,11 +275,20 @@ class CallInliner(ast.NodeTransformer):
             )
 
         # Rename local names in subroutine to avoid conflicts with caller context names
-        assign_targets = gt_meta.collect_assign_targets(call_ast)
-        assert all(
-            len(target) == 1 and isinstance(target[0], ast.Name) for target in assign_targets
-        )
-        assigned_symbols = set(target[0].id for target in assign_targets)
+        try:
+            assign_targets = gt_meta.collect_assign_targets(call_ast, allow_multiple_targets=False)
+        except RuntimeError as e:
+            raise GTScriptSyntaxError(
+                message="Assignment to more than one target is not supported."
+            ) from e
+
+        assigned_symbols = set()
+        for target in assign_targets:
+            if not isinstance(target, ast.Name):
+                raise GTScriptSyntaxError(message="Unsupported assignment target.", loc=target)
+
+            assigned_symbols.add(target.id)
+
         name_mapping = {
             name: value.id
             for name, value in call_args.items()
@@ -504,6 +513,14 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
+    @staticmethod
+    def _sort_blocks_key(comp_block):
+        start = comp_block.interval.start
+        assert isinstance(start.level, gt_ir.LevelMarker)
+        key = 0 if start.level == gt_ir.LevelMarker.START else 100000
+        key += start.offset
+        return key
+
     def _visit_computation_node(self, node: ast.With) -> list:
         loc = gt_ir.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
@@ -547,6 +564,12 @@ class IRMaker(ast.NodeVisitor):
             block.iteration_order = iteration_order
             result.append(block)
         self.parsing_context = ParsingContext.CONTROL_FLOW
+
+        if len(result) > 1:
+            # Vertical regions with variable references are not supported yet
+            result.sort(key=self._sort_blocks_key)
+            if iteration_order == gt_ir.IterationOrder.BACKWARD:
+                result.reverse()
 
         return result
 
@@ -794,17 +817,29 @@ class IRMaker(ast.NodeVisitor):
         # assert len(node.targets) == 1
         # Create decls for temporary fields
         target = []
+        if len(node.targets) > 1:
+            raise GTScriptSyntaxError(
+                message="Assignment to multiple variables (e.g. var1 = var2 = value) not supported."
+            )
+
         for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
-            if isinstance(t, ast.Name) and not self._is_known(t.id):
-                field_decl = gt_ir.FieldDecl(
-                    name=t.id,
-                    data_type=gt_ir.DataType.AUTO,
-                    axes=[ax.name for ax in gt_ir.Domain.LatLonGrid().axes],
-                    # layout_id=t.id,
-                    is_api=False,
+            if isinstance(t, ast.Name):
+                if not self._is_known(t.id):
+                    field_decl = gt_ir.FieldDecl(
+                        name=t.id,
+                        data_type=gt_ir.DataType.AUTO,
+                        axes=[ax.name for ax in gt_ir.Domain.LatLonGrid().axes],
+                        # layout_id=t.id,
+                        is_api=False,
+                    )
+                    result.append(field_decl)
+                    self.fields[field_decl.name] = field_decl
+            elif isinstance(t, ast.Subscript):
+                raise GTScriptSyntaxError(
+                    message="Assignment to subscripts is not supported.", loc=target
                 )
-                result.append(field_decl)
-                self.fields[field_decl.name] = field_decl
+            else:
+                raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
 
             target.append(self.visit(t))
 

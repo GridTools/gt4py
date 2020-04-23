@@ -87,16 +87,18 @@ def simple_horizontal_diffusion(in_field: Field3D, coeff: Field3D, out_field: Fi
 
 @register
 def tridiagonal_solver(inf: Field3D, diag: Field3D, sup: Field3D, rhs: Field3D, out: Field3D):
-    with computation(FORWARD), interval(0, 1):
-        sup = sup / diag
-        rhs = rhs / diag
-    with computation(FORWARD), interval(1, None):
-        sup = sup / (diag - sup[0, 0, -1] * inf)
-        rhs = (rhs - inf * rhs[0, 0, -1]) / (diag - sup[0, 0, -1] * inf)
-    with computation(BACKWARD), interval(0, -1):
-        out = rhs - sup * out[0, 0, 1]
-    with computation(BACKWARD), interval(-1, None):
-        out = rhs
+    with computation(FORWARD):
+        with interval(0, 1):
+            sup = sup / diag
+            rhs = rhs / diag
+        with interval(1, None):
+            sup = sup / (diag - sup[0, 0, -1] * inf)
+            rhs = (rhs - inf * rhs[0, 0, -1]) / (diag - sup[0, 0, -1] * inf)
+    with computation(BACKWARD):
+        with interval(0, -1):
+            out = rhs - sup * out[0, 0, 1]
+        with interval(-1, None):
+            out = rhs
 
 
 @register(externals={"BET_M": 0.5, "BET_P": 0.5})
@@ -111,70 +113,84 @@ def vertical_advection_dycore(
 ):
     from __externals__ import BET_M, BET_P
 
-    with computation(FORWARD), interval(0, 1):
-        gcv = 0.25 * (wcon[1, 0, 1] + wcon[0, 0, 1])
-        cs = gcv * BET_M
+    with computation(FORWARD):
+        with interval(0, 1):
+            gcv = 0.25 * (wcon[1, 0, 1] + wcon[0, 0, 1])
+            cs = gcv * BET_M
 
-        ccol = gcv * BET_P
-        bcol = dtr_stage - ccol[0, 0, 0]
+            ccol = gcv * BET_P
+            bcol = dtr_stage - ccol[0, 0, 0]
 
-        # update the d column
-        correction_term = -cs * (u_stage[0, 0, 1] - u_stage[0, 0, 0])
-        dcol = dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
+            # update the d column
+            correction_term = -cs * (u_stage[0, 0, 1] - u_stage[0, 0, 0])
+            dcol = (
+                dtr_stage * u_pos[0, 0, 0]
+                + utens[0, 0, 0]
+                + utens_stage[0, 0, 0]
+                + correction_term
+            )
 
-        # Thomas forward
-        divided = 1.0 / bcol[0, 0, 0]
-        ccol = ccol[0, 0, 0] * divided
-        dcol = dcol[0, 0, 0] * divided
+            # Thomas forward
+            divided = 1.0 / bcol[0, 0, 0]
+            ccol = ccol[0, 0, 0] * divided
+            dcol = dcol[0, 0, 0] * divided
 
-    with computation(FORWARD), interval(1, -1):
-        gav = -0.25 * (wcon[1, 0, 0] + wcon[0, 0, 0])
-        gcv = 0.25 * (wcon[1, 0, 1] + wcon[0, 0, 1])
+        with interval(1, -1):
+            gav = -0.25 * (wcon[1, 0, 0] + wcon[0, 0, 0])
+            gcv = 0.25 * (wcon[1, 0, 1] + wcon[0, 0, 1])
 
-        as_ = gav * BET_M
-        cs = gcv * BET_M
+            as_ = gav * BET_M
+            cs = gcv * BET_M
 
-        acol = gav * BET_P
-        ccol = gcv * BET_P
-        bcol = dtr_stage - acol[0, 0, 0] - ccol[0, 0, 0]
+            acol = gav * BET_P
+            ccol = gcv * BET_P
+            bcol = dtr_stage - acol[0, 0, 0] - ccol[0, 0, 0]
 
-        # update the d column
-        correction_term = -as_ * (u_stage[0, 0, -1] - u_stage[0, 0, 0]) - cs * (
-            u_stage[0, 0, 1] - u_stage[0, 0, 0]
-        )
-        dcol = dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
+            # update the d column
+            correction_term = -as_ * (u_stage[0, 0, -1] - u_stage[0, 0, 0]) - cs * (
+                u_stage[0, 0, 1] - u_stage[0, 0, 0]
+            )
+            dcol = (
+                dtr_stage * u_pos[0, 0, 0]
+                + utens[0, 0, 0]
+                + utens_stage[0, 0, 0]
+                + correction_term
+            )
 
-        # Thomas forward
-        divided = 1.0 / (bcol[0, 0, 0] - ccol[0, 0, -1] * acol[0, 0, 0])
-        ccol = ccol[0, 0, 0] * divided
-        dcol = (dcol[0, 0, 0] - (dcol[0, 0, -1]) * acol[0, 0, 0]) * divided
+            # Thomas forward
+            divided = 1.0 / (bcol[0, 0, 0] - ccol[0, 0, -1] * acol[0, 0, 0])
+            ccol = ccol[0, 0, 0] * divided
+            dcol = (dcol[0, 0, 0] - (dcol[0, 0, -1]) * acol[0, 0, 0]) * divided
 
-    with computation(FORWARD), interval(-1, None):
-        gav = -0.25 * (wcon[1, 0, 0] + wcon[0, 0, 0])
-        as_ = gav * BET_M
-        acol = gav * BET_P
-        bcol = dtr_stage - acol[0, 0, 0]
+        with interval(-1, None):
+            gav = -0.25 * (wcon[1, 0, 0] + wcon[0, 0, 0])
+            as_ = gav * BET_M
+            acol = gav * BET_P
+            bcol = dtr_stage - acol[0, 0, 0]
 
-        # update the d column
-        correction_term = -as_ * (u_stage[0, 0, -1] - u_stage[0, 0, 0])
-        dcol = dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
+            # update the d column
+            correction_term = -as_ * (u_stage[0, 0, -1] - u_stage[0, 0, 0])
+            dcol = (
+                dtr_stage * u_pos[0, 0, 0]
+                + utens[0, 0, 0]
+                + utens_stage[0, 0, 0]
+                + correction_term
+            )
 
-        # Thomas forward
-        divided = 1.0 / (bcol[0, 0, 0] - ccol[0, 0, -1] * acol[0, 0, 0])
-        dcol = (dcol[0, 0, 0] - (dcol[0, 0, -1]) * acol[0, 0, 0]) * divided
-    # with computation(BACKWARD), interval(0, -1):
-    #     datacol = dcol[0, 0, 0] - ccol[0, 0, 0] * data_col[0, 0, 1]
-    #     data_col = datacol
-    #     utens_stage = dtr_stage * (datacol) - u_pos[0, 0, 0]
+            # Thomas forward
+            divided = 1.0 / (bcol[0, 0, 0] - ccol[0, 0, -1] * acol[0, 0, 0])
+            dcol = (dcol[0, 0, 0] - (dcol[0, 0, -1]) * acol[0, 0, 0]) * divided
 
-    with computation(BACKWARD), interval(-1, None):
-        datacol = dcol[0, 0, 0]
-        data_col = datacol
-        utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
-    with computation(BACKWARD), interval(0, -1):
-        datacol = dcol[0, 0, 0] - ccol[0, 0, 0] * data_col[0, 0, 1]
-        data_col = datacol
-        utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
+    with computation(BACKWARD):
+        with interval(-1, None):
+            datacol = dcol[0, 0, 0]
+            data_col = datacol
+            utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
+
+        with interval(0, -1):
+            datacol = dcol[0, 0, 0] - ccol[0, 0, 0] * data_col[0, 0, 1]
+            data_col = datacol
+            utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
 
 
 @register
