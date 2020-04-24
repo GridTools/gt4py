@@ -278,23 +278,23 @@ A major problem with this approach is that it requires the backend to know about
 
 .. code-block:: python
 
-  @gtscript.stencil()
-  def ubke(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, *, dt4: float, dt5: float):
-    with computation(gtscript.PARALLEL),
-      with interval(i_s:i_e, j_s:j_e, k_s:k_e):
-        ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina
-      # West edge
-      with interval(i_e-1:i_e, :, :):
-        ub = dt5 * (ut[0, -1, 0] + ut)
-      # East edge
-      with interval(i_e:i_e+1, :, :):
-        ub = dt5 * (ut[0, -1, 0] + ut)
-      # South edge
-      with interval(:,j_s:j_s+1, :):
-        ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
-      # North edge
-      with interval(:, j_e:j_e+1, :):
-        ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
+    @gtscript.stencil()
+    def ubke(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, *, dt4: float, dt5: float):
+        with computation(gtscript.PARALLEL),
+            with interval(i_s:i_e, j_s:j_e, k_s:k_e):
+                ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina
+            # West edge
+            with interval(i_e-1:i_e, :, :):
+                ub = dt5 * (ut[0, -1, 0] + ut)
+            # East edge
+            with interval(i_e:i_e+1, :, :):
+                ub = dt5 * (ut[0, -1, 0] + ut)
+            # South edge
+            with interval(:,j_s:j_s+1, :):
+                ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
+            # North edge
+            with interval(:, j_e:j_e+1, :):
+                ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
 
 3. Partitioner outside stencil
 Have a partitioner object that has awareness of the model decomposition make the calls.
@@ -302,17 +302,17 @@ Use methods it has to specify subdomains.
 
 .. code-block:: python
 
-  def ub(uc, vc, ub, dt4, dt5, partitioner):  # new SubtilePartitioner object
-    with partitioner.center(uc) as domain:
-        main_ub(uc,vc,grid.cosa,grid.rsina,ub,dt5=dt5,origin=domain.origin, domain=domain.extent,)
-    with partitioner.tile_west(ut, start=0, end=1) as domain:
-        x_edge(ut, ub, dt5=dt5, origin=domain.origin, domain=domain.extent)
-    with partitioner.tile_south(ut, start=0, end=1) as domain:
-        y_edge(ut, ub, dt4=dt4, origin=domain.origin, domain=domain.extent)
-    with partitioner.tile_north(ut, start=-1, end=0) as domain:
-        y_edge(ut, ub, dt4=dt4, origin=domain.origin, domain=domain.extent)
-    with partitioner.tile_east(ut, start=-1, end=0) as domain:
-        x_edge(ut, ub, dt5=dt5, origin=domain.origin, domain=domain.extent)
+    def ub(uc, vc, ub, dt4, dt5, partitioner):  # new SubtilePartitioner object
+        with partitioner.center(uc) as domain:
+            main_ub(uc,vc,grid.cosa,grid.rsina,ub,dt5=dt5,origin=domain.origin, domain=domain.extent,)
+        with partitioner.tile_west(ut, start=0, end=1) as domain:
+            x_edge(ut, ub, dt5=dt5, origin=domain.origin, domain=domain.extent)
+        with partitioner.tile_south(ut, start=0, end=1) as domain:
+            y_edge(ut, ub, dt4=dt4, origin=domain.origin, domain=domain.extent)
+        with partitioner.tile_north(ut, start=-1, end=0) as domain:
+            y_edge(ut, ub, dt4=dt4, origin=domain.origin, domain=domain.extent)
+        with partitioner.tile_east(ut, start=-1, end=0) as domain:
+            x_edge(ut, ub, dt5=dt5, origin=domain.origin, domain=domain.extent)
 
 This is similar to the idea of a region object, but is more directly utilizing a user defined object rather than a special boundary keyword.
 It is unclear how this would translate to the backend.
