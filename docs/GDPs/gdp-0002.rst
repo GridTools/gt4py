@@ -65,12 +65,11 @@ To illustrate the need for such a feature, consider a snippet of the model that 
 This example motivates a number of requirements for the feature. It must be able to
 
 1. specify regions in the context of a global iteration space (for global boundary conditions) using different `with` blocks inside a single stencil
-2. specify arbitrary sub-regions using a clean abstraction
-3. specify cleanly regions at and near the edge of compute domains
-4. read from and write to fields inside halo regions
+2. specify cleanly regions at and near the edge of compute domains
+3. read from and write to fields inside halo regions
 
 The specific feature that we are proposing is the addition of a `region()` specifier that complements the `interval()`, but treats the horizontal instead of the vertical.
-Arguments passed to the `region()` specifier can be arbitrary Python expressions resolved at compile time, which result in objects specifying the local index region for the contained computation.
+Arguments passed to the `region()` specifier are Python expressions resolved at compile time, which result in objects specifying the local index region for the contained computation.
 In order to make this friendlier for applications, they can provide methods or classes that provide these objects specifying the local index region.
 
 Using this concept, the example above is transformed into:
@@ -83,7 +82,7 @@ Using this concept, the example above is transformed into:
             with interval(...): # applies to the compute domain as it does now
                 ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina
             with region((WestEdge(0, 1), EastEdge(0, 1)), interval(...):
-                # Executes on regions defined by the Box objects
+                # Executes on regions defined by the region objects
                 ub = dt5 * (ut[0, -1, 0] + ut)​
             with region(SouthEdge(0, 1), NorthEdge(0, 1)), interval(...):
                 ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
@@ -135,7 +134,7 @@ To explain how this works, consider part of the example above with a domain of s
 This part of the example neatly indicates that it is intended to be run on both the east and west edges of horizontal plane for each `k`, with an index strip `1` wide.
 The construction and evaluation of these application-specific objects, `WestEdge(0,1)` and `EastEdge(0,1)`, are done before code generation, and can call into user-provided code.
 These objects have attributes `local_origin` and `extent` which define the iteration space in the horizontal plane `i` and `j`.
-The union of the boxes defined by each of these objects is used for iteration.
+The union of the region objects defined by each of these objects is used for iteration.
 
 When GT4Py asks for the iteration space from the region objects, it sees different `local_origin` and `extent` on each process using the local iteration space indices:
 
@@ -146,9 +145,15 @@ When GT4Py asks for the iteration space from the region objects, it sees differe
     proc 2:    local_origin=(n-1, 0), extent=(1, N)
 
 The result of the evaluation is inserted directly into code, so GT4Py and its backend never deal with partitioning.
-Translation to the local indices is done within the Box object specialization from the application.
+Translation to the local indices is done within the specializations from the application.
 
-Note that if this example had only one process, the local and global iteration spaces coincide, so the `local_origin` and `extent` set simply get passed on to GT4Py unmodified.
+Note that if this example had only one process, then the local and global iteration spaces coincide so the `local_origin` and `extent` set simply get passed on to GT4Py unmodified.
+The process would see:
+
+.. code-block:: python
+
+    only proc:    ((local_origin=(0, 0), extent=(1, N)), (local_origin=(N-1, 0), extent=(1, N)))
+
 
 
 Compilation-Time Evaluation
@@ -167,7 +172,7 @@ If the `extent` is of size `0` in any dimension, the block will not execute.
 This information could be utilized by the backend to optimize not computing unnecessary stencils.
 Note that `region` takes in an arbitrary number of arguments (`region(*args)`) so the same sub-stencil can execute on any number of rectangular areas specified, as was shown in the motivating example.
 
-Application developers will create their own specializations of Box for their particular uses.
+Application developers will create their own specializations of the objects for their particular uses.
 For example, since our use case has edges and corners, we may have specific `Corner` specializations as well.
 
 When using `region()`, the stencil caller should avoid using `origin` and `domain` as this would change the iteration space and would be very error prone.
@@ -176,7 +181,7 @@ Halo Regions
 ++++++++++++
 
 It is important for our application that halo regions can be accessed by the stencils.
-This falls out naturally from the `region()` by passing negative integers to the `Edge` boxes.
+This falls out naturally from the `region()` by passing negative integers to the `Edge` regions.
 For example, `WestEdge(-2,0)` will access two lines of halo points.
 
 
@@ -242,10 +247,10 @@ There are a number of slight modifications possible to how this is expressed in 
 
 1. Multidimensional Intervals
 
-This alternative expands the `interval()` specifier to include both vertical and horizontal ranges with the Box objects.
+This alternative expands the `interval()` specifier to include both vertical and horizontal ranges with the region objects.
 This may be not quite consistent because the `with computation()` still refers to the ordering of the vertical direction, while `with interval()` would specify the whole 3D iteration space.
 To correct this we could rename 'with computation' to 'with vertical_computation', or something similar, at the expense of backward compatibility.
-With this idea, the interval could specify an arbitrary number of box bounds.
+With this idea, the interval could specify an arbitrary number of region bounds.
 
 .. code-block:: python
 
