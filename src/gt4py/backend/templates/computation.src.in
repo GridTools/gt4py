@@ -57,7 +57,7 @@
 #include <array>
 #include <cassert>
 #include <stdexcept>
-#include <chrono>
+
 namespace {{ stencil_unique_name }} {
 
 namespace {
@@ -98,8 +98,9 @@ using p_{{ param.name }} = gt::arg<{{ loop.index0 }}, gt::global_parameter<{{ pa
 
 // Computation
 using computation_t =
-    gt::computation<p_{{ (arg_fields|list + parameters|list)|map(attribute='name')|join(", p_")}}>;
-
+    gt::computation<{% if arg_fields %}
+    p_{{ (arg_fields|list + parameters|list)|map(attribute='name')|join(", p_")}}
+    {% endif %}>;
 
 // Constants
 {% for name, value in constants.items() %}
@@ -108,7 +109,7 @@ static constexpr auto {{ name }} = {{ value }};
 
 // Functors
 {% for name, stage in stage_functors.items() %}
-struct {{ name }}_func {
+struct _{{ name }} {
     {%- for arg in stage.args %}
     using {{ arg.name }} = gt::{{ arg.access_type }}_accessor<{{ loop.index0 }}
                 {%- if arg.extent is not none %}, gt::extent<{{ arg.extent|join(", ")}}>{% endif -%}>;
@@ -197,15 +198,12 @@ gt::global_parameter<{{ param.dtype }}> {{ param.name }}_param = gt::make_global
 
 
 // Run actual computation
-std::array<double, 2>  run(const std::array<gt::uint_t, 3>& domain,
-{%- set comma = joiner(", ") %}
+void run(const std::array<gt::uint_t, 3>& domain
 {%- for field in arg_fields -%}
-         {{- comma() }}
-         const BufferInfo& bi_{{ field.name }} {{- comma() -}} const std::array<gt::uint_t, 3>& {{ field.name }}_origin
+         , const BufferInfo& bi_{{ field.name }}, const std::array<gt::uint_t, 3>& {{ field.name }}_origin
 {%- endfor %}
 {%- for param in parameters %}
-         {{- comma() }}
-         {{ param.dtype }} {{ param.name }}
+         , {{ param.dtype }} {{ param.name }}
 {%- endfor %})
 {
 {#-
@@ -235,41 +233,44 @@ std::array<double, 2>  run(const std::array<gt::uint_t, 3>& domain,
     gt::update_global_parameter({{ param.name }}_param, {{ param.name }});
 {%- endfor %}
 
-    // Run computation and wait for the synchronization of the output stores
-    computation_t gt_computation = gt::make_computation<backend_t>(
-        make_grid(domain),
+{% if multi_stages %}
+        // Run computation and wait for the synchronization of the output stores
+        computation_t gt_computation = gt::make_computation<backend_t>(
+            make_grid(domain),
 
-{%- set multi_comma = joiner(",") %}
-{%- for multi in multi_stages %}
-        {{- multi_comma() }}
-        gt::make_multistage(gt::execute::{{ multi.exec }}(),
-    {%- set step_comma = joiner(",") %}
-    {%- for step in multi.steps %}
-        {{- step_comma() }}
-        {%- if step|length > 1 %}
-            gt::make_independent(
-            {%- set extra_indent=4 %}
-        {%- else %}
-            {%- set extra_indent=0 %}
-        {%- endif %}
-        {%- set stage_comma = joiner(",") -%}
-        {%- for stage in step %}
-            {%- filter indent(width=extra_indent) %}
-            {{- stage_comma() }}
-            gt::make_stage<{{ stage }}_func>(
-                p_{{ stage_functors[stage].args|map(attribute="name")|join("(), p_")}}()
+    {%- set multi_comma = joiner(",") %}
+
+    {%- for multi in multi_stages %}
+            {{- multi_comma() }}
+            {% if multi.steps %}
+                gt::make_multistage(gt::execute::{{ multi.exec }}(),
+                {%- set step_comma = joiner(",") %}
+                {%- for step in multi.steps %}
+                    {{- step_comma() }}
+                    {%- if step|length > 1 %}
+                        gt::make_independent(
+                        {%- set extra_indent=4 %}
+                    {%- else %}
+                        {%- set extra_indent=0 %}
+                    {%- endif %}
+                    {%- for stage in step %}
+                        {%- filter indent(width=extra_indent) %}
+                        gt::make_stage<_{{ stage }}>(
+                            {% if stage_functors[stage].args %}
+                                p_{{ stage_functors[stage].args|map(attribute="name")|join("(), p_")}}()
+                            {% endif %}
+                        )
+                        {%- endfilter %}
+                    {%- endfor %}
+                    {%- if step|length > 1 %}
+                        )
+                    {%- endif %}
+                {%- endfor %}
+            {% endif %}
             )
-            {%- endfilter %}
-        {%- endfor %}
-        {%- if step|length > 1 %}
-            )
-        {%- endif %}
     {%- endfor %}
-        )
-{%- endfor %}
-    );
-    std::array<double, 2> res = {0.0,0.0};
-    res[0] = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+        );
+
     gt_computation.run({%- set comma = joiner(", ") %}
 {%- for field in arg_fields -%}
                      {{ comma() }}p_{{ field.name }}()=ds_{{ field.name }}
@@ -277,10 +278,9 @@ std::array<double, 2>  run(const std::array<gt::uint_t, 3>& domain,
 {%- for param in parameters -%}
                      {{ comma() }}p_{{ param.name }}()={{ param.name }}_param
 {%- endfor %});
-
-    res[1] = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
-    return res;
         // computation_.sync_bound_data_stores();
+
+{% endif %}
 }
 
 }  // namespace {{ stencil_unique_name }}

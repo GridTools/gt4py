@@ -912,7 +912,6 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             for f in self.demotables:
                 assert f in node.temporary_fields
                 node.fields.pop(f)
-                assert node.fields_extents[f] == [(0, 0), (0, 0), (0, 0)]
                 node.fields_extents.pop(f)
             return res
 

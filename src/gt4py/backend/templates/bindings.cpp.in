@@ -68,16 +68,17 @@ BufferInfo make_buffer_info(py::object& b) {
     return BufferInfo{ndim, shape, strides, ptr};
 }
 
-void run_computation(const std::array<gt::uint_t, 3>& domain,
-{%- set comma = joiner(", ") -%}
-{%- for field in arg_fields -%}
-                     {{- comma() }}
-                     py::object {{ field.name }}, const std::array<gt::uint_t, 3>& {{ field.name }}_origin
-{%- endfor -%}
-{%- for param in parameters -%}
-                     {{- comma() }}
-                     {{ param.dtype }} {{ param.name }}
-{%- endfor -%}, py::object& exec_info)
+void run_computation(const std::array<gt::uint_t, 3>& domain
+{% if arg_fields %}
+    {%- for field in arg_fields -%}
+                         , py::object {{ field.name }}, const std::array<gt::uint_t, 3>& {{ field.name }}_origin
+    {%- endfor -%}
+{% endif %}
+{% if parameters %}
+    {%- for param in parameters -%}
+                         , {{ param.dtype }} {{ param.name }}
+    {%- endfor -%}
+{% endif %}, py::object& exec_info)
 {
     if (!exec_info.is(py::none()))
     {
@@ -89,23 +90,22 @@ void run_computation(const std::array<gt::uint_t, 3>& domain,
     auto bi_{{ field.name }} = make_buffer_info({{ field.name }});
 {%- endfor %}
 
-    auto timestamps = {{ stencil_unique_name }}::run(domain,
-{%- set comma = joiner(", ") -%}
-{%- for field in arg_fields -%}
-        {{- comma() }}
-        bi_{{ field.name }}, {{ field.name }}_origin
-{%- endfor -%}
-{%- for param in parameters -%}
-        {{- comma() }}
-        {{ param.name }}
-{%- endfor %});
+    {{ stencil_unique_name }}::run(domain
+{% if arg_fields %}
+    {%- for field in arg_fields -%}
+            , bi_{{ field.name }}, {{ field.name }}_origin
+    {%- endfor -%}
+{% endif %}
+{% if parameters %}
+    {%- for param in parameters -%}
+            , {{ param.name }}
+    {%- endfor %}
+{% endif %});
 
     if (!exec_info.is(py::none()))
     {
         auto exec_info_dict = exec_info.cast<py::dict>();
         exec_info_dict["end_run_cpp_time"] = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
-        exec_info_dict["start_run_cpp_time_inner"] = timestamps[0];
-        exec_info_dict["end_run_cpp_time_inner"] = timestamps[1];
     }
 }
 
@@ -115,14 +115,13 @@ void run_computation(const std::array<gt::uint_t, 3>& domain,
 PYBIND11_MODULE({{ module_name }}, m) {
     m.def("run_computation", &run_computation, "Runs the given computation",
           py::arg("domain"),
-{%- set comma = joiner(", ") -%}
-{%- for field in arg_fields -%}
-          {{- comma() }}
-          py::arg("{{ field.name }}") {{- comma() }} py::arg("{{ field.name }}_origin") {{- zero_origin }}
-{%- endfor -%}
-{%- for param in parameters -%}
-          {{- comma() }}
-          py::arg("{{ param.name }}")
-{%- endfor -%}, py::arg("exec_info"));
+{% if arg_fields or parameters%}
+    {%- for field in arg_fields -%}
+              py::arg("{{ field.name }}"), py::arg("{{ field.name }}_origin") {{- zero_origin }},
+    {%- endfor -%}
+    {%- for param in parameters -%}
+            py::arg("{{ param.name }}"),
+    {%- endfor -%}
+{% endif %} py::arg("exec_info"));
 
 }
