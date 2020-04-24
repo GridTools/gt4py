@@ -256,8 +256,7 @@ With this idea, the interval could specify an arbitrary number of region bounds.
 
   Vertical(start, end) -> Column(k=slice(start, end))​
   @gtscript.stencil(backend=dawn)​
-  def ubke(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, ut:
-  FIELD_TYPE, dt4: float, dt5: float):​
+  def ubke(uc: FIELD_TYPE, vc: FIELD_TYPE, cosa: FIELD_TYPE, rsina: FIELD_TYPE, ub: FIELD_TYPE, ut: FIELD_TYPE, dt4: float, dt5: float):​
     with computation(gtscript.PARALLEL):​
       with interval(...): # indicates compute domain specified with 'origin' and 'domain'
         ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina​
