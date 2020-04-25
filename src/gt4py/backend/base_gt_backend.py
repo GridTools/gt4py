@@ -394,7 +394,8 @@ import functools
 from gt4py import utils as gt_utils
         """
         if self.implementation_ir.multi_stages:
-            source += """pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_file_path}", public_import=True)
+            source += """
+pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_file_path}", public_import=True)
         """.format(
                 pyext_module_name=self.options.pyext_module_name,
                 pyext_file_path=self.options.pyext_file_path,
@@ -419,7 +420,7 @@ from gt4py import utils as gt_utils
 # Load or generate a GTComputation object for the current domain size
 pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 """.format(
-                run_args=(", " if args else "") + ", ".join(args)
+                run_args=", ".join(args)
             )
             if self.backend_name == "gtcuda":
                 source = (
