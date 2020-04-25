@@ -392,12 +392,13 @@ class GTPyModuleGenerator(gt_backend.BaseModuleGenerator):
 import functools
 
 from gt4py import utils as gt_utils
-
-pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_file_path}", public_import=True)
+        """
+        if self.implementation_ir.multi_stages:
+            source += """pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_file_path}", public_import=True)
         """.format(
-            pyext_module_name=self.options.pyext_module_name,
-            pyext_file_path=self.options.pyext_file_path,
-        )
+                pyext_module_name=self.options.pyext_module_name,
+                pyext_file_path=self.options.pyext_file_path,
+            )
 
         return source
 
@@ -413,19 +414,23 @@ pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_fil
                 if arg.name in self.implementation_ir.fields:
                     args.append("list(_origin_['{}'])".format(arg.name))
 
-        source = """
+        if self.implementation_ir.multi_stages:
+            source = """
 # Load or generate a GTComputation object for the current domain size
 pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 """.format(
-            run_args=", ".join(args)
-        )
-        if self.backend_name == "gtcuda":
-            source = (
-                source
-                + """import cupy
+                run_args=(", " if args else "") + ", ".join(args)
+            )
+            if self.backend_name == "gtcuda":
+                source = (
+                    source
+                    + """import cupy
 cupy.cuda.Device(0).synchronize()
 """
-            )
+                )
+        else:
+            source = "\n"
+
         source = source + (
             """if exec_info is not None:
     exec_info["run_end_time"] = time.perf_counter()
@@ -481,11 +486,12 @@ class BaseGTBackend(gt_backend.BaseBackend):
     def generate_cache_info(cls, stencil_id, extra_cache_info):
         cache_info = super(BaseGTBackend, cls).generate_cache_info(stencil_id, {})
 
-        cache_info["pyext_file_path"] = extra_cache_info["pyext_file_path"]
+        cache_info["pyext_file_path"] = extra_cache_info.get("pyext_file_path", None)
         cache_info["pyext_md5"] = hashlib.md5(
             open(cache_info["pyext_file_path"], "rb").read()
+            if cache_info["pyext_file_path"] is not None
+            else b""
         ).hexdigest()
-
         return cache_info
 
     @classmethod
@@ -505,22 +511,26 @@ class BaseGTBackend(gt_backend.BaseBackend):
         from gt4py import gt_src_manager
 
         cls._check_options(options)
-        implementation_ir = gt_analysis.transform(definition_ir, options)
-
-        # Generate the Python binary extension (checking if GridTools sources are installed)
-        if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
-            raise RuntimeError("Missing GridTools sources.")
-        pyext_module_name, pyext_file_path = cls.generate_extension(
-            stencil_id, implementation_ir, options
+        implementation_ir: gt_ir.StencilImplementation = gt_analysis.transform(
+            definition_ir, options
         )
 
-        # Generate and return the Python wrapper class
         generator_options = options.as_dict()
-        generator_options["pyext_module_name"] = pyext_module_name
-        generator_options["pyext_file_path"] = pyext_file_path
+        extra_cache_info = dict()
+        if implementation_ir.multi_stages:
+            # Generate the Python binary extension (checking if GridTools sources are installed)
+            if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
+                raise RuntimeError("Missing GridTools sources.")
+            pyext_module_name, pyext_file_path = cls.generate_extension(
+                stencil_id, implementation_ir, options
+            )
 
-        extra_cache_info = {"pyext_file_path": pyext_file_path}
+            generator_options["pyext_module_name"] = pyext_module_name
+            generator_options["pyext_file_path"] = pyext_file_path
 
+            extra_cache_info["pyext_file_path"] = pyext_file_path
+
+        # Generate and return the Python wrapper class
         return super(BaseGTBackend, cls)._generate_module(
             stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info
         )

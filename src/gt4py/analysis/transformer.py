@@ -23,6 +23,7 @@ from gt4py import ir as gt_ir
 from gt4py.analysis import TransformData
 from .passes import (
     BuildIIRPass,
+    CleanUpPass,
     ComputeExtentsPass,
     ComputeUsedSymbolsPass,
     DataTypePass,
@@ -118,6 +119,9 @@ class IRTransformer:
 
         demote_local_temporaries_to_variables_pass = DemoteLocalTemporariesToVariablesPass()
         demote_local_temporaries_to_variables_pass.apply(self.transform_data)
+
+        cleanup_pass = CleanUpPass()
+        cleanup_pass.apply(self.transform_data)
 
         if options.build_info is not None:
             options.build_info["def_ir"] = self.transform_data.definition_ir

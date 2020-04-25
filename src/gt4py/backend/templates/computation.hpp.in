@@ -49,7 +49,7 @@ namespace gt = ::gridtools;
 
 namespace {{ stencil_unique_name }} {
 
-std::array<double, 2> run(const std::array<gt::uint_t, 3>& domain,
+void run(const std::array<gt::uint_t, 3>& domain,
 {%- set comma = joiner(", ") %}
 {%- for field in arg_fields -%}
          {{- comma() }}
