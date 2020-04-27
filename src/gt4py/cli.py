@@ -1,3 +1,4 @@
+import copy
 import importlib
 import shutil
 import types
@@ -69,6 +70,162 @@ def files_from_def(function_definition, frontend, backend):
 
     package_path = pathlib.Path(backend.get_stencil_package_path(stencil_id))
     return package_path
+
+
+class BuildError(Exception):
+    pass
+
+
+class BuildContext:
+    def __init__(self, definition, data_dict):
+        self._data = data_dict
+        self["module"] = getattr(definition, "__module__", "")
+        self["name"] = definition.__name__
+        self["externals"] = {}
+        self["qualified_name"] = f"{module}.{name}"
+        self["build_info"] = {}
+        self["options"] = gt4py.definitions.BuildOptions(
+            name=name, module=module, build_info=ctx["build_info"]
+        )
+        self._data.update(data_dict)
+
+    return ctx
+
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return getattr(self.key)
+        return self._data[key]
+
+    def __setitem__(self, key, value):
+        if hasattr(self, key):
+            setattr(self, key, value)
+        self._data[key] = value
+
+    @property
+    def externals(self):
+        return self._data.get("externals", {})
+
+    @property
+    def build_info(self):
+        return self._data.get("build_info", {})
+
+    @property
+    def backend(self):
+        if "backend" not in self._data:
+            raise BuildError(msg="Backend not set.")
+        return self._data["backend"]
+
+    @backend.setter
+    def backend(self, value):
+        if "backend" in self._data:
+            raise BuildError(msg="Can not change backend, create new build context instead.")
+        self._data["backend"] = value
+
+    @property
+    def frontend(self):
+        if "frontend" not in self._data:
+            raise BuildError(msg="Frontend not set.")
+        return self._data["frontend"]
+
+    @frontend.setter
+    def frontend(self, value):
+        if "frontend" in self._data:
+            raise BuildError(msg="Can not change frontend, create new build context instead.")
+        self._data["frontend"] = value
+
+    @property
+    def options(self):
+        if "options" not in self._data:
+            raise BuildError(msg="Build options not set.")
+        return self._data["options"]
+
+    @options.setter
+    def options(self, value):
+        self._data["options"] = value
+
+    @property
+    def options_id(self):
+        if "options_id" not in self._data:
+            self._data["options_id"] = self.backend.get_options_id(self.options)
+        return self._data["options_id"]
+
+    def clone(self):
+        return copy.deepcopy(self)
+
+
+class BuildWrapper:
+    def __init__(self, definition, *, frontend, backend, build_options):
+        self.definition = definition
+        self.ctx = BuildContext(definition, build_options)
+        self.ctx["frontend"] = frontend
+        self.ctx["backend"] = backend
+
+    def make_ir(self):
+        ctx = self.ctx.clone()
+        ctx["id"] = ctx["frontend"].get_stencil_id(
+            ctx["qualified_name"], ctx["definition"], ctx["externals"], ctx["options"]
+        )
+        ctx["ir"] = ctx["frontend"].generate(
+            definition=ctx["definition"], externals=ctx["externals"], options=ctx["options"]
+        )
+        return IRWrapper(ctx["ir"], ctx=ctx)
+
+
+class IRWrapper:
+    def __init__(self, stencil_ir, *, ctx):
+        self.ir = stencil_ir
+        self.ctx = ctx
+
+    def make_iir(self):
+        ctx = self.ctx.clone()
+        ctx["backend"]._check_options(ctx["options"])
+        ctx["iir"] = gt4py.analysis.transform(stencil_ir, ctx["options"])
+        if hasattr(ctx["backend"], "PYEXT_GENERATOR_CLASS"):
+            return self._iir_with_pyext(ctx["iir"], ctx)
+        return self._iir_no_pyext(ctx["iir"], ctx)
+
+    def _iir_with_pyext(self, stencil_ir, ctx):
+        return IIRWrapperWithPyext(stencil_iir, ctx=ctx)
+
+    def _iir_no_pyext(self, stencil_ir, ctx):
+        return IIRWrapperNoPyext(stencil_iir, ctx=ctx)
+
+
+class IIRWrapper:
+    def __init__(self, stencil_iir, *, ctx):
+        self.stencil_iir = stencil_iir
+        self.ctx = ctx
+
+    def make_module_src(self):
+        ctx = self.ctx.clone()
+        generator_options = copy.deepcopy(ctx["options"].as_dict())
+        generator = ctx["backend"].GENERATOR_CLASS(
+            ctx["backend"].__class__, options=generator_options
+        )
+        ctx["module_src"] = generator(ctx["id"], self.stencil_iir)
+        return ModuleSrcWrapper(ctx["module_src"], ctx=ctx)
+
+
+class IIRWrapperNoPyext(IIRWrapperNoPyext):
+    pass
+
+
+class IIRWrapperWithPyext(IIRWrapperNoPyext):
+    def make_ext_sources(self):
+        ctx = self.ctx.clone()
+        backend = ctx["backend"]
+        generator = backend.PYEXT_GENERATOR_CLASS(
+            backend.get_pyext_class_name(ctx["id"]),
+            backend.get_pyext_module_name(ctx["id"]),
+            backend._CPU_ARCHITECTURE,
+            ctx["options"],
+        )
+        ctx["pyext_src"] = generator(self.stencil_iir)
+        return PyextSrcWrapper(ctx["pyext_src"], ctx=ctx)
+
+
+class ModuleSrcWrapper:
+    pass
 
 
 @click.command()
