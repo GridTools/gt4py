@@ -827,6 +827,19 @@ class IRMaker(ast.NodeVisitor):
             )
 
         for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
+            if isinstance(t, ast.Subscript):
+                if isinstance(t.slice, ast.Index) and (
+                    isinstance(t.slice.value, ast.Ellipsis)
+                    or (
+                        isinstance(t.slice.value, ast.Tuple)
+                        and all(v.n == 0 for v in t.slice.value.elts)
+                    )
+                ):
+                    t = t.value
+                else:
+                    raise GTScriptSyntaxError(
+                        message="Assignment to non-zero offsets is not supported.", loc=target
+                    )
             if isinstance(t, ast.Name):
                 if not self._is_known(t.id):
                     if self.in_if:
@@ -843,10 +856,6 @@ class IRMaker(ast.NodeVisitor):
                     )
                     result.append(field_decl)
                     self.fields[field_decl.name] = field_decl
-            elif isinstance(t, ast.Subscript):
-                raise GTScriptSyntaxError(
-                    message="Assignment to subscripts is not supported.", loc=target
-                )
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
 
@@ -907,6 +916,26 @@ class IRMaker(ast.NodeVisitor):
             )
 
         return blocks
+
+
+class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
+    def __call__(self, node: ast.FunctionDef):
+        self.local_symbols = set()
+        self.visit(node)
+        result = self.local_symbols
+        del self.local_symbols
+        return result
+
+    def visit_Assign(self, node: ast.Assign):
+        for t in node.targets:
+            if isinstance(t, ast.Name):
+                self.local_symbols.add(t.id)
+            elif isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
+                self.local_symbols.add(t.value.id)
+            else:
+                raise GTScriptSyntaxError(
+                    message="invalid target in assign", loc=gt_ir.Location.from_ast_node(node)
+                )
 
 
 class GTScriptParser(ast.NodeVisitor):
@@ -1033,6 +1062,11 @@ class GTScriptParser(ast.NodeVisitor):
         context, unbound = gt_meta.get_closure(
             definition, included_nonlocals=False, include_builtins=False
         )
+
+        gtscript_ast = ast.parse(gt_meta.get_ast(definition)).body[0]
+        local_symbol_collector = CollectLocalSymbolsAstVisitor()
+        local_symbols = local_symbol_collector(gtscript_ast)
+
         nonlocal_symbols = {}
 
         name_nodes = gt_meta.collect_names(definition)
@@ -1049,7 +1083,7 @@ class GTScriptParser(ast.NodeVisitor):
                         context,
                         gt_ir.Location.from_ast_node(name_nodes[collected_name][0]),
                     )
-                elif root_name in unbound:
+                elif root_name not in local_symbols and root_name in unbound:
                     raise GTScriptSymbolError(
                         name=collected_name,
                         loc=gt_ir.Location.from_ast_node(name_nodes[collected_name][0]),
