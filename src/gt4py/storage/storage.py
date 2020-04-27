@@ -177,6 +177,9 @@ class Storage(np.ndarray):
         return res
 
     def __deepcopy__(self, memo={}):
+        return self.copy()
+
+    def copy(self):
         res = empty(
             shape=self.shape,
             dtype=self.dtype,
@@ -195,7 +198,9 @@ class Storage(np.ndarray):
         else:
             if self.base is None:
                 # case np.array
-                raise RuntimeError("Copying storages is only possible through deepcopy.")
+                raise RuntimeError(
+                    "Copying storages is only possible through Storage.copy() or deepcopy."
+                )
             else:
                 if not isinstance(obj, Storage) and not isinstance(obj, _ViewableNdarray):
                     raise RuntimeError(
@@ -232,6 +237,15 @@ class Storage(np.ndarray):
     def _finalize_view(self, obj):
         pass
 
+    def synchronize(self):
+        pass
+
+    def host_to_device(self, force=False):
+        pass
+
+    def device_to_host(self, force=False):
+        pass
+
     def __iconcat__(self, other):
         raise NotImplementedError("Concatenation of Storages is not supported")
 
@@ -266,8 +280,8 @@ class GPUStorage(Storage):
         ):
             raise Exception("The buffers are in an inconsistent state.")
 
-    def __deepcopy__(self, memo={}):
-        res = super().__deepcopy__(memo=memo)
+    def copy(self):
+        res = super().copy()
         res.gpu_view[...] = self.gpu_view
         cp.cuda.Device(0).synchronize()
         return res
@@ -284,15 +298,6 @@ class GPUStorage(Storage):
             return value
         else:
             return super().__setitem__(key, value)
-
-    def synchronize(self):
-        pass
-
-    def host_to_device(self, force=False):
-        pass
-
-    def device_to_host(self, force=False):
-        pass
 
     @property
     def _is_clean(self):
@@ -346,8 +351,8 @@ class CPUStorage(Storage):
     def data(self):
         return self.view(np.ndarray)
 
-    def __deepcopy__(self, memo={}):
-        res = super().__deepcopy__(memo=memo)
+    def copy(self):
+        res = super().copy()
         res[...] = self
         return res
 
@@ -364,9 +369,12 @@ class ExplicitlySyncedGPUStorage(Storage):
     def __init__(self, *args, **kwargs):
         self._sync_state = self.SyncState()
 
-    def __deepcopy__(self, memo={}):
-        res = super().__deepcopy__(memo)
-        res._device_field[...] = self._device_field[...]
+    def copy(self):
+        res = super().copy()
+        res._sync_state = self.SyncState()
+        res._sync_state.state = self._sync_state.state
+        res[...] = self
+        res._device_field[...] = self._device_field
         return res
 
     @classmethod
@@ -514,14 +522,6 @@ class ExplicitlySyncedGPUStorage(Storage):
             self._device_field = cp.lib.stride_tricks.as_strided(
                 raw_with_offset, shape=self.shape, strides=self.strides
             )
-
-    def __deepcopy__(self, memo={}):
-        res = super().__deepcopy__(memo)
-        res._sync_state = self.SyncState()
-        res._sync_state.state = self._sync_state.state
-        res[...] = self
-        res._device_field[...] = self._device_field
-        return res
 
     @property
     def __cuda_array_interface__(self):
