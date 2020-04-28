@@ -83,6 +83,8 @@ def mc_is_compatible_layout(field):
 
 
 class GTCPUBackend(gt_backend.BaseGTBackend):
+    SRC_EXTENSION = "cpp"
+
     @classmethod
     def generate_extension(cls, stencil_id, implementation_ir, options):
         pyext_opts = dict(
@@ -110,7 +112,7 @@ class GTCPUBackend(gt_backend.BaseGTBackend):
             src_ext = src_file_name.split(".")[-1]
             if src_ext != "hpp":
                 if src_ext == "src":
-                    src_file_name = src_file_name.replace("src", "cpp")
+                    src_file_name = src_file_name.replace("src", cls.SRC_EXTENSION)
                 sources.append(src_file_name)
 
             with open(src_file_name, "w") as f:

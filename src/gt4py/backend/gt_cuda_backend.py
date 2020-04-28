@@ -57,6 +57,7 @@ def cuda_is_compatible_type(field):
 @gt_backend.register
 class GTCUDABackend(gt_backend.BaseGTBackend):
     GENERATOR_CLASS = GTCUDAPyModuleGenerator
+    SRC_EXTENSION = "cu"
     name = "gtcuda"
     options = gt_backend.BaseGTBackend.GT_BACKEND_OPTS
     storage_info = {
@@ -94,7 +95,7 @@ class GTCUDABackend(gt_backend.BaseGTBackend):
             src_ext = src_file_name.split(".")[-1]
             if src_ext != "hpp":
                 if src_ext == "src":
-                    src_file_name = src_file_name.replace("src", "cu")
+                    src_file_name = src_file_name.replace("src", cls.SRC_EXTENSION)
                 sources.append(src_file_name)
 
             with open(src_file_name, "w") as f:

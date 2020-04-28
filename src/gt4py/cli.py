@@ -79,26 +79,21 @@ class BuildError(Exception):
 class BuildContext:
     def __init__(self, definition, data_dict):
         self._data = data_dict
+        self["definition"] = eval_arg_types(definition)
         self["module"] = getattr(definition, "__module__", "")
         self["name"] = definition.__name__
         self["externals"] = {}
-        self["qualified_name"] = f"{module}.{name}"
+        self["qualified_name"] = f"{self['module']}.{self['name']}"
         self["build_info"] = {}
         self["options"] = gt4py.definitions.BuildOptions(
-            name=name, module=module, build_info=ctx["build_info"]
+            name=self["name"], module=self["module"], build_info=self["build_info"]
         )
         self._data.update(data_dict)
 
-    return ctx
-
     def __getitem__(self, key):
-        if hasattr(self, key):
-            return getattr(self.key)
         return self._data[key]
 
     def __setitem__(self, key, value):
-        if hasattr(self, key):
-            setattr(self, key, value)
         self._data[key] = value
 
     @property
@@ -112,31 +107,31 @@ class BuildContext:
     @property
     def backend(self):
         if "backend" not in self._data:
-            raise BuildError(msg="Backend not set.")
+            raise BuildError("Backend not set.")
         return self._data["backend"]
 
     @backend.setter
     def backend(self, value):
         if "backend" in self._data:
-            raise BuildError(msg="Can not change backend, create new build context instead.")
+            raise BuildError("Can not change backend, create new build context instead.")
         self._data["backend"] = value
 
     @property
     def frontend(self):
         if "frontend" not in self._data:
-            raise BuildError(msg="Frontend not set.")
+            raise BuildError("Frontend not set.")
         return self._data["frontend"]
 
     @frontend.setter
     def frontend(self, value):
         if "frontend" in self._data:
-            raise BuildError(msg="Can not change frontend, create new build context instead.")
+            raise BuildError("Can not change frontend, create new build context instead.")
         self._data["frontend"] = value
 
     @property
     def options(self):
         if "options" not in self._data:
-            raise BuildError(msg="Build options not set.")
+            raise BuildError("Build options not set.")
         return self._data["options"]
 
     @options.setter
@@ -151,6 +146,12 @@ class BuildContext:
 
     def clone(self):
         return copy.deepcopy(self)
+
+
+def backend_has_ext(backend):
+    if hasattr(backend, "PYEXT_GENERATOR_CLASS"):
+        return True
+    return False
 
 
 class BuildWrapper:
@@ -173,41 +174,37 @@ class BuildWrapper:
 
 class IRWrapper:
     def __init__(self, stencil_ir, *, ctx):
-        self.ir = stencil_ir
+        self.stencil_ir = stencil_ir
         self.ctx = ctx
 
     def make_iir(self):
         ctx = self.ctx.clone()
         ctx["backend"]._check_options(ctx["options"])
-        ctx["iir"] = gt4py.analysis.transform(stencil_ir, ctx["options"])
-        if hasattr(ctx["backend"], "PYEXT_GENERATOR_CLASS"):
+        ctx["iir"] = gt4py.analysis.transform(self.stencil_ir, ctx["options"])
+        if backend_has_ext(ctx["backend"]):
             return self._iir_with_pyext(ctx["iir"], ctx)
         return self._iir_no_pyext(ctx["iir"], ctx)
 
-    def _iir_with_pyext(self, stencil_ir, ctx):
+    def _iir_with_pyext(self, stencil_iir, ctx):
         return IIRWrapperWithPyext(stencil_iir, ctx=ctx)
 
-    def _iir_no_pyext(self, stencil_ir, ctx):
+    def _iir_no_pyext(self, stencil_iir, ctx):
         return IIRWrapperNoPyext(stencil_iir, ctx=ctx)
 
 
 class IIRWrapper:
-    def __init__(self, stencil_iir, *, ctx):
-        self.stencil_iir = stencil_iir
+    def __init__(self, stencil_ir, *, ctx):
+        self.stencil_iir = stencil_ir
         self.ctx = ctx
 
+
+class IIRWrapperNoPyext(IIRWrapper):
     def make_module_src(self):
         ctx = self.ctx.clone()
         generator_options = copy.deepcopy(ctx["options"].as_dict())
-        generator = ctx["backend"].GENERATOR_CLASS(
-            ctx["backend"].__class__, options=generator_options
-        )
+        generator = ctx["backend"].GENERATOR_CLASS(ctx["backend"], options=generator_options)
         ctx["module_src"] = generator(ctx["id"], self.stencil_iir)
         return ModuleSrcWrapper(ctx["module_src"], ctx=ctx)
-
-
-class IIRWrapperNoPyext(IIRWrapperNoPyext):
-    pass
 
 
 class IIRWrapperWithPyext(IIRWrapperNoPyext):
@@ -224,17 +221,78 @@ class IIRWrapperWithPyext(IIRWrapperNoPyext):
         return PyextSrcWrapper(ctx["pyext_src"], ctx=ctx)
 
 
+class PyextSrcWrapper:
+    def __init__(self, pyext_src, *, ctx):
+        self.pyext_src = pyext_src
+        self.ctx = ctx
+
+    def make_module_src(self, *, ext_module_name, ext_module_path):
+        ctx = self.ctx.clone()
+        ctx["generator_options"] = ctx["options"].as_dict()
+        ctx["generator_options"]["pyext_module_name"] = ext_module_name
+        ctx["generator_options"]["pyext_file_path"] = ext_module_path
+        generator = ctx["backend"].GENERATOR_CLASS(
+            ctx["backend"], options=ctx["generator_options"]
+        )
+        ctx["module_src"] = generator(ctx["id"], ctx["iir"])
+        return ModuleSrcWrapper(ctx["module_src"], ctx=ctx)
+
+    @property
+    def impl(self):
+        return self.pyext_src["computation.src"]
+
+    @property
+    def header(self):
+        return self.pyext_src["computation.hpp"]
+
+    @property
+    def bindings(self):
+        return self.pyext_src["bindings.cpp"]
+
+    @property
+    def impl_ext(self):
+        return "." + self.ctx["backend"].SRC_EXTENSION
+
+
 class ModuleSrcWrapper:
-    pass
+    def __init__(self, module_src, *, ctx):
+        self.module_src = module_src
+        self.ctx = ctx
+
+    @property
+    def module(self):
+        return self.module_src
+
+
+class BackendChoice(click.Choice):
+    name = "backend"
+
+    def convert(self, value, param, ctx):
+        return gt4py.backend.from_name(super().convert(value, param, ctx))
+
+
+STAGE_CHOICES = {
+    "nopy": "generate only backend specific source code",
+    "withpy": "generate backend specific code and python bindings",
+}
+
+
+def verify_output_spec(ctx, param, value):
+    backend = ctx.params["backend"]
+    choices = STAGE_CHOICES
+    if value:
+        if not backend_has_ext(backend):
+            raise click.BadParameter(f"backend {backend} does not allow source-only options")
+    return value
 
 
 @click.command()
 @click.option(
     "--backend",
     "-b",
-    type=click.Choice(backend_options.keys()),
+    type=BackendChoice(backend_options.keys()),
     help="Choose a backend",
-    required=True,
+    is_eager=True,
 )
 @click.option(
     "--output-path",
@@ -243,8 +301,23 @@ class ModuleSrcWrapper:
     type=click.Path(file_okay=False),
     help="output path for the compiled source.",
 )
+@click.option(
+    "--src-only",
+    callback=verify_output_spec,
+    type=click.Choice(STAGE_CHOICES),
+    help="Generate only source code with or without python bindings. Only available if backend supports it.",
+)
+@click.option(
+    "--option",
+    "-O",
+    "options",
+    nargs=2,
+    multiple=True,
+    type=(str, bool),
+    help="Backend flag (multiple allowed), format: -O key value",
+)
 @click.argument("input_file", type=click.Path(file_okay=True, dir_okay=False, exists=True))
-def gtpyc(input_file, backend, output_path):
+def gtpyc(input_file, backend, output_path, src_only, options):
     """
     GT4Py (GridTools for Python) stencil compiler.
     """
@@ -252,6 +325,7 @@ def gtpyc(input_file, backend, output_path):
     input_file = pathlib.Path(input_file)
     output_path = pathlib.Path(output_path)
     input_module = module_from_path(input_file)
+    build_options = dict(options)
     functions = [
         v
         for k, v in input_module.__dict__.items()
@@ -259,14 +333,38 @@ def gtpyc(input_file, backend, output_path):
     ]
 
     frontend = gt4py.frontend.from_name("gtscript")
-    backend = gt4py.backend.from_name(backend)
 
     default_out_path_name = f"{input_file.stem}_out"
 
-    if output_path.exists() and output_path.name != default_out_path_name:
-        output_path /= default_out_path_name
-        output_path.mkdir(mode=755)
+    # if output_path.exists() and output_path.name != default_out_path_name:
+    #    output_path /= default_out_path_name
+
+    if not output_path.exists():
+        output_path.mkdir(mode=0o755)
 
     for function in functions:
-        package_path = files_from_def(function, frontend, backend)
-        shutil.copytree(package_path, output_path / function.__name__)
+        if not src_only:
+            package_path = files_from_def(function, frontend, backend)
+            shutil.copytree(package_path, output_path / function.__name__)
+        else:
+            stage_iir = (
+                BuildWrapper(
+                    function, frontend=frontend, backend=backend, build_options=build_options
+                )
+                .make_ir()
+                .make_iir()
+            )
+            ext_src = stage_iir.make_ext_sources()
+            header_f = output_path / f'{ext_src.ctx["name"]}.hpp'
+            impl_f = output_path / f'{ext_src.ctx["name"]}{ext_src.impl_ext}'
+            header_f.write_text(ext_src.header)
+            impl_f.write_text(ext_src.impl)
+            if src_only == "withpy":
+                pybind_f = output_path / f"bindings.cpp"
+                pybind_f.write_text(ext_src.bindings)
+                ext_mod_name = "_" + ext_src.ctx["name"]
+                mod_src = ext_src.make_module_src(
+                    ext_module_name=ext_mod_name, ext_module_path=output_path / ext_mod_name
+                )
+                mod_f = output_path / f'{ext_src.ctx["name"]}.py'
+                mod_f.write_text(mod_src.module)
