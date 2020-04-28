@@ -457,7 +457,7 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(3, 3), (3, 3), (3, 3)]
-    backends = ["dace"]
+    backends = ["dacex86"]
     symbols = dict(
         # factor=gt_testing.global_name(one_of=(-1., 0., 1.)),
         factor=gt_testing.parameter(in_range=(-100, 100)),
@@ -467,8 +467,11 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
     )
 
     def definition(field_a, field_b, field_c, *, factor):
+        # def definition(field_a, field_c, *, factor):
         # from __externals__ import factor
         with computation(PARALLEL), interval(...):
+            field_b = 0
+            field_c = 0
             if factor > 0:
                 if field_a < 0:
                     field_b = -field_a
@@ -479,11 +482,12 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
                     field_c = -field_a
                 else:
                     field_c = field_a
-
             field_a = add_one(field_a)
 
     def validation(field_a, field_b, field_c, *, factor, domain, origin, **kwargs):
-
+        # def validation(field_a, field_c, *, factor, domain, origin, **kwargs):
+        field_b[...] = 0
+        field_c[...] = 0
         if factor > 0:
             field_b[...] = np.abs(field_a)
         else:

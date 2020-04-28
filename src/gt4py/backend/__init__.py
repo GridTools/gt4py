@@ -21,6 +21,7 @@ from .numpy_backend import *
 from .base_gt_backend import *
 from .gt_cpu_backend import *
 from .gt_cuda_backend import *
-from .dace_backend import *
+from .dace.cpu_backend import CPUDaceBackend
+from .dace.gpu_backend import GPUDaceBackend
 
 from . import python_generator
