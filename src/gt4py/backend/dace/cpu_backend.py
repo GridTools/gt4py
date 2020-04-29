@@ -37,7 +37,8 @@ class CPUDaceBackend(DaceBackend):
         # from dace.transformation.dataflow.map_collapse import MapCollapse
         #
         # from dace.transformation.dataflow import InLocalStorage, OutLocalStorage
-        # from dace.transformation.dataflow import MergeArrays
+        from dace.transformation.dataflow import MergeArrays
+
         # from dace.transformation.dataflow import MapFusion
         #
         # from dace.transformation.dataflow import MapToForLoop
@@ -49,7 +50,10 @@ class CPUDaceBackend(DaceBackend):
         # for state in sdfg.nodes():
         #     outer_k_loop_to_inner_map(sdfg, state)
         #
-        # sdfg.apply_strict_transformations(validate=False)
+        from dace.transformation.interstate import StateFusion
+
+        sdfg.apply_transformations_repeated(StateFusion)
+        sdfg.apply_strict_transformations(validate=False)
         # sdfg.apply_transformations_repeated([MapFusion], validate=False)
         # # from dace.transformation.dataflow import Vectorization
         #

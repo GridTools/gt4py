@@ -299,10 +299,14 @@ class SDFGBuilder:
             K = dace.symbol("K")
             self.map_counter = itertools.count()
             self.tasklet_counter = itertools.count()
+            self.apply_method_counter = itertools.count()
             self.symbolic_domain = (I, J, K)
 
         def new_tasklet_name(self):
             return "tasklet_" + str(next(self.tasklet_counter))
+
+        def new_apply_method_name(self):
+            return "apply_method_" + str(next(self.apply_method_counter))
 
         def new_map_name(self):
             return "map_" + str(next(self.map_counter))
@@ -351,49 +355,81 @@ class SDFGBuilder:
 
             return state
 
-        def _make_parallel_computation(self, node: gt_ir.ApplyBlock):
-            map_range = OrderedDict(
-                i="{:d}:I{:+d}".format(*node.i_range),
-                j="{:d}:J{:+d}".format(*node.j_range),
-                k="{}:{}".format(*node.k_range),
-            )
-            state = self._make_mapped_computation(node, map_range)
-            return state, state
-
-        def _make_forward_computation(self, node: gt_ir.ApplyBlock):
-            map_range = dict(
-                i="{:d}:I{:+d}".format(*node.i_range),
-                j="{:d}:J{:+d}".format(*node.j_range),  # _null_="0:1"
-            )
-            state = self._make_mapped_computation(node, map_range)
-            loop_start, _, loop_end = self.sdfg.add_loop(
-                None, state, None, "k", str(node.k_range[0]), f"k<{node.k_range[1]}", "k+1"
-            )
-
-            return loop_start, loop_end
-
-        def _make_backward_computation(self, node: gt_ir.ApplyBlock):
-            map_range = dict(
-                i="{:d}:I{:+d}".format(*node.i_range),
-                j="{:d}:J{:+d}".format(*node.j_range),  # _null_="0:1"
-            )
-            state = self._make_mapped_computation(node, map_range)
-            loop_start, _, loop_end = self.sdfg.add_loop(
-                None, state, None, "k", str(node.k_range[1]) + "-1", f"k>={node.k_range[0]}", "k-1"
-            )
-
-            return loop_start, loop_end
-
         def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
 
-            if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
-                make_computation = self._make_parallel_computation
-            if self.iteration_order == gt_ir.IterationOrder.FORWARD:
-                make_computation = self._make_forward_computation
-            if self.iteration_order == gt_ir.IterationOrder.BACKWARD:
-                make_computation = self._make_backward_computation
+            # if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
+            #     make_computation = self._make_parallel_computation
+            # if self.iteration_order == gt_ir.IterationOrder.FORWARD:
+            #     make_computation = self._make_forward_computation
+            # if self.iteration_order == gt_ir.IterationOrder.BACKWARD:
+            #     make_computation = self._make_backward_computation
 
-            self._append_states(*make_computation(node))
+            # self._append_states(*make_computation(node))
+            from .library import ApplyMethodLibraryNode
+
+            state = self.sdfg.add_state()
+
+            inputs = set(info.outer_name for info in node.mapped_input_memlet_infos.values())
+            outputs = set(info.outer_name for info in node.mapped_output_memlet_infos.values())
+            iteration_order_str = (
+                "parallel"
+                if self.iteration_order is gt_ir.IterationOrder.PARALLEL
+                else (
+                    "forward"
+                    if self.iteration_order is gt_ir.IterationOrder.FORWARD
+                    else "backward"
+                )
+            )
+            library_node = ApplyMethodLibraryNode(
+                name=self.new_apply_method_name(),
+                inputs=inputs,
+                outputs=outputs,
+                iteration_order=iteration_order_str,
+                code=node.tasklet_code,
+                # k_range=
+            )
+            state.add_node(library_node)
+            input_memlets = dict()
+            for input_memlet in node.mapped_input_memlets.values():
+                if input_memlet.data in input_memlets:
+                    subset = dace.memlet.subsets.union(
+                        input_memlet.subset, input_memlets[input_memlet.data].subset
+                    )
+                    input_memlets[input_memlet.data] = dace.memlet.Memlet.simple(
+                        input_memlets[input_memlet.data], subset_str=str(subset)
+                    )
+                else:
+                    input_memlets[input_memlet.data] = input_memlet
+            for input_memlet in input_memlets.values():
+                state.add_edge(
+                    state.add_read(input_memlet.data),
+                    None,
+                    library_node,
+                    "IN_" + input_memlet.data,
+                    input_memlet,
+                )
+
+            output_memlets = dict()
+            for output_memlet in node.mapped_output_memlets.values():
+                if output_memlet.data in output_memlets:
+                    subset = dace.memlet.subsets.union(
+                        output_memlet.subset, output_memlets[output_memlet.data].subset
+                    )
+                    output_memlets[output_memlet.data] = dace.memlet.Memlet.simple(
+                        output_memlets[output_memlet.data], subset_str=str(subset)
+                    )
+                else:
+                    output_memlets[output_memlet.data] = output_memlet
+            for output_memlet in output_memlets.values():
+                state.add_edge(
+                    library_node,
+                    "OUT_" + output_memlet.data,
+                    state.add_write(output_memlet.data),
+                    None,
+                    output_memlet,
+                )
+
+            self._append_states(state, state)
 
         def visit_MultiStage(self, node: gt_ir.MultiStage):
             self.iteration_order = node.iteration_order
