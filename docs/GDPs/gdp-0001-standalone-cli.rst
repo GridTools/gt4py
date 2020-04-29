@@ -65,27 +65,99 @@ allows to use a licence other than GPL3 in said project without the express perm
 Usage and Impact
 ----------------
 
-The usage is envisioned as follows::
+The usage is explained best using a small example.
 
-   $ gtpyc -b mc stencils.py -o stencils
-   $ ls
-   > stencils.py stencils.so
+Assume the following file structure:
 
-builds a shared library from python source
-::
+.. code-block:: bash
 
-   $ gtpyc -b mc -f cpp stencils.py -o stencils
-   $ ls
-   > stencils.py stencils.cpp stencils.hpp
+   $ tree .
+   pwd
+   ├── constants.py
+   └── stencils.py
 
-builds GT code from python source
-::
+`stencils.py` contains the `gtscript` code to be compiled to stencils. The contents might look something like the following example.
 
-   $ gtpyc -b mc -f py stencils.py -o stencils_module
-   $ ls
-   > stencils.py stencils_module.so stencils_module.py
+.. code-block:: python
 
-builds a python extension
+   ## use-dsl: gtscript
+
+   from .constants import PI
+
+
+   @function
+   def square(inp_field):
+      return inp_field * inp_field
+
+
+   @stencil
+   def stencil_a(inp_field: Field[float64], out_field: Field[float64]):
+      with computation(PARALLEL), interval(...):
+         out_field = square(inp_field)
+
+
+   @stencil
+   def stencil_b(inp_field: Field[float64], out_field: Field[float64]):
+      from __externals__ import COMPILE_TIME_VALUE
+      with computation(PARALLEL), interval(...):
+         out_field = PI * inp_field + COMPILE_TIME_VALUE
+
+Notice that this file uses names from `gt4py.gtscript` without importing `gt4py`. The names will be injected by
+`gtpyc` upon recognizing the `## use-dsl: gtscript` comment.
+Also note that `stencil_b` uses an external value which is not available in the file itself, so it 
+will have to be supplied on the command line.
+The file `constants.py` contains some constant values (which might be templated by the build system).
+
+In order to get C++ code we can now run `gtpyc` with for example the `GridTools` multi core backend (`-b gtmc`) and
+tell it to generate the stencils in the new subdirectory `stencils` (`-o stencils`). 
+
+.. code-block:: bash
+
+   $ gtpyc -b gtmc stencils.py -o stencils -e COMPILE_TIME_VALUE 
+   $ tree .stencils/
+   stencils
+   ├── stencil_a.cpp
+   ├── stencil_a.hpp
+   ├── stencil_b.cpp
+   └── stencil_b.hpp
+
+The current backends of `gt4py` (with the exception of the python-only ones) all have the ability to generate python bindings.
+Future backends might allow bindings for other languages. This is accessible through an additional CLI option, which should
+be validated based on the chosen backend.
+
+.. code-block:: bash
+
+   $ gtpyc -b gtx86 stencils.py -o stencils --bindings=python -e COMPILE_TIME_VALUE 
+   $ tree .stencils/
+   stencils
+   ├── stencil_a_bindings.cpp
+   ├── stencil_a.cpp
+   ├── stencil_a.hpp
+   ├── stencil_a.py
+   ├── stencil_b_bindings.cpp
+   ├── stencil_b.cpp
+   ├── stencil_b.hpp
+   └── stencil_b.py
+
+Finally, the backend may allow options specific to it. These can be passed using the `--option` or `-O` flag.
+For example the `GridTools` multi core backend takes a `debug` flag (which does nothing during source file generation) but
+would activate debug flags if we ask gt4py to compile a readily importable python extension.
+
+.. code-block:: bash
+
+   $ gtpyc -b gtmc stencils.py -o stencils -e COMPILE_TIME_VALUE -O debug True --bindings=python --compile-bindings
+   $ tree .stencils/
+   stencils
+   ├── stencil_a_bindings.cpp
+   ├── stencil_a.cpp
+   ├── stencil_a.hpp
+   ├── _stencil_a.so  # compiled with debug flags
+   ├── stencil_a.py
+   ├── stencil_b_bindings.cpp
+   ├── stencil_b.cpp
+   ├── stencil_b.hpp
+   ├── _stencil_b.so  # compiled with debug flags
+   └── stencil_b.py
 
 Additional Commandline options will mostly correspond to the keyword arguments of
 the `gtscript.stencil` decorator.
@@ -107,10 +179,57 @@ Any description of design ideas and implementation refers to the
 `reference implementation <https://github.com/GridTools/gt4py/pull/23>`_.
 This section will be updated as the reference implementation progresses.
 
+Enabling all of gtscript without importing from gt4py
++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+The currently chosen route for this is to require a comment at the very start of the file::
+
+   ## use-dsl: gtscript
+
+This will serve two purposes, first it will mark the file as being written in gtscript.
+Any name that in python can be accessed by `from gt4py.gtscript import *` will work when
+compiling with `gtpyc` but will be deemed undefined by the python interpreter.
+It is not planned to provide any means of informing python syntax checkers to consider
+these names as defined.
+Secondly `gtpyc` can replace this line with an actual `import` line without changing line numbers
+for error messages.
+
+Obviously, some symbols like the `@stencil` decorator will have to be either changed or
+monkey patched, since we do not want loading of the input gtscript file to already trigger
+a compilation and though we might want to give default arguments to the backend in the decorator
+we want to be able to override them on the CLI.
+
+Importing python modules
+++++++++++++++++++++++++
+
+Gtscript files can import python modules as well as gtscript files only via relative imports in the
+format of `from .<module> import <name>`. `gtpyc` will make sure of turning all gtscript imports into valid
+python code before importing them.
+
+Passing externals
++++++++++++++++++
+
+There are two supported ways to configure values at compile / generate time.
+
+ * By relative import of a python file, which may be automatically generated from a template.
+   The latter could happen as part of a build system depending on build parameters. In this case
+   the stencil definition can use the values without importing them from `__externals__`. If it does, however,
+   the external value can be overriden on the command line using the following second option.
+ * By passing externals options on the command line. In this case the external will be passed
+   to every stencil in this run of `gtpyc` and each stencil needs to import it from `__externals__` to use it.
+
+Generating Language bindings
+++++++++++++++++++++++++++++
+
+The intention of this GDP is to support generating language bindings for all languages the chosen backend
+supports. These language bindings are intended to be usable without `gt4py` as a requirement. This is important
+to allow usage of generated bindings in non-GPL3 projects.
+
 Related Work
 ------------
 
 CLIs of well-known compilers (Provide CLI conventions):
+
  * `clang`_
  * `gcc`_
  * `gfortran`_
