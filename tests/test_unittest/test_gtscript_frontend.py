@@ -455,14 +455,24 @@ class TestAssignmentSyntax:
                     out_field["a_key"] = in_field
 
     def test_temporary(self):
-        @gtscript.stencil(backend="debug")
-        def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-            with computation(PARALLEL), interval(...):
-                tmp[...] = in_field
-                out_field = tmp
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="No subscript allowed in assignment to temporaries",
+        ):
 
-        @gtscript.stencil(backend="debug")
-        def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-            with computation(PARALLEL), interval(...):
-                tmp[0, 0, 0] = 2 * in_field
-                out_field = tmp
+            @gtscript.stencil(backend="debug")
+            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+                with computation(PARALLEL), interval(...):
+                    tmp[...] = in_field
+                    out_field = tmp
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="No subscript allowed in assignment to temporaries",
+        ):
+
+            @gtscript.stencil(backend="debug")
+            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+                with computation(PARALLEL), interval(...):
+                    tmp[0, 0, 0] = 2 * in_field
+                    out_field = tmp
