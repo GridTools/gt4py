@@ -927,15 +927,17 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
         return result
 
     def visit_Assign(self, node: ast.Assign):
-        for t in node.targets:
-            if isinstance(t, ast.Name):
-                self.local_symbols.add(t.id)
-            elif isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
-                self.local_symbols.add(t.value.id)
-            else:
-                raise GTScriptSyntaxError(
-                    message="invalid target in assign", loc=gt_ir.Location.from_ast_node(node)
-                )
+        for target in node.targets:
+            targets = target.elts if isinstance(target, ast.Tuple) else [target]
+            for t in targets:
+                if isinstance(t, ast.Name):
+                    self.local_symbols.add(t.id)
+                elif isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
+                    self.local_symbols.add(t.value.id)
+                else:
+                    raise GTScriptSyntaxError(
+                        message="invalid target in assign", loc=gt_ir.Location.from_ast_node(node)
+                    )
 
 
 class GTScriptParser(ast.NodeVisitor):
