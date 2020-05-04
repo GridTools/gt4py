@@ -100,8 +100,8 @@ if __name__ == "__main__":
     import gt4py.backend as gt_backend
 
     niter = 10
-    domain = (256, 256, 64)
-    # domain = (16, 16, 32)
+    # domain = (256, 256, 64)
+    domain = (16, 16, 32)
 
     print("##vertical advection")
     print("start dace")

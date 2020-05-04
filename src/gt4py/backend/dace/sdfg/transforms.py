@@ -172,8 +172,8 @@ def global_ij_tiling(sdfg, tile_size=(8, 8)):
             #     for s in array.shape
             # ]
             array.tile_size = tile_size
-    print()
-    #         array.storage = dace.dtypes.StorageType.CPU_Threadprivate_Persistent
+            # print()
+            array.storage = dace.dtypes.StorageType.CPU_ThreadLocal
 
 
 import dace.transformation.pattern_matching as pattern_matching

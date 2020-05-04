@@ -423,12 +423,14 @@ class SDFGBuilder:
                     )
                 else:
                     assert field.name in node.temporary_fields
-                    self.sdfg.add_transient(
+                    tmp = self.sdfg.add_transient(
                         # field.name, shape=shape, dtype=field.data_type.dtype.type, toplevel=True
                         field.name,
                         shape=shape,
                         dtype=field.data_type.dtype.type,
+                        lifetime=dace.dtypes.AllocationLifetime.Persistent,
                     )
+                    print(tmp.lifetime)
             for k, v in node.parameters.items():
                 self.sdfg.add_scalar(k, v.data_type.dtype.type)
             self.generic_visit(node)
