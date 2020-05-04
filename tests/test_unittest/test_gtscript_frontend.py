@@ -401,13 +401,6 @@ class TestDTypes:
             )
 
 
-def test_external_dx():
-    @gtscript.stencil(backend="debug")
-    def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-        with computation(PARALLEL), interval(...):
-            out_field = in_field["hoi"] + 1
-
-
 class TestAssignmentSyntax:
     def test_ellipsis(self):
         @gtscript.stencil(backend="debug")
