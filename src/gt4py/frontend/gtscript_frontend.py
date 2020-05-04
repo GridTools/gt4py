@@ -835,10 +835,20 @@ class IRMaker(ast.NodeVisitor):
                         and all(v.n == 0 for v in t.slice.value.elts)
                     )
                 ):
+                    if t.value.id not in {
+                        name for name, field in self.fields.items() if field.is_api
+                    }:
+
+                        raise GTScriptSyntaxError(
+                            message="No subscript allowed in assignment to temporaries",
+                            loc=gt_ir.Location.from_ast_node(t),
+                        )
                     t = t.value
+
                 else:
                     raise GTScriptSyntaxError(
-                        message="Assignment to non-zero offsets is not supported.", loc=target
+                        message="Assignment to non-zero offsets is not supported.",
+                        loc=gt_ir.Location.from_ast_node(t),
                     )
             if isinstance(t, ast.Name):
                 if not self._is_known(t.id):
