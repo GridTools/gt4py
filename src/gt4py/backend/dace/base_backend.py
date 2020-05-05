@@ -218,15 +218,16 @@ class DaceBackend(gt_backend.BaseBackend):
 
         from dace.transformation.dataflow.merge_arrays import MergeArrays
 
-        sdfg.save("tmp.sdfg")
+        sdfg.save("00_raw.sdfg")
         sdfg.apply_transformations_repeated(MergeArrays)
 
         sdfg.validate()
 
         cls.transform_to_device(sdfg)
         cls.transform_optimize(sdfg)
-        sdfg.save("tmp.sdfg")
+        sdfg.save("01_library_optimized.sdfg")
         sdfg.expand_library_nodes()
+        sdfg.save("02_library_expanded.sdfg")
 
         implementation_ir.sdfg = sdfg
         dace_build_path = os.path.relpath(cls.get_dace_module_path(stencil_id))

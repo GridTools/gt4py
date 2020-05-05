@@ -59,6 +59,5 @@ class CPUDaceBackend(DaceBackend):
         #
         # #
         # # sdfg.apply_transformations_repeated(Vectorization)
-        from gt4py.backend.dace.sdfg.transforms import global_ij_tiling
-
-        global_ij_tiling(sdfg, tile_size=(8, 8))
+        # from gt4py.backend.dace.sdfg.transforms import global_ij_tiling
+        # global_ij_tiling(sdfg, tile_size=(8, 8))

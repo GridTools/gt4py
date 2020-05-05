@@ -369,26 +369,16 @@ class SDFGBuilder:
 
             state = self.sdfg.add_state()
 
-            inputs = set(info.outer_name for info in node.mapped_input_memlet_infos.values())
-            outputs = set(info.outer_name for info in node.mapped_output_memlet_infos.values())
-            iteration_order_str = (
-                "parallel"
-                if self.iteration_order is gt_ir.IterationOrder.PARALLEL
-                else (
-                    "forward"
-                    if self.iteration_order is gt_ir.IterationOrder.FORWARD
-                    else "backward"
-                )
-            )
             library_node = ApplyMethodLibraryNode(
                 name=self.new_apply_method_name(),
-                inputs=inputs,
-                outputs=outputs,
-                iteration_order=iteration_order_str,
                 code=node.tasklet_code,
-                # k_range=
+                read_accesses=node.mapped_input_memlet_infos,
+                write_accesses=node.mapped_output_memlet_infos,
+                iteration_order=self.iteration_order,
+                k_range=node.interval,
             )
             state.add_node(library_node)
+
             input_memlets = dict()
             for input_memlet in node.mapped_input_memlets.values():
                 if input_memlet.data in input_memlets:
@@ -400,6 +390,7 @@ class SDFGBuilder:
                     )
                 else:
                     input_memlets[input_memlet.data] = input_memlet
+
             for input_memlet in input_memlets.values():
                 state.add_edge(
                     state.add_read(input_memlet.data),
@@ -459,14 +450,13 @@ class SDFGBuilder:
                     )
                 else:
                     assert field.name in node.temporary_fields
-                    tmp = self.sdfg.add_transient(
+                    self.sdfg.add_transient(
                         # field.name, shape=shape, dtype=field.data_type.dtype.type, toplevel=True
                         field.name,
                         shape=shape,
                         dtype=field.data_type.dtype.type,
                         lifetime=dace.dtypes.AllocationLifetime.Persistent,
                     )
-                    print(tmp.lifetime)
             for k, v in node.parameters.items():
                 self.sdfg.add_scalar(k, v.data_type.dtype.type)
             self.generic_visit(node)

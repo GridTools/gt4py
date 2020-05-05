@@ -103,6 +103,40 @@ if __name__ == "__main__":
     # domain = (256, 256, 64)
     domain = (16, 16, 32)
 
+    print("##horizontal diffusion")
+    print("start dace")
+    dace_exec_infos = run_horizontal_diffusion(
+        niter=niter, domain=domain, backend=gt_backend.from_name("dacex86")
+    )
+    print("start gt")
+    gt_exec_infos = run_horizontal_diffusion(
+        niter=niter, domain=domain, backend=gt_backend.from_name("gtmc")
+    )
+    print("dace times:")
+    for k, v in summary(dace_exec_infos).items():
+        print("\t{}: {}".format(k, v))
+    print("gt times:")
+    for k, v in summary(gt_exec_infos).items():
+        print("\t{}: {}".format(k, v))
+
+    # print("start dacecuda")
+    # dace_exec_infos = run_horizontal_diffusion(
+    #     niter=niter, domain=domain, backend=gt_backend.from_name("dacecuda")
+    # )
+    # print("start gtcuda")
+    # gt_exec_infos = run_horizontal_diffusion(
+    #     niter=niter, domain=domain, backend=gt_backend.from_name("gtcuda")
+    # )
+    # print("dace times:")
+    # for k, v in summary(dace_exec_infos).items():
+    #     print("\t{}: {}".format(k, v))
+    # print("gt times:")
+    # for k, v in summary(gt_exec_infos).items():
+    #     print("\t{}: {}".format(k, v))
+    # import gt4py.backend as gt_backend
+    #
+    # #############################################
+
     print("##vertical advection")
     print("start dace")
     dace_exec_infos = run_vertical_advection(
@@ -137,37 +171,3 @@ if __name__ == "__main__":
     # #     print("\t{}: {}".format(k, v))
 
     ##########################################################
-
-    print("##horizontal diffusion")
-    print("start dace")
-    dace_exec_infos = run_horizontal_diffusion(
-        niter=niter, domain=domain, backend=gt_backend.from_name("dacex86")
-    )
-    print("start gt")
-    gt_exec_infos = run_horizontal_diffusion(
-        niter=niter, domain=domain, backend=gt_backend.from_name("gtmc")
-    )
-    print("dace times:")
-    for k, v in summary(dace_exec_infos).items():
-        print("\t{}: {}".format(k, v))
-    print("gt times:")
-    for k, v in summary(gt_exec_infos).items():
-        print("\t{}: {}".format(k, v))
-
-    # print("start dacecuda")
-    # dace_exec_infos = run_horizontal_diffusion(
-    #     niter=niter, domain=domain, backend=gt_backend.from_name("dacecuda")
-    # )
-    # print("start gtcuda")
-    # gt_exec_infos = run_horizontal_diffusion(
-    #     niter=niter, domain=domain, backend=gt_backend.from_name("gtcuda")
-    # )
-    # print("dace times:")
-    # for k, v in summary(dace_exec_infos).items():
-    #     print("\t{}: {}".format(k, v))
-    # print("gt times:")
-    # for k, v in summary(gt_exec_infos).items():
-    #     print("\t{}: {}".format(k, v))
-    # import gt4py.backend as gt_backend
-    #
-    # #############################################
