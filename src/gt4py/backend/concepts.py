@@ -60,6 +60,9 @@ class Backend(abc.ABC):
     #   + info:
     #       - versioning: bool
     #       - description [optional]: str
+    #       - type
+
+    BINDINGS_LANGUAGES = []
 
     @classmethod
     def get_options_id(cls, options):

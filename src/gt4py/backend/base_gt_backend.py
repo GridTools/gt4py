@@ -438,12 +438,13 @@ class BaseGTBackend(gt_backend.BaseBackend):
     PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
     GT_BACKEND_OPTS = {
-        "verbose": {"versioning": False},
-        "clean": {"versioning": False},
-        "gtcache_size": {"versioning": True},
-        "debug_mode": {"versioning": True},
-        "add_profile_info": {"versioning": True},
+        "verbose": {"versioning": False, "type": bool},
+        "clean": {"versioning": False, "type": bool},
+        "gtcache_size": {"versioning": True, "type": int},
+        "debug_mode": {"versioning": True, "type": bool},
+        "add_profile_info": {"versioning": True, "type": bool},
     }
+    BINDINGS_LANGUAGES = ["python"]
 
     @classmethod
     def get_pyext_module_name(cls, stencil_id, *, qualified=False):

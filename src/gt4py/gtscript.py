@@ -29,6 +29,8 @@ import numpy as np
 
 from gt4py import definitions as gt_definitions
 from gt4py import utils as gt_utils
+from gt4py import __gtscript__, __externals__
+from gt4py.cli import BuildContext
 
 
 # GTScript builtins
@@ -53,7 +55,7 @@ builtins = {
     "__INLINED",
 }
 
-__all__ = list(builtins) + ["function", "stencil"]
+__all__ = list(builtins) + ["function", "stencil", "mark_stencil"]
 
 __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
@@ -191,6 +193,25 @@ def stencil(
         return _decorator
     else:
         return _decorator(definition)
+
+
+def mark_stencil(*, default_backend=None, dtypes=None, externals=None, name=None, **kwargs):
+    from gt4py import frontend
+
+    def _decorator(func):
+        defaults = {
+            "backend": default_backend,
+            "frontend": frontend.from_name("gtscript"),
+            "dtypes": dtypes,
+            "externals": externals or {},
+        }
+        if name:
+            defaults["name"] = name
+        defaults.update(kwargs)
+
+        return BuildContext(func, defaults)
+
+    return _decorator
 
 
 # GTScript builtins: domain axes
