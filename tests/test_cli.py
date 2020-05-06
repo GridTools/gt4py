@@ -1,7 +1,11 @@
-from click.testing import CliRunner
-from gt4py import cli
-import pytest
 import re
+
+from click.testing import CliRunner
+import pytest
+import numpy
+
+from gt4py import storage
+from gt4py import cli
 
 
 @pytest.fixture
@@ -184,3 +188,10 @@ def test_externals(clirunner, features_stencil, tmp_path):
     assert re.findall(
         rf'["\'\s]*fill_value["\'\s]*[:=]["\'\s]*{fill_value}["\'\s]*', fill_f.read_text()
     )
+
+    fill_m = cli.module_from_path(fill_f)
+    data = storage.empty(backend="debug", shape=(2, 2, 1), dtype=float, default_origin=((0, 0, 0)))
+    stencil_name = [name for name in fill_m.__dict__.keys() if name.startswith("fill")][0]
+    stencil = getattr(fill_m, stencil_name)()
+    stencil(data)
+    assert (data == numpy.full((2, 2, 1), fill_value)).all()
