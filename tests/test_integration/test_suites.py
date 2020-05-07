@@ -512,3 +512,83 @@ class TestTernaryOp(gt_testing.StencilTestSuite):
 
     def validation(infield, outfield, *, domain, origin, **kwargs):
         outfield[...] = np.choose(infield[:, :-1, :] > 0, [-infield[:, 1:, :], infield[:, :-1, :]])
+
+
+# class TestSimple(gt_testing.StencilTestSuite):
+#
+#     dtypes = (np.float_,)
+#     domain_range = [(1, 1), (1, 1), (1, 1)]
+#     backends = ["numpy", "dacex86"]
+#     symbols = dict(
+#         u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (0, 0), (0, 0)]),
+#         diffusion=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+#     )
+#
+#     def definition(u, diffusion):
+#         with computation(PARALLEL), interval(...):
+#             tmp = u[-1, 0, 0] + u + u[1, 0, 0]
+#             diffusion = tmp[-1, 0, 0] + tmp + tmp[1, 0, 0]
+#
+#     def validation(u, diffusion, *, domain, origin, **kwargs):
+#         tmp = u[:-2, :, :] + u[1:-1, :, :] + u[2:, :, :]
+#         diffusion[...] = tmp[:-2, :, :] + tmp[1:-1, :, :] + tmp[2:, :, :]
+
+
+# class TestSimple(gt_testing.StencilTestSuite):
+#
+#     dtypes = (np.float_,)
+#     domain_range = [(1, 1), (1, 1), (1, 1)]
+#     backends = ["numpy", "dacex86"]
+#     symbols = dict(
+#         u=gt_testing.field(in_range=(-10, 10), boundary=[(1, 1), (0, 0), (0, 0)]),
+#         diffusion=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+#     )
+#
+#     def definition(u, diffusion):
+#         with computation(PARALLEL), interval(...):
+#             laplacian = u[1, 0, 0] + u[-1, 0, 0]
+#             diffusion = u[0, 0, 0] - laplacian
+#
+#     def validation(u, diffusion, *, domain, origin, **kwargs):
+#         laplacian = u[2:, :, :] + u[:-2, :, :]
+#         diffusion[...] = u[1:-1, :, :] - laplacian
+
+
+class TestSimple(gt_testing.StencilTestSuite):
+
+    dtypes = (np.float_,)
+    domain_range = [(1, 1), (1, 1), (3, 3)]
+    backends = ["numpy", "dacex86"]
+    symbols = dict(
+        inf=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        diag=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        sup=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        rhs=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        out=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+    )
+
+    def definition(inf, diag, sup, rhs, out):
+        # with computation(FORWARD):
+        #     with interval(0, 1):
+        #         sup = sup / diag
+        #     with interval(1, None):
+        #         sup = sup / (diag - sup[0, 0, -1] * inf)
+        with computation(PARALLEL):
+            with interval(...):
+                diag = diag
+                inf = inf
+        with computation(BACKWARD):
+            with interval(-1, None):
+                out = rhs
+            with interval(0, -1):
+                out = rhs - sup * out[0, 0, 1]
+
+    def validation(inf, diag, sup, rhs, out, *, domain, origin, **kwargs):
+        # for k in range(0, 1):
+        #     sup[:, :, k] = sup[:, :, k] / diag[:, :, k]
+        # for k in range(1, domain[-1]):
+        #     sup[:, :, k] = sup[:, :, k] / (diag[:, :, k] - sup[:, :, k - 1] * inf[:, :, k])
+        for k in range(domain[-1] - 1, domain[-1] - 2, -1):
+            out[:, :, k] = rhs[:, :, k]
+        for k in range(domain[-1] - 2, -1, -1):
+            out[:, :, k] = rhs[:, :, k] - sup[:, :, k] * out[:, :, k + 1]

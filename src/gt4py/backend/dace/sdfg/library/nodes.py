@@ -25,13 +25,17 @@ class ApplyMethodLibraryNode(dace.library.LibraryNode):
     write_accesses = dace.properties.Property(
         dtype=dict, default={}, desc="map local symbol to MappedMemletInfo"
     )
+    inputs = dace.properties.Property(dtype=set, default=set(), desc="names of inputs")
+    outputs = dace.properties.Property(dtype=set, default=set(), desc="names of outputs")
     input_extents = dace.properties.Property(
         dtype=dict, default={}, desc="maximum offsets per dimension in read accesses"
     )
     output_extents = dace.properties.Property(
         dtype=dict, default={}, desc="maximum offsets per dimension in write accesses"
     )
-    k_range = dace.properties.RangeProperty(allow_none=True, desc="range as subset descriptor")
+    ranges = dace.properties.Property(
+        dtype=tuple, allow_none=True, desc="range as subset descriptor"
+    )
     code = dace.properties.CodeProperty(
         default=dace.properties.CodeProperty.from_string("", language=dace.dtypes.Language.Python),
         desc="apply method body",
@@ -45,7 +49,7 @@ class ApplyMethodLibraryNode(dace.library.LibraryNode):
         iteration_order=gt_ir.IterationOrder.PARALLEL,
         *,
         code=None,
-        k_range=None,
+        ranges=None,
         implementation=None,
     ):
         super().__init__(
@@ -63,14 +67,15 @@ class ApplyMethodLibraryNode(dace.library.LibraryNode):
                 code, language=dace.dtypes.Language.Python
             )
         self.code = code
-        if isinstance(k_range, gt_ir.AxisInterval):
-            k_range = axis_interval_to_range(k_range)
 
-        if k_range is not None:
-            self.k_range = k_range
+        self.ranges = ranges
+        self.inputs = set(info.outer_name for info in read_accesses.values())
+        self.outputs = set(info.outer_name for info in write_accesses.values())
+
         if implementation is not None:
             self.implementation = implementation
-
+        self.input_extents = {}
+        self.output_extents = {}
         for acc in read_accesses.values():
             offset = (acc.offset.get("I", 0), acc.offset.get("J", 0), acc.offset.get("K", 0))
             if acc.outer_name not in self.input_extents:

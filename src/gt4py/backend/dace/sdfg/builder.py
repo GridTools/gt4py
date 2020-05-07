@@ -134,6 +134,7 @@ class SDFGBuilder:
         def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
             self.input_memlets = dict()
             self.output_memlets = dict()
+            self.ranges = (node.i_range, node.j_range, node.k_range)
 
             self.visit(node.body)
 
@@ -154,6 +155,7 @@ class SDFGBuilder:
             self.input_memlets = None
             self.output_memlets = None
             self.tasklet_targets = None
+            self.ranges = None
 
         def visit_FieldRef(self, node: gt_ir.FieldRef):
             key = node.local_name
@@ -162,12 +164,21 @@ class SDFGBuilder:
                 subset_list = []
                 itervar = dict(I="i", J="j", K="k")
                 itervar_idx = dict(I=0, J=1, K=2)
-                origin = self.field_extents[node.name].lower_indices
+                origin = tuple(abs(v) for v in self.field_extents[node.name].lower_indices)
                 for k, v in node.offset.items():
                     if k != "K":
-                        subset_list.append(itervar[k] + "{:+d}".format(v - origin[itervar_idx[k]]))
+                        subset_list.append(
+                            f"{origin[itervar_idx[k]] + self.ranges[itervar_idx[k]][0]}{v:+d}:{k}{origin[itervar_idx[k]] + self.ranges[itervar_idx[k]][1]:+d}{v:+d}"
+                        )
+                        # subset_list.append("0:{}+{:+d}".format(k, v - origin[itervar_idx[k]]))
                     else:
-                        subset_list.append(itervar[k] + "{:+d}".format(v))
+                        # subset_list.append(itervar[k].upper() + "{:+d}".format(v))
+                        subset_list.append(
+                            f"{self.ranges[itervar_idx[k]][0]}+{v:+d}:{self.ranges[itervar_idx[k]][1]}+{v:+d}"
+                        )
+                        # subset_list.append(
+                        #     "{}:{}+{:+d}".format(self.k_range[0], self.k_range[1], v)
+                        # )
                 subset_str = ", ".join(subset_list) if subset_list else "0"
 
                 memlet_dict[key] = MappedMemletInfo(
@@ -375,7 +386,7 @@ class SDFGBuilder:
                 read_accesses=node.mapped_input_memlet_infos,
                 write_accesses=node.mapped_output_memlet_infos,
                 iteration_order=self.iteration_order,
-                k_range=node.interval,
+                ranges=(node.i_range, node.j_range, node.k_range),
             )
             state.add_node(library_node)
 

@@ -223,12 +223,16 @@ class DaceBackend(gt_backend.BaseBackend):
 
         sdfg.validate()
 
-        cls.transform_to_device(sdfg)
-        cls.transform_optimize(sdfg)
-        sdfg.save("01_library_optimized.sdfg")
+        # cls.transform_to_device(sdfg)
+        # cls.transform_optimize(sdfg)
+        # sdfg.save("01_library_optimized.sdfg")
+        sdfg.validate()
         sdfg.expand_library_nodes()
         sdfg.save("02_library_expanded.sdfg")
-
+        sdfg.validate()
+        # sdfg.apply_strict_transformations()
+        # sdfg.save("03_reapply_strict.sdfg")
+        # sdfg.validate()
         implementation_ir.sdfg = sdfg
         dace_build_path = os.path.relpath(cls.get_dace_module_path(stencil_id))
         os.makedirs(dace_build_path, exist_ok=True)

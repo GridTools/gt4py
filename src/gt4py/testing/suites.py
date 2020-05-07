@@ -29,7 +29,7 @@ from .utils import *
 counter = count()
 RTOL = 1e-05
 ATOL = 1e-08
-EQUAL_NAN = False
+EQUAL_NAN = True
 
 unique_str_ctr = count()
 
