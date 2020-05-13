@@ -9,6 +9,7 @@ import click
 
 import gt4py
 from gt4py.backend import REGISTRY as backend_options
+from gt4py import gtsimport
 
 
 def eval_arg_types(definition):
@@ -21,8 +22,6 @@ def eval_arg_types(definition):
     This is a poor quality version of what needs to be done in order to
     support input modules that do not import gt4py.
     """
-    from gt4py.gtscript import Field
-
     assert isinstance(definition, types.FunctionType)
     annotations = getattr(definition, "__annotations__", {})
     for arg, value in annotations.items():
@@ -403,15 +402,18 @@ class JsonInput(click.ParamType):
     type=JsonInput(),
     help="JSON string describing externals overrides for all stencils.",
 )
-@click.argument("input_file", type=click.Path(file_okay=True, dir_okay=False, exists=True))
-def gtpyc(input_file, backend, output_path, bindings, compile_bindings, options, externals):
+@click.argument("input_path", type=click.Path(file_okay=True, dir_okay=True, exists=True))
+def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options, externals):
     """
     GT4Py (GridTools for Python) stencil compiler.
+
+    INPUT_PATH can be either a gtscript or python file or a python package.
     """
 
-    input_file = pathlib.Path(input_file)
+    input_path = pathlib.Path(input_path)
     output_path = pathlib.Path(output_path)
-    input_module = module_from_path(input_file)
+    finder = gtsimport.install(search_path=[input_path.parent])
+    input_module = importlib.import_module(input_path.stem)
     build_options = dict(options)
     stencils = [
         v
@@ -421,7 +423,7 @@ def gtpyc(input_file, backend, output_path, bindings, compile_bindings, options,
 
     frontend = gt4py.frontend.from_name("gtscript")
 
-    default_out_path_name = f"{input_file.stem}_out"
+    default_out_path_name = f"{input_path.stem}_out"
 
     # if output_path.exists() and output_path.name != default_out_path_name:
     #    output_path /= default_out_path_name

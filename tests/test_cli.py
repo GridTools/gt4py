@@ -1,4 +1,5 @@
 import re
+import sys
 
 from click.testing import CliRunner
 import pytest
@@ -14,8 +15,16 @@ def clirunner():
 
 
 @pytest.fixture
-def simple_stencil(tmp_path):
-    module_file = tmp_path / "stencil.py"
+def clean_imports():
+    impdata = [sys.path.copy(), sys.meta_path.copy(), sys.modules.copy()]
+    yield
+    sys.path, sys.meta_path, sys.modules = impdata
+
+
+@pytest.fixture
+def simple_stencil(tmp_path, clean_imports):
+    """Provide a gtscript file with a simple stencil."""
+    module_file = tmp_path / "stencil.gtpy"
     module_file.write_text(
         (
             "## using-dsl: gtscript\n"
@@ -31,11 +40,13 @@ def simple_stencil(tmp_path):
 
 
 @pytest.fixture
-def features_stencil(tmp_path):
-    module_file = tmp_path / "features_stencil.py"
+def features_stencil(tmp_path, clean_imports):
+    """Provide a gtscript file with a stencil using all the features."""
+    module_file = tmp_path / "features_stencil.gtpy"
     module_file.write_text(
         (
             "## using-dsl: gtscript\n"
+            "import numpy\n"
             "\n"
             "\n"
             "CONSTANT = 5.9\n"
@@ -47,20 +58,26 @@ def features_stencil(tmp_path):
             "\n"
             "\n"
             "@mark_stencil(externals={'my_constant': CONSTANT})\n"
-            "def some_stencil(field_a: Field[float], field_b: Field[float]):\n"
+            "def some_stencil(field_a: Field[numpy.float], field_b: Field[numpy.float]):\n"
             "    from __externals__ import my_constant\n"
             "    with computation(PARALLEL), interval(...):\n"
             "        field_a = some_operation(field_a, field_b, constant=my_constant)\n"
             "\n"
             "\n"
             "@mark_stencil(externals={'fill_value': CONSTANT})\n"
-            "def fill(field_a: Field[float]):\n"
+            "def fill(field_a: Field[numpy.float]):\n"
             "    from __externals__ import fill_value\n"
             "    with computation(PARALLEL), interval(...):\n"
             "        field_a = fill_value\n"
         )
     )
     yield module_file
+
+
+@pytest.fixture
+def library_stencil(tmp_path):
+    """Provide a gtscript file that brings it's own library."""
+    module_file = tmp_path / "library_stencil"
 
 
 def test_gtpyc_help(clirunner):
