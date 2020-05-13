@@ -145,7 +145,7 @@ def test_gtpyc_nopy_gtx86(clirunner, simple_stencil, tmp_path):
     )
     assert result.exit_code == 0
     src_files = [path.name for path in output_path.iterdir()]
-    assert ["init_1.hpp", "init_1.cpp"] == src_files
+    assert set(["init_1.hpp", "init_1.cpp"]) == set(src_files)
 
 
 def test_gtpyc_withpy_gtx86(clirunner, simple_stencil, tmp_path):
@@ -163,7 +163,7 @@ def test_gtpyc_withpy_gtx86(clirunner, simple_stencil, tmp_path):
     assert result.exit_code == 0
     src_files = [path.name for path in output_path.iterdir()]
     src_files.sort()
-    assert ["bindings.cpp", "init_1.cpp", "init_1.hpp", "init_1.py"] == src_files
+    assert set(["bindings.cpp", "init_1.cpp", "init_1.hpp", "init_1.py"]) == set(src_files)
 
 
 def test_sub_and_multi(clirunner, features_stencil, tmp_path):
