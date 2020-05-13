@@ -22,7 +22,6 @@ import types
 
 from .nodes import *
 from gt4py.utils import NOTHING
-import gt4py.gtscript as gtscript
 
 # --- Definition IR ---
 DEFAULT_LAYOUT_ID = "_default_layout_id_"
@@ -154,6 +153,8 @@ def make_definition(
     externals=None,
     sources=None,
 ):
+    from gt4py import gtscript
+
     api_signature = make_api_signature(args_list)
     domain = domain or Domain.LatLonGrid()
     externals = externals or {}

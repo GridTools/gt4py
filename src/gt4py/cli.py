@@ -8,8 +8,13 @@ import pathlib
 import click
 
 import gt4py
-from gt4py.backend import REGISTRY as backend_options
 from gt4py import gtsimport
+
+
+def get_backend_options():
+    from gt4py.backend import REGISTRY as backend_options
+
+    return backend_options.keys()
 
 
 def eval_arg_types(definition):
@@ -366,7 +371,7 @@ class JsonInput(click.ParamType):
 @click.option(
     "--backend",
     "-b",
-    type=BackendChoice(backend_options.keys()),
+    type=BackendChoice(get_backend_options()),
     help="Choose a backend",
     is_eager=True,
 )
