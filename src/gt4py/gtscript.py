@@ -48,9 +48,10 @@ builtins = {
     "externals",
     "computation",
     "interval",
+    "region",
     "__gtscript__",
     "__externals__",
-    "__INLINED",
+    "__INLINED"
 }
 
 __all__ = list(builtins) + ["function", "stencil"]
