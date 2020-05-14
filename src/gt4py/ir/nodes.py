@@ -118,7 +118,11 @@ storing a reference to the piece of source code which originated the node.
         # level: VarRef = access to `int` or `[int]` variable holding the run-time value of the level
         # offset: int
 
-    AxisInterval(start: AxisBound, end: AxisBound)
+    IterationSpace(istart: AxisBound, iend=AxisBound, jstart=AxisBound, jend=AxisBound)
+        # starts are inclusive
+        # ends are excluded
+
+    AxisInterval(start: AxisBound, end: AxisBound, [space: IterationSpace])
         # start is included
         # end is excluded
 
@@ -650,12 +654,19 @@ class AxisBound(Node):
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
 
+@attribclass
+class IterationSpace(Node):
+    istart = attribute(of=AxisBound)
+    iend = attribute(of=AxisBound)
+    jstart = attribute(of=AxisBound)
+    jend = attribute(of=AxisBound)
 
 @attribclass
 class AxisInterval(Node):
     start = attribute(of=AxisBound)
     end = attribute(of=AxisBound)
     loc = attribute(of=Location, optional=True)
+    space = attribute(of=IterationSpace, optional=True)
 
     @classmethod
     def full_interval(cls):
