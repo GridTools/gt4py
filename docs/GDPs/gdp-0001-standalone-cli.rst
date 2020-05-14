@@ -6,7 +6,8 @@ GDP 1 — Standalone Compiler CLI
 :Status: Draft
 :Type: Feature
 :Created: 17.04.2020
-:Discussion PR: `<https://github.com/GridTools/gt4py/pull/21>`
+:Discussion PR: `https://github.com/GridTools/gt4py/pull/21 <discussion_pr>`_
+:Implementation: `https://github.com/GridTools/gt4py/pull/23 <reference_impl_pr>`_
 
 
 Abstract
@@ -18,6 +19,8 @@ compiling and running GridTools stencils from python programs.
 This GDP describes an additional CLI which can be integrated into the build
 process of non-python programs to compile, link and run stencils written
 in GT4Py DSL from any host language that can link to C++ libraries.
+
+A `reference implementation <reference_impl_pr>`_ exists, which will on acception of this GDP be drawn on for adding functionality of this GDP in a series of separate pull requests.
 
 Motivation and Scope
 --------------------
@@ -269,16 +272,24 @@ Secondly `gtpyc` can replace this line with an actual `import` line without chan
 for error messages.
 
 Obviously, some symbols like the `@stencil` decorator will have to be either changed or
-monkey patched, since we do not want loading of the input gtscript file to already trigger
+an alternative has to be offered, since we do not want loading of the input gtscript file to already trigger
 a compilation and though we might want to give default arguments to the backend in the decorator
 we want to be able to override them on the CLI.
 
-Importing python modules
-++++++++++++++++++++++++
+Lazy stencil decorator
+++++++++++++++++++++++
 
-Gtscript files can import python modules as well as gtscript files only via relative imports in the
-format of `from .<module> import <name>`. `gtpyc` will make sure of turning all gtscript imports into valid
-python code before importing them.
+The reference implementation contains an additional `mark_stencil` decorator, which returns a `BuildContext` object.
+A build context holds all the information required to perform a build step, such as stencil definition, backend choice, backend options etc.
+Furthermore from a build context a build manager object can be constructed, which allows stepping through the build process by passing the context object from step to step.
+
+After adoption of this GDP, the object returned by `mark_stencil` should also offer a `__call__` method which compiles the stencil completely and caches the result for further calls, after that it should be renamed to `lazy_stencil` or incorporated into the `stencil` decorator with an optional kwarg.
+
+Gtscript import system
+++++++++++++++++++++++
+
+Gtscript files can import python modules and vice versa, after installing the gtscript import system (which can be done in a single line). `gtpyc` installs the import system and (by default) adds the parent directory of the input file to `sys.path`, the search path for python imports. This means python and gtscript modules and packages in the same folder as the input file are found by default, other than that imports behave as normal.
+The reference implementation for this is in `gt4py.gtsimport`, the public API consists of the `gt4py.gtsimport.install` function. The module docstring contains usage examples. The code can be found in the corresponding `draft PR <reference_impl_pr>`_.
 
 Passing externals
 +++++++++++++++++
