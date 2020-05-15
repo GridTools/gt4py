@@ -655,18 +655,10 @@ class AxisBound(Node):
     loc = attribute(of=Location, optional=True)
 
 @attribclass
-class IterationSpace(Node):
-    istart = attribute(of=AxisBound)
-    iend = attribute(of=AxisBound)
-    jstart = attribute(of=AxisBound)
-    jend = attribute(of=AxisBound)
-
-@attribclass
 class AxisInterval(Node):
     start = attribute(of=AxisBound)
     end = attribute(of=AxisBound)
     loc = attribute(of=Location, optional=True)
-    space = attribute(of=IterationSpace, optional=True)
 
     @classmethod
     def full_interval(cls):
@@ -695,7 +687,9 @@ class AxisInterval(Node):
 
 @attribclass
 class ComputationBlock(Node):
+    # TODO Should this be renamed to "sequential_interval"?
     interval = attribute(of=AxisInterval)
+    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
     iteration_order = attribute(of=IterationOrder)
     body = attribute(of=BlockStmt)
     loc = attribute(of=Location, optional=True)
