@@ -35,7 +35,7 @@ from . import loader
 from . import storage
 from . import testing
 
-from .definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo, CartesianSpace
+from .definitions import Interval, AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo, CartesianSpace
 from .stencil_object import StencilObject
 
 from pkg_resources import get_distribution, DistributionNotFound

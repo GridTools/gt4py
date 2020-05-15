@@ -31,6 +31,10 @@ from gt4py.utils.attrib import (
     Tuple as TupleOf,
 )
 
+@enum.unique
+class Interval(enum.Enum):
+    START = 0
+    END = 1
 
 class CartesianSpace:
     @enum.unique
