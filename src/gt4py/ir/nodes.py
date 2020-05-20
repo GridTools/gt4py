@@ -707,6 +707,7 @@ class StencilDefinition(Node):
     computations = attribute(of=ListOf[ComputationBlock])
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
+    docstring = attribute(of=str)
 
 
 # ---- Implementation IR (IIR) ----
@@ -800,6 +801,7 @@ class StencilImplementation(IIRNode):
     axis_splitters_var = attribute(of=str, optional=True)
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
+    docstring = attribute(of=str)
 
     @property
     def arg_fields(self):
