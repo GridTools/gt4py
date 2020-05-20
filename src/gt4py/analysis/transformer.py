@@ -77,6 +77,7 @@ class IRTransformer:
             axis_splitters_var=None,
             externals=definition_ir.externals,
             sources=definition_ir.sources,
+            docstring=definition_ir.docstring,
         )
         self.transform_data = TransformData(
             definition_ir=definition_ir, implementation_ir=implementation_ir, options=options

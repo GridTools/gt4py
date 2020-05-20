@@ -365,6 +365,7 @@ class BaseModuleGenerator(abc.ABC):
             module_members=module_members,
             class_name=self.stencil_class_name,
             class_members=class_members,
+            docstring=implementation_ir.docstring,
             gt_backend=self.backend_name,
             gt_source=sources,
             gt_domain_info=domain_info,

@@ -45,11 +45,11 @@ class StencilObject(abc.ABC):
     def __str__(self):
         result = """
 <StencilObject: {name}> [backend="{backend}"]
-    - I/O fields: {fields} 
-    - Parameters: {params} 
-    - Constants: {constants} 
+    - I/O fields: {fields}
+    - Parameters: {params}
+    - Constants: {constants}
     - Definition ({func}):
-{source} 
+{source}
         """.format(
             name=self.options["module"] + "." + self.options["name"],
             version=self._gt_id_,
