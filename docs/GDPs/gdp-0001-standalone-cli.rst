@@ -75,7 +75,6 @@ Flexibility
 The import mechanism will allow the flexibility to define `gtscript` objects in `gtscript` files and using them in python code
 without extra steps (as if they were defined directly in python), yet also compiling them into other language sources / bindings from the same code base just by running the CLI tool on them. This allows prototyping in python without making a final choice as to project language and license.
 
-
 Usage and Impact
 ----------------
 
@@ -83,6 +82,9 @@ Basic CLI usage
 +++++++++++++++
 
 The usage is explained best using a small example.
+
+Note that `.gtpy` files could be replaced by equivalent `.py` files (importing `gtscript` symbols either from `gt4py` or from a `.gtpy` file) in all following examples.
+Python modules or packages are also valid input files to `gtpyc`, provided they are valid Python under the assumption that the import extensions are installed.
 
 Assume the following file structure:
 
@@ -93,7 +95,7 @@ Assume the following file structure:
    ├── constants.py
    └── stencils.gtpy
 
-`stencils.py` contains the `gtscript` code to be compiled to stencils. The contents might look something like the following example.
+`stencils.gtpy` contains the `gtscript` code to be compiled to stencils. The contents might look something like the following example.
 
 .. code-block:: python
 
@@ -310,6 +312,41 @@ The intention of this GDP is to support generating language bindings for all lan
 supports. These language bindings are intended to be usable without `gt4py` as a requirement. This is important
 to allow usage of generated bindings in non-GPL3 projects.
 
+Implications for Tools (IDEs, Linters, etc)
++++++++++++++++++++++++++++++++++++++++++++
+
+It has been remarked that it would be beneficial to use Python tools like linters, checkers, syntax highlighting etc. for `.gtpy` files.
+Most of these tools should be fairly simple to configure for this. Note though, that `GTScript` keywords will appear as undefined python symbols to those tools.
+Some tools like `pylint` allow configuration for symbols that should be ignored or libraries that should be considered imported by default.
+These configuration options are very different from tool to tool and are documented for each tool separately. This GDP does not propose packaging any
+such configuration or even extensions for tools with `gt4py`.
+
+Note that the following is a simple way to get most of the desired behaviour from most tools:
+
+
+.. code-block:: bash
+
+   $ tree .
+   pwd
+   ├── mystencils.py
+   └── mygts.gtpy
+
+.. code-block: mygts.gtpy: python
+
+   ## using-dsl: gtscript
+
+.. code-block: mystencils.py: python
+
+   from mygts import lazy_stencil, Field, computation, interval
+
+   @lazy_stencil
+   def mystencil(a: Field[float]):
+      with computation(PARALLEL), interval(...):
+         a = 1.
+
+Now IDEs will recognize `mystencils.py` as a python file and will highlight and check the syntax. Of course tools will be unable to import `mygts`, unless there is a way to
+configure them to run `gt4py.gtsimport.install()` before trying to import.
+
 Related Work
 ------------
 
@@ -354,6 +391,16 @@ lead to partially reinventing one of the more advanced frameworks like `click`_.
 
 The author of this GDP does believe the additional requirement of a small
 pure-python framework like `click`_ to be outweighed by the benefits.
+
+Using `.py` extension in combination with the marker comment
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+The author believes that the two types of files serve distinctly separate purposes.
+While both types can be passed into `gtpyc`, `.py` files should represent valid Python modules
+whereas `.gtpy` files are treated as written in `gtscript`, a domain specific language that extends Python.
+
+It may be a subtle difference in implementation but quite a difference in intent. The author of a `.py` file
+may use `gt4py` as a library, whereas the author of a `gtscript` file uses a different language which happens to have the same syntax.
 
 Discussion
 ----------
