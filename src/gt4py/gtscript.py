@@ -30,7 +30,7 @@ import numpy as np
 from gt4py import definitions as gt_definitions
 from gt4py import utils as gt_utils
 from gt4py import __gtscript__, __externals__
-from gt4py.cli import BuildContext
+from gt4py.build import BuildContext
 
 
 # GTScript builtins
@@ -209,7 +209,7 @@ def mark_stencil(*, default_backend=None, dtypes=None, externals=None, name=None
             defaults["name"] = name
         defaults.update(kwargs)
 
-        return BuildContext(func, defaults)
+        return BuildContext(func, **defaults)
 
     return _decorator
 
