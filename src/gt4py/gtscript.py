@@ -26,11 +26,12 @@ import inspect
 import types
 
 import numpy as np
+from cached_property import cached_property
 
 from gt4py import definitions as gt_definitions
 from gt4py import utils as gt_utils
 from gt4py import __gtscript__, __externals__
-from gt4py.build import BuildContext
+from gt4py.build import BuildContext, BeginStage
 
 
 # GTScript builtins
@@ -89,6 +90,21 @@ def function(func):
 
     gt_frontend.GTScriptParser.annotate_definition(func)
     return func
+
+
+class LazyStencil:
+    def __init__(self, context):
+        self.ctx = context
+
+    @cached_property
+    def implementation(self):
+        impl = stencil(**self.ctx)
+
+    def begin_build(self):
+        return BeginStage(self.ctx).make()
+
+    def __call__(self, *args, **kwargs):
+        self.implementation(*args, **kwargs)
 
 
 # Interface functions
@@ -195,23 +211,36 @@ def stencil(
         return _decorator(definition)
 
 
-def mark_stencil(*, default_backend=None, dtypes=None, externals=None, name=None, **kwargs):
+def mark_stencil(
+    *,
+    backend=None,
+    definition=None,
+    build_info=None,
+    dtypes=None,
+    externals=None,
+    name=None,
+    rebuild=False,
+    **kwargs,
+):
     from gt4py import frontend
 
     def _decorator(func):
         defaults = {
-            "backend": default_backend,
+            "backend": backend,
             "frontend": frontend.from_name("gtscript"),
             "dtypes": dtypes,
             "externals": externals or {},
+            "build_info": build_info,
+            "name": name,
+            "rebuild": rebuild,
         }
-        if name:
-            defaults["name"] = name
         defaults.update(kwargs)
 
-        return BuildContext(func, **defaults)
+        return LazyStencil(BuildContext(func, **defaults))
 
-    return _decorator
+    if definition is None:
+        return _decorator
+    return decorator(definition)
 
 
 # GTScript builtins: domain axes

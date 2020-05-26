@@ -10,6 +10,7 @@ import click
 import gt4py
 from gt4py import gtsimport
 from gt4py.build import BeginStage, BindingsStage, BuildContext
+from gt4py.gtscript import LazyStencil
 
 
 def get_backend_options():
@@ -195,7 +196,7 @@ def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options,
     stencils = [
         v
         for k, v in input_module.__dict__.items()
-        if k.startswith != "_" and isinstance(v, BuildContext)
+        if k.startswith != "_" and isinstance(v, LazyStencil)
     ]
 
     frontend = gt4py.frontend.from_name("gtscript")
@@ -208,7 +209,8 @@ def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options,
     if not output_path.exists():
         output_path.mkdir(mode=0o755)
 
-    for ctx in stencils:
+    for lazy_stencil in stencils:
+        ctx = lazy_stencil.ctx
         ctx["output_path"] = output_path
         ctx["backend"] = backend
         ctx["frontend"] = frontend
@@ -216,7 +218,7 @@ def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options,
         ctx["externals"].update(externals or {})
         ctx["bindings"] = bindings
         ctx["compile_bindings"] = compile_bindings
-        builder = BeginStage(ctx).make()
+        builder = lazy_stencil.begin_build()
         if not bindings and not backend.BINDINGS_LANGUAGES:
             stage = builder
             while not stage.is_final():
