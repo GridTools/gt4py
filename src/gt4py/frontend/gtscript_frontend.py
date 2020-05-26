@@ -486,7 +486,7 @@ class IRMaker(ast.NodeVisitor):
     def __call__(self, ast_root: ast.AST):
         assert (
             isinstance(ast_root, ast.Module)
-            and ast_root._fields == ("body",)
+            and "body" in ast_root._fields
             and len(ast_root.body) == 1
             and isinstance(ast_root.body[0], ast.FunctionDef)
         )
@@ -1252,7 +1252,7 @@ class GTScriptParser(ast.NodeVisitor):
     def run(self):
         assert (
             isinstance(self.ast_root, ast.Module)
-            and self.ast_root._fields == ("body",)
+            and "body" in self.ast_root._fields
             and len(self.ast_root.body) == 1
             and isinstance(self.ast_root.body[0], ast.FunctionDef)
         )

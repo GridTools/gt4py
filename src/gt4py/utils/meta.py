@@ -293,6 +293,9 @@ class ASTEvaluator(ASTPass):
     def visit_Num(self, node):
         return node.n
 
+    def visit_Constant(self, node):
+        return node.n
+
     def visit_NameConstant(self, node):
         return node.value
 
