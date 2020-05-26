@@ -14,7 +14,6 @@ import gt4py
 
 
 LOGGER = logging.Logger("GT4Py build logger")
-LOGGER.setLevel("INFO")
 
 
 class BuildContext:
@@ -77,6 +76,7 @@ class BuildStage(abc.ABC):
     """Manage transition to the next build stage, adding information to the context."""
 
     def __init__(self, ctx):
+        LOGGER.warning("%s created.", self.__class__.__name__)
         self.ctx = ctx
 
     @abc.abstractmethod
@@ -85,6 +85,7 @@ class BuildStage(abc.ABC):
 
     def make(self):
         self._make()
+        LOGGER.warning("%s built.", self.__class__.__name__)
         return self
 
     @abc.abstractmethod
@@ -104,7 +105,6 @@ class BeginStage(BuildStage):
     """This stage is at the beginning of every build process."""
 
     def _make(self):
-        LOGGER.warning("Begin stage created.")
         pass
 
     def next_stage(self):
@@ -206,8 +206,10 @@ class SourceStage(BuildStage):
     def _make_lang_src(self):
         backend = self.ctx["backend"]
         generator = backend.PYEXT_GENERATOR_CLASS(
-            backend.get_pyext_class_name(self.ctx["id"]),
-            backend.get_pyext_module_name(self.ctx["id"]),
+            # backend.get_pyext_class_name(self.ctx["id"]),
+            self.ctx["name"],
+            # backend.get_pyext_module_name(self.ctx["id"]),
+            "_" + self.ctx["name"],
             backend._CPU_ARCHITECTURE,
             self.ctx["options"],
         )
@@ -236,6 +238,13 @@ class SourceStage(BuildStage):
         return BindingsStage
 
 
+class FakeId:
+    def __init__(self, name):
+        self.name = name
+        self.qualified_name = name
+        self.version = ""
+
+
 class BindingsStage(BuildStage):
     """
     Language bindings stage.
@@ -257,7 +266,7 @@ class BindingsStage(BuildStage):
     """
 
     def is_final(self):
-        return True
+        return not self.ctx.get("compile_bindings", False)
 
     def _make(self):
         if "python" in self.ctx["bindings"]:
@@ -266,17 +275,61 @@ class BindingsStage(BuildStage):
             generator_options["pyext_module_name"] = self.ctx.get(
                 "pyext_module_name", f"_{self.ctx['name']}"
             )
-            generator_options["pyext_file_path"] = self.ctx["pyext_file_path"]
+            generator_options["pyext_file_path"] = self.ctx["pyext_module_path"]
             self.ctx["generator_options"] = generator_options
             generator = backend.GENERATOR_CLASS(backend, options=generator_options)
             bindings_src = {}
-            print(bindings_src)
             bindings_src["python"] = {
                 "bindings.cpp": self.ctx.get("bindings_src", {}).get("bindings.cpp", ""),
-                f"{self.ctx['name']}.py": generator(self.ctx["id"], self.ctx["iir"]),
+                f"{self.ctx['name']}.py": generator(
+                    self.ctx["id"], self.ctx["iir"], override_stencil_class_name=self.ctx["name"]
+                ),
             }
-            print(bindings_src)
             self.ctx["bindings_src"] = bindings_src
+
+    def next_stage(self):
+        if not self.is_final():
+            return CompileBindingsStage
+        return None
+
+
+class CompileBindingsStage(BuildStage):
+    """
+    Compile language bindings stage.
+
+    Make context requirements
+    -------------------------
+
+    * `backend` must support language bindings
+    * `bindings` must be a non-empty list of languages supported by `backend`
+    * `compile_bindings` must be True
+    * `bindings_src_files` must be a dict with a key for each language in `bindings` and a list for each
+        key containing existing source files for the compilation
+    * `pyext_module_name` must be the name of the target module
+    * `pyext_module_path` must be an existing directory
+    * `pyext_opts`, optional options for the pyext builder
+
+    Side effects
+    ------------
+
+    * `pyext_module_path`/`pyext_module_name`.so will be a compiled python extension object file
+    """
+
+    def is_final(self):
+        return True
+
+    def _make(self):
+        if "python" in self.ctx["bindings"] and self.ctx["compile_bindings"]:
+            backend = self.ctx["backend"]
+            pyext_opts = self.ctx.get("pyext_opts", {})
+            module_name, file_path = backend.build_pyext(
+                self.ctx["pyext_module_name"],
+                sources=self.ctx["bindings_src_files"]["python"],
+                build_path=self.ctx["pyext_module_path"],
+                target_path=self.ctx["pyext_module_path"],
+                **pyext_opts,
+            )
+            self.ctx["pyext_file_path"] = file_path
 
     def next_stage(self):
         return None

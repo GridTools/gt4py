@@ -276,7 +276,7 @@ class BaseModuleGenerator(abc.ABC):
         with open(self.TEMPLATE_PATH, "r") as f:
             self.template = jinja2.Template(f.read())
 
-    def __call__(self, stencil_id, implementation_ir):
+    def __call__(self, stencil_id, implementation_ir, *, override_stencil_class_name=None):
         self.stencil_id = stencil_id
         self.implementation_ir = implementation_ir
 
@@ -366,7 +366,7 @@ class BaseModuleGenerator(abc.ABC):
         module_source = self.template.render(
             imports=imports,
             module_members=module_members,
-            class_name=self.stencil_class_name,
+            class_name=override_stencil_class_name or self.stencil_class_name,
             class_members=class_members,
             docstring=implementation_ir.docstring,
             gt_backend=self.backend_name,

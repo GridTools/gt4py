@@ -67,6 +67,7 @@ class GTCUDABackend(gt_backend.BaseGTBackend):
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }
+    build_pyext = pyext_builder.build_gtcuda_ext
 
     @classmethod
     def generate_extension(cls, stencil_id, implementation_ir, options):

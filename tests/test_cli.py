@@ -7,6 +7,7 @@ import numpy
 
 from gt4py import storage
 from gt4py import cli
+from gt4py import gtsimport
 
 
 @pytest.fixture
@@ -80,6 +81,19 @@ def library_stencil(tmp_path):
     module_file = tmp_path / "library_stencil"
 
 
+@pytest.fixture(scope="function")
+def reset_importsys():
+    print("storing data")
+    stored_sys_path = sys.path.copy()
+    stored_metapath = sys.meta_path.copy()
+    stored_modules = sys.modules.copy()
+    yield
+    print("resetting data")
+    sys.path = stored_sys_path
+    sys.meta_path = stored_metapath
+    sys.modules = stored_modules
+
+
 def test_gtpyc_help(clirunner):
     """Calling the CLI with --help should print the usage message."""
     result = clirunner.invoke(cli.gtpyc, ["--help"])
@@ -99,7 +113,7 @@ def test_gtpyc_compile_debug(clirunner, simple_stencil, tmp_path):
     assert "init_1.py" in py_files
 
 
-def test_gtpyc_compile_gtx86_pyext(clirunner, simple_stencil, tmp_path):
+def test_gtpyc_compile_gtx86_pyext(clirunner, simple_stencil, tmp_path, clean_imports):
     """Compile the test stencil binary python extension using the gtx86 backend and check the resulting source structure."""
     output_path = tmp_path / "gtpyc_test_gtx86"
     result = clirunner.invoke(
@@ -115,16 +129,18 @@ def test_gtpyc_compile_gtx86_pyext(clirunner, simple_stencil, tmp_path):
         ],
     )
     assert result.exit_code == 0
-    stencil_path = output_path / "init_1"
-    print(list(stencil_path.iterdir()))
-    py_files = [path for path in stencil_path.iterdir() if path.suffix == ".py"]
-    stencil_modules = [path for path in py_files if path.name.startswith("m_init_1")]
+    print(result.output)
+    print(list(output_path.iterdir()))
+    py_files = [path for path in output_path.iterdir() if path.suffix == ".py"]
+    stencil_modules = [path for path in py_files if path.name.startswith("init_1")]
     ext_modules = [
         path
-        for path in stencil_path.iterdir()
-        if path.suffix == ".so" and path.name.startswith("m_init_1")
+        for path in output_path.iterdir()
+        if path.suffix == ".so" and path.name.startswith("_init_1")
     ]
-    build_paths = [path for path in stencil_path.iterdir() if path.name.endswith("BUILD")]
+    build_paths = [
+        path for path in output_path.iterdir() if path.name.startswith("src_") and path.is_dir()
+    ]
     assert ext_modules
     assert stencil_modules
     assert build_paths
@@ -135,6 +151,12 @@ def test_gtpyc_compile_gtx86_pyext(clirunner, simple_stencil, tmp_path):
     assert "computation.cpp" in cpp_files
     assert "bindings.cpp" in cpp_files
     assert "computation.hpp" in hpp_files
+    sys.path.append(str(output_path))
+    import init_1
+
+    print(init_1)
+    print(init_1.__dict__.keys())
+    assert init_1.init_1
 
 
 def test_gtpyc_nopy_gtx86(clirunner, simple_stencil, tmp_path):
@@ -144,8 +166,9 @@ def test_gtpyc_nopy_gtx86(clirunner, simple_stencil, tmp_path):
         cli.gtpyc, [f"--output-path={output_path}", "--backend=gtx86", str(simple_stencil)],
     )
     assert result.exit_code == 0
-    src_files = [path.name for path in output_path.iterdir()]
-    assert set(["init_1.hpp", "init_1.cpp"]) == set(src_files)
+    src_path = output_path / f"src_init_1"
+    src_files = [path.name for path in src_path.iterdir()]
+    assert set(["computation.hpp", "computation.cpp"]) == set(src_files)
 
 
 def test_gtpyc_withpy_gtx86(clirunner, simple_stencil, tmp_path):
@@ -161,9 +184,11 @@ def test_gtpyc_withpy_gtx86(clirunner, simple_stencil, tmp_path):
         ],
     )
     assert result.exit_code == 0
-    src_files = [path.name for path in output_path.iterdir()]
-    src_files.sort()
-    assert set(["bindings.cpp", "init_1.cpp", "init_1.hpp", "init_1.py"]) == set(src_files)
+    src_path = output_path / f"src_init_1"
+    output_contents = [path.name for path in output_path.iterdir()]
+    src_contents = [path.name for path in src_path.iterdir()]
+    assert set(["init_1.py", "src_init_1"]) == set(output_contents)
+    assert set(["bindings.cpp", "computation.cpp", "computation.hpp"]) == set(src_contents)
 
 
 def test_sub_and_multi(clirunner, features_stencil, tmp_path):
@@ -177,7 +202,14 @@ def test_sub_and_multi(clirunner, features_stencil, tmp_path):
     assert src_files.issuperset({"some_stencil.py", "fill.py"})
 
 
-def test_externals(clirunner, features_stencil, tmp_path):
+@pytest.mark.parametrize(
+    "backend",
+    [
+        ("--backend=debug",),
+        pytest.param(("--backend=gtx86", "--bindings=python", "--compile-bindings")),
+    ],
+)
+def test_externals(clirunner, features_stencil, tmp_path, reset_importsys, backend):
     """override externals on commandline."""
     import json
     import traceback
@@ -206,9 +238,54 @@ def test_externals(clirunner, features_stencil, tmp_path):
         rf'["\'\s]*fill_value["\'\s]*[:=]["\'\s]*{fill_value}["\'\s]*', fill_f.read_text()
     )
 
-    fill_m = cli.module_from_path(fill_f)
+    sys.path.append(str(fill_f.parent))
+    import fill as fill_m
+
     data = storage.empty(backend="debug", shape=(2, 2, 1), dtype=float, default_origin=((0, 0, 0)))
     stencil_name = [name for name in fill_m.__dict__.keys() if name.startswith("fill")][0]
     stencil = getattr(fill_m, stencil_name)()
     stencil(data)
+    assert (data == numpy.full((2, 2, 1), fill_value)).all()
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        ("--backend=debug",),
+        ("--backend=numpy",),
+        pytest.param(
+            ("--backend=gtx86", "--bindings=python", "--compile-bindings"),
+            marks=pytest.mark.xfail(
+                reason="using numpy arrays for storatges is not yet implemented for gtx86"
+            ),
+        ),
+    ],
+)
+def test_run_with_array(clirunner, features_stencil, tmp_path, reset_importsys, backend):
+    """override externals on commandline."""
+    import json
+    import traceback
+
+    output_path = tmp_path / "gtpyc_test_externals"
+    my_constant = 42
+    fill_value = 8.0
+    externals = json.dumps({"my_constant": my_constant, "fill_value": fill_value})
+    args = [
+        f"--output-path={output_path}",
+        *backend,
+        f"--externals={externals}",
+        str(features_stencil),
+    ]
+    print(args)
+    result = clirunner.invoke(cli.gtpyc, args,)
+    fill_f = output_path / "fill.py"
+    print(list(output_path.iterdir()))
+    sys.path.append(str(output_path))
+    import fill as fill_m
+
+    data = numpy.empty(shape=(2, 2, 1), dtype=float)
+    print(fill_m.__dict__.keys())
+    stencil_name = [name for name in fill_m.__dict__.keys() if name.startswith("fill")][0]
+    stencil = getattr(fill_m, stencil_name)()
+    stencil(data, origin=(0, 0, 0))
     assert (data == numpy.full((2, 2, 1), fill_value)).all()

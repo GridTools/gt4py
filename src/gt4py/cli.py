@@ -9,7 +9,7 @@ import click
 
 import gt4py
 from gt4py import gtsimport
-from gt4py.build import BeginStage, BuildContext
+from gt4py.build import BeginStage, BindingsStage, BuildContext
 
 
 def get_backend_options():
@@ -215,6 +215,7 @@ def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options,
         ctx["build_options"] = build_options or ctx["options"]
         ctx["externals"].update(externals or {})
         ctx["bindings"] = bindings
+        ctx["compile_bindings"] = compile_bindings
         builder = BeginStage(ctx).make()
         if not bindings and not backend.BINDINGS_LANGUAGES:
             stage = builder
@@ -223,21 +224,26 @@ def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options,
             mod_name = f"{ctx['name']}.py"
             mod_f = output_path / mod_name
             mod_f.write_text(ctx["src"][mod_name])
-        elif compile_bindings:
-            package_path = files_from_ctx(ctx)
-            shutil.copytree(package_path, output_path / ctx["name"])
         else:
             ctx["pyext_module_name"] = "_" + ctx["name"]
-            ctx["pyext_file_path"] = output_path / ctx["pyext_module_name"]
+            ctx["pyext_module_path"] = str(output_path)
             stage = builder
             while not stage.is_final():
                 stage = stage.make_next()
+                if isinstance(stage, BindingsStage):
+                    break
+            src_path = output_path / f"src_{ctx['name']}"
+            src_path.mkdir()
             for name in ctx["src"]:
-                output_path.joinpath(name.replace("computation", ctx["name"])).write_text(
-                    ctx["src"][name]
-                )
+                src_path.joinpath(name).write_text(ctx["src"][name])
             if bindings == "python":
-                pybind_f = output_path / f"bindings.cpp"
+                pybind_f = src_path / f"bindings.cpp"
                 pybind_f.write_text(ctx["bindings_src"]["python"]["bindings.cpp"])
+                if compile_bindings:
+                    ctx["bindings_src_files"] = {
+                        "python": [str(s) for s in src_path.iterdir() if s.suffix != ".hpp"]
+                    }
+                    stage.make_next()
+                    click.echo(f"compiled python bindings to {ctx['pyext_file_path']}")
                 mod_f = output_path / f'{ctx["name"]}.py'
                 mod_f.write_text(ctx["bindings_src"]["python"][mod_f.name])

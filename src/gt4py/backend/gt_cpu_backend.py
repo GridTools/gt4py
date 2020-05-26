@@ -84,6 +84,7 @@ def mc_is_compatible_layout(field):
 
 class GTCPUBackend(gt_backend.BaseGTBackend):
     SRC_EXTENSION = "cpp"
+    build_pyext = pyext_builder.build_gtcpu_ext
 
     @classmethod
     def generate_extension(cls, stencil_id, implementation_ir, options):
