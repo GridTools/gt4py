@@ -20,7 +20,7 @@ def reset_importsys():
     sys.modules = stored_modules
 
 
-@pytest.fixture(params=[".pygt", ".gts"])
+@pytest.fixture(params=[".pygt", ".gts", ".gt.py"])
 def extension(request):
     yield request.param
 
@@ -263,7 +263,9 @@ def test_single_file_import_module(make_single_file):
 
     single_file = make_single_file("sfile_im")
     gtsimport.install(search_path=[single_file.parent])
-    sfile_im = import_module(single_file.stem)
+    print(single_file.stem)
+    print(single_file.suffixes)
+    sfile_im = import_module(single_file.stem.split(".")[0])
     assert sfile_im.SENTINEL == 5
 
 
