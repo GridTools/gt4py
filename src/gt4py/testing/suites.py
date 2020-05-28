@@ -380,13 +380,13 @@ class StencilTestSuite(metaclass=SuiteMeta):
         instance, to avoid duplication of (potentially expensive) compilations.
         """
         cls = type(self)
-        implementation = gtscript.stencil(
+        implementation = gtscript.mark_stencil(
             backend=test["backend"],
             definition=test["definition"],
             name=f"{test['suite']}_{test['backend']}_{test['test_id']}",
             rebuild=True,
             externals=externals_dict,
-        )
+        ).implementation
 
         for k, v in externals_dict.items():
             implementation._gt_constants_[k] = v

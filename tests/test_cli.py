@@ -10,6 +10,15 @@ from gt4py import cli
 from gt4py import gtsimport
 
 
+def has_cupy():
+    try:
+        import cupy
+
+        return True
+    except ImportError:
+        return False
+
+
 @pytest.fixture
 def clirunner():
     yield CliRunner()
@@ -207,6 +216,10 @@ def test_sub_and_multi(clirunner, features_stencil, tmp_path):
     [
         ("--backend=debug",),
         pytest.param(("--backend=gtx86", "--bindings=python", "--compile-bindings")),
+        pytest.param(
+            ("--backend=gtcuda", "--bindings=python", "--compile-bindings"),
+            marks=pytest.mark.skipif(not has_cupy(), reason="cupy not installed"),
+        ),
     ],
 )
 def test_externals(clirunner, features_stencil, tmp_path, reset_importsys, backend):
@@ -258,6 +271,15 @@ def test_externals(clirunner, features_stencil, tmp_path, reset_importsys, backe
             marks=pytest.mark.xfail(
                 reason="using numpy arrays for storatges is not yet implemented for gtx86"
             ),
+        ),
+        pytest.param(
+            ("--backend=gtcuda", "--bindings=python", "--compile-bindings"),
+            marks=[
+                pytest.mark.skipif(not has_cupy(), reason="cupy not installed"),
+                pytest.mark.xfail(
+                    reason="using numpy arrays for storatges is not yet implemented for gtx86"
+                ),
+            ],
         ),
     ],
 )

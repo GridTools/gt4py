@@ -98,7 +98,19 @@ class LazyStencil:
 
     @cached_property
     def implementation(self):
-        impl = stencil(**self.ctx)
+        keys = ["backend", "definition", "build_info", "dtypes", "externals", "name", "rebuild"]
+        kwargs = {k: v for k, v in self.ctx._data.items() if k in keys}
+        kwargs.update(self.ctx["options"].as_dict()["backend_opts"])
+        impl = stencil(**kwargs,)
+        return impl
+
+    @property
+    def backend(self):
+        return self.implementation.backend
+
+    @property
+    def field_info(self):
+        return self.implementation.field_info
 
     def begin_build(self):
         return BeginStage(self.ctx).make()
@@ -212,9 +224,9 @@ def stencil(
 
 
 def mark_stencil(
-    *,
     backend=None,
     definition=None,
+    *,
     build_info=None,
     dtypes=None,
     externals=None,
@@ -240,7 +252,7 @@ def mark_stencil(
 
     if definition is None:
         return _decorator
-    return decorator(definition)
+    return _decorator(definition)
 
 
 # GTScript builtins: domain axes
