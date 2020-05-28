@@ -361,6 +361,8 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             else:
                 info["sources"] = {}
 
+            info["docstring"] = definition_ir.docstring
+
             parallel_axes = definition_ir.domain.parallel_axes or []
             sequential_axis = definition_ir.domain.sequential_axis.name
             domain_info = gt_definitions.DomainInfo(

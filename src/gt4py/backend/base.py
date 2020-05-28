@@ -487,7 +487,7 @@ class BaseModuleGenerator(abc.ABC):
             module_members=module_members,
             class_name=self.stencil_class_name,
             class_members=class_members,
-            docstring=implementation_ir.docstring,
+            docstring=wrapper_info["docstring"],
             gt_backend=self.backend_name,
             gt_source=wrapper_info["sources"],
             gt_domain_info=wrapper_info["domain_info"],
@@ -522,6 +522,7 @@ class BaseModuleGenerator(abc.ABC):
 
     def _generate_wrapper_info(self) -> Dict[str, Any]:
         info = {}
+        implementation_ir = self.implementation_ir
 
         if self.definition_ir.sources is not None:
             info["sources"].update(
@@ -533,7 +534,8 @@ class BaseModuleGenerator(abc.ABC):
         else:
             info["sources"] = {}
 
-        implementation_ir = self.implementation_ir
+        info["docstring"] = implementation_ir.docstring
+
         parallel_axes = implementation_ir.domain.parallel_axes or []
         sequential_axis = implementation_ir.domain.sequential_axis.name
         info["domain_info"] = repr(
