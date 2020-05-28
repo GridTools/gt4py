@@ -1,6 +1,7 @@
 import pathlib
 import sys
 import subprocess
+import os
 
 import pytest
 
@@ -40,7 +41,7 @@ def make_single_file(tmp_path, extension, reset_importsys):
                 "## using-dsl: gtscript\n"
                 "\n"
                 "\n"
-                "@mark_stencil()\n"
+                "@lazy_stencil()\n"
                 "def single_file(a: Field[float]):\n"
                 "    with computation(PARALLEL), interval(...):\n"
                 "        a = 1.\n"
@@ -88,7 +89,7 @@ def make_two_files(tmp_path, extension, reset_importsys):
                 "SENTINEL = 43\n"
                 "\n"
                 "\n"
-                "@mark_stencil()\n"
+                "@lazy_stencil()\n"
                 "def a_square_b(a: FT, b: FT):\n"
                 "    with computation(PARALLEL), interval(...):\n"
                 "        a = square(b)\n"
@@ -163,7 +164,7 @@ def make_package(tmp_path, extension, reset_importsys):
                 "@function\n"
                 "def mf(a, *, const):\n"
                 "    return SENTINEL * const\n\n\n"
-                '@mark_stencil(externals={"C": CONST})\n'
+                '@lazy_stencil(externals={"C": CONST})\n'
                 "def ms(a: Field[float]):\n"
                 "    from __externals__ import C\n"
                 "    with computation(PARALLEL), interval(...):\n"
@@ -200,7 +201,7 @@ def make_package(tmp_path, extension, reset_importsys):
         sub_sub_path.write_text(
             (
                 "## using-dsl: gtscript\n\n\n"
-                "@mark_stencil()\n"
+                "@lazy_stencil()\n"
                 "def sss(a: Field[float]):\n"
                 "    with computation(PARALLEL), interval(...):\n"
                 "        a = 0\n\n\n"
@@ -212,7 +213,7 @@ def make_package(tmp_path, extension, reset_importsys):
     yield run
 
 
-def test_single_file_import(make_single_file):
+def test_single_file_import(make_single_file, reset_importsys):
     """Test using basic import statement for a gtscript module."""
     single_file = make_single_file("sfile_imp")
     gtsimport.install(search_path=[single_file.parent])

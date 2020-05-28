@@ -40,7 +40,7 @@ def simple_stencil(tmp_path, clean_imports):
             "## using-dsl: gtscript\n"
             "\n"
             "\n"
-            "@mark_stencil()\n"
+            "@lazy_stencil()\n"
             "def init_1(input_field: Field[float]):\n"
             "    with computation(PARALLEL), interval(...):\n"
             "        input_field = 1\n"
@@ -67,14 +67,14 @@ def features_stencil(tmp_path, clean_imports):
             "    return field_a + constant * field_b\n"
             "\n"
             "\n"
-            "@mark_stencil(externals={'my_constant': CONSTANT})\n"
+            "@lazy_stencil(externals={'my_constant': CONSTANT})\n"
             "def some_stencil(field_a: Field[numpy.float], field_b: Field[numpy.float]):\n"
             "    from __externals__ import my_constant\n"
             "    with computation(PARALLEL), interval(...):\n"
             "        field_a = some_operation(field_a, field_b, constant=my_constant)\n"
             "\n"
             "\n"
-            "@mark_stencil(externals={'fill_value': CONSTANT})\n"
+            "@lazy_stencil(externals={'fill_value': CONSTANT})\n"
             "def fill(field_a: Field[numpy.float]):\n"
             "    from __externals__ import fill_value\n"
             "    with computation(PARALLEL), interval(...):\n"
@@ -105,7 +105,7 @@ def reset_importsys():
 
 def test_gtpyc_help(clirunner):
     """Calling the CLI with --help should print the usage message."""
-    result = clirunner.invoke(cli.gtpyc, ["--help"])
+    result = clirunner.invoke(cli.gtpyc, ["--help"], catch_exceptions=False)
     assert result.exit_code == 0
     assert "Usage: " in result.output
 
@@ -114,7 +114,9 @@ def test_gtpyc_compile_debug(clirunner, simple_stencil, tmp_path):
     """Compile the test stencil using the debug backend and check for compiled source files."""
     output_path = tmp_path / "gtpyc_test_debug"
     result = clirunner.invoke(
-        cli.gtpyc, [f"--output-path={output_path}", "--backend=debug", str(simple_stencil)]
+        cli.gtpyc,
+        [f"--output-path={output_path}", "--backend=debug", str(simple_stencil)],
+        catch_exceptions=False,
     )
     assert result.exit_code == 0
     print(list(output_path.iterdir()))
@@ -136,6 +138,7 @@ def test_gtpyc_compile_gtx86_pyext(clirunner, simple_stencil, tmp_path, clean_im
             "verbose=True",
             str(simple_stencil),
         ],
+        catch_exceptions=False,
     )
     assert result.exit_code == 0
     print(result.output)
@@ -172,7 +175,9 @@ def test_gtpyc_nopy_gtx86(clirunner, simple_stencil, tmp_path):
     """Only generate the c++ files."""
     output_path = tmp_path / "gtpyc_test_nopy"
     result = clirunner.invoke(
-        cli.gtpyc, [f"--output-path={output_path}", "--backend=gtx86", str(simple_stencil)],
+        cli.gtpyc,
+        [f"--output-path={output_path}", "--backend=gtx86", str(simple_stencil)],
+        catch_exceptions=False,
     )
     assert result.exit_code == 0
     src_path = output_path / f"src_init_1"
@@ -191,6 +196,7 @@ def test_gtpyc_withpy_gtx86(clirunner, simple_stencil, tmp_path):
             "--bindings=python",
             str(simple_stencil),
         ],
+        catch_exceptions=False,
     )
     assert result.exit_code == 0
     src_path = output_path / f"src_init_1"
@@ -204,7 +210,9 @@ def test_sub_and_multi(clirunner, features_stencil, tmp_path):
     """generate two or more stencils, one using a subroutine."""
     output_path = tmp_path / "gtpyc_test_submulti"
     result = clirunner.invoke(
-        cli.gtpyc, [f"--output-path={output_path}", "--backend=debug", str(features_stencil),]
+        cli.gtpyc,
+        [f"--output-path={output_path}", "--backend=debug", str(features_stencil),],
+        catch_exceptions=False,
     )
     assert result.exit_code == 0, result.output
     src_files = set(path.name for path in output_path.iterdir())
@@ -239,6 +247,7 @@ def test_externals(clirunner, features_stencil, tmp_path, reset_importsys, backe
             f"--externals={externals}",
             str(features_stencil),
         ],
+        catch_exceptions=False,
     )
     assert result.exit_code == 0, traceback.print_tb(result.exc_info[2])
     some_stencil_f = output_path / "some_stencil.py"
@@ -299,7 +308,7 @@ def test_run_with_array(clirunner, features_stencil, tmp_path, reset_importsys, 
         str(features_stencil),
     ]
     print(args)
-    result = clirunner.invoke(cli.gtpyc, args,)
+    result = clirunner.invoke(cli.gtpyc, args, catch_exceptions=False)
     fill_f = output_path / "fill.py"
     print(list(output_path.iterdir()))
     sys.path.append(str(output_path))

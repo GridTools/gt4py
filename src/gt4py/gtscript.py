@@ -56,7 +56,7 @@ builtins = {
     "__INLINED",
 }
 
-__all__ = list(builtins) + ["function", "stencil", "mark_stencil"]
+__all__ = list(builtins) + ["function", "stencil", "lazy_stencil"]
 
 __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
@@ -93,29 +93,87 @@ def function(func):
 
 
 class LazyStencil:
+    """
+    A stencil object which defers compilation until it is needed.
+
+    Usually obtained using the py:function:`gt4py.gtscript.lazy_stencil` decorator, not directly instanciated.
+
+    This is done by keeping all the necessary information in a py:class:`gt4py.build.BuildContex`
+    object in the `ctx` attribute.
+
+    Compilation happens implicitly on first access to the `implementation` property.
+    A step by step compilation process can be initiated by calling py:function:`gt4py.gtscript.LazyStencil.begin_build`.
+    """
+
     def __init__(self, context):
         self.ctx = context
 
     @cached_property
     def implementation(self):
+        """
+        The compiled backend-specific python callable which executes the stencil.
+
+        Compilation happens at first access, the result is cached and should consecutively be
+        accessible without overhead (not rigorously tested / benchmarked).
+        """
         keys = ["backend", "definition", "build_info", "dtypes", "externals", "name", "rebuild"]
         kwargs = {k: v for k, v in self.ctx._data.items() if k in keys}
         kwargs.update(self.ctx["options"].as_dict()["backend_opts"])
-        impl = stencil(**kwargs,)
+        impl = self._jit_build()
         return impl
+
+    def _jit_build(self):
+        """Build and load."""
+        from gt4py import loader as gt_loader
+
+        _set_arg_dtypes(self.ctx["definition"], self.ctx.get("dtypes"))
+        return gt_loader.gtscript_loader(
+            self.ctx["definition"],
+            backend=self.ctx["backend"],
+            build_options=self.ctx["options"],
+            externals=self.ctx["externals"],
+        )
 
     @property
     def backend(self):
-        return self.implementation.backend
+        """
+        The backend to be used for compilation.
+
+        Does not trigger a build.
+        """
+        return self.ctx["backend"]
 
     @property
     def field_info(self):
+        """
+        Access the compiled stencil object's `field_info` attribute.
+
+        Triggers a build if necessary.
+        """
         return self.implementation.field_info
 
     def begin_build(self):
+        """
+        Create a py:class:`gt4py.build.BeginStage` from the build context.
+
+        No generation / compilation is done yet, but the process can be stepped through
+        by calling py:function:`gt4py.build.BeginStage.make_next` on the result.
+        """
         return BeginStage(self.ctx).make()
 
+    def check_syntax(self):
+        """
+        Create the gtscript IR for the stencil, failing on syntax errors.
+
+        This step is cached and will be skipped on subsequent builds starting from
+        py:function:`gt4py.gtscript.LazyStencil.begin_build`.
+        """
+        BeginStage(self.ctx).make().make_next()
+
     def __call__(self, *args, **kwargs):
+        """
+        Execute the stencil, building the stencil if necessary.
+        """
         self.implementation(*args, **kwargs)
 
 
@@ -223,7 +281,7 @@ def stencil(
         return _decorator(definition)
 
 
-def mark_stencil(
+def lazy_stencil(
     backend=None,
     definition=None,
     *,
@@ -232,8 +290,10 @@ def mark_stencil(
     externals=None,
     name=None,
     rebuild=False,
+    eager=False,
     **kwargs,
 ):
+    """Create a LazyStencil object with deferred compilation from a stencil definition function."""
     from gt4py import frontend
 
     def _decorator(func):
@@ -252,6 +312,8 @@ def mark_stencil(
 
     if definition is None:
         return _decorator
+    elif eager:
+        return _decorator(definition).implementation
     return _decorator(definition)
 
 

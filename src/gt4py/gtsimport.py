@@ -1,8 +1,10 @@
 """
 GTScript import machinery.
 
-Usage:
-..code-block:python:
+Usage Example
+-------------
+
+..code-block:python::
 
     from gt4py import gtsimport
 

@@ -380,7 +380,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         instance, to avoid duplication of (potentially expensive) compilations.
         """
         cls = type(self)
-        implementation = gtscript.mark_stencil(
+        implementation = gtscript.lazy_stencil(
             backend=test["backend"],
             definition=test["definition"],
             name=f"{test['suite']}_{test['backend']}_{test['test_id']}",

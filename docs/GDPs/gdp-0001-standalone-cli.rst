@@ -314,13 +314,13 @@ decorator we want to be able to override them on the CLI.
 Lazy stencil decorator
 ++++++++++++++++++++++
 
-The :py:func:`gt4py.gtscript.stencil` decorator will be extended to return an intermediate object, a
-drop-in replacement for the compiled :py:class:`StencilObject` which triggers the compilation
-process only when used in a way that requires the stencil to be compiled first.  On the other hand
-it will hold all contextual information given to the decorator, which will allow ``gtpyc`` to
-trigger it's slightly modified build process.
+The reference implementation contains an additional `lazy_stencil` decorator, which returns a `BuildContext` object.
+A build context holds all the information required to perform a build step, such as stencil definition, backend choice, backend options etc.
+Furthermore from a build context a build manager object can be constructed, which allows stepping through the build process by passing the context object from step to step.
 
-GTScript import system
+After adoption of this GDP, the object returned by `lazy_stencil` should also offer a `__call__` method which compiles the stencil completely and caches the result for further calls, after that it should be renamed to `lazy_stencil` or incorporated into the `stencil` decorator with an optional kwarg.
+
+Gtscript import system
 ++++++++++++++++++++++
 
 GTScript files can import Python modules and vice versa, after installing the GTScript import
