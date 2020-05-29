@@ -5,13 +5,12 @@ Data structures to pass information along and facilitate the entire build proces
 Allows fine grained control of build stages.
 """
 import abc
-import copy
 import typing
 import logging
-from collections import ChainMap
 
 import gt4py
-
+from cached_property import cached_property
+from gt4py.gtscript_impl import _set_arg_dtypes
 
 LOGGER = logging.Logger("GT4Py build logger")
 
@@ -110,7 +109,7 @@ class BuildStage(abc.ABC):
     """Manage transition to the next build stage, adding information to the context."""
 
     def __init__(self, ctx):
-        LOGGER.warning("%s created.", self.__class__.__name__)
+        LOGGER.info("%s created.", self.__class__.__name__)
         self.ctx = ctx
 
     @abc.abstractmethod
@@ -119,7 +118,7 @@ class BuildStage(abc.ABC):
 
     def make(self):
         self._make()
-        LOGGER.warning("%s built.", self.__class__.__name__)
+        LOGGER.info("%s built.", self.__class__.__name__)
         return self
 
     @abc.abstractmethod
@@ -356,3 +355,88 @@ class CompileBindingsStage(BuildStage):
 
     def next_stage(self):
         return None
+
+
+class LazyStencil:
+    """
+    A stencil object which defers compilation until it is needed.
+
+    Usually obtained using the :func:`gt4py.gtscript.lazy_stencil` decorator, not directly instanciated.
+
+    This is done by keeping all the necessary information in a :class:`gt4py.build.BuildContex`
+    object in the `ctx` attribute.
+
+    Compilation happens implicitly on first access to the `implementation` property.
+    A step by step compilation process can be initiated by calling :func:`gt4py.build.LazyStencil.begin_build`.
+    """
+
+    def __init__(self, context):
+        self.ctx = context
+
+    @cached_property
+    def implementation(self):
+        """
+        The compiled backend-specific python callable which executes the stencil.
+
+        Compilation happens at first access, the result is cached and should consecutively be
+        accessible without overhead (not rigorously tested / benchmarked).
+        """
+        keys = ["backend", "definition", "build_info", "dtypes", "externals", "name", "rebuild"]
+        kwargs = {k: v for k, v in self.ctx._data.items() if k in keys}
+        kwargs.update(self.ctx["options"].as_dict()["backend_opts"])
+        impl = self._jit_build()
+        return impl
+
+    def _jit_build(self):
+        """Build and load."""
+        from gt4py import loader as gt_loader
+
+        _set_arg_dtypes(self.ctx["definition"], self.ctx.get("dtypes"))
+        return gt_loader.gtscript_loader(
+            self.ctx["definition"],
+            backend=self.ctx["backend"],
+            build_options=self.ctx["options"],
+            externals=self.ctx["externals"],
+        )
+
+    @property
+    def backend(self):
+        """
+        The backend to be used for compilation.
+
+        Does not trigger a build.
+        """
+        return self.ctx["backend"]
+
+    @property
+    def field_info(self):
+        """
+        Access the compiled stencil object's `field_info` attribute.
+
+        Triggers a build if necessary.
+        """
+        return self.implementation.field_info
+
+    def begin_build(self):
+        """
+        Create a :class:`gt4py.build.BeginStage` from the build context.
+
+        No generation / compilation is done yet, but the process can be stepped through
+        by calling :func:`gt4py.build.BeginStage.make_next` on the result.
+        """
+        return BeginStage(self.ctx).make()
+
+    def check_syntax(self):
+        """
+        Create the gtscript IR for the stencil, failing on syntax errors.
+
+        This step is cached and will be skipped on subsequent builds starting from
+        :func:`gt4py.gtscript.LazyStencil.begin_build`.
+        """
+        BeginStage(self.ctx).make().make_next()
+
+    def __call__(self, *args, **kwargs):
+        """
+        Execute the stencil, building the stencil if necessary.
+        """
+        self.implementation(*args, **kwargs)

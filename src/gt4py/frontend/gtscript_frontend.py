@@ -22,6 +22,7 @@ import itertools
 import numbers
 import types
 
+import gt4py.gtscript_impl
 import numpy as np
 
 from gt4py import definitions as gt_definitions
@@ -958,7 +959,7 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
 
 class GTScriptParser(ast.NodeVisitor):
 
-    CONST_VALUE_TYPES = (*gtscript._VALID_DATA_TYPES, types.FunctionType, type(None))
+    CONST_VALUE_TYPES = (*gt4py.gtscript_impl._VALID_DATA_TYPES, types.FunctionType, type(None))
 
     def __init__(self, definition, *, options, externals=None):
         assert isinstance(definition, types.FunctionType)
@@ -1013,11 +1014,11 @@ class GTScriptParser(ast.NodeVisitor):
                         )
                     default = param.default
 
-                if isinstance(param.annotation, (str, gtscript._FieldDescriptor)):
+                if isinstance(param.annotation, (str, gt4py.gtscript_impl._FieldDescriptor)):
                     dtype_annotation = param.annotation
                 elif (
                     isinstance(param.annotation, type)
-                    and param.annotation in gtscript._VALID_DATA_TYPES
+                    and param.annotation in gt4py.gtscript_impl._VALID_DATA_TYPES
                 ):
                     dtype_annotation = np.dtype(param.annotation)
                 elif param.annotation is inspect.Signature.empty:
@@ -1187,11 +1188,15 @@ class GTScriptParser(ast.NodeVisitor):
 
         for arg_info, arg_annotation in zip(api_signature, api_annotations):
             try:
-                assert arg_annotation in gtscript._VALID_DATA_TYPES or isinstance(
-                    arg_annotation, (gtscript._SequenceDescriptor, gtscript._FieldDescriptor)
+                assert arg_annotation in gt4py.gtscript_impl._VALID_DATA_TYPES or isinstance(
+                    arg_annotation,
+                    (
+                        gt4py.gtscript_impl._SequenceDescriptor,
+                        gt4py.gtscript_impl._FieldDescriptor,
+                    ),
                 ), "Invalid parameter annotation"
 
-                if arg_annotation in gtscript._VALID_DATA_TYPES:
+                if arg_annotation in gt4py.gtscript_impl._VALID_DATA_TYPES:
                     dtype = np.dtype(arg_annotation)
                     if arg_info.default not in [gt_ir.Empty, None]:
                         assert np.dtype(type(arg_info.default)) == dtype
@@ -1199,7 +1204,7 @@ class GTScriptParser(ast.NodeVisitor):
                     parameter_decls[arg_info.name] = gt_ir.VarDecl(
                         name=arg_info.name, data_type=data_type, length=0, is_api=True
                     )
-                elif isinstance(arg_annotation, gtscript._SequenceDescriptor):
+                elif isinstance(arg_annotation, gt4py.gtscript_impl._SequenceDescriptor):
                     assert arg_info.default in [gt_ir.Empty, None]
                     data_type = gt_ir.DataType.from_dtype(np.dtype(arg_annotation))
                     length = arg_annotation.length
@@ -1207,7 +1212,7 @@ class GTScriptParser(ast.NodeVisitor):
                         name=arg_info.name, data_type=data_type, length=length, is_api=True
                     )
                 else:
-                    assert isinstance(arg_annotation, gtscript._FieldDescriptor)
+                    assert isinstance(arg_annotation, gt4py.gtscript_impl._FieldDescriptor)
                     assert arg_info.default in [gt_ir.Empty, None]
                     data_type = gt_ir.DataType.from_dtype(np.dtype(arg_annotation.dtype))
                     axes = [ax.name for ax in arg_annotation.axes]

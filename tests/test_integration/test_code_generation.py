@@ -16,6 +16,7 @@
 
 import itertools
 
+import gt4py.gtscript_impl
 import numpy as np
 import pytest
 
@@ -46,7 +47,7 @@ def test_generation_cpu(name, backend):
     stencil = gtscript.lazy_stencil(backend, stencil_definition, externals=externals)
     args = {}
     for k, v in stencil_definition.__annotations__.items():
-        if isinstance(v, gtscript._FieldDescriptor):
+        if isinstance(v, gt4py.gtscript_impl._FieldDescriptor):
             args[k] = gt_storage.ones(
                 dtype=v.dtype,
                 mask=gtscript.mask_from_axes(v.axes),

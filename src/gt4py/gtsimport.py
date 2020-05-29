@@ -4,7 +4,7 @@ GTScript import machinery.
 Usage Example
 -------------
 
-..code-block:python::
+::
 
     from gt4py import gtsimport
 
@@ -24,7 +24,7 @@ import pathlib
 import sys
 import tempfile
 import types
-from typing import Union, List
+from typing import Optional, Union, List
 
 
 GTS_EXTENSIONS = [".pygt", ".gtpy", ".gts", ".gt.py"]
@@ -55,14 +55,22 @@ def add_extension(path: pathlib.Path, extension: str):
 
 class GtsFinder:
     """
-    Implements the importlib.abc.PathFinder protocol.
+    Implements the :class:`importlib.abc.PathFinder` protocol.
 
-    This finder is responsible for finding .gs files within a given path.
+    This finder is responsible for finding GTScript files within a set of
+    search paths.
 
-    args:
-        * search_path: list of str / path to search in or None, in which case sys.path is used
-        * generate_path: str / path to generate py modules in or None in which case a temp dir is used
-        * in_source: bool, True if py modules should be built next to the gtscript files (generate_path is ignored if True)
+    Parameters
+    ----------
+    search_path : `List[Pathlike]`, optional
+        Search path for `gtscript` sources, defaults to `sys.path`
+
+    generate_path : `Pathlike`, optional
+        Path to generate py modules in. use a temp dir by default
+
+    in_source : `bool`, optional
+        If True, py modules are built next to the gtscript files
+        (generate_path is ignored).
     """
 
     def __init__(
@@ -132,7 +140,7 @@ class GtsFinder:
 
 class GtsLoader(importlib.machinery.SourceFileLoader):
     """
-    Extend SourceFileLoader for GTScript files.
+    Extend :class:`importlib.machinery.SourceFileLoader` for GTScript files, should not be used directly.
 
     Generate a python module for a GTScript file and use the super class to
     load that instead.
@@ -143,6 +151,22 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
         super().__init__(fullname, path)
 
     def get_filename(self, fullname):
+        """
+        Generate a py module if an up to date one doesn't exist yet.
+
+        Create the generation directory if necessary.
+        Use file stats to check if the module needs to be updated.
+
+
+        Parameters
+        ----------
+        fullname : `str`
+            Dotted name corresponding to the gtscript module.
+
+        Returns:
+
+            The file path of the generated py module as a string
+        """
         if not self.module_file.parent.exists():
             self.module_file.parent.mkdir(exist_ok=True)
         if not self.module_file.exists():
@@ -162,10 +186,28 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
 
 def install(
     *,
-    search_path: Union[List[Union[str, pathlib.Path]], None] = None,
-    generate_path: Union[str, pathlib.Path, None] = None,
+    search_path: Optional[List[Union[str, pathlib.Path]]] = None,
+    generate_path: Optional[Union[str, pathlib.Path]] = None,
     in_source: bool = False,
 ):
+    """
+    Install GTScript import extensions.
+
+    Parameters
+    ----------
+    search_path : `List[Pathlike]`
+        A list of paths where gtscript files are expected to be found.
+        Also added to the search path for python files.
+
+    generate_path : `Pathlike`, optional
+        Path to a directory where python modules generated from `gtscript` files
+        will be created. Can be used to cache the process between runs.
+        If none is given, a temporary directory is used.
+
+    in_source: `bool`
+        If true, `generate_path` will be ignored and python modules will be
+        generated alongside the corresponding `gtscript` sources.
+    """
     finder = GtsFinder(search_path=search_path, generate_path=generate_path, in_source=in_source)
     finder.install()
     return finder

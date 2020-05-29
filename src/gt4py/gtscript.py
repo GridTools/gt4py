@@ -20,21 +20,21 @@ Interface functions to define and compile GTScript definitions and empty symbol
 definitions for the keywords of the DSL.
 """
 
-import collections
-import functools
 import inspect
-import types
-
-import numpy as np
-from cached_property import cached_property
 
 from gt4py import definitions as gt_definitions
-from gt4py import utils as gt_utils
-from gt4py import __gtscript__, __externals__
-from gt4py.build import BuildContext, BeginStage
-
+from gt4py import __gtscript__, __externals__  # noqa
+from gt4py.build import BuildContext, LazyStencil
 
 # GTScript builtins
+from gt4py.gtscript_impl import (
+    _FieldDescriptorMaker,
+    _Axis,
+    _SequenceDescriptorMaker,
+    _ComputationContextManager,
+    _set_arg_dtypes,
+)
+
 builtins = {
     "I",
     "J",
@@ -62,27 +62,6 @@ __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
 
 
-_VALID_DATA_TYPES = (bool, np.bool, int, np.int32, np.int64, float, np.float32, np.float64)
-
-
-def _set_arg_dtypes(definition, dtypes):
-    assert isinstance(definition, types.FunctionType)
-    annotations = getattr(definition, "__annotations__", {})
-    for arg, value in annotations.items():
-        if isinstance(value, _FieldDescriptor) and isinstance(value.dtype, str):
-            if value.dtype in dtypes:
-                annotations[arg] = _FieldDescriptor(dtypes[value.dtype], value.axes)
-            else:
-                raise ValueError(f"Missing '{value.dtype}' dtype definition for arg '{arg}'")
-        elif isinstance(value, str):
-            if value in dtypes:
-                annotations[arg] = dtypes[value]
-            else:
-                raise ValueError(f"Missing '{value}' dtype definition for arg '{arg}'")
-
-    return definition
-
-
 def function(func):
     """GTScript function."""
 
@@ -90,91 +69,6 @@ def function(func):
 
     gt_frontend.GTScriptParser.annotate_definition(func)
     return func
-
-
-class LazyStencil:
-    """
-    A stencil object which defers compilation until it is needed.
-
-    Usually obtained using the py:function:`gt4py.gtscript.lazy_stencil` decorator, not directly instanciated.
-
-    This is done by keeping all the necessary information in a py:class:`gt4py.build.BuildContex`
-    object in the `ctx` attribute.
-
-    Compilation happens implicitly on first access to the `implementation` property.
-    A step by step compilation process can be initiated by calling py:function:`gt4py.gtscript.LazyStencil.begin_build`.
-    """
-
-    def __init__(self, context):
-        self.ctx = context
-
-    @cached_property
-    def implementation(self):
-        """
-        The compiled backend-specific python callable which executes the stencil.
-
-        Compilation happens at first access, the result is cached and should consecutively be
-        accessible without overhead (not rigorously tested / benchmarked).
-        """
-        keys = ["backend", "definition", "build_info", "dtypes", "externals", "name", "rebuild"]
-        kwargs = {k: v for k, v in self.ctx._data.items() if k in keys}
-        kwargs.update(self.ctx["options"].as_dict()["backend_opts"])
-        impl = self._jit_build()
-        return impl
-
-    def _jit_build(self):
-        """Build and load."""
-        from gt4py import loader as gt_loader
-
-        _set_arg_dtypes(self.ctx["definition"], self.ctx.get("dtypes"))
-        return gt_loader.gtscript_loader(
-            self.ctx["definition"],
-            backend=self.ctx["backend"],
-            build_options=self.ctx["options"],
-            externals=self.ctx["externals"],
-        )
-
-    @property
-    def backend(self):
-        """
-        The backend to be used for compilation.
-
-        Does not trigger a build.
-        """
-        return self.ctx["backend"]
-
-    @property
-    def field_info(self):
-        """
-        Access the compiled stencil object's `field_info` attribute.
-
-        Triggers a build if necessary.
-        """
-        return self.implementation.field_info
-
-    def begin_build(self):
-        """
-        Create a py:class:`gt4py.build.BeginStage` from the build context.
-
-        No generation / compilation is done yet, but the process can be stepped through
-        by calling py:function:`gt4py.build.BeginStage.make_next` on the result.
-        """
-        return BeginStage(self.ctx).make()
-
-    def check_syntax(self):
-        """
-        Create the gtscript IR for the stencil, failing on syntax errors.
-
-        This step is cached and will be skipped on subsequent builds starting from
-        py:function:`gt4py.gtscript.LazyStencil.begin_build`.
-        """
-        BeginStage(self.ctx).make().make_next()
-
-    def __call__(self, *args, **kwargs):
-        """
-        Execute the stencil, building the stencil if necessary.
-        """
-        self.implementation(*args, **kwargs)
 
 
 # Interface functions
@@ -291,9 +185,56 @@ def lazy_stencil(
     name=None,
     rebuild=False,
     eager=False,
+    check_syntax=False,
     **kwargs,
 ):
-    """Create a LazyStencil object with deferred compilation from a stencil definition function."""
+    """
+    Create a stencil object with deferred building and optional up-front syntax checking.
+
+    Parameters
+    ----------
+        backend : `str`
+            Name of the implementation backend.
+
+        definition : `None` when used as a decorator, otherwise a `function` or a `:class:`gt4py.StencilObject`
+            Function object defining the stencil.
+
+        build_info : `dict`, optional
+            Dictionary used to store information about the stencil generation.
+            (`None` by default).
+
+        dtypes: `dict`[`str`, dtype_definition], optional
+            Specify dtypes for string keys in the argument annotations.
+
+        externals: `dict`, optional
+            Specify values for otherwise unbound symbols.
+
+        name : `str`, optional
+            The fully qualified name of the generated :class:`StencilObject`.
+            If `None`, it will be set to the qualified name of the definition function.
+            (`None` by default).
+
+        rebuild : `bool`, optional
+            Force rebuild of the :class:`gt4py.StencilObject` even if it is
+            found in the cache. (`False` by default).
+
+        eager : `bool`, optional
+            If true do not defer stencil building and instead return the fully built raw implementation object.
+
+        check_syntax: `bool`, optional
+            If true, build and cache the IR build stage already, which checks stencil definition syntax.
+
+        **kwargs: `dict`, optional
+            Extra backend-specific options. Check the specific backend
+            documentation for further information.
+
+    Returns
+    -------
+        :class:`gridtools.build.LazyStencil`
+            Wrapper arouund an instance of the dynamically-generated subclass of :class:`gt4py.StencilObject`.
+            Defers the generation step until the last moment and allows syntax checking independently.
+            Also gives access to a more fine grained generate / build process.
+    """
     from gt4py import frontend
 
     def _decorator(func):
@@ -308,26 +249,19 @@ def lazy_stencil(
         }
         defaults.update(kwargs)
 
-        return LazyStencil(BuildContext(func, **defaults))
+        stencil = LazyStencil(BuildContext(func, **defaults))
+        if eager:
+            stencil = stencil.implementation
+        elif check_syntax:
+            stencil.check_syntax()
+        return stencil
 
     if definition is None:
         return _decorator
-    elif eager:
-        return _decorator(definition).implementation
     return _decorator(definition)
 
 
 # GTScript builtins: domain axes
-class _Axis:
-    def __init__(self, name: str):
-        assert name
-        self.name = name
-
-    def __repr__(self):
-        return f"_Axis(name={self.name})"
-
-    def __str__(self):
-        return self.name
 
 
 I = _Axis("I")
@@ -369,50 +303,9 @@ BACKWARD = -1
 PARALLEL = 0
 """Parallel iteration order."""
 
-
-class _FieldDescriptor:
-    def __init__(self, dtype, axes):
-        if isinstance(dtype, str):
-            self.dtype = dtype
-        else:
-            if dtype not in _VALID_DATA_TYPES:
-                raise ValueError("Invalid data type descriptor")
-            self.dtype = np.dtype(dtype)
-        self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
-
-    def __repr__(self):
-        return f"_FieldDescriptor(dtype={repr(self.dtype)}, axes={repr(self.axes)})"
-
-    def __str__(self):
-        return f"Field<{str(self.dtype)}, [{', '.join(str(ax) for ax in self.axes)}]>"
-
-
-class _FieldDescriptorMaker:
-    def __getitem__(self, dtype_and_axes):
-        if isinstance(dtype_and_axes, collections.abc.Collection) and not isinstance(
-            dtype_and_axes, str
-        ):
-            dtype, axes = dtype_and_axes
-        else:
-            dtype, axes = [dtype_and_axes, IJK]
-        return _FieldDescriptor(dtype, axes)
-
-
 # GTScript builtins: variable annotations
 Field = _FieldDescriptorMaker()
 """Field descriptor."""
-
-
-class _SequenceDescriptor:
-    def __init__(self, dtype, length):
-        self.dtype = dtype
-        self.length = length
-
-
-class _SequenceDescriptorMaker:
-    def __getitem__(self, dtype, length=None):
-        return dtype, length
-
 
 Sequence = _SequenceDescriptorMaker()
 """Sequence descriptor."""
@@ -425,12 +318,6 @@ def externals(*args):
 
 
 # GTScript builtins: computation and interval statements
-class _ComputationContextManager:
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        pass
 
 
 def computation(order):

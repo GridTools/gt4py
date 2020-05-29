@@ -17,6 +17,8 @@
 import textwrap
 import types
 
+import gt4py.build
+import gt4py.gtscript_impl
 import numpy as np
 import pytest
 
@@ -42,7 +44,7 @@ def compile_definition(
     rebuild=False,
     **kwargs,
 ):
-    gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
+    gt4py.gtscript_impl._set_arg_dtypes(definition_func, dtypes=dtypes or {})
     build_options = gt_definitions.BuildOptions(
         name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=None
     )

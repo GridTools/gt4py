@@ -1,16 +1,15 @@
+"""GTScript compiler command line interface."""
 import copy
 import importlib
-import shutil
-import types
 import tempfile
 import pathlib
+import typing
 
 import click
 
 import gt4py
 from gt4py import gtsimport
-from gt4py.build import BeginStage, BindingsStage, BuildContext
-from gt4py.gtscript import LazyStencil
+from gt4py.build import BeginStage, BindingsStage, BuildContext, LazyStencil
 
 
 def get_backend_options():
@@ -19,75 +18,17 @@ def get_backend_options():
     return backend_options.keys()
 
 
-def eval_arg_types(definition):
-    """
-    Call `eval()` on the function's type annotations after importing `Field`.
-
-    This allows input modules to use string annotations of the type `arg: "Field[<dtype>]"`
-    where <dtype> must be a name available in this function's scope.
-
-    This is a poor quality version of what needs to be done in order to
-    support input modules that do not import gt4py.
-    """
-    assert isinstance(definition, types.FunctionType)
-    annotations = getattr(definition, "__annotations__", {})
-    for arg, value in annotations.items():
-        if isinstance(value, str):
-            annotations[arg] = eval(value)
-    return definition
-
-
-def module_from_path(location: pathlib.Path):
-    """
-    Load a python module file residing in <location> as an imported module.
-
-    This possibly duplicates functionality available elsewhere.
-    """
-    build_dir = pathlib.Path(tempfile.gettempdir())
-    source = location.read_text()
-
-    tmp_location = build_dir / location.name
-    tmp_location.write_text(
-        source.replace("## using-dsl: gtscript", "from gt4py.gtscript import *")
-    )
-    name = tmp_location.stem
-    module_spec = importlib.util.spec_from_file_location(name=name, location=tmp_location)
-    module = importlib.util.module_from_spec(module_spec)
-    module_spec.loader.exec_module(module)
-    return module
-
-
-def files_from_ctx(ctx):
-    """
-    Create a stencil object from a function definition.
-
-    This does not use the `gtscript.stencil` function, as it needs access to
-    the stencil id in order to retrieve the paths to the backend output files
-    from the backend.
-
-    Currently, this function creates and loads the python module in any case.
-    To avoid that in cases where it is not necessary will require refactoring
-    of the backend concept.
-    """
-    ir_stage = BeginStage(ctx).make_next()
-    backend = ctx["backend"]
-    stencil_obj = backend.generate(ctx["id"], ctx["ir"], ctx["definition"], ctx["options"])
-
-    package_path = pathlib.Path(backend.get_stencil_package_path(ctx["id"]))
-    return package_path
-
-
 class BackendChoice(click.Choice):
     name = "backend"
 
-    def convert(self, value, param, ctx):
+    def convert(self, value: typing.Optional[str], param: click.Parameter, ctx: click.Context):
         return gt4py.backend.from_name(super().convert(value, param, ctx))
 
 
 class BindingsLanguage(click.ParamType):
     name = "bindings"
 
-    def convert(self, value, param, ctx):
+    def convert(self, value: typing.Optional[str], param: click.Parameter, ctx: click.Context):
         backend = ctx.params["backend"]
         if value:
             if not backend.BINDINGS_LANGUAGES:
@@ -105,7 +46,13 @@ class BackendOption(click.ParamType):
 
     converter_map = {bool: click.BOOL, int: click.INT, float: click.FLOAT, str: click.STRING}
 
-    def _convert_value(self, type_spec, value, param, ctx):
+    def _convert_value(
+        self,
+        type_spec: typing.Type,
+        value: typing.Optional[str],
+        param: click.Parameter,
+        ctx: click.Context,
+    ):
         if type_spec in self.converter_map:
             return self.converter_map[type_spec].convert(value, param, ctx)
         elif hasattr(type_spec, "convert"):
@@ -113,7 +60,7 @@ class BackendOption(click.ParamType):
         else:
             return type_spec(value)
 
-    def convert(self, value, param, ctx):
+    def convert(self, value: typing.Optional[str], param: click.Parameter, ctx: click.Context):
         backend = ctx.params["backend"]
         if value:
             name, value = value.split("=")
@@ -129,7 +76,7 @@ class BackendOption(click.ParamType):
 class JsonInput(click.ParamType):
     name = "json"
 
-    def convert(self, value, param, ctx):
+    def convert(self, value: typing.Optional[str], param: click.Parameter, ctx: click.Context):
         if value:
             import json
 
@@ -172,7 +119,7 @@ class JsonInput(click.ParamType):
     "options",
     multiple=True,
     type=BackendOption(),
-    help="Backend flag (multiple allowed), format: -O key=value",
+    help="Backend option (multiple allowed), format: -O key=value",
 )
 @click.option(
     "--externals",
