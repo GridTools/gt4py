@@ -87,6 +87,15 @@ class JsonInput(click.ParamType):
         return value
 
 
+class Reporter:
+    def __init__(self, silent=False):
+        self._silent = silent
+
+    def echo(self, *args, **kwargs):
+        if not self._silent:
+            click.echo(*args, **kwargs)
+
+
 @click.command()
 @click.option(
     "--backend",
@@ -127,24 +136,33 @@ class JsonInput(click.ParamType):
     type=JsonInput(),
     help="JSON string describing externals overrides for all stencils.",
 )
+@click.option("--silent", "-s", default=False, is_flag=True, help="suppress output.")
 @click.argument("input_path", type=click.Path(file_okay=True, dir_okay=True, exists=True))
-def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options, externals):
+def gtpyc(
+    input_path, backend, output_path, bindings, compile_bindings, options, externals, silent
+):
     """
     GT4Py (GridTools for Python) stencil compiler.
 
     INPUT_PATH can be either a gtscript or python file or a python package.
     """
-
+    report = Reporter(silent)
     input_path = pathlib.Path(input_path)
     output_path = pathlib.Path(output_path)
     finder = gtsimport.install(search_path=[input_path.parent])
-    input_module = importlib.import_module(input_path.stem)
+    report.echo(f"reading input file {input_path}")
+    input_module = importlib.import_module(input_path.stem.split(".")[0])
+    report.echo(f"input file loaded as module {input_module}")
     build_options = dict(options)
     stencils = [
         v
         for k, v in input_module.__dict__.items()
         if k.startswith != "_" and isinstance(v, LazyStencil)
     ]
+    stencils_msg = "No stencils found."
+    if stencils:
+        stencil_msg = f"found stencils {', '.join(str(st) for st in stencils)}."
+    report.echo(stencil_msg)
 
     frontend = gt4py.frontend.from_name("gtscript")
 
@@ -156,8 +174,9 @@ def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options,
     if not output_path.exists():
         output_path.mkdir(mode=0o755)
 
-    for lazy_stencil in stencils:
-        ctx = lazy_stencil.ctx
+    for potential_stencil in stencils:
+        report.echo(f"Building stencil {potential_stencil.ctx['name']}")
+        ctx = potential_stencil.ctx
         ctx["output_path"] = output_path
         ctx["backend"] = backend
         ctx["frontend"] = frontend
@@ -165,7 +184,7 @@ def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options,
         ctx["externals"].update(externals or {})
         ctx["bindings"] = bindings
         ctx["compile_bindings"] = compile_bindings
-        builder = lazy_stencil.begin_build()
+        builder = potential_stencil.begin_build()
         if not bindings and not backend.BINDINGS_LANGUAGES:
             stage = builder
             while not stage.is_final():
@@ -173,6 +192,7 @@ def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options,
             mod_name = f"{ctx['name']}.py"
             mod_f = output_path / mod_name
             mod_f.write_text(ctx["src"][mod_name])
+            report.echo(f" -> {mod_f}")
         else:
             ctx["pyext_module_name"] = "_" + ctx["name"]
             ctx["pyext_module_path"] = str(output_path)
@@ -184,7 +204,9 @@ def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options,
             src_path = output_path / f"src_{ctx['name']}"
             src_path.mkdir()
             for name in ctx["src"]:
-                src_path.joinpath(name).write_text(ctx["src"][name])
+                src_file = src_path.joinpath(name)
+                src_file.write_text(ctx["src"][name])
+                report.echo(f" -> {src_file}")
             if bindings == "python":
                 pybind_f = src_path / f"bindings.cpp"
                 pybind_f.write_text(ctx["bindings_src"]["python"]["bindings.cpp"])
@@ -196,3 +218,4 @@ def gtpyc(input_path, backend, output_path, bindings, compile_bindings, options,
                     click.echo(f"compiled python bindings to {ctx['pyext_file_path']}")
                 mod_f = output_path / f'{ctx["name"]}.py'
                 mod_f.write_text(ctx["bindings_src"]["python"][mod_f.name])
+            report.echo(f" -> {mod_f}")
