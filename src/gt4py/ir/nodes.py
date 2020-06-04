@@ -118,15 +118,13 @@ storing a reference to the piece of source code which originated the node.
         # level: VarRef = access to `int` or `[int]` variable holding the run-time value of the level
         # offset: int
 
-    IterationSpace(istart: AxisBound, iend=AxisBound, jstart=AxisBound, jend=AxisBound)
-        # starts are inclusive
-        # ends are excluded
-
-    AxisInterval(start: AxisBound, end: AxisBound, [space: IterationSpace])
+    AxisInterval(start: AxisBound, end: AxisBound)
         # start is included
         # end is excluded
 
-    ComputationBlock(interval: AxisInterval, order: IterationOrder, body: BlockStmt)
+    ComputationBlock(interval: AxisInterval, order: IterationOrder,
+                     [parallel_interval: List[AxisInterval],] body: BlockStmt)
+        # If parallel interval is defined, the horizontal iteration space is restricted
 
     ArgumentInfo(name: str, is_keyword: bool, [default: Any])
 
@@ -689,8 +687,9 @@ class AxisInterval(Node):
 class ComputationBlock(Node):
     # TODO Should this be renamed to "sequential_interval"?
     interval = attribute(of=AxisInterval)
-    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
+    # TODO Should this be renamed to "sequential_interation_order"?
     iteration_order = attribute(of=IterationOrder)
+    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
     body = attribute(of=BlockStmt)
     loc = attribute(of=Location, optional=True)
 
