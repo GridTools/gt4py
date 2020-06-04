@@ -20,10 +20,13 @@ import types
 import numpy as np
 import pytest
 
+from collections import namedtuple
+
 from gt4py import gtscript
 from gt4py import definitions as gt_definitions
 from gt4py.frontend import gtscript_frontend as gt_frontend
 from gt4py import utils as gt_utils
+from gt4py import Interval
 
 from ..utils import id_version
 
@@ -476,3 +479,12 @@ class TestAssignmentSyntax:
                 with computation(PARALLEL), interval(...):
                     tmp[0, 0, 0] = 2 * in_field
                     out_field = tmp
+
+class TestRegionSyntax:
+    def test_custom_type_region(self):
+        # This is a custom type with the API
+        TestRegion = namedtuple("RegionObject", ("range"))
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...), region(TestRegion(range=(((Interval.START, 0), (Interval.START, 1)), ))):
+                out_field = in_field
