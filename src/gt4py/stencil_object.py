@@ -278,3 +278,5 @@ class StencilObject(abc.ABC):
         self.run(
             _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
         )
+        if exec_info is not None:
+            exec_info["call_run_end_time"] = time.perf_counter()

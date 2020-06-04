@@ -426,11 +426,6 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 cupy.cuda.Device(0).synchronize()
 """
             )
-        source = source + (
-            """if exec_info is not None:
-    exec_info["run_end_time"] = time.perf_counter()
-"""
-        )
         sources.extend(source.splitlines())
 
         return sources.text
