@@ -230,7 +230,9 @@ def test_sub_and_multi(clirunner, features_stencil, tmp_path):
         ),
     ],
 )
-def test_externals(clirunner, features_stencil, tmp_path, reset_importsys, backend):
+def test_externals_run_with_storage(
+    clirunner, features_stencil, tmp_path, reset_importsys, backend
+):
     """override externals on commandline."""
     import json
     import traceback
@@ -263,9 +265,11 @@ def test_externals(clirunner, features_stencil, tmp_path, reset_importsys, backe
     sys.path.append(str(fill_f.parent))
     import fill as fill_m
 
-    data = storage.empty(backend="debug", shape=(2, 2, 1), dtype=float, default_origin=((0, 0, 0)))
-    stencil_name = [name for name in fill_m.__dict__.keys() if name.startswith("fill")][0]
-    stencil = getattr(fill_m, stencil_name)()
+    stencil = fill_m.fill()
+
+    data = storage.empty(
+        backend=stencil.backend, shape=(2, 2, 1), dtype=float, default_origin=((0, 0, 0))
+    )
     stencil(data)
     assert (data == numpy.full((2, 2, 1), fill_value)).all()
 
@@ -292,7 +296,7 @@ def test_externals(clirunner, features_stencil, tmp_path, reset_importsys, backe
         ),
     ],
 )
-def test_run_with_array(clirunner, features_stencil, tmp_path, reset_importsys, backend):
+def test_externals_run_with_array(clirunner, features_stencil, tmp_path, reset_importsys, backend):
     """override externals on commandline."""
     import json
     import traceback
@@ -314,9 +318,9 @@ def test_run_with_array(clirunner, features_stencil, tmp_path, reset_importsys, 
     sys.path.append(str(output_path))
     import fill as fill_m
 
-    data = numpy.empty(shape=(2, 2, 1), dtype=float)
     print(fill_m.__dict__.keys())
-    stencil_name = [name for name in fill_m.__dict__.keys() if name.startswith("fill")][0]
-    stencil = getattr(fill_m, stencil_name)()
+    stencil = fill_m.fill()
+
+    data = numpy.empty(shape=(2, 2, 1), dtype=float)
     stencil(data, origin=(0, 0, 0))
     assert (data == numpy.full((2, 2, 1), fill_value)).all()

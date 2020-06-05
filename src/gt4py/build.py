@@ -7,9 +7,13 @@ Allows fine grained control of build stages.
 import abc
 import typing
 import logging
+import pathlib
+
+from cached_property import cached_property
 
 import gt4py
-from cached_property import cached_property
+import gt4py.frontend
+import gt4py.backend
 from gt4py.gtscript_impl import _set_arg_dtypes
 
 LOGGER = logging.Logger("GT4Py build logger")
@@ -30,7 +34,8 @@ class BuildContext:
     def __init__(self, definition, **kwargs):
         """BuildContext can be constructed from a function definition."""
         self.validate_kwargs(kwargs)
-        self._data = {k: v for k, v in kwargs.items() if v is not None}
+        self._data = {}
+        self.update({k: v for k, v in kwargs.items() if v is not None})
         self._data["definition"] = definition
         self._set_no_replace("module", getattr(definition, "__module__", ""))
         self._set_no_replace("name", definition.__name__)
@@ -45,6 +50,7 @@ class BuildContext:
                 build_info=self._data["build_info"],
             ),
         )
+        self.validate()
 
     @classmethod
     def validate_kwargs(cls, data):
@@ -90,19 +96,42 @@ class BuildContext:
         return self._data[key]
 
     def __setitem__(self, key: str, value: typing.Any):
+        if key == "backend":
+            value = self._process_backend(value)
+        elif key == "frontend":
+            value = self._process_frontend(value)
         self._data[key] = value
 
     def update(self, data: typing.Mapping):
-        self._data.update(data)
+        for key, value in data.items():
+            self[key] = value
 
-    def __contains__(self, key):
+    def __contains__(self, key: str):
         return key in self._data
 
-    def set_frontend(self, frontend_name: str):
-        self._data["frontend"] = gt4py.frontend.from_name(frontend_name)
+    def keys(self):
+        return self._data.keys()
 
-    def set_backend(self, backend_name: str):
-        self._data["backend"] = gt4py.backend.from_name(backend_name)
+    def __eq__(self, other):
+        return self._data == other._data
+
+    @classmethod
+    def _process_frontend(cls, frontend: typing.Union[str, type]):
+        original_value = frontend
+        if not isinstance(frontend, type):
+            frontend = gt4py.frontend.from_name(frontend)
+        if not frontend:
+            raise ValueError(f"invalid frontend {original_value}")
+        return frontend
+
+    @classmethod
+    def _process_backend(cls, backend: typing.Union[str, type]):
+        original_value = backend
+        if not isinstance(backend, type):
+            backend = gt4py.backend.from_name(backend)
+        if not backend:
+            raise ValueError(f"invalid backend {original_value}")
+        return backend
 
 
 class BuildStage(abc.ABC):
@@ -218,6 +247,7 @@ class SourceStage(BuildStage):
     Make context requirements:
 
     * `iir`
+    * `id` if backend generates python directly
     * `backend`
     * `options`
     * `bindings` if backend supports bindings and they should be generated
@@ -239,9 +269,7 @@ class SourceStage(BuildStage):
     def _make_lang_src(self):
         backend = self.ctx["backend"]
         generator = backend.PYEXT_GENERATOR_CLASS(
-            # backend.get_pyext_class_name(self.ctx["id"]),
             self.ctx["name"],
-            # backend.get_pyext_module_name(self.ctx["id"]),
             "_" + self.ctx["name"],
             backend._CPU_ARCHITECTURE,
             self.ctx["options"],
@@ -260,7 +288,11 @@ class SourceStage(BuildStage):
         generator_options = self.ctx["options"].as_dict()
         generator = backend.GENERATOR_CLASS(backend, options=generator_options)
         self.ctx["generator_options"] = generator_options
-        self.ctx["src"] = {f"{self.ctx['name']}.py": generator(self.ctx["id"], self.ctx["iir"])}
+        self.ctx["src"] = {
+            f"{self.ctx['name']}.py": generator(
+                self.ctx["id"], self.ctx["iir"], override_stencil_class_name=self.ctx["name"]
+            )
+        }
 
     def is_final(self):
         if self.ctx["backend"].BINDINGS_LANGUAGES and self.ctx.get("bindings", None):
@@ -280,13 +312,16 @@ class BindingsStage(BuildStage):
     * `backend` must support language bindings
     * `bindings` must be a non-empty list of languages supported by `backend`
     * `options`
-    * `pyext_module_name`, defaults to `_<name>`
-    * `pyext_module_path`
+    * `iir`
+    * `id`
+    * `pyext_file_path_final`
     * `bindings_src`, optional, may contain a key `bindings.cpp`.
 
     Make context modifications:
 
     * `bindings_src` is generated via the backend and should be a mapping of filenames to source strings
+    * `pyext_module_name` is taken from `pyext_file_path_final`
+    * `pyext_generator_options` records the options passed to the python extension generator.
     """
 
     def is_final(self):
@@ -295,12 +330,12 @@ class BindingsStage(BuildStage):
     def _make(self):
         if "python" in self.ctx["bindings"]:
             backend = self.ctx["backend"]
+            pyext_module_name = self.ctx["pyext_file_path_final"].split(".")[0]
             generator_options = self.ctx["options"].as_dict()
-            generator_options["pyext_module_name"] = self.ctx.get(
-                "pyext_module_name", f"_{self.ctx['name']}"
-            )
-            generator_options["pyext_file_path"] = self.ctx["pyext_module_path"]
-            self.ctx["generator_options"] = generator_options
+            generator_options["pyext_module_name"] = pyext_module_name
+            generator_options["pyext_file_path"] = self.ctx["pyext_file_path_final"]
+            self.ctx["pyext_generator_options"] = generator_options
+            self.ctx["pyext_module_name"] = generator_options["pyext_module_name"]
             generator = backend.GENERATOR_CLASS(backend, options=generator_options)
             bindings_src = {}
             bindings_src["python"] = {
@@ -351,7 +386,10 @@ class CompileBindingsStage(BuildStage):
                 target_path=self.ctx["pyext_module_path"],
                 **pyext_opts,
             )
-            self.ctx["pyext_file_path"] = file_path
+            tmp_pyext_file = pathlib.Path(file_path)
+            pyext_file = pathlib.Path(self.ctx["pyext_file_path_final"])
+            tmp_pyext_file.rename(pyext_file)
+            self.ctx["pyext_file_path"] = pyext_file
 
     def next_stage(self):
         return None
@@ -394,7 +432,7 @@ class LazyStencil:
         _set_arg_dtypes(self.ctx["definition"], self.ctx.get("dtypes"))
         return gt_loader.gtscript_loader(
             self.ctx["definition"],
-            backend=self.ctx["backend"],
+            backend=self.ctx["backend"].name,
             build_options=self.ctx["options"],
             externals=self.ctx["externals"],
         )

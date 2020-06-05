@@ -161,7 +161,8 @@ def gtpyc(
     ]
     stencils_msg = "No stencils found."
     if stencils:
-        stencil_msg = f"found stencils {', '.join(str(st) for st in stencils)}."
+        stencil_names = ", ".join('"' + st.ctx["name"] + '"' for st in stencils)
+        stencil_msg = f"Found {len(stencils)} stencils: {stencil_names}."
     report.echo(stencil_msg)
 
     frontend = gt4py.frontend.from_name("gtscript")
@@ -192,10 +193,11 @@ def gtpyc(
             mod_name = f"{ctx['name']}.py"
             mod_f = output_path / mod_name
             mod_f.write_text(ctx["src"][mod_name])
-            report.echo(f" -> {mod_f}")
+            report.echo(f" -> {mod_f.absolute()}")
         else:
             ctx["pyext_module_name"] = "_" + ctx["name"]
             ctx["pyext_module_path"] = str(output_path)
+            ctx["pyext_file_path_final"] = str(output_path / f"{ctx['pyext_module_name']}.so")
             stage = builder
             while not stage.is_final():
                 stage = stage.make_next()
@@ -206,16 +208,20 @@ def gtpyc(
             for name in ctx["src"]:
                 src_file = src_path.joinpath(name)
                 src_file.write_text(ctx["src"][name])
-                report.echo(f" -> {src_file}")
+                report.echo(f" -> {src_file.absolute()}")
             if bindings == "python":
                 pybind_f = src_path / f"bindings.cpp"
                 pybind_f.write_text(ctx["bindings_src"]["python"]["bindings.cpp"])
+                report.echo(f" -> {pybind_f.absolute()}")
                 if compile_bindings:
                     ctx["bindings_src_files"] = {
                         "python": [str(s) for s in src_path.iterdir() if s.suffix != ".hpp"]
                     }
                     stage.make_next()
-                    click.echo(f"compiled python bindings to {ctx['pyext_file_path']}")
+                    pyext_file = pathlib.Path(ctx["pyext_file_path"])
+                    pyext_file.rename(pathlib.Path(ctx["pyext_file_path_final"]))
+                    ctx["pyext_file_path"] = str(pyext_file.absolute())
+                    click.echo(f"compiled python bindings to {pyext_file.absolute()}")
                 mod_f = output_path / f'{ctx["name"]}.py'
                 mod_f.write_text(ctx["bindings_src"]["python"][mod_f.name])
-            report.echo(f" -> {mod_f}")
+                report.echo(f" -> {mod_f.absolute()}")
