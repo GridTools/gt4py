@@ -13,9 +13,8 @@ new features
 
 Additionally, if this PR contains code authored by new contributors:
 
-- [ ] All the authors have provided to us a signed copy of a copyright release
-form to ETH Zurich / Their employers have signed a custom collaboration
-agreement with ETH Zurich
+- [ ] All the authors are covered by a valid contributor assignment agreement,
+signed by the employer if needed, provided to ETH Zurich
 - [ ] The names of all the new contributors have been added to an updated
 version of the AUTHORS.rst file included in the PR
  

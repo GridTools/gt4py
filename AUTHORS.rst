@@ -2,17 +2,10 @@
 Authors
 =======
 
-Core developers
----------------
+.. List format (alphabetical order):  Surname, Name. Employer
 
-* Enrique G. Paredes <enriqueg@cscs.ch>
-* Linus Groner  <groner@cscs.ch>
-* Rico Häuselmann <ricoh@cscs.ch>
-
-Contributors
-------------
-
-* Hannes Vogt <vogt@cscs.ch>
-* Till Ehrengruber <ehrengruber@cscs.ch>
-
-.. Comment. Add yourself to the list as: Your Name <your_email@company.com>
+* Ehrengruber, Till. ETH Zurich - CSCS
+* González Paredes, Enrique. ETH Zurich - CSCS
+* Groner, Linus. ETH Zurich - CSCS
+* Häuselmann, Rico. ETH Zurich - CSCS
+* Vogt, Hannes. ETH Zurich - CSCS
