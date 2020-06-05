@@ -2,7 +2,7 @@
 Authors
 =======
 
-.. List format (alphabetical order):  Surname, Name. Employer
+.. List format (alphabetical order):  Surname, Name. Employer/Affiliation
 
 * Ehrengruber, Till. ETH Zurich - CSCS
 * González Paredes, Enrique. ETH Zurich - CSCS
