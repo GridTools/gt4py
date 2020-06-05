@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -14,10 +14,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Python bindings for Gridtools."""
+"""Python API to develop performance portable applications for weather and climate."""
 
-__copyright__ = "ETH Zurich"
-__license__ = "gpl3"
+__copyright__ = "Copyright (c) 2014-2020 ETH Zurich"
+__license__ = "GPLv3+"
 
 
 from . import config

@@ -1,4 +1,5 @@
-![](https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?branch=master)
+.. figure:: https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?branch=master
+   :alt: 
 
 GT4Py: GridTools for Python
 ===========================
@@ -6,12 +7,13 @@ GT4Py: GridTools for Python
 WARNING!
 --------
 
-GT4Py is still under development and is in an incomplete state. While 
-GT4Py has been proven to work for some basic applications already, we are
-working actively on making GT4Py suitable for more use cases by adding 
-features, improving performance as well as reliability and adding a thorough
-documentation. GT4Py will be changing for the time being. New features will
-be implemented, APIs may change and dependencies will be added.
+GT4Py is still under development and is in an incomplete state. While
+GT4Py has been proven to work for some basic applications already, we
+are working actively on making GT4Py suitable for more use cases by
+adding features, improving performance as well as reliability and adding
+a thorough documentation. GT4Py will be changing for the time being. New
+features will be implemented, APIs may change and dependencies will be
+added.
 
 
 Description
@@ -19,8 +21,8 @@ Description
 
 GT4Py is a Python library for generating high performance
 implementations of stencil kernels from a high-level definition using
-regular Python functions. GT4Py uses the [GridTools
-Framework](https://github.com/GridTools/gridtools) for a native
+regular Python functions. GT4Py uses the `GridTools
+Framework <https://github.com/GridTools/gridtools>`__ for a native
 implementation of the kernel, but other code-generating backends are
 also available.
 
@@ -37,21 +39,23 @@ boundary conditions, data management and bindings to C and Fortran.
 Installation instructions
 -------------------------
 
-GT4Py contains a standard `setup.py` installation script that might be
+GT4Py contains a standard ``setup.py`` installation script that might be
 installed as usual with *pip*. Additional commands are provided to
-install and remove the GridTools C++ sources, which are not
-contained in the package. 
+install and remove the GridTools C++ sources, which are not contained in
+the package.
 
-_**IMPORTANT:**_ if the user provides a custom installation of GridTools C++
-sources, it should be compatible with the latest stable release of GridTools,
-which is the version targeted by GT4Py. Note that a compilation problem may
-also appear if there is a different GridTools C++ version installed in a
-standard prefix (e.g. `/usr/local`) which could be included in user-provided
-or standard `setuptools` include paths (for example if _Boost_ is installed in
-the same prefix).
+**IMPORTANT:** if the user provides a custom installation of GridTools
+C++ sources, it should be compatible with the latest stable release of
+GridTools, which is the version targeted by GT4Py. Note that a
+compilation problem may also appear if there is a different GridTools
+C++ version installed in a standard prefix (e.g. ``/usr/local``) which
+could be included in user-provided or standard ``setuptools`` include
+paths (for example if *Boost* is installed in the same prefix).
 
-As usual in Python, we strongly recommended to create a new virtual environment for
-any project:
+As usual in Python, we strongly recommended to create a new virtual
+environment for any project:
+
+::
 
     # Create a virtual environment using the 'venv' module
     python -m venv path_for_the_new_venv
@@ -60,23 +64,28 @@ any project:
     source path_for_the_new_venv/bin/activate
     pip install --upgrade wheel
 
+Recommended installation for regular users
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-### Recommended installation for regular users
+If you are not planning to modify GT4Py sources, the easiest way to
+complete the installation would be:
 
-If you are not planning to modify GT4Py sources, the easiest way to complete
-the installation would be:
+::
 
     # First, clone the repository
     git clone https://github.com/gridtools/gt4py.git
-    
+
     # Then install the Python package directly from the local repository
     # For the CUDA backends add the '[cudaXX]' optional dependency 
     # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
     pip install -e ./gt4py     # pip install -e ./gt4py[cudaXX]
 
-Alternatively, if you do not need to build the documentation or look at the
-examples, you could install GT4Py directly from the GitHub repository:
-  
+Alternatively, if you do not need to build the documentation or look at
+the examples, you could install GT4Py directly from the GitHub
+repository:
+
+::
+
     # Install the package directly from GitHub:
     # For the CUDA backends add the '[cudaXX]' optional dependency 
     # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
@@ -86,30 +95,37 @@ examples, you could install GT4Py directly from the GitHub repository:
 In either case, you need to run a post-installation script to install
 GridTools C++ sources:
 
+::
+
     # Run the command to install GridTools C++ sources
     python -m gt4py.gt_src_manager install
 
-Note that `pip` will not delete GridTools C++ sources when uninstalling
-the package, so make sure you run the remove command in advance:
+Note that ``pip`` will not delete GridTools C++ sources when
+uninstalling the package, so make sure you run the remove command in
+advance:
+
+::
 
     python -m gt4py.gt_src_manager remove
     pip uninstall gt4py
 
-
-### Recommended installation for developers
+Recommended installation for developers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For GT4Py developers and advanced users, it is recommended to clone the
-repository and use an _editable_ installation of GT4Py:
+repository and use an *editable* installation of GT4Py:
+
+::
 
     # First, clone the repository
     git clone https://github.com/gridtools/gt4py.git
-    
+
     # Then install the Python package directly from the local repository
     # adding the '-e' flag to get an editable installation
     # For the CUDA backends add the '[cudaXX]' optional dependency 
     # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
     pip install -e ./gt4py     # pip install -e ./gt4py[cudaXX]
-    
+
     # Run the command to install GridTools C++ sources
     python -m gt4py.gt_src_manager install
 
@@ -117,20 +133,24 @@ repository and use an _editable_ installation of GT4Py:
 Documentation
 -------------
 
-A proper documentation is in the works. Please refer to the jupyter notebooks
-in the examples folder of this repository for examples of how GT4Py can be
-used, or the _Quickstart_ page of the documentation.
-To build it, you need to clone the repository first (follow the instructions
-in [_Recommended installation for developers_](#recommended-installation-for-developers))
-and then install the additional development requirements with:
+A proper documentation is in the works. Please refer to the jupyter
+notebooks in the examples folder of this repository for examples of how
+GT4Py can be used, or the *Quickstart* page of the documentation. To
+build it, you need to clone the repository first (follow the
+instructions in `Recommended installation for
+developers <#recommended-installation-for-developers>`__) and then
+install the additional development requirements with:
 
-    pip install -r ./gt4py/requirements_dev.txt
+::
+
+    pip install -r ./gt4py/requirements-dev.txt
 
 and then build the docs with:
 
+::
+
     cd gt4py/docs
     make html  # run 'make help' for a list of targets
-
 
 Development roadmap
 -------------------
@@ -138,16 +158,16 @@ Development roadmap
 A short overview of the new features and changes planned for the coming
 weeks & months.
 
+-  Integration with `Dawn <https://github.com/MeteoSwiss-APN/dawn>`__
+   compiler
+-  Update documentation (API reference, tutorial, notebooks and
+   examples)
+-  Missing features:
 
-*  Integration with [Dawn](https://github.com/MeteoSwiss-APN/dawn)
-    compiler
-* Update documentation (API reference, tutorial, notebooks and examples)
-* Missing features
-    - Support for unstructured grids (GTScript extensions)
-    - Support for run-time values in interval definitions (run-time splitters)
-    - Support for different field layouts (storages masks)
-    - Support for OOP-based stencil definitions
-    - Support for boundary condition functions
-    - Support for proper function & stencil calls
-
-
+   +  Support for unstructured grids (GTScript extensions)
+   +  Support for run-time values in interval definitions (run-time
+      splitters)
+   +  Support for different field layouts (storages masks)
+   +  Support for OOP-based stencil definitions
+   +  Support for boundary condition functions
+   +  Support for proper function & stencil calls
