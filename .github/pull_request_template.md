@@ -10,6 +10,8 @@ Before submitting this PR, please make sure:
 - [ ] The code passes all the existing tests
 - [ ] If this PR adds a new feature, new tests have been added to test these
 new features
+- [ ] All relevant documentation has been updated or added
+
 
 Additionally, if this PR contains code authored by new contributors:
 
