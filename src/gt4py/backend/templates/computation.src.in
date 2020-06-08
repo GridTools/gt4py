@@ -78,19 +78,24 @@ static constexpr gt::uint_t halo_size_j = {{ halo_sizes[1] }};
 static constexpr gt::uint_t halo_size_k = {{ halo_sizes[2] }};
 
 // Storage definitions
-template <int Id>
+template<typename LayoutMap, int Id,  gt::uint_t Alignment>
 using storage_info_t =
-    gt::storage_traits<backend_t>::storage_info_t<
-        Id, 3,
-        gt::halo<0, 0, 0 /* not used */>>;
+    gt::storage_traits<backend_t>::custom_layout_storage_info_align_t<Id, LayoutMap, gt::halo<0, 0, 0>, gt::alignment<Alignment>>;
 
-template<typename T, int Id>
+template<typename T,typename LayoutMap, int Id, gt::uint_t Alignment>
 using data_store_t =
-    gt::storage_traits<backend_t>::data_store_t<T, storage_info_t<Id>>;
+    gt::storage_traits<backend_t>::data_store_t<T, storage_info_t<LayoutMap, Id, Alignment>>;
+
+{%- if tmp_fields %}
+template<typename T, int Id>
+using tmp_data_store_t =
+    gt::storage_traits<backend_t>::data_store_t<T, gt::storage_traits<backend_t>::storage_info_t<0, 3>>;
+{%- endif %}
+
 
 // Placeholder definitions
 {%- for field in arg_fields %}
-using p_{{ field.name }} = gt::arg<{{ loop.index0 }}, data_store_t<{{ field.dtype }}, {{ field.layout_id }}>>;
+using p_{{ field.name }} = gt::arg<{{ loop.index0 }}, data_store_t<{{ field.dtype }}, gt::layout_map<{{ field.order_and_mask }}>, {{ field.layout_id }}, {{ field.alignment }}>>;
 {%- endfor %}
 {% for param in parameters %}
 using p_{{ param.name }} = gt::arg<{{ loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
@@ -150,34 +155,34 @@ auto make_grid(const std::array<gt::uint_t, 3>& compute_domain_shape) {
 {% if tmp_fields -%}
 // Placeholder definitions
 {%- for field in tmp_fields %}
-using p_{{ field.name }} = gt::tmp_arg<{{ loop.index0 }}, data_store_t<{{ field.dtype }}, 0>>;
+using p_{{ field.name }} = gt::tmp_arg<{{ loop.index0 }}, tmp_data_store_t<{{ field.dtype }}, 0>>;
 {%- endfor %}
 {%- endif %}
 
 
-template<typename T, int Id>
-data_store_t<T, Id> make_data_store(const BufferInfo& bi,
-                                    const std::array<gt::uint_t, 3>& compute_domain_shape,
-                                    const std::array<gt::uint_t, 3>& origin)
+template<typename T, typename LayoutMap, int Id, int Alignment>
+data_store_t<T, LayoutMap, Id, Alignment> make_data_store(const BufferInfo& bi,
+                                    const std::array<gt::uint_t, LayoutMap::unmasked_length>& compute_domain_shape,
+                                    const std::array<gt::uint_t, LayoutMap::unmasked_length>& origin)
 {
-    if (bi.ndim != 3) {
+    if (bi.ndim != LayoutMap::unmasked_length) {
         throw std::runtime_error("Wrong number of dimensions [" +
                                  std::to_string(bi.ndim) +
-                                 " != " + std::to_string(3) + "]");
+                                 " != " + std::to_string(LayoutMap::unmasked_length) + "]");
     }
 
     // ptr, dims and strides are "outer domain" (i.e., compute domain + halo
     // region). The halo region is only defined through `make_grid` (and
     // currently, in the storage info)
-    gt::array<gt::uint_t, 3> dims{};
-    gt::array<gt::uint_t, 3> strides{};
+    gt::array<gt::uint_t, LayoutMap::unmasked_length> dims{};
+    gt::array<gt::uint_t, LayoutMap::unmasked_length> strides{};
     T* ptr = static_cast<T*>(bi.ptr);
-    for (int i = 0; i < 3; ++i) {
+    for (gt::uint_t i = 0; i < LayoutMap::unmasked_length; ++i) {
         strides[i] = bi.strides[i] / sizeof(T);
         ptr += strides[i] * origin[i];
         dims[i] = compute_domain_shape[i]+2*origin[i];
     }
-    return data_store_t<T, Id>{storage_info_t<Id>{dims, strides}, ptr,
+    return data_store_t<T, LayoutMap, Id, Alignment>{ storage_info_t<LayoutMap, Id, Alignment>{dims, strides}, ptr,
 {%- if gt_backend == "cuda" %}
                            gt::ownership::external_gpu};
 {%- else %}
@@ -227,7 +232,7 @@ void run(const std::array<gt::uint_t, 3>& domain,
 #}
     // Initialize data stores from input buffers
 {%- for field in arg_fields %}
-    auto ds_{{ field.name }} = make_data_store<{{ field.dtype }}, {{ field.layout_id }}>(bi_{{ field.name }}, domain, {{ field.name }}_origin);
+    auto ds_{{ field.name }} = make_data_store<{{ field.dtype }},gt::layout_map<{{ field.order_and_mask }}>, {{ field.layout_id }}, {{ field.alignment }}>(bi_{{ field.name }}, domain, {{ field.name }}_origin);
 {%- endfor %}
 
     // Update global parameters

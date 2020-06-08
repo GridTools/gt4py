@@ -24,9 +24,11 @@ import collections
 import functools
 import inspect
 import types
+import numbers
 
 import numpy as np
 
+import gt4py
 from gt4py import definitions as gt_definitions
 from gt4py import utils as gt_utils
 
@@ -65,7 +67,7 @@ def _set_arg_dtypes(definition, dtypes):
     for arg, value in annotations.items():
         if isinstance(value, _FieldDescriptor) and isinstance(value.dtype, str):
             if value.dtype in dtypes:
-                annotations[arg] = _FieldDescriptor(dtypes[value.dtype], value.axes)
+                annotations[arg].dtype = _DType.normalize_value(dtypes[value.dtype])
             else:
                 raise ValueError(f"Missing '{value.dtype}' dtype definition for arg '{arg}'")
         elif isinstance(value, str):
@@ -193,7 +195,7 @@ def stencil(
 # GTScript builtins: domain axes
 class _Axis:
     def __init__(self, name: str):
-        assert name
+        assert name in "IJK"
         self.name = name
 
     def __repr__(self):
@@ -243,15 +245,181 @@ PARALLEL = 0
 """Parallel iteration order."""
 
 
+class _FieldAnnotationPropertyMaker:
+    def __init__(self, property: type):
+        self.property = property
+
+    def __getitem__(self, value):
+        return self.property(value)
+
+
+import abc
+
+
+class _FieldAnnotationProperty(abc.ABC):
+    def __init__(self, value):
+        self._value = self.normalize_value(value)
+
+    @staticmethod
+    @abc.abstractmethod
+    def normalize_value(value):
+        raise NotImplementedError
+
+    @property
+    def value(self):
+        return self._value
+
+
+class _DType(_FieldAnnotationProperty):
+    name = "dtype"
+
+    @staticmethod
+    def normalize_value(value):
+        try:
+            dtype = gt4py.ir.nodes.DataType.from_dtype(np.dtype(value))
+        except:
+            if isinstance(value, str):
+                return value
+            else:
+                raise TypeError(f"Invalid data type descriptor: dtype '{value}' not understood")
+        if dtype is gt4py.ir.nodes.DataType.INVALID:
+            raise ValueError(f"Invalid data type descriptor: dtype '{value}' not supported")
+        return dtype
+
+
+class _LayoutMap(_FieldAnnotationProperty):
+    name = "layout_map"
+
+    @staticmethod
+    def normalize_value(value):
+        if (
+            not gt_utils.is_iterable_of(value, int)
+            or not len(value) == 3
+            or not 0 in value
+            or not 1 in value
+            or not 2 in value
+        ):
+            raise TypeError("LayoutMap must be a permutation of (0, 1, 2).")
+        return tuple(value)
+
+
+LayoutMap = _FieldAnnotationPropertyMaker(_LayoutMap)
+
+
+class _Alignment(_FieldAnnotationProperty):
+    name = "alignment"
+
+    @staticmethod
+    def normalize_value(value):
+        if not isinstance(value, numbers.Integral) or not value > 0:
+            raise ValueError("Alignment must be a positive integer")
+        return int(value)
+
+
+Alignment = _FieldAnnotationPropertyMaker(_Alignment)
+
+
+class _DefaultParameters(_FieldAnnotationProperty):
+    name = "default_parameters"
+
+    @staticmethod
+    def normalize_value(value):
+        if not isinstance(value, str) or value not in gt4py.storage.default_parameters.REGISTRY:
+            raise ValueError(
+                f"DefaultParameters must be one of {list(gt4py.storage.default_parameters.REGISTRY.keys())}"
+            )
+        return gt4py.storage.default_parameters.REGISTRY[value]
+
+
+DefaultParameters = _FieldAnnotationPropertyMaker(_DefaultParameters)
+
+
+class _Axes(_FieldAnnotationProperty):
+    name = "axes"
+
+    @staticmethod
+    def normalize_value(value):
+        if isinstance(value, _Axis):
+            value = value.name
+        elif gt_utils.is_iterable_of(value, _Axis):
+            value = "".join(v.name for v in value)
+        elif not isinstance(value, str):
+            raise TypeError("Invalid Axes type")
+        if (
+            not all(c in "IJK" for c in value)
+            or len(set(value)) != len(value)
+            or sorted(value) != list(value)
+        ):
+            raise ValueError('Axes must be a sub-sequence of "IJK"')
+        return tuple(_Axis(c) for c in value)
+
+
 class _FieldDescriptor:
-    def __init__(self, dtype, axes):
-        if isinstance(dtype, str):
-            self.dtype = dtype
+    def __init__(self, *properties):
+
+        # self._dtype = None
+        # self._axes = None
+        # self._layout_map = None
+        # self._alignment = None
+        # self._default_parameters = None
+        # self._backend_defaults = None
+
+        defined_properties = set()
+        for prop in properties:
+            if not isinstance(prop, _FieldAnnotationProperty):
+                raise TypeError(f"Field property of type '{type(prop)}' not understood.")
+            if id(type(prop)) in defined_properties:
+                raise ValueError(
+                    f"Repeated specification of {type(prop).__name__} field property."
+                )
+            defined_properties.add(id(type(prop)))
+
+        dtype = list(prop for prop in properties if isinstance(prop, _DType))
+        if len(dtype) == 1:
+            self.dtype = dtype[0].value
         else:
-            if dtype not in _VALID_DATA_TYPES:
-                raise ValueError("Invalid data type descriptor")
-            self.dtype = np.dtype(dtype)
-        self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
+            assert len(dtype) == 0
+            raise ValueError("Missing dtype field property.")
+
+        axes = list(prop for prop in properties if isinstance(prop, _Axes))
+        if len(axes) == 1:
+            self.axes = axes[0].value
+        else:
+            assert len(axes) == 0
+            raise ValueError("Missing axes field property.")
+
+        self._backend_defaults = len(properties) <= 2
+
+        if not self._backend_defaults:
+            self.alignment = 1
+            self.layout_map = (0, 1, 2)
+            default_parameters = list(
+                prop for prop in properties if isinstance(prop, _DefaultParameters)
+            )
+            if len(default_parameters) == 1:
+                default_parameters = default_parameters[0].value
+                if default_parameters.alignment is not None:
+                    self.alignment = default_parameters.alignment
+                if default_parameters.layout_map is not None:
+                    self.layout_map = default_parameters.layout_map
+            else:
+                assert len(default_parameters) == 0
+
+            alignment = list(prop for prop in properties if isinstance(prop, _Alignment))
+            if len(alignment) == 1:
+                self.alignment = alignment[0].value
+            else:
+                assert len(alignment) == 0
+
+            layout_map = list(prop for prop in properties if isinstance(prop, _LayoutMap))
+            if len(layout_map) == 1:
+                layout_map = layout_map[0].value
+            else:
+                assert len(layout_map) == 0
+            axes = [a.name for a in self._axes]
+            mask = [c in axes for c in "IJK"]
+            masked_layout = tuple(l for m, l in zip(mask, layout_map) if m)
+            self.layout_map = tuple(int(l) for l in np.argsort(np.argsort(masked_layout)))
 
     def __repr__(self):
         return f"_FieldDescriptor(dtype={repr(self.dtype)}, axes={repr(self.axes)})"
@@ -261,14 +429,23 @@ class _FieldDescriptor:
 
 
 class _FieldDescriptorMaker:
-    def __getitem__(self, dtype_and_axes):
-        if isinstance(dtype_and_axes, collections.abc.Collection) and not isinstance(
-            dtype_and_axes, str
-        ):
-            dtype, axes = dtype_and_axes
+    def __getitem__(self, properties):
+        if isinstance(properties, collections.abc.Collection) and not isinstance(properties, str):
+            properties = list(properties)
         else:
-            dtype, axes = [dtype_and_axes, IJK]
-        return _FieldDescriptor(dtype, axes)
+            properties = [properties]
+        properties[0] = _FieldAnnotationPropertyMaker(_DType)[properties[0]]
+
+        if len(properties) > 1:
+            if not isinstance(properties[1], _FieldAnnotationProperty):
+                properties[1] = _FieldAnnotationPropertyMaker(_Axes)[properties[1]]
+
+        defined_properties = set()
+        for prop in properties:
+            defined_properties.add(id(type(prop)))
+        if id(_Axes) not in defined_properties:
+            properties.append(_FieldAnnotationPropertyMaker(_Axes)[IJK])
+        return _FieldDescriptor(*properties)
 
 
 # GTScript builtins: variable annotations

@@ -17,45 +17,5 @@
 """GridTools storages classes."""
 
 
-from .storage import empty, ones, zeros, from_array
-
-_numpy_patch = None
-
-
-def prepare_numpy():
-    """Apply NumPy module patch."""
-
-    import numpy as np
-
-    if "__gt_array_patch__" not in np.__dict__:
-        from functools import wraps
-        from gt4py import utils as gt_utils
-
-        global _numpy_patch
-
-        original_array_func = np.array
-
-        @wraps(np.array)
-        def __array_with_subok_patch(
-            object, dtype=None, copy=True, order="K", subok=False, ndmin=0
-        ):
-            subok = getattr(object, "__array_subok__", subok)
-            return original_array_func(
-                object, dtype=dtype, copy=copy, order=order, subok=subok, ndmin=ndmin
-            )
-
-        _numpy_patch = gt_utils.patch_module(np, np.array, __array_with_subok_patch)
-
-        np.__dict__["__gt_array_patch__"] = True
-
-
-def restore_numpy():
-    """Revert NumPy module patch."""
-
-    import numpy as np
-
-    if "__gt_array_patch__" in np.__dict__:
-        from gt4py import utils as gt_utils
-
-        gt_utils.restore_module(_numpy_patch)
-        del np.__dict__["__gt_array_patch__"]
+from .storage import empty, ones, zeros, full, storage, asstorage, Storage
+from .default_parameters import register, StorageDefaults

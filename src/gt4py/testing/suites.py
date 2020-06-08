@@ -423,12 +423,12 @@ class StencilTestSuite(metaclass=SuiteMeta):
             for k, f in fields.items():
                 if isinstance(f, np.ndarray):
 
-                    inputs[k] = gt_storage.from_array(
+                    inputs[k] = gt_storage.storage(
                         f,
                         dtype=test["definition"].__annotations__[k],
                         shape=f.shape,
                         default_origin=cls.origin,
-                        backend=test["backend"],
+                        default_parameters=test["backend"],
                     )
 
                 else:
@@ -484,7 +484,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 if isinstance(fields[name], np.ndarray):
 
                     np.testing.assert_allclose(
-                        value.data,
+                        value,
                         expected_value,
                         rtol=RTOL,
                         atol=ATOL,

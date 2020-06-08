@@ -181,39 +181,55 @@ class StencilObject(abc.ABC):
         for name, parameter_info in self.parameter_info.items():
             if parameter_info is not None and parameter_args[name] is None:
                 raise ValueError(f"Parameter '{name}' is None.")
+
+        observed_shapes = {}
+        backend = gt_backend.from_name(self.backend)
+
         # assert compatibility of fields with stencil
         for name, field in used_arg_fields.items():
-            if not gt_backend.from_name(self.backend).storage_info["is_compatible_layout"](field):
+            field_info = self.field_info[name]
+            if isinstance(field, gt_storage.Storage):
+                if not field.layout_map == field_info.layout_map:
+                    msg = (
+                        f"The layout_map of field '{name}' is {field.layout_map}, "
+                        f"but expected {field_info.layout_map}."
+                    )
+                    if gt_backend.from_name(self.backend).assert_specified_layout:
+                        raise ValueError(msg)
+                    else:
+                        warnings.warn(msg + " This will raise an exception for some backends.")
+                if not field.axes == "".join(field_info.axes):
+                    raise ValueError(
+                        f"Field '{name}' has axes {field.axes}, but expected {field_info.axes}."
+                    )
+            else:
+                msg = (
+                    f"The strides of field '{name}' are {field.strides}, which is "
+                    f"incompatible with expected layout_map {field_info.layout_map}."
+                )
+                if gt_backend.from_name(self.backend).assert_specified_layout:
+                    raise ValueError(msg)
+                else:
+                    warnings.warn(msg + " This will raise an exception for some backends.")
+                if not field.ndim == len(field_info.axes):
+                    raise ValueError(
+                        f"Field '{name}' has {field.ndims} dimensions, "
+                        f"but expected {len(field_info.axes)}."
+                    )
+
+            axes = tuple(field_info.axes)
+            if axes not in observed_shapes:
+                observed_shapes[axes] = field.shape
+            if observed_shapes[axes] != field.shape:
                 raise ValueError(
-                    f"The layout of the field {name} is not compatible with the backend."
+                    f"Field '{name}' has shape {field.shape}, but you passed another field with "
+                    f"the same axes {axes} but different shape {observed_shapes[axes]}."
                 )
 
-            if not gt_backend.from_name(self.backend).storage_info["is_compatible_type"](field):
-                raise ValueError(
-                    f"Field '{name}' has type '{type(field)}', which is not compatible with the '{self.backend}' backend."
-                )
-            elif type(field) is np.ndarray:
-                warnings.warn(
-                    "NumPy ndarray passed as field. This is discouraged and only works with constraints and only for certain backends.",
-                    RuntimeWarning,
-                )
             if not field.dtype == self.field_info[name].dtype:
                 raise TypeError(
                     f"The dtype of field '{name}' is '{field.dtype}' instead of '{self.field_info[name].dtype}'"
                 )
-            # ToDo: check if mask is correct: need mask info in stencil object.
-
-            if isinstance(field, gt_storage.storage.Storage):
-                if not field.is_stencil_view:
-                    raise ValueError(
-                        f"An incompatible view was passed for field {name} to the stencil. "
-                    )
-                for name_other, field_other in used_arg_fields.items():
-                    if field_other.mask == field.mask:
-                        if not field_other.shape == field.shape:
-                            raise ValueError(
-                                f"The fields {name} and {name_other} have the same mask but different shapes."
-                            )
 
         # assert compatibility of parameters with stencil
         for name, parameter in used_arg_params.items():
@@ -276,7 +292,11 @@ class StencilObject(abc.ABC):
                 )
 
         self.run(
-            _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
+            _domain_=domain,
+            _origin_=origin,
+            exec_info=exec_info,
+            **{n: np.array(f, copy=False) for n, f in field_args.items()},
+            **parameter_args,
         )
         if exec_info is not None:
             exec_info["call_run_end_time"] = time.perf_counter()

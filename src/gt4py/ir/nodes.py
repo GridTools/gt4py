@@ -329,6 +329,9 @@ class DataType(enum.Enum):
         return result
 
 
+DataType.supported_dtypes = set([np.bool, np.int8, np.int16, np.int32, np.float32, np.float64])
+
+
 DataType.NATIVE_TYPE_TO_NUMPY = {
     DataType.DEFAULT: "float_",
     DataType.BOOL: "bool",
@@ -565,6 +568,8 @@ class FieldDecl(Decl):
     name = attribute(of=str)
     data_type = attribute(of=DataType)
     axes = attribute(of=ListOf[str])
+    layout_map = attribute(of=TupleOf[int, int, int], optional=True)
+    alignment = attribute(of=int, optional=True)
     is_api = attribute(of=bool)
     layout_id = attribute(of=str, default="_default_")
     loc = attribute(of=Location, optional=True)

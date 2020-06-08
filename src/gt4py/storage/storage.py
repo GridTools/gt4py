@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2019, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -14,604 +14,1101 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import numpy as np
+import abc
+import collections
+import numbers
 
 try:
     import cupy as cp
 except ImportError:
     cp = None
+import numpy as np
 
 from . import utils as storage_utils
+from .array_function_handlers import REGISTRY as array_function_registry
+from .default_parameters import get_default_parameters
 from gt4py import backend as gt_backend
+from gt4py import ir as gt_ir
+from gt4py import utils as gt_utils
 
 
-def empty(backend, default_origin, shape, dtype, mask=None, *, managed_memory=False):
-    if gt_backend.from_name(backend).storage_info["device"] == "gpu":
-        if managed_memory:
-            storage_t = GPUStorage
-        else:
-            storage_t = ExplicitlySyncedGPUStorage
-    else:
-        storage_t = CPUStorage
-
-    return storage_t(
-        shape=shape, dtype=dtype, backend=backend, default_origin=default_origin, mask=mask
-    )
-
-
-def ones(backend, default_origin, shape, dtype, mask=None, *, managed_memory=False):
-    storage = empty(
-        shape=shape,
-        dtype=dtype,
-        backend=backend,
-        default_origin=default_origin,
-        mask=mask,
-        managed_memory=managed_memory,
-    )
-    storage[...] = 1
-    return storage
-
-
-def zeros(backend, default_origin, shape, dtype, mask=None, *, managed_memory=False):
-    storage = empty(
-        shape=shape,
-        dtype=dtype,
-        backend=backend,
-        default_origin=default_origin,
-        mask=mask,
-        managed_memory=managed_memory,
-    )
-    storage[...] = 0
-    return storage
-
-
-def from_array(
-    data, backend, default_origin, shape=None, dtype=None, mask=None, *, managed_memory=False
+def empty(
+    default_parameters=None,
+    default_origin=None,
+    shape=None,
+    dtype=None,
+    axes=None,
+    gpu=False,
+    *,
+    managed=False,
 ):
-    if shape is None:
-        shape = np.asarray(data).shape
-    if dtype is None:
-        dtype = np.asarray(data).dtype
-    storage = empty(
+
+    return storage(
+        None,
         shape=shape,
         dtype=dtype,
-        backend=backend,
+        default_parameters=default_parameters,
         default_origin=default_origin,
-        mask=mask,
-        managed_memory=managed_memory,
+        axes=axes,
+        gpu=gpu,
+        copy=False,
+        managed=managed,
     )
-    if cp is not None and isinstance(data, cp.ndarray):
-        if isinstance(storage, GPUStorage) or isinstance(storage, ExplicitlySyncedGPUStorage):
-            tmp = storage_utils.gpu_view(storage)
-            tmp[...] = data
+
+
+def ones(
+    default_parameters=None,
+    default_origin=None,
+    shape=None,
+    dtype=None,
+    axes=None,
+    gpu=False,
+    *,
+    managed=False,
+):
+    return storage(
+        data=1,
+        shape=shape,
+        dtype=dtype,
+        default_parameters=default_parameters,
+        default_origin=default_origin,
+        axes=axes,
+        gpu=gpu,
+        copy=True,
+        managed=managed,
+    )
+
+
+def zeros(
+    default_parameters=None,
+    default_origin=None,
+    shape=None,
+    dtype=None,
+    axes=None,
+    gpu=False,
+    *,
+    managed=False,
+):
+    return storage(
+        data=0,
+        shape=shape,
+        dtype=dtype,
+        default_parameters=default_parameters,
+        default_origin=default_origin,
+        axes=axes,
+        gpu=gpu,
+        copy=True,
+        managed=managed,
+    )
+
+
+def full(
+    value,
+    default_parameters=None,
+    default_origin=None,
+    shape=None,
+    dtype=None,
+    axes=None,
+    gpu=False,
+    *,
+    managed=False,
+):
+    return storage(
+        data=value,
+        shape=shape,
+        dtype=dtype,
+        default_parameters=default_parameters,
+        default_origin=default_origin,
+        axes=axes,
+        gpu=gpu,
+        copy=True,
+        managed=managed,
+    )
+
+
+def asstorage(
+    data,
+    default_parameters=None,
+    default_origin=None,
+    shape=None,
+    dtype=None,
+    axes=None,
+    *,
+    managed=None,
+    device_data=None,
+):
+    return storage(
+        data,
+        default_parameters=default_parameters,
+        default_origin=default_origin,
+        shape=shape,
+        dtype=dtype,
+        axes=axes,
+        managed=managed,
+        copy=False,
+        device_data=device_data,
+    )
+
+
+def storage(
+    data,
+    *,
+    default_parameters=None,
+    default_origin=None,
+    shape=None,
+    dtype=None,
+    axes=None,
+    alignment=None,
+    gpu=None,
+    layout_map=None,
+    copy=True,
+    device_data=None,
+    managed=None,
+):
+    return Storage(
+        data,
+        default_parameters=default_parameters,
+        default_origin=default_origin,
+        shape=shape,
+        dtype=dtype,
+        axes=axes,
+        alignment=alignment,
+        gpu=gpu,
+        layout_map=layout_map,
+        copy=copy,
+        device_data=device_data,
+        managed=managed,
+    )
+
+
+class Storage(abc.ABC, np.lib.mixins.NDArrayOperatorsMixin):
+
+    SUPPORTED_UFUNCS = {
+        # math operations
+        np.add,
+        np.subtract,
+        np.multiply,
+        np.divide,
+        np.logaddexp,
+        np.logaddexp2,
+        np.true_divide,
+        np.floor_divide,
+        np.negative,
+        np.positive,
+        np.power,
+        np.remainder,
+        np.mod,
+        np.fmod,
+        np.divmod,
+        np.absolute,
+        np.fabs,
+        np.rint,
+        np.sign,
+        np.heaviside,
+        np.conj,  # note: complex types not supported
+        np.conjugate,  # note: complex types not supported
+        np.exp,
+        np.exp2,
+        np.log,
+        np.log2,
+        np.log10,
+        np.expm1,
+        np.log1p,
+        np.sqrt,
+        np.square,
+        np.cbrt,
+        np.reciprocal,
+        np.gcd,
+        np.lcm,
+        # trigonometric functions
+        np.sin,
+        np.cos,
+        np.tan,
+        np.arcsin,
+        np.arccos,
+        np.arctan,
+        np.arctan2,
+        np.hypot,
+        np.sinh,
+        np.cosh,
+        np.tanh,
+        np.arcsinh,
+        np.arccosh,
+        np.arctanh,
+        np.deg2rad,
+        np.rad2deg,
+        # bit-twiddling functions
+        np.bitwise_and,
+        np.bitwise_or,
+        np.bitwise_xor,
+        np.invert,
+        np.left_shift,
+        np.right_shift,
+        # comparison functions
+        np.greater,
+        np.greater_equal,
+        np.less,
+        np.less_equal,
+        np.not_equal,
+        np.equal,
+        np.logical_and,
+        np.logical_or,
+        np.logical_xor,
+        np.logical_not,
+        np.maximum,
+        np.minimum,
+        np.fmax,
+        np.fmin,
+        # floating functions
+        np.isfinite,
+        np.isinf,
+        np.isnan,
+        # np.isnat,  # times not supported
+        np.fabs,
+        np.signbit,
+        np.copysign,
+        np.nextafter,
+        np.spacing,
+        np.modf,
+        np.ldexp,
+        np.frexp,
+        np.fmod,
+        np.floor,
+        np.ceil,
+        np.trunc,
+    }
+
+    def __new__(
+        cls,
+        data,
+        *,
+        default_parameters=None,
+        default_origin=None,
+        shape=None,
+        dtype=None,
+        axes=None,
+        alignment=None,
+        gpu=None,
+        layout_map=None,
+        copy=True,
+        device_data=None,
+        managed=None,
+    ):
+        # 1) for each parameter assert that type and value is valid
+        if data is not None:
+            if not isinstance(data, Storage):
+                try:
+                    np.asarray(data)
+                except:
+                    try:
+                        cp.asarray(data)
+                    except:
+                        raise TypeError("'data' not understood as array")
+
+        if shape is not None:
+            if not gt_utils.is_iterable_of(shape, numbers.Integral):
+                raise TypeError("'shape' must be an iterable of integers")
+            elif not all(map(lambda x: x >= 0, shape)):
+                raise ValueError("shape contains negative values")
+            shape = tuple(int(s) for s in shape)
+        if default_parameters is not None:
+            if not isinstance(default_parameters, str):
+                raise TypeError("'default_parameters' must be a string")
+            elif not default_parameters in ["F", "C"] + gt_backend.REGISTRY.names:
+                raise ValueError(
+                    f"'default_parameters' must be in {['F','C']+gt_backend.REGISTRY.names}"
+                )
+        if dtype is not None:
+            if isinstance(dtype, gt_ir.DataType):
+                dtype = dtype.dtype
+            else:
+                try:
+                    dtype = np.dtype(dtype)
+                except:
+                    raise TypeError("'dtype' not understood ")
+
+        if axes is not None:
+            if not gt_utils.is_iterable_of(
+                axes, iterable_class=collections.abc.Sequence, item_class=str
+            ):
+                raise TypeError("'axes' must be a sequence of unique characters in 'IJK'")
+            axes = "".join(axes)
+            if (
+                not len(axes) <= 3
+                or not all([c in "IJK" for c in axes])
+                or not len(set(axes)) == len(axes)
+                or not sorted(axes) == list(axes)
+            ):
+                raise ValueError("'axes' must be a sub-sequence of 'IJK'")
+            mask = tuple(c in axes for c in "IJK")
         else:
-            storage[...] = cp.asnumpy(data)
-    else:
-        storage[...] = data
+            mask = None
 
-    return storage
+        if alignment is not None:
+            if not isinstance(alignment, int):
+                raise TypeError("'alignment' must be an integer")
+            if not alignment > 0:
+                raise ValueError("'alignment' must be positive")
 
+        if gpu is not None:
+            if not isinstance(gpu, bool):
+                raise TypeError("'gpu' must be a boolean")
 
-class Storage(np.ndarray):
-    """
-    Storage class based on a numpy (CPU) or cupy (GPU) array, taking care of proper memory alignment, with additional
-    information that is required by the backends.
+        if layout_map is not None:
+            if not gt_utils.is_iterable_of(layout_map, int) and not callable(layout_map):
+                if not callable(layout_map):
+                    raise TypeError(
+                        f"'layout_map' must either be an iterable of integers"
+                        " or a callable returning such an iterable when given 'ndim'"
+                    )
 
+        if not isinstance(copy, bool):
+            raise TypeError("'copy' must be a boolean")
 
-    Attributes
-    ----------
-    In addition to the attributes inherited, Storages have the following attributes:
+        if device_data is not None:
+            if not isinstance(device_data, Storage):
+                try:
+                    cp.asarray(device_data)
+                except:
+                    raise TypeError("'device_data' not understood as gpu array")
 
-    backend: the backend identifier string of the storage
+        if managed is not None:
+            if not isinstance(managed, str) and managed != False:
+                raise TypeError("'managed_memory' must be a string or 'False'")
+            elif not managed in ["cuda", "gt4py", False]:
+                raise ValueError('\'managed_memory\' must be in ["cuda", "gt4py", False]')
 
-    mask:iterable of booleans. Dimensions where the corresponding entry is `False` are ignored.
-    """
+        # 2a) if data is storage, use those parameters
+        if isinstance(data, Storage) or isinstance(device_data, Storage):
+            template = data if isinstance(data, Storage) else device_data
+            if gpu is None:
+                gpu = template.gpu
+            if alignment is None:
+                alignment = template.alignment
+            if layout_map is None:
+                layout_map = template.layout_map
+            if default_origin is None:
+                default_origin = template.default_origin
+        # 2b) if data is given, infer some more params
+        if data is not None:
+            if dtype is None:
+                dtype = np.asarray(data).dtype
+        # 2b) fill in default parameters.
+        if default_parameters is not None:
+            default_parameters = get_default_parameters(default_parameters)
+            if gpu is None:
+                gpu = default_parameters.gpu
+            if alignment is None:
+                alignment = default_parameters.alignment
+            if layout_map is None:
+                layout_map = default_parameters.layout_map
 
-    __array_subok__ = True
+        # 3) determine data and/or device_data buffers
+        if data is not None or device_data is not None:
+            if gpu:
+                if managed is not None:
+                    pass
+                else:
+                    pass
+            else:
+                pass
 
-    def __new__(cls, shape, dtype, backend, default_origin, mask=None):
-        """"
-
-        Parameters
-        ----------
-
-        shape: tuple of ints
-            the shape of the storage
-
-        dtype: data type compatible with numpy dtypes
-            supported are the floating point and integer dtypes of numpy
-
-        backend: string, backend identifier
-            Currently possible: debug, numpy, gtx86, gtmc, gtcuda
-
-        default_origin: tuple of ints
-            determines the point to which the storage memory address is aligned.
-            for performance, this should be the coordinates of the most common origin
-            at call time.
-            when calling a stencil and no origin is specified, the default_origin is used.
-
-        mask: list of booleans
-            False entries indicate that the corresponding dimension is masked, i.e. the storage
-            has reduced dimension and reading and writing from offsets along this axis acces the same element.
-        """
-
+        # 4) fill in missing parameters from given data/device_data
+        if shape is None:
+            if data is not None:
+                shape = data.shape
+            elif device_data is not None:
+                shape = device_data.shape
         if mask is None:
-            mask = [True] * len(shape)
-        default_origin = storage_utils.normalize_default_origin(default_origin, mask)
-        shape = storage_utils.normalize_shape(shape, mask)
+            if isinstance(data, Storage):
+                mask = data.mask
+            elif isinstance(device_data, Storage):
+                mask = data.mask
 
-        if not backend in gt_backend.REGISTRY:
-            ValueError("Backend must be in {}.".format(gt_backend.REGISTRY))
+        if isinstance(data, Storage):
+            ndim = data.ndim
+        elif isinstance(device_data, Storage):
+            ndim = device_data.ndim
+        elif mask is not None:
+            ndim = len(mask)
+        elif shape is not None:
+            ndim = len(shape)
+        else:
+            raise TypeError("not enough information to determine the number of dimensions")
 
-        alignment = gt_backend.from_name(backend).storage_info["alignment"]
-        layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)
+        if layout_map is None:
+            if isinstance(data, Storage):
+                layout_map = data._layout_map
+            elif isinstance(device_data, Storage):
+                layout_map = device_data._layout_map
 
-        obj = cls._construct(
-            backend, np.dtype(dtype), default_origin, shape, alignment, layout_map
+        elif not gt_utils.is_iterable_of(layout_map, item_class=int):
+            assert callable(layout_map)
+            layout_map = layout_map(ndim)
+            if not gt_utils.is_iterable_of(layout_map, item_class=int):
+                raise TypeError(
+                    f"'layout_map' did not return an iterable of integers for ndim={ndim}"
+                )
+
+        if layout_map is not None and (
+            not all(item >= 0 for item in layout_map)
+            or not all(item < len(layout_map) for item in layout_map)
+            or not len(set(layout_map)) == len(layout_map)
+        ):
+            raise ValueError(
+                f"elements of layout map must be a permutation of (0, ..., len(layout_map))"
+            )
+
+        # 5a) assert consistency of parameters
+
+        if mask is not None:
+            if len(shape) == len(mask):
+                shape = tuple(s for s, m in zip(shape, mask) if m)
+        # 5b) if not copy: assert consistency with given buffer
+
+        # 6) assert info is provided for all required parameters
+
+        # 7) fill in missing parameters where a default is available
+        assert isinstance(ndim, int) and ndim >= 0
+
+        if layout_map is None:
+            layout_map = tuple(range(ndim))
+        if alignment is None:
+            alignment = 1
+        if mask is None:
+            mask = (True,) * ndim
+
+        #
+        # if not copy:
+        #     managed_memory = storage_utils.is_cuda_managed(data)
+        #     if kwargs.get("managed_memory", managed_memory) != managed_memory:
+        #         raise ValueError(
+        #             f"tried to construct storage from existing array with 'managed_memory' set to"
+        #             f"'{kwargs.get('managed_memory', managed_memory)}', but the provided data is"
+        #             + ("" if managed_memory else " not")
+        #             + " cuda managed memory"
+        #         )
+        # else:
+        #     managed_memory = kwargs.get("managed_memory", None)
+        #
+        # if device is not None:
+        #     if not isinstance(device, str):
+        #         raise TypeError("device must be a string")
+        #     if device not in ["cpu", "gpu"]:
+        #         raise ValueError("device must be 'cpu' or 'gpu'")
+        #     device = device
+        # else:
+        #     device = parameters.device
+        #
+        # if alignment is not None:
+        #     if not isinstance(alignment, int):
+        #         raise TypeError("expected 'alignment' to be of type 'int'")
+        #     if not alignment > 0:
+        #         raise ValueError("'alignment' must be positive")
+        #     alignment = alignment
+        # else:
+        #     alignment = parameters.alignment
+        #
+        # if layout_map is not None:
+        #     if callable(layout_map):
+        #         try:
+        #             layout_map = layout_map(ndim)
+        #         except:
+        #             layout_map = None
+        #     if not gt_utils.is_iterable_of(layout_map, item_class=bool):
+        #         raise TypeError(
+        #             "'layout_map' must be a sequence of length ndim containing unique integers"
+        #             "or a callable returning such an iterable when given ndim."
+        #         )
+        #     layout_map = storage_utils.normalize_layout_map(layout_map, ndim)
+        # elif default_parameters is None and isinstance(data, Storage):
+        #     layout_map = data.layout_map
+        # else:
+        #     layout_map = parameters.layout_map(ndim)
+        #
+        # if default_origin is None:
+        #     default_origin = [0] * ndim
+        # default_origin = storage_utils.normalize_default_origin(default_origin, mask)
+        #
+        # #######################################################################
+        # if device == "gpu" and managed_memory is None:
+        #     raise ValueError(
+        #         "'managed_memory' must be a boolean if 'device' is 'gpu' and 'copy' is 'True'"
+        #     )
+        #
+        # if cp is not None and isinstance(data, cp.ndarray):
+        #     if isinstance(storage, GPUStorage) or isinstance(storage, ExplicitlySyncedGPUStorage):
+        #         tmp = storage_utils.gpu_view(storage)
+        #         tmp[...] = data
+        #     else:
+        #         storage[...] = cp.asnumpy(data)
+        # else:
+        #     storage[...] = data
+
+        # if device is None:
+        #     if default_parameters is None:
+        #         raise ValueError("neither 'default_parameters' nor 'device' specified")
+        #     device = gt_backend.from_name(default_parameters).storage_info["device"]
+
+        # 7) determine storage type
+        if gpu:
+            if managed == "cuda":
+                storage_t = CudaManagedGPUStorage
+                kwargs = {}
+            elif managed == "gt4py":
+                storage_t = SoftwareManagedGPUStorage
+                kwargs = {}
+            else:
+                storage_t = GPUStorage
+                kwargs = {}
+        else:
+            storage_t = CPUStorage
+            kwargs = {}
+
+        assert gt_utils.is_iterable_of(shape, item_class=int, iterable_class=tuple)
+        assert gt_utils.is_iterable_of(mask, item_class=bool, iterable_class=tuple)
+
+        return storage_t.__new__(
+            storage_t,
+            array=data,
+            shape=shape,
+            dtype=dtype,
+            default_origin=default_origin,
+            mask=mask,
+            layout_map=layout_map,
+            alignment=alignment,
+            copy=copy,
+            **kwargs,
         )
-        obj._backend = backend
-        obj.is_stencil_view = True
-        obj._mask = mask
-        obj._check_data()
 
-        return obj
+    # def __init__(
+    #     self,
+    #     *,
+    #     shape,
+    #     dtype,
+    #     data=None,
+    #     default_origin=None,
+    #     mask=None,
+    #     default_parameters=None,
+    #     alignment=None,
+    #     device=None,
+    #     layout_map=None,
+    #     copy=True,
+    # ):
+    #     # """
+    #     #
+    #     # Parameters
+    #     # ----------
+    #     #
+    #     # shape: tuple of ints
+    #     #     the shape of the storage
+    #     #
+    #     # dtype: data type compatible with numpy dtypes
+    #     #     supported are the floating point and integer dtypes of numpy
+    #     #
+    #     # default_parameters: string, backend identifier
+    #     #     Currently possible: debug, numpy, gtx86, gtmc, gtcuda
+    #     #     specifies according to which backend alignment, layout_map and device should be chosen if not otherwise
+    #     #     specified.
+    #     # default_origin: tuple of ints
+    #     #     determines the point to which the storage memory address is aligned.
+    #     #     for performance, this should be the coordinates of the most common origin
+    #     #     at call time.
+    #     #     when calling a stencil and no origin is specified, the default_origin is used.
+    #     #
+    #     # mask: list of booleans
+    #     #     False entries indicate that the corresponding dimension is masked, i.e. the storage
+    #     #     has reduced dimension and reading and writing from offsets along this axis acces the same element.
+    #     # """
+    #
+    #     self._alignment = alignment
+    #     self._layout_map = layout_map
+    #     self._mask = mask
+    #     self._default_origin = default_origin
 
-    @property
-    def backend(self):
-        return self._backend
+    def all(*args, **kwargs):
+        return np.all(*args, **kwargs)
+
+    def any(*args, **kwargs):
+        return np.any(*args, **kwargs)
+
+    def min(*args, **kwargs):
+        return np.min(*args, **kwargs)
+
+    def max(*args, **kwargs):
+        return np.max(*args, **kwargs)
+
+    def transpose(*args, **kwargs):
+        return np.transpose(*args, **kwargs)
 
     @property
     def mask(self):
-        return self._mask
+        return tuple(self._mask)
+
+    @property
+    def axes(self):
+        return "".join([c for m, c in zip(self._mask, "IJK") if m])
+
+    @property
+    def ndim(self):
+        return sum(self._mask)
+
+    @property
+    def default_origin(self):
+        return self._default_origin
+
+    @property
+    def alignment(self):
+        return self._alignment
 
     @property
     def layout_map(self):
-        return gt_backend.from_name(self.backend).storage_info["layout_map"](self.mask)
+        return self._layout_map
 
-    def transpose(self, *axes):
-        res = super().transpose(*axes)
-        if res._is_consistent(self):
-            res.is_stencil_view = self.is_stencil_view
-        else:
-            res.is_stencil_view = False
+    @property
+    @abc.abstractmethod
+    def shape(self):
+        pass
+
+    @property
+    def _expanded_shape(self):
+        return storage_utils.expand_shape(self.shape, self._mask)
+
+    @property
+    @abc.abstractmethod
+    def strides(self):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def dtype(self):
+        pass
+
+    @property
+    def gpu(self):
+        return False
+
+    @property
+    @abc.abstractmethod
+    def _ptr(self):
+        pass
+
+    @abc.abstractmethod
+    def __array__(self):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def __array_interface__(self):
+        pass
+
+    def copy(self):
+        res = storage(self, copy=True)
         return res
 
     def __deepcopy__(self, memo={}):
-        return self.copy()
-
-    def copy(self):
-        res = empty(
-            shape=self.shape,
-            dtype=self.dtype,
-            backend=self.backend,
-            default_origin=self.default_origin,
-            mask=self.mask,
-            managed_memory=not isinstance(self, ExplicitlySyncedGPUStorage),
-        )
-        res.is_stencil_view = self.is_stencil_view
+        res = storage(self, copy=True)
         return res
 
-    def __array_finalize__(self, obj):
-        if obj is None:
-            # constructor called previously
-            return
+    @abc.abstractmethod
+    def __array_function__(self, func, types, args, kwargs):
+        pass
+
+    @abc.abstractmethod
+    def _forward_ufunc(
+        self,
+        ufunc,
+        method,
+        inputs,
+        broadcastable_input_shapes,
+        outputs,
+        broadcastable_output_shape,
+        kwargs,
+    ):
+        pass
+
+    @abc.abstractmethod
+    def _forward_setitem(self):
+        pass
+
+    @abc.abstractmethod
+    def _forward_getitem(self):
+        pass
+
+    def _ufunc_out_types(self, ufunc, method, inputs, dtype, kwargs):
+        kwargs = dict(kwargs)
+        if "axis" in kwargs:
+            kwargs.pop("axis")
+        # outputs = kwargs.pop("out")
+        # if not isinstance(outputs, tuple):
+        #     outputs = (outputs,)
+
+        input_dtypes = [
+            np.dtype(inp.dtype) if hasattr(inp, "dtype") else np.dtype(type(inp)) for inp in inputs
+        ]
+        # output_dtypes = [np.dtype(outp.dtype) for outp in outputs]
+        inputs = [t.type() for t in input_dtypes]
+        # outputs = [t.type() for t in output_dtypes]
+        # kwargs["out"] = tuple(outputs)
+        try:
+            out = np.ufunc.__dict__[method](ufunc, *inputs, **kwargs)
+        except:
+            # go on, s.t. the actual forwarding call raises
+            return []
+
+        out = out if isinstance(out, tuple) else (out,)
+        return [o.dtype for o in out]
+
+    def _calculate_broadcast_shape_and_mask(self, storages, expanded_array_shapes):
+        broadcast_shape = [1] * 3
+        broadcast_mask = [False] * 3
+        for stor in storages:
+            for i, (s, m) in enumerate(zip(stor._expanded_shape, stor.mask)):
+                if m:
+                    if broadcast_mask[i] and not broadcast_shape[i] == s:
+                        raise ValueError
+                    broadcast_shape[i] = s
+                    broadcast_mask[i] = True
+        for shape in expanded_array_shapes:
+            for i, s in enumerate(shape):
+                if s != 1:
+                    if broadcast_mask[i] and not (broadcast_shape[i] == s):
+                        raise ValueError
+                    broadcast_shape[i] = s
+                    broadcast_mask[i] = True
+        return broadcast_shape, broadcast_mask
+
+    def _broadcast_info(self, inputs, outputs):
+        inputs = [
+            inp if isinstance(inp, Storage) else storage_utils.asarray(inp) for inp in inputs
+        ]
+        expanded_input_shapes = [
+            inp._expanded_shape if isinstance(inp, Storage) else inp.shape for inp in inputs
+        ]  # only at the end of the function is it guaranteed that all shapes in this list are expanded
+
+        input_storages = [inp for inp in inputs if isinstance(inp, Storage)]
+        output_storages = [outp for outp in outputs if isinstance(outp, Storage)]
+        storages = input_storages + output_storages
+
+        ndim = 3
+
+        expanded_input_array_shapes = [
+            inp.shape for inp in inputs if (not isinstance(inp, Storage) and inp.ndim == ndim)
+        ]
+        expanded_output_array_shapes = [
+            outp.shape for outp in outputs if (not isinstance(outp, Storage) and outp.ndim == ndim)
+        ]
+
+        # check if input arrays w/ only unmasked defined match input and
+        for i, s in enumerate(expanded_input_shapes):
+            if not len(s) == ndim:
+                assert len(input_storages) <= 1
+                if len(input_storages) == 1:
+                    input_mask = input_storages[0].mask
+                    if sum(input_mask) == len(s):
+                        res = tuple(
+                            s[sum(input_mask[: j + 1]) - 1] if m else 1
+                            for j, m in enumerate(input_mask)
+                        )
+                        expanded_input_shapes[i] = res
+                        expanded_input_array_shapes.append(res)
+
+        broadcast_shape, broadcast_mask = self._calculate_broadcast_shape_and_mask(
+            storages, expanded_input_array_shapes + expanded_output_array_shapes
+        )
+
+        # check if arrays w/ only unmasked defined match joint shape/mask
+        # conflict: raise
+        # match: expand
+        # check if input arrays w/ only unmasked defined match input and
+        for i, s in enumerate(expanded_input_shapes):
+            if not len(s) == ndim:
+                if sum(broadcast_mask) == len(s):
+                    expanded_shape = storage_utils.expand_shape(s, broadcast_mask)
+                    expanded_input_shapes[i] = expanded_shape
+                elif s == ():
+                    expanded_input_shapes[i] = (1,) * ndim
+                else:
+                    raise ValueError
+        return expanded_input_shapes, broadcast_shape, broadcast_mask
+
+    def _ufunc_broadcast_info(self, ufunc, method, inputs, kwargs, *, outputs):
+
+        bcast_input_shapes, bcast_shape, bcast_mask = self._broadcast_info(
+            inputs, outputs if outputs is not None else []
+        )
+        if method == "reduce":
+            if len(bcast_shape) > 0:
+                axis = kwargs.get("axis", (0,))
+                if axis is None:
+                    axis = tuple(range(len(bcast_shape)))
+                for a in axis:
+                    if a < len(bcast_shape):  # otherwise, ufunc forwarding will raise eventually
+                        bcast_shape[a] = 1
+                        bcast_mask[a] = False
+        return bcast_input_shapes, bcast_shape, bcast_mask
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+
+        kwargs = dict(kwargs)
+        outputs = kwargs.get("out", None)
+        dtype = kwargs.get("dtype", None)
+
+        if outputs is not None:
+            if not isinstance(outputs, tuple):
+                outputs = (outputs,)
+            for outp in outputs:
+                outp_is_buffer = True
+                try:
+                    tmp_asarray = np.asarray(outp)
+                    assert (
+                        gt_ir.nodes.DataType.from_dtype(tmp_asarray.dtype)
+                        != gt_ir.nodes.DataType.INVALID
+                    ), "output data type not supported"
+                except AssertionError:
+                    raise
+                except Exception:
+                    outp_is_buffer = False
+                if not (outp_is_buffer or hasattr(outp, "__cuda_array_interface__")):
+                    return NotImplemented
+
+        if method not in ["__call__", "reduce"]:
+            return NotImplemented
+        if ufunc not in self.SUPPORTED_UFUNCS:
+            return NotImplemented
+
+        if method == "reduce":
+            if ufunc.nin != 2:
+                raise ValueError(
+                    "reduce only supported for binary functions"
+                )  # Numpy error string
+            if ufunc.nout != 1:
+                raise ValueError(
+                    "reduce only supported for functions returning a single value"
+                )  # Numpy error string
         else:
-            if self.base is None:
-                # case np.array
-                raise RuntimeError(
-                    "Copying storages is only possible through Storage.copy() or deepcopy."
-                )
-            else:
-                if not isinstance(obj, Storage) and not isinstance(obj, _ViewableNdarray):
-                    raise RuntimeError(
-                        "Meta information can not be inferred when creating Storage views from other classes than Storage."
+            if ufunc.nin != len(inputs):
+                raise ValueError("invalid number of arguments")  # Numpy error string
+            if outputs is not None and ufunc.nout != len(outputs):
+                raise ValueError(
+                    f"The 'out' tuple must have exactly {ufunc.nout} entries: one per ufunc output"
+                )  # Numpy error string
+
+        tmp_inputs = []
+        for inp in inputs:
+            inp_is_buffer = True
+            try:
+                tmp_asarray = np.asarray(inp)
+                assert (
+                    gt_ir.nodes.DataType.from_dtype(tmp_asarray.dtype)
+                    != gt_ir.nodes.DataType.INVALID
+                ), "input data type not supported"
+            except AssertionError:
+                raise
+            except:
+                inp_is_buffer = False
+            if not (inp_is_buffer or hasattr(inp, "__cuda_array_interface__")):
+                return NotImplemented
+
+            expanded_input_shapes, expanded_output_shape, output_mask = self._ufunc_broadcast_info(
+                ufunc, method, inputs, kwargs, outputs=outputs
+            )
+
+        if outputs is None:
+            out_types = self._ufunc_out_types(ufunc, method, inputs, dtype, kwargs)
+            # out_mask, out_shape, expanded_output_shape = self._ufunc_broadcast_info(
+            #     ufunc, method, inputs, expanded_input_shapes, out
+            # )
+            out_shape = tuple(s for s, m in zip(expanded_output_shape, output_mask) if m)
+
+            # determine the default origin as the dimension-wise minimum of all minima
+            input_storages = [inp for inp in inputs if isinstance(inp, Storage)]
+
+            ndim = 3
+
+            out_origin = [0] * ndim
+            for inp in inputs:
+                if isinstance(inp, Storage):
+                    expanded_input_origin = storage_utils.expand_shape(
+                        inp.default_origin, inp.mask
                     )
-                self.__dict__ = {**obj.__dict__, **self.__dict__}
-                self.is_stencil_view = False
-                if not hasattr(obj, "default_origin"):
-                    self.is_stencil_view = True
-                elif self._is_consistent(obj):
-                    self.is_stencil_view = obj.is_stencil_view
-                self._finalize_view(obj)
+                    for i, m in enumerate(inp.mask):
+                        if m:
+                            out_origin[i] = max(expanded_input_origin[i], out_origin[i])
+            out_origin = tuple([o for i, o in enumerate(out_origin) if output_mask[i]])
 
-    def _is_consistent(self, obj):
-        if not self.shape == obj.shape:
-            return False
-        # check strides
-        stride = 0
-        if len(self.strides) < len(self.layout_map):
-            return False
-        for dim in reversed(np.argsort(self.layout_map)):
-            if self.strides[dim] < stride:
-                return False
-            stride = self.strides[dim]
+            out_alignment = max(
+                inp._alignment if isinstance(inp, Storage) else 1 for inp in inputs
+            )
 
-        # check alignment
-        if (
-            self.ctypes.data + np.sum([o * s for o, s in zip(self.default_origin, self.strides)])
-        ) % gt_backend.from_name(self.backend).storage_info["alignment"]:
-            return False
+            out_layout_map = next(inp for inp in inputs if isinstance(inp, Storage))._layout_map
 
-        return True
+            # allocate
+            storage_t = type(self)
+            outputs = tuple(
+                storage_t(
+                    shape=out_shape,
+                    dtype=t,
+                    mask=output_mask,
+                    alignment=out_alignment,
+                    layout_map=out_layout_map,
+                    default_origin=out_origin,
+                )
+                for t in out_types
+            )
 
-    def _finalize_view(self, obj):
-        pass
-
-    def synchronize(self):
-        pass
-
-    def host_to_device(self, force=False):
-        pass
-
-    def device_to_host(self, force=False):
-        pass
-
-    def __iconcat__(self, other):
-        raise NotImplementedError("Concatenation of Storages is not supported")
-
-
-class GPUStorage(Storage):
-    @classmethod
-    def _construct(cls, backend, dtype, default_origin, shape, alignment, layout_map):
-
-        (raw_buffer, field) = storage_utils.allocate_gpu(
-            default_origin, shape, layout_map, dtype, alignment * dtype.itemsize
+        return self._forward_ufunc(
+            ufunc, method, inputs, expanded_input_shapes, outputs, expanded_output_shape, kwargs
         )
-        obj = field.view(_ViewableNdarray)
-        obj = obj.view(GPUStorage)
-        obj._raw_buffer = raw_buffer
-        obj.default_origin = default_origin
-        return obj
-
-    @property
-    def __cuda_array_interface__(self):
-        array_interface = self.__array_interface__
-        array_interface["version"] = 2
-        array_interface["strides"] = self.strides
-        array_interface.pop("offset", None)
-        return array_interface
-
-    def _check_data(self):
-        # check that memory of field is within raw_buffer
-        if (
-            not self.ctypes.data >= self._raw_buffer.data.ptr
-            and self.ctypes.data + self.itemsize * (self.size - 1)
-            <= self._raw_buffer[-1:].data.ptr
-        ):
-            raise Exception("The buffers are in an inconsistent state.")
-
-    def copy(self):
-        res = super().copy()
-        res.gpu_view[...] = self.gpu_view
-        cp.cuda.Device(0).synchronize()
-        return res
-
-    @property
-    def gpu_view(self):
-        return storage_utils.gpu_view(self)
 
     def __setitem__(self, key, value):
-        if hasattr(value, "__cuda_array_interface__"):
-            gpu_view = storage_utils.gpu_view(self)
-            gpu_view[key] = cp.asarray(value)
-            cp.cuda.Device(0).synchronize()
-            return value
-        else:
-            return super().__setitem__(key, value)
+        target = self.__getitem__(key)
 
-    @property
-    def _is_clean(self):
-        return True
+        expanded_input_shapes, broadcast_shape, broadcast_mask = self._broadcast_info(
+            inputs=[value], outputs=[target]
+        )
+        assert len(expanded_input_shapes) == 1
+        target._forward_setitem(value, expanded_input_shapes[0], broadcast_shape)
 
-    @property
-    def _is_host_modified(self):
-        return False
+    def __getitem__(self, key):
+        res = storage(self, copy=False)
+        if key is Ellipsis:
+            return res
+        res._forward_getitem(key)
+        res._mask = tuple(m if isinstance(k, slice) else False for m, k in zip(self._mask, key))
+        return res
 
-    @property
-    def _is_device_modified(self):
-        return False
-
-    def _set_clean(self):
-        pass
-
-    def _set_host_modified(self):
-        pass
-
-    def _set_device_modified(self):
-        pass
+    def __iconcat__(self, other):
+        raise NotImplementedError("Concatenation of storages is not supported")
 
 
 class CPUStorage(Storage):
-    @property
-    def _ptr(self):
-        return self._ndarray.ctypes.data
-
-    @classmethod
-    def _construct(cls, backend, dtype, default_origin, shape, alignment, layout_map):
-        (raw_buffer, field) = storage_utils.allocate_cpu(
-            default_origin, shape, layout_map, dtype, alignment * dtype.itemsize
+    def __new__(
+        cls,
+        *,
+        shape,
+        dtype,
+        array=None,
+        default_parameters=None,
+        default_origin=None,
+        mask=None,
+        alignment=None,
+        layout_map=None,
+        copy=False,
+        **kwargs,
+    ):
+        self = super(Storage, cls).__new__(
+            CPUStorage,
+            # shape=shape,
+            # dtype=dtype,
+            # default_origin=default_origin,
+            # default_parameters=default_parameters,
+            # mask=mask,
+            # alignment=alignment,
+            # layout_map=layout_map,
         )
-        obj = field.view(_ViewableNdarray)
-        obj = obj.view(CPUStorage)
-        obj._raw_buffer = raw_buffer
-        obj.default_origin = default_origin
-        return obj
+        self._alignment = alignment
+        self._layout_map = layout_map
+        self._mask = mask
+        self._default_origin = default_origin
 
-    def _check_data(self):
-        # check that memory of field is within raw_buffer and that field is a view of raw_buffer
-        if (
-            not self.ctypes.data >= self._raw_buffer.ctypes.data
-            and self.ctypes.data + self.itemsize * (self.size - 1)
-            <= self._raw_buffer[-1:].ctypes.data
-            and self.base is not self._raw_buffer
+        reduced_layout_map = [None] * self.ndim
+        for ctr, idx in enumerate(
+            np.argsort(list(mp for mp, msk in zip(self._layout_map, self.mask) if msk))
         ):
-            raise Exception("The buffers are in an inconsistent state.")
+            reduced_layout_map[idx] = ctr
 
-    @property
-    def data(self):
-        return self.view(np.ndarray)
-
-    def copy(self):
-        res = super().copy()
-        res[...] = self
-        return res
-
-
-class ExplicitlySyncedGPUStorage(Storage):
-    class SyncState:
-        SYNC_CLEAN = 0
-        SYNC_HOST_DIRTY = 1
-        SYNC_DEVICE_DIRTY = 2
-
-        def __init__(self):
-            self.state = self.SYNC_CLEAN
-
-    def __init__(self, *args, **kwargs):
-        self._sync_state = self.SyncState()
-
-    def copy(self):
-        res = super().copy()
-        res._sync_state = self.SyncState()
-        res._sync_state.state = self._sync_state.state
-        res[...] = self
-        res._device_field[...] = self._device_field
-        return res
-
-    @classmethod
-    def _construct(cls, backend, dtype, default_origin, shape, alignment, layout_map):
-
-        (
-            raw_buffer,
-            field,
-            device_raw_buffer,
-            device_field,
-        ) = storage_utils.allocate_gpu_unmanaged(
-            default_origin, shape, layout_map, dtype, alignment * dtype.itemsize
-        )
-        obj = field.view(_ViewableNdarray)
-        obj = obj.view(ExplicitlySyncedGPUStorage)
-        obj._raw_buffer = raw_buffer
-        obj._device_field = device_field
-        obj._device_raw_buffer = device_raw_buffer
-        obj.default_origin = default_origin
-
-        return obj
-
-    @property
-    def data(self):
-        return self._device_field
-
-    def synchronize(self):
-        if self._is_host_modified:
-            self.host_to_device()
-        elif self._is_device_modified:
-            self.device_to_host()
-        self._set_clean()
-
-    def host_to_device(self, force=False):
-        if force or self._is_host_modified:
-            self._set_clean()
-            self._device_raw_buffer.set(self._raw_buffer)
-
-    def device_to_host(self, force=False):
-        if force or self._is_device_modified:
-            self._set_clean()
-            self._device_raw_buffer.get(out=self._raw_buffer)
-
-    def __getitem__(self, item):
-        if self._is_device_modified:
-            self.device_to_host()
-        return super().__getitem__(item)
-
-    @property
-    def _is_clean(self):
-        return self._sync_state.state == self.SyncState.SYNC_CLEAN
-
-    @property
-    def _is_host_modified(self):
-        return self._sync_state.state == self.SyncState.SYNC_HOST_DIRTY
-
-    @property
-    def _is_device_modified(self):
-        return self._sync_state.state == self.SyncState.SYNC_DEVICE_DIRTY
-
-    def _set_clean(self):
-        self._sync_state.state = self.SyncState.SYNC_CLEAN
-
-    def _set_host_modified(self):
-        self._sync_state.state = self.SyncState.SYNC_HOST_DIRTY
-
-    def _set_device_modified(self):
-        self._sync_state.state = self.SyncState.SYNC_DEVICE_DIRTY
-
-    def __setitem__(self, key, value):
-        if isinstance(value, ExplicitlySyncedGPUStorage):
-            if (self._is_clean or self._is_device_modified) and (
-                value._is_clean or value._is_device_modified
-            ):
-                self._set_device_modified()
-                self._device_field[key] = value._device_field
-                return value
-            elif (self._is_clean or self._is_host_modified) and (
-                value._is_clean or value._is_host_modified
-            ):
-                self._set_host_modified()
-                return self.view(_ViewableNdarray).view(np.ndarray).__setitem__(key, value)
-            else:
-                if self._is_host_modified:
-                    self.host_to_device()
-                else:
-                    value.host_to_device()
-                self._set_device_modified()
-                self._device_field.__setitem__(key, value._device_field)
-                return value
-        elif hasattr(value, "__cuda_array_interface__"):
-            if self._is_host_modified:
-                self.host_to_device()
-            self._set_device_modified()
-            return self._device_field.__setitem__(key, value)
+        if array is None or copy:
+            _, self._array = storage_utils.allocate_cpu(
+                default_origin,
+                shape,
+                reduced_layout_map,
+                dtype,
+                self._alignment * np.dtype(dtype).itemsize,
+            )
         else:
-            if self._is_device_modified:
-                self.device_to_host()
-            self._set_host_modified()
-            return super().__setitem__(key, value)
+            self._array = np.asarray(array)
 
-    # @property
-    # def sync_state(self):
-    #     return self._sync_state.state
+        if copy:
+            self._array[...] = array
+        return self
+
+    __array_priority__ = 10
+
+    @property
+    def shape(self):
+        return self._array.shape
+
+    @property
+    def strides(self):
+        return self._array.strides
+
+    @property
+    def dtype(self):
+        return self._array.dtype
 
     @property
     def _ptr(self):
-        return self.data.ptr
+        return self._array.ctypes.data
 
-    def _check_data(self):
-
-        # check that memory of field is within raw_buffer
-        if (
-            not self.ctypes.data >= self._raw_buffer.ctypes.data
-            and self.ctypes.data + self.itemsize * (self.size - 1)
-            <= self._raw_buffer[-1:].ctypes.data
-            and self.base is not self._raw_buffer
-        ):
-            raise Exception("The buffers are in an inconsistent state.")
-
-        # check that memory of field is within raw_buffer
-        if (
-            not self._device_field.data.ptr >= self._device_raw_buffer.data.ptr
-            and self._device_field.data.ptr + self.itemsize * (self.size - 1)
-            <= self._device_raw_buffer[-1:].data.ptr
-        ):
-            raise Exception("The buffers are in an inconsistent state.")
-
-    def transpose(self, *axes):
-        res = super().transpose(*axes)
-        res._device_field = cp.lib.stride_tricks.as_strided(
-            res._device_raw_buffer, shape=res.shape, strides=res.strides
-        )
-        return res
-
-    def _finalize_view(self, base):
-
-        if self.shape != base.shape or self.strides != base.strides:
-            offset = (base.ctypes.data - self.ctypes.data) + (
-                self._device_field.data.ptr - self._device_raw_buffer.data.ptr
-            )
-            assert not offset % self.dtype.itemsize
-            offset = int(offset / self.dtype.itemsize)
-            raw_with_offset = self._device_raw_buffer[offset:]
-            self._device_field = cp.lib.stride_tricks.as_strided(
-                raw_with_offset, shape=self.shape, strides=self.strides
-            )
+    def __array__(self):
+        return self._array.__array__()
 
     @property
-    def __cuda_array_interface__(self):
-        self.host_to_device()
-        res = self._device_field.__cuda_array_interface__
-        res["strides"] = self.strides
+    def __array_interface__(self):
+        return self._array.__array_interface__
+
+    def __deepcopy__(self, memo={}):
+        res = storage(self, copy=True)
         return res
 
-    def _call_inplace(self, fname, other):
-        if isinstance(other, ExplicitlySyncedGPUStorage):
-            if (self._is_clean or self._is_device_modified) and (
-                other._is_clean or other._is_device_modified
-            ):
-                self._set_device_modified()
-                getattr(self._device_field, fname)(other)
-                return self
-            elif (self._is_clean or self._is_host_modified) and (
-                other._is_clean or other._is_host_modified
-            ):
-                self._set_host_modified()
-                return getattr(super(), fname)(other)
+    def __array_function__(self, func, types, args, kwargs):
+        if func.__name__ not in array_function_registry:
+            raise NotImplementedError
+        else:
+            return array_function_registry[func.__name__](types, *args, **kwargs)
+
+    def _forward_ufunc(
+        self,
+        ufunc,
+        method,
+        inputs,
+        broadcastable_input_shapes,
+        outputs,
+        broadcastable_output_shape,
+        kwargs,
+    ):
+
+        inp = tuple(x._array if isinstance(x, CPUStorage) else x for x in inputs)
+        inp = tuple(
+            x.reshape(s) if isinstance(x, np.ndarray) else x
+            for x, s in zip(inp, broadcastable_input_shapes)
+        )
+        outp = tuple(o._array if isinstance(o, CPUStorage) else o for o in outputs)
+        kwargs["out"] = tuple(x.reshape(broadcastable_output_shape) for x in outp)
+        if "axis" in kwargs:
+            axis = kwargs["axis"]
+            if axis is None:
+                axis_shape = ()
             else:
-                if self._is_host_modified:
-                    self.host_to_device()
-                else:
-                    other.host_to_device()
-                self._set_device_modified()
-                getattr(self._device_field, fname)(other)
-                return self
-        elif hasattr(other, "__cuda_array_interface__"):
-            if self._is_host_modified:
-                self.host_to_device()
-            self._set_device_modified()
-            getattr(self._device_field, fname)(other)
-            return self
-        else:
-            if self._is_device_modified:
-                self.device_to_host()
-            self._set_host_modified()
-            return getattr(super(), fname)(other)
+                axis_shape = tuple(
+                    b for i, b in enumerate(broadcastable_output_shape) if i not in kwargs["axis"]
+                )
+            kwargs["out"] = tuple(x.reshape(axis_shape) for x in kwargs["out"])
+        if len(kwargs["out"]) == 0:
+            kwargs.pop("out")
+        # copy of kwargs needed since ufunc removes tuple for single element "out" tuple
+        result = getattr(ufunc, method)(*inp, **dict(kwargs))
+        assert all(
+            r is o
+            for r, o in zip(result if isinstance(result, tuple) else (result,), kwargs["out"])
+        ), "output is new array"
+        return outputs[0] if ufunc.nout == 1 else outputs
 
-    def __iadd__(self, other):
-        return self._call_inplace("__iadd__", other)
+    def _forward_setitem(self, value, expanded_input_shape, expanded_output_shape):
+        value = np.array(value, copy=False).reshape(expanded_input_shape)
+        target_array = self._array.reshape(expanded_output_shape)
+        target_array.__setitem__(Ellipsis, value)
 
-    def __iand__(self, other):
-        return self._call_inplace("__iand__", other)
-
-    def __ifloordiv__(self, other):
-        return self._call_inplace("__ifloordiv__", other)
-
-    def __ilshift__(self, other):
-        return self._call_inplace("__ilshift__", other)
-
-    def __imod__(self, other):
-        return self._call_inplace("__imod__", other)
-
-    def __imul__(self, other):
-        return self._call_inplace("__imul__", other)
-
-    def __ior__(self, other):
-        return self._call_inplace("__ior__", other)
-
-    def __ipow__(self, other):
-        return self._call_inplace("__ipow__", other)
-
-    def __irshift__(self, other):
-        return self._call_inplace("__irshift__", other)
-
-    def __isub__(self, other):
-        return self._call_inplace("__isub__", other)
-
-    def __itruediv__(self, other):
-        return self._call_inplace("__itruediv__", other)
-
-    def __ixor__(self, other):
-        return self._call_inplace("__ixor__", other)
-
-
-class _ViewableNdarray(np.ndarray):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.is_stencil_view = True
-
-    def __new__(cls, *args, **kwargs):
-        obj = super().__new__(*args, **kwargs)
-        obj.is_stencil_view = True
-        return obj
-
-    def __array_finalize__(self, obj):
-        if hasattr(obj, "is_stencil_view"):
-            self.is_stencil_view = obj.is_stencil_view
-        else:
-            self.is_stencil_view = True
+    def _forward_getitem(self, key):
+        self._array = self._array[key]

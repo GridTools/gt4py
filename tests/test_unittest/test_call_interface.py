@@ -39,21 +39,21 @@ def stencil(
 
 def test_assert_same_shape():
     A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        default_parameters="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
+        default_parameters="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        default_parameters="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
+        default_parameters="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
     stencil(
         A,
@@ -64,10 +64,9 @@ def test_assert_same_shape():
         domain=(1, 1, 1),
     )
     A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(5, 5, 5), default_origin=(0, 0, 0)
+        default_parameters="gtmc", dtype=np.float64, shape=(5, 5, 5), default_origin=(0, 0, 0)
     )
     A = A[1:-1, 1:-1, 1:-1]
-    A.is_stencil_view = True
     stencil(
         A,
         B,
@@ -77,20 +76,15 @@ def test_assert_same_shape():
         domain=(1, 1, 1),
     )
 
-    try:
+    with pytest.raises(ValueError):
         C = gt_storage.ones(
-            backend="numpy", dtype=np.float32, shape=(5, 5, 5), default_origin=(0, 1, 0)
+            default_parameters="numpy", dtype=np.float32, shape=(5, 5, 5), default_origin=(0, 1, 0)
         )
         stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
-    except ValueError:
-        pass
-    else:
-        assert False
 
-    try:
-
+    with pytest.raises(ValueError):
         C = gt_storage.ones(
-            backend="numpy", dtype=np.float32, shape=(5, 5, 5), default_origin=(0, 1, 0)
+            default_parameters="numpy", dtype=np.float32, shape=(5, 5, 5), default_origin=(0, 1, 0)
         )
         stencil(
             A,
@@ -100,21 +94,17 @@ def test_assert_same_shape():
             origin=dict(field1=(2, 2, 2), field2=(0, 0, 0), field3=(1, 1, 1)),
             domain=(1, 1, 1),
         )
-    except ValueError:
-        pass
-    else:
-        assert False
 
 
 def test_origin_selection():
     A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        default_parameters="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
+        default_parameters="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
@@ -126,13 +116,13 @@ def test_origin_selection():
     assert np.sum(np.asarray(C)) == 47
 
     A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        default_parameters="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
+        default_parameters="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
     stencil(A, B, C, param=3.0, origin={"_all_": (1, 1, 1), "field1": (2, 2, 2)}, domain=(1, 1, 1))
 
@@ -144,13 +134,13 @@ def test_origin_selection():
     assert np.sum(np.asarray(C)) == 47
 
     A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        default_parameters="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
+        default_parameters="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
     stencil(A, B, C, param=3.0, origin={"field1": (2, 2, 2)}, domain=(1, 1, 1))
 
@@ -164,13 +154,13 @@ def test_origin_selection():
 
 def test_domain_selection():
     A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        default_parameters="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
+        default_parameters="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
@@ -182,13 +172,13 @@ def test_domain_selection():
     assert np.sum(np.asarray(C)) == 47
 
     A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        default_parameters="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
+        default_parameters="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
     stencil(A, B, C, param=3.0, origin=(0, 0, 0))
 
@@ -228,7 +218,7 @@ def avg_stencil(in_field: Field[np.float64], out_field: Field[np.float64]):
     [
         name
         for name in gt_backend.REGISTRY.names
-        if gt_backend.from_name(name).storage_info["device"] == "cpu"
+        if gt_backend.from_name(name).compute_device == "cpu"
     ],
 )
 def test_default_arguments(backend):
@@ -240,13 +230,13 @@ def test_default_arguments(backend):
     )
 
     arg1 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     arg2 = gt_storage.zeros(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     arg3 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     tmp = np.asarray(arg3)
     tmp *= 2
@@ -265,13 +255,13 @@ def test_default_arguments(backend):
         assert False
 
     arg1 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     arg2 = gt_storage.zeros(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     arg3 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        default_parameters=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
     tmp = np.asarray(arg3)
     tmp *= 2
@@ -295,7 +285,7 @@ def test_default_arguments(backend):
     [
         name
         for name in gt_backend.REGISTRY.names
-        if gt_backend.from_name(name).storage_info["device"] != "gpu"
+        if gt_backend.from_name(name).compute_device != "gpu"
     ],
 )
 def test_halo_checks(backend):
@@ -303,40 +293,40 @@ def test_halo_checks(backend):
 
     # test default works
     in_field = gt_storage.ones(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        default_parameters=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
     )
     out_field = gt_storage.zeros(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        default_parameters=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
     )
     stencil(in_field=in_field, out_field=out_field)
     assert (out_field[1:-1, 1:-1, :] == 1).all()
 
     # test setting arbitrary, small domain works
     in_field = gt_storage.ones(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        default_parameters=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
     )
     out_field = gt_storage.zeros(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        default_parameters=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
     )
     stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(10, 10, 10))
     assert (out_field[2:12, 2:12, :] == 1).all()
 
     # test setting domain+origin too large raises
     in_field = gt_storage.ones(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        default_parameters=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
     )
     out_field = gt_storage.zeros(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        default_parameters=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
     )
     with pytest.raises(ValueError):
         stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
 
     # test 2*origin+domain does not raise if still fits (c.f. previous bug in c++ check.)
     in_field = gt_storage.ones(
-        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+        default_parameters=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
     )
     out_field = gt_storage.zeros(
-        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+        default_parameters=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
     )
     stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
 
@@ -347,13 +337,13 @@ def test_np_int_types():
 
     # test numpy int types are accepted
     in_field = gt_storage.ones(
-        backend=backend,
+        default_parameters=backend,
         shape=(np.int8(23), np.int16(23), np.int32(10)),
         default_origin=(np.int64(1), int(1), 0),
         dtype=np.float64,
     )
     out_field = gt_storage.zeros(
-        backend=backend,
+        default_parameters=backend,
         shape=(np.int8(23), np.int16(23), np.int32(10)),
         default_origin=(np.int64(1), int(1), 0),
         dtype=np.float64,
@@ -372,13 +362,13 @@ def test_np_array_int_types():
 
     # test numpy int types are accepted
     in_field = gt_storage.ones(
-        backend=backend,
+        default_parameters=backend,
         shape=np.asarray((23, 23, 10), dtype=np.int64),
         default_origin=np.asarray((1, 1, 0), dtype=np.int64),
         dtype=np.float64,
     )
     out_field = gt_storage.zeros(
-        backend=backend,
+        default_parameters=backend,
         shape=np.asarray((23, 23, 10), dtype=np.int64),
         default_origin=np.asarray((1, 1, 0), dtype=np.int64),
         dtype=np.float64,
@@ -391,42 +381,6 @@ def test_np_array_int_types():
     )
 
 
-def test_ndarray_warning():
-    """test that proper warnings are raised depending on field type."""
-    backend = "numpy"
-    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
-
-    # test numpy int types are accepted
-    in_field = gt_storage.ones(
-        backend=backend,
-        shape=np.asarray((23, 23, 10), dtype=np.int64),
-        default_origin=np.asarray((1, 1, 0), dtype=np.int64),
-        dtype=np.float64,
-    )
-    out_field = gt_storage.zeros(
-        backend=backend,
-        shape=np.asarray((23, 23, 10), dtype=np.int64),
-        default_origin=np.asarray((1, 1, 0), dtype=np.int64),
-        dtype=np.float64,
-    )
-    with pytest.warns(RuntimeWarning):
-        stencil(
-            in_field=in_field.view(np.ndarray),
-            out_field=out_field.view(np.ndarray),
-            origin=np.asarray((2, 2, 0), dtype=np.int64),
-            domain=np.asarray((20, 20, 10), dtype=np.int64),
-        )
-
-    with pytest.warns(None) as record:
-        stencil(
-            in_field=in_field,
-            out_field=out_field,
-            origin=np.asarray((2, 2, 0), dtype=np.int64),
-            domain=np.asarray((20, 20, 10), dtype=np.int64),
-        )
-    assert len(record) == 0
-
-
 @pytest.mark.parametrize("backend", ["debug", "numpy", "gtx86"])
 def test_exec_info(backend):
     """test that proper warnings are raised depending on field type."""
@@ -435,13 +389,13 @@ def test_exec_info(backend):
     exec_info = {}
     # test numpy int types are accepted
     in_field = gt_storage.ones(
-        backend=backend,
+        default_parameters=backend,
         shape=(np.int8(23), np.int16(23), np.int32(10)),
         default_origin=(1, 1, 0),
         dtype=np.float64,
     )
     out_field = gt_storage.zeros(
-        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+        default_parameters=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
     )
     stencil(
         in_field=in_field,

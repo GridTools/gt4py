@@ -1218,16 +1218,20 @@ class GTScriptParser(ast.NodeVisitor):
                         is_api=True,
                         layout_id=arg_info.name,
                     )
+                    if not arg_annotation._backend_defaults:
+                        fields_decls[arg_info.name].layout_map = arg_annotation.layout_map
+                        fields_decls[arg_info.name].alignment = arg_annotation.alignment
 
                 if data_type is gt_ir.DataType.INVALID:
                     raise GTScriptDataTypeError(name=arg_info.name, data_type=data_type)
 
             except Exception as e:
-                raise GTScriptDefinitionError(
-                    name=arg_info.name,
-                    value=arg_annotation,
-                    message=f"Invalid definition of argument '{arg_info.name}': {arg_annotation}",
-                ) from e
+                raise
+                # raise GTScriptDefinitionError(
+                #     name=arg_info.name,
+                #     value=arg_annotation,
+                #     message=f"Invalid definition of argument '{arg_info.name}': {arg_annotation}",
+                # ) from e
 
         for item in itertools.chain(fields_decls.values(), parameter_decls.values()):
             if item.data_type is gt_ir.DataType.INVALID:

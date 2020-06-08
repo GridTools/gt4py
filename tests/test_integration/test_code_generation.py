@@ -36,7 +36,7 @@ from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
         [
             name
             for name in gt_backend.REGISTRY.names
-            if gt_backend.from_name(name).storage_info["device"] == "cpu"
+            if gt_backend.from_name(name).compute_device == "cpu"
         ],
     ),
 )
@@ -49,8 +49,8 @@ def test_generation_cpu(name, backend):
         if isinstance(v, gtscript._FieldDescriptor):
             args[k] = gt_storage.ones(
                 dtype=v.dtype,
-                mask=gtscript.mask_from_axes(v.axes),
-                backend=backend,
+                axes=[a.name for a in v.axes],
+                default_parameters=backend,
                 shape=(23, 23, 23),
                 default_origin=(10, 10, 10),
             )

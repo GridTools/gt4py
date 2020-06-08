@@ -19,72 +19,14 @@ import os
 import numpy as np
 
 from gt4py import backend as gt_backend
+from gt4py import storage as gt_storage
+from gt4py.storage import StorageDefaults
 from . import pyext_builder
-
-
-def make_x86_layout_map(mask):
-    ctr = iter(range(sum(mask)))
-    if len(mask) < 3:
-        layout = [next(ctr) if m else None for m in mask]
-    else:
-        swapped_mask = [*mask[3:], *mask[:3]]
-        layout = [next(ctr) if m else None for m in swapped_mask]
-
-        layout = [*layout[-3:], *layout[:-3]]
-
-    return tuple(layout)
-
-
-def x86_is_compatible_layout(field):
-    stride = 0
-    layout_map = make_x86_layout_map(field.mask)
-    if len(field.strides) < len(layout_map):
-        return False
-    for dim in reversed(np.argsort(layout_map)):
-        if field.strides[dim] < stride:
-            return False
-        stride = field.strides[dim]
-    return True
-
-
-def gtcpu_is_compatible_type(field):
-    return isinstance(field, np.ndarray)
-
-
-def make_mc_layout_map(mask):
-    ctr = reversed(range(sum(mask)))
-    if len(mask) < 3:
-        layout = [next(ctr) if m else None for m in mask]
-    else:
-        swapped_mask = list(mask)
-        tmp = swapped_mask[1]
-        swapped_mask[1] = swapped_mask[2]
-        swapped_mask[2] = tmp
-
-        layout = [next(ctr) if m else None for m in swapped_mask]
-
-        tmp = layout[1]
-        layout[1] = layout[2]
-        layout[2] = tmp
-
-    return tuple(layout)
-
-
-def mc_is_compatible_layout(field):
-    stride = 0
-    layout_map = make_mc_layout_map(field.mask)
-    if len(field.strides) < len(layout_map):
-        return False
-    for dim in reversed(np.argsort(layout_map)):
-        if field.strides[dim] < stride:
-            return False
-        stride = field.strides[dim]
-    return True
 
 
 class GTCPUBackend(gt_backend.BaseGTBackend):
     @classmethod
-    def generate_extension(cls, stencil_id, implementation_ir, options):
+    def generate_extension(cls, stencil_id, implementation_ir, storage_defaults, options):
         pyext_opts = dict(
             verbose=options.backend_opts.pop("verbose", False),
             clean=options.backend_opts.pop("clean", False),
@@ -97,6 +39,7 @@ class GTCPUBackend(gt_backend.BaseGTBackend):
             cls.get_pyext_class_name(stencil_id),
             cls.get_pyext_module_name(stencil_id),
             cls._CPU_ARCHITECTURE,
+            storage_defaults,
             options,
         )
         gt_pyext_sources = gt_pyext_generator(implementation_ir)
@@ -135,13 +78,9 @@ class GTX86Backend(GTCPUBackend):
 
     name = "gtx86"
     options = gt_backend.BaseGTBackend.GT_BACKEND_OPTS
-    storage_info = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": make_x86_layout_map,
-        "is_compatible_layout": x86_is_compatible_layout,
-        "is_compatible_type": gtcpu_is_compatible_type,
-    }
+    compute_device = "cpu"
+    assert_specified_layout = True
+    storage_defaults = StorageDefaults(layout_map=(0, 1, 2))
 
     _CPU_ARCHITECTURE = "x86"
 
@@ -151,12 +90,8 @@ class GTMCBackend(GTCPUBackend):
 
     name = "gtmc"
     options = gt_backend.BaseGTBackend.GT_BACKEND_OPTS
-    storage_info = {
-        "alignment": 8,
-        "device": "cpu",
-        "layout_map": make_mc_layout_map,
-        "is_compatible_layout": mc_is_compatible_layout,
-        "is_compatible_type": gtcpu_is_compatible_type,
-    }
+    compute_device = "cpu"
+    assert_specified_layout = True
+    storage_defaults = StorageDefaults(alignment=8, layout_map=(0, 2, 1))
 
     _CPU_ARCHITECTURE = "mc"

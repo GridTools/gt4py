@@ -47,20 +47,20 @@ def get_reference(test_name, backend, domain, origins, shapes, masks=None):
             res[k] = np.float_(data)
         else:
             try:
-                field = gt_store.from_array(
+                field = gt_store.storage(
                     data,
                     dtype=np.float_,
                     default_origin=origins[k],
                     shape=shapes[k],
-                    backend=backend.name,
+                    default_parameters=backend.name,
                 )
             except KeyError:
-                field = gt_store.from_array(
+                field = gt_store.storage(
                     data,
                     dtype=np.float_,
                     default_origin=origins[k[: -len("_reference")]],
                     shape=shapes[k[: -len("_reference")]],
-                    backend=backend.name,
+                    default_parameters=backend.name,
                 )
 
             res[k] = field
@@ -88,8 +88,8 @@ def run_horizontal_diffusion(backend, id_version, domain):
         if hasattr(arg_fields[k], "host_to_device"):
             arg_fields[k].host_to_device()
     testmodule.run(
-        **arg_fields,
-        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
+        # **arg_fields,
+        **{k: np.array(v, copy=False) for k, v in arg_fields.items()},
         _domain_=domain,
         _origin_=origins,
         exec_info=None,
@@ -98,9 +98,7 @@ def run_horizontal_diffusion(backend, id_version, domain):
     for k in validate_field_names:
         if hasattr(arg_fields[k], "synchronize"):
             arg_fields[k].device_to_host(force=True)
-        np.testing.assert_allclose(
-            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
-        )
+        np.testing.assert_allclose(arg_fields[k], validate_fields[k + "_reference"])
 
 
 @register
@@ -137,8 +135,8 @@ def run_tridiagonal_solver(backend, id_version, domain):
         if hasattr(arg_fields[k], "host_to_device"):
             arg_fields[k].host_to_device()
     testmodule.run(
-        **arg_fields,
-        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
+        # **arg_fields,
+        **{k: np.array(v, copy=False) for k, v in arg_fields.items()},
         _domain_=domain,
         _origin_=origins,
         exec_info=None,
@@ -147,9 +145,7 @@ def run_tridiagonal_solver(backend, id_version, domain):
     for k in validate_field_names:
         if hasattr(arg_fields[k], "synchronize"):
             arg_fields[k].device_to_host(force=True)
-        np.testing.assert_allclose(
-            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
-        )
+        np.testing.assert_allclose(arg_fields[k], validate_fields[k + "_reference"])
 
 
 @register
@@ -192,22 +188,16 @@ def run_vertical_advection_dycore(backend, id_version, domain):
         if hasattr(arg_fields[k], "host_to_device"):
             arg_fields[k].host_to_device()
     testmodule.run(
-        **arg_fields,
-        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
+        # **arg_fields,
+        **{k: np.array(v, copy=False) for k, v in arg_fields.items()},
         _domain_=domain,
         _origin_=origins,
-        # _origin_={
-        #    k: [oo[0] if isinstance(oo, tuple) else oo for oo in o] for k, o in origins.items()
-        # },
         exec_info=None,
     )
-
     for k in validate_field_names:
         if hasattr(arg_fields[k], "synchronize"):
             arg_fields[k].device_to_host(force=True)
-        np.testing.assert_allclose(
-            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
-        )
+        np.testing.assert_allclose(arg_fields[k], validate_fields[k + "_reference"])
 
 
 @pytest.mark.parametrize(
@@ -217,7 +207,7 @@ def run_vertical_advection_dycore(backend, id_version, domain):
             gt_backend.from_name(name)
             for name in gt_backend.REGISTRY.names
             # for name in ["numpy"]
-            if gt_backend.from_name(name).storage_info["device"] == "cpu"
+            if gt_backend.from_name(name).compute_device == "cpu"
         ],
         REGISTRY,
     ),
@@ -233,7 +223,7 @@ def test_cpp_regression_cpu(backend, id_version, function):
         [
             gt_backend.from_name(name)
             for name in gt_backend.REGISTRY.names
-            if gt_backend.from_name(name).storage_info["device"] == "gpu"
+            if gt_backend.from_name(name).compute_device == "gpu"
         ],
         REGISTRY,
     ),

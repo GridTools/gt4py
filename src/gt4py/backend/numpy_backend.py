@@ -19,7 +19,9 @@ import numpy as np
 from gt4py import backend as gt_backend
 from gt4py import ir as gt_ir
 from gt4py import definitions as gt_definitions
+from gt4py import storage as gt_storage
 from gt4py.utils import text as gt_text
+from gt4py.storage import StorageDefaults
 
 from .python_generator import PythonSourceGenerator
 
@@ -158,18 +160,18 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return source
 
     def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
-        self.sources.empty_line()
-
+        # self.sources.empty_line()
+        #
         # Accessors for IO fields
         self.sources.append("# Sliced views of the stencil fields (domain + borders)")
         for info in node.api_signature:
             if info.name in node.fields and info.name not in node.unreferenced:
                 self.sources.extend(self._make_field_origin(info.name))
-                self.sources.extend(
-                    "{name} = {name}.view({np}.ndarray)".format(
-                        name=info.name, np=self.numpy_prefix
-                    )
-                )
+        #         self.sources.extend(
+        #             "{name} = {np}.array({name}, copy=False)".format(
+        #                 name=info.name, np=self.numpy_prefix
+        #             )
+        #         )
         self.sources.empty_line()
 
         super().visit_StencilImplementation(node)
@@ -320,30 +322,12 @@ def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
         return sources.text
 
 
-def numpy_layout(mask):
-    ctr = iter(range(sum(mask)))
-    layout = [next(ctr) if m else None for m in mask]
-    return tuple(layout)
-
-
-def numpy_is_compatible_layout(field):
-    return sum(field.shape) > 0
-
-
-def numpy_is_compatible_type(field):
-    return isinstance(field, np.ndarray)
-
-
 @gt_backend.register
 class NumPyBackend(gt_backend.BaseBackend):
     name = "numpy"
     options = {}
-    storage_info = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": numpy_layout,
-        "is_compatible_layout": numpy_is_compatible_layout,
-        "is_compatible_type": numpy_is_compatible_type,
-    }
+    compute_device = "cpu"
+    assert_specified_layout = False
+    storage_defaults = StorageDefaults()
 
     GENERATOR_CLASS = NumPyModuleGenerator

@@ -644,10 +644,22 @@ class DomainInfo(
     pass
 
 
-class FieldInfo(collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "dtype"])):
+class FieldInfo(
+    collections.namedtuple(
+        "FieldInfoNamedTuple", ["access", "boundary", "dtype", "axes", "layout_map", "alignment"]
+    )
+):
     def __repr__(self):
-        result = "FieldInfo(access=AccessKind.{access}, boundary={boundary}, dtype={dtype})".format(
-            access=self.access.name, boundary=repr(self.boundary), dtype=repr(self.dtype)
+        result = (
+            "FieldInfo(access=AccessKind.{access}, boundary={boundary}, dtype={dtype}, "
+            "axes={axes}, layout_map={layout_map}, alignment={alignment})".format(
+                access=self.access.name,
+                boundary=repr(self.boundary),
+                dtype=repr(self.dtype),
+                axes=self.axes,
+                layout_map=self.layout_map,
+                alignment=self.alignment,
+            )
         )
         return result
 

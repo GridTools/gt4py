@@ -19,12 +19,8 @@ import os
 import numpy as np
 
 from gt4py import backend as gt_backend
+from gt4py.storage import StorageDefaults
 from . import pyext_builder
-
-
-def cuda_layout(mask):
-    ctr = reversed(range(sum(mask)))
-    return tuple([next(ctr) if m else None for m in mask])
 
 
 class GTCUDAPyModuleGenerator(gt_backend.GTPyModuleGenerator):
@@ -35,37 +31,14 @@ class GTCUDAPyModuleGenerator(gt_backend.GTPyModuleGenerator):
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])
 
 
-def cuda_is_compatible_layout(field):
-    stride = 0
-    layout_map = cuda_layout(field.mask)
-    if len(field.strides) < len(layout_map):
-        return False
-    for dim in reversed(np.argsort(layout_map)):
-        if field.strides[dim] < stride:
-            return False
-        stride = field.strides[dim]
-    return True
-
-
-def cuda_is_compatible_type(field):
-    # ToDo: find a better way to remove the import cycle
-    from gt4py.storage.storage import GPUStorage, ExplicitlySyncedGPUStorage
-
-    return isinstance(field, (GPUStorage, ExplicitlySyncedGPUStorage))
-
-
 @gt_backend.register
 class GTCUDABackend(gt_backend.BaseGTBackend):
     GENERATOR_CLASS = GTCUDAPyModuleGenerator
     name = "gtcuda"
     options = gt_backend.BaseGTBackend.GT_BACKEND_OPTS
-    storage_info = {
-        "alignment": 32,
-        "device": "gpu",
-        "layout_map": cuda_layout,
-        "is_compatible_layout": cuda_is_compatible_layout,
-        "is_compatible_type": cuda_is_compatible_type,
-    }
+    compute_device = "gpu"
+    assert_specified_layout = True
+    storage_defaults = StorageDefaults(alignment=32, gpu=True, layout_map=(2, 1, 0))
 
     @classmethod
     def generate_extension(cls, stencil_id, implementation_ir, options):

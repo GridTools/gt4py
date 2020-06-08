@@ -20,6 +20,8 @@ from gt4py import backend as gt_backend
 from gt4py import ir as gt_ir
 from gt4py import definitions as gt_definitions
 from gt4py.utils import text as gt_text
+import gt4py.storage as gt_storage
+from gt4py.storage import StorageDefaults
 
 from .python_generator import PythonSourceGenerator
 
@@ -199,30 +201,12 @@ class _Accessor:
         return sources.text
 
 
-def debug_layout(mask):
-    ctr = iter(range(sum(mask)))
-    layout = [next(ctr) if m else None for m in mask]
-    return tuple(layout)
-
-
-def debug_is_compatible_layout(field):
-    return sum(field.shape) > 0
-
-
-def debug_is_compatible_type(field):
-    return isinstance(field, np.ndarray)
-
-
 @gt_backend.register
 class DebugBackend(gt_backend.BaseBackend):
     name = "debug"
     options = {}
-    storage_info = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": debug_layout,
-        "is_compatible_layout": debug_is_compatible_layout,
-        "is_compatible_type": debug_is_compatible_type,
-    }
+    compute_device = "cpu"
+    assert_specified_layout = False
+    storage_defaults = StorageDefaults()
 
     GENERATOR_CLASS = DebugModuleGenerator

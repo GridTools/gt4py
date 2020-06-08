@@ -19,6 +19,7 @@ import hashlib
 import numbers
 import os
 
+import numpy as np
 import jinja2
 
 from gt4py import analysis as gt_analysis
@@ -85,9 +86,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         gt_ir.DataType.FLOAT64: "float64_t",
     }
 
-    def __init__(self, class_name, module_name, backend, options):
+    def __init__(self, class_name, module_name, backend, storage_defaults, options):
         self.class_name = class_name
         self.module_name = module_name
+        self.storage_defaults = storage_defaults
         self.backend = backend
         self.options = options
 
@@ -329,10 +331,23 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         for name, field_decl in node.fields.items():
             if name not in node.unreferenced:
                 max_ndim = max(max_ndim, len(field_decl.axes))
+
                 field_attributes = {
                     "name": field_decl.name,
                     "dtype": self._make_cpp_type(field_decl.data_type),
+                    "axes": "".join(field_decl.axes).lower(),
                 }
+                if field_decl.layout_map is not None:
+                    layout_map = field_decl.layout_map
+                else:
+                    layout_map = self.storage_defaults.layout_map or (0, 1, 2)
+                if field_decl.alignment is not None:
+                    alignment = field_decl.alignment
+                else:
+                    alignment = self.storage_defaults.alignment or 1
+
+                field_attributes["order_and_mask"] = ", ".join(str(l) for l in layout_map)
+                field_attributes["alignment"] = alignment
                 if field_decl.is_api:
                     if field_decl.layout_id not in storage_ids:
                         storage_ids.append(field_decl.layout_id)
@@ -357,6 +372,11 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         for multi_stage in node.multi_stages:
             steps = [[stage.name for stage in group.stages] for group in multi_stage.groups]
             multi_stages.append({"exec": str(multi_stage.iteration_order).lower(), "steps": steps})
+
+        storage_types = dict()
+        for f in arg_fields:
+            axes = f["axes"]
+            storage_types[axes] = dict(axes=axes, ndims=len(axes))
 
         template_args = dict(
             arg_fields=arg_fields,
@@ -465,7 +485,7 @@ class BaseGTBackend(gt_backend.BaseBackend):
         return path
 
     @classmethod
-    def generate_extension(cls, stencil_id, implementation_ir, options):
+    def generate_extension(cls, stencil_id, implementation_ir, storage_defaults, options):
         raise NotImplementedError(
             "'generate_extension()' method must be implemented by subclasses"
         )
@@ -504,7 +524,7 @@ class BaseGTBackend(gt_backend.BaseBackend):
         if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
         pyext_module_name, pyext_file_path = cls.generate_extension(
-            stencil_id, implementation_ir, options
+            stencil_id, implementation_ir, cls.storage_defaults, options
         )
 
         # Generate and return the Python wrapper class
@@ -515,5 +535,5 @@ class BaseGTBackend(gt_backend.BaseBackend):
         extra_cache_info = {"pyext_file_path": pyext_file_path}
 
         return super(BaseGTBackend, cls)._generate_module(
-            stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info
+            stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info,
         )

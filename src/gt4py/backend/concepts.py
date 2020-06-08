@@ -29,6 +29,7 @@ from gt4py import config as gt_config
 from gt4py import definitions as gt_definitions
 from gt4py import utils as gt_utils
 from gt4py import ir as gt_ir
+import gt4py.storage.default_parameters
 
 
 REGISTRY = gt_utils.Registry()
@@ -41,15 +42,23 @@ def from_name(name: str):
 def register(backend_cls):
     assert issubclass(backend_cls, Backend) and backend_cls.name is not None
 
-    if isinstance(backend_cls.name, str):
-        return REGISTRY.register(backend_cls.name, backend_cls)
-
-    else:
+    if not isinstance(backend_cls.name, str):
         raise ValueError(
             "Invalid 'name' attribute ('{name}') in backend class '{cls}'".format(
                 name=backend_cls.name, cls=backend_cls
             )
         )
+
+    if isinstance(backend_cls.storage_defaults, gt4py.storage.default_parameters.StorageDefaults):
+        gt4py.storage.register(name=backend_cls.name, defaults=backend_cls.storage_defaults)
+    else:
+        raise ValueError(
+            "Invalid 'storage_defaults' attribute in backend class '{cls}'".format(
+                name=backend_cls.name, cls=backend_cls
+            )
+        )
+
+    return REGISTRY.register(backend_cls.name, backend_cls)
 
 
 class Backend(abc.ABC):
@@ -235,7 +244,7 @@ class BaseBackend(Backend):
         cls, stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info
     ):
         generator = cls.GENERATOR_CLASS(cls, options=generator_options)
-        module_source = generator(stencil_id, implementation_ir)
+        module_source = generator(stencil_id, cls.storage_defaults, implementation_ir)
 
         file_name = cls.get_stencil_module_path(stencil_id)
         os.makedirs(os.path.dirname(file_name), exist_ok=True)
@@ -273,7 +282,7 @@ class BaseModuleGenerator(abc.ABC):
         with open(self.TEMPLATE_PATH, "r") as f:
             self.template = jinja2.Template(f.read())
 
-    def __call__(self, stencil_id, implementation_ir):
+    def __call__(self, stencil_id, storage_defaults, implementation_ir):
         self.stencil_id = stencil_id
         self.implementation_ir = implementation_ir
 
@@ -321,10 +330,19 @@ class BaseModuleGenerator(abc.ABC):
                     else gt_definitions.AccessKind.READ_ONLY
                 )
                 if arg.name not in implementation_ir.unreferenced:
+                    layout_map = implementation_ir.fields[arg.name].layout_map
+                    if layout_map is None:
+                        layout_map = self.backend_class.storage_defaults.layout_map or (0, 1, 2)
+                    alignment = implementation_ir.fields[arg.name].alignment
+                    if alignment is None:
+                        alignment = self.backend_class.storage_defaults.alignment or 1
                     field_info[arg.name] = gt_definitions.FieldInfo(
                         access=access,
                         dtype=implementation_ir.fields[arg.name].data_type.dtype,
                         boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
+                        axes=implementation_ir.fields[arg.name].axes,
+                        layout_map=layout_map,
+                        alignment=alignment,
                     )
                 else:
                     field_info[arg.name] = None
