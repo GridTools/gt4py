@@ -182,7 +182,7 @@ def draw_from_strategies(draw, strategies):
     Parameters
     ----------
     draw : `function`
-        Hypothesis :function:`draw` implementation.
+        Hypothesis :func:`draw` implementation.
     strategies : `dict`
         Named strategies.
         - ``name``: Hypothesis strategy (`function`).
