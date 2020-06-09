@@ -484,7 +484,7 @@ class TestRegionSyntax:
     def test_custom_type_region(self):
         # This is a custom type with the API
         TestRegion = namedtuple("RegionObject", ("range"))
-        @gtscript.stencil(backend="debug")
+        @gtscript.stencil(backend="debug", rebuild=True)
         def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...), region(TestRegion(range=(((Interval.START, 0), (Interval.START, 1)), ))):
                 out_field = in_field
