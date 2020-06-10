@@ -129,6 +129,10 @@ repository and use an *editable* installation of GT4Py:
     # Run the command to install GridTools C++ sources
     python -m gt4py.gt_src_manager install
 
+    # Install the pre-commit checks
+    pip install pre-commit
+    pre-commit install  # in the repo directory
+
 
 Documentation
 -------------
