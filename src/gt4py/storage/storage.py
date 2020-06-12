@@ -971,15 +971,14 @@ class Storage(abc.ABC, np.lib.mixins.NDArrayOperatorsMixin):
         target._forward_setitem(value, expanded_input_shapes[0], broadcast_shape)
 
     def __getitem__(self, key):
-        if not isinstance(key, numbers.Integral) and not gt_utils.is_iterable_of(
-            iterable_class=tuple, item_class=(slice, numbers.Integral)
-        ):
-            raise TypeError("Index type not supported.")
-        if not isinstance(key, tuple):
-            key = (key,)
+
         res = storage(self, copy=False)
         if key is Ellipsis:
             return res
+
+        if not isinstance(key, tuple):
+            key = (key,)
+
         res._forward_getitem(key)
 
         key = key + (slice(None, None),) * (self.ndim - len(key))
