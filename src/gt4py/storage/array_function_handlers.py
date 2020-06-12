@@ -26,6 +26,11 @@ def all(types, a, axis=None, out=None, **kwargs):
 
 
 @register
+def allclose(types, a, b, *args, **kwargs):
+    return np.allclose(np.asarray(a), np.asarray(b), *args, **kwargs)
+
+
+@register
 def any(types, a, axis=None, out=None, **kwargs):
     return reduction_handler(np.logical_or, a=a, axis=axis, out=out, **kwargs)
 
