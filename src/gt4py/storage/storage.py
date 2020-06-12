@@ -981,7 +981,13 @@ class Storage(abc.ABC, np.lib.mixins.NDArrayOperatorsMixin):
         if key is Ellipsis:
             return res
         res._forward_getitem(key)
-        res._mask = tuple(m if isinstance(k, slice) else False for m, k in zip(self._mask, key))
+
+        key = key + (slice(None, None),) * (self.ndim - len(key))
+        tmp_mask = list(res._mask)
+        for i, m in enumerate(self.mask):
+            if m:
+                tmp_mask[i] = isinstance(key[sum(self.mask[:i])], slice)
+        res._mask = tuple(tmp_mask)
         return res
 
     def __iconcat__(self, other):
