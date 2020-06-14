@@ -23,7 +23,7 @@ Open GDPs (under consideration)
 .. toctree::
    :maxdepth: 1
 
-   gdp-duck-storage
+   gdp-0003-duck-storage
 
 
 Provisional GDPs (provisionally accepted; interface may change)

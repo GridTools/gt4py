@@ -93,24 +93,25 @@ All of these take the following keyword arguments:
    can be used in the way of the current :code`backend` parameter. for each backend, as well as for the keys
    :code:`'F'` and :code:`'C'`, a default parameter set is provided. Not all default parameter sets provide defaults
    for all other parameters. defining the other arguments explicitly overrides the defaults
-:code:`default_origin`
-   the point to which the memory is aligned, as well as the point that is used as the origin of the storage if none is
-   provided at stencil call time.
+:code:`aligned_index`
+   the point to which the memory is aligned
 :code:`shape`
    iterable of ints, the shape of the storage
 :code:`dtype`
    the dtype of the storage (numpy-like)
 :code:`axes`
-   string, subset of "IJK", indicating the spatial dimensions along which the field extends
+   string, permutation of a sub-sequence of "IJK", indicating the spatial dimensions along which the field extends and
+   their order when indexing.
 :code:`alignment`
-   integer, indicates on a boundary of how many elements the point :code:`default_origin` is aligned. defaults to
+   integer, indicates on a boundary of how many elements the point :code:`aligned_index` is aligned. defaults to
    :code:`1` which indicates no alignment
 :code:`gpu`
    boolean, indicates whether the storage has a GPU buffer, defaults to :code:`False`
 :code:`layout_map`
-   iterable of numbers or a callable returning such an iterable when given the number of dimensions. the iterable
-   indicates the order of strides in decreasing order, i.e. the entry :code:`0` in the iterable corresponds to the dimension
-   with the largest stride.
+   iterable of numbers or a callable returning such an iterable when given the number of dimensions. The iterable
+   indicates the order of strides in decreasing order, i.e. the entry :code:`0` in the iterable corresponds to the
+   dimension with the largest stride. The layout map is always of length 3, and the entries corresponds to the axes in
+   "IJK" order. Default values may however depend on the order of the axes.
 :code:`managed`
    :code:`False`, :code:`"gt4py"`, :code:`"cuda:`, optional. only has effect if :code:`gpu=True`
    defaults to "gt4py". can be used to choose whether the copying to GPU is handled by the user (:code:`False`),
@@ -143,8 +144,9 @@ If :code:`copy=False` and neither :code:`data` nor :code:`device_data` are provi
 allocate an appropriate buffer. If :code:`data` or :code:`device_data` is provided, the consistency of the parameters
 with the buffers is validated.
 
-If the field is not 3-D, as indicated by :code:`axes`, the length of parameters :code:`default_origin` and
-:code:`shape`, may either be of length 3 or of the actual dimension of the storage.
+If the field is not 3-D, as indicated by :code:`axes`, the length of parameters :code:`aligned_index` and
+:code:`shape`, may either be of length 3 or of the actual dimension of the storage, where the not needed entries are
+ignored in the latter case.
 
 We further expose the :code:`Storage` base class, mainly to enable type checking. It can alternatively be used in the
 same way as :code:`storage` to initialize storages. On the other hand, constructors of the derived, hardware-specific
@@ -162,40 +164,44 @@ Supported numpy functions:
 
 :code:`np.all`, :code:`np.any`
    same semantics as :code:`np.logical_and.reduce` and :code:`np.logical_or.reduce`, respectively
-
-Features not supported due to unclear semantics:
-
-:code:`transpose`
-   It does not seem to make sense to swap spatial dimensions
+:code:`np.transpose`
+   It permutes the axes.
 
 .. _constructors:
 
-Properties
+Attributes
 ==========
+:code:`Storage` s have the following attributes:
 
-:code:`ndims`
+:code:`dtype`
+   the dtype as numpy dtype
+:code:`ndim`
    number of (unmasked) dimensions
 :code:`shape`
-    tuple of length :code:`ndims`,
+    tuple of length :code:`ndims`, the shape, with entries corresponding to the axes indicated by :code:`axes`
 :code:`strides`
-    tuple of length :code:`ndims`,
-:code:`data`
-   returns :code:`data` attribute of the underlying ndarray
+    tuple of length :code:`ndims`, the strides, with entries corresponding to the axes indicated by :code:`axes`
+:code:`data`, :code:`flags`
+   returns :code:`data` attribute of the underlying numpy ndarray if a main memory buffer is present, :code:`None`
+   otherwise
+:code:`device_data`
+   returns :code:`data` attribute of the underlying cupy ndarray if a gpu buffer is present, :code:`None`
+   otherwise
 :code:`alignment`
    the value given in the constructor
 :code:`axes`
    string of unmasked axes, e.g. :code:`"IJ"` for a 2d field spanning longitude and latitude but not the vertical.
 :code:`mask`
-   similar to axes, but a tuple of booleans. :code:`(True, True, False)` would be a 2d field spanning longitude and
-latitude but not the vertical
-
-:code:`default_origin`
-   the value given in the constructor indicating the grid point to which the memory is aligned.
-
+   tuple of booleans indicating whether the corresponding axis is contained in :code:`axes`.
+   :code:`(True, True, False)` would be a 2d field spanning longitude and latitude but not the vertical axis.
+:code:`aligned_index`
+   the value given in the constructor indicating the grid point to which the memory is aligned. Note that this only
+   partly takes the role of the former :code:`default_origin` parameter, since it no longer has any influence on the
+   choice of origin at call time.
+:code:`nbytes`,
+   size of the buffer in bytes (excluding padding)
 :code:`gpu`
    boolean, indicating whether the storage has a gpu buffer
-
-ToDo
 
 Methods
 =======
@@ -209,21 +215,20 @@ Methods
 
 :code:`__getitem__`
    dimensions, for which a certain index is selected are returned as masked, while slices do not reduce dimensionality.
+   advanced indexing is not supported, since the result is a 1-d buffer rather than a field.
 
 :code:`__setitem__`
    :ref:`broadcasting: and device selection is equivalent to that of a unary ufunc with a provided output buffer.
    For example, :code:`stor_out[:,3:5, 0] = stor2d` would be equivalent to
    :code:`np.positive(stor2d, out=stor_out[:,3:5, 0]`)
-
-:code:`copy`
-   allocate new buffers and copy the contents
+   advanced indexing is supported in assignments
 
 The following methods are used to ensure one-sided modifications to CPU or GPU buffers of the
 `SoftwareManagedGPUStorage` are tracked properly. They are no-ops for all other storage classes, but are there so that
 user code can be backend-agnostic in these cases.
 
 The use of these methods should only be necessary, if a reference to the storage buffers is kept and modified outside
-of GT4Py.
+of GT4Py, which is generally not recommended.
 
 :code:`set_device_modified`, :code:`set_host_modified`, :code:`set_device_synchronized`
    mark a buffer as modified, so that it can be synchronized before the respective other buffer is accessed.
@@ -242,11 +247,11 @@ Universal Functions
 ^^^^^^^^^^^^^^^^^^^
 
 Universal functions, such as mathematical binary operations and logical operators are supported through the
-:code:`numpy.lib.mixins.NDArrayOperatorsMixin` type and the `__array_ufunc__` interface. We support the methods
+:code:`numpy.lib.mixins.NDArrayOperatorsMixin` base type and the `__array_ufunc__` interface. We support the methods
 `__call__` and `reduce` of the numpy ufunc mechanism.
 
 If the :code:`reduce` method of ufuncs is used, this results in a Storage with the dimensions masked along which the
-reduction was performed.
+reduction was performed. (e.g. taking the sum over the K axis of an IJK storage will result in an IJ storage)
 
 .. _broadcasting:
 
@@ -261,10 +266,10 @@ dimension. I.e. adding an :code:`IJ` field :code:`A` of shape :code:`(2, 3)` wit
 Similarly, fields of lower dimension are assigned to such of higher dimension by broadcasting along the missing
 dimensions.
 
+To keep compatibility with numpy, dimensions of size 1 are treated like masked dimension when broadcasting.
+
 Further, the output buffer can have higher dimensionality than the determined broadcast shape. In this case, the result
 is replicated along the missing dimensions.
-
-
 
 Output Storage Parameters
 =========================
@@ -272,7 +277,7 @@ Output Storage Parameters
 If no output buffer is provided, the constructor parameters of the output storage have to be inferred using the
 available information from the inputs.
 
-:code:`default_origin`
+:code:`aligned_index`
    it is chosen to be as the largest value per dimension across all inputs which are a GT4Py Storage
 :code:`layout_map`
    the layout map is chosen as the layout map of the first input argument which is a GT4Py Storage
@@ -309,7 +314,7 @@ For the synchronized memory classes (be it by CUDA or by GT4Py), the compute dev
 We assume that mixing these in the same application is not a common case. Should it nevertheless appear, the object that
 handles the ufunc will determine the behavior. (Where each of the classes will treat the other as on GPU.)
 
-For CPU storages, all inputs and output need to be compatible with `np.asarray`, for GPU storages with `cp.asarray`,
+For pure CPU storages, all inputs and output need to be compatible with `np.asarray`, for GPU storages with `cp.asarray`,
 otherwise an exception is raised.
 
 :code:`CudaManagedGPUStorage` and :code:`SoftwareManagedGPUStorage` shall both have a :code:`__array_priority__` set to
@@ -326,7 +331,11 @@ settings, these must also be specified to the stencil. We propose the following 
 annotation, which are specified using the notation (:code:`Argument[value]`):
 
 :code:`DType`
-   correspoinds to the `dtype` argument
+   correspoinds to the `dtype` argument, can alternatively be a placeholder string, which can be bound to a dtype using
+   the :code:`dtypes` parameter in the stencil decorator.
+:code:`Axes`
+   corresponds to the `axes` argument. Note that the order of the axes here only indicates what the order is of the
+   axes of the storages which are passed as a field at call time. In gtscript, offset-indexing is always in order 'IJK'.
 :code:`LayoutMap`
    corresponds to the `layout_map` argument
 :code:`Alignment`
@@ -334,14 +343,14 @@ annotation, which are specified using the notation (:code:`Argument[value]`):
 :code:`DefaultParameters`
    corresponds to the `default_parameters` argument.
    Either :code:`'F'` for FORTRAN layout, :code:`'C'` for C/C++-layout or one of the backend identifier strings.
-:code:`Axes`
-   corresponds to the `axes` argument can be a string or as it is now one of :code:`I`, :code:`J`, :code:`K`,
-   :code:`IJ` :code:`IK`, :code:`JK`, :code:`IJK`
 
-The dtype is required, all others optional. The dtype and axes can be specified as positional arguments or using the
-bracket notation, while all others have to be specified using the bracket notation. If any parameter is specified both
-explicitly and in the default parameter set, the explicit value takes precedence. All symbols, including the `Axes`
-arguments can be imported from :code:`gt4py.gtscript`.
+The dtype is required, all others optional. The dtype and axes are specified as positional arguments, while all others
+have to be specified using the bracket notation. If any parameter is specified both explicitly and in the default
+parameter set, the explicit value takes precedence. All symbols, including the `Axes` arguments can be imported from
+:code:`gt4py.gtscript`. If any of the parameters :code:`LayoutMap`, :code:`Alignment`, :code:`DefaultParameters` is
+specified, the backend has no influence on these parameters for that field. If however none of those are specified,
+the behavior is the same if only :code:`DType`, optionally :code:`Axes` and the :code:`DefaultParameters` of the backend
+are specified.
 
 .. note::
    While the storage constructors take the `gpu` argument, it is not necessary to declare this in the stencil
@@ -379,7 +388,7 @@ However, if the backend actually is :code:`backend="gtmc"`, the following will c
 Run-time Checks
 ---------------
 When calling the stencil, an exception is raised if a field does not conform with the previously specified information,
-if going forward would trigger undefined behavior. If it is safe to go on only a warning is raised.
+if going forward would trigger undefined behavior. If it is safe to go on, only a warning is raised.
 
 This implies that e.g. for the :code:`"debug"` and :code:`"numpy"` backends, the specification of the fields only ever
 causes warnings, which may turn into exceptions for the compiled backends.
@@ -391,14 +400,12 @@ CuPy ndarrays, respectively.
 Implementation
 --------------
 Internally, all CPU buffers are kept as NumPy ndarrays, ufunc calls are forwarded after allocating the appropriate
-output buffers. GPU buffers are stored as CuPy ndarrays.
+output buffers. GPU buffers are stored as CuPy ndarrays, except for the :code:`CudaManagedGPUStorage`.
 
 Universal functions are handled by inheriting from :code:`numpy.NDArrayOperatorsMixin` and implementing the
 :code:`__array_ufunc__` interface, which will determine the proper broadcasting, output shape and compute device,
 and then dispatch the actual computation to NumPy or CuPy, respectively. Other numpy API functions will be handled
 by means of the :code:`__array_function__` protocol.
-
-ToDo
 
 .. _storage_types:
 
