@@ -652,6 +652,7 @@ class AxisBound(Node):
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
 
+
 @attribclass
 class AxisInterval(Node):
     start = attribute(of=AxisBound)
