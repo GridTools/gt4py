@@ -81,11 +81,11 @@ There will be 6 functions that should be used to initialize the storages. These 
    Used to allocate a storage with values initialized to 1.
 :code:`full`
    Used to allocate a storage with values initialized to a given scalar value.
-:code:`asstorage`
+:code:`as_storage`
    Used to wrap an existing buffer in a storage object, without copying the buffer's contents.
 :code:`storage`
    Used to allocate a storage with values initialized to those of a given array. If the argument
-   :code:`copy` is set to :code:`False`, the behavior is that of :code:`asstorage`.
+   :code:`copy` is set to :code:`False`, the behavior is that of :code:`as_storage`.
 
 All of these take the following keyword arguments:
 
@@ -93,8 +93,11 @@ All of these take the following keyword arguments:
    can be used in the way of the current :code`backend` parameter. for each backend, as well as for the keys
    :code:`'F'` and :code:`'C'`, a default parameter set is provided. Not all default parameter sets provide defaults
    for all other parameters. defining the other arguments explicitly overrides the defaults
+:code:`halo`
+   tuple of length :code:`3` or :code:`ndim`, each entry is either an int or a 2-tuple of ints. ints represent a
+   symmetric halo in that dimension, while a 2-tuple specifies the halo on the respective boundary for that dimension
 :code:`aligned_index`
-   the point to which the memory is aligned
+   the point to which the memory is aligned, defaults to the lower indices of the halo attribute
 :code:`shape`
    iterable of ints, the shape of the storage
 :code:`dtype`
@@ -122,13 +125,13 @@ In addition, some of the functions support additional positional or keyword argu
 :code:`value`
    supported by the :code:`full` method. it indicates the value to which the array is initialized
 :code:`data`
-   supported by the :code:`asstorage` and :code:`storage` functions. It is used to specify the buffer from which the
+   supported by the :code:`as_storage` and :code:`storage` functions. It is used to specify the buffer from which the
    storage is initialized (with or without copying the values)
 :code:`device_data`
-   supported by the :code:`asstorage` and :code:`storage` functions. It is used to specify the device buffer in case
+   supported by the :code:`as_storage` and :code:`storage` functions. It is used to specify the device buffer in case
    allocation from existing buffers on both the device and main memory is desired.
 :code:`sync_state`:
-   gt4py.storage.SyncState, supported by the :code:`asstorage` and :code:`storage` functions,  only has effect if
+   gt4py.storage.SyncState, supported by the :code:`as_storage` and :code:`storage` functions,  only has effect if
    :code:`managed="gt4py"`. indicates which of the provided buffers (among :code:`data`, :code:`device_data`) is up to
    date at the time of initialization.
 :code:`copy`
@@ -153,8 +156,8 @@ same way as :code:`storage` to initialize storages. On the other hand, construct
 storage types (See Section :ref:`storage_types`) are not intended to be used directly.
 
 
-Storage Attributes
-^^^^^^^^^^^^^^^^^^
+Storage Attributes and NumPy API functions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 While we aim at supporting as many features as possible, we have not compiled an exhaustive list of features yet and we
 expressly ask for suggestions here (focusing on NumPy functions of the form :code:`np.function` or attributes and
@@ -190,10 +193,8 @@ Attributes
 :code:`alignment`
    the value given in the constructor
 :code:`axes`
-   string of unmasked axes, e.g. :code:`"IJ"` for a 2d field spanning longitude and latitude but not the vertical.
-:code:`mask`
-   tuple of booleans indicating whether the corresponding axis is contained in :code:`axes`.
-   :code:`(True, True, False)` would be a 2d field spanning longitude and latitude but not the vertical axis.
+   string of unmasked axes, e.g. :code:`"JI"` for a 2d field spanning longitude and latitude but not the vertical, where
+   the first index corresponds to the "J" axis.
 :code:`aligned_index`
    the value given in the constructor indicating the grid point to which the memory is aligned. Note that this only
    partly takes the role of the former :code:`default_origin` parameter, since it no longer has any influence on the
@@ -202,26 +203,45 @@ Attributes
    size of the buffer in bytes (excluding padding)
 :code:`gpu`
    boolean, indicating whether the storage has a gpu buffer
+:code:`halo`
+   n-dimensional tuple of 2-tuples of ints, in the same format as the halo parameter of the constructor methods.
+   this property has a corresponding setter
+:code:`domain_shape`
+   the shape of the inner part of the field, i.e. the shape with the halo subtracted.
+:code:`domain_view`
+   a view of the buffer, again as a storage, with the halo removed. That is, the index :code:`[0, 0, 0]` corrsetponds
+   to the first point in the domain.
 
 Methods
 =======
 
-:code:`__array__`, :code:`__array_interface__` and :code:`__cuda_array_interface__`
-   where the former two are only supported for storages with an actual CPU buffer, the latter only for GPU-enabled
-   storages
+:code:`__array__()`
+   returns either a numpy ndarray (if a CPU buffer is available), or a cupy ndarray otherwise
+
+:code:`__array_interface__`
+    only supported for storages with an actual CPU buffer
+
+:code:`__cuda_array_interface__`
+   only for GPU-enabled storages.
 
 :code:`__deepcopy__` and :code:`copy` methods
    allocate new buffers and copy the contents
 
 :code:`__getitem__`
    dimensions, for which a certain index is selected are returned as masked, while slices do not reduce dimensionality.
-   advanced indexing is not supported, since the result is a 1-d buffer rather than a field.
+   advanced indexing is not supported, since the result would be a 1-d buffer rather than a field.
 
 :code:`__setitem__`
    :ref:`broadcasting: and device selection is equivalent to that of a unary ufunc with a provided output buffer.
    For example, :code:`stor_out[:,3:5, 0] = stor2d` would be equivalent to
    :code:`np.positive(stor2d, out=stor_out[:,3:5, 0]`)
    advanced indexing is supported in assignments
+
+:code:`to_ndarray`
+   returns a view of the buffer which is a cupy ndarray if a storage is GPU enabled, and a numpy ndarray otherwise.
+:code:`to_numpy`, :code:`to_cupy`
+   returns a view of the buffer which is a view of the underlying buffers in numpy or cupy, or raises an exception
+   if no buffer is available on the respective device.
 
 The following methods are used to ensure one-sided modifications to CPU or GPU buffers of the
 `SoftwareManagedGPUStorage` are tracked properly. They are no-ops for all other storage classes, but are there so that
@@ -279,6 +299,8 @@ available information from the inputs.
 
 :code:`aligned_index`
    it is chosen to be as the largest value per dimension across all inputs which are a GT4Py Storage
+:code:`halo`
+   it is chosen s.t. the resulting domain is the intersection of all individual domains.
 :code:`layout_map`
    the layout map is chosen as the layout map of the first input argument which is a GT4Py Storage
 :code:`alignment`
