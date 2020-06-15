@@ -501,7 +501,11 @@ class TestRegion:
             with computation(PARALLEL), interval(...), region(region_list):
                 out_field = in_field
 
-        def_ir = compile_definition(valid, "test_region_parsing_valid", module, externals=externals)
+        def_ir = compile_definition(
+            valid, "test_region_parsing_valid", module, externals=externals
+        )
 
         with pytest.raises(gt_frontend.GTScriptSymbolError):
-            def_ir = compile_definition(expect_error, "test_region_parsing_expect_error", module, externals=externals)
+            def_ir = compile_definition(
+                expect_error, "test_region_parsing_expect_error", module, externals=externals
+            )
