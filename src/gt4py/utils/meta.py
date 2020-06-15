@@ -532,6 +532,42 @@ class SymbolsNameMapper(ASTTransformPass):
 map_symbol_names = SymbolsNameMapper.apply
 
 
+class InsideCall(ASTPass):
+    @classmethod
+    def apply(cls, func_or_source_or_ast, name_node, id_string):
+        collector = cls(name_node=name_node, id_string=id_string)
+        return collector(func_or_source_or_ast)
+
+    def __init__(self, name_node, id_string):
+        self.name_node = name_node
+        self.id_string = id_string
+        self.found_node = False
+
+    def __call__(self, func_or_source_or_ast):
+        self.call = None
+        super().__call__(func_or_source_or_ast)
+        return not self.found_node
+
+    def visit_Call(self, node: ast.Call):
+        if isinstance(node.func, ast.Name) and not node.func.id == self.id_string:
+            self.generic_visit(node)
+        elif isinstance(node.func, ast.Attribute) and not node.func.attr == self.id_string:
+            self.generic_visit(node)
+
+    # def visit_Subscript(self, node: ast.Subscript):
+    #     if isinstance(node.value, ast.Name):
+    #         if not node.value.id == self.id_string:
+    #             self.generic_visit(node)
+    #     else:
+    #         self.generic_visit(node)
+
+    def visit_Name(self, node: ast.Name):
+        self.found_node = node == self.name_node
+
+
+inside_call = InsideCall.apply
+
+
 # def collect_caller_symbols(collect_globals=True):
 #     symbols = dict()
 #     caller_frame = None

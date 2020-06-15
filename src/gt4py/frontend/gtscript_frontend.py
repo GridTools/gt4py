@@ -22,6 +22,8 @@ import itertools
 import numbers
 import types
 
+from collections.abc import Iterable
+
 import numpy as np
 
 from gt4py import definitions as gt_definitions
@@ -101,6 +103,85 @@ class GTScriptDataTypeError(GTScriptSyntaxError):
         super().__init__(message, loc=loc)
         self.name = name
         self.data_type = data_type
+
+
+class RegionReplacer(ast.NodeTransformer):
+    @classmethod
+    def apply(cls, func_node: ast.FunctionDef, source: str, context: dict):
+        inliner = cls(source, context)
+        inliner(func_node)
+
+    def __init__(self, source, context):
+        self.source = source
+        self.context = context
+
+    def __call__(self, func_node: ast.FunctionDef):
+        self.visit(func_node)
+
+    def visit_With(self, node: ast.With):
+        def find_region_source(source: str, line: int, col: int) -> str:
+            sizes = tuple(len(x) + 1 for x in source.split("\n"))
+            partial_sizes = [0] + list(itertools.accumulate(sizes))
+            offset = partial_sizes[line - 1] + col - 1
+            index = source[offset:].find("(")
+            assert index > 0
+            offset += index + 1
+            start, scope = offset, 1
+            while scope > 0:
+                offset += 1
+                character = source[offset]
+                if character in ("(", "["):
+                    scope += 1
+                elif character in (")", "]"):
+                    scope -= 1
+
+            return source[start:offset]
+
+        def is_valid_specifier(spec):
+            if not isinstance(spec, Iterable):
+                return False
+            for axis in spec:
+                if not isinstance(axis, Iterable):
+                    return False
+                if any((not isinstance(endpt, Iterable) for endpt in axis)):
+                    return False
+                if any((not isinstance(endpt[0], gt_definitions.Interval) for endpt in axis)):
+                    return False
+                if any((not isinstance(endpt[1], int) for endpt in axis)):
+                    return False
+            return True
+
+        item_contexts = [x.context_expr for x in node.items]
+        assert all(isinstance(x, ast.Call) for x in item_contexts)
+
+        func_ids = [x.func.id for x in item_contexts]
+
+        if "interval" in func_ids:
+            # Store in the interval node
+            index = func_ids.index("interval")
+        elif "computation" in func_ids:
+            # Store in the computation node and apply to all intervals inside that
+            index = func_ids.index("computation")
+        else:
+            raise GTScriptSymbolError("With node must have either interval or computation")
+
+        if "region" in func_ids:
+            arg_index = func_ids.index("region")
+            region_node = item_contexts[arg_index]
+            code = find_region_source(self.source, region_node.lineno, region_node.col_offset)
+            specifiers = tuple(tuple(item) for item in eval(f"({code},)", self.context))
+
+            for spec in specifiers:
+                if not is_valid_specifier(spec):
+                    raise GTScriptSymbolError("Not a valid specifier: " + str(spec))
+
+            # Store
+            item_contexts[index].regions = specifiers
+
+            # Delete region AST node
+            del node.items[arg_index]
+
+        return node
 
 
 class ValueInliner(ast.NodeTransformer):
@@ -452,6 +533,23 @@ class ParsingContext(enum.Enum):
     INTERVAL = 3
 
 
+def axis_intervals_from_region(region: list):
+    def make_axis_bound(endpt):
+        indicator, offset = endpt
+        return gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START
+            if indicator == gt_definitions.Interval.START
+            else gt_ir.LevelMarker.END,
+            offset=offset,
+        )
+
+    assert len(region) == 2
+    return [
+        gt_ir.AxisInterval(start=make_axis_bound(endpts[0]), end=make_axis_bound(endpts[1]))
+        for endpts in region
+    ]
+
+
 class IRMaker(ast.NodeVisitor):
     def __init__(
         self,
@@ -548,6 +646,9 @@ class IRMaker(ast.NodeVisitor):
             raise syntax_error
         iteration_order = gt_ir.IterationOrder[iteration_order_node.id]
 
+        # Region (if present, may be in interval)
+        regions = getattr(comp_node, "regions", list())
+
         # Body
         body = list(node.body)
         if len(node.items) == 2:
@@ -561,10 +662,17 @@ class IRMaker(ast.NodeVisitor):
         self.parsing_context = ParsingContext.COMPUTATION
         result = []
         for item in body:
-            block = self.visit(item)
-            assert isinstance(block, gt_ir.ComputationBlock)
-            block.iteration_order = iteration_order
-            result.append(block)
+            comp_blocks = self.visit(item)
+            for block in comp_blocks:
+                assert isinstance(block, gt_ir.ComputationBlock)
+                block.iteration_order = iteration_order
+                result.append(block)
+            if regions:
+                assert len(comp_blocks) == 1
+                block = comp_blocks[0]
+                comp_blocks = [block] * len(regions)
+                for region, block in zip(regions, comp_blocks):
+                    block.parallel_interval = axis_intervals_from_region(region)
         self.parsing_context = ParsingContext.CONTROL_FLOW
 
         if len(result) > 1:
@@ -611,6 +719,9 @@ class IRMaker(ast.NodeVisitor):
         else:
             raise range_error
 
+        # Get region (if present, maybe in computation node)
+        regions = getattr(interval_node, "regions", list())
+
         self.parsing_context = ParsingContext.INTERVAL
         stmts = []
         for stmt in node.body:
@@ -623,7 +734,14 @@ class IRMaker(ast.NodeVisitor):
             body=gt_ir.BlockStmt(stmts=stmts),
         )
 
-        return result
+        if regions:
+            comp_blocks = [result] * len(regions)
+            for region, block in zip(regions, comp_blocks):
+                block.parallel_interval = axis_intervals_from_region(region)
+        else:
+            comp_blocks = [result]
+
+        return comp_blocks
 
     # Visitor methods
     # -- Special nodes --
@@ -1082,25 +1200,21 @@ class GTScriptParser(ast.NodeVisitor):
         nonlocal_symbols = {}
 
         name_nodes = gt_meta.collect_names(definition)
-        for collected_name in name_nodes.keys():
+        for collected_name, nodes in name_nodes.items():
             if collected_name not in gtscript.builtins:
                 root_name = collected_name.split(".")[0]
                 if root_name in imported_symbols:
                     imported_symbols[root_name].setdefault(
                         collected_name, name_nodes[collected_name]
                     )
-                elif root_name in context and not inspect.isclass(context[root_name]):
-                    # Could be a constant OR a region object
-                    # If instance of a region object, then skip it
-                    # TODO distinguish between constant and instance of
-                    # region object type.
-                    # If they are added to nonlocal_symbols, then GTScriptParser
-                    # run() tries to inline the values
-                    nonlocal_symbols[collected_name] = GTScriptParser.eval_constant(
-                        collected_name,
-                        context,
-                        gt_ir.Location.from_ast_node(name_nodes[collected_name][0]),
-                    )
+                elif root_name in context:
+                    if not gt_meta.inside_call(definition, nodes[0], "region"):
+                        # Assume it is a constant symbol and eval it
+                        nonlocal_symbols[collected_name] = GTScriptParser.eval_constant(
+                            collected_name, context, gt_ir.Location.from_ast_node(nodes[0])
+                        )
+                    else:
+                        nonlocal_symbols[root_name] = context[root_name]
                 elif root_name not in local_symbols and root_name in unbound:
                     raise GTScriptSymbolError(
                         name=collected_name,
@@ -1258,7 +1372,14 @@ class GTScriptParser(ast.NodeVisitor):
         )
         main_func_node = self.ast_root.body[0]
 
-        assert hasattr(self.definition, "_gtscript_")
+        if not hasattr(self.definition, "_gtscript_"):
+            self.definition = GTScriptParser.annotate_definition(self.definition)
+            resolved_externals = GTScriptParser.resolve_external_symbols(
+                self.definition._gtscript_["nonlocals"],
+                self.definition._gtscript_["imported"],
+                self.external_context,
+            )
+            self.definition._gtscript_["externals"] = resolved_externals
         # self.resolved_externals = self.resolve_external_symbols(
         #     self.definition._gtscript_["nonlocals"],
         #     self.definition._gtscript_["imported"],
@@ -1288,6 +1409,10 @@ class GTScriptParser(ast.NodeVisitor):
             self.external_context,
             exhaustive=False,
         )
+
+        # Replace calls to external functions inside region() calls
+        RegionReplacer.apply(main_func_node, source=self.source, context=local_context)
+
         ValueInliner.apply(main_func_node, context=local_context)
 
         # Inline function calls

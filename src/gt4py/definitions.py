@@ -31,10 +31,12 @@ from gt4py.utils.attrib import (
     Tuple as TupleOf,
 )
 
+
 @enum.unique
 class Interval(enum.Enum):
     START = 0
     END = 1
+
 
 class CartesianSpace:
     @enum.unique
@@ -711,6 +713,31 @@ class GTSpecificationError(GTError):
 class GTSemanticError(GTError):
     def __init__(self, message):
         super().__init__(message)
+
+
+# Select an interval
+class _Selection:
+    def __getitem__(self, *args):
+        return_list = []
+        for arg in tuple(*args):
+            if arg.start is None:
+                start = (Interval.START, 0)
+            elif arg.start < 0:
+                start = (Interval.END, arg.start)
+            else:
+                start = (Interval.START, arg.start)
+            if arg.stop is None:
+                end = (Interval.END, 0)
+            elif arg.stop > 0:
+                end = (Interval.START, arg.stop)
+            else:
+                end = (Interval.END, arg.stop)
+            return_list.append((start, end))
+        return return_list
+
+
+# Use this object with __getitem__, e.g. gt4py.selection[:3, -3:]
+selection = _Selection()
 
 
 def normalize_domain(domain):

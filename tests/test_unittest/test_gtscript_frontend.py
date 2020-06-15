@@ -17,6 +17,7 @@
 import textwrap
 import types
 
+import inspect
 import numpy as np
 import pytest
 
@@ -29,6 +30,8 @@ from gt4py import utils as gt_utils
 from gt4py import Interval
 
 from ..utils import id_version
+
+from gt4py.frontend.gtscript_frontend import GTScriptParser, GTScriptFrontend
 
 
 # ---- Utilities -----
@@ -480,11 +483,33 @@ class TestAssignmentSyntax:
                     tmp[0, 0, 0] = 2 * in_field
                     out_field = tmp
 
-class TestRegionSyntax:
-    def test_custom_type_region(self):
-        # This is a custom type with the API
-        TestRegion = namedtuple("RegionObject", ("range"))
-        @gtscript.stencil(backend="debug", rebuild=True)
-        def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-            with computation(PARALLEL), interval(...), region(TestRegion(range=(((Interval.START, 0), (Interval.START, 1)), ))):
+
+class TestRegion:
+    def test_region_parsing(self):
+        region_list = (gt_definitions.selection[:3, -3:], gt_definitions.selection[:2, -2:])
+
+        def parse_stencil(func):
+            return GTScriptFrontend.generate(
+                func, {}, gt_definitions.BuildOptions(name=func.__module__, module=__name__)
+            )
+
+        def valid(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...), region(gt_definitions.selection[:3, -3:]):
                 out_field = in_field
+            with computation(PARALLEL), interval(...), region(
+                gt_definitions.selection[:3, -3:], gt_definitions.selection[:2, -2:]
+            ):
+                out_field = in_field
+            with computation(PARALLEL), interval(...), region(*region_list):
+                out_field = in_field
+
+        def expect_error(
+            in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
+        ):
+            with computation(PARALLEL), interval(...), region(region_list):
+                out_field = in_field
+
+        def_ir = parse_stencil(valid)
+
+        with pytest.raises(gt_frontend.GTScriptSymbolError):
+            def_ir = parse_stencil(expect_error)
