@@ -68,7 +68,7 @@ This example motivates a number of requirements for the feature. It must be able
 2. specify cleanly regions at and near the edge of compute domains
 3. read from and write to fields inside halo regions
 
-The specific feature that we are proposing is the addition of a `region()` that specifies the horizontal iteration space.
+The specific feature that we are proposing is the addition of a `region()` keyword that specifies the horizontal iteration space.
 Arguments passed to the `region()` specifier are Python expressions resolved at compile time, which result in objects specifying the local index region for the contained computation.
 In order to make this friendlier for applications, they can provide methods or classes that provide these objects specifying the local index region.
 
@@ -89,17 +89,15 @@ This reduces the complexity of the code and consolidates operations on `ub` - it
 Model developers already understand the idea of offsets with the stencil notation of e.g. `uc[0, -1, 0]`, which is analogous to specifying offsets from an edge of the horizontal domain.
 
 All that needs to be changed in the frontend is adding the `region()` specifier, **so all existing GT4Py code will continue to work as before.**
-The new `region()` specifier accepts `local_origin` and `extent` that describe the horizontal iteration space in a way that describes the process-local iteration space, and can also represent the global space if the space is domain decomposed and computed by a set of processes.
-
-It may not be immediately obvious that this supports the notion of a global iteration space, but the object passed to `region()` is constructed by the user, and can embed details about the domain partitioning.
-It is the responsibility of this object to translate from a global index provided by the user to a local index used by gt4py.
+The new `region()` specifier is a tuple that describes the horizontal iteration space in a way that describes the process-local iteration space, and can also represent the global space if the space is domain decomposed and computed by a set of processes.
+The arbitrary python code executed to create the  tuples(s) passed to `region()` and therefore can embed details about the domain partitioning.
 The processes that do not have an global iteration space index intersection with the provided regions simply skip this computation altogether.
 
 
 Usage and Impact
 ----------------
 
-This is an optional feature, but should help nearly every application of GT4Py, since almost all partial differential equations at some point have a non-periodic boundary condition or require special treatment somewhere in the domain.
+This is an optional feature, but should help nearly every application of GT4Py, since nearly all partial differential equations at some point have a non-periodic boundary condition or require special treatment in the domain.
 
 
 Backward Compatibility
@@ -117,6 +115,20 @@ However, the fact that there are multiple dimensions in the horizontal, halos, a
 As introduced above, we propose adding a new gtscript `region()` specifier that specializes the stencil on a region of the space when a non-zero intersection with the global region occurs.
 The idea behind using the region objects is that they can incorporate both the iteration space a process sees and the global partitioning that an application must handle, all while hiding the complexity at the stencil level for model developers.
 In this proposal, the application remains in control of the partitioning data so **the partitioner is entirely transparent to both GT4Py and its backend.**
+
+Region Specification
+++++++++++++++++++++
+
+The region specification is a nested tuple interface that defines offsets from the endpoints on each axis.
+There are two parallel axes each with two endpoints, so it is a pair of pairs, where a pair is a 2-tuple.
+Each endpoint is itself a pair of a `gt4py.definitions.Interval` and an integer offset.
+For example, to fill a strip the "west" strip of a I-J plane of size 3:
+
+.. code-block:: python
+
+    (((Interval.START, 0), (Interval.START, 3)), ((Interval.START, 0), (Interval.END, 0)))
+
+This is tedious, so a helper object is available. This is equivalent to writing `gt4py.selection[:3, :]`.
 
 
 Specification Options
@@ -261,7 +273,7 @@ The implementation on the GT4Py side should be relatively light. We will need to
 .. _IRMaker: https://github.com/GridTools/gt4py/blob/master/src/gt4py/frontend/gtscript_frontend.py#L454
 .. _internal IR: https://github.com/GridTools/gt4py/blob/master/src/gt4py/ir/nodes.py
 
-Implementation on the application side is to define region classes for its needs.
+The application must define functions that create the tuples or subclass tuple.
 
 
 
