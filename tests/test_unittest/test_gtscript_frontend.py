@@ -17,21 +17,15 @@
 import textwrap
 import types
 
-import inspect
 import numpy as np
 import pytest
-
-from collections import namedtuple
 
 from gt4py import gtscript
 from gt4py import definitions as gt_definitions
 from gt4py.frontend import gtscript_frontend as gt_frontend
 from gt4py import utils as gt_utils
-from gt4py import Interval
 
 from ..utils import id_version
-
-from gt4py.frontend.gtscript_frontend import GTScriptParser, GTScriptFrontend
 
 
 # ---- Utilities -----
@@ -489,7 +483,7 @@ class TestRegion:
         region_list = (gt_definitions.selection[:3, -3:], gt_definitions.selection[:2, -2:])
 
         def parse_stencil(func):
-            return GTScriptFrontend.generate(
+            return gt_frontend.GTScriptFrontend.generate(
                 func, {}, gt_definitions.BuildOptions(name=func.__module__, module=__name__)
             )
 
