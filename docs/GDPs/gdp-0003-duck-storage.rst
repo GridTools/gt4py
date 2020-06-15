@@ -12,47 +12,46 @@ GDP 3 — Storage Refactoring
 Abstract
 --------
 
-We propose to replace the current storage classes by a class which does not inherit
-from NumPy ndarrays.
-Further, the new storage classes shall introduce the possibility to be constructed
-from existing memory and provide more control over the underlying memory.
+We propose to replace the current storage implementation by a new `storage` class hierarchy
+which does not inherit from NumPy `ndarray`. Further, the new storage classes shall introduce
+the possibility to be constructed from externally allocated memory buffers and provide more
+control over the underlying memory.
 
 
 Motivation and Scope
 --------------------
 
 In the current state of GT4Py, we implemented storages as subclasses of NumPy :code:`ndarrays`.
-This has some drawbacks such as the missing possibility to maintain some information about the buffers
-under certain operations of the NumPy API. Further, some one-sided changes to buffers of
-the `ExplicitlySyncedGPUStorage` could not be tracked reliably, resulting in validation errors which are hard to
-debug and avoid.
+Although this strategy is fully documented and supported by NumPy API, it presents some drawbacks
+such as the possibility of missing some buffer metadata under certain operations of the NumPy API.
+Further, some NumPy API calls cause one-sided changes to coupled host/device buffers managed by
+GT4Py storages (e.g. :code:`ExplicitlySyncedGPUStorage` class) which cannot be tracked reliably,
+resulting in validation errors which are hard to find and fix.
 
-Nevertheless, the storages are currently implemented as ndarray subclasses. This was necessary
-so the storages could be used in some third party frameworks. Since
-then, these frameworks have extended their compatibility to the interface that are
-specified in the :emphasis:`Numpy Enhancement Proposal`
-`NEP18 <https://numpy.org/neps/nep-0018-array-function-protocol.html>`_.
+The current implementation of GT4Py storages as `ndarray` subclasses was needed to use storages
+transparently with third-party frameworks relying on NumPy `ndarray` implementation details.
+Nowadays, however, most of the Python scientific ecosystem supports the more generic interface
+specified in the :emphasis:`NumPy Enhancement Proposal` `NEP18 <https://numpy.org/neps/nep-0018-array-function-protocol.html>`_,
+which allows the seamless integration of NumPy code with custom implementations of the NumPy API by
+means of `duck typing <https://en.wikipedia.org/wiki/Duck_typing>`_. Thus, reimplementing GT4Py
+storages using the interface introduced in the NEP18 allows GT4Py to retain full control over the
+internal behavior of complex operations, while keeping interoperability with third-party scientific
+frameworks.
 
-Implementing the interface introduced in the NEP18 allows GT4Py to retain full control
-over the copying behavior, while allowing the use of the mentioned frameworks.
+Additionally, we propose to take this opportunity to improve the interaction with existing codes by
+allowing the initialization of storages from external buffers without requiring a copying operation.
+To use this feature, some additional information about the provided buffers needs to be specified to
+both the :code:`__init__` method of the storages as well to GT4Py stencils at compile time.
 
-Besides this substantial change, we propose to take the opportunity of this development
-to also improve the interaction with existing codes by allowing the initialization of
-storages from external buffers without copying. To use this feature, some additional
-information about the provided buffers needs to be specified to both the :code:`__init__`
-method of the storages as well to the stencils at compile time.
-
-Despite the move away from NumPy as a base class, the storage should integrate with the
-scientific python ecosystem as seamlessly as possible and mimic a NumPy ndarray, which is an established standard,
-by means of `duck typing <https://en.wikipedia.org/wiki/Duck_typing>`_, to the extent that this is feasible.
 
 Backward Compatibility
 ----------------------
 
-The implementation of this GDP breaks the integration with external libraries which require a NumPy ndarray subclass.
-Further, we propose some API changes like renaming or repurposing of keyword arguments and attributes.
-This will break all existing user codes. However, all existing GT4Py functionality will remain or be extended. Updating
-codebases to the new interface amounts mostly to updating attribute and keyword argument names.
+The implementation of this GDP breaks the integration with external libraries which require a NumPy
+`ndarray` subclass. Further, we propose some API changes like renaming or repurposing of keyword
+arguments and attributes. These changes are expected to break most of existing user codes. However,
+existing GT4Py functionality will remain or be extended and thus updating codebases to the new
+interface amounts mostly to updating attribute and keyword argument names.
 
 
 Detailed Description
@@ -61,82 +60,101 @@ Detailed Description
 Supported Functionality
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-Ideally, storages would behave in the same way as ndarrays. We limit this if it is not possible to maintain the
-consistency of the underlying structured memory. We chose to internally use NumPy and CuPy ndarrays
-to store CPU and GPU buffers, respectively. We also implement some functionality like mathematical operations by
-forwarding to those libraries. Therefore, support for dtypes and other functionality is restricted to the common
-denominator of CuPy and NumPy.
+Our goal is to make GT4Py `storages` behave as close as possible to `ndarrays`, although behavior
+may differ in specific cases where is not possible to maintain the consistency of the underlying
+structured memory.
+
+We chose to use internally NumPy and CuPy `ndarrays` to store CPU and GPU buffers, respectively,
+since they are standard and realiable components of the Python ecosystem. We rely on those libraries
+to implement part of the functionality, like mathematical operators, by forwarding the calls to the
+appropriate library call. As a consequence, support for `dtypes` and other functionality is
+restricted to the common denominator of CuPy and NumPy.
 
 
-Storage Constructors
-^^^^^^^^^^^^^^^^^^^^
+Storage Creation
+^^^^^^^^^^^^^^^^
 
-There will be 6 functions that should be used to initialize the storages. These are:
+We propose the following functions to create and initialize GT4Py storages (meaning of common parameters is explained below): 
 
-:code:`empty`
-   Used to allocate a storage with uninitialized (undefined) values.
-:code:`zeros`
-   Used to allocate a storage with values initialized to 0.
-:code:`ones`
-   Used to allocate a storage with values initialized to 1.
-:code:`full`
-   Used to allocate a storage with values initialized to a given scalar value.
-:code:`as_storage`
-   Used to wrap an existing buffer in a storage object, without copying the buffer's contents.
-:code:`storage`
-   Used to allocate a storage with values initialized to those of a given array. If the argument
-   :code:`copy` is set to :code:`False`, the behavior is that of :code:`as_storage`.
 
-All of these take the following keyword arguments:
+   Allocate a storage with uninitialized (undefined) values.
 
-:code:`default_parameters`
+- :code:`zeros(shape, dtype=np.float64, *, alignment_index=None, alignment_size=1, axes=None, device=None, managed=None, **kwargs)`
+
+   Allocate a storage with values initialized to 0.
+
+- :code:`ones(shape, dtype=np.float64, *, alignment_index=None, alignment_size=1, axes=None, device=None, managed=None, **kwargs)`
+
+   Allocate a storage with values initialized to 1.
+
+- :code:`full(shape, fill_value, dtype=np.float64, *, alignment_index=None, alignment_size=1, axes=None, device=None, managed=None, **kwargs)`
+
+    Allocate a storage with values initialized to the given scalar.
+
+    Parameters:
+        + :code:`fill_value: Number`.
+
+- :code:`as_storage(data=None, device_data=None, sync_state=None, *, axes=None, managed=None, **kwargs)`
+
+    Wrap an existing buffer in a GT4Py storage instance, without copying the buffer's contents.
+
+    Parameters:
+        + :code:`data: array_like`. The buffer from which the storage is initialized.
+        + :code:`device_data: array_like`. The device buffer in case wrapping existing
+            buffers on both the device and main memory is desired.
+        + :code:`sync_state: gt4py.storage.SyncState`. If `managed="gt4py"` indicates which of the
+            provided buffers, `data` or `device_data`, is up to date at the time of initialization.
+
+
+- :code:`storage(data=None, device_data=None, *, axes=None, copy=True, managed=None, **kwargs)`
+
+    Used to allocate a storage with values initialized to those of a given array.
+    If the argument :code:`copy` is set to :code:`False`, the behavior is that of :code:`as_storage`.
+
+    Parameters:
+        + :code:`data: array_like`. The buffer from which the storage is initialized.
+        + :code:`device_data: array_like`. The device buffer in case allocation from existing
+            buffers on both the device and main memory is desired.
+        + :code:`sync_state: gt4py.storage.SyncState`. If `managed="gt4py"` indicates which of the
+            provided buffers, `data` or `device_data`, is up to date at the time of initialization.
+
+    Keyword-only parameters:
+        + :code:`copy: bool`.
+
+
+Most of the functions support a common set of parameters defining how to allocate data in memory to the to all these functions is All of these take the following keyword arguments:
+
+- :code:`default_parameters: str`
    can be used in the way of the current :code`backend` parameter. for each backend, as well as for the keys
    :code:`'F'` and :code:`'C'`, a default parameter set is provided. Not all default parameter sets provide defaults
    for all other parameters. defining the other arguments explicitly overrides the defaults
-:code:`halo`
-   tuple of length :code:`3` or :code:`ndim`, each entry is either an int or a 2-tuple of ints. ints represent a
-   symmetric halo in that dimension, while a 2-tuple specifies the halo on the respective boundary for that dimension
-:code:`aligned_index`
-   the point to which the memory is aligned, defaults to the lower indices of the halo attribute
-:code:`shape`
+- :code:`halo: Sequence[int]`
+   Sequence of length :code:`3` or :code:`ndim`, each entry is either an int or a 2-tuple of ints. ints represent a
+   symmetric halo in that dimension, while a 2-tuple specifies the halo on the respective boundary for that dimension.
+   defaults to no halo, i.e. :code:`(0, 0, 0)`
+- :code:`shape: Iterable[int]`
    iterable of ints, the shape of the storage
-:code:`dtype`
+- :code:`np.dtype`
    the dtype of the storage (numpy-like)
-:code:`axes`
-   string, permutation of a sub-sequence of "IJK", indicating the spatial dimensions along which the field extends and
+- :code:`axes: str`
+  string, permutation of a sub-sequence of "IJK", indicating the spatial dimensions along which the field extends and
    their order when indexing.
-:code:`alignment`
-   integer, indicates on a boundary of how many elements the point :code:`aligned_index` is aligned. defaults to
+- :code:`aligned_index: Sequence[int]`
+   the point to which the memory is aligned, defaults to the lower indices of the halo attribute
+- :code:`alignment_size`
+   integer, indicates on a boundary of how many elements the point :code:`alignment_index` is aligned. defaults to
    :code:`1` which indicates no alignment
-:code:`gpu`
+- :code:`gpu: bool`
    boolean, indicates whether the storage has a GPU buffer, defaults to :code:`False`
-:code:`layout_map`
+- :code:`layout_map`
    iterable of numbers or a callable returning such an iterable when given the number of dimensions. The iterable
    indicates the order of strides in decreasing order, i.e. the entry :code:`0` in the iterable corresponds to the
    dimension with the largest stride. The layout map is always of length 3, and the entries corresponds to the axes in
    "IJK" order. Default values may however depend on the order of the axes.
-:code:`managed`
-   :code:`False`, :code:`"gt4py"`, :code:`"cuda:`, optional. only has effect if :code:`gpu=True`
+- :code:`managed`
+   :code:`False`, :code:`"gt4py"` or :code:`"cuda"`, optional. only has effect if :code:`gpu=True`
    defaults to "gt4py". can be used to choose whether the copying to GPU is handled by the user (:code:`False`),
    GT4Py (:code:`"gt4py"`) or CUDA (:code:`"cuda"`).
-
-In addition, some of the functions support additional positional or keyword arguments:
-
-:code:`value`
-   supported by the :code:`full` method. it indicates the value to which the array is initialized
-:code:`data`
-   supported by the :code:`as_storage` and :code:`storage` functions. It is used to specify the buffer from which the
-   storage is initialized (with or without copying the values)
-:code:`device_data`
-   supported by the :code:`as_storage` and :code:`storage` functions. It is used to specify the device buffer in case
-   allocation from existing buffers on both the device and main memory is desired.
-:code:`sync_state`:
-   gt4py.storage.SyncState, supported by the :code:`as_storage` and :code:`storage` functions,  only has effect if
-   :code:`managed="gt4py"`. indicates which of the provided buffers (among :code:`data`, :code:`device_data`) is up to
-   date at the time of initialization.
-:code:`copy`
-   Supported by the :code:`storage` function. It can be used to specify whether the value given by :code:`data` or
-   :code:`device_data` is copied or not.
 
 If a parameter is not explicitly specified, it is inferred from the default parameter set. If there is no default
 parameter set provided or it does not provide the required information, it is gathered from the :code:`data` or
@@ -151,10 +169,7 @@ If the field is not 3-D, as indicated by :code:`axes`, the length of parameters 
 :code:`shape`, may either be of length 3 or of the actual dimension of the storage, where the not needed entries are
 ignored in the latter case.
 
-We further expose the :code:`Storage` base class, mainly to enable type checking. It can alternatively be used in the
-same way as :code:`storage` to initialize storages. On the other hand, constructors of the derived, hardware-specific
-storage types (See Section :ref:`storage_types`) are not intended to be used directly.
-
+We further expose the :code:`Storage` base class, mainly to enable type checking.
 
 Storage Attributes and NumPy API functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -181,9 +196,9 @@ Attributes
 :code:`ndim`
    number of (unmasked) dimensions
 :code:`shape`
-    tuple of length :code:`ndims`, the shape, with entries corresponding to the axes indicated by :code:`axes`
+    tuple of length :code:`ndim`, the shape, with entries corresponding to the axes indicated by :code:`axes`
 :code:`strides`
-    tuple of length :code:`ndims`, the strides, with entries corresponding to the axes indicated by :code:`axes`
+    tuple of length :code:`ndim`, the strides, with entries corresponding to the axes indicated by :code:`axes`
 :code:`data`, :code:`flags`
    returns :code:`data` attribute of the underlying numpy ndarray if a main memory buffer is present, :code:`None`
    otherwise
@@ -197,8 +212,8 @@ Attributes
    the first index corresponds to the "J" axis.
 :code:`aligned_index`
    the value given in the constructor indicating the grid point to which the memory is aligned. Note that this only
-   partly takes the role of the former :code:`default_origin` parameter, since it no longer has any influence on the
-   choice of origin at call time.
+   partly takes the role of the former :code:`default_origin` parameter, since that functionaly is now taken over by the
+   :code:`halo` attribute.
 :code:`nbytes`,
    size of the buffer in bytes (excluding padding)
 :code:`gpu`
@@ -209,7 +224,7 @@ Attributes
 :code:`domain_shape`
    the shape of the inner part of the field, i.e. the shape with the halo subtracted.
 :code:`domain_view`
-   a view of the buffer, again as a storage, with the halo removed. That is, the index :code:`[0, 0, 0]` corrsetponds
+   a view of the buffer, again as a storage, with the halo removed. That is, the index :code:`[0, 0, 0]` corresponds
    to the first point in the domain.
 
 Methods
@@ -303,6 +318,10 @@ available information from the inputs.
    it is chosen s.t. the resulting domain is the intersection of all individual domains.
 :code:`layout_map`
    the layout map is chosen as the layout map of the first input argument which is a GT4Py Storage
+:code:`axes`
+   if the :code:`axes` parameters of all operands agree, the output will have the same :code:`axes`.
+   otherwise, the axes are chosen as the union of all input storages. the order will be a 
+   sub-sequence of "IJK" in this case.
 :code:`alignment`
    the resulting alignment is chosen as the least common multiple of the alignments of all inputs which are a GT4Py
    Storage
@@ -350,12 +369,13 @@ Currently, field arguments are annotated with :code:`Field[dtype]` in the functi
 alignment in the generated code is then based on the :code:`backend` parameter of the :code:`stencil` decorator.
 This will continue to work, but in case the storage passed at call-time uses other settings than the backend's default
 settings, these must also be specified to the stencil. We propose the following arguments for the :code:`Field`
-annotation, which are specified using the notation (:code:`Argument[value]`):
+annotation, where dtype and axes are specified as positional arguments, while the others use the notation
+(:code:`Argument[value]`):
 
-:code:`DType`
+:code:`dtype`
    correspoinds to the `dtype` argument, can alternatively be a placeholder string, which can be bound to a dtype using
    the :code:`dtypes` parameter in the stencil decorator.
-:code:`Axes`
+:code:`axes`
    corresponds to the `axes` argument. Note that the order of the axes here only indicates what the order is of the
    axes of the storages which are passed as a field at call time. In gtscript, offset-indexing is always in order 'IJK'.
 :code:`LayoutMap`
@@ -371,7 +391,7 @@ have to be specified using the bracket notation. If any parameter is specified b
 parameter set, the explicit value takes precedence. All symbols, including the `Axes` arguments can be imported from
 :code:`gt4py.gtscript`. If any of the parameters :code:`LayoutMap`, :code:`Alignment`, :code:`DefaultParameters` is
 specified, the backend has no influence on these parameters for that field. If however none of those are specified,
-the behavior is the same if only :code:`DType`, optionally :code:`Axes` and the :code:`DefaultParameters` of the backend
+the behavior is the same if only the dtype, optionally the axes and the :code:`DefaultParameters` of the backend
 are specified.
 
 .. note::
