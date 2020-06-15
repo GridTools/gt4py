@@ -1214,7 +1214,7 @@ class GTScriptParser(ast.NodeVisitor):
                         collected_name, name_nodes[collected_name]
                     )
                 elif root_name in context:
-                    if not gt_meta.inside_call(definition, nodes[0], "region"):
+                    if not gt_meta.referenced_inside_call(definition, nodes[0], "region"):
                         # Assume it is a constant symbol and eval it
                         nonlocal_symbols[collected_name] = GTScriptParser.eval_constant(
                             collected_name, context, gt_ir.Location.from_ast_node(nodes[0])

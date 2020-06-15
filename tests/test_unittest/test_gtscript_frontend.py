@@ -139,7 +139,7 @@ class TestInlinedExternals:
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
 
-        with pytest.raises(gt_frontend.GTScriptSymbolError, match=r".*WRONG_VALUE_CONSTANT.*"):
+        with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*WRONG_VALUE_CONSTANT.*"):
             compile_definition(definition_func, "test_wrong_value", module, externals=externals)
 
 
