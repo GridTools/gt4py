@@ -480,12 +480,10 @@ class TestAssignmentSyntax:
 
 class TestRegion:
     def test_region_parsing(self):
-        region_list = (gt_definitions.selection[:3, -3:], gt_definitions.selection[:2, -2:])
+        module = f"TestRegion_test_region_parsing_{id_version}"
+        externals = {}
 
-        def parse_stencil(func):
-            return gt_frontend.GTScriptFrontend.generate(
-                func, {}, gt_definitions.BuildOptions(name=func.__module__, module=__name__)
-            )
+        region_list = (gt_definitions.selection[:3, -3:], gt_definitions.selection[:2, -2:])
 
         def valid(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...), region(gt_definitions.selection[:3, -3:]):
@@ -503,7 +501,7 @@ class TestRegion:
             with computation(PARALLEL), interval(...), region(region_list):
                 out_field = in_field
 
-        def_ir = parse_stencil(valid)
+        def_ir = compile_definition(valid, "test_region_parsing_valid", module, externals=externals)
 
         with pytest.raises(gt_frontend.GTScriptSymbolError):
-            def_ir = parse_stencil(expect_error)
+            def_ir = compile_definition(expect_error, "test_region_parsing_expect_error", module, externals=externals)

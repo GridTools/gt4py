@@ -1378,14 +1378,7 @@ class GTScriptParser(ast.NodeVisitor):
         )
         main_func_node = self.ast_root.body[0]
 
-        if not hasattr(self.definition, "_gtscript_"):
-            self.definition = GTScriptParser.annotate_definition(self.definition)
-            resolved_externals = GTScriptParser.resolve_external_symbols(
-                self.definition._gtscript_["nonlocals"],
-                self.definition._gtscript_["imported"],
-                self.external_context,
-            )
-            self.definition._gtscript_["externals"] = resolved_externals
+        assert hasattr(self.definition, "_gtscript_")
         # self.resolved_externals = self.resolve_external_symbols(
         #     self.definition._gtscript_["nonlocals"],
         #     self.definition._gtscript_["imported"],
