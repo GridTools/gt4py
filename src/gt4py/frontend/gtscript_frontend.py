@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -440,6 +440,11 @@ class CallInliner(ast.NodeTransformer):
 
         return result_node
 
+    def visit_Expr(self, node: ast.Expr):
+        """ignore pure string statements in callee"""
+        if not isinstance(node.value, ast.Str):
+            return super().visit_Expr(node)
+
 
 class CompiledIfInliner(ast.NodeTransformer):
     @classmethod
@@ -579,7 +584,7 @@ class IRMaker(ast.NodeVisitor):
     def __call__(self, ast_root: ast.AST):
         assert (
             isinstance(ast_root, ast.Module)
-            and ast_root._fields == ("body",)
+            and "body" in ast_root._fields
             and len(ast_root.body) == 1
             and isinstance(ast_root.body[0], ast.FunctionDef)
         )
@@ -1035,6 +1040,7 @@ class IRMaker(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> list:
         blocks = []
+        docstring = ast.get_docstring(node)
         for stmt in node.body:
             blocks.extend(gt_utils.listify(self.visit(stmt)))
 
@@ -1366,7 +1372,7 @@ class GTScriptParser(ast.NodeVisitor):
     def run(self):
         assert (
             isinstance(self.ast_root, ast.Module)
-            and self.ast_root._fields == ("body",)
+            and "body" in self.ast_root._fields
             and len(self.ast_root.body) == 1
             and isinstance(self.ast_root.body[0], ast.FunctionDef)
         )
@@ -1446,6 +1452,7 @@ class GTScriptParser(ast.NodeVisitor):
             ],
             computations=computations,
             externals=self.resolved_externals,
+            docstring=inspect.getdoc(self.definition) or "",
         )
 
         return self.definition_ir
@@ -1465,6 +1472,7 @@ class GTScriptFrontend(gt_frontend.Frontend):
 
         fingerprint = {
             "__main__": definition._gtscript_["canonical_ast"],
+            "docstring": inspect.getdoc(definition),
             "api_annotations": f"[{', '.join(str(item) for item in definition._gtscript_['api_annotations'])}]",
         }
         for name, value in resolved_externals.items():

@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -365,6 +365,7 @@ class BaseModuleGenerator(abc.ABC):
             module_members=module_members,
             class_name=self.stencil_class_name,
             class_members=class_members,
+            docstring=implementation_ir.docstring,
             gt_backend=self.backend_name,
             gt_source=sources,
             gt_domain_info=domain_info,

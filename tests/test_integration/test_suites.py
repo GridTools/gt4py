@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -210,6 +210,7 @@ class TestHorizontalDiffusion(gt_testing.StencilTestSuite):
 
 @gtscript.function
 def lap_op(u):
+    """Laplacian operator."""
     return 4.0 * u[0, 0, 0] - (u[1, 0, 0] + u[-1, 0, 0] + u[0, 1, 0] + u[0, -1, 0])
 
 
@@ -341,6 +342,15 @@ class TestHorizontalDiffusionSubroutines3(gt_testing.StencilTestSuite):
     )
 
     def definition(u, diffusion, *, weight):
+        """
+        Horizontal diffusion stencil.
+
+        Parameters
+        ----------
+        u : 3D float field, input
+        diffusion : 3D float field, output
+        weight : diffusion coefficient
+        """
         from __externals__ import fwd_diff, BRANCH
 
         with computation(PARALLEL), interval(...):
@@ -418,6 +428,7 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
 
 @gtscript.function
 def add_one(field_in):
+    """Add 1 to each element of `field_in`."""
     return field_in + 1
 
 
