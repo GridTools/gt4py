@@ -330,9 +330,27 @@ class InitInfoPass(TransformPass):
 
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
             assert node.computations  # non-empty definition
+
+            def make_interval_info(parallel_interval):
+                def make_tuple(endpt):
+                    return (0 if endpt.level == gt_ir.LevelMarker.START else 1, endpt.offset)
+
+                if not parallel_interval:
+                    return None
+                else:
+                    assert len(parallel_interval) == 2
+                return [
+                    IntervalInfo(start=make_tuple(endpt.start), end=make_tuple(endpt.end))
+                    for endpt in parallel_interval
+                ]
+
             for computation, interval in zip(node.computations, self.computation_intervals):
                 self.current_block_info = DomainBlockInfo(
-                    self.data.id_generator.new, computation.iteration_order, {interval}, []
+                    self.data.id_generator.new,
+                    computation.iteration_order,
+                    {interval},
+                    make_interval_info(computation.parallel_interval),
+                    [],
                 )
                 self.visit(computation)
                 self.data.blocks.append(self.current_block_info)
@@ -426,6 +444,7 @@ class NormalizeBlocksPass(TransformPass):
                                 transform_data.id_generator.new,
                                 block.iteration_order,
                                 set(new_ij_block.intervals),
+                                block.parallel_interval,
                                 [new_ij_block],
                                 {**new_ij_block.inputs},
                                 set(new_ij_block.outputs),
@@ -489,8 +508,25 @@ class MergeBlocksPass(TransformPass):
     def _are_compatible_multi_stages(
         self, target: DomainBlockInfo, candidate: DomainBlockInfo, has_sequential_axis: bool
     ):
+        def _are_compatible_parallel_intervals(candidate, target):
+            if candidate is None and target is None:
+                return True
+            elif candidate is None or target is None:
+                return False
+
+            for candidate_axis, target_axis in zip(candidate, target):
+                for candidate_endpt, target_endpt in zip(candidate_axis, target_axis):
+                    if any((cv != tv for cv, tv in zip(candidate_endpt, target_endpt))):
+                        return False
+            return True
+
         result = False
-        if candidate.iteration_order == target.iteration_order:
+        if (
+            candidate.iteration_order == target.iteration_order
+            and _are_compatible_parallel_intervals(
+                candidate.parallel_interval, target.parallel_interval
+            )
+        ):
             if candidate.iteration_order == gt_ir.IterationOrder.PARALLEL and has_sequential_axis:
                 inputs_with_k_deps = set(
                     name for name, extent in candidate.inputs.items() if extent[-1] != (0, 0)
@@ -723,6 +759,27 @@ class ComputeUsedSymbolsPass(TransformPass):
         return transform_data
 
 
+def _make_parallel_interval(parallel_interval_infos: list):
+    def make_axis_bound(endpt):
+        indicator, offset = endpt
+        return gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START if indicator == 0 else gt_ir.LevelMarker.END,
+            offset=offset,
+        )
+
+    if not parallel_interval_infos:
+        return None
+    else:
+        assert len(parallel_interval_infos) == 2
+
+    return [
+        gt_ir.AxisInterval(
+            start=make_axis_bound(axis_info.start), end=make_axis_bound(axis_info.end)
+        )
+        for axis_info in parallel_interval_infos
+    ]
+
+
 class BuildIIRPass(TransformPass):
 
     _DEFAULT_OPTIONS = {}
@@ -765,6 +822,7 @@ class BuildIIRPass(TransformPass):
             multi_stage = gt_ir.MultiStage(
                 name="multi_stage__{}".format(block.id),
                 iteration_order=block.iteration_order,
+                parallel_interval=_make_parallel_interval(block.parallel_interval),
                 groups=groups,
             )
             self.iir.multi_stages.append(multi_stage)

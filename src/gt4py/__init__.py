@@ -36,7 +36,6 @@ from . import storage
 from . import testing
 
 from .definitions import (
-    Interval,
     AccessKind,
     Boundary,
     DomainInfo,

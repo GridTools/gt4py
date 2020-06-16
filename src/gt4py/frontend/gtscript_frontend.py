@@ -145,9 +145,7 @@ class RegionReplacer(ast.NodeTransformer):
                     return False
                 if any((not isinstance(endpt, Iterable) for endpt in axis)):
                     return False
-                if any((not isinstance(endpt[0], gt_definitions.Interval) for endpt in axis)):
-                    return False
-                if any((not isinstance(endpt[1], int) for endpt in axis)):
+                if any((not all(isinstance(e, int) for e in endpt) for endpt in axis)):
                     return False
             return True
 
@@ -181,7 +179,9 @@ class RegionReplacer(ast.NodeTransformer):
             # Delete region AST node
             del node.items[arg_index]
 
-        return node
+            return node
+        else:
+            return self.generic_visit(node)
 
 
 class ValueInliner(ast.NodeTransformer):
@@ -538,13 +538,11 @@ class ParsingContext(enum.Enum):
     INTERVAL = 3
 
 
-def axis_intervals_from_region(region: list):
+def _make_parallel_interval(region: list):
     def make_axis_bound(endpt):
         indicator, offset = endpt
         return gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START
-            if indicator == gt_definitions.Interval.START
-            else gt_ir.LevelMarker.END,
+            level=gt_ir.LevelMarker.START if indicator == 0 else gt_ir.LevelMarker.END,
             offset=offset,
         )
 
@@ -742,7 +740,7 @@ class IRMaker(ast.NodeVisitor):
         if regions:
             comp_blocks = [result] * len(regions)
             for region, block in zip(regions, comp_blocks):
-                block.parallel_interval = axis_intervals_from_region(region)
+                block.parallel_interval = _make_parallel_interval(region)
         else:
             comp_blocks = [result]
 

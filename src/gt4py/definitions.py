@@ -32,12 +32,6 @@ from gt4py.utils.attrib import (
 )
 
 
-@enum.unique
-class Interval(enum.Enum):
-    START = 0
-    END = 1
-
-
 class CartesianSpace:
     @enum.unique
     class Axis(enum.Enum):
@@ -721,17 +715,17 @@ class _Selection:
         return_list = []
         for arg in tuple(*args):
             if arg.start is None:
-                start = (Interval.START, 0)
+                start = (0, 0)
             elif arg.start < 0:
-                start = (Interval.END, arg.start)
+                start = (1, arg.start)
             else:
-                start = (Interval.START, arg.start)
+                start = (0, arg.start)
             if arg.stop is None:
-                end = (Interval.END, 0)
+                end = (1, 0)
             elif arg.stop > 0:
-                end = (Interval.START, arg.stop)
+                end = (0, arg.stop)
             else:
-                end = (Interval.END, arg.stop)
+                end = (1, arg.stop)
             return_list.append((start, end))
         return return_list
 
