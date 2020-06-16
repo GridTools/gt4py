@@ -508,7 +508,7 @@ class MergeBlocksPass(TransformPass):
     def _are_compatible_multi_stages(
         self, target: DomainBlockInfo, candidate: DomainBlockInfo, has_sequential_axis: bool
     ):
-        def _are_compatible_parallel_intervals(candidate, target):
+        def are_compatible_parallel_intervals(candidate, target):
             if candidate is None and target is None:
                 return True
             elif candidate is None or target is None:
@@ -523,7 +523,7 @@ class MergeBlocksPass(TransformPass):
         result = False
         if (
             candidate.iteration_order == target.iteration_order
-            and _are_compatible_parallel_intervals(
+            and are_compatible_parallel_intervals(
                 candidate.parallel_interval, target.parallel_interval
             )
         ):
