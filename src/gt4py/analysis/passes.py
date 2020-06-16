@@ -331,7 +331,7 @@ class InitInfoPass(TransformPass):
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
             assert node.computations  # non-empty definition
 
-            def make_interval_info(parallel_interval):
+            def make_interval_infos(parallel_interval):
                 def make_tuple(endpt):
                     return (0 if endpt.level == gt_ir.LevelMarker.START else 1, endpt.offset)
 
@@ -349,7 +349,7 @@ class InitInfoPass(TransformPass):
                     self.data.id_generator.new,
                     computation.iteration_order,
                     {interval},
-                    make_interval_info(computation.parallel_interval),
+                    make_interval_infos(computation.parallel_interval),
                     [],
                 )
                 self.visit(computation)
