@@ -131,7 +131,9 @@ repository and use an *editable* installation of GT4Py:
 
     # Install the pre-commit checks
     pip install pre-commit
-    pre-commit install  # in the repo directory
+    # You need to have a python3.6 interpreter in your PATH for the following:
+    pre-commit install-hooks  # in the repo directory 
+    # But you can develop using any version >= 3.6
 
 
 Documentation

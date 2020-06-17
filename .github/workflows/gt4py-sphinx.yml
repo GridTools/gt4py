@@ -1,4 +1,4 @@
-name: Build Docs (sphinx)
+name: Build Docs
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - master
 
 jobs:
-  build:
+  sphinx-build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2

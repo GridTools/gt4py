@@ -35,7 +35,7 @@ repos:
           tests/test_unittest/test_gtscript_frontend.py |
           )$
 
--   repo: http://gitlab.com/PyCQA/flake8
+-   repo: https://gitlab.com/PyCQA/flake8
     rev: 3.8.2
     hooks:
     - id: flake8
@@ -92,3 +92,11 @@ repos:
           tests/test_unittest/test_gtscript_frontend.py |
           tests/test_unittest/test_storage.py |
           )$
+
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.1.0
+    hooks:
+        - id: check-json
+        - id: pretty-format-json
+        - id: check-toml
+        - id: check-yaml
