@@ -55,6 +55,9 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+
+# type checkers
+.mypy_cache/
 .pytype
 .pyre
 
@@ -102,6 +105,3 @@ venv.bak/
 
 # mkdocs documentation
 /site
-
-# mypy
-.mypy_cache/

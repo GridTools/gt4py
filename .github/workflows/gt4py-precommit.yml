@@ -1,4 +1,4 @@
-name: Formatting & compliance (pre-commit)
+name: Formatting & compliance
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - master
 
 jobs:
-  build:
+  pre-commit:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
