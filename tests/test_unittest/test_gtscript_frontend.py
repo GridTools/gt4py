@@ -483,22 +483,30 @@ class TestRegion:
         module = f"TestRegion_test_region_parsing_{id_version}"
         externals = {}
 
-        region_list = (gt_definitions.selection[:3, -3:], gt_definitions.selection[:2, -2:])
+        Interval = gt_definitions.Interval
+
+        region_var = (
+            (dict(start=(Interval.START, 0), stop=(Interval.START, 1)), None),
+            (None, dict(start=(Interval.END, -3), stop=(Interval.END, 0))),
+        )
 
         def valid(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-            with computation(PARALLEL), interval(...), region(gt_definitions.selection[:3, -3:]):
-                out_field = in_field
             with computation(PARALLEL), interval(...), region(
-                gt_definitions.selection[:3, -3:], gt_definitions.selection[:2, -2:]
+                (dict(start=(Interval.START, 0), stop=(Interval.START, 1)), None)
             ):
                 out_field = in_field
-            with computation(PARALLEL), interval(...), region(*region_list):
+            with computation(PARALLEL), interval(...), region(
+                (dict(start=(Interval.START, 0), stop=(Interval.START, 1)), None),
+                (None, dict(start=(Interval.END, -3), stop=(Interval.END, 0))),
+            ):
+                out_field = in_field
+            with computation(PARALLEL), interval(...), region(*region_var):
                 out_field = in_field
 
         def expect_error(
             in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
         ):
-            with computation(PARALLEL), interval(...), region(region_list):
+            with computation(PARALLEL), interval(...), region(region_var):
                 out_field = in_field
 
         def_ir = compile_definition(

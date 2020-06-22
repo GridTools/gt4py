@@ -550,33 +550,37 @@ class InsideCall(ASTPass):
         else:
             assert False, "name_or_attribute must be of type ast.Name or ast.Attribute"
         self.id_string = id_string
-        self.found_node = False
+        self.found_name = False
+        self.traverse_without_check = False
 
     def __call__(self, func_or_source_or_ast):
         self.call = None
         super().__call__(func_or_source_or_ast)
-        return not self.found_node
+        return self.found_name
 
     def visit_Call(self, node: ast.Call):
-        if isinstance(node.func, ast.Name) and not node.func.id == self.id_string:
+        if self.traverse_without_check:
             self.generic_visit(node)
-        elif isinstance(node.func, ast.Attribute) and not node.func.attr == self.id_string:
+        if isinstance(node.func, ast.Name) and node.func.id == self.id_string:
+            name_matches = True
+        elif isinstance(node.func, ast.Attribute) and node.func.attr == self.id_string:
+            name_matches = True
+        else:
+            name_matches = False
+        if name_matches and not self.found_name:
+            self.this_found_name = False
+            self.traverse_without_check = True
             self.generic_visit(node)
-
-    # def visit_Subscript(self, node: ast.Subscript):
-    #     if isinstance(node.value, ast.Name):
-    #         if not node.value.id == self.id_string:
-    #             self.generic_visit(node)
-    #     else:
-    #         self.generic_visit(node)
+            self.traverse_without_check = False
+            self.found_name = self.found_name or self.this_found_name
 
     def visit_Name(self, node: ast.Name):
         if node.id == self.node_name and node.ctx == self.ctx:
-            self.found_node = True
+            self.this_found_name = True
 
     def visit_Attribute(self, node: ast.Attribute):
         if node.attr == self.node_name and node.ctx == self.ctx:
-            self.found_node = True
+            self.this_found_name = True
 
 
 referenced_inside_call = InsideCall.apply

@@ -129,10 +129,9 @@ class RegionReplacer(ast.NodeTransformer):
             start, scope = offset, 1
             while scope > 0:
                 offset += 1
-                character = source[offset]
-                if character in ("(", "["):
+                if source[offset] in ("(", "["):
                     scope += 1
-                elif character in (")", "]"):
+                elif source[offset] in (")", "]"):
                     scope -= 1
 
             return source[start:offset]
@@ -141,11 +140,15 @@ class RegionReplacer(ast.NodeTransformer):
             if not isinstance(spec, Iterable):
                 return False
             for axis in spec:
-                if not isinstance(axis, Iterable):
-                    return False
-                if any((not isinstance(endpt, Iterable) for endpt in axis)):
-                    return False
-                if any((not all(isinstance(e, int) for e in endpt) for endpt in axis)):
+                if axis is None:
+                    continue
+                try:
+                    for endpt in (axis["start"], axis["stop"]):
+                        if not isinstance(endpt[0], gt_definitions.Interval):
+                            return False
+                        elif not isinstance(endpt[1], int):
+                            return False
+                except:
                     return False
             return True
 
@@ -166,15 +169,22 @@ class RegionReplacer(ast.NodeTransformer):
         if "region" in func_ids:
             arg_index = func_ids.index("region")
             region_node = item_contexts[arg_index]
-            code = find_region_source(self.source, region_node.lineno, region_node.col_offset)
-            specifiers = tuple(tuple(item) for item in eval(f"({code},)", self.context))
+            code = find_region_source(self.source, region_node.lineno, region_node.col_offset).rstrip(" \n,") + ","
+            specifiers = (tuple(item) for item in eval(f"({code})", self.context))
+
+            # Remove None objects (these are skipped regions)
+            specifiers = tuple(filter(lambda x: x is not None, specifiers))
 
             for spec in specifiers:
                 if not is_valid_specifier(spec):
-                    raise GTScriptSymbolError("Not a valid specifier: " + str(spec))
+                    raise GTScriptSymbolError(f"Not a valid specifier: {spec}")
 
-            # Store
-            item_contexts[index].regions = specifiers
+            if len(specifiers) > 0:
+                # Store in the node
+                item_contexts[index].regions = specifiers
+            else:
+                # Delete the whole interval or computation node
+                del node.items[index]
 
             # Delete region AST node
             del node.items[arg_index]
@@ -538,19 +548,24 @@ class ParsingContext(enum.Enum):
     INTERVAL = 3
 
 
-def _make_parallel_interval(region: list):
+def _make_parallel_interval(region: Iterable):
     def make_axis_bound(endpt):
         indicator, offset = endpt
-        return gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START if indicator == 0 else gt_ir.LevelMarker.END,
-            offset=offset,
-        )
+        if indicator == gt_definitions.Interval.START:
+            level_marker = gt_ir.LevelMarker.START
+        else:
+            level_marker = gt_ir.LevelMarker.END
+        return gt_ir.AxisBound(level=level_marker, offset=offset)
 
     assert len(region) == 2
-    return [
-        gt_ir.AxisInterval(start=make_axis_bound(endpts[0]), end=make_axis_bound(endpts[1]))
+    return (
+        gt_ir.AxisInterval(
+            start=make_axis_bound(endpts["start"]), end=make_axis_bound(endpts["end"])
+        )
+        if endpts
+        else gt_ir.AxisInterval.full_interval()
         for endpts in region
-    ]
+    )
 
 
 class IRMaker(ast.NodeVisitor):
@@ -1194,7 +1209,7 @@ class GTScriptParser(ast.NodeVisitor):
         imported_symbols = {name: {} for name in imported_names}
 
         context, unbound = gt_meta.get_closure(
-            definition, included_nonlocals=True, include_builtins=False
+            definition, included_nonlocals=False, include_builtins=False
         )
 
         gtscript_ast = ast.parse(gt_meta.get_ast(definition)).body[0]
@@ -1212,13 +1227,15 @@ class GTScriptParser(ast.NodeVisitor):
                         collected_name, name_nodes[collected_name]
                     )
                 elif root_name in context:
-                    if not gt_meta.referenced_inside_call(definition, nodes[0], "region"):
-                        # Assume it is a constant symbol and eval it
-                        nonlocal_symbols[collected_name] = GTScriptParser.eval_constant(
-                            collected_name, context, gt_ir.Location.from_ast_node(nodes[0])
-                        )
-                    else:
-                        nonlocal_symbols[root_name] = context[root_name]
+                    # Assume it is a constant symbol and eval it
+                    nonlocal_symbols[collected_name] = GTScriptParser.eval_constant(
+                        collected_name, context, gt_ir.Location.from_ast_node(nodes[0])
+                    )
+                elif gt_meta.referenced_inside_call(definition, nodes[0], "region"):
+                    # Get the larger context (includes nonlocals and builtins)
+                    # and store the live object ref
+                    larger_context, _ = gt_meta.get_closure(definition)
+                    nonlocal_symbols[root_name] = larger_context[root_name]
                 elif root_name not in local_symbols and root_name in unbound:
                     raise GTScriptSymbolError(
                         name=collected_name,

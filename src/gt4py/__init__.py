@@ -42,7 +42,6 @@ from .definitions import (
     FieldInfo,
     ParameterInfo,
     CartesianSpace,
-    selection,
 )
 from .stencil_object import StencilObject
 
