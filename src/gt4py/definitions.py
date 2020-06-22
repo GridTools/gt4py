@@ -715,6 +715,7 @@ class Interval(enum.Enum):
     START = enum.auto()
     END = enum.auto()
 
+
 # def selection(i_axis, i_axis):
 #     """Convenience function that returns region arguments for particular boundary.
 #     The arguments here are less verbose than the actual region argument. Restricts

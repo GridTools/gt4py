@@ -169,7 +169,12 @@ class RegionReplacer(ast.NodeTransformer):
         if "region" in func_ids:
             arg_index = func_ids.index("region")
             region_node = item_contexts[arg_index]
-            code = find_region_source(self.source, region_node.lineno, region_node.col_offset).rstrip(" \n,") + ","
+            code = (
+                find_region_source(self.source, region_node.lineno, region_node.col_offset).rstrip(
+                    " \n,"
+                )
+                + ","
+            )
             specifiers = (tuple(item) for item in eval(f"({code})", self.context))
 
             # Remove None objects (these are skipped regions)
