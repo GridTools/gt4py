@@ -1,12 +1,13 @@
-===========================
-GDP 3 — Storage Refactoring
-===========================
+======================================================
+GDP 3 — A New Storage Implementation using Duck Typing
+======================================================
 
 :Author: Linus Groner <linus.groner@cscs.ch>
+:Author: Enrique G. Paredes <enrique.gonzalez@cscs.ch>
 :Status: Draft
 :Type: Feature
 :Created: 08-05-2020
-:Discussion PR: TBD
+:Discussion PR: https://github.com/GridTools/gt4py/pull/28
 
 
 Abstract
@@ -57,72 +58,162 @@ interface amounts mostly to updating attribute and keyword argument names.
 Detailed Description
 --------------------
 
-Supported Functionality
-^^^^^^^^^^^^^^^^^^^^^^^
+Functionality
+^^^^^^^^^^^^^
 
-Our goal is to make GT4Py `storages` behave as close as possible to `ndarrays`, although behavior
-may differ in specific cases where is not possible to maintain the consistency of the underlying
-structured memory.
+Our main goal is to make GT4Py `storages` behave as close as possible to NumPy `ndarrays`
+for the base cases while providing additional domain-specific functionality. This means that,
+ideally, users can treat GT4Py Storages as regular NumPy arrays in their codes and expect the
+same results. The specific cases where behavior may differ because of the limitations of the NumPy
+API or the GT4Py Storage requirements, should be mentioned here and in the GT4Py documentation.
+
 
 We chose to use internally NumPy and CuPy `ndarrays` to store CPU and GPU buffers, respectively,
 since they are standard and realiable components of the Python ecosystem. We rely on those libraries
-to implement part of the functionality, like mathematical operators, by forwarding the calls to the
-appropriate library call. As a consequence, support for `dtypes` and other functionality is
-restricted to the common denominator of CuPy and NumPy.
+to implement part of the functionality, like mathematical operators, by forwarding the calls to
+the appropriate NumPy/CuPy function call. As a consequence, support for `dtypes` and other
+functionality is restricted to the common denominator of CuPy and NumPy.
+
+.. note:: In this document, references to NumPy and CuPy objects or functions use the standard
+    shorted prefiex for these libraries, that is :code:`np.` for NumPy and :code:`cp.` for CuPy.
 
 
 Storage Creation
 ^^^^^^^^^^^^^^^^
 
-We propose the following functions to create and initialize GT4Py storages (meaning of common parameters is explained below): 
+The :code:`Storage` base class is exposed in the API mainly to enable type checking. For the actual
+creation and initialization of GT4Py storages we propose the following set of functions which
+closely resemble their NumPy counterparts (meaning of the common parameters is explained below):
+
+:code:`empty(shape, dtype=np.float64, **kwargs)`
+    Allocate a storage with uninitialized (undefined) values.
+
+:code:`zeros(shape, dtype=np.float64, **kwargs)`
+    Allocate a storage with values initialized to 0.
 
 
-   Allocate a storage with uninitialized (undefined) values.
+:code:`ones(shape, dtype=np.float64, **kwargs)`
+    Allocate a storage with values initialized to 1.
 
-- :code:`zeros(shape, dtype=np.float64, *, alignment_index=None, alignment_size=1, axes=None, device=None, managed=None, **kwargs)`
 
-   Allocate a storage with values initialized to 0.
-
-- :code:`ones(shape, dtype=np.float64, *, alignment_index=None, alignment_size=1, axes=None, device=None, managed=None, **kwargs)`
-
-   Allocate a storage with values initialized to 1.
-
-- :code:`full(shape, fill_value, dtype=np.float64, *, alignment_index=None, alignment_size=1, axes=None, device=None, managed=None, **kwargs)`
-
+:code:`full(shape, fill_value, dtype=np.float64, **kwargs)`
     Allocate a storage with values initialized to the given scalar.
 
     Parameters:
         + :code:`fill_value: Number`.
 
-- :code:`as_storage(data=None, device_data=None, sync_state=None, *, axes=None, managed=None, **kwargs)`
-
+:code:`as_storage(data=None, device_data=None, *, sync_state=None, **kwargs)`
     Wrap an existing buffer in a GT4Py storage instance, without copying the buffer's contents.
 
     Parameters:
-        + :code:`data: array_like`. The buffer from which the storage is initialized.
-        + :code:`device_data: array_like`. The device buffer in case wrapping existing
-            buffers on both the device and main memory is desired.
+        + :code:`data: array_like`. The memory buffer or storage from which the storage is
+          initialized.
+        + :code:`device_data: array_like`. The device buffer or storage in case wrapping
+          existing buffers on both the device and main memory is desired.
+
+    Keyword-only parameters:
         + :code:`sync_state: gt4py.storage.SyncState`. If `managed="gt4py"` indicates which of the
-            provided buffers, `data` or `device_data`, is up to date at the time of initialization.
+          provided buffers, `data` or `device_data`, is up to date at the time of initialization.
 
-
-- :code:`storage(data=None, device_data=None, *, axes=None, copy=True, managed=None, **kwargs)`
-
+:code:`storage(data=None, device_data=None, *, copy=True, **kwargs)`
     Used to allocate a storage with values initialized to those of a given array.
     If the argument :code:`copy` is set to :code:`False`, the behavior is that of :code:`as_storage`.
 
     Parameters:
-        + :code:`data: array_like`. The buffer from which the storage is initialized.
-        + :code:`device_data: array_like`. The device buffer in case allocation from existing
-            buffers on both the device and main memory is desired.
+        + :code:`data: array_like`. The original array from which the storage is initialized.
+        + :code:`device_data: array_like`. The original array in case copying to a gpu buffer is desired.
+            The same buffer could also be passed through `data` in that case, however this parameter is here to
+            provide the same interface like the :code:`as_storage` function.
         + :code:`sync_state: gt4py.storage.SyncState`. If `managed="gt4py"` indicates which of the
             provided buffers, `data` or `device_data`, is up to date at the time of initialization.
 
     Keyword-only parameters:
-        + :code:`copy: bool`.
+        + :code:`copy: bool`. Allocate a new buffer and initialize it with a copy of the data or
+          wrap the existing buffer.
+        + :code:`sync_state: gt4py.storage.SyncState`. If `managed="gt4py"` indicates which of the
+          provided buffers, `data` or `device_data`, is up to date at the time of initialization.
 
+The definitions of the common parameters accepted by all the previous functions is the following:
 
-Most of the functions support a common set of parameters defining how to allocate data in memory to the to all these functions is All of these take the following keyword arguments:
+:code:`dtype: np.dtype_like`
+    The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
+    :code:`np.float64`.
+
+:code:`shape: Sequence[int]`
+    Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the shape
+    of the storage, that is, the full addressable space in the allocated memory buffer.
+
+Additionally, these **optional** keyword-only parameters are accepted:
+
+:code:`aligned_index: Sequence[int]`
+    The point to which the memory is aligned, defaults to the lower indices of the halo attribute.
+
+:code:`alignment: int`
+    Sequence of length :code:`ndim` which indicates on a boundary of how many elements the point
+    :code:`aligned_index` is aligned. It defaults to :code:`1`, which indicates no alignment.
+
+:code:`axes: str`
+    Any permutation of a sub-sequence of the :code:`"IJK"` string indicating the spatial dimensions
+    along which the field extends and their order for indexing operations in Python. The default
+    value is :code:`"IJK"`.
+
+:code:`defaults: str`
+    It can be used in the way of the current :code:`backend` parameter. For each backend, as well
+    as for the keys :code:`"F"` and :code:`"C"` (equivalent to the same values in the :code:`order`
+    parameter for NumPy allocation routines) a preset of suitable parameters is provided. Explicit
+    definitions of additional parameters are possible and they override its default value from the
+    preset.
+
+:code:`device: str`
+    Indicates whether the storage should contain a buffer on an accelerator device. Currently it
+    only accepts :code:`"gpu"` or :code:`None`. Defaults to :code:`None`.
+
+:code:`halo: Sequence[Union[int, Tuple[int, int]]`
+    Sequence of length :code:`ndim` where each entry is either an :code:`int` or a 2-tuple
+    of :code:`int` s. A sequence of integer numbers represent a symmetric halo with the specific
+    size per dimension, while a sequence of 2-tuple specifies the start and end boundary sizes on
+    the respective dimension. It defaults to no halo, i.e. :code:`(0, 0, 0)`
+
+:code:`layout: str`
+    A length-3 string with the name of axes (or a callable returning such a string)
+    dimensions. The sequence indicates the order of strides in decreasing order, i.e. the first
+    entry in the sequence corresponds to the axis with the largest stride. The layout map
+    is always of, length 3. The default
+    value is "IJK".
+
+    Default values as indicated by the :code:`defaults` parameter may depend on the axes. E.g. if the defaults is any
+    of the compiled GridTools backends, the default value is defined according to the semantic meaning of each
+    dimension. For example for the :code:`"gtx86"` backend, the layout is always IJK, meaning the smallest stride is in
+    the 3rd dimension, independently which dimension is the K dimension. On the other hand, we assume that if a storage
+    is created from an existing FORTRAN array, the first index has the smallest stride, irrespective of its
+    corresponding axis. I.e. the first index has the smallest stride in FORTRAN for both IJK and KJI storages.
+
+    ==================  ====================  ====================  ========================  =========================
+     Default Layout     :code:`defaults="F"`  :code:`defaults="C"`  :code:`defaults="gtx86"`  :code:`defaults="gtcuda"`
+    ==================  ====================  ====================  ========================  =========================
+    :code:`axes="IJK"`  :code:`layout="KJI"`  :code:`layout="IJK"`  :code:`layout="IJK"`      :code:`layout="KJI"`
+    :code:`axes="KJI"`  :code:`layout="IJK"`  :code:`layout="KJI"`  :code:`layout="IJK"`      :code:`layout="KJI"`
+    ==================  ====================  ====================  ========================  =========================
+
+    The rationale behind this is that in this way, storages allocated with :code:`defaults` set to a backend will
+    always get optimal performance, while :code:`defaults` set to :code:`"F"` or :code:`"C"` will have expected behavior
+    when wrapping FORTRAN or C buffers, respectively.
+
+    The :code`layout` parameter always has to be of length 3, so that in the case a storage is 1 or 2-dimensional,
+    the place of the missing dimension is known. In this way, the result of ufunc's involving only storages that were
+    allocated for a certain backend, will always again result in compatible storages. (See also Section
+    :ref:`output_storage_parameters`)
+
+:code:`managed: str`
+    :code:`None`, :code:`"gt4py"` or :code:`"cuda"`. It only has effect if :code:`device="gpu"` and
+    it specifies whether the synchronization between the host and device buffers is handled manually
+    by the user (:code:`None`), GT4Py (:code:`"gt4py"`) or CUDA (:code:`"cuda"`). It defaults to
+    :code:`"gt4py"`
+.. COMMENT If a parameter is not explicitly specified, it is inferred from the default parameter set. If there
+.. COMMENT is no default parameter set provided or it does not provide the required information, it is gathered
+.. COMMENT from the :code:`data` or :code:`device_data` parameters. If this does not provide this information,
+.. COMMENT a trivial default value is assumed. If no default value is available, an error is raised that the
+.. COMMENT parameters are underdetermined.
 
 - :code:`default_parameters: str`
    can be used in the way of the current :code`backend` parameter. for each backend, as well as for the keys
@@ -305,6 +396,9 @@ To keep compatibility with numpy, dimensions of size 1 are treated like masked d
 
 Further, the output buffer can have higher dimensionality than the determined broadcast shape. In this case, the result
 is replicated along the missing dimensions.
+
+
+.. _output_storage_parameters:
 
 Output Storage Parameters
 =========================
