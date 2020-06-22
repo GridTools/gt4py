@@ -134,10 +134,10 @@ This is tedious, so a helper object is available. This is equivalent to writing 
 Specification Options
 +++++++++++++++++++++
 
-An issue we faced when designing the iteration space featiure is that the stages (`with interval()`) are, by the execution model specification, free to be re-ordered by the runtime.
-We propose adding the `region()` to **either** (1) the multistage, in which case the execution order is specified by GridTool's execution model **or** (2) within a stage.
+An issue we faced when designing the iteration space feature is that the stages, where it is natural to specify the iteration space, are by the execution model specification free to be re-ordered by the runtime.
+We propose adding `region()` to **either** (1) the multistages, in which case the execution order is specified by GridTool's execution model **or** (2) within a stage.
 We plan to implement these in order, first finishing an implementation of (1) before attempting the second.
-If we agree to try (2) the example would look like:
+If we try (2) the aformentioned example becomes
 
 .. code-block:: python
 
@@ -151,10 +151,10 @@ If we agree to try (2) the example would look like:
                 ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
 
 This creates a switch-like stage where the execution at the point choses one of these options.
-The first line(s), or the lines ouside a `with` block, specify the default operation, and specializations are inside the blocks.
-An ambiguity arises when the same point is represented in multiple specializations, but that is easily cleared up by specifying that the **last** specialization is the one that takes precedence.
-The reason for choosing this option is that performance (especially in the CUDA backend) is retained, even without multistage fusion, since the backend does not see multiple multistages.
-However, this has the drawback that additional parsing is needed.
+The first line(s), or the lines ouside a `with` block, specify the default operation, and specializations are inside the blocks and appear as executed in program order.
+
+When implemented well by a backend, such a specification would allow for regions to be specified within a stencil for example without launching another GPU kernel.
+However, this is adds quite a bit of complexity to the backend implementation.
 
 
 Relation to Global Iteration Space
