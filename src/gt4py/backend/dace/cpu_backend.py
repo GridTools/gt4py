@@ -59,11 +59,3 @@ class CPUDaceBackend(DaceBackend):
         #
         # #
         # # sdfg.apply_transformations_repeated(Vectorization)
-        # from gt4py.backend.dace.sdfg.transforms import global_ij_tiling
-        # global_ij_tiling(sdfg, tile_size=(8, 8))
-
-    @classmethod
-    def transform_2(cls, sdfg):
-        from dace.transformation.dataflow import MapCollapse
-
-        sdfg.apply_transformations_repeated(MapCollapse)

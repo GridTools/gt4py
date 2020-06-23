@@ -39,6 +39,10 @@ class GPUDaceBackend(DaceBackend):
 
     @classmethod
     def transform_optimize(cls, sdfg):
+        for name, array in sdfg.arrays.items():
+            if array.transient:
+                array.lifetime = dace.dtypes.AllocationLifetime.Persistent
+        dace.Config.set("compiler", "cuda", "default_block_size", value="64,2,1")
         # tiling transform:
         # from dace.transformation.dataflow.tiling import MapTiling
         # from dace.transformation.dataflow import InLocalStorage, OutLocalStorage
@@ -55,4 +59,3 @@ class GPUDaceBackend(DaceBackend):
         #
         # sdfg.apply_strict_transformations(validate=False)
         # sdfg.apply_transformations_repeated([InLocalStorage, OutLocalStorage], validate=False)
-        pass
