@@ -286,8 +286,10 @@ Rejected Alternatives:
    (afterwards tab-completion can be used).
 
 It is recommended to allow one file extension for GTScript files which can be derived from the CLI
-command name by shortening it in an intuitive way.  It is possible to allow multiple extensions,
-however it is doubtful there are any real benefits to that.
+command name by shortening it in an intuitive way. Since the accepted double extension might cause
+trouble for some tools or in some environments an additional fallback is acceptable. It is possible
+to allow many more extensions, however the potential confusion outweighs the benefits of being more
+permissive.
 
 Enabling all of GTScript without importing from gt4py
 +++++++++++++++++++++++++++++++++++++++++++++++++++++
