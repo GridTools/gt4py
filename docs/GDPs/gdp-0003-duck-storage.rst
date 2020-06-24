@@ -226,7 +226,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
     Note that :code:`shape` is not a parameter and can not be overridden, implying that also the
     :code:`axes` can not be overridden.
 
-:code:`as_storage(data: array_like = None, device_data: = None, *, sync_state: Storage.SyncState = None, **kwargs) -> Storage`
+:code:`as_storage(data: array_like = None, device_data: array_like = None, *, sync_state: Storage.SyncState = None, **kwargs) -> Storage`
     Wrap an existing buffer in a GT4Py storage instance, without copying the buffer's contents.
 
     Parameters:
@@ -245,7 +245,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
 
         For common keyword-only arguments, please see below.
 
-:code:`storage(data: array_like = None, device_data: array_like = None, *, dtype: dtype_like = np.float64 copy=True, **kwargs) -> Storage`
+:code:`storage(data: array_like = None, device_data: array_like = None, *, dtype: dtype_like = np.float64, copy=True, **kwargs) -> Storage`
     Used to allocate a storage with values initialized to those of a given array.
     If the argument :code:`copy` is set to :code:`False`, the behavior is that of :code:`as_storage`.
 
@@ -267,6 +267,16 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
           provided buffers, `data` or `device_data`, is up to date at the time of initialization.
 
         For common keyword-only arguments, please see below.
+
+    If :code:`copy=False` and neither :code:`data` nor :code:`device_data` are provided, the other
+    arguments are used to allocate an appropriate buffer without initialization (equivalent to call
+    :code:`empty()`). If :code:`data` or :code:`device_data` is provided, the consistency of the
+    parameters with the buffers is validated.
+
+    If the field is not 3-D, as indicated by :code:`axes`, the length of parameters
+    :code:`aligned_index` and :code:`shape`, may either be of length 3 or of the actual dimension
+    of the storage, where the not needed entries are ignored in the latter case.
+
 
 The definitions of the common parameters accepted by all the previous functions are the following:
 
@@ -355,14 +365,6 @@ first alternative source where the parameter is defined in the following search 
 3. A fallback default value specified above. The only case where this is not available is
    :code:`shape`, in which case an exception is raised.
 
-If :code:`copy=False` and neither :code:`data` nor :code:`device_data` are provided, the other
-arguments are used to allocate an appropriate buffer without initialization (equivalent to call
-:code:`empty()`). If :code:`data` or :code:`device_data` is provided, the consistency of the
-parameters with the buffers is validated.
-
-If the field is not 3-D, as indicated by :code:`axes`, the length of parameters
-:code:`aligned_index` and :code:`shape`, may either be of length 3 or of the actual dimension of the
-storage, where the not needed entries are ignored in the latter case.
 
 .. _domain_and_halo:
 
