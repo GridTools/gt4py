@@ -3,7 +3,7 @@ GDP 1 — Standalone Compiler CLI
 =================================
 
 :Author: Rico Häuselmann <ricoh@cscs.ch>
-:Status: Draft
+:Status: Accepted
 :Type: Feature
 :Created: 17.04.2020
 :Discussion PR: `https://github.com/GridTools/gt4py/pull/21 <discussion_pr>`_
