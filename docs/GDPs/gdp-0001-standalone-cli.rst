@@ -26,22 +26,28 @@ Motivation and Scope
 --------------------
 
 This GDP proposes adding a CLI command named `gtpyc` (naming rationale / alternatives documented somewhere below).
-The command will take a gtscript file and the name of one of the available backends as input and output
+The command will take a GTScript file and the name of one of the available backends as input and output
 backend specific source code. This includes any language bindings supported by the backend. Commandline options will
 allow full control over what bindings should be created if any, depending on what the backend supports.
 
-A gtscript file denotes a file with a to-be-defined extension (suggestion: `.gt.py`), beginning with the line `## using-dsl: gtscript`. All other content must be valid python under the assumption that the first line has been replaced by `from gt4py.gtscript import *`.
+A GTScript file denotes a file with a to-be-defined extension (suggestion: `.gt.py`), beginning with the line 
+
+..code-block:: python
+
+   # [GT] using-dsl: gtscript 
+   
+All other content must be valid python under the assumption that the first line has been replaced by `from gt4py.gtscript import *`.
 
 In support of this, two more features are proposed:
 
- * A mechanism to allow gtscript files as if they were python modules
+ * A mechanism to allow GTScript files as if they were python modules
  * A lazy variant or replacement of the `stencil` decorator, returning an object that supports manual stepwise compilation.
 
 Limited Scope
 +++++++++++++
 
 In order to support the usecases listed below the input python files must be written in
-gtscript DSL without explicitly importing GT4Py. Instead of the decorators provided by the
+GTScript DSL without explicitly importing GT4Py. Instead of the decorators provided by the
 `gtscript` module, comments may be used, or functions may be inferred to be a `stencil` or `submodule`
 depending on whether they return something or not. In order to stay maintainable `gtpyc`
 will not add any new logic beyond reading input python code and command line options.
@@ -72,7 +78,7 @@ allows to use a licence other than GPL3 in said project without the express perm
 Flexibility
 +++++++++++
 
-The import mechanism will allow the flexibility to define `gtscript` objects in `gtscript` files and using them in python code
+The import mechanism will allow the flexibility to define GTScript objects in GTScript files and using them in python code
 without extra steps (as if they were defined directly in python), yet also compiling them into other language sources / bindings from the same code base just by running the CLI tool on them. This allows prototyping in python without making a final choice as to project language and license.
 
 Usage and Impact
@@ -83,7 +89,7 @@ Basic CLI usage
 
 The usage is explained best using a small example.
 
-Note that `.gt.py` files could be replaced by equivalent `.py` files (importing `gtscript` symbols either from `gt4py` or from a `.gt.py` file) in all following examples.
+Note that `.gt.py` files could be replaced by equivalent `.py` files (importing GTScript symbols either from `gt4py` or from a `.gt.py` file) in all following examples.
 Python modules or packages are also valid input files to `gtpyc`, provided they are valid Python under the assumption that the import extensions are installed.
 
 Assume the following file structure:
@@ -95,11 +101,11 @@ Assume the following file structure:
    ├── constants.py
    └── stencils.gt.py
 
-`stencils.gt.py` contains the `gtscript` code to be compiled to stencils. The contents might look something like the following example.
+`stencils.gt.py` contains the GTScript code to be compiled to stencils. The contents might look something like the following example.
 
 .. code-block:: python
 
-   ## using-dsl: gtscript
+   # [GT] using-dsl: gtscript
 
    from .constants import PI
 
@@ -122,7 +128,7 @@ Assume the following file structure:
          out_field = PI * inp_field + COMPILE_TIME_VALUE
 
 Notice that this file uses names from `gt4py.gtscript` without importing `gt4py`. The names will be injected by
-`gtpyc` upon recognizing the `## using-dsl: gtscript` comment.
+`gtpyc` upon recognizing the `# [GT] using-dsl: gtscript` comment.
 Also note that `stencil_b` uses an external value which is not available in the file itself, so it 
 will have to be supplied on the command line.
 The file `constants.py` contains some constant values (which might be templated by the build system).
@@ -188,7 +194,7 @@ or as an alternative step to build `.py` sources into ready to link libraries.
 Advanced CLI usage
 ++++++++++++++++++
 
-For complex or mixed language usecases it might be desirable to use a whole library of `gtscript` / python files. The import mechanism makes it possible.
+For complex or mixed language usecases it might be desirable to use a whole library of GTScript / python files. The import mechanism makes it possible.
 
 .. code-block:: bash
 
@@ -202,8 +208,8 @@ For complex or mixed language usecases it might be desirable to use a whole libr
            ├── __init__.py
            └── baz.gt.py
 
-Note that packages require an __init__.py which remains a valid python module (no `gtscript` injection). However any python module inside
-the package can import from any `gtscript` file (including `gtscript` members).
+Note that packages require an __init__.py which remains a valid python module (no `gt4py.gtscript` injection). However any python module inside
+the package can import from any GTScript file (including `gt4py.gtscript` members).
 
 .. code-block:: bash
 
@@ -220,7 +226,7 @@ Compiles all top-level stencil members of `lib/__init__.py`.
 Usage from python
 +++++++++++++++++
 
-After adding the following to the top of a python module, any `gtscript` files in the PYTHONPATH can be imported as python modules:
+After adding the following to the top of a python module, any GTScript files in the PYTHONPATH can be imported as python modules:
 
 .. code-block:: python
 
@@ -255,17 +261,17 @@ Rejected Alternatives:
 
  * `gt4pyc`, the sequence "gt4" is all typed with the left index finger on a standard keyboard. The author strongly feels that cli command names should start with an easy to type sequence (afterwards tab-completion can be used).
 
-It is recommended to allow one file extension for `gtscript` files which can be derived from the CLI command name by shortening it in an intuitive way.
+It is recommended to allow one file extension for GTScript files which can be derived from the CLI command name by shortening it in an intuitive way.
 It is possible to allow multiple extensions, however it is doubtful there are any real benefits to that.
 
-Enabling all of gtscript without importing from gt4py
+Enabling all of GTScript without importing from gt4py
 +++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 The currently chosen route for this is to require a comment at the very start of the file::
 
-   ## using-dsl: gtscript
+   # [GT] using-dsl: gtscript
 
-This will serve two purposes, first it will mark the file as being written in gtscript.
+This will serve two purposes, first it will mark the file as being written in GTScript.
 Any name that in python can be accessed by `from gt4py.gtscript import *` will work when
 compiling with `gtpyc` but will be deemed undefined by the python interpreter.
 It is not planned to provide any means of informing python syntax checkers to consider
@@ -274,7 +280,7 @@ Secondly `gtpyc` can replace this line with an actual `import` line without chan
 for error messages.
 
 Obviously, some symbols like the `@stencil` decorator will have to be either changed or
-an alternative has to be offered, since we do not want loading of the input gtscript file to already trigger
+an alternative has to be offered, since we do not want loading of the input GTScript file to already trigger
 a compilation and though we might want to give default arguments to the backend in the decorator
 we want to be able to override them on the CLI.
 
@@ -290,7 +296,7 @@ After adoption of this GDP, the object returned by `mark_stencil` should also of
 Gtscript import system
 ++++++++++++++++++++++
 
-Gtscript files can import python modules and vice versa, after installing the gtscript import system (which can be done in a single line). `gtpyc` installs the import system and (by default) adds the parent directory of the input file to `sys.path`, the search path for python imports. This means python and gtscript modules and packages in the same folder as the input file are found by default, other than that imports behave as normal.
+Gtscript files can import python modules and vice versa, after installing the GTScript import system (which can be done in a single line). `gtpyc` installs the import system and (by default) adds the parent directory of the input file to `sys.path`, the search path for python imports. This means python and GTScript modules and packages in the same folder as the input file are found by default, other than that imports behave as normal.
 The reference implementation for this is in `gt4py.gtsimport`, the public API consists of the `gt4py.gtsimport.install` function. The module docstring contains usage examples. The code can be found in the corresponding `draft PR <reference_impl_pr>`_.
 
 Passing externals
@@ -332,7 +338,7 @@ Note that the following is a simple way to get most of the desired behaviour fro
 
 .. code-block: mygts.gt.py: python
 
-   ## using-dsl: gtscript
+   # [GT] using-dsl: gtscript
 
 .. code-block: mystencils.py: python
 
@@ -396,10 +402,10 @@ Using plain `.py` extension in combination with the marker comment
 
 The author believes that the two types of files serve distinctly separate purposes.
 While both types can be passed into `gtpyc`, plain `.py` files should represent valid Python modules
-whereas `.gt.py` files are treated as written in `gtscript`, a domain specific language that extends Python.
+whereas `.gt.py` files are treated as written in GTScript, a domain specific language that extends Python.
 
 It may be a subtle difference in implementation but quite a difference in intent. The author of a `.py` file
-may use `gt4py` as a library, whereas the author of a `gtscript` file uses a different language which happens to have the same syntax.
+may use `gt4py` as a library, whereas the author of a GTScript file uses a different language which happens to have the same syntax.
 
 Discussion
 ----------
