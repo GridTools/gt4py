@@ -487,7 +487,7 @@ class TestRegion:
 
         region_var = (
             (dict(start=(Interval.START, 0), stop=(Interval.START, 1)), None),
-            (None, dict(start=(Interval.END, -3), stop=(Interval.END, 0))),
+            (None, dict(start=(Interval.STOP, -3), stop=(Interval.STOP, 0))),
         )
 
         def valid(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
@@ -497,7 +497,7 @@ class TestRegion:
                 out_field = in_field
             with computation(PARALLEL), interval(...), region(
                 (dict(start=(Interval.START, 0), stop=(Interval.START, 1)), None),
-                (None, dict(start=(Interval.END, -3), stop=(Interval.END, 0))),
+                (None, dict(start=(Interval.STOP, -3), stop=(Interval.STOP, 0))),
             ):
                 out_field = in_field
             with computation(PARALLEL), interval(...), region(*region_var):

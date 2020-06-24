@@ -105,6 +105,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
         extent = self.block_info.extent
+        parallel_interval = self.block_info.parallel_interval
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
 
@@ -115,19 +116,39 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 upper_extent[d] += idx
 
         index = []
-        for d in range(2):
-            start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
-            size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
-            size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
-            index.append(
-                "{name}{marker}[{d}]{start}: {name}{marker}[{d}] + {size}".format(
-                    name=node.name,
-                    start=start_expr,
-                    marker=self.origin_marker,
-                    d=d,
-                    size=size_expr,
+        if not parallel_interval:
+            for d in range(2):
+                start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
+                size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
+                size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
+                index.append(
+                    "{name}{marker}[{d}]{start}: {name}{marker}[{d}] + {size}".format(
+                        name=node.name,
+                        start=start_expr,
+                        marker=self.origin_marker,
+                        d=d,
+                        size=size_expr,
+                    )
                 )
-            )
+        else:
+            for d in range(2):
+                expr = []
+                assert len(parallel_interval) == 2
+                size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
+                axis_bound = parallel_interval[d]
+                for interval in (axis_bound.start, axis_bound.end):
+                    start_expr = ""
+                    if interval.level == gt_ir.LevelMarker.END:
+                        start_expr += " + " + size_expr
+                    start_expr += " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
+                    start_expr += " {:+d}".format(interval.offset) if interval.offset != 0 else ""
+                    expr.append("{name}{marker}[{d}]{start}".format(
+                        name=node.name,
+                        marker=self.origin_marker,
+                        d=d,
+                        start=start_expr
+                    ))
+                index.append("{}:{}".format(*expr))
 
         k_ax = self.domain.sequential_axis.name
         k_offset = node.offset.get(k_ax, 0)
@@ -293,7 +314,7 @@ class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
         )
 
     def generate_module_members(self):
-        source = """       
+        source = """
 def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
     return np.choose(
         condition,

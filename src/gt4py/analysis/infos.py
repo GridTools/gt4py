@@ -148,6 +148,7 @@ class IntervalBlockInfo:
 
     id = attribute(of=int)
     interval = attribute(of=IntervalInfo)
+    parallel_interval = attribute(of=ListOf[IntervalInfo], optional=True)
     stmts = attribute(of=ListOf[StatementInfo], factory=list)
     inputs = attribute(of=DictOf[str, Extent], factory=dict)
     outputs = attribute(of=SetOf[str], factory=set)
@@ -169,6 +170,7 @@ class IJBlockInfo:
 
     id = attribute(of=int)
     intervals = attribute(of=SetOf[IntervalInfo])
+    parallel_interval = attribute(of=ListOf[IntervalInfo], optional=True)
     interval_blocks = attribute(of=ListOf[IntervalBlockInfo], factory=list)
     inputs = attribute(of=DictOf[str, Extent], factory=dict)
     outputs = attribute(of=SetOf[str], factory=set)

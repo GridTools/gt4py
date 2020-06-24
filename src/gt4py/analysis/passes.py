@@ -287,7 +287,10 @@ class InitInfoPass(TransformPass):
 
         def visit_ComputationBlock(self, node: gt_ir.ComputationBlock):
             interval = next(iter(self.current_block_info.intervals))
-            interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
+            parallel_interval = self.current_block_info.parallel_interval
+            interval_block = IntervalBlockInfo(
+                self.data.id_generator.new, interval, parallel_interval
+            )
 
             assert node.body.stmts  # non-empty computation
             stmt_infos = [
@@ -313,7 +316,9 @@ class InitInfoPass(TransformPass):
                     self.current_block_info.ij_blocks.append(
                         self._make_ij_block(interval, interval_block)
                     )
-                    interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
+                    interval_block = IntervalBlockInfo(
+                        self.data.id_generator.new, interval, parallel_interval
+                    )
                     group_outputs = set()
 
                 interval_block.stmts.append(stmt_info)
@@ -331,7 +336,7 @@ class InitInfoPass(TransformPass):
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
             assert node.computations  # non-empty definition
 
-            def make_interval_infos(parallel_interval):
+            def make_parallel_interval(parallel_interval):
                 def make_tuple(endpt):
                     return (0 if endpt.level == gt_ir.LevelMarker.START else 1, endpt.offset)
 
@@ -349,7 +354,7 @@ class InitInfoPass(TransformPass):
                     self.data.id_generator.new,
                     computation.iteration_order,
                     {interval},
-                    make_interval_infos(computation.parallel_interval),
+                    make_parallel_interval(computation.parallel_interval),
                     [],
                 )
                 self.visit(computation)
@@ -359,6 +364,7 @@ class InitInfoPass(TransformPass):
             ij_block = IJBlockInfo(
                 self.data.id_generator.new,
                 {interval},
+                interval_block.parallel_interval,
                 interval_blocks=[interval_block],
                 inputs={**interval_block.inputs},
                 outputs=set(interval_block.outputs),
@@ -425,9 +431,11 @@ class NormalizeBlocksPass(TransformPass):
                     for interval_block in ij_block.interval_blocks:
                         for stmt_info in interval_block.stmts:
                             interval = interval_block.interval
+                            parallel_interval = interval_block.parallel_interval
                             new_interval_block = IntervalBlockInfo(
                                 transform_data.id_generator.new,
                                 interval,
+                                parallel_interval,
                                 [stmt_info],
                                 stmt_info.inputs,
                                 stmt_info.outputs,
@@ -435,6 +443,7 @@ class NormalizeBlocksPass(TransformPass):
                             new_ij_block = IJBlockInfo(
                                 transform_data.id_generator.new,
                                 {interval},
+                                parallel_interval,
                                 [new_interval_block],
                                 {**new_interval_block.inputs},
                                 set(new_interval_block.outputs),
@@ -515,8 +524,15 @@ class MergeBlocksPass(TransformPass):
                 return False
 
             for candidate_axis, target_axis in zip(candidate, target):
-                for candidate_endpt, target_endpt in zip(candidate_axis, target_axis):
-                    if any((cv != tv for cv, tv in zip(candidate_endpt, target_endpt))):
+                for endpt in ("start", "end"):
+                    if any(
+                        [
+                            x != y
+                            for x, y in zip(
+                                getattr(candidate_axis, endpt), getattr(target_axis, endpt)
+                            )
+                        ]
+                    ):
                         return False
             return True
 
@@ -822,7 +838,6 @@ class BuildIIRPass(TransformPass):
             multi_stage = gt_ir.MultiStage(
                 name="multi_stage__{}".format(block.id),
                 iteration_order=block.iteration_order,
-                parallel_interval=_make_parallel_interval(block.parallel_interval),
                 groups=groups,
             )
             self.iir.multi_stages.append(multi_stage)
@@ -850,6 +865,7 @@ class BuildIIRPass(TransformPass):
 
             apply_block = gt_ir.ApplyBlock(
                 interval=self._make_axis_interval(int_block.interval),
+                parallel_interval=_make_parallel_interval(int_block.parallel_interval),
                 local_symbols=local_symbols,
                 body=gt_ir.BlockStmt(stmts=stmts),
             )
@@ -879,18 +895,18 @@ class BuildIIRPass(TransformPass):
 
         return stage
 
-    def _make_apply_block(self, interval_block):
-        # Body
-        stmts = []
-        for stmt_info in interval_block.stmts:
-            if not isinstance(stmt_info.stmt, gt_ir.Decl):
-                stmts.append(stmt_info.stmt)
-        body = gt_ir.BlockStmt(stmts=stmts)
-        result = gt_ir.ApplyBlock(
-            interval=self._make_axis_interval(interval_block.interval), body=body
-        )
+    # def _make_apply_block(self, interval_block):
+    #     # Body
+    #     stmts = []
+    #     for stmt_info in interval_block.stmts:
+    #         if not isinstance(stmt_info.stmt, gt_ir.Decl):
+    #             stmts.append(stmt_info.stmt)
+    #     body = gt_ir.BlockStmt(stmts=stmts)
+    #     result = gt_ir.ApplyBlock(
+    #         interval=self._make_axis_interval(interval_block.interval), body=body
+    #     )
 
-        return result
+    #     return result
 
     def _make_accessor(self, name, extent, read_write: bool):
         assert name in self.data.symbols

@@ -128,25 +128,26 @@ class RegionReplacer(ast.NodeTransformer):
             offset += index + 1
             start, scope = offset, 1
             while scope > 0:
-                offset += 1
                 if source[offset] in ("(", "["):
                     scope += 1
                 elif source[offset] in (")", "]"):
                     scope -= 1
+                offset += 1
 
-            return source[start:offset]
+            return source[start : offset - 1]
 
         def is_valid_specifier(spec):
+            # None regions were already removed
             if not isinstance(spec, Iterable):
                 return False
             for axis in spec:
                 if axis is None:
                     continue
                 try:
-                    for endpt in (axis["start"], axis["stop"]):
-                        if not isinstance(endpt[0], gt_definitions.Interval):
+                    for endpt in ("start", "stop"):
+                        if not isinstance(axis[endpt][0], gt_definitions.Interval):
                             return False
-                        elif not isinstance(endpt[1], int):
+                        elif not isinstance(axis[endpt][1], int):
                             return False
                 except:
                     return False
@@ -554,23 +555,28 @@ class ParsingContext(enum.Enum):
 
 
 def _make_parallel_interval(region: Iterable):
-    def make_axis_bound(endpt):
-        indicator, offset = endpt
-        if indicator == gt_definitions.Interval.START:
-            level_marker = gt_ir.LevelMarker.START
-        else:
-            level_marker = gt_ir.LevelMarker.END
-        return gt_ir.AxisBound(level=level_marker, offset=offset)
+    def make_axis_bounds(endpts):
+        axis_bounds = {}
+        for incl_key, excl_key in zip(("start", "stop"), ("start", "end")):
+            indicator, original_offset = endpts[incl_key]
+            add_offset = 0
+            if indicator == gt_definitions.Interval.START:
+                level_marker = gt_ir.LevelMarker.START
+            else:
+                level_marker = gt_ir.LevelMarker.END
+                if incl_key == "start":
+                    add_offset = -1
+            offset = original_offset + add_offset
+            axis_bounds[excl_key] = gt_ir.AxisBound(level=level_marker, offset=offset)
+        return axis_bounds
 
     assert len(region) == 2
-    return (
-        gt_ir.AxisInterval(
-            start=make_axis_bound(endpts["start"]), end=make_axis_bound(endpts["end"])
-        )
+    return [
+        gt_ir.AxisInterval(**make_axis_bounds(endpts))
         if endpts
         else gt_ir.AxisInterval.full_interval()
         for endpts in region
-    )
+    ]
 
 
 class IRMaker(ast.NodeVisitor):
@@ -1231,16 +1237,16 @@ class GTScriptParser(ast.NodeVisitor):
                     imported_symbols[root_name].setdefault(
                         collected_name, name_nodes[collected_name]
                     )
-                elif root_name in context:
-                    # Assume it is a constant symbol and eval it
-                    nonlocal_symbols[collected_name] = GTScriptParser.eval_constant(
-                        collected_name, context, gt_ir.Location.from_ast_node(nodes[0])
-                    )
                 elif gt_meta.referenced_inside_call(definition, nodes[0], "region"):
                     # Get the larger context (includes nonlocals and builtins)
                     # and store the live object ref
                     larger_context, _ = gt_meta.get_closure(definition)
                     nonlocal_symbols[root_name] = larger_context[root_name]
+                elif root_name in context:
+                    # Assume it is a constant symbol and eval it
+                    nonlocal_symbols[collected_name] = GTScriptParser.eval_constant(
+                        collected_name, context, gt_ir.Location.from_ast_node(nodes[0])
+                    )
                 elif root_name not in local_symbols and root_name in unbound:
                     raise GTScriptSymbolError(
                         name=collected_name,

@@ -147,6 +147,7 @@ Implementation IR
                 | FieldAccessor(symbol: str, intent: AccessIntent, extent: Extent)
 
     ApplyBlock(interval: AxisInterval,
+               [parallel_interval: List[AxisInterval],]
                local_symbols: Dict[str, VarDecl],
                body: BlockStmt)
 
@@ -159,7 +160,6 @@ Implementation IR
 
     MultiStage(name: str,
                iteration_order: IterationOrder,
-               [parallel_interval: List[AxisInterval],] # To all ApplyBlocks within this MultiStage
                groups: List[StageGroups])
 
     StencilImplementation(name: str,
@@ -742,6 +742,7 @@ class FieldAccessor(Accessor):
 @attribclass
 class ApplyBlock(Node):
     interval = attribute(of=AxisInterval)
+    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
     local_symbols = attribute(of=DictOf[str, VarDecl])
     body = attribute(of=BlockStmt)
 
@@ -792,7 +793,6 @@ class StageGroup(IIRNode):
 class MultiStage(IIRNode):
     name = attribute(of=str)
     iteration_order = attribute(of=IterationOrder)
-    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
     # caches = attribute(of=ListOf[Cache])
     groups = attribute(of=ListOf[StageGroup])
 

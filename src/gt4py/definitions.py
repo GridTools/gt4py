@@ -713,71 +713,7 @@ class GTSemanticError(GTError):
 @enum.unique
 class Interval(enum.Enum):
     START = enum.auto()
-    END = enum.auto()
-
-
-# def selection(i_axis, i_axis):
-#     """Convenience function that returns region arguments for particular boundary.
-#     The arguments here are less verbose than the actual region argument. Restricts
-#     an axis relative to one of the axis endpoints, with offsets.
-
-#     Parameters
-#     ----------
-#         i_axis: `tuple` or `None`
-#             Tuple of i-axis side and offset or None to not restrict i-axis.
-
-#         j_axis: `tuple` or `None`
-#             Tuple of j-axis side and offset or None to not restrict j-axis.
-
-#     This function returns None when both i_axis and j_axis are None, which
-#     implies the region should be skipped altogether.
-
-#     Examples
-#     --------
-#     `selection((Interval.START, 0, 3),)`
-#         Indicates computation in a strip 4 wide in the I-axis, but does not
-#         restrict J or K.
-
-#     `selection(, (Interval.START, 0, 3))`
-#         Indicates computation in a strip 4 wide in the J-axis, but does not
-#         restrict I or K.
-
-#     `selection(,)`
-#         Returns none
-
-#     Region Argument
-#     ---------------
-#     The arguments take the form:
-#     (
-#         ((xinterval_start, x_start), (xinterval_end, x_end)),
-#         ((yinterval_start, y_start), (yinterval_end, y_end))
-#     )
-
-#         xinterval_start `Interval`
-#             Starting interval endpoint (i.e. START or END)
-
-#         x_start `int`
-#             Offset from the endpoint of the domain (positive or negative)
-
-#         xinterval_end  `Interval`
-#             Ending interval endpoint (i.e. START or END)
-
-#         x_end `int`
-#             Offset from endpoint of domain (positive or negative)
-
-#         ...
-#     """
-#     if x_axis is None and y_axis is None:
-#         return None
-
-#     return_list = []
-#     for arg in (x_axis, y_axis):
-#         if arg is None:
-#             return_list.append(((Interval.START, 0), (Interval.END, 0)))
-#         else:
-#             endpt, start, stop = arg
-#             return_list.append(((endpt, start), (endpt, stop)))
-#     return tuple(return_list)
+    STOP = enum.auto()
 
 
 def normalize_domain(domain):
