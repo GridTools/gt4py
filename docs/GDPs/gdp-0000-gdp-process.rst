@@ -71,7 +71,7 @@ way to start.
 The proposal should be submitted as a draft GDP via a `GitHub pull request`_
 (PR) to the ``docs/GDPs`` directory with the name ``gdp-<n>-<name>.rst`` where
 ``<n>`` is an appropriately assigned four-digit number and ``<name>`` is a short
-kebab-case name (e.g., ``gdp-0000-gdp-process.rst``). The draft must use the
+*kebab-case name* (e.g., ``gdp-0000-gdp-process.rst``). The draft must use the
 :doc:`gdp-template` file.  The GT4Py core developers may reject a draft GDP (and
 thus avoiding any discussion on the topic) if the draft GDP is considered as
 completely out of the scope of the project or if the PR does not follow the
