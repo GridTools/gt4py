@@ -18,7 +18,7 @@ compiling and running GridTools stencils from Python programs.
 
 This GDP describes an additional CLI which can be integrated into the build
 process of non-Python programs to compile, link and run stencils written
-in GT4Py DSL from any host language that can link to C++ libraries.
+in GT4Py DSL (GTScript) from any host language that can link to C++ libraries.
 
 A `reference implementation <reference_impl_pr>`_ exists, which will on acception of this GDP be
 drawn on for adding functionality of this GDP in a series of separate pull requests.
@@ -73,8 +73,8 @@ Avoiding runtime dependency
 +++++++++++++++++++++++++++
 
 Even for Python projects it may be desirable to distribute only the extension modules created by
-GT4Py, not the code that generated them, thus requiring the end user to only install GridTools, not
-GT4Py.
+GT4Py, not the code that generated them, thus requiring the final user of the generated code to
+only install GridTools, not GT4Py.
 
 Licensing
 +++++++++
@@ -319,10 +319,10 @@ process only when used in a way that requires the stencil to be compiled first. 
 it will hold all contextual information given to the decorator, which will allow ``gtpyc`` to
 trigger it's slightly modified build process.
 
-Gtscript import system
+GTScript import system
 ++++++++++++++++++++++
 
-Gtscript files can import Python modules and vice versa, after installing the GTScript import
+GTScript files can import Python modules and vice versa, after installing the GTScript import
 system (which can be done in a single line). ``gtpyc`` installs the import system and (by default)
 adds the parent directory of the input file to :py:mod:`sys.path`, the search path for Python imports. This
 means Python and GTScript modules and packages in the same folder as the input file are found by
