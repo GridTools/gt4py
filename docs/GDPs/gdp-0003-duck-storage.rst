@@ -608,9 +608,24 @@ user code can be agnostic of the backend and the synchronization mode.
 Universal Functions (ufuncs)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Universal functions, such as mathematical binary operations and logical operators can be supported
-through the :code:`numpy.lib.mixins.NDArrayOperatorsMixin` base type and the :code:`__array_ufunc__`
-interface. We propose to support the methods :code:`__call__` and :code:`reduce` of the NumPy ufunc
+`Universal Functions <https://numpy.org/doc/stable/reference/ufuncs.html>`_ are a subset of the
+NumPy API which mostly implements mathematical operator functions and have a particular structure:
+They are subclasses of :code:`np.ufunc` and can be invoked through the
+`methods <https://numpy.org/doc/stable/reference/ufuncs.html#methods>`_ :code:`reduce`,
+:code:`accumulate`, :code:`reduceat`, :code:`outer`, :code:`at` and :code:`__call__`. We propose to
+use the `mixin` functionality and to implement the :code:`__array_ufunc__` interface to support
+these functions: NumPy provides the :code:`numpy.lib.mixins.NDArrayOperatorsMixin` class, from which
+a duck array can inherit from. Doing so forwards mathematical operators using python syntax (such as
+binary :code:`+` or unary :code:`-`) to the :code:`__array_ufunc__` method where own behavior can
+be defined.
+
+Using mathematical operators with the mixin is equivalent to calling the ufuncs through the
+:code:`__call__` method. (E.g. :code:`np.add(storage1, storage2)` or
+:code:`np.negative(storage)`) alternatively, some ufuncs can be used to perform reductions.
+In this case, one can explicitly call the :code:`reduce` method (e.g. :code:`np.add.reduce(axis=1)`
+to accumulate the values along a given axis.
+
+We propose to support the methods :code:`__call__` and :code:`reduce` of the NumPy ufunc
 mechanism.
 
 If the :code:`reduce` method of `ufuncs` is used, this results in a Storage with the axis along
