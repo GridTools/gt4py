@@ -45,7 +45,7 @@ by :code:`from gt4py.gtscript import *`.
 In support of this, two more features are proposed:
 
 * A mechanism to allow GTScript files as if they were Python modules.  The usage will be
-  :code:`from gt4py import gtpy_importer; gtpy_importer.install()`.
+  :code:`from gt4py import gtpy_import; gtpy_import.install()`.
 * A lazy variant or replacement of the ``stencil`` decorator, returning an object that supports
    manual stepwise compilation.
 
@@ -250,7 +250,7 @@ be imported as Python modules:
 
 .. code-block:: python
 
-   from gt4py import gtsimport; gtsimport.install()
+   from gt4py import gtpy_import; gtpy_import.install()
 
 Backward compatibility
 ----------------------
@@ -389,7 +389,7 @@ have trouble with the ``.gt.py`` double extension (The author is not aware of an
 
 Now IDEs will recognize ``mystencils.py`` as a Python file and will highlight and check the syntax.
 Of course tools will be unable to import ``mygts``, unless there is a way to configure them to run
-:code:`gt4py.gtsimport.install()` before trying to import.
+:code:`gt4py.gtpy_import.install()` before trying to import.
 
 Related Work
 ------------
