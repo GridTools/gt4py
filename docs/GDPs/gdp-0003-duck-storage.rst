@@ -337,18 +337,33 @@ Additionally, these **optional** keyword-only parameters are accepted:
     irrespective of its corresponding axis. I.e. the first index has the smallest stride in FORTRAN
     for both IJK and KJI storages.
 
-    ==================  ====================  ====================  ========================  =========================
-     Default Layout     :code:`defaults="F"`  :code:`defaults="C"`  :code:`defaults="gtx86"`  :code:`defaults="gtcuda"`
-    ==================  ====================  ====================  ========================  =========================
-    :code:`axes="IJK"`  :code:`layout="KJI"`  :code:`layout="IJK"`  :code:`layout="IJK"`      :code:`layout="KJI"`
-    :code:`axes="KJI"`  :code:`layout="IJK"`  :code:`layout="KJI"`  :code:`layout="IJK"`      :code:`layout="KJI"`
-    ==================  ====================  ====================  ========================  =========================
+    .. list-table:: Default :code:`layout` parameter when given :code:`defaults` and :code:`axes`
+       :header-rows: 1
+       :stub-columns: 1
+
+       * -
+         - :code:`defaults="F"`
+         - :code:`defaults="C"`
+         - :code:`defaults="gtx86"`
+         - :code:`defaults="gtcuda"`
+
+       * - :code:`axes="IJK"`
+         - :code:`layout="KJI"`
+         - :code:`layout="IJK"`
+         - :code:`layout="IJK"`
+         - :code:`layout="KJI"`
+
+       * - :code:`axes="KJI"`
+         - :code:`layout="IJK"`
+         - :code:`layout="KJI"`
+         - :code:`layout="IJK"`
+         - :code:`layout="KJI"`
 
     The rationale behind this is that in this way, storages allocated with :code:`defaults` set to a
     backend will always get optimal performance, while :code:`defaults` set to :code:`"F"` or
     :code:`"C"` will have expected behavior when wrapping FORTRAN or C buffers, respectively.
 
-    The :code`layout` parameter always has to be of length 3, so that in the case a storage is 1 or
+    The :code:`layout` parameter always has to be of length 3, so that in the case a storage is 1 or
     2-dimensional, the place of the missing dimension is known. In this way, the result of ufunc's
     involving only storages that were allocated for a certain backend, will always again result in
     compatible storages. (See also Section :ref:`output_storage_parameters`)
