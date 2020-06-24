@@ -44,7 +44,8 @@ by :code:`from gt4py.gtscript import *`.
 
 In support of this, two more features are proposed:
 
-* A mechanism to allow GTScript files as if they were Python modules
+* A mechanism to allow GTScript files as if they were Python modules.  The usage will be
+  :code:`from gt4py import gtpy_importer; gtpy_importer.install()`.
 * A lazy variant or replacement of the ``stencil`` decorator, returning an object that supports
    manual stepwise compilation.
 
@@ -312,16 +313,11 @@ decorator we want to be able to override them on the CLI.
 Lazy stencil decorator
 ++++++++++++++++++++++
 
-The reference implementation contains an additional :py:func:`mark_stencil` decorator, which returns a
-:py:class:`BuildContext` object.  A build context holds all the information required to perform a build step,
-such as stencil definition, backend choice, backend options etc.  Furthermore from a build context
-a build manager object can be constructed, which allows stepping through the build process by
-passing the context object from step to step.
-
-After adoption of this GDP, the object returned by :py:func:`mark_stencil` should also offer a :py:func:`__call__`
-method which compiles the stencil completely and caches the result for further calls, after that it
-should be renamed to :py:func:`lazy_stencil` or incorporated into the :py:func:`stencil` decorator with an optional
-kwarg.
+The :py:func:`gt4py.gtscript.stencil` decorator will be extended to return an intermediate object, a
+drop-in replacement for the compiled :py:class:`StencilObject` which triggers the compilation
+process only when used in a way that requires the stencil to be compiled first.  On the other hand
+it will hold all contextual information given to the decorator, which will allow ``gtpyc`` to
+trigger it's slightly modified build process.
 
 Gtscript import system
 ++++++++++++++++++++++
@@ -330,10 +326,9 @@ Gtscript files can import Python modules and vice versa, after installing the GT
 system (which can be done in a single line). ``gtpyc`` installs the import system and (by default)
 adds the parent directory of the input file to :py:mod:`sys.path`, the search path for Python imports. This
 means Python and GTScript modules and packages in the same folder as the input file are found by
-default, other than that imports behave as normal.  The reference implementation for this is in
-:py:mod:`gt4py.gtsimport`, the public API consists of the :py:mod:`gt4py.gtsimport.install` function. The module
-docstring contains usage examples. The code can be found in the corresponding `draft PR
-<reference_impl_pr>`_.
+default, other than that imports behave as normal.  
+
+The public API consists of the :py:mod:`gt4py.gtpy_import.install` function.
 
 Passing externals
 +++++++++++++++++
