@@ -247,13 +247,15 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 None,
                 dace.memlet.Memlet.simple("OUT_" + output, subset_str=subset_str),
             )
-        from dace.transformation.interstate import InlineSDFG
 
-        tmp_sdfg.apply_transformations_repeated(InlineSDFG, validate=False)
         if len(library_node.inputs) == 0:
             tmp_state.add_edge(map_entry, None, nsdfg_node, None, dace.EmptyMemlet())
         if len(library_node.outputs) == 0:
             tmp_state.add_edge(nsdfg_node, None, map_entry, None, dace.EmptyMemlet())
+
+        from dace.transformation.interstate import InlineSDFG
+
+        tmp_sdfg.apply_transformations_repeated(InlineSDFG, validate=False)
         return tmp_sdfg
 
     @classmethod
@@ -531,7 +533,7 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 )
             not_yet_mapped_vars.add(variable)
 
-        symbols_mapping = {k: k for k in tmp_sdfg.undefined_symbols(True).keys()}
+        symbols_mapping = {k: k for k in tmp_sdfg.free_symbols}
         k_loc = (
             # f"({node.ranges[2][0]}) - ({node.ranges[2][1]})"
             # if node.iteration_order == gt_ir.IterationOrder.BACKWARD

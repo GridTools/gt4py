@@ -8,7 +8,7 @@ def global_ij_tiling(sdfg, tile_size=(8, 8)):
     output_arrays = dict()
     for state in sdfg.nodes():
         for node in state.nodes():
-            if isinstance(node, dace.graph.nodes.AccessNode):
+            if isinstance(node, dace.nodes.AccessNode):
                 if (
                     node.access is dace.AccessType.ReadOnly
                     or node.access is dace.AccessType.ReadWrite
@@ -178,7 +178,8 @@ def global_ij_tiling(sdfg, tile_size=(8, 8)):
 
 import dace.transformation.pattern_matching as pattern_matching
 from dace.properties import make_properties, Property, ShapeProperty
-from dace.graph import nodes, nxutil
+from dace import nodes
+import dace.sdfg.utils
 
 
 @registry.autoregister_params(singlestate=True)
@@ -202,7 +203,7 @@ class GlobalIJMapTiling(pattern_matching.Transformation):
 
     @staticmethod
     def expressions():
-        return [nxutil.node_path_graph(GlobalIJMapTiling._map_entry)]
+        return [dace.sdfg.utils.node_path_graph(GlobalIJMapTiling._map_entry)]
 
     @staticmethod
     def can_be_applied(graph, candidate, expr_index, sdfg, strict=False):
@@ -301,7 +302,7 @@ class TaskletAsKLoop(pattern_matching.Transformation):
     @staticmethod
     def expressions():
         return [
-            nxutil.node_path_graph(
+            dace.sdfg.utils.node_path_graph(
                 TaskletAsKLoop._map_entry, TaskletAsKLoop._tasklet, TaskletAsKLoop._map_exit
             )
         ]

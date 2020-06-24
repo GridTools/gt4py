@@ -35,14 +35,14 @@ def generate_test_module(name, backend, *, id_version, rebuild=True):
         backend_opts["add_profile_info"] = True
         backend_opts["verbose"] = True
     options = gt_defs.BuildOptions(
-        name=stencil_name, module=module_name, rebuild=rebuild, backend_opts=backend_opts
+        name=stencil_name, module=module_name, rebuild=False, backend_opts=backend_opts
     )
 
     decorator = gtscript.stencil(
         backend=backend.name,
         externals=EXTERNALS_REGISTRY[stencil_name],
         name=stencil_name,
-        rebuild=rebuild,
+        rebuild=False,
         **backend_opts,
     )
     stencil_definition = stencil_registry[name]

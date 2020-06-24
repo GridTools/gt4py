@@ -148,10 +148,11 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
                 + "\n"
                 + "\n".join(field_slices)
                 + """
-
+print('pre init')
 dace_lib['__dace_init_{program_name}']({run_args}, {total_field_sizes})
 if exec_info is not None:
     exec_info['pyext_program_start_time'] = time.perf_counter()
+print('pre run')
 dace_lib['__program_{program_name}']({run_args}, {total_field_sizes})
 if exec_info is not None:
     exec_info['pyext_program_end_time'] = time.perf_counter()
@@ -223,12 +224,14 @@ class DaceBackend(gt_backend.BaseBackend):
 
         sdfg.validate()
 
-        # cls.transform_to_device(sdfg)
+        sdfg.expand_library_nodes()
+        cls.transform_to_device(sdfg)
         # cls.transform_optimize(sdfg)
         # sdfg.save("01_library_optimized.sdfg")
         sdfg.validate()
-        sdfg.expand_library_nodes()
         sdfg.save("02_library_expanded.sdfg")
+        sdfg.validate()
+        sdfg = dace.SDFG.from_file("02_library_expanded.sdfg")
         sdfg.validate()
         # sdfg.apply_strict_transformations()
         # sdfg.save("03_reapply_strict.sdfg")

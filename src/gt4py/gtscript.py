@@ -178,7 +178,7 @@ def stencil(
     )  # definition_func.__globals__["__name__"] ??,
 
     build_options = gt_definitions.BuildOptions(
-        name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=build_info
+        name=name, module=module, rebuild=False, backend_opts=kwargs, build_info=build_info
     )
 
     def _decorator(def_func):
