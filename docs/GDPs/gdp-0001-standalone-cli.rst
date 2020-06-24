@@ -13,11 +13,11 @@ GDP 1 — Standalone Compiler CLI
 Abstract
 --------
 
-GT4Py currently provides a python API / embedded DSL for defining,
-compiling and running GridTools stencils from python programs.
+GT4Py currently provides a Python API / embedded DSL for defining,
+compiling and running GridTools stencils from Python programs.
 
 This GDP describes an additional CLI which can be integrated into the build
-process of non-python programs to compile, link and run stencils written
+process of non-Python programs to compile, link and run stencils written
 in GT4Py DSL from any host language that can link to C++ libraries.
 
 A `reference implementation <reference_impl_pr>`_ exists, which will on acception of this GDP be drawn on for adding functionality of this GDP in a series of separate pull requests.
@@ -36,21 +36,21 @@ A GTScript file denotes a file with a to-be-defined extension (suggestion: `.gt.
 
    # [GT] using-dsl: gtscript 
    
-All other content must be valid python under the assumption that the first line has been replaced by `from gt4py.gtscript import *`.
+All other content must be valid Python under the assumption that the first line has been replaced by `from gt4py.gtscript import *`.
 
 In support of this, two more features are proposed:
 
- * A mechanism to allow GTScript files as if they were python modules
+ * A mechanism to allow GTScript files as if they were Python modules
  * A lazy variant or replacement of the `stencil` decorator, returning an object that supports manual stepwise compilation.
 
 Limited Scope
 +++++++++++++
 
-In order to support the usecases listed below the input python files must be written in
+In order to support the usecases listed below the input Python files must be written in
 GTScript DSL without explicitly importing GT4Py. Instead of the decorators provided by the
 `gtscript` module, comments may be used, or functions may be inferred to be a `stencil` or `submodule`
 depending on whether they return something or not. In order to stay maintainable `gtpyc`
-will not add any new logic beyond reading input python code and command line options.
+will not add any new logic beyond reading input Python code and command line options.
 
 However, the final version will rely on more fine grained control over when and where backends create and store intermediate source files, which should become part of the backend API to be used for run-time compilation in order to avoid redundancy and guarantee maintainability.
 
@@ -58,14 +58,14 @@ Other language projects
 +++++++++++++++++++++++
 
 In order to benefit from the higher abstraction level of the GT4Py eDSL it should
-not be required to run python code at runtime. Especially for existing programs
+not be required to run Python code at runtime. Especially for existing programs
 written in other languages it makes more sense to link to libraries created by GT4Py
 as part of the build process of the host program.
 
 Avoiding runtime dependency
 +++++++++++++++++++++++++++
 
-Even for python projects it may be desirable to distribute only the extension
+Even for Python projects it may be desirable to distribute only the extension
 modules created by GT4Py, not the code that generated them,
 thus requiring the end user to only install GridTools, not GT4Py.
 
@@ -78,8 +78,8 @@ allows to use a licence other than GPL3 in said project without the express perm
 Flexibility
 +++++++++++
 
-The import mechanism will allow the flexibility to define GTScript objects in GTScript files and using them in python code
-without extra steps (as if they were defined directly in python), yet also compiling them into other language sources / bindings from the same code base just by running the CLI tool on them. This allows prototyping in python without making a final choice as to project language and license.
+The import mechanism will allow the flexibility to define GTScript objects in GTScript files and using them in Python code
+without extra steps (as if they were defined directly in Python), yet also compiling them into other language sources / bindings from the same code base just by running the CLI tool on them. This allows prototyping in Python without making a final choice as to project language and license.
 
 Usage and Impact
 ----------------
@@ -147,7 +147,7 @@ tell it to generate the stencils in the new subdirectory `stencils` (`-o stencil
    ├── stencil_b.cpp
    └── stencil_b.hpp
 
-The current backends of `gt4py` (with the exception of the python-only ones) all have the ability to generate python bindings.
+The current backends of `gt4py` (with the exception of the Python-only ones) all have the ability to generate Python bindings.
 Future backends might allow bindings for other languages. This is accessible through an additional CLI option, which should
 be validated based on the chosen backend.
 
@@ -167,7 +167,7 @@ be validated based on the chosen backend.
 
 Finally, the backend may allow options specific to it. These can be passed using the `--option` or `-O` flag.
 For example the `GridTools` multi core backend takes a `debug` flag (which does nothing during source file generation) but
-would activate debug flags if we ask gt4py to compile a readily importable python extension.
+would activate debug flags if we ask gt4py to compile a readily importable Python extension.
 
 .. code-block:: bash
 
@@ -195,7 +195,7 @@ or as an alternative step to build `.py` sources into ready to link libraries.
 Advanced CLI usage
 ++++++++++++++++++
 
-For complex or mixed language usecases it might be desirable to use a whole library of GTScript / python files. The import mechanism makes it possible.
+For complex or mixed language usecases it might be desirable to use a whole library of GTScript / Python files. The import mechanism makes it possible.
 
 .. code-block:: bash
 
@@ -209,7 +209,7 @@ For complex or mixed language usecases it might be desirable to use a whole libr
            ├── __init__.py
            └── baz.gt.py
 
-Note that packages require an __init__.py which remains a valid python module (no `gt4py.gtscript` injection). However any python module inside
+Note that packages require an __init__.py which remains a valid Python module (no `gt4py.gtscript` injection). However any Python module inside
 the package can import from any GTScript file (including `gt4py.gtscript` members).
 
 .. code-block:: bash
@@ -224,10 +224,10 @@ Compiles all top-level stencil members of `stencils.gt.py`, whether they are def
 
 Compiles all top-level stencil members of `lib/__init__.py`.
 
-Usage from python
+Usage from Python
 +++++++++++++++++
 
-After adding the following to the top of a python module, any GTScript files in the PYTHONPATH can be imported as python modules:
+After adding the following to the top of a Python module, any GTScript files in the PYTHONPATH can be imported as Python modules:
 
 .. code-block:: python
 
@@ -273,9 +273,9 @@ The currently chosen route for this is to require a comment at the very start of
    # [GT] using-dsl: gtscript
 
 This will serve two purposes, first it will mark the file as being written in GTScript.
-Any name that in python can be accessed by `from gt4py.gtscript import *` will work when
-compiling with `gtpyc` but will be deemed undefined by the python interpreter.
-It is not planned to provide any means of informing python syntax checkers to consider
+Any name that in Python can be accessed by `from gt4py.gtscript import *` will work when
+compiling with `gtpyc` but will be deemed undefined by the Python interpreter.
+It is not planned to provide any means of informing Python syntax checkers to consider
 these names as defined.
 Secondly `gtpyc` can replace this line with an actual `import` line without changing line numbers
 for error messages.
@@ -297,7 +297,7 @@ After adoption of this GDP, the object returned by `mark_stencil` should also of
 Gtscript import system
 ++++++++++++++++++++++
 
-Gtscript files can import python modules and vice versa, after installing the GTScript import system (which can be done in a single line). `gtpyc` installs the import system and (by default) adds the parent directory of the input file to `sys.path`, the search path for python imports. This means python and GTScript modules and packages in the same folder as the input file are found by default, other than that imports behave as normal.
+Gtscript files can import Python modules and vice versa, after installing the GTScript import system (which can be done in a single line). `gtpyc` installs the import system and (by default) adds the parent directory of the input file to `sys.path`, the search path for Python imports. This means Python and GTScript modules and packages in the same folder as the input file are found by default, other than that imports behave as normal.
 The reference implementation for this is in `gt4py.gtsimport`, the public API consists of the `gt4py.gtsimport.install` function. The module docstring contains usage examples. The code can be found in the corresponding `draft PR <reference_impl_pr>`_.
 
 Passing externals
@@ -305,7 +305,7 @@ Passing externals
 
 There are two supported ways to configure values at compile / generate time.
 
- * By relative import of a python file, which may be automatically generated from a template.
+ * By relative import of a Python file, which may be automatically generated from a template.
    The latter could happen as part of a build system depending on build parameters. In this case
    the stencil definition can use the values without importing them from `__externals__`. If it does, however,
    the external value can be overriden on the command line using the following second option.
@@ -323,8 +323,8 @@ Implications for Tools (IDEs, Linters, etc)
 +++++++++++++++++++++++++++++++++++++++++++
 
 It has been remarked that it would be beneficial to use Python tools like linters, checkers, syntax highlighting etc. for `GTScript` files.
-This should work by default using the recommended `.gt.py` file extension. However it is natural that python tools will flag some code which is perfectly
-valid `GTScript` code as faulty python code. Most tools should expose configuration options to ignore or correctly consider such cases.
+This should work by default using the recommended `.gt.py` file extension. However it is natural that Python tools will flag some code which is perfectly
+valid `GTScript` code as faulty Python code. Most tools should expose configuration options to ignore or correctly consider such cases.
 These configuration options are very different from tool to tool and are documented for each tool separately. This GDP does not propose packaging any
 such configuration or even extensions for tools with `gt4py`.
 
@@ -352,7 +352,7 @@ Note that the following is a simple way to get most of the desired behaviour fro
       with computation(PARALLEL), interval(...):
          a = 1.
 
-Now IDEs will recognize `mystencils.py` as a python file and will highlight and check the syntax. Of course tools will be unable to import `mygts`, unless there is a way to
+Now IDEs will recognize `mystencils.py` as a Python file and will highlight and check the syntax. Of course tools will be unable to import `mygts`, unless there is a way to
 configure them to run `gt4py.gtsimport.install()` before trying to import.
 
 Related Work
@@ -398,7 +398,7 @@ option handling code from program logic, any attempt to do so consistently would
 lead to partially reinventing one of the more advanced frameworks like `click`_.
 
 The author of this GDP does believe the additional requirement of a small
-pure-python framework like `click`_ to be outweighed by the benefits.
+pure-Python framework like `click`_ to be outweighed by the benefits.
 
 Using plain `.py` extension in combination with the marker comment
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
