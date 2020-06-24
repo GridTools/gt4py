@@ -29,10 +29,10 @@ Further, some NumPy API calls cause one-sided changes to coupled host/device buf
 GT4Py storages (e.g. :code:`ExplicitlySyncedGPUStorage` class) which cannot be tracked reliably,
 resulting in validation errors which are hard to find and fix.
 
-The current implementation of GT4Py storages as :code:`ndarray` subclasses was needed to use storages
-transparently with third-party frameworks relying on NumPy :code:`ndarray` implementation details.
-Nowadays, however, most of the Python scientific ecosystem supports the more generic interface
-specified in the :emphasis:`NumPy Enhancement Proposal`
+The current implementation of GT4Py storages as :code:`ndarray` subclasses was needed to use
+storages transparently with third-party frameworks relying on NumPy :code:`ndarray` implementation
+details. Nowadays, however, most of the Python scientific ecosystem supports the more generic
+interface specified in the :emphasis:`NumPy Enhancement Proposal`
 `NEP18 <https://numpy.org/neps/nep-0018-array-function-protocol.html>`_, which allows the seamless
 integration of NumPy code with custom implementations of the NumPy API by means of
 `duck typing <https://en.wikipedia.org/wiki/Duck_typing>`_. Thus, reimplementing GT4Py storages
@@ -131,9 +131,9 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
           :code:`np.float64`.
 
         + :code:`shape: Sequence[int]`
-          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the shape
-          of the storage, that is, the full addressable space in the allocated memory buffer. (See also
-          Section :ref:`domain_and_halo`)
+          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the
+          shape of the storage, that is, the full addressable space in the allocated memory buffer.
+          (See also Section :ref:`domain_and_halo`)
 
         For common keyword-only arguments, please see below.
 
@@ -150,7 +150,8 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
           The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
           :code:`data.dtype`
 
-    The common keyword-only arguments can also be overridden. Please see below for their description.
+    The common keyword-only arguments can also be overridden. Please see below for their
+    description.
 
     Note that :code:`shape` is not a parameter and can not be overridden, implying that also the
     :code:`axes` can not be overridden.
@@ -165,9 +166,9 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
           :code:`np.float64`.
 
         + :code:`shape: Sequence[int]`
-          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the shape
-          of the storage, that is, the full addressable space in the allocated memory buffer. (See also
-          Section :ref:`domain_and_halo`)
+          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the
+          shape of the storage, that is, the full addressable space in the allocated memory buffer.
+          (See also Section :ref:`domain_and_halo`)
 
     For common keyword-only arguments, please see below.
 
@@ -184,7 +185,8 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
           The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
           :code:`data.dtype`
 
-    The common keyword-only arguments can also be overridden. Please see below for their description.
+    The common keyword-only arguments can also be overridden. Please see below for their
+    description.
 
     Note that :code:`shape` is not a parameter and can not be overridden, implying that also the
     :code:`axes` can not be overridden.
@@ -201,9 +203,9 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
         + :code:`fill_value: Number`. The number to which the storage is initialized.
 
         + :code:`shape: Sequence[int]`
-          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the shape
-          of the storage, that is, the full addressable space in the allocated memory buffer. (See also
-          Section :ref:`domain_and_halo`)
+          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the
+          shape of the storage, that is, the full addressable space in the allocated memory buffer.
+          (See also Section :ref:`domain_and_halo`)
 
     For common keyword-only arguments, please see below.
 
@@ -329,11 +331,11 @@ Additionally, these **optional** keyword-only parameters are accepted:
     Default values as indicated by the :code:`defaults` parameter may depend on the axes. E.g. if
     :code:`defaults` is any of the compiled GridTools backends, the default value is defined
     according to the semantic meaning of each dimension. For example for the :code:`"gtx86"`
-    backend, the layout is always IJK, meaning the smallest stride is in the 3rd dimension,
-    independently which dimension is the K dimension. On the other hand, we assume that if a storage
-    is created from an existing FORTRAN array, the first index has the smallest stride, irrespective
-    of its corresponding axis. I.e. the first index has the smallest stride in FORTRAN for both IJK
-    and KJI storages.
+    backend, the layout is always IJK, meaning the smallest stride is in the K dimension,
+    independently which index corresponds to the K dimension. On the other hand, we assume that if a
+    storage is created from an existing FORTRAN array, the first index has the smallest stride,
+    irrespective of its corresponding axis. I.e. the first index has the smallest stride in FORTRAN
+    for both IJK and KJI storages.
 
     ==================  ====================  ====================  ========================  =========================
      Default Layout     :code:`defaults="F"`  :code:`defaults="C"`  :code:`defaults="gtx86"`  :code:`defaults="gtcuda"`
@@ -415,8 +417,8 @@ NumPy Functions
 
 :code:`np.transpose`
     permutation of the axes. In addition to the parameters of :code:`np.transpose`, when applied to
-    :code:`ndarray`'s, :code:`axes` can be the usual strings to represent the :code:`axes` attribute of the resulting
-    storage. See also the :code:`reinterpret` method below.
+    :code:`ndarray`'s, :code:`axes` can be the usual strings to represent the :code:`axes` attribute
+    of the resulting storage. See also the :code:`reinterpret` method below.
 
 
 Attributes and Properties
@@ -545,8 +547,8 @@ Methods
         + :code:`key: index_like` Indicates the locations at which the values are to be changed. The
           same keys as for :code:`__setitem__` are supported.
 
-        + :code:`value: Union[Number, Storage, cp.ndarray, np.ndarray]` the values that are copied to
-          the storage at the locations indicated by :code:`key`.
+        + :code:`value: Union[Number, Storage, cp.ndarray, np.ndarray]` the values that are copied
+          to the storage at the locations indicated by :code:`key`.
 
 :code:`copy(self: Storage) -> Storage`
     Create a new Storage instance with the same parameters as this instance and a copy of the data.
@@ -664,8 +666,8 @@ missing axes when broadcasting.
 Output Storage Parameters
 =========================
 
-If no output buffer is provided, the constructor parameters of the output storage have to be inferred using the
-available information from the inputs.
+If no output buffer is provided, the constructor parameters of the output storage have to be
+inferred using the available information from the inputs.
 
 :code:`aligned_index`
     It is chosen to be as the largest value per dimension across all inputs which are a GT4Py
@@ -720,14 +722,15 @@ depending on
     :code:`SoftwareManagedGPUStorage` but are modified on CPU).
 
 We assume that mixing these in the same application is not a common case. Should it nevertheless
-appear, the object that handles the ufunc will determine the behavior. (Where each of the classes will treat the other as on GPU.)
+appear, the object that handles the ufunc will determine the behavior. (Where each of the classes
+will treat the other as on GPU.)
 
-For pure CPU storages, all inputs and output need to be compatible with `np.asarray`, for GPU storages with `cp.asarray`,
-otherwise an exception is raised.
+For pure CPU storages, all inputs and output need to be compatible with `np.asarray`, for GPU
+storages with `cp.asarray`, otherwise an exception is raised.
 
-:code:`CudaManagedGPUStorage` and :code:`SoftwareManagedGPUStorage` shall both have a :code:`__array_priority__` set to
-:code:`11`, while for :code:`CPUStorage` and :code:`GPUStorage` it is set to :code:`10`, meaning that managed storages
-have priority in handling these cases.
+:code:`CudaManagedGPUStorage` and :code:`SoftwareManagedGPUStorage` shall both have a
+:code:`__array_priority__` set to :code:`11`, while for :code:`CPUStorage` and :code:`GPUStorage` it
+is set to :code:`10`, meaning that managed storages have priority in handling these cases.
 
 Implementation
 --------------
@@ -763,12 +766,12 @@ Their purpose is as follows:
     It holds a reference to a `NumPy <https://numpy.org/>`_ :code:`ndarray`.
 
 :code:`GPUStorage`
-    Internally holds a reference to a `CuPy <https://cupy.chainer.org/>`_ `ndarray`. This storage does not have a CPU
-    buffer.
+    Internally holds a reference to a `CuPy <https://cupy.chainer.org/>`_ `ndarray`. This storage
+    does not have a CPU buffer.
 
 :code:`SoftwareManagedGPUStorage`
-    Internally holds a reference to both a `NumPy <https://numpy.org/>`_ and a `CuPy <https://cupy.chainer.org/>`_
-    :code:`ndarray`. Synchronization is taken care of by GT4Py.
+    Internally holds a reference to both a `NumPy <https://numpy.org/>`_ and a
+    `CuPy <https://cupy.chainer.org/>`_ :code:`ndarray`. Synchronization is taken care of by GT4Py.
 
 .. _sync_state:
 
