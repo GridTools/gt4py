@@ -44,8 +44,8 @@ by `from gt4py.gtscript import *`.
 
 In support of this, two more features are proposed:
 
- * A mechanism to allow GTScript files as if they were Python modules
- * A lazy variant or replacement of the `stencil` decorator, returning an object that supports
+* A mechanism to allow GTScript files as if they were Python modules
+* A lazy variant or replacement of the `stencil` decorator, returning an object that supports
    manual stepwise compilation.
 
 Limited Scope
@@ -272,13 +272,13 @@ this name, it is simply the first one that came to mind.
 
 Alternatives under consideration:
 
- * `gtscript` / `gtscriptc` (or short version `gts` / `gtsc`)  -> most intuitive file extension:
+* `gtscript` / `gtscriptc` (or short version `gts` / `gtsc`)  -> most intuitive file extension:
    `.gts` * same as above but prefixed with `py` -> most intuitive file extension: `.pygt` or
    `.pyg`
    
 Rejected Alternatives:
 
- * `gt4pyc`, the sequence "gt4" is all typed with the left index finger on a standard keyboard. The
+* `gt4pyc`, the sequence "gt4" is all typed with the left index finger on a standard keyboard. The
    author strongly feels that cli command names should start with an easy to type sequence
    (afterwards tab-completion can be used).
 
@@ -335,12 +335,12 @@ Passing externals
 
 There are two supported ways to configure values at compile / generate time.
 
- * By relative import of a Python file, which may be automatically generated from a template.  The
+* By relative import of a Python file, which may be automatically generated from a template.  The
    latter could happen as part of a build system depending on build parameters. In this case the
    stencil definition can use the values without importing them from `__externals__`. If it does,
    however, the external value can be overriden on the command line using the following second
    option.
- * By passing externals options on the command line. In this case the external will be passed to
+* By passing externals options on the command line. In this case the external will be passed to
    every stencil in this run of `gtpyc` and each stencil needs to import it from `__externals__` to
    use it.
 
@@ -396,9 +396,9 @@ Related Work
 
 CLIs of well-known compilers (Provide CLI conventions):
 
- * `clang`_
- * `gcc`_
- * `gfortran`_
+* `clang`_
+* `gcc`_
+* `gfortran`_
 
 Implementation
 --------------
@@ -416,10 +416,10 @@ limitations of `click`_ are foreseen to be detrimental to what this GDP wants to
 
 Reasons for choosing `click`_
 +++++++++++++++++++++++++++++
- * separation of concerns
- * ease of reuse of CLI components
- * built in command completion for bash, zsh etc
- * built-in testing api
+* separation of concerns
+* ease of reuse of CLI components
+* built in command completion for bash, zsh etc
+* built-in testing api
 
 
 Alternatives
