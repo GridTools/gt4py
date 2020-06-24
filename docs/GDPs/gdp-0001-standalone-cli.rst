@@ -32,7 +32,7 @@ allow full control over what bindings should be created if any, depending on wha
 
 A GTScript file denotes a file with a to-be-defined extension (suggestion: `.gt.py`), beginning with the line 
 
-..code-block:: python
+.. code-block:: python
 
    # [GT] using-dsl: gtscript 
    
@@ -104,6 +104,7 @@ Assume the following file structure:
 `stencils.gt.py` contains the GTScript code to be compiled to stencils. The contents might look something like the following example.
 
 .. code-block:: python
+   :caption: stencils.gt.py
 
    # [GT] using-dsl: gtscript
 
@@ -242,7 +243,7 @@ Detailed description
 --------------------
 
 Any description of design ideas and implementation refers to the
-`reference implementation <https://github.com/GridTools/gt4py/pull/23>`_.
+`reference implementation <reference_impl_pr>`_.
 This section will be updated as the reference implementation progresses.
 
 Naming
@@ -336,11 +337,13 @@ Note that the following is a simple way to get most of the desired behaviour fro
    ├── mystencils.py
    └── mygts.gt.py
 
-.. code-block: mygts.gt.py: python
+.. code-block:: python
+   :caption: mygts.gt.py
 
    # [GT] using-dsl: gtscript
 
-.. code-block: mystencils.py: python
+.. code-block:: python
+   :caption: mystencils.py
 
    from mygts import lazy_stencil, Field, computation, interval
 
@@ -398,7 +401,7 @@ The author of this GDP does believe the additional requirement of a small
 pure-python framework like `click`_ to be outweighed by the benefits.
 
 Using plain `.py` extension in combination with the marker comment
-++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 The author believes that the two types of files serve distinctly separate purposes.
 While both types can be passed into `gtpyc`, plain `.py` files should represent valid Python modules
