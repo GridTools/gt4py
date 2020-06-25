@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -182,7 +182,7 @@ def draw_from_strategies(draw, strategies):
     Parameters
     ----------
     draw : `function`
-        Hypothesis :function:`draw` implementation.
+        Hypothesis :func:`draw` implementation.
     strategies : `dict`
         Named strategies.
         - ``name``: Hypothesis strategy (`function`).

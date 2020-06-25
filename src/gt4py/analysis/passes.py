@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -258,7 +258,11 @@ class InitInfoPass(TransformPass):
         def visit_If(self, node: gt_ir.If):
             inputs = {}
             outputs = set()
-            for stmt in [*node.main_body.stmts, *node.else_body.stmts]:
+
+            stmts = list(node.main_body.stmts)
+            if node.else_body is not None:
+                stmts.extend(node.else_body.stmts)
+            for stmt in stmts:
                 stmt_info = self.visit(stmt)
                 inputs = self._merge_extents(list(inputs.items()) + list(stmt_info.inputs.items()))
                 outputs |= stmt_info.outputs
@@ -528,8 +532,11 @@ class MergeBlocksPass(TransformPass):
                             next(iter(candidate.intervals)).as_tuple(min_k_interval_sizes)
                             + extent[-2]
                         )
-                        for merged_interval in target.interval_blocks:
-                            if merged_interval.interval.overlaps(
+                        for merged_interval_block in target.interval_blocks:
+                            merged_interval = merged_interval_block.interval
+                            if merged_interval.as_tuple(
+                                min_k_interval_sizes
+                            ) != read_interval and merged_interval.overlaps(
                                 read_interval, min_k_interval_sizes
                             ):
                                 result = False

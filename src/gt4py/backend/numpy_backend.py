@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -223,20 +223,13 @@ class NumPySourceGenerator(PythonSourceGenerator):
     def _visit_branch_stmt(self, stmt):
         sources = []
         if isinstance(stmt, gt_ir.Assign):
-            condition = (
-                (
-                    "{np}.logical_and(".format(np=self.numpy_prefix)
-                    + ", ".join(
-                        [
-                            "__condition_{level}".format(level=i + 1)
-                            for i in range(self.conditions_depth)
-                        ]
-                    )
-                    + ")"
+            condition = "__condition_1"
+            for i in range(1, self.conditions_depth):
+                condition = "{np}.logical_and({outer_condition}, {inner_condition})".format(
+                    np=self.numpy_prefix,
+                    outer_condition=condition,
+                    inner_condition="__condition_{level}".format(level=i + 1),
                 )
-                if self.conditions_depth > 1
-                else "__condition_1"
-            )
 
             target = self.visit(stmt.target)
             value = self.visit(stmt.value)

@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -417,7 +417,7 @@ class AST2IRVisitor(ast.NodeVisitor):
     def __call__(self, ast_root: ast.AST):
         assert (
             isinstance(ast_root, ast.Module)
-            and ast_root._fields == ("body",)
+            and "body" in ast_root._fields
             and len(ast_root.body) == 1
             and isinstance(ast_root.body[0], ast.FunctionDef)
         )

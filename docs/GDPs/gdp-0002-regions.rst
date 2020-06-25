@@ -6,7 +6,8 @@ GDP 2 — Horizontal Iteration Specification
 :Status: Draft
 :Type: Feature
 :Created: 21-04-2020
-:Discussion PR: https://github.com/GridTools/gt4py/pull/24
+:Discussion PR: `https://github.com/GridTools/gt4py/pull/24 <discussion_pr>`_
+:Implementation: `https://github.com/GridTools/gt4py/pull/36 <impl_pr>`_
 
 
 Abstract

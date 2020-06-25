@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -77,6 +77,7 @@ class IRTransformer:
             axis_splitters_var=None,
             externals=definition_ir.externals,
             sources=definition_ir.sources,
+            docstring=definition_ir.docstring,
         )
         self.transform_data = TransformData(
             definition_ir=definition_ir, implementation_ir=implementation_ir, options=options

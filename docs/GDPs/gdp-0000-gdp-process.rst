@@ -69,12 +69,12 @@ suitable for a GDP. Posting to the `GT4Py Slack channel`_ is the best
 way to start.
 
 The proposal should be submitted as a draft GDP via a `GitHub pull request`_
-(PR) to the ``docs/GDPs`` directory with the name ``gdp-<n>.rst``
-where ``<n>`` is an appropriately assigned four-digit number (e.g.,
-``gdp-0000.rst``). The draft must use the :doc:`gdp-template` file.
-The GT4Py core developers may reject a draft GDP (and thus avoiding any
-discussion on the topic) if the draft GDP is considered as completely
-out of the scope of the project or if the PR does not follow the
+(PR) to the ``docs/GDPs`` directory with the name ``gdp-<n>-<name>.rst`` where
+``<n>`` is an appropriately assigned four-digit number and ``<name>`` is a short
+*kebab-case name* (e.g., ``gdp-0000-gdp-process.rst``). The draft must use the
+:doc:`gdp-template` file.  The GT4Py core developers may reject a draft GDP (and
+thus avoiding any discussion on the topic) if the draft GDP is considered as
+completely out of the scope of the project or if the PR does not follow the
 conventions documented here.
 
 Once the PR for the GDP is in place, a message should be posted to the
@@ -119,7 +119,8 @@ also be marked as ``Provisional``. This is short for "Provisionally Accepted",
 and indicates that the proposal has been accepted for inclusion in the GT4Py
 implementation, but additional user feedback is needed before the full
 design can be considered "Final". Unlike regular accepted GDPs, provisionally
-accepted GDPs may still be ``Declined`` even after the related changes have been included in a GT4Py release.
+accepted GDPs may still be ``Declined`` even after the related changes have
+been included in a GT4Py release.
 
 Wherever possible, it is considered preferable to reduce the scope of a
 proposal to avoid the need to rely on the ``Provisional`` status (e.g. by

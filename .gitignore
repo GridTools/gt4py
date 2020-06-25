@@ -56,6 +56,11 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+# type checkers
+.mypy_cache/
+.pytype
+.pyre
+
 # Flask stuff:
 instance/
 .webassets-cache
@@ -100,6 +105,3 @@ venv.bak/
 
 # mkdocs documentation
 /site
-
-# mypy
-.mypy_cache/

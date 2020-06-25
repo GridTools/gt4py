@@ -1,7 +1,102 @@
+default_language_version:
+    python: python3.6
 repos:
 -   repo: https://github.com/psf/black
     rev: stable
     hooks:
     - id: black
-      language_version: python3.6
 
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v0.780
+    hooks:
+    - id: mypy
+      exclude:
+          (?x)^(
+          docs/conf.py |
+          src/gt4py/analysis/infos.py |
+          src/gt4py/analysis/passes.py |
+          src/gt4py/analysis/transformer.py |
+          src/gt4py/backend/base_gt_backend.py |
+          src/gt4py/backend/debug_backend.py |
+          src/gt4py/backend/gt_cpu_backend.py |
+          src/gt4py/backend/gt_cuda_backend.py |
+          src/gt4py/backend/numpy_backend.py |
+          src/gt4py/backend/pyext_builder.py |
+          src/gt4py/backend/python_generator.py |
+          src/gt4py/frontend/gtscript_frontend.py |
+          src/gt4py/ir/nodes.py |
+          src/gt4py/ir/utils.py |
+          src/gt4py/stencil_object.py |
+          src/gt4py/utils/meta.py |
+          tests/_disabled/test_iir/test_validation.py |
+          tests/test_integration/stencil_definitions.py |
+          tests/test_integration/test_code_generation.py |
+          tests/test_unittest/test_call_interface.py |
+          tests/test_unittest/test_gtscript_frontend.py |
+          )$
+
+-   repo: https://gitlab.com/PyCQA/flake8
+    rev: 3.8.2
+    hooks:
+    - id: flake8
+      exclude: >
+          (?x)^(
+          setup.py |
+          src/gt4py/__gtscript__.py |
+          src/gt4py/__init__.py |
+          src/gt4py/definitions.py |
+          src/gt4py/gtscript.py |
+          src/gt4py/stencil_object.py |
+          src/gt4py/analysis/__init__.py |
+          src/gt4py/analysis/infos.py |
+          src/gt4py/analysis/passes.py |
+          src/gt4py/analysis/transformer.py |
+          src/gt4py/backend/__init__.py |
+          src/gt4py/backend/base_gt_backend.py |
+          src/gt4py/backend/debug_backend.py |
+          src/gt4py/backend/numpy_backend.py |
+          src/gt4py/backend/pyext_builder.py |
+          src/gt4py/backend/python_generator.py |
+          src/gt4py/frontend/__init__.py |
+          src/gt4py/frontend/gtscript_frontend.py |
+          src/gt4py/ir/__init__.py |
+          src/gt4py/ir/nodes.py |
+          src/gt4py/ir/utils.py |
+          src/gt4py/storage/__init__.py |
+          src/gt4py/storage/storage.py |
+          src/gt4py/storage/utils.py |
+          src/gt4py/testing/__init__.py |
+          src/gt4py/testing/input_strategies.py |
+          src/gt4py/testing/suites.py |
+          src/gt4py/testing/utils.py |
+          src/gt4py/utils/__init__.py |
+          src/gt4py/utils/base.py |
+          src/gt4py/utils/attrib.py |
+          src/gt4py/utils/meta.py |
+          tests/conftest.py |
+          tests/_disabled/test_iir/iir_stencil_definitions.py |
+          tests/_disabled/test_iir/test_code_generation.py |
+          tests/_disabled/test_iir/test_cpp_regression.py |
+          tests/_disabled/test_iir/test_validation.py |
+          tests/_disabled/test_iir/utils.py |
+          tests/_disabled/test_def_ir/test_cpp_regression.py |
+          tests/_disabled/test_def_ir/test_ir_transformation.py |
+          tests/_disabled/test_def_ir/def_ir_stencil_definitions.py |
+          tests/_disabled/test_def_ir/utils.py |
+          tests/test_integration/stencil_definitions.py |
+          tests/test_integration/test_code_generation.py |
+          tests/test_integration/test_cpp_regression.py |
+          tests/test_integration/test_suites.py |
+          tests/test_integration/utils.py |
+          tests/test_unittest/test_call_interface.py |
+          tests/test_unittest/test_gtscript_frontend.py |
+          tests/test_unittest/test_storage.py |
+          )$
+
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.1.0
+    hooks:
+        - id: check-json
+        - id: pretty-format-json
+        - id: check-toml
+        - id: check-yaml

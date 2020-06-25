@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -399,3 +399,80 @@ class TestDTypes:
                 module,
                 dtypes={"dtype": test_dtype},
             )
+
+
+class TestAssignmentSyntax:
+    def test_ellipsis(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                out_field[...] = in_field
+
+    def test_offset(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                out_field[0, 0, 0] = in_field
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError):
+
+            @gtscript.stencil(backend="debug")
+            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+                with computation(PARALLEL), interval(...):
+                    out_field[0, 0, 1] = in_field
+
+        @gtscript.stencil(backend="debug", externals={"offset": 0})
+        def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            from gt4py.__externals__ import offset
+
+            with computation(PARALLEL), interval(...):
+                out_field[0, 0, offset] = in_field
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError):
+
+            @gtscript.stencil(backend="debug", externals={"offset": 1})
+            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+                from gt4py.__externals__ import offset
+
+                with computation(PARALLEL), interval(...):
+                    out_field[0, 0, offset] = in_field
+
+    def test_slice(self):
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError):
+
+            @gtscript.stencil(backend="debug")
+            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+                with computation(PARALLEL), interval(...):
+                    out_field[:, :, :] = in_field
+
+    def test_string(self):
+        with pytest.raises(gt_frontend.GTScriptSyntaxError):
+
+            @gtscript.stencil(backend="debug")
+            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+                with computation(PARALLEL), interval(...):
+                    out_field["a_key"] = in_field
+
+    def test_temporary(self):
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="No subscript allowed in assignment to temporaries",
+        ):
+
+            @gtscript.stencil(backend="debug")
+            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+                with computation(PARALLEL), interval(...):
+                    tmp[...] = in_field
+                    out_field = tmp
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="No subscript allowed in assignment to temporaries",
+        ):
+
+            @gtscript.stencil(backend="debug")
+            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+                with computation(PARALLEL), interval(...):
+                    tmp[0, 0, 0] = 2 * in_field
+                    out_field = tmp

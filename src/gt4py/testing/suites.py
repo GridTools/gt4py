@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -317,8 +317,12 @@ class StencilTestSuite(metaclass=SuiteMeta):
         - ``label``: `list` of `dtype`.
         If this value is a `list`, it will be converted to a `dict` with the default
         `None` key assigned to its value. It is meant to be populated with labels representing
-         groups of symbols that should have the same type.
-        Example:    {
+        groups of symbols that should have the same type.
+        Example:
+
+        .. code-block:: python
+
+                    {
                         'float_symbols' : (np.float32, np.float64),
                         'int_symbols' : (int, np.int_, np.int64)
                     }
@@ -338,19 +342,19 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
     validation : `function`
         Stencil validation function. It should have exactly the same signature than
-        the ``definition`` function plus the extra ``_globals_``, ``_domain_``, and ``_origin_``
         arguments to access the actual values used in the current testing invocation.
-        It should always return a `list` of `numpy.ndarray`s, one per output, even if
+        the ``definition`` function plus the extra ``_globals_``, ``_domain_``, and ``_origin_``
+        It should always return a `list` of `numpy.ndarray` s, one per output, even if
         the function only defines one output value.
 
 
     Automatically generated class members are:
 
-    definition_strategies : `dict'
+    definition_strategies : `dict`
         Hypothesis strategies for the stencil parameters used at definition (externals)
         - ``constant_name``: Hypothesis strategy (`strategy`).
 
-    validation_strategies : `dict'
+    validation_strategies : `dict`
         Hypothesis strategies for the stencil parameters used at run-time (fields and parameters)
         - ``field_name``: Hypothesis strategy (`strategy`).
         - ``parameter_name``: Hypothesis strategy (`strategy`).
@@ -359,10 +363,10 @@ class StencilTestSuite(metaclass=SuiteMeta):
         Constant of dimensions (1-3). If the name of class ends in ["1D", "2D", "3D"],
         this attribute needs to match the name or an assertion error will be raised.
 
-    global_boundaries : 'dict'
+    global_boundaries : `dict`
         Expected global boundaries for the input fields.
         - ``field_name``: 'list' of ``ndim`` 'tuple`s  (``(lower_boundary, upper_boundary)``).
-            Example (3D): [(1, 3), (2, 2), (0, 0)]
+        Example (3D): `[(1, 3), (2, 2), (0, 0)]`
 
 
     """

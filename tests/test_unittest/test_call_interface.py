@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2019, ETH Zurich
+# Copyright (c) 2014-2020, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -425,3 +425,36 @@ def test_ndarray_warning():
             domain=np.asarray((20, 20, 10), dtype=np.int64),
         )
     assert len(record) == 0
+
+
+@pytest.mark.parametrize("backend", ["debug", "numpy", "gtx86"])
+def test_exec_info(backend):
+    """test that proper warnings are raised depending on field type."""
+    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
+
+    exec_info = {}
+    # test numpy int types are accepted
+    in_field = gt_storage.ones(
+        backend=backend,
+        shape=(np.int8(23), np.int16(23), np.int32(10)),
+        default_origin=(1, 1, 0),
+        dtype=np.float64,
+    )
+    out_field = gt_storage.zeros(
+        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+    )
+    stencil(
+        in_field=in_field,
+        out_field=out_field,
+        origin=(2, 2, 0),
+        domain=(20, 20, 10),
+        exec_info=exec_info,
+    )
+    timings = ["call", "call_run", "run"]
+    assert all([k + "_start_time" in exec_info for k in timings])
+    assert all([k + "_end_time" in exec_info for k in timings])
+    assert all([exec_info[k + "_end_time"] > exec_info[k + "_start_time"] for k in timings])
+    if backend.startswith("gt"):
+        assert "run_cpp_start_time" in exec_info
+        assert "run_cpp_end_time" in exec_info
+        assert exec_info["run_cpp_end_time"] > exec_info["run_cpp_start_time"]

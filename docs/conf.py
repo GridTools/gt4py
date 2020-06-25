@@ -27,7 +27,7 @@ full_version = get_distribution("gt4py").version
 # -- Project information -----------------------------------------------------
 
 project = "GT4Py"
-copyright = "2019, CSCS"
+copyright = "2014-2020, ETH Zurich"
 author = "ETH Zurich"
 
 # The short X.Y version

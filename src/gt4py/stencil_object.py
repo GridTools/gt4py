@@ -45,11 +45,11 @@ class StencilObject(abc.ABC):
     def __str__(self):
         result = """
 <StencilObject: {name}> [backend="{backend}"]
-    - I/O fields: {fields} 
-    - Parameters: {params} 
-    - Constants: {constants} 
+    - I/O fields: {fields}
+    - Parameters: {params}
+    - Constants: {constants}
     - Definition ({func}):
-{source} 
+{source}
         """.format(
             name=self.options["module"] + "." + self.options["name"],
             version=self._gt_id_,
@@ -278,3 +278,5 @@ class StencilObject(abc.ABC):
         self.run(
             _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
         )
+        if exec_info is not None:
+            exec_info["call_run_end_time"] = time.perf_counter()
