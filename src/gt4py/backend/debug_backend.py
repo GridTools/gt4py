@@ -56,6 +56,47 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
+    def _make_ij_loop_lines(self, parallel_interval, extent, axes_names):
+        lower_extent = extent.lower_indices
+        upper_extent = extent.upper_indices
+
+        # Create IJ for-loops
+        ij_loop_lines = []
+        if not parallel_interval:
+            for d in range(extent.ndims):
+                axis_name = axes_names[d]
+                if axis_name != seq_axis_name:
+                    i = d + 1
+                    start_expr = "{:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
+                    size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
+                    size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
+                    range_expr = "range({args})".format(
+                        args=", ".join(a for a in (start_expr, size_expr, "") if a)
+                    )
+                    ij_loop_lines.append(
+                        " " * self.indent_size * i
+                        + "for {ax} in {range_expr}:".format(ax=axis_name, range_expr=range_expr)
+                    )
+        else:
+            for d in range(2):
+                i = d + 1
+                axis_name = axes_names[d]
+                assert len(parallel_interval) == 2
+                size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
+                axis_bound = parallel_interval[d]
+                bounds = []
+                for interval in (axis_bound.start, axis_bound.end):
+                    expr = f"{size_expr}" if interval.level == gt_ir.LevelMarker.END else "0"
+                    expr += "{:+d}".format(interval.offset) if interval.offset != 0 else ""
+                    bounds.append(expr)
+                range_expr = "range({args})".format(args=", ".join(bounds))
+                ij_loop_lines.append(
+                    " " * self.indent_size * i
+                    + "for {ax} in {range_expr}:".format(ax=axis_name, range_expr=range_expr)
+                )
+
+        return ij_loop_lines
+
     def make_temporary_field(
         self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent
     ):
@@ -66,27 +107,8 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
     def make_stage_source(self, iteration_order: gt_ir.IterationOrder, regions: list):
         extent = self.block_info.extent
-        lower_extent = extent.lower_indices
-        upper_extent = extent.upper_indices
         seq_axis_name = self.impl_node.domain.sequential_axis.name
         axes_names = self.impl_node.domain.axes_names
-
-        # Create IJ for-loops
-        ij_loop_lines = []
-        for d in range(extent.ndims):
-            axis_name = axes_names[d]
-            if axis_name != seq_axis_name:
-                i = d + 1
-                start_expr = "{:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
-                size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
-                size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
-                range_expr = "range({args})".format(
-                    args=", ".join(a for a in (start_expr, size_expr, "") if a)
-                )
-                ij_loop_lines.append(
-                    " " * self.indent_size * i
-                    + "for {ax} in {range_expr}:".format(ax=axis_name, range_expr=range_expr)
-                )
 
         # Create K for-loop: computation body is split in different vertical regions
         source_lines = []
@@ -94,9 +116,11 @@ class DebugSourceGenerator(PythonSourceGenerator):
         if iteration_order == gt_ir.IterationOrder.BACKWARD:
             regions = reversed(regions)
 
-        for bounds, body_sources in regions:
-            region_lines = self._make_regional_computation(iteration_order, bounds)
+        for seq_bounds, parallel_interval, body_sources in regions:
+            region_lines = self._make_regional_computation(iteration_order, seq_bounds)
             source_lines.extend(region_lines)
+
+            ij_loop_lines = self._make_ij_loop_lines(parallel_interval, extent, axes_names)
             source_lines.extend(ij_loop_lines)
             source_lines.extend(
                 " " * self.indent_size * extent.ndims + line for line in body_sources
@@ -175,7 +199,7 @@ class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
         )
 
     def generate_module_members(self):
-        source = """       
+        source = """
 class _Accessor:
     def __init__(self, array, origin):
         self.array = array
@@ -184,7 +208,7 @@ class _Accessor:
     def _shift(self, index):
         return tuple(i + offset for i, offset in zip(index, self.origin))
 
-    def __getitem__(self, index):        
+    def __getitem__(self, index):
         return self.array[self._shift(index)]
 
     def __setitem__(self, index, value):

@@ -219,7 +219,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         self.block_info.symbols = set(node.local_symbols.keys())
         body_sources = self.visit(node.body)
 
-        return interval_definition, body_sources
+        return interval_definition, node.parallel_interval, body_sources
 
     def visit_Stage(self, node: gt_ir.Stage, *, iteration_order):
         # Initialize symbols for the generation of references in this stage
