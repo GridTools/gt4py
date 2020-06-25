@@ -19,30 +19,58 @@ import numpy as np
 import gt4py as gt
 from gt4py import gtscript
 from gt4py import ir as gt_ir
+from gt4py import definitions as gt_definitions
 from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
 from gt4py.definitions import Extent, StencilID
 
+import types
+from functools import wraps, partial
+
 REGISTRY = gt_utils.Registry()
 EXTERNALS_REGISTRY = gt_utils.Registry()
 
 
-def register(externals):
-    if callable(externals):
-        func = externals  # wacky hacky!
-        EXTERNALS_REGISTRY.setdefault(func.__name__, {})
-        REGISTRY.register(func.__name__, func)
-        return func
-    else:
+def register(func=None, *, externals=None, exclude_backends=None):
+    if func is None:
+        return partial(register, externals=externals, exclude_backends=exclude_backends)
 
-        def register_inner(arg_inner):
-            EXTERNALS_REGISTRY.register(arg_inner.__name__, externals)
-            REGISTRY.register(arg_inner.__name__, arg_inner)
-            return arg_inner
+    externals = externals if externals else {}
+    exclude_backends = exclude_backends if exclude_backends else []
 
-        return register_inner
+    EXTERNALS_REGISTRY.setdefault(func.__name__, externals)
+    REGISTRY.register(
+        func.__name__, types.SimpleNamespace(callable=func, exclude_backends=exclude_backends)
+    )
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+# def register(externals, exclude_backends=[]):
+#     if callable(externals):
+#         func = externals  # wacky hacky!
+#         EXTERNALS_REGISTRY.setdefault(func.__name__, {})
+#         REGISTRY.register(
+#             func.__name__, types.SimpleNamespace(callable=func, exclude_backends=exclude_backends)
+#         )
+#         return func
+#     else:
+
+#         def register_inner(arg_inner):
+#             EXTERNALS_REGISTRY.register(arg_inner.__name__, externals)
+#             REGISTRY.register(
+#                 arg_inner.__name__,
+#                 types.SimpleNamespace(callable=arg_inner, exclude_backends=exclude_backends),
+#             )
+#             return arg_inner
+
+#         return register_inner
 
 
 Field0D = gtscript.Field[np.float_, ()]
@@ -58,6 +86,19 @@ def copy_stencil(field_a: Field3D, field_b: Field3D):
 @register
 def copy_stencil_plus_one(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
+        field_b = field_a[0, 0, 0] + 1
+
+
+Interval = gt_definitions.Interval
+skip_edges_region = (
+    dict(start=(Interval.START, 1), stop=(Interval.STOP, -1)),
+    dict(start=(Interval.START, 1), stop=(Interval.STOP, -1)),
+)
+
+
+@register(exclude_backends=["gtx86", "gtmc", "gtcuda"])
+def copy_stencil_region(field_a: Field3D, field_b: Field3D):
+    with computation(PARALLEL), interval(...), region(skip_edges_region):
         field_b = field_a[0, 0, 0] + 1
 
 
