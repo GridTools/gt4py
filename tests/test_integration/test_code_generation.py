@@ -31,17 +31,20 @@ from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 
 @pytest.mark.parametrize(
     ["name", "backend"],
-    tuple(filter(
-        lambda name_backend: name_backend[1] not in stencil_definitions[name_backend[0]].exclude_backends,
-        itertools.product(
-            stencil_definitions.names,
-            [
-                name
-                for name in gt_backend.REGISTRY.names
-                if gt_backend.from_name(name).storage_info["device"] == "cpu"
-            ],
-        ),
-    )),
+    tuple(
+        filter(
+            lambda name_backend: name_backend[1]
+            not in stencil_definitions[name_backend[0]].exclude_backends,
+            itertools.product(
+                stencil_definitions.names,
+                [
+                    name
+                    for name in gt_backend.REGISTRY.names
+                    if gt_backend.from_name(name).storage_info["device"] == "cpu"
+                ],
+            ),
+        )
+    ),
 )
 def test_generation_cpu(name, backend):
     stencil_definition = stencil_definitions[name].callable

@@ -15,6 +15,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
+import types
+from functools import wraps, partial
 
 import gt4py as gt
 from gt4py import gtscript
@@ -25,9 +27,6 @@ from gt4py import backend as gt_backend
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
 from gt4py.definitions import Extent, StencilID
-
-import types
-from functools import wraps, partial
 
 REGISTRY = gt_utils.Registry()
 EXTERNALS_REGISTRY = gt_utils.Registry()
@@ -50,27 +49,6 @@ def register(func=None, *, externals=None, exclude_backends=None):
         return func(*args, **kwargs)
 
     return wrapper
-
-
-# def register(externals, exclude_backends=[]):
-#     if callable(externals):
-#         func = externals  # wacky hacky!
-#         EXTERNALS_REGISTRY.setdefault(func.__name__, {})
-#         REGISTRY.register(
-#             func.__name__, types.SimpleNamespace(callable=func, exclude_backends=exclude_backends)
-#         )
-#         return func
-#     else:
-
-#         def register_inner(arg_inner):
-#             EXTERNALS_REGISTRY.register(arg_inner.__name__, externals)
-#             REGISTRY.register(
-#                 arg_inner.__name__,
-#                 types.SimpleNamespace(callable=arg_inner, exclude_backends=exclude_backends),
-#             )
-#             return arg_inner
-
-#         return register_inner
 
 
 Field0D = gtscript.Field[np.float_, ()]
@@ -99,7 +77,7 @@ skip_edges_region = (
 @register(exclude_backends=["gtx86", "gtmc", "gtcuda"])
 def copy_stencil_region(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...), region(skip_edges_region):
-        field_b = field_a[0, 0, 0] + 1
+        field_b = field_a[0, 0, 0]
 
 
 @register
