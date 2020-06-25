@@ -10,7 +10,7 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
 
     environments = []
 
-    iteration_order = "KIJ"
+    iteration_order = "IKJ"
 
     # def _make_parallel_computation(self, node: gt_ir.ApplyBlock):
     #     map_range = OrderedDict(
@@ -109,6 +109,7 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 f"_K_loc+{mapped_shape[2]-1}"
                 # f"{k_shape}+({mapped_shape[2]-1})",
             )
+
             if is_array:
                 tmp_sdfg.add_array(
                     "IN_" + input,
@@ -315,19 +316,24 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 f"_K_loc+{mapped_shape[2]-1}"
                 # f"{k_shape}+({mapped_shape[2]-1})",
             )
-            tmp_sdfg.add_array(
-                "IN_" + input,
-                shape=tuple(
-                    m if var not in not_yet_mapped_vars | {variable} else f
-                    for var, m, f in zip("IJK", mapped_shape, full_shape)
+            if is_array:
+                tmp_sdfg.add_array(
+                    "IN_" + input,
+                    shape=tuple(
+                        m if var not in not_yet_mapped_vars | {variable} else f
+                        for var, m, f in zip("IJK", mapped_shape, full_shape)
+                    ),
+                    dtype=mapped_sdfg.arrays["IN_" + input].dtype,
+                    strides=mapped_sdfg.arrays["IN_" + input].strides,
+                    total_size=mapped_sdfg.arrays["IN_" + input].total_size,
+                    storage=dace.StorageType.Register,
                 )
-                if is_array
-                else "1",
-                dtype=mapped_sdfg.arrays["IN_" + input].dtype,
-                strides=mapped_sdfg.arrays["IN_" + input].strides,
-                total_size=mapped_sdfg.arrays["IN_" + input].total_size,
-                storage=dace.StorageType.Register,
-            )
+            else:
+                tmp_sdfg.add_scalar(
+                    "IN_" + input,
+                    dtype=mapped_sdfg.arrays["IN_" + input].dtype,
+                    storage=dace.StorageType.Register,
+                )
 
         for output in library_node.outputs:
             is_array = isinstance(mapped_sdfg.arrays["OUT_" + output], dace_data.Array)
@@ -371,19 +377,26 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 # f"{k_shape}+({mapped_shape[2]-1})",
             )
             if output not in tmp_sdfg.arrays:
-                tmp_sdfg.add_array(
-                    "OUT_" + output,
-                    shape=tuple(
-                        m if var not in not_yet_mapped_vars | {variable} else f
-                        for var, m, f in zip("IJK", mapped_shape, full_shape)
+                if is_array:
+                    tmp_sdfg.add_array(
+                        "OUT_" + output,
+                        shape=tuple(
+                            m if m in not_yet_mapped_vars else f
+                            for m, f in zip(mapped_shape, full_shape)
+                        )
+                        if isinstance(mapped_sdfg.arrays["OUT_" + output], dace_data.Array)
+                        else "1",
+                        dtype=mapped_sdfg.arrays["OUT_" + output].dtype,
+                        strides=mapped_sdfg.arrays["OUT_" + output].strides,
+                        total_size=mapped_sdfg.arrays["OUT_" + output].total_size,
+                        storage=dace.StorageType.Register,
                     )
-                    if is_array
-                    else "1",
-                    dtype=mapped_sdfg.arrays["OUT_" + output].dtype,
-                    strides=mapped_sdfg.arrays["OUT_" + output].strides,
-                    total_size=mapped_sdfg.arrays["OUT_" + output].total_size,
-                    storage=dace.StorageType.Register,
-                )
+                else:
+                    tmp_sdfg.add_scalar(
+                        "OUT_" + output,
+                        dtype=mapped_sdfg.arrays["OUT_" + output].dtype,
+                        storage=dace.StorageType.Register,
+                    )
 
         if library_node.iteration_order == gt_ir.IterationOrder.BACKWARD:
             tmp_sdfg.add_loop(
