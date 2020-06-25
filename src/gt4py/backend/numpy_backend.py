@@ -142,12 +142,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
                         start_expr += " + " + size_expr
                     start_expr += " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
                     start_expr += " {:+d}".format(interval.offset) if interval.offset != 0 else ""
-                    expr.append("{name}{marker}[{d}]{start}".format(
-                        name=node.name,
-                        marker=self.origin_marker,
-                        d=d,
-                        start=start_expr
-                    ))
+                    expr.append(
+                        "{name}{marker}[{d}]{start}".format(
+                            name=node.name, marker=self.origin_marker, d=d, start=start_expr
+                        )
+                    )
                 index.append("{}:{}".format(*expr))
 
         k_ax = self.domain.sequential_axis.name
