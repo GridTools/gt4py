@@ -1,8 +1,7 @@
 ### Custom ####
 _local_
 
-### GridTools ####
-src/gt4py/_external_src/gridtools
+### GT4Py ####
 .gt_cache/
 
 ### Python ###
