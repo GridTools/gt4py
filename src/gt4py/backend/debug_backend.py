@@ -56,7 +56,10 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
-    def _make_ij_loop_lines(self, parallel_interval, extent, axes_names):
+    def _make_ij_loop_lines(self, parallel_interval):
+        seq_axis_name = self.impl_node.domain.sequential_axis.name
+        axes_names = self.impl_node.domain.axes_names
+        extent = self.block_info.extent
         lower_extent = extent.lower_indices
         upper_extent = extent.upper_indices
 
@@ -107,8 +110,6 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
     def make_stage_source(self, iteration_order: gt_ir.IterationOrder, regions: list):
         extent = self.block_info.extent
-        seq_axis_name = self.impl_node.domain.sequential_axis.name
-        axes_names = self.impl_node.domain.axes_names
 
         # Create K for-loop: computation body is split in different vertical regions
         source_lines = []
@@ -120,7 +121,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
             region_lines = self._make_regional_computation(iteration_order, seq_bounds)
             source_lines.extend(region_lines)
 
-            ij_loop_lines = self._make_ij_loop_lines(parallel_interval, extent, axes_names)
+            ij_loop_lines = self._make_ij_loop_lines(parallel_interval)
             source_lines.extend(ij_loop_lines)
             source_lines.extend(
                 " " * self.indent_size * extent.ndims + line for line in body_sources
