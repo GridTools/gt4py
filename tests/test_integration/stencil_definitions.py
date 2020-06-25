@@ -44,11 +44,7 @@ def register(func=None, *, externals=None, exclude_backends=None):
         func.__name__, types.SimpleNamespace(callable=func, exclude_backends=exclude_backends)
     )
 
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    return wrapper
+    return func
 
 
 Field0D = gtscript.Field[np.float_, ()]
