@@ -272,6 +272,9 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         #     interval_definition = (None, None)
         interval_definition = self.visit(node.interval)
 
+        if node.parallel_interval is not None:
+            raise NotImplementedError("Parallel intervals are not yet supported by the GT backends")
+
         self.declared_symbols = set()
         self.apply_block_symbols = {**self.stage_symbols, **node.local_symbols}
         body_sources = self.visit(node.body)
