@@ -702,7 +702,7 @@ inferred using the available information from the inputs.
    The resulting dtype is determined by NumPy behavior.
 
 :code:`halo`
-    It is chosen s.t. the resulting domain is the intersection of all individual domains.
+    It is chosen such that the resulting domain is the intersection of all individual domains.
 
 :code:`layout`
     The layout is chosen as the layout of the first input argument which is a GT4Py Storage
