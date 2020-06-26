@@ -101,7 +101,7 @@ def stencil(
 ):
     """Generate an implementation of the stencil definition with the specified backend.
 
-    It can be used as a parameterized function decorator or as a regular function.
+    It can be used as a parametrized function decorator or as a regular function.
 
     Parameters
     ----------
