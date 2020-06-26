@@ -294,11 +294,15 @@ The definitions of the common parameters accepted by all the previous functions 
 Additionally, these **optional** keyword-only parameters are accepted:
 
 :code:`aligned_index: Sequence[int]`
-    The point to which the memory is aligned, defaults to the lower indices of the halo attribute.
+    The index of the grid point to which the memory is aligned. Note that this only partly takes the
+    role of the former :code:`default_origin` parameter, since part of the functionality is now
+    taken over by the :code:`halo` attribute.
 
-:code:`alignment: Optional[int]`
-    Indicates on a boundary of how many elements the point :code:`aligned_index` is aligned. It
-    defaults to :code:`1`, which indicates no alignment.
+:code:`alignment_size: Optional[int]`
+    The buffers are allocated such that :code:`mod(aligned_addr, alignment_size) == 0`, where
+    :code:`aligned_addr` is the memory address of the grid point denoted by :code:`aligned_index`.
+
+    It defaults to :code:`1`, which indicates no alignment.
 
 :code:`axes: str`
     Any permutation of a sub-sequence of the :code:`"IJK"` string indicating the spatial dimensions
@@ -320,8 +324,8 @@ Additionally, these **optional** keyword-only parameters are accepted:
     Sequence of length :code:`ndim` where each entry is either an :code:`int` or a 2-tuple
     of :code:`int` s. A sequence of integer numbers represent a symmetric halo with the specific
     size per dimension, while a sequence of 2-tuple specifies the start and end boundary sizes on
-    the respective dimension. It defaults to no halo, i.e. :code:`(0, 0, 0)`. (See also Section
-    :ref:`domain_and_halo`)
+    the respective dimension, which can be used to denote asymmetric halos. It defaults to no halo,
+    i.e. :code:`(0, 0, 0)`. (See also Section :ref:`domain_and_halo`)
 
 :code:`layout: Optional[str]`
     A length-3 string with the name of axes. The sequence indicates the order of strides in
@@ -391,9 +395,9 @@ Storage Domain and Halo
 Semantically, the :code:`halo` parameter is just a convenient marker for users to delimit the
 expected inner domain part. This separation is used to infer the compute domain when calling
 stencils, unless an origin and domain are explicitly specified. Further, the domain can be accessed
-in the storage through the :code:`domain` attribute of the storage. The result is again a storage
-with no halo, such that the index :code:`storage.domain[0, 0, 0]` refers to a corner of the inner
-domain denoted by the halo.
+in the storage through the :code:`domain_view` attribute of the storage. The result is again a
+storage but without the halo, such that the index :code:`storage.domain[0, 0, 0]` refers to a corner
+of the inner domain denoted by the halo.
 
 The halo can be changed after allocation by assigning to :code:`storage.halo` using the same values
 as in the :code:`halo` parameter above.
@@ -448,13 +452,18 @@ Attributes and Properties
     The *CUDA Array Interface* descriptor of this storage (only supported on instances with an
     actual GPU device buffer).
 
-:code:`alignment: int`
-    Alignment size value given at creation time
+:code:`alignment_size: int`
+    The value of :code:`alignment_size` which was given as a parameter in the storage creation
+    routine.
+
+    This indicates that the buffers were allocated such that
+    :code:`mod(aligned_addr, alignment_size) == 0`, where :code:`aligned_addr` is the memory address
+    of the grid point denoted by :code:`aligned_index`.
 
 :code:`aligned_index: Tuple[int]`
-    The index of the grid point to which the memory is aligned, given at creation time.
-    Note that this only partly takes the role of the former :code:`default_origin` parameter,
-    since part of the functionality is now taken over by the :code:`halo` attribute.
+    The index of the grid point to which the memory is aligned, based on the value which was given
+    at creation time. Note that this only partly takes the role of the former :code:`default_origin`
+    parameter, since part of the functionality is now taken over by the :code:`halo` attribute.
 
 :code:`axes: str`
     Domain axes represented in the current instance, e.g. :code:`"JI"` for a 2d field spanning
@@ -489,11 +498,11 @@ Attributes and Properties
     :code:`np.ndarray` instance backing the host memory buffer, :code:`None` otherwise.
 
 :code:`halo: Tuple[Tuple[int, int], ...]`
-    A n-dimensional tuple of 2-tuples of ints, in the same format as the halo parameter of the
-    construction functions. This property can be modified at run-time and therefore has a
-    corresponding setter, where values of the type :code:`Tuple[Union[int,Tuple[int, int]], ...]`
-    are accepted with the same meaning as for the :code:`halo` parameter of the storage creation
-    functions.
+    A tuple of length :code:`ndim` with entries which are 2-tuples of ints. Specifies the start and
+    end boundary sizes on the respective dimension. This property can be modified at run-time and
+    therefore has a corresponding setter, where values of the type
+    :code:`Tuple[Union[int,Tuple[int, int]], ...]` are accepted with the same meaning as for the
+    :code:`halo` parameter of the storage creation functions.
 
 :code:`nbytes: int`,
     Size of the buffer in bytes (excluding padding).
@@ -580,16 +589,16 @@ Methods
     meaning that e.g. the size in the K-dimension will change from 30 to 10 in the result.
 
 :code:`to_cupy(self: Storage) -> cp.ndarray`
-    Return a view of the underlying device buffer (CuPy :code:`ndarray`) if present or raise an
-    exception if this instance does not contain a device buffer.
+    Return a view of the underlying device buffer (CuPy :code:`ndarray`) if present or raise a
+    :code:`GTNoSuchBufferError` if this instance does not contain a device buffer.
 
 :code:`to_ndarray(self: Storage) -> Union[np.ndarray, cp.ndarray]`
     Return a view of the device buffer (CuPy :code:`ndarray`) if present or a view of the host
     buffer (NumPy :code:`ndarray`) otherwise.
 
 :code:`to_numpy(self: Storage) -> np.ndarray`
-    Return a view of the underlying host buffer (NumPy :code:`ndarray`) if present or raise an
-    exception if this instance does not contain a host buffer.
+    Return a view of the underlying host buffer (NumPy :code:`ndarray`) if present or raise a
+    :code:`GTNoSuchBufferError` if this instance does not contain a host buffer.
 
 The following methods are used to ensure that one-sided modifications to the host or device
 buffers of a storage instance are tracked properly when the synchronization is managed by GT4Py.
@@ -671,11 +680,6 @@ Similarly, fields of lower dimension are assigned to such of higher dimension by
 the missing axes. To keep compatibility with NumPy, dimensions of size 1 are treated like missing
 axes when broadcasting.
 
-Similarly, fields of lower dimension are assigned to such of higher dimension by broadcasting along
-the missing dimensions. To keep compatibility with NumPy, dimensions of size 1 are treated like
-missing axes when broadcasting.
-
-
 .. _output_storage_parameters:
 
 Output Storage Parameters
@@ -688,7 +692,7 @@ inferred using the available information from the inputs.
     It is chosen to be as the largest value per dimension across all inputs which are a GT4Py
     Storage.
 
-:code:`alignment`
+:code:`alignment_size`
    The resulting alignment is chosen as the least common multiple of the alignments of all inputs
    which are a GT4Py storage.
 
@@ -702,7 +706,9 @@ inferred using the available information from the inputs.
    The resulting dtype is determined by NumPy behavior.
 
 :code:`halo`
-    It is chosen such that the resulting domain is the intersection of all individual domains.
+    It is chosen such that the resulting inner domain, i.e. the part not in the halo, is the
+    intersection of all individual inner domains of the inputs. In other words, the resulting halo
+    is the maximum of all input halos per dimension and edge.
 
 :code:`layout`
     The layout is chosen as the layout of the first input argument which is a GT4Py Storage
