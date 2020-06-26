@@ -150,7 +150,6 @@ def stencil(
     Examples
     --------
         TODO
-
     """
 
     from gt4py import loader as gt_loader
