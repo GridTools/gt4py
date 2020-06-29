@@ -535,55 +535,51 @@ class SymbolsNameMapper(ASTTransformPass):
 map_symbol_names = SymbolsNameMapper.apply
 
 
-class InsideCall(ASTPass):
+class ReferencedInsideCall(ASTPass):
     @classmethod
     def apply(cls, func_or_source_or_ast, name_or_attribute, id_string):
+        """Returns True if a ast.Name or ast.Attribute are referenced within an ast.Call named id_string."""
         collector = cls(name_or_attribute, id_string)
         return collector(func_or_source_or_ast)
 
     def __init__(self, name_or_attribute, id_string):
         self.ctx = name_or_attribute.ctx
         if isinstance(name_or_attribute, ast.Name):
-            self.node_name = name_or_attribute.id
+            self.node_id = name_or_attribute.id
         elif isinstance(name_or_attribute, ast.Attribute):
-            self.node_name = name_or_attribute.attr
+            self.node_id = name_or_attribute.attr
         else:
             assert False, "name_or_attribute must be of type ast.Name or ast.Attribute"
         self.id_string = id_string
-        self.found_name = False
-        self.traverse_without_check = False
+        self.found = False
+        self.inside_call = False
 
     def __call__(self, func_or_source_or_ast):
         self.call = None
         super().__call__(func_or_source_or_ast)
-        return self.found_name
+        return self.found
 
     def visit_Call(self, node: ast.Call):
-        if self.traverse_without_check:
+        if self.inside_call and not self.found:
             self.generic_visit(node)
-        if isinstance(node.func, ast.Name) and node.func.id == self.id_string:
-            name_matches = True
-        elif isinstance(node.func, ast.Attribute) and node.func.attr == self.id_string:
-            name_matches = True
-        else:
-            name_matches = False
-        if name_matches and not self.found_name:
-            self.this_found_name = False
-            self.traverse_without_check = True
-            self.generic_visit(node)
-            self.traverse_without_check = False
-            self.found_name = self.found_name or self.this_found_name
+
+        elif not self.found:
+            call_id = getattr(node.func, "id", getattr(node.func, "attr", None))
+            if call_id == self.id_string:
+                self.inside_call = True
+                self.generic_visit(node)
+                self.inside_call = False
 
     def visit_Name(self, node: ast.Name):
-        if node.id == self.node_name and node.ctx == self.ctx:
-            self.this_found_name = True
+        if (node.id, node.ctx) == (self.node_id, self.ctx) and self.inside_call:
+            self.found = True
 
     def visit_Attribute(self, node: ast.Attribute):
-        if node.attr == self.node_name and node.ctx == self.ctx:
-            self.this_found_name = True
+        if (node.attr, node.ctx) == (self.node_id, self.ctx) and self.inside_call:
+            self.found = True
 
 
-referenced_inside_call = InsideCall.apply
+referenced_inside_call = ReferencedInsideCall.apply
 
 
 # def collect_caller_symbols(collect_globals=True):
