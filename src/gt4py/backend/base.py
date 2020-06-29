@@ -469,17 +469,16 @@ class BaseModuleGenerator(abc.ABC):
         self.options = options
         self.stencil_id = stencil_id
         self.definition_ir = definition_ir
+        self.implementation_ir = kwargs.get("implementation_ir", None)
 
         if module_info is None:
             # If a `module_info dict` is not explicitly provided by a subclass, it will be
             # generated from a `implementation_ir` object. If this is also not provided, the
             # internal analysis pipeline would be used as a fallback to generate both
-            self.implementation_ir = kwargs.get(
-                "implementation_ir", self._generate_implementation_ir()
-            )
-            self.module_info = kwargs.get("module_info", self._generate_module_info())
+            if self.implementation_ir is None:
+                self.implementation_ir = self._generate_implementation_ir()
+            self.module_info = self._generate_module_info()
         else:
-            self.implementation_ir = kwargs.get("implementation_ir", None)
             self.module_info = module_info
 
         module_info = self.module_info
