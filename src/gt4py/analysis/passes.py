@@ -895,18 +895,18 @@ class BuildIIRPass(TransformPass):
 
         return stage
 
-    # def _make_apply_block(self, interval_block):
-    #     # Body
-    #     stmts = []
-    #     for stmt_info in interval_block.stmts:
-    #         if not isinstance(stmt_info.stmt, gt_ir.Decl):
-    #             stmts.append(stmt_info.stmt)
-    #     body = gt_ir.BlockStmt(stmts=stmts)
-    #     result = gt_ir.ApplyBlock(
-    #         interval=self._make_axis_interval(interval_block.interval), body=body
-    #     )
+    def _make_apply_block(self, interval_block):
+        # Body
+        stmts = []
+        for stmt_info in interval_block.stmts:
+            if not isinstance(stmt_info.stmt, gt_ir.Decl):
+                stmts.append(stmt_info.stmt)
+        body = gt_ir.BlockStmt(stmts=stmts)
+        result = gt_ir.ApplyBlock(
+            interval=self._make_axis_interval(interval_block.interval), body=body
+        )
 
-    #     return result
+        return result
 
     def _make_accessor(self, name, extent, read_write: bool):
         assert name in self.data.symbols
