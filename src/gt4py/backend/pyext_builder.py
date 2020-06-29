@@ -20,6 +20,7 @@ import distutils
 import io
 import os
 import shutil
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import setuptools
 from setuptools.command.build_ext import build_ext
@@ -29,18 +30,67 @@ import pybind11
 from gt4py import config as gt_config
 
 
-def clean_build_flags(config_vars):
-    for key, value in config_vars.items():
-        if type(value) == str:
-            value = " " + value + " "
-            for s in value.split(" "):
-                if (
-                    s in ["-Wstrict-prototypes", "-DNDEBUG", "-pg"]
-                    or s.startswith("-O")
-                    or s.startswith("-g")
-                ):
-                    value = value.replace(" " + s + " ", " ")
-            config_vars[key] = " ".join(value.split())
+def get_gt_pyext_build_opts(
+    *, debug_mode: bool = False, add_profile_info: bool = False, uses_cuda: bool = False
+) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
+
+    include_dirs = [gt_config.build_settings["boost_include_path"]]
+    extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
+
+    extra_compile_args = dict(
+        cxx=[
+            "-std=c++14",
+            "-ftemplate-depth=800",
+            "-fvisibility=hidden",
+            "-fopenmp",
+            "-fPIC",
+            "-isystem{}".format(gt_config.build_settings["gt_include_path"]),
+            "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
+            "-DBOOST_PP_VARIADICS",
+            *extra_compile_args_from_config["cxx"],
+        ],
+        nvcc=[
+            "-std=c++14",
+            "-fvisibility=hidden",
+            "-fPIC",
+            "-isystem={}".format(gt_config.build_settings["gt_include_path"]),
+            "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
+            "-DBOOST_PP_VARIADICS",
+            "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
+            "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
+            "--expt-relaxed-constexpr",
+            "--compiler-options",
+            "--compiler-options",
+            *extra_compile_args_from_config["nvcc"],
+        ],
+    )
+    extra_link_args = ["-fopenmp", *gt_config.build_settings["extra_link_args"]]
+
+    mode_flags = ["-O0", "-ggdb"] if debug_mode else ["-O3", "-DNDEBUG"]
+    extra_compile_args["cxx"].extend(mode_flags)
+    extra_compile_args["nvcc"].extend(mode_flags)
+    extra_link_args.extend(mode_flags)
+
+    if add_profile_info:
+        profile_flags = ["-pg"]
+        extra_compile_args["cxx"].extend(profile_flags)
+        extra_compile_args["nvcc"].extend(profile_flags)
+        extra_link_args.extend(profile_flags)
+
+    if uses_cuda:
+        build_opts = dict(
+            include_dirs=include_dirs,
+            extra_compile_args=extra_compile_args,
+            extra_link_args=extra_link_args,
+        )
+    else:
+        build_opts = dict(
+            include_dirs=include_dirs,
+            extra_compile_args=extra_compile_args["cxx"],
+            extra_link_args=extra_link_args,
+        )
+
+    return build_opts
 
 
 def build_pybind_ext(
@@ -49,19 +99,19 @@ def build_pybind_ext(
     build_path: str,
     target_path: str,
     *,
-    include_dirs=None,
-    library_dirs=None,
-    libraries=None,
-    extra_compile_args=None,
-    extra_link_args=None,
-    build_ext_class=None,
-    verbose=False,
-    clean=False,
-):
+    include_dirs: Optional[List[str]] = None,
+    library_dirs: Optional[List[str]] = None,
+    libraries: Optional[List[str]] = None,
+    extra_compile_args: Optional[Union[List[str], Dict[str, List[str]]]] = None,
+    extra_link_args: Optional[List[str]] = None,
+    build_ext_class: Type = None,
+    verbose: bool = False,
+    clean: bool = False,
+) -> Tuple[str, str]:
 
     # Hack to remove warning about "-Wstrict-prototypes" not having effect in C++
     replaced_flags_backup = copy.deepcopy(distutils.sysconfig._config_vars)
-    clean_build_flags(distutils.sysconfig._config_vars)
+    _clean_build_flags(distutils.sysconfig._config_vars)
 
     include_dirs = include_dirs or []
     library_dirs = library_dirs or []
@@ -124,49 +174,27 @@ def build_pybind_ext(
     return module_name, dest_path
 
 
-def build_gtcpu_ext(
+def build_pybind_cuda_ext(
     name: str,
     sources: list,
     build_path: str,
     target_path: str,
     *,
+    include_dirs: Optional[List[str]] = None,
+    library_dirs: Optional[List[str]] = None,
+    libraries: Optional[List[str]] = None,
+    extra_compile_args: Optional[Union[List[str], Dict[str, List[str]]]] = None,
+    extra_link_args: Optional[List[str]] = None,
     verbose: bool = False,
     clean: bool = False,
-    debug_mode: bool = False,
-    add_profile_info: bool = False,
-    extra_include_dirs: list = None,
-):
-    include_dirs = [gt_config.build_settings["boost_include_path"]]
-    if extra_include_dirs:
-        include_dirs.extend(extra_include_dirs)
-    extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
-    if isinstance(extra_compile_args_from_config, dict):
-        extra_compile_args_from_config = extra_compile_args_from_config["cxx"]
+) -> Tuple[str, str]:
 
-    extra_compile_args = [
-        "-ftemplate-depth=2500",
-        "-std=c++14",
-        "-fvisibility=hidden",
-        "-fopenmp",
-        "-isystem{}".format(gt_config.build_settings["gt_include_path"]),
-        "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
-        *extra_compile_args_from_config,
-    ]
-    extra_link_args = ["-fopenmp", *gt_config.build_settings["extra_link_args"]]
-
-    if debug_mode:
-        debug_flags = ["-O0", "-ggdb"]
-        extra_compile_args.extend(debug_flags)
-        extra_link_args.extend(debug_flags)
-    else:
-        release_flags = ["-O3", "-DNDEBUG"]
-        extra_compile_args.extend(release_flags)
-        extra_link_args.extend(release_flags)
-
-    if add_profile_info:
-        profile_flags = ["-pg"]
-        extra_compile_args.extend(profile_flags)
-        extra_link_args.extend(profile_flags)
+    include_dirs = include_dirs or []
+    include_dirs.append(gt_config.build_settings["cuda_include_path"])
+    library_dirs = library_dirs or []
+    library_dirs.append(gt_config.build_settings["cuda_library_path"])
+    libraries = (libraries or []).append("cudart")
+    extra_compile_args = extra_compile_args or []
 
     return build_pybind_ext(
         name,
@@ -176,9 +204,26 @@ def build_gtcpu_ext(
         verbose=verbose,
         clean=clean,
         include_dirs=include_dirs,
+        library_dirs=library_dirs,
+        libraries=libraries,
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,
+        build_ext_class=CUDABuildExtension,
     )
+
+
+def _clean_build_flags(config_vars: Dict[str, str]) -> None:
+    for key, value in config_vars.items():
+        if type(value) == str:
+            value = " " + value + " "
+            for s in value.split(" "):
+                if (
+                    s in ["-Wstrict-prototypes", "-DNDEBUG", "-pg"]
+                    or s.startswith("-O")
+                    or s.startswith("-g")
+                ):
+                    value = value.replace(" " + s + " ", " ")
+            config_vars[key] = " ".join(value.split())
 
 
 class CUDABuildExtension(build_ext, object):
@@ -186,7 +231,7 @@ class CUDABuildExtension(build_ext, object):
     #   - https://github.com/pytorch/pytorch/torch/utils/cpp_extension.py
     #   - https://github.com/rmcgibbo/npcuda-example/blob/master/cython/setup.py
     #
-    def build_extensions(self):
+    def build_extensions(self) -> None:
         # Register .cu  source extensions
         self.compiler.src_extensions.append(".cu")
 
@@ -214,95 +259,3 @@ class CUDABuildExtension(build_ext, object):
         self.compiler._compile = nvcc_compile
         build_ext.build_extensions(self)
         self.compiler._compile = original_compile
-
-
-def build_gtcuda_ext(
-    name: str,
-    sources: list,
-    build_path: str,
-    target_path: str,
-    *,
-    verbose: bool = False,
-    clean: bool = False,
-    debug_mode: bool = False,
-    add_profile_info: bool = False,
-    extra_include_dirs: list = None,
-):
-    include_dirs = [
-        gt_config.build_settings["boost_include_path"],
-        gt_config.build_settings["cuda_include_path"],
-    ]
-    if extra_include_dirs:
-        include_dirs.extend(extra_include_dirs)
-
-    library_dirs = [gt_config.build_settings["cuda_library_path"]]
-    libraries = ["cudart"]
-
-    extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
-    if isinstance(extra_compile_args_from_config, dict):
-        cxx_extra_compile_args_from_config = extra_compile_args_from_config["cxx"]
-        nvcc_extra_compile_args_from_config = extra_compile_args_from_config["nvcc"]
-    else:
-        cxx_extra_compile_args_from_config = extra_compile_args_from_config
-        nvcc_extra_compile_args_from_config = extra_compile_args_from_config
-
-    extra_compile_args = {
-        "cxx": [
-            "-std=c++14",
-            "-fvisibility=hidden",
-            "-fopenmp",
-            "-isystem{}".format(gt_config.build_settings["gt_include_path"]),
-            "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
-            "-DBOOST_PP_VARIADICS",
-            "-fPIC",
-            *cxx_extra_compile_args_from_config,
-        ],
-        "nvcc": [
-            "-std=c++14",
-            "-isystem={}".format(gt_config.build_settings["gt_include_path"]),
-            "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
-            "-DBOOST_PP_VARIADICS",
-            "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
-            "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
-            "--expt-relaxed-constexpr",
-            "--compiler-options",
-            "-fPIC",
-            "--compiler-options",
-            "-fvisibility=hidden",
-            *nvcc_extra_compile_args_from_config,
-        ],
-    }
-
-    extra_link_args = [*gt_config.build_settings["extra_link_args"]]
-
-    if debug_mode:
-        debug_flags = ["-O0", "-ggdb"]
-        extra_compile_args["cxx"].extend(debug_flags)
-        extra_compile_args["nvcc"].extend(debug_flags)
-        extra_link_args.extend(debug_flags)
-    else:
-        release_flags = ["-O3", "-DNDEBUG"]
-        extra_compile_args["cxx"].extend(release_flags)
-        extra_compile_args["nvcc"].extend(release_flags)
-        extra_link_args.extend(release_flags)
-
-    if add_profile_info:
-        profile_flags = ["-pg"]
-        extra_compile_args["cxx"].extend(profile_flags)
-        extra_compile_args["nvcc"].extend(profile_flags)
-        extra_link_args.extend(profile_flags)
-
-    return build_pybind_ext(
-        name,
-        sources,
-        build_path,
-        target_path,
-        verbose=verbose,
-        clean=clean,
-        include_dirs=include_dirs,
-        library_dirs=library_dirs,
-        libraries=libraries,
-        extra_compile_args=extra_compile_args,
-        extra_link_args=extra_link_args,
-        build_ext_class=CUDABuildExtension,
-    )

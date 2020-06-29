@@ -19,7 +19,7 @@ import os
 
 import gt4py
 import gt4py.utils as gt_utils
-
+from gt4py.backend import pyext_builder
 
 GT4PY_INSTALLATION_PATH = os.path.dirname(inspect.getabsfile(gt4py))
 
@@ -27,16 +27,17 @@ EXTERNAL_SRC_PATH = os.path.join(GT4PY_INSTALLATION_PATH, "_external_src")
 
 
 def compile_reference():
-    from gt4py.backend.pyext_builder import build_gtcpu_ext
-
     current_dir = os.path.dirname(__file__)
-    reference_names = build_gtcpu_ext(
+    build_opts = pyext_builder.get_gt_pyext_build_opts()
+    build_opts["include_dirs"].append(EXTERNAL_SRC_PATH)
+
+    reference_names = pyext_builder.build_pybind_ext(
         "reference_cpp_regression",
         [os.path.join(current_dir, "reference.cpp")],
         os.path.join(current_dir, "build"),
         current_dir,
         verbose=False,
         clean=False,
-        extra_include_dirs=[EXTERNAL_SRC_PATH],
+        **build_opts
     )
     return gt_utils.make_module_from_file(*reference_names)

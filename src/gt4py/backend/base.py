@@ -22,7 +22,7 @@ import os
 import pickle
 import sys
 import types
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, ClassVar, Dict, Optional, Tuple, Type
 
 import jinja2
 
@@ -41,7 +41,7 @@ def from_name(name: str):
     return REGISTRY.get(name, None)
 
 
-def register(backend_cls):
+def register(backend_cls: Type["Backend"]):
     assert issubclass(backend_cls, Backend) and backend_cls.name is not None
 
     if isinstance(backend_cls.name, str):
@@ -57,14 +57,14 @@ def register(backend_cls):
 
 class Backend(abc.ABC):
     #: Backend name: str
-    name = None
+    name: ClassVar[Optional[str]] = None
 
     #: Backend-specific options:
     #:  Dict[name: str, info: Dict[str, Any]]]
     #:      + info:
     #:          - versioning: bool
     #:          - description [optional]: str
-    options = None
+    options: ClassVar[Optional[Dict[str, Any]]] = None
 
     #: Backend-specific storage parametrization: Dict[str, Any]
     #:  - "alignment": int (in bytes)
@@ -72,10 +72,10 @@ class Backend(abc.ABC):
     #:  - "layout_map": Tuple[bool] -> Tuple[Union[int, None]]
     #:  - "is_compatible_layout": StorageLikeInstance -> bool
     #:  - "is_compatible_type": StorageLikeInstance -> bool
-    storage_info = None
+    storage_info: ClassVar[Optional[Dict[str, Any]]] = None
 
     @classmethod
-    def get_options_id(cls, options: gt_definitions.BuildOptions):
+    def get_options_id(cls, options: gt_definitions.BuildOptions) -> str:
         filtered_options = copy.deepcopy(options)
         id_names = set(name for name, info in cls.options.items() if info["versioning"])
         non_id_names = set(filtered_options.backend_opts.keys()) - id_names
@@ -111,7 +111,7 @@ class BaseBackend(Backend):
     MODULE_GENERATOR_CLASS = None
 
     @classmethod
-    def get_stencil_package_name(cls, stencil_id: gt_definitions.StencilID):
+    def get_stencil_package_name(cls, stencil_id: gt_definitions.StencilID) -> str:
         components = stencil_id.qualified_name.split(".")
         package_name = ".".join([gt_config.code_settings["root_package_name"]] + components[:-1])
         return package_name
@@ -126,7 +126,7 @@ class BaseBackend(Backend):
         return module_name
 
     @classmethod
-    def get_stencil_class_name(cls, stencil_id: gt_definitions.StencilID):
+    def get_stencil_class_name(cls, stencil_id: gt_definitions.StencilID) -> str:
         components = stencil_id.qualified_name.split(".")
         class_name = "{name}__{backend}_{id}".format(
             name=components[-1], backend=gt_utils.slugify(cls.name), id=stencil_id.version
@@ -134,7 +134,7 @@ class BaseBackend(Backend):
         return class_name
 
     @classmethod
-    def get_base_path(cls):
+    def get_base_path(cls) -> str:
         # Initialize cache folder
         cache_root = os.path.join(
             gt_config.cache_settings["root_path"], gt_config.cache_settings["dir_name"]
@@ -149,13 +149,13 @@ class BaseBackend(Backend):
         return base_path
 
     @classmethod
-    def get_stencil_package_path(cls, stencil_id: gt_definitions.StencilID):
+    def get_stencil_package_path(cls, stencil_id: gt_definitions.StencilID) -> str:
         components = stencil_id.qualified_name.split(".")
         path = os.path.join(cls.get_base_path(), *components[:-1])
         return path
 
     @classmethod
-    def get_stencil_module_path(cls, stencil_id: gt_definitions.StencilID):
+    def get_stencil_module_path(cls, stencil_id: gt_definitions.StencilID) -> str:
         components = stencil_id.qualified_name.split(".")
         path = os.path.join(
             cls.get_base_path(), *components[:-1], cls.get_stencil_module_name(stencil_id) + ".py"
@@ -163,14 +163,15 @@ class BaseBackend(Backend):
         return path
 
     @classmethod
-    def get_cache_info_path(cls, stencil_id: gt_definitions.StencilID):
+    def get_cache_info_path(cls, stencil_id: gt_definitions.StencilID) -> str:
         path = str(cls.get_stencil_module_path(stencil_id))[:-3] + ".cacheinfo"
         return path
 
     @classmethod
     def generate_cache_info(
         cls, stencil_id: gt_definitions.StencilID, extra_cache_info: Dict[str, Any]
-    ):
+    ) -> str:
+
         module_file_name = cls.get_stencil_module_path(stencil_id)
         with open(module_file_name, "r") as f:
             source = f.read()
@@ -186,7 +187,10 @@ class BaseBackend(Backend):
         return cache_info
 
     @classmethod
-    def update_cache(cls, stencil_id: gt_definitions.StencilID, extra_cache_info: Dict[str, Any]):
+    def update_cache(
+        cls, stencil_id: gt_definitions.StencilID, extra_cache_info: Dict[str, Any]
+    ) -> None:
+
         cache_info = cls.generate_cache_info(stencil_id, extra_cache_info)
         cache_file_name = cls.get_cache_info_path(stencil_id)
         os.makedirs(os.path.dirname(cache_file_name), exist_ok=True)
@@ -200,7 +204,8 @@ class BaseBackend(Backend):
         cache_info: Dict[str, Any],
         *,
         validate_hash: bool = True,
-    ):
+    ) -> bool:
+
         result = True
         try:
             cache_info = types.SimpleNamespace(**cache_info)
@@ -224,7 +229,9 @@ class BaseBackend(Backend):
         return result
 
     @classmethod
-    def check_cache(cls, stencil_id: gt_definitions.StencilID, *, validate_hash: bool = True):
+    def check_cache(
+        cls, stencil_id: gt_definitions.StencilID, *, validate_hash: bool = True
+    ) -> bool:
         try:
             cache_file_name = cls.get_cache_info_path(stencil_id)
             with open(cache_file_name, "rb") as f:
@@ -238,7 +245,7 @@ class BaseBackend(Backend):
         return result
 
     @classmethod
-    def _check_options(cls, options: gt_definitions.BuildOptions):
+    def _check_options(cls, options: gt_definitions.BuildOptions) -> None:
         assert cls.options is not None
         unknown_options = set(options.backend_opts.keys()) - set(cls.options.keys())
         if unknown_options:
@@ -310,17 +317,19 @@ class BaseBackend(Backend):
 
 class BasePyExtBackend(BaseBackend):
     @classmethod
-    def get_pyext_module_name(cls, stencil_id: gt_definitions.StencilID, *, qualified=False):
+    def get_pyext_module_name(
+        cls, stencil_id: gt_definitions.StencilID, *, qualified=False
+    ) -> str:
         module_name = cls.get_stencil_module_name(stencil_id, qualified=qualified) + "_pyext"
         return module_name
 
     @classmethod
-    def get_pyext_class_name(cls, stencil_id: gt_definitions.StencilID):
+    def get_pyext_class_name(cls, stencil_id: gt_definitions.StencilID) -> str:
         module_name = cls.get_stencil_class_name(stencil_id) + "_pyext"
         return module_name
 
     @classmethod
-    def get_pyext_build_path(cls, stencil_id: gt_definitions.StencilID):
+    def get_pyext_build_path(cls, stencil_id: gt_definitions.StencilID) -> str:
         path = os.path.join(
             cls.get_stencil_package_path(stencil_id),
             cls.get_pyext_module_name(stencil_id) + "_BUILD",
@@ -331,7 +340,7 @@ class BasePyExtBackend(BaseBackend):
     @classmethod
     def generate_cache_info(
         cls, stencil_id: gt_definitions.StencilID, extra_cache_info: Dict[str, Any]
-    ):
+    ) -> Dict[str, Any]:
         cache_info = super(BasePyExtBackend, cls).generate_cache_info(stencil_id, {})
 
         cache_info["pyext_file_path"] = extra_cache_info["pyext_file_path"]
@@ -348,7 +357,7 @@ class BasePyExtBackend(BaseBackend):
         cache_info: Dict[str, Any],
         *,
         validate_hash: bool = True,
-    ):
+    ) -> bool:
         result = True
         try:
             assert super(BasePyExtBackend, cls).validate_cache_info(
@@ -370,9 +379,8 @@ class BasePyExtBackend(BaseBackend):
         pyext_sources: Dict[str, str],
         pyext_build_opts: Dict[str, str],
         *,
-        pyext_extra_include_dirs: List[str] = None,
         uses_cuda: bool = False,
-    ):
+    ) -> Tuple[str, str]:
 
         # Build extension module
         pyext_build_path = os.path.relpath(cls.get_pyext_build_path(stencil_id))
@@ -392,21 +400,19 @@ class BasePyExtBackend(BaseBackend):
         qualified_pyext_name = cls.get_pyext_module_name(stencil_id, qualified=True)
 
         if uses_cuda:
-            module_name, file_path = pyext_builder.build_gtcuda_ext(
+            module_name, file_path = pyext_builder.build_pybind_cuda_ext(
                 qualified_pyext_name,
                 sources=sources,
                 build_path=pyext_build_path,
                 target_path=pyext_target_path,
-                extra_include_dirs=pyext_extra_include_dirs,
                 **pyext_build_opts,
             )
         else:
-            module_name, file_path = pyext_builder.build_gtcpu_ext(
+            module_name, file_path = pyext_builder.build_pybind_cuda_ext(
                 qualified_pyext_name,
                 sources=sources,
                 build_path=pyext_build_path,
                 target_path=pyext_target_path,
-                extra_include_dirs=pyext_extra_include_dirs,
                 **pyext_build_opts,
             )
         assert module_name == qualified_pyext_name
@@ -445,35 +451,34 @@ class BaseModuleGenerator(abc.ABC):
             self.template = jinja2.Template(f.read())
 
         self.implementation_ir = None
-        self.wrapper_info = None
+        self.module_info = None
 
     def __call__(
         self,
         stencil_id: gt_definitions.StencilID,
         definition_ir: gt_ir.StencilDefinition,
         options: gt_definitions.BuildOptions,
+        module_info: Optional[Dict[str, Any]] = None,
         **kwargs,
-    ):
+    ) -> str:
+
         self.options = options
         self.stencil_id = stencil_id
         self.definition_ir = definition_ir
 
-        # IIR is generated by default using the internal analysis pipeline,
-        # but if a backend uses its own pipeline it can pass it explicitly to
-        # the module generator using kwargs
-        self.implementation_ir = (
-            kwargs["implementation_ir"]
-            if "implementation_ir" in kwargs
-            else self._generate_implementation_ir()
-        )
-        # By default the wrapper_info is generated from the IIR, but
-        # if a backend generates it using other mechanisms it can pass it
-        # explicitly to the module generator using kwargs
-        self.wrapper_info = (
-            kwargs["wrapper_info"] if "wrapper_info" in kwargs else self._generate_wrapper_info()
-        )
+        if module_info is None:
+            # If a `module_info dict` is not explicitly provided by a subclass, it will be generated
+            # from a `implementation_ir` object. If this is also not provided, the internal analysis
+            # pipeline would be used as a fallback to generate both
+            self.implementation_ir = kwargs.get(
+                "implementation_ir", self._generate_implementation_ir()
+            )
+            self.module_info = kwargs.get("module_info", self._generate_module_info())
+        else:
+            self.implementation_ir = kwargs.get("implementation_ir", None)
+            self.module_info = module_info
 
-        wrapper_info = self.wrapper_info
+        module_info = self.module_info
         stencil_signature = self.generate_signature()
         imports = self.generate_imports()
         module_members = self.generate_module_members()
@@ -487,17 +492,17 @@ class BaseModuleGenerator(abc.ABC):
             module_members=module_members,
             class_name=self.stencil_class_name,
             class_members=class_members,
-            docstring=wrapper_info["docstring"],
+            docstring=module_info["docstring"],
             gt_backend=self.backend_name,
-            gt_source=wrapper_info["sources"],
-            gt_domain_info=wrapper_info["domain_info"],
-            gt_field_info=repr(wrapper_info["field_info"]),
-            gt_parameter_info=repr(wrapper_info["parameter_info"]),
-            gt_constants=wrapper_info["gt_constants"],
-            gt_options=wrapper_info["gt_options"],
+            gt_source=module_info["sources"],
+            gt_domain_info=module_info["domain_info"],
+            gt_field_info=repr(module_info["field_info"]),
+            gt_parameter_info=repr(module_info["parameter_info"]),
+            gt_constants=module_info["gt_constants"],
+            gt_options=module_info["gt_options"],
             stencil_signature=stencil_signature,
-            field_names=wrapper_info["field_info"].keys(),
-            param_names=wrapper_info["parameter_info"].keys(),
+            field_names=module_info["field_info"].keys(),
+            param_names=module_info["parameter_info"].keys(),
             pre_run=pre_run,
             post_run=post_run,
             implementation=implementation,
@@ -520,7 +525,7 @@ class BaseModuleGenerator(abc.ABC):
         implementation_ir = gt_analysis.transform(self.definition_ir, self.options)
         return implementation_ir
 
-    def _generate_wrapper_info(self) -> Dict[str, Any]:
+    def _generate_module_info(self) -> Dict[str, Any]:
         info = {}
         implementation_ir = self.implementation_ir
 
@@ -663,7 +668,8 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         definition_ir: gt_ir.StencilDefinition,
         options: gt_definitions.BuildOptions,
         **kwargs,
-    ):
+    ) -> str:
+
         self.pyext_module_name = kwargs["pyext_module_name"]
         self.pyext_file_path = kwargs["pyext_file_path"]
         return super().__call__(stencil_id, definition_ir, options, **kwargs)
@@ -685,7 +691,7 @@ pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_fil
         args = []
         api_fields = set(field.name for field in self.definition_ir.api_fields)
         for arg in self.definition_ir.api_signature:
-            if arg.name not in self.wrapper_info["unreferenced"]:
+            if arg.name not in self.module_info["unreferenced"]:
                 args.append(arg.name)
                 if arg.name in api_fields:
                     args.append("list(_origin_['{}'])".format(arg.name))

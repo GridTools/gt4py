@@ -29,6 +29,7 @@ from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
+from . import pyext_builder
 
 
 def make_x86_layout_map(mask):
@@ -544,8 +545,11 @@ class BaseGTBackend(gt_backend.BasePyExtBackend):
         pyext_opts = dict(
             verbose=options.backend_opts.get("verbose", False),
             clean=options.backend_opts.get("clean", False),
-            debug_mode=options.backend_opts.get("debug_mode", False),
-            add_profile_info=options.backend_opts.get("add_profile_info", False),
+            **pyext_builder.get_gt_pyext_build_opts(
+                debug_mode=options.backend_opts.get("debug_mode", False),
+                add_profile_info=options.backend_opts.get("add_profile_info", False),
+                uses_cuda=uses_cuda,
+            ),
         )
 
         return cls.build_extension_module(
