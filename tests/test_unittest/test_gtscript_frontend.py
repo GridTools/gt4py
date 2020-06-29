@@ -479,7 +479,7 @@ class TestAssignmentSyntax:
 
 
 class TestRegion:
-    def test_region_parsing(self):
+    def test_parsing(self):
         module = f"TestRegion_test_region_parsing_{id_version}"
         externals = {}
 
