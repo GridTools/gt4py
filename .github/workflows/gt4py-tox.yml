@@ -39,4 +39,4 @@ jobs:
         pyversion_no_dot="${{ matrix.python-version }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
         pip install tox
-        tox -r -e py${pyversion_no_dot}-dawn-cpu
+        tox -r -e py${pyversion_no_dot}-cpu
