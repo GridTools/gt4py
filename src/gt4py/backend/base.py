@@ -467,9 +467,9 @@ class BaseModuleGenerator(abc.ABC):
         self.definition_ir = definition_ir
 
         if module_info is None:
-            # If a `module_info dict` is not explicitly provided by a subclass, it will be generated
-            # from a `implementation_ir` object. If this is also not provided, the internal analysis
-            # pipeline would be used as a fallback to generate both
+            # If a `module_info dict` is not explicitly provided by a subclass, it will be
+            # generated from a `implementation_ir` object. If this is also not provided, the
+            # internal analysis pipeline would be used as a fallback to generate both
             self.implementation_ir = kwargs.get(
                 "implementation_ir", self._generate_implementation_ir()
             )
@@ -679,7 +679,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
 from gt4py import utils as gt_utils
 
 pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_file_path}", public_import=True)
-        """.format(
+        """.format(  # noqa: E501
             pyext_module_name=self.pyext_module_name, pyext_file_path=self.pyext_file_path
         )
 

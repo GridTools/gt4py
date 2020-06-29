@@ -24,7 +24,6 @@ import types
 
 from gt4py import backend as gt_backend
 from gt4py import frontend as gt_frontend
-from gt4py.stencil_object import StencilObject
 
 
 def load_stencil(frontend_name, backend_name, definition_func, externals, build_options):

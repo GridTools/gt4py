@@ -38,6 +38,6 @@ def compile_reference():
         current_dir,
         verbose=False,
         clean=False,
-        **build_opts
+        **build_opts,
     )
     return gt_utils.make_module_from_file(*reference_names)

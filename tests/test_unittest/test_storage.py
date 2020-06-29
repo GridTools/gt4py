@@ -20,6 +20,7 @@ import hypothesis as hyp
 import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
+
 try:
     import cupy as cp
 except ImportError:
