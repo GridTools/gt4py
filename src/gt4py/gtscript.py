@@ -88,9 +88,6 @@ def function(func):
     return func
 
 
-__DEV_OPTS_KEYS = ["code-generation", "cache-validation"]
-
-
 # Interface functions
 def stencil(
     backend,
@@ -101,7 +98,6 @@ def stencil(
     externals=None,
     name=None,
     rebuild=False,
-    _dev_opts=None,
     **kwargs,
 ):
     f"""Generate an implementation of the stencil definition with the specified backend.
@@ -134,10 +130,6 @@ def stencil(
         rebuild : `bool`, optional
             Force rebuild of the :class:`gt4py.StencilObject` even if it is
             found in the cache. (`False` by default).
-
-        _dev_opts : `dict`[`str`, `bool`], optional
-            Switch on/off different parts of the pipeline. Everything is turned on
-            by default. Keys: {__DEV_OPTS_KEYS} (`None` by default).
 
         **kwargs: `dict`, optional
             Extra backend-specific options. Check the specific backend
@@ -172,11 +164,6 @@ def stencil(
         raise ValueError(f"Invalid 'name' string ('{name}')")
     if not isinstance(rebuild, bool):
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
-    if _dev_opts is not None:
-        if not isinstance(_dev_opts, dict) or (
-            isinstance(_dev_opts, dict) and not set(_dev_opts.keys()) <= set(__DEV_OPTS_KEYS)
-        ):
-            raise ValueError(f"Invalid '_dev_opts' dictionary ('{_dev_opts}')")
 
     module = None
     if name:
@@ -189,13 +176,21 @@ def stencil(
         module or inspect.currentframe().f_back.f_globals["__name__"]
     )  # definition_func.__globals__["__name__"] ??,
 
+    # Move hidden "_option" keys to _impl_opts
+    _impl_opts = {}
+    for key, value in kwargs.items():
+        if key.startswith("_"):
+            _impl_opts[key] = value
+    for key in _impl_opts:
+        kwargs.pop(key)
+
     build_options = gt_definitions.BuildOptions(
         name=name,
         module=module,
         rebuild=rebuild,
-        dev_opts=_dev_opts or {},
         backend_opts=kwargs,
         build_info=build_info,
+        impl_opts=_impl_opts,
     )
 
     def _decorator(definition_func):

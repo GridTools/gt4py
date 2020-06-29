@@ -74,6 +74,10 @@ class Backend(abc.ABC):
     #:  - "is_compatible_type": StorageLikeInstance -> bool
     storage_info: ClassVar[Optional[Dict[str, Any]]] = None
 
+    # __impl_opts:
+    #   "disable-code-generation": bool
+    #   "disable-cache-validation": bool
+
     @classmethod
     def get_options_id(cls, options: gt_definitions.BuildOptions) -> str:
         filtered_options = copy.deepcopy(options)
@@ -273,7 +277,7 @@ class BaseBackend(Backend):
         stencil_class = None
         if stencil_id is not None:
             cls._check_options(options)
-            validate_hash = options.dev_opts.get("cache-validation", True)
+            validate_hash = options._impl_opts.get("cache-validation", True)
             if cls.check_cache(stencil_id, validate_hash=validate_hash):
                 stencil_class = cls._load(stencil_id, definition_func)
 
@@ -294,7 +298,7 @@ class BaseBackend(Backend):
         generator = cls.MODULE_GENERATOR_CLASS(cls)
         module_source = generator(stencil_id, definition_ir, options, **kwargs)
 
-        if options.dev_opts.get("code-generation", True):
+        if options._impl_opts.get("code-generation", True):
             os.makedirs(os.path.dirname(file_name), exist_ok=True)
             with open(file_name, "w") as f:
                 f.write(module_source)

@@ -345,7 +345,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         extra_cache_info=None,
         **kwargs,
     ):
-        if options.dev_opts.get("code-generation", True):
+        if options._impl_opts.get("code-generation", True):
             # Dawn backends do not use the internal analysis pipeline, so a custom
             # module_info object should be passed to the module generator
             assert "implementation_ir" in kwargs
@@ -432,7 +432,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         dawn_src_file = f"_dawn_{stencil_id.qualified_name.split('.')[-1]}.hpp"
 
         # Generate source
-        if options.dev_opts.get("code-generation", True):
+        if options._impl_opts.get("code-generation", True):
             gt_pyext_sources = cls.generate_extension_sources(
                 stencil_id, definition_ir, options, cls.GT_BACKEND_T
             )

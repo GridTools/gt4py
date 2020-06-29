@@ -522,7 +522,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend):
         implementation_ir = kwargs["implementation_ir"]
 
         # Generate source
-        if options.dev_opts.get("code-generation", True):
+        if options._impl_opts.get("code-generation", True):
             gt_pyext_generator = cls.PYEXT_GENERATOR_CLASS(
                 cls.get_pyext_class_name(stencil_id),
                 cls.get_pyext_module_name(stencil_id),

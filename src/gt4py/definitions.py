@@ -665,7 +665,7 @@ class BuildOptions:
     backend_opts = attribute(of=DictOf[str, Any], factory=dict)
     build_info = attribute(of=dict, optional=True)
     rebuild = attribute(of=bool, default=False)
-    dev_opts = attribute(of=DictOf[str, bool], factory=dict)
+    _impl_opts = attribute(of=DictOf[str, Any], factory=dict)
 
     @property
     def qualified_name(self):

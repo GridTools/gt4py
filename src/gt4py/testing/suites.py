@@ -389,7 +389,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
             rebuild=True,
             externals=externals_dict,
             # debug_mode=True,
-            # _dev_opts={"cache-validation": False, "code-generation": False},
+            # _impl_opts={"cache-validation": False, "code-generation": False},
         )
 
         for k, v in externals_dict.items():
