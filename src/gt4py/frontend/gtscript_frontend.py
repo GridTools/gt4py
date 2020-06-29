@@ -118,81 +118,74 @@ class RegionReplacer(ast.NodeTransformer):
     def __call__(self, func_node: ast.FunctionDef):
         self.visit(func_node)
 
-    def visit_With(self, node: ast.With):
-        def find_region_source(source: str, line: int, col: int) -> str:
-            sizes = tuple(len(x) + 1 for x in source.split("\n"))
-            partial_sizes = [0] + list(itertools.accumulate(sizes))
-            offset = partial_sizes[line - 1] + col - 1
-            index = source[offset:].find("(")
-            assert index > 0
-            offset += index + 1
-            start, scope = offset, 1
-            while scope > 0:
-                if source[offset] in ("(", "["):
-                    scope += 1
-                elif source[offset] in (")", "]"):
-                    scope -= 1
-                offset += 1
+    def _find_region_source(self, line: int, col: int) -> str:
+        sizes = tuple(len(x) + 1 for x in self.source.split("\n"))
+        partial_sizes = [0] + list(itertools.accumulate(sizes))
+        offset = partial_sizes[line - 1] + col - 1
 
-            return source[start : offset - 1]
+        index = self.source[offset:].find("(")
+        assert index > 0
+        offset += index + 1
 
-        def is_valid_specifier(spec):
-            # None regions were already removed
-            if not isinstance(spec, Iterable):
+        start, scope = offset, 1
+        while scope > 0:
+            if self.source[offset] in ("(", "["):
+                scope += 1
+            elif self.source[offset] in (")", "]"):
+                scope -= 1
+            offset += 1
+
+        return self.source[start : offset - 1]
+
+    @staticmethod
+    def _is_valid_specifier(spec):
+        for axis in spec:
+            if axis is None:
+                continue
+            try:
+                for endpt in ("start", "stop"):
+                    if not isinstance(axis[endpt][0], gt_definitions.Interval):
+                        return False
+                    elif not isinstance(axis[endpt][1], int):
+                        return False
+            except:
                 return False
-            for axis in spec:
-                if axis is None:
-                    continue
-                try:
-                    for endpt in ("start", "stop"):
-                        if not isinstance(axis[endpt][0], gt_definitions.Interval):
-                            return False
-                        elif not isinstance(axis[endpt][1], int):
-                            return False
-                except:
-                    return False
-            return True
+        return True
 
-        item_contexts = [x.context_expr for x in node.items]
-        assert all(isinstance(x, ast.Call) for x in item_contexts)
+    def _extract_and_eval_regions(self, node: ast.Call):
+        code = self._find_region_source(node.lineno, node.col_offset).rstrip(" \n,") + ","
+        specifiers = [tuple(item) for item in eval(f"({code})", self.context) if item is not None]
 
-        func_ids = [x.func.id for x in item_contexts]
+        for spec in specifiers:
+            if not self._is_valid_specifier(spec):
+                raise GTScriptSymbolError(f"Not a valid specifier: {spec}")
 
-        if "interval" in func_ids:
-            # Store in the interval node
-            index = func_ids.index("interval")
-        elif "computation" in func_ids:
-            # Store in the computation node and apply to all intervals inside that
-            index = func_ids.index("computation")
-        else:
-            raise GTScriptSymbolError("With node must have either interval or computation")
+        return specifiers
+
+    def visit_With(self, node: ast.With):
+        item_contexts = [item.context_expr for item in node.items]
+        func_ids = [ctx.func.id for ctx in item_contexts if isinstance(ctx, ast.Call)]
 
         if "region" in func_ids:
             arg_index = func_ids.index("region")
-            region_node = item_contexts[arg_index]
-            code = (
-                find_region_source(self.source, region_node.lineno, region_node.col_offset).rstrip(
-                    " \n,"
-                )
-                + ","
-            )
-            specifiers = (tuple(item) for item in eval(f"({code})", self.context))
+            regions = self._extract_and_eval_regions(node.items[arg_index].context_expr)
 
-            # Remove None objects (these are skipped regions)
-            specifiers = tuple(filter(lambda x: x is not None, specifiers))
-
-            for spec in specifiers:
-                if not is_valid_specifier(spec):
-                    raise GTScriptSymbolError(f"Not a valid specifier: {spec}")
-
-            if len(specifiers) > 0:
-                # Store in the node
-                item_contexts[index].regions = specifiers
+            # Store 'regions' attribute in either interval (preferred) or computation node
+            if "interval" in func_ids:
+                index = func_ids.index("interval")
+            elif "computation" in func_ids:
+                index = func_ids.index("computation")
             else:
-                # Delete the whole interval or computation node
+                raise GTScriptSymbolError("With node must have either interval or computation")
+
+            if len(regions) > 0:
+                # Store as attribute in ast node
+                item_contexts[index].regions = regions
+            else:
+                # Delete the whole node
                 del node.items[index]
 
-            # Delete region AST node
+            # Delete region withitem ast node
             del node.items[arg_index]
 
             return node
