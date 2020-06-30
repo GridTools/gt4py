@@ -116,38 +116,32 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 upper_extent[d] += idx
 
         index = []
-        if not parallel_interval:
-            for d in range(2):
-                start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
-                size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
-                size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
-                index.append(
-                    "{name}{marker}[{d}]{start}: {name}{marker}[{d}] + {size}".format(
-                        name=node.name,
-                        start=start_expr,
-                        marker=self.origin_marker,
-                        d=d,
-                        size=size_expr,
-                    )
-                )
-        else:
-            for d in range(2):
-                expr = []
-                assert len(parallel_interval) == 2
-                size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
-                axis_bound = parallel_interval[d]
-                for interval in (axis_bound.start, axis_bound.end):
-                    start_expr = ""
-                    if interval.level == gt_ir.LevelMarker.END:
-                        start_expr += " + " + size_expr
-                    start_expr += " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
-                    start_expr += " {:+d}".format(interval.offset) if interval.offset != 0 else ""
-                    expr.append(
-                        "{name}{marker}[{d}]{start}".format(
-                            name=node.name, marker=self.origin_marker, d=d, start=start_expr
-                        )
-                    )
-                index.append("{}:{}".format(*expr))
+        for d in range(2):
+            start_expr = f"{node.name}{self.origin_marker}[{d}]"
+            size_expr = f" + {self.domain_arg_name}[{d}]"
+
+            if parallel_interval:
+                axis_bounds = [getattr(parallel_interval[d], x) for x in ("start", "end")]
+            else:
+                axis_bounds = [None, None]
+
+            exprs = []
+            for endpt_extent, axis_bound in zip((lower_extent[d], upper_extent[d]), axis_bounds):
+                expr = start_expr
+                expr += " {:+d}".format(endpt_extent) if endpt_extent != 0 else ""
+
+                level = axis_bound.level if axis_bound else gt_ir.LevelMarker.START
+                expr += size_expr if level == gt_ir.LevelMarker.END else ""
+
+                offset = axis_bound.offset if axis_bound else 0
+                expr += " {:+d}".format(offset) if offset != 0 else ""
+
+                exprs.append(expr)
+
+            if not parallel_interval:
+                exprs[1] += size_expr
+
+            index.append("{}:{}".format(*exprs))
 
         k_ax = self.domain.sequential_axis.name
         k_offset = node.offset.get(k_ax, 0)

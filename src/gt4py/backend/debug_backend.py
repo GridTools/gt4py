@@ -65,34 +65,34 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         # Create IJ for-loops
         ij_loop_lines = []
-        if not parallel_interval:
-            for d in range(extent.ndims):
-                axis_name = axes_names[d]
-                if axis_name != seq_axis_name:
-                    i = d + 1
-                    start_expr = "{:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
-                    size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
-                    size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
-                    range_expr = "range({args})".format(
-                        args=", ".join(a for a in (start_expr, size_expr, "") if a)
-                    )
-                    ij_loop_lines.append(
-                        " " * self.indent_size * i
-                        + "for {ax} in {range_expr}:".format(ax=axis_name, range_expr=range_expr)
-                    )
-        else:
-            for d in range(2):
+        for d in range(extent.ndims):
+            axis_name = axes_names[d]
+            if axis_name != seq_axis_name:
                 i = d + 1
-                axis_name = axes_names[d]
-                assert len(parallel_interval) == 2
-                size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
-                axis_bound = parallel_interval[d]
-                bounds = []
-                for interval in (axis_bound.start, axis_bound.end):
-                    expr = f"{size_expr}" if interval.level == gt_ir.LevelMarker.END else "0"
-                    expr += "{:+d}".format(interval.offset) if interval.offset != 0 else ""
-                    bounds.append(expr)
-                range_expr = "range({args})".format(args=", ".join(bounds))
+
+                size_expr = f" + {self.domain_arg_name}[{d}]"
+
+                if parallel_interval:
+                    axis_bounds = [getattr(parallel_interval[d], x) for x in ("start", "end")]
+                else:
+                    axis_bounds = [None, None]
+
+                exprs = []
+                for endpt_extent, axis_bound in zip((lower_extent[d], upper_extent[d]), axis_bounds):
+                    expr = f"{endpt_extent}"
+
+                    level = axis_bound.level if axis_bound else gt_ir.LevelMarker.START
+                    expr += size_expr if level == gt_ir.LevelMarker.END else ""
+
+                    offset = axis_bound.offset if axis_bound else 0
+                    expr += " {:+d}".format(offset) if offset != 0 else ""
+
+                    exprs.append(expr if expr else "0")
+
+                if not parallel_interval:
+                    exprs[1] += size_expr
+
+                range_expr = "range({args})".format(args=", ".join(exprs))
                 ij_loop_lines.append(
                     " " * self.indent_size * i
                     + "for {ax} in {range_expr}:".format(ax=axis_name, range_expr=range_expr)
