@@ -1,4 +1,5 @@
 import os
+import copy
 
 import numpy as np
 
@@ -148,11 +149,9 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
                 + "\n"
                 + "\n".join(field_slices)
                 + """
-print('pre init')
 dace_lib['__dace_init_{program_name}']({run_args}, {total_field_sizes})
 if exec_info is not None:
     exec_info['pyext_program_start_time'] = time.perf_counter()
-print('pre run')
 dace_lib['__program_{program_name}']({run_args}, {total_field_sizes})
 if exec_info is not None:
     exec_info['pyext_program_end_time'] = time.perf_counter()
@@ -213,38 +212,46 @@ class DaceBackend(gt_backend.BaseBackend):
     @classmethod
     def generate_dace(cls, stencil_id, implementation_ir, options):
         sdfg = SDFGBuilder.apply(implementation_ir)
+
+        dace_build_path = os.path.relpath(cls.get_dace_module_path(stencil_id))
+        os.makedirs(dace_build_path, exist_ok=True)
+
         # sdfg = performance_ir.sdfg
 
         import json
 
         from dace.transformation.dataflow.merge_arrays import MergeArrays
 
-        sdfg.save("00_raw.sdfg")
+        save_sdfgs = {}
+
+        sdfg.save(dace_build_path + os.path.sep + "00_raw.sdfg")
+
         sdfg.apply_transformations_repeated(MergeArrays)
-
         sdfg.validate()
+        from dace.transformation.interstate import StateFusion
 
+        sdfg.apply_transformations_repeated([StateFusion], validate=False)
+
+        sdfg.save(dace_build_path + os.path.sep + "01_fused_states.sdfg")
+        cls.transform_library(sdfg)
+        sdfg.save(dace_build_path + os.path.sep + "02_library_nodes_optimized.sdfg")
         sdfg.expand_library_nodes()
+        sdfg.save(dace_build_path + os.path.sep + "03_library_expanded.sdfg")
         cls.transform_to_device(sdfg)
-        # cls.transform_optimize(sdfg)
-        # sdfg.save("01_library_optimized.sdfg")
+        sdfg.save(dace_build_path + os.path.sep + "04_on_device.sdfg")
+        cls.transform_optimize(sdfg)
+        sdfg.save(dace_build_path + os.path.sep + "05_optimized.sdfg")
         sdfg.validate()
-        sdfg.save("02_library_expanded.sdfg")
-        sdfg.validate()
-        sdfg = dace.SDFG.from_file("02_library_expanded.sdfg")
-        sdfg.validate()
-        # sdfg.apply_strict_transformations()
-        # sdfg.save("03_reapply_strict.sdfg")
-        # sdfg.validate()
+        sdfg.save(dace_build_path + os.path.sep + "06_validate.sdfg")
         implementation_ir.sdfg = sdfg
-        dace_build_path = os.path.relpath(cls.get_dace_module_path(stencil_id))
-        os.makedirs(dace_build_path, exist_ok=True)
 
         program_folder = dace.codegen.compiler.generate_program_folder(
             sdfg=sdfg, code_objects=generate_code(sdfg), out_path=dace_build_path
         )
+        sdfg.save(dace_build_path + os.path.sep + "07_generated.sdfg")
         assert program_folder == dace_build_path
         dace_ext_lib = dace.codegen.compiler.configure_and_compile(program_folder)
+        sdfg.save(dace_build_path + os.path.sep + "08_compiled.sdfg")
 
         return dace_ext_lib, dace_build_path
 
@@ -271,3 +278,15 @@ class DaceBackend(gt_backend.BaseBackend):
         return super(DaceBackend, cls)._generate_module(
             stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info
         )
+
+    @classmethod
+    def transform_library(cls, sdfg):
+        raise NotImplementedError("This method must be implemented in a subclass.")
+
+    @classmethod
+    def transform_to_device(cls, sdfg):
+        raise NotImplementedError("This method must be implemented in a subclass.")
+
+    @classmethod
+    def transform_optimize(cls, sdfg):
+        raise NotImplementedError("This method must be implemented in a subclass.")

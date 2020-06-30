@@ -10,8 +10,6 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
 
     environments = []
 
-    iteration_order = "IKJ"
-
     # def _make_parallel_computation(self, node: gt_ir.ApplyBlock):
     #     map_range = OrderedDict(
     #         i="{:d}:I{:+d}".format(*node.i_range),
@@ -289,7 +287,9 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                     #         f"{subset[0]-lower_extent}:{subset[1]+(-lower_extent+upper_extent+1)}"
                     #     )
                     # else:
-                    subset_strs.append(f"{0}:_{var.upper()}_loc+{(-lower_extent+upper_extent)}")
+                    subset_strs.append(
+                        f"0:{dace.symbolic.pystr_to_symbolic(f'({library_node.ranges[2][1]}) - ({library_node.ranges[2][0]})')}+{(-lower_extent+upper_extent)}"
+                    )
                 elif var == variable:
                     subset_strs.append(
                         f"{var.lower()}:{var.lower()}+{(-lower_extent+upper_extent)+1}"
@@ -535,7 +535,7 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
 
         tmp_sdfg.validate()
         not_yet_mapped_vars = set()
-        for variable in reversed(cls.iteration_order):
+        for variable in reversed(node.loop_order):
             if variable == "K" and node.iteration_order is not gt_ir.IterationOrder.PARALLEL:
                 tmp_sdfg = cls._loop(
                     node, tmp_sdfg, not_yet_mapped_vars=not_yet_mapped_vars, variable=variable
@@ -547,28 +547,51 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
             not_yet_mapped_vars.add(variable)
 
         symbols_mapping = {k: k for k in tmp_sdfg.free_symbols}
-        k_loc = (
-            # f"({node.ranges[2][0]}) - ({node.ranges[2][1]})"
-            # if node.iteration_order == gt_ir.IterationOrder.BACKWARD
-            # else
-            f"({node.ranges[2][1]}) - ({node.ranges[2][0]})"
-        )
 
         symbols_mapping.update(
             _I_loc=f"I+{node.ranges[0][1] - node.ranges[0][0]}",
             _J_loc=f"J+{node.ranges[1][1] - node.ranges[1][0]}",
-            _K_loc=k_loc,
+            _K_loc=f"({node.ranges[2][1]}) - ({node.ranges[2][0]})",
         )
+
+        k_loc = dace.symbolic.pystr_to_symbolic(f"({node.ranges[2][1]}) - ({node.ranges[2][0]})")
+
+        # if len(k_loc.free_symbols) == 0:
+        #     del symbols_mapping["_K_loc"]
+        #     # tmp_sdfg.add_constant("_K_loc", dace.dtypes.int32(int(k_loc)), dace.dtypes.int32())
+        #     tmp_sdfg.replace("_K_loc", str(k_loc))
+        # else:
+        #     symbols_mapping["_K_loc"] = k_loc
+
         from dace.transformation.interstate import InlineSDFG
 
-        tmp_sdfg.apply_transformations_repeated(InlineSDFG, validate=True)
-        return dace.nodes.NestedSDFG(
+        tmp_sdfg.apply_transformations_repeated(InlineSDFG, validate=False)
+
+        from gt4py.backend.dace.sdfg.api import replace_recursive
+
+        for k in "IJK":
+            replace_recursive(tmp_sdfg, f"_{k}_loc", str(symbols_mapping[f"_{k}_loc"]))
+
+        from gt4py.backend.dace.sdfg.transforms import RemoveTrivialLoop
+        from gt4py.backend.dace.sdfg.api import apply_transformations_repeated_recursive
+        from dace.transformation.interstate import EndStateElimination, StateAssignElimination
+
+        apply_transformations_repeated_recursive(
+            tmp_sdfg,
+            [RemoveTrivialLoop, EndStateElimination, StateAssignElimination],
+            validate=False,
+        )
+        tmp_sdfg.apply_strict_transformations(validate=False)
+        res = dace.nodes.NestedSDFG(
             label=node.label,
             sdfg=tmp_sdfg,
             inputs=node.in_connectors,
             outputs=node.out_connectors,
             symbol_mapping=symbols_mapping,
         )
+        res.sdfg.parent = parent_state
+        res.sdfg.parent_sdfg = parent_sdfg
+        return res
 
         # res_sdfg = dace.SDFG(node.label + "_expanded_sdfg")
         # res_state = res_sdfg.add_state(node.label + "_expanded_state")

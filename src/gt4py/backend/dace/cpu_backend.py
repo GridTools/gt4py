@@ -32,30 +32,21 @@ class CPUDaceBackend(DaceBackend):
         pass
 
     @classmethod
+    def transform_library(cls, sdfg):
+        from gt4py.backend.dace.sdfg.library.nodes import ApplyMethodLibraryNode
+
+        for state in sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, ApplyMethodLibraryNode):
+                    node.loop_order = "IJK"
+
+    @classmethod
     def transform_optimize(cls, sdfg):
-        # from dace.transformation.dataflow.map_expansion import MapExpansion
         # from dace.transformation.dataflow.map_collapse import MapCollapse
         #
-        # from dace.transformation.dataflow import InLocalStorage, OutLocalStorage
-        from dace.transformation.dataflow import MergeArrays
-
-        # from dace.transformation.dataflow import MapFusion
+        # from gt4py.backend.dace.sdfg.transforms import global_ij_tiling
         #
-        # from dace.transformation.dataflow import MapToForLoop
-        #
-        # for state in sdfg.nodes():
-        #     #     sdfg.apply_transformations(MapExpansion, states=[state], validate=False)
-        #     #     sdfg.apply_transformations(MapCollapse, states=[state], validate=False)
-        #     eliminate_trivial_k_loop(sdfg, state)
-        # for state in sdfg.nodes():
-        #     outer_k_loop_to_inner_map(sdfg, state)
-        #
-        from dace.transformation.interstate import StateFusion
-
-        sdfg.apply_transformations_repeated(StateFusion)
-        sdfg.apply_strict_transformations()
-        # sdfg.apply_transformations_repeated([MapFusion], validate=False)
-        # # from dace.transformation.dataflow import Vectorization
-        #
-        # #
-        # # sdfg.apply_transformations_repeated(Vectorization)
+        # sdfg.apply_transformations_repeated([MapCollapse], validate=False)
+        # sdfg.apply_strict_transformations(validate=False)
+        # global_ij_tiling(sdfg, tile_size=(8, 8))
+        pass

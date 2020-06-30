@@ -1,3 +1,5 @@
+import copy
+
 import dace
 from dace import registry
 from dace.sdfg import SDFG
@@ -184,104 +186,6 @@ import dace.sdfg.utils
 
 @registry.autoregister_params(singlestate=True)
 @make_properties
-class GlobalIJMapTiling(pattern_matching.Transformation):
-    """ Implements the orthogonal tiling transformation.
-
-        Orthogonal tiling is a type of nested map fission that creates tiles
-        in every dimension of the matched Map.
-    """
-
-    _map_entry = nodes.MapEntry(nodes.Map("", [], []))
-
-    # Properties
-    prefix = Property(dtype=str, default="tile", desc="Prefix for new range symbols")
-    tile_size = ShapeProperty(dtype=tuple, default=(8, 8), desc="Tile size per dimension")
-
-    @staticmethod
-    def annotates_memlets():
-        return False
-
-    @staticmethod
-    def expressions():
-        return [dace.sdfg.utils.node_path_graph(GlobalIJMapTiling._map_entry)]
-
-    @staticmethod
-    def can_be_applied(graph, candidate, expr_index, sdfg, strict=False):
-        # applies to IJ maps fully containing [0:I]x[0:J]
-        map_entry = graph.nodes()[candidate[GlobalIJMapTiling._map_entry]]
-        if not sorted(map_entry.map.params) == ["i", "j"]:
-            return False
-        free_symbols = map_entry.range.free_symbols
-        if not sorted(free_symbols.keys()) == ["I", "J"]:
-            return False
-        I_symbol = free_symbols["I"]
-        J_symbol = free_symbols["J"]
-        range = map_entry.range.ranges
-        if not range[0][0] <= 0 or not range[1][0] <= 0:
-            return False
-        if not range[0][1] - I_symbol <= 0 or not range[1][1] - J_symbol <= 0:
-            return False
-        if not range[0][2] == 1 or not range[1][2] == 1:
-            return False
-
-        return True
-
-    @staticmethod
-    def match_to_str(graph, candidate):
-        map_entry = graph.nodes()[candidate[GlobalIJMapTiling._map_entry]]
-        return map_entry.map.label + ": " + str(map_entry.map.params)
-
-    def apply(self, sdfg):
-        graph = sdfg.nodes()[self.state_id]
-        map_entry = graph.nodes()[self.subgraph[GlobalIJMapTiling._map_entry]]
-
-        # nd_to = symbolic.pystr_to_symbolic(
-        #     f"int_ceil(I + 1, {tile_stride}) - 1"
-        # )
-
-        free_symbols = map_entry.range.free_symbols
-        I_symbol = free_symbols["I"]
-        J_symbol = free_symbols["J"]
-
-        ranges = map_entry.range.ranges
-        halo = (
-            (ranges[0][0], ranges[0][1] - I_symbol + 1),
-            (ranges[1][0], ranges[1][1] - J_symbol + 1),
-        )
-
-        from dace.transformation.dataflow.tiling import MapTiling
-
-        maptiling = MapTiling(
-            sdfg.sdfg_list.index(sdfg),
-            self.state_id,
-            {MapTiling._map_entry: self.subgraph[GlobalIJMapTiling._map_entry]},
-            self.expr_index,
-        )
-        assert halo[0][0] <= 0
-        assert halo[0][1] >= 0
-        assert halo[1][0] <= 0
-        assert halo[1][1] >= 0
-        maptiling.tile_sizes = [t - h_l + h_r for t, (h_l, h_r) in zip(self.tile_size, halo)]
-        maptiling.strides = self.tile_size
-        maptiling.apply(sdfg)
-
-        new_map_entry = graph.in_edges(map_entry)[0].src
-        import dace.symbolic as symbolic
-
-        new_map_entry.range.ranges[0] = (
-            0,
-            symbolic.pystr_to_symbolic(f"int_ceil(I, {self.tile_size[0]}) - 1"),
-            1,
-        )
-        new_map_entry.range.ranges[1] = (
-            0,
-            symbolic.pystr_to_symbolic(f"int_ceil(J, {self.tile_size[1]}) - 1"),
-            1,
-        )
-
-
-@registry.autoregister_params(singlestate=True)
-@make_properties
 class TaskletAsKLoop(pattern_matching.Transformation):
     """ Docstring TODO
     """
@@ -362,14 +266,14 @@ class TaskletAsKLoop(pattern_matching.Transformation):
             for n in graph.nodes()
             if isinstance(n, dace.nodes.AccessNode) and n.access == dace.dtypes.AccessType.ReadOnly
         ):
-            nsdfg.add_datadesc(in_prefix + name, sdfg.arrays[name])
+            nsdfg.add_datadesc(in_prefix + name, copy.deepcopy(sdfg.arrays[name]))
         for name in set(
             n.data
             for n in graph.nodes()
             if isinstance(n, dace.nodes.AccessNode)
             and n.access == dace.dtypes.AccessType.WriteOnly
         ):
-            nsdfg.add_datadesc(out_prefix + name, sdfg.arrays[name])
+            nsdfg.add_datadesc(out_prefix + name, copy.deepcopy(sdfg.arrays[name]))
 
         read_accessors = dict()
         for name in nsdfg_in_arrays:
@@ -557,59 +461,162 @@ class TaskletAsKLoop(pattern_matching.Transformation):
         #     )
 
 
-def eliminate_trivial_k_loop(sdfg: dace.SDFG, state: dace.SDFGState):
-    sdfg.predecessor_states(state)
-    if not len(sdfg.successors(state)) == 2:
-        return
-    if not len(sdfg.predecessors(state)) == 2:
-        return
-    init, condition, step = None, None, None
-    for s in sdfg.predecessors(state):
-        edges = sdfg.edges_between(s, state)
-        if not len(edges) == 1:
-            return
-        if edges[0].data.condition.as_string == "" and s in sdfg.predecessor_states(state):
-            init = edges[0].data.assignments["k"]
-            init_state = s
-        elif not edges[0].data.condition.as_string == "":
-            return
+from dace.transformation.interstate.loop_detection import DetectLoop
+from dace.transformation.interstate.loop_unroll import LoopUnroll
+
+
+class EnhancedDetectLoop(DetectLoop):
+    """ Detects a for-loop construct from an SDFG, with added utility function for finding
+     context states."""
+
+    def _get_context_subgraph(self, sdfg):
+        # Obtain loop information
+        guard: dace.SDFGState = sdfg.node(self.subgraph[DetectLoop._loop_guard])
+        begin: dace.SDFGState = sdfg.node(self.subgraph[DetectLoop._loop_begin])
+        after_state: dace.SDFGState = sdfg.node(self.subgraph[DetectLoop._exit_state])
+
+        # Obtain iteration variable, range, and stride
+        guard_inedges = sdfg.in_edges(guard)
+        condition_edge = sdfg.edges_between(guard, begin)[0]
+        itervar = list(guard_inedges[0].data.assignments.keys())[0]
+        condition = condition_edge.data.condition_sympy()
+        rng = LoopUnroll._loop_range(itervar, guard_inedges, condition)
+
+        # Find the state prior to the loop
+        if rng[0] == symbolic.pystr_to_symbolic(guard_inedges[0].data.assignments[itervar]):
+            before_state: dace.SDFGState = guard_inedges[0].src
+            last_state: dace.SDFGState = guard_inedges[1].src
         else:
-            step = edges[0].data.assignments["k"]
-            loop_end_state = s
-    for s in sdfg.successors(state):
-        edges = sdfg.edges_between(state, s)
-        if edges:
-            if not len(edges) == 1:
-                return
-            if not edges[0].data.condition.as_string == "":
-                condition = edges[0].data.condition
-                loop_start_state = s
-            else:
-                exit_state = s
+            before_state: dace.SDFGState = guard_inedges[1].src
+            last_state: dace.SDFGState = guard_inedges[0].src
 
-    if "<" in condition.as_string:
-        k_min = init
-        _, k_max = condition.as_string.split("<")
-        k_max = k_max + " - 1"
-    else:
-        k_max = str(init)
-        _, k_min = condition.as_string.split(">=")
+        return guard, begin, last_state, before_state, after_state
 
-    if not dace.symbolic.pystr_to_symbolic(f"({k_min})-({k_max})") == 0:
-        return
 
-    # add edge from pred directly to loop states
-    sdfg.add_edge(init_state, loop_start_state, dace.InterstateEdge(assignments={"k": init}))
-    # add edge from loop states directly to succ
-    sdfg.add_edge(loop_end_state, exit_state, dace.InterstateEdge())
-    # remove guard & edges involving guard
-    for s in sdfg.successors(state):
-        for edge in sdfg.edges_between(state, s):
-            sdfg.remove_edge(edge)
-    for s in sdfg.predecessors(state):
-        for edge in sdfg.edges_between(s, state):
-            sdfg.remove_edge(edge)
-    sdfg.remove_node(state)
+from dace import symbolic
+
+
+@registry.autoregister
+@make_properties
+class RemoveTrivialLoop(EnhancedDetectLoop):
+
+    count = 1
+
+    @staticmethod
+    def can_be_applied(graph, candidate, expr_index, sdfg, strict=False):
+        if not EnhancedDetectLoop.can_be_applied(graph, candidate, expr_index, sdfg, strict):
+            return False
+
+        guard = graph.node(candidate[DetectLoop._loop_guard])
+        begin = graph.node(candidate[DetectLoop._loop_begin])
+
+        # Obtain iteration variable, range, and stride
+        guard_inedges = graph.in_edges(guard)
+        condition_edge = graph.edges_between(guard, begin)[0]
+        itervar = list(guard_inedges[0].data.assignments.keys())[0]
+        condition = condition_edge.data.condition_sympy()
+
+        # If loop cannot be detected, fail
+        rng = LoopUnroll._loop_range(itervar, guard_inedges, condition)
+        if not rng:
+            return False
+
+        start, end, step = rng
+
+        try:
+            return bool(start == end)
+        except TypeError:
+            return False
+
+    def apply(self, sdfg):
+        guard, first_state, last_state, before_state, after_state = self._get_context_subgraph(
+            sdfg
+        )
+        # guard_inedges = sdfg.in_edges(guard)
+        # condition_edge = sdfg.edges_between(guard, first_state)[0]
+        # itervar = list(guard_inedges[0].data.assignments.keys())[0]
+        # condition = condition_edge.data.condition_sympy()
+
+        init_edges = sdfg.edges_between(before_state, guard)
+        assert len(init_edges) == 1
+        init_edge = init_edges[0]
+        sdfg.add_edge(
+            before_state,
+            first_state,
+            dace.InterstateEdge(
+                condition=init_edge.data.condition, assignments=init_edge.data.assignments
+            ),
+        )
+        sdfg.remove_edge(init_edge)
+        # add edge from pred directly to loop states
+
+        # sdfg.add_edge(before_state, first_state, dace.InterstateEdge(assignments=init_edge.assignments))
+        exit_edge = sdfg.edges_between(last_state, guard)[0]
+        sdfg.add_edge(
+            last_state, after_state, dace.InterstateEdge(assignments=exit_edge.data.assignments)
+        )
+        sdfg.remove_edge(exit_edge)
+
+        # remove guard
+        sdfg.remove_edge(sdfg.edges_between(guard, first_state)[0])
+        sdfg.remove_edge(sdfg.edges_between(guard, after_state)[0])
+        sdfg.remove_node(guard)
+
+
+#
+# def eliminate_trivial_k_loop(sdfg: dace.SDFG, state: dace.SDFGState):
+#     sdfg.predecessor_states(state)
+#     if not len(sdfg.successors(state)) == 2:
+#         return
+#     if not len(sdfg.predecessors(state)) == 2:
+#         return
+#     init, condition, step = None, None, None
+#     for s in sdfg.predecessors(state):
+#         edges = sdfg.edges_between(s, state)
+#         if not len(edges) == 1:
+#             return
+#         if edges[0].data.condition.as_string == "" and s in sdfg.predecessor_states(state):
+#             init = edges[0].data.assignments["k"]
+#             init_state = s
+#         elif not edges[0].data.condition.as_string == "":
+#             return
+#         else:
+#             step = edges[0].data.assignments["k"]
+#             loop_end_state = s
+#     for s in sdfg.successors(state):
+#         edges = sdfg.edges_between(state, s)
+#         if edges:
+#             if not len(edges) == 1:
+#                 return
+#             if not edges[0].data.condition.as_string == "":
+#                 condition = edges[0].data.condition
+#                 loop_start_state = s
+#             else:
+#                 exit_state = s
+#
+#     if "<" in condition.as_string:
+#         k_min = init
+#         _, k_max = condition.as_string.split("<")
+#         k_max = k_max + " - 1"
+#     else:
+#         k_max = str(init)
+#         _, k_min = condition.as_string.split(">=")
+#
+#     if not dace.symbolic.pystr_to_symbolic(f"({k_min})-({k_max})") == 0:
+#         return
+#
+#     # add edge from pred directly to loop states
+#     sdfg.add_edge(init_state, loop_start_state, dace.InterstateEdge(assignments={"k": init}))
+#     # add edge from loop states directly to succ
+#     sdfg.add_edge(loop_end_state, exit_state, dace.InterstateEdge())
+#     # remove guard & edges involving guard
+#     for s in sdfg.successors(state):
+#         for edge in sdfg.edges_between(state, s):
+#             sdfg.remove_edge(edge)
+#     for s in sdfg.predecessors(state):
+#         for edge in sdfg.edges_between(s, state):
+#             sdfg.remove_edge(edge)
+#     sdfg.remove_node(state)
 
 
 def outer_k_loop_to_inner_map(sdfg: dace.SDFG, state: dace.SDFGState):

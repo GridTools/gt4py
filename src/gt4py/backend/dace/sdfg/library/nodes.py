@@ -40,6 +40,9 @@ class ApplyMethodLibraryNode(dace.library.LibraryNode):
         default=dace.properties.CodeProperty.from_string("", language=dace.dtypes.Language.Python),
         desc="apply method body",
     )
+    loop_order = dace.properties.Property(
+        dtype=str, allow_none=False, default="IJK", desc="order of loops, permutation of 'IJK'"
+    )
 
     def __init__(
         self,

@@ -82,7 +82,7 @@ def run_horizontal_diffusion(backend, id_version, domain):
     }
 
     testmodule = generate_test_module(
-        "horizontal_diffusion", backend, id_version=id_version, rebuild=True
+        "horizontal_diffusion", backend, id_version=id_version, rebuild=False
     )
     for k in arg_fields:
         if hasattr(arg_fields[k], "host_to_device"):
@@ -131,7 +131,7 @@ def run_tridiagonal_solver(backend, id_version, domain):
     }
 
     testmodule = generate_test_module(
-        "tridiagonal_solver", backend, id_version=id_version, rebuild=True
+        "tridiagonal_solver", backend, id_version=id_version, rebuild=False
     )
     for k in arg_fields:
         if hasattr(arg_fields[k], "host_to_device"):
