@@ -35,11 +35,16 @@ class GPUDaceBackend(DaceBackend):
             array.storage = dace.dtypes.StorageType.GPU_Global
         from dace.transformation.interstate.gpu_transform_sdfg import GPUTransformSDFG
 
-        sdfg.apply_transformations([GPUTransformSDFG], strict=False, validate=False)
+        sdfg.apply_transformations(
+            [GPUTransformSDFG], options={"strict_transform": False}, strict=False, validate=False
+        )
 
         for st in sdfg.nodes():
             for node in st.nodes():
-                if isinstance(node, dace.nodes.NestedSDFG):
+                parent = st.entry_node(node)
+                if isinstance(node, dace.nodes.NestedSDFG) and (
+                    parent is None or parent.schedule != dace.ScheduleType.GPU_Device
+                ):
                     cls.transform_to_device(node.sdfg)
 
     @classmethod
@@ -49,7 +54,7 @@ class GPUDaceBackend(DaceBackend):
         for state in sdfg.nodes():
             for node in state.nodes():
                 if isinstance(node, ApplyMethodLibraryNode):
-                    node.loop_order = "IJK"
+                    node.loop_order = "IKJ"
 
     @classmethod
     def transform_optimize(cls, sdfg):

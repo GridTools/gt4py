@@ -224,7 +224,7 @@ class DaceBackend(gt_backend.BaseBackend):
 
         save_sdfgs = {}
 
-        sdfg.save(dace_build_path + os.path.sep + "00_raw.sdfg")
+        # sdfg.save(dace_build_path + os.path.sep + "00_raw.sdfg")
 
         sdfg.apply_transformations_repeated(MergeArrays)
         sdfg.validate()
@@ -232,15 +232,20 @@ class DaceBackend(gt_backend.BaseBackend):
 
         sdfg.apply_transformations_repeated([StateFusion], validate=False)
 
-        sdfg.save(dace_build_path + os.path.sep + "01_fused_states.sdfg")
+        # sdfg.save(dace_build_path + os.path.sep + "01_fused_states.sdfg")
         cls.transform_library(sdfg)
-        sdfg.save(dace_build_path + os.path.sep + "02_library_nodes_optimized.sdfg")
+        # sdfg.save(dace_build_path + os.path.sep + "02_library_nodes_optimized.sdfg")
         sdfg.expand_library_nodes()
-        sdfg.save(dace_build_path + os.path.sep + "03_library_expanded.sdfg")
+        sdfg.save("tmp.sdfg")
+        sdfg = dace.SDFG.from_file("tmp.sdfg")
+        from dace.transformation.interstate import InlineSDFG
+
+        sdfg.apply_transformations_repeated([InlineSDFG], validate=False)
+        # sdfg.save(dace_build_path + os.path.sep + "03_library_expanded.sdfg")
         cls.transform_to_device(sdfg)
-        sdfg.save(dace_build_path + os.path.sep + "04_on_device.sdfg")
+        # sdfg.save(dace_build_path + os.path.sep + "04_on_device.sdfg")
         cls.transform_optimize(sdfg)
-        sdfg.save(dace_build_path + os.path.sep + "05_optimized.sdfg")
+        # sdfg.save(dace_build_path + os.path.sep + "05_optimized.sdfg")
         sdfg.validate()
         implementation_ir.sdfg = sdfg
 

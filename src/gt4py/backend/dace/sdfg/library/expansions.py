@@ -575,10 +575,11 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
         from gt4py.backend.dace.sdfg.transforms import RemoveTrivialLoop
         from gt4py.backend.dace.sdfg.api import apply_transformations_repeated_recursive
         from dace.transformation.interstate import EndStateElimination, StateAssignElimination
+        from dace.transformation.dataflow import MapCollapse
 
         apply_transformations_repeated_recursive(
             tmp_sdfg,
-            [RemoveTrivialLoop, EndStateElimination, StateAssignElimination],
+            [RemoveTrivialLoop, EndStateElimination, StateAssignElimination, MapCollapse],
             validate=False,
         )
         tmp_sdfg.apply_strict_transformations(validate=False)
