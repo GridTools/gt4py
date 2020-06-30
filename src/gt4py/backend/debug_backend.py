@@ -78,7 +78,9 @@ class DebugSourceGenerator(PythonSourceGenerator):
                     axis_bounds = [None, None]
 
                 exprs = []
-                for endpt_extent, axis_bound in zip((lower_extent[d], upper_extent[d]), axis_bounds):
+                for endpt_extent, axis_bound in zip(
+                    (lower_extent[d], upper_extent[d]), axis_bounds
+                ):
                     expr = f"{endpt_extent}"
 
                     level = axis_bound.level if axis_bound else gt_ir.LevelMarker.START
