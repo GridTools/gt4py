@@ -242,16 +242,13 @@ class DaceBackend(gt_backend.BaseBackend):
         cls.transform_optimize(sdfg)
         sdfg.save(dace_build_path + os.path.sep + "05_optimized.sdfg")
         sdfg.validate()
-        sdfg.save(dace_build_path + os.path.sep + "06_validate.sdfg")
         implementation_ir.sdfg = sdfg
 
         program_folder = dace.codegen.compiler.generate_program_folder(
             sdfg=sdfg, code_objects=generate_code(sdfg), out_path=dace_build_path
         )
-        sdfg.save(dace_build_path + os.path.sep + "07_generated.sdfg")
         assert program_folder == dace_build_path
         dace_ext_lib = dace.codegen.compiler.configure_and_compile(program_folder)
-        sdfg.save(dace_build_path + os.path.sep + "08_compiled.sdfg")
 
         return dace_ext_lib, dace_build_path
 
