@@ -174,7 +174,7 @@ class BaseBackend(Backend):
     @classmethod
     def generate_cache_info(
         cls, stencil_id: gt_definitions.StencilID, extra_cache_info: Dict[str, Any]
-    ) -> str:
+    ) -> Dict[str, Any]:
 
         module_file_name = cls.get_stencil_module_path(stencil_id)
         with open(module_file_name, "r") as f:
@@ -277,7 +277,7 @@ class BaseBackend(Backend):
         stencil_class = None
         if stencil_id is not None:
             cls._check_options(options)
-            validate_hash = options._impl_opts.get("cache-validation", True)
+            validate_hash = not options._impl_opts.get("disable-cache-validation", False)
             if cls.check_cache(stencil_id, validate_hash=validate_hash):
                 stencil_class = cls._load(stencil_id, definition_func)
 
@@ -298,7 +298,7 @@ class BaseBackend(Backend):
         generator = cls.MODULE_GENERATOR_CLASS(cls)
         module_source = generator(stencil_id, definition_ir, options, **kwargs)
 
-        if options._impl_opts.get("code-generation", True):
+        if not options._impl_opts.get("disable-code-generation", False):
             os.makedirs(os.path.dirname(file_name), exist_ok=True)
             with open(file_name, "w") as f:
                 f.write(module_source)

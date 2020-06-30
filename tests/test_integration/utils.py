@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import gt4py.definitions as gt_defs
+import gt4py.definitions as gt_definitions
 import gt4py.gtscript as gtscript
 
 from .stencil_definitions import REGISTRY as stencil_registry
@@ -33,7 +33,7 @@ def generate_test_module(name, backend, *, id_version, rebuild=True):
         backend_opts["add_profile_info"] = True
     if "verbose" in backend.options:
         backend_opts["verbose"] = True
-    options = gt_defs.BuildOptions(
+    options = gt_definitions.BuildOptions(
         name=stencil_name, module=module_name, rebuild=rebuild, backend_opts=backend_opts
     )
     decorator = gtscript.stencil(backend=backend.name, externals=EXTERNALS_REGISTRY[stencil_name])

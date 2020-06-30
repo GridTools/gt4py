@@ -22,7 +22,7 @@ import pytest
 import gt4py as gt
 from gt4py import gtscript
 from gt4py import storage as gt_storage
-import gt4py.definitions as gt_defs
+import gt4py.definitions as gt_definitions
 from gt4py.stencil_object import StencilObject
 from .input_strategies import *
 from .utils import *
@@ -442,7 +442,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
             max_boundary = ((0, 0), (0, 0), (0, 0))
             for name, info in implementation.field_info.items():
-                if isinstance(info, gt_defs.FieldInfo):
+                if isinstance(info, gt_definitions.FieldInfo):
                     max_boundary = tuple(
                         (max(m[0], abs(b[0])), max(m[1], b[1]))
                         for m, b in zip(max_boundary, info.boundary)

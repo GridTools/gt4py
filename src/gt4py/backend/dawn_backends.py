@@ -22,7 +22,6 @@ import re
 import types
 
 import jinja2
-import numpy as np
 
 import dawn4py
 from dawn4py.serialization import SIR
@@ -32,6 +31,7 @@ from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
+from . import pyext_builder
 
 DOMAIN_AXES = gt_definitions.CartesianSpace.names
 
@@ -247,7 +247,8 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         # Generate the Python binary extension (checking if GridTools sources are installed)
         if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
-        module_kwargs = {"implementation_ir": None}
+
+        module_kwargs = {}
         pyext_module_name, pyext_file_path = cls.generate_extension(
             stencil_id, definition_ir, options, module_kwargs=module_kwargs
         )
@@ -345,11 +346,9 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         extra_cache_info=None,
         **kwargs,
     ):
-        if options._impl_opts.get("code-generation", True):
+        if not options._impl_opts.get("disable-code-generation", False):
             # Dawn backends do not use the internal analysis pipeline, so a custom
             # module_info object should be passed to the module generator
-            assert "implementation_ir" in kwargs
-
             info = {}
             if definition_ir.sources is not None:
                 info["sources"].update(
@@ -432,7 +431,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         dawn_src_file = f"_dawn_{stencil_id.qualified_name.split('.')[-1]}.hpp"
 
         # Generate source
-        if options._impl_opts.get("code-generation", True):
+        if not options._impl_opts.get("disable-code-generation", False):
             gt_pyext_sources = cls.generate_extension_sources(
                 stencil_id, definition_ir, options, cls.GT_BACKEND_T
             )
@@ -458,21 +457,20 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         pyext_opts = dict(
             verbose=options.backend_opts.get("verbose", False),
             clean=options.backend_opts.get("clean", False),
-            debug_mode=options.backend_opts.get("debug_mode", False),
-            add_profile_info=options.backend_opts.get("add_profile_info", False),
+            **pyext_builder.get_gt_pyext_build_opts(
+                debug_mode=options.backend_opts.get("debug_mode", False),
+                add_profile_info=options.backend_opts.get("add_profile_info", False),
+                uses_cuda=uses_cuda,
+            ),
         )
-        include_dirs = [
+        pyext_opts["include_dirs"].append(
             "{install_dir}/_external_src".format(
                 install_dir=os.path.dirname(inspect.getabsfile(dawn4py))
             )
-        ]
+        )
 
         return cls.build_extension_module(
-            stencil_id,
-            gt_pyext_sources,
-            pyext_opts,
-            pyext_extra_include_dirs=include_dirs,
-            uses_cuda=uses_cuda,
+            stencil_id, gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda,
         )
 
     @classmethod
@@ -522,7 +520,7 @@ class DawnGTX86Backend(BaseDawnBackend):
 
     name = "dawn:gtx86"
     options = _DAWN_BACKEND_OPTIONS
-    storage_info = gt_backend.GTX86Backend.storage_info
+    storage_info = {**gt_backend.GTX86Backend.storage_info}
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
@@ -540,7 +538,7 @@ class DawnGTMCBackend(BaseDawnBackend):
 
     name = "dawn:gtmc"
     options = _DAWN_BACKEND_OPTIONS
-    storage_info = gt_backend.GTMCBackend.storage_info
+    storage_info = {**gt_backend.GTMCBackend.storage_info}
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
@@ -560,7 +558,7 @@ class DawnGTCUDABackend(BaseDawnBackend):
 
     name = "dawn:gtcuda"
     options = _DAWN_BACKEND_OPTIONS
-    storage_info = gt_backend.GTCUDABackend.storage_info
+    storage_info = {**gt_backend.GTCUDABackend.storage_info}
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
