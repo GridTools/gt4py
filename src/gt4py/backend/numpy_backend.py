@@ -277,10 +277,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
 
 class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
-    def __init__(self, backend_class, options):
-        super().__init__(backend_class, options)
-        assert len(self.options.backend_opts) == 0
-
+    def __init__(self, backend_class):
+        super().__init__(backend_class)
         self.source_generator = NumPySourceGenerator(
             indent_size=self.TEMPLATE_INDENT_SIZE,
             origin_marker="__O",
@@ -346,4 +344,4 @@ class NumPyBackend(gt_backend.BaseBackend):
         "is_compatible_type": numpy_is_compatible_type,
     }
 
-    GENERATOR_CLASS = NumPyModuleGenerator
+    MODULE_GENERATOR_CLASS = NumPyModuleGenerator

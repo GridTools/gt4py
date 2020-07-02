@@ -1,0 +1,144 @@
+{#
+
+ # GT4Py - GridTools4Py - GridTools for Python
+ #
+ # Copyright (c) 2014-2019, ETH Zurich
+ # All rights reserved.
+ #
+ # This file is part the GT4Py project and the GridTools framework.
+ # GT4Py is free software: you can redistribute it and/or modify it under
+ # the terms of the GNU General Public License as published by the
+ # Free Software Foundation, either version 3 of the License, or any later
+ # version. See the LICENSE.txt file at the top-level directory of this
+ # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+ #
+ # SPDX-License-Identifier: GPL-3.0-or-later
+
+ ---- Template variables ----
+
+    - arg_fields: [{ "name": str}]
+    - dawn_backend: str
+    - gt_backend: str
+    - header_file: str
+    - parameters: [{ "name": str, "dtype": str }]
+    - stencil_short_name: str
+    - stencil_unique_name: str
+#}
+
+
+{# #define GRIDTOOLS_CLANG_HALO_EXTEND {{user_value} #}
+
+
+#include "{{ header_file }}"
+
+{%- if gt_backend == "cuda" %}
+#define GRIDTOOLS_DAWN_CUDA
+{%- endif %}
+
+#define DAWN_GT_BACKEND gt::backend::{{ gt_backend }}
+using backend_t = DAWN_GT_BACKEND;
+
+#include "_dawn_{{ stencil_short_name }}.hpp"
+
+#include <array>
+#include <cassert>
+#include <stdexcept>
+
+namespace {{ stencil_unique_name }} {
+
+namespace {
+
+
+gridtools::dawn::domain make_domain(const std::array<gt::uint_t, 3> &size) {
+    gridtools::dawn::domain d{size};
+    d.set_halos(0, 0, 0, 0, 0, 0);
+    return d;
+}
+
+using storage_info_t = meta_data_ijk_t;
+using data_store_t = storage_ijk_t;
+static_assert(
+    std::is_same<data_store_t, gridtools::dawn::storage_ijk_t>::value,
+    "Storage types do not match");
+
+// Constants
+template<typename T>
+data_store_t make_data_store(const BufferInfo& bi,
+                             const std::array<gt::uint_t, 3>& compute_domain_shape,
+                             const std::array<gt::uint_t, 3>& origin)
+{
+    static_assert(std::is_same<T, double>::value, "Only double is supported right now");
+    if (bi.ndim != 3) {
+        throw std::runtime_error("Wrong number of dimensions [" +
+                                 std::to_string(bi.ndim) +
+                                 " != " + std::to_string(3) + "]");
+    }
+
+{#
+    for (int i = 0; i < 2 /*3*/; ++i) {
+        if (origin[i] < halo_size_i)
+            throw std::runtime_error(
+                "Origin too small");
+        if (origin[i] + halo_size_i + compute_domain_shape[i] < bi.shape[i])
+            throw std::runtime_error(
+                "Given shape and origin exceed buffer dimension");
+    }
+#}
+
+    // ptr, dims and strides are "outer domain" (i.e., compute domain + halo
+    // region). The halo region is only defined through `make_grid` (and
+    // currently, in the storage info)
+    gt::array<gt::uint_t, 3> dims{};
+    gt::array<gt::uint_t, 3> strides{};
+    double* ptr = static_cast<double*>(bi.ptr);
+    for (int i = 0; i < 3; ++i) {
+        strides[i] = bi.strides[i] / sizeof(double);
+        ptr += strides[i] * origin[i];
+        dims[i] = compute_domain_shape[i]+2*origin[i];
+    }
+    return data_store_t{storage_info_t{dims, strides}, ptr,
+{%- if gt_backend == "cuda" %}
+                        gt::ownership::external_gpu};
+{%- else %}
+                        gt::ownership::external_cpu};
+{%- endif %}
+}
+
+}  // namespace
+
+
+// Run actual computation
+void run(const std::array<gt::uint_t, 3>& domain,
+{%- set comma = joiner(", ") %}
+{%- for field in arg_fields -%}
+         {{- comma() }}
+         const BufferInfo& bi_{{ field.name }} {{- comma() -}} const std::array<gt::uint_t, 3>& {{ field.name }}_origin
+{%- endfor %}
+{%- for param in parameters %}
+         {{- comma() }}
+         {{ param.dtype }} {{ param.name }}
+{%- endfor %})
+{
+    // Initialize data stores from input buffers
+{%- for field in arg_fields %}
+    auto ds_{{ field.name }} = make_data_store<double>(bi_{{ field.name }}, domain, {{ field.name }}_origin);
+{%- endfor %}
+
+    // create computation
+    dawn_generated::{{ dawn_backend }}::{{ stencil_short_name }} computation{make_domain(domain)};
+
+    // Update global parameters
+{%- for param in parameters %}
+    computation.set_{{ param.name }}({{ param.name }});
+{%- endfor %}
+
+    // Run computation and wait for the synchronization of the output stores
+    computation.run(
+        {%- set comma = joiner(", ") %}
+{%- for field in arg_fields -%}
+        {{ comma() }}ds_{{ field.name }}
+{%- endfor %});
+        // computation_.sync_bound_data_stores();
+}
+
+}  // namespace {{ stencil_unique_name }}

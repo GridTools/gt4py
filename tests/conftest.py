@@ -17,10 +17,22 @@
 """GlobalDecl configuration of test generation and execution (with Hypothesis and pytest)
 """
 
+import os
+import shutil
+
 import hypothesis as hyp
 import pytest
 
-collect_ignore_glob = [".*", "_disabled*"]  # ignore hidden folders and disabled tests
+from gt4py import config as gt_config
+
+# Delete cache folder
+shutil.rmtree(
+    os.path.join(gt_config.cache_settings["root_path"], gt_config.cache_settings["dir_name"]),
+    ignore_errors=True,
+)
+
+# Ignore hidden folders and disabled tests
+collect_ignore_glob = [".*", "_disabled*"]
 
 
 def pytest_configure(config):
