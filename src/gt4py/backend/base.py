@@ -412,7 +412,7 @@ class BasePyExtBackend(BaseBackend):
                 **pyext_build_opts,
             )
         else:
-            module_name, file_path = pyext_builder.build_pybind_cuda_ext(
+            module_name, file_path = pyext_builder.build_pybind_ext(
                 qualified_pyext_name,
                 sources=sources,
                 build_path=pyext_build_path,

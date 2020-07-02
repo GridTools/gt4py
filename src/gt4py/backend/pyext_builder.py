@@ -190,11 +190,11 @@ def build_pybind_cuda_ext(
 ) -> Tuple[str, str]:
 
     include_dirs = include_dirs or []
-    include_dirs.append(gt_config.build_settings["cuda_include_path"])
+    include_dirs = [*include_dirs, gt_config.build_settings["cuda_include_path"]]
     library_dirs = library_dirs or []
-    library_dirs.append(gt_config.build_settings["cuda_library_path"])
+    library_dirs = [*library_dirs, gt_config.build_settings["cuda_library_path"]]
     libraries = libraries or []
-    libraries.append("cudart")
+    libraries = [*libraries, "cudart"]
     extra_compile_args = extra_compile_args or []
 
     return build_pybind_ext(
