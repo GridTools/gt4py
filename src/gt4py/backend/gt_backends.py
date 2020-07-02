@@ -614,14 +614,14 @@ class GTMCBackend(BaseGTBackend):
 
 class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
     def generate_pre_run(self) -> str:
-        field_names = self.wrapper_info["field_info"].keys()
+        field_names = self.module_info["field_info"].keys()
 
         return "\n".join([f + ".host_to_device()" for f in field_names])
 
     def generate_post_run(self) -> str:
         output_field_names = [
             name
-            for name, info in self.wrapper_info["field_info"].items()
+            for name, info in self.module_info["field_info"].items()
             if info.access == gt_definitions.AccessKind.READ_WRITE
         ]
 

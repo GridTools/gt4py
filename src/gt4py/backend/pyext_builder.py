@@ -51,8 +51,6 @@ def get_gt_pyext_build_opts(
         ],
         nvcc=[
             "-std=c++14",
-            "-fvisibility=hidden",
-            "-fPIC",
             "-isystem={}".format(gt_config.build_settings["gt_include_path"]),
             "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
             "-DBOOST_PP_VARIADICS",
@@ -60,7 +58,9 @@ def get_gt_pyext_build_opts(
             "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
             "--expt-relaxed-constexpr",
             "--compiler-options",
+            "-fvisibility=hidden",
             "--compiler-options",
+            "-fPIC",
             *extra_compile_args_from_config["nvcc"],
         ],
     )
@@ -193,7 +193,8 @@ def build_pybind_cuda_ext(
     include_dirs.append(gt_config.build_settings["cuda_include_path"])
     library_dirs = library_dirs or []
     library_dirs.append(gt_config.build_settings["cuda_library_path"])
-    libraries = (libraries or []).append("cudart")
+    libraries = libraries or []
+    libraries.append("cudart")
     extra_compile_args = extra_compile_args or []
 
     return build_pybind_ext(
