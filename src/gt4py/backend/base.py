@@ -681,8 +681,9 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         source = """
 from gt4py import utils as gt_utils
 
-pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_file_path}", public_import=True)
-        """.format(  # noqa: E501
+pyext_module = gt_utils.make_module_from_file(
+    "{pyext_module_name}", "{pyext_file_path}", public_import=True
+)""".format(
             pyext_module_name=self.pyext_module_name, pyext_file_path=self.pyext_file_path
         )
 
