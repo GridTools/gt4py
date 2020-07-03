@@ -21,7 +21,6 @@ definitions for the keywords of the DSL.
 """
 
 import collections
-import functools
 import inspect
 import types
 
@@ -55,6 +54,9 @@ builtins = {
 }
 
 __all__ = list(builtins) + ["function", "stencil"]
+
+__externals__ = "Placeholder"
+__gtscript__ = "Placeholder"
 
 
 _VALID_DATA_TYPES = (bool, np.bool, int, np.int32, np.int64, float, np.float32, np.float64)
@@ -108,14 +110,14 @@ def stencil(
         backend : `str`
             Name of the implementation backend.
 
-        definition : ``None` when used as a decorator, otherwise a `function` or a `:class:`gt4py.StencilObject`
+        definition : `None` when used as a decorator, otherwise a `function` or a `:class:`gt4py.StencilObject`
             Function object defining the stencil.
 
         build_info : `dict`, optional
             Dictionary used to store information about the stencil generation.
             (`None` by default).
 
-        dtypes: `dict`['str`, dtype_definition], optional
+        dtypes: `dict`[`str`, dtype_definition], optional
             Specify dtypes for string keys in the argument annotations.
 
         externals: `dict`, optional
@@ -175,14 +177,36 @@ def stencil(
         module or inspect.currentframe().f_back.f_globals["__name__"]
     )  # definition_func.__globals__["__name__"] ??,
 
+    # Move hidden "_option" keys to _impl_opts
+    _impl_opts = {}
+    for key, value in kwargs.items():
+        if key.startswith("_"):
+            _impl_opts[key] = value
+    for key in _impl_opts:
+        kwargs.pop(key)
+
     build_options = gt_definitions.BuildOptions(
-        name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=build_info
+        name=name,
+        module=module,
+        rebuild=rebuild,
+        backend_opts=kwargs,
+        build_info=build_info,
+        impl_opts=_impl_opts,
     )
 
-    def _decorator(def_func):
-        _set_arg_dtypes(def_func, dtypes or {})
+    def _decorator(definition_func):
+        if not isinstance(definition_func, types.FunctionType):
+            if hasattr(definition_func, "definition_func"):  # StencilObject
+                definition_func = definition_func.definition_func
+            elif callable(definition_func):  # General callable
+                definition_func = definition_func.__call__
+
+        _set_arg_dtypes(definition_func, dtypes or {})
         return gt_loader.gtscript_loader(
-            def_func, backend=backend, build_options=build_options, externals=externals or {}
+            definition_func,
+            backend=backend,
+            build_options=build_options,
+            externals=externals or {},
         )
 
     if definition is None:

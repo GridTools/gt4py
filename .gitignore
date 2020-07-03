@@ -1,8 +1,7 @@
 ### Custom ####
 _local_
 
-### GridTools ####
-src/gt4py/_external_src/gridtools
+### GT4Py ####
 .gt_cache/
 
 ### Python ###
@@ -56,6 +55,11 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+# type checkers
+.mypy_cache/
+.pytype
+.pyre
+
 # Flask stuff:
 instance/
 .webassets-cache
@@ -100,6 +104,3 @@ venv.bak/
 
 # mkdocs documentation
 /site
-
-# mypy
-.mypy_cache/

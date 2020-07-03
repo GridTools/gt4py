@@ -66,3 +66,5 @@ Tools
    conventions
 
 -  Git commit hooks with `pre-commit <https://pre-commit.com/>`__
+   - runs formatting and compliance checks for you
+   - will be run on all files at every pull request

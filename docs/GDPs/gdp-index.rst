@@ -23,6 +23,8 @@ Open GDPs (under consideration)
 .. toctree::
    :maxdepth: 1
 
+   gdp-0001-standalone-cli
+
 
 Provisional GDPs (provisionally accepted; interface may change)
 ---------------------------------------------------------------
