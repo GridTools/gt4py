@@ -22,14 +22,13 @@ import itertools
 import numbers
 import types
 
-from collections.abc import Iterable
-
 import numpy as np
 
 from gt4py import definitions as gt_definitions
 from gt4py import frontend as gt_frontend
 from gt4py import gtscript
 from gt4py import ir as gt_ir
+from gt4py.ir.utils import make_parallel_axis_intervals
 from gt4py import utils as gt_utils
 from gt4py.utils import meta as gt_meta, NOTHING
 
@@ -137,30 +136,15 @@ class RegionReplacer(ast.NodeTransformer):
 
         return self.source[start : offset - 1]
 
-    @staticmethod
-    def _is_valid_specifier(spec):
-        for axis in spec:
-            if axis is None:
-                continue
-            try:
-                for endpt in ("start", "stop"):
-                    if not isinstance(axis[endpt][0], gt_definitions.Interval):
-                        return False
-                    elif not isinstance(axis[endpt][1], int):
-                        return False
-            except:
-                return False
-        return True
-
     def _extract_and_eval_regions(self, node: ast.Call):
         code = self._find_region_source(node.lineno, node.col_offset).rstrip(" \n,") + ","
-        specifiers = [tuple(item) for item in eval(f"({code})", self.context) if item is not None]
+        regions = tuple(eval(f"({code})", self.context))
 
-        for spec in specifiers:
-            if not self._is_valid_specifier(spec):
-                raise GTScriptSymbolError(f"Not a valid specifier: {spec}")
+        for region in regions:
+            if not isinstance(region, gt_definitions.Region):
+                raise GTScriptSymbolError(f"Not a valid specifier: {region}")
 
-        return specifiers
+        return regions
 
     def visit_With(self, node: ast.With):
         item_contexts = [item.context_expr for item in node.items]
@@ -547,31 +531,6 @@ class ParsingContext(enum.Enum):
     INTERVAL = 3
 
 
-def _make_parallel_interval(region: Iterable):
-    def make_axis_bounds(endpts):
-        axis_bounds = {}
-        for incl_key, excl_key in zip(("start", "stop"), ("start", "end")):
-            indicator, original_offset = endpts[incl_key]
-            add_offset = 0
-            if indicator == gt_definitions.Interval.START:
-                level_marker = gt_ir.LevelMarker.START
-            else:
-                level_marker = gt_ir.LevelMarker.END
-                if incl_key == "start":
-                    add_offset = -1
-            offset = original_offset + add_offset
-            axis_bounds[excl_key] = gt_ir.AxisBound(level=level_marker, offset=offset)
-        return axis_bounds
-
-    assert len(region) == 2
-    return [
-        gt_ir.AxisInterval(**make_axis_bounds(endpts))
-        if endpts
-        else gt_ir.AxisInterval.full_interval()
-        for endpts in region
-    ]
-
-
 class IRMaker(ast.NodeVisitor):
     def __init__(
         self,
@@ -694,7 +653,7 @@ class IRMaker(ast.NodeVisitor):
                 block = comp_blocks[0]
                 comp_blocks = [block] * len(regions)
                 for region, block in zip(regions, comp_blocks):
-                    block.parallel_interval = axis_intervals_from_region(region)
+                    block.parallel_interval = make_parallel_axis_intervals(region)
         self.parsing_context = ParsingContext.CONTROL_FLOW
 
         if len(result) > 1:
@@ -759,7 +718,7 @@ class IRMaker(ast.NodeVisitor):
         if regions:
             comp_blocks = [result] * len(regions)
             for region, block in zip(regions, comp_blocks):
-                block.parallel_interval = _make_parallel_interval(region)
+                block.parallel_interval = make_parallel_axis_intervals(region)
         else:
             comp_blocks = [result]
 

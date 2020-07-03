@@ -689,9 +689,8 @@ class AxisInterval(Node):
 
 @attribclass
 class ComputationBlock(Node):
-    # TODO Should this be renamed to "sequential_interval"?
+    # TODO Should these be renamed to sequential_interval and sequential_interation_order?
     interval = attribute(of=AxisInterval)
-    # TODO Should this be renamed to "sequential_interation_order"?
     iteration_order = attribute(of=IterationOrder)
     parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
     body = attribute(of=BlockStmt)

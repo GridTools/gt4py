@@ -19,6 +19,7 @@ import collections
 import enum
 import numbers
 import operator
+import types
 
 from gt4py import utils as gt_utils
 from gt4py.utils.attrib import (
@@ -656,6 +657,40 @@ class ParameterInfo(collections.namedtuple("ParameterInfoNamedTuple", ["dtype"])
     pass
 
 
+# Intervals are used for regions (STOP is the inclusive endpoint)
+@enum.unique
+class Interval(enum.Enum):
+    START = enum.auto()
+    STOP = enum.auto()
+
+
+class Region:
+    def __init__(self, *axes):
+        if len(axes) != 2:
+            raise TypeError("Requires two axis specifications")
+        if any((len(axis) != 2 if axis is not None else False for axis in axes)):
+            raise TypeError(
+                "Each axis must have format (interval, offset), where\n"
+                "\tinterval : one of gt_definitions.Interval.[START, STOP]\n"
+                "\toffset : an offset from the interval position (positive or negative)."
+            )
+
+        self.axes = list()
+        for axis in axes:
+            if axis is None:
+                self.axes.append(None)
+            elif getattr(axis, "start", None) is not None:
+                self.axes.append(types.SimpleNamespace(start=axis.start, stop=axis.stop))
+            else:
+                self.axes.append(types.SimpleNamespace(start=axis[0], stop=axis[1]))
+
+
+def make_region_on_axis(axis, interval, start, stop):
+    return Region(
+        *(((interval, start), (interval, stop)) if i == axis else None for i in range(2))
+    )
+
+
 @attribkwclass
 class BuildOptions:
     """Build options."""
@@ -707,13 +742,6 @@ class GTSpecificationError(GTError):
 class GTSemanticError(GTError):
     def __init__(self, message):
         super().__init__(message)
-
-
-# Select an interval
-@enum.unique
-class Interval(enum.Enum):
-    START = enum.auto()
-    STOP = enum.auto()
 
 
 def normalize_domain(domain):

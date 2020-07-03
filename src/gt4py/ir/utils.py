@@ -21,6 +21,7 @@ import textwrap
 import types
 
 from .nodes import *
+from gt4py import definitions as gt_definitions
 from gt4py.utils import NOTHING
 import gt4py.gtscript as gtscript
 
@@ -216,6 +217,28 @@ def make_definition(
     )
 
     return definition
+
+
+def make_parallel_axis_intervals(region: gt_definitions.Region):
+    """Create a gt_ir.AxisInterval from a gt_definitions.Region."""
+
+    def _region_axis_to_interval(axis):
+        axis_bounds = dict()
+        for incl_key, excl_key in zip(("start", "stop"), ("start", "end")):
+            indicator, original_offset = getattr(axis, incl_key)
+            level_marker = getattr(
+                LevelMarker, "START" if indicator == gt_definitions.Interval.START else "END"
+            )
+            add_offset = -1 if level_marker == LevelMarker.END and incl_key == "start" else 0
+            axis_bounds[excl_key] = AxisBound(
+                level=level_marker, offset=original_offset + add_offset
+            )
+        return AxisInterval(**axis_bounds)
+
+    return [
+        _region_axis_to_interval(axis) if axis else AxisInterval.full_interval()
+        for axis in region.axes
+    ]
 
 
 # --- Implementation IR ---

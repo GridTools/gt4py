@@ -486,18 +486,14 @@ class TestRegion:
         Interval = gt_definitions.Interval
 
         region_var = (
-            (dict(start=(Interval.START, 0), stop=(Interval.START, 1)), None),
-            (None, dict(start=(Interval.STOP, -3), stop=(Interval.STOP, 0))),
+            gt_definitions.make_region_on_axis(0, Interval.START, 0, 1),
+            gt_definitions.Region(((Interval.STOP, -3), (Interval.STOP, 0)), None),
         )
 
         def valid(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...), region(
-                (dict(start=(Interval.START, 0), stop=(Interval.START, 1)), None)
-            ):
-                out_field = in_field
-            with computation(PARALLEL), interval(...), region(
-                (dict(start=(Interval.START, 0), stop=(Interval.START, 1)), None),
-                (None, dict(start=(Interval.STOP, -3), stop=(Interval.STOP, 0))),
+                gt_definitions.make_region_on_axis(0, Interval.START, 0, 1),
+                gt_definitions.Region(((Interval.STOP, -3), (Interval.STOP, 0)), None),
             ):
                 out_field = in_field
             with computation(PARALLEL), interval(...), region(*region_var):

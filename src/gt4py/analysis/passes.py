@@ -62,6 +62,51 @@ class IntervalSpecificationError(IRSpecificationError):
         self.interval = interval
 
 
+def _make_parallel_interval_info(parallel_interval):
+    """Create a list of IntervalInfos from a list of AxisIntervals."""
+    if parallel_interval is None:
+        return None
+
+    interval_infos = list()
+    level_marker_to_info = lambda level_marker: 0 if level_marker == gt_ir.LevelMarker.START else 1
+    for interval in parallel_interval:
+        if interval is None:
+            interval = gt_ir.AxisInterval.full_interval()
+        interval_infos.append(
+            IntervalInfo(
+                start=(level_marker_to_info(interval.start.level), interval.start.offset),
+                end=(level_marker_to_info(interval.end.level), interval.end.offset),
+            )
+        )
+
+    return interval_infos
+
+
+def _make_parallel_interval_from_info(parallel_interval_info):
+    """Create a list of AxisInterval from list of IntervalInfos."""
+    if parallel_interval_info is None:
+        return None
+
+    intervals = list()
+    info_to_level_marker = (
+        lambda info: gt_ir.LevelMarker.START if info == 0 else gt_ir.LevelMarker.END
+    )
+    for interval_info in parallel_interval_info:
+        intervals.append(
+            gt_ir.AxisInterval(
+                start=gt_ir.AxisBound(
+                    level=info_to_level_marker(interval_info.start[0]),
+                    offset=interval_info.start[1],
+                ),
+                end=gt_ir.AxisBound(
+                    level=info_to_level_marker(interval_info.end[0]), offset=interval_info.end[1]
+                ),
+            )
+        )
+
+    return intervals
+
+
 class InitInfoPass(TransformPass):
 
     _DEFAULT_OPTIONS = {"redundant_temp_fields": False}
@@ -336,25 +381,12 @@ class InitInfoPass(TransformPass):
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
             assert node.computations  # non-empty definition
 
-            def make_parallel_interval(parallel_interval):
-                def make_tuple(endpt):
-                    return (0 if endpt.level == gt_ir.LevelMarker.START else 1, endpt.offset)
-
-                if not parallel_interval:
-                    return None
-                else:
-                    assert len(parallel_interval) == 2
-                return [
-                    IntervalInfo(start=make_tuple(endpt.start), end=make_tuple(endpt.end))
-                    for endpt in parallel_interval
-                ]
-
             for computation, interval in zip(node.computations, self.computation_intervals):
                 self.current_block_info = DomainBlockInfo(
                     self.data.id_generator.new,
                     computation.iteration_order,
                     {interval},
-                    make_parallel_interval(computation.parallel_interval),
+                    _make_parallel_interval_info(computation.parallel_interval),
                     [],
                 )
                 self.visit(computation)
@@ -524,16 +556,8 @@ class MergeBlocksPass(TransformPass):
                 return False
 
             for candidate_axis, target_axis in zip(candidate, target):
-                for endpt in ("start", "end"):
-                    if any(
-                        [
-                            x != y
-                            for x, y in zip(
-                                getattr(candidate_axis, endpt), getattr(target_axis, endpt)
-                            )
-                        ]
-                    ):
-                        return False
+                if any((x != y for x, y in zip(candidate_axis, target_axis))):
+                    return False
             return True
 
         result = False
@@ -775,27 +799,6 @@ class ComputeUsedSymbolsPass(TransformPass):
         return transform_data
 
 
-def _make_parallel_interval(parallel_interval_infos: list):
-    def make_axis_bound(endpt):
-        indicator, offset = endpt
-        return gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START if indicator == 0 else gt_ir.LevelMarker.END,
-            offset=offset,
-        )
-
-    if not parallel_interval_infos:
-        return None
-    else:
-        assert len(parallel_interval_infos) == 2
-
-    return [
-        gt_ir.AxisInterval(
-            start=make_axis_bound(axis_info.start), end=make_axis_bound(axis_info.end)
-        )
-        for axis_info in parallel_interval_infos
-    ]
-
-
 class BuildIIRPass(TransformPass):
 
     _DEFAULT_OPTIONS = {}
@@ -865,7 +868,7 @@ class BuildIIRPass(TransformPass):
 
             apply_block = gt_ir.ApplyBlock(
                 interval=self._make_axis_interval(int_block.interval),
-                parallel_interval=_make_parallel_interval(int_block.parallel_interval),
+                parallel_interval=_make_parallel_interval_from_info(int_block.parallel_interval),
                 local_symbols=local_symbols,
                 body=gt_ir.BlockStmt(stmts=stmts),
             )
