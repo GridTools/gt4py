@@ -65,6 +65,15 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
             library_node.label + f"_{variable}_map", ndrange=ndrange
         )
         for input in library_node.inputs:
+            acc_num = (
+                dace.DYNAMIC
+                if all(
+                    acc.num == dace.DYNAMIC
+                    for acc in library_node.read_accesses.values()
+                    if input == acc.outer_name
+                )
+                else 1
+            )
             output = input
             is_array = isinstance(mapped_sdfg.arrays["IN_" + input], dace_data.Array)
 
@@ -97,7 +106,9 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 "OUT_" + output,
                 nsdfg_node,
                 "IN_" + input,
-                dace.memlet.Memlet.simple(data="IN_" + input, subset_str=subset_str),
+                dace.memlet.Memlet.simple(
+                    data="IN_" + input, subset_str=subset_str, num_accesses=acc_num
+                ),
             )
             mapped_shape = library_node.input_extents[input].shape
             # k_shape = library_node.k_range.ranges[0][1] - library_node.k_range.ranges[0][0] + 1
@@ -118,13 +129,13 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                     dtype=mapped_sdfg.arrays["IN_" + input].dtype,
                     strides=mapped_sdfg.arrays["IN_" + input].strides,
                     total_size=mapped_sdfg.arrays["IN_" + input].total_size,
-                    storage=dace.StorageType.Register,
+                    storage=dace.StorageType.Default,
                 )
             else:
                 tmp_sdfg.add_scalar(
                     "IN_" + input,
                     dtype=mapped_sdfg.arrays["IN_" + input].dtype,
-                    storage=dace.StorageType.Register,
+                    storage=dace.StorageType.Default,
                 )
             map_entry.add_in_connector("IN_" + input)
 
@@ -152,9 +163,20 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 None,
                 map_entry,
                 "IN_" + input,
-                dace.memlet.Memlet.simple("IN_" + input, subset_str=subset_str),
+                dace.memlet.Memlet.simple(
+                    "IN_" + input, subset_str=subset_str, num_accesses=acc_num
+                ),
             )
         for output in library_node.outputs:
+            acc_num = (
+                dace.DYNAMIC
+                if all(
+                    acc.num == dace.DYNAMIC
+                    for acc in library_node.write_accesses.values()
+                    if output == acc.outer_name
+                )
+                else 1
+            )
             input = output
             is_array = isinstance(mapped_sdfg.arrays["OUT_" + output], dace_data.Array)
 
@@ -187,7 +209,9 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 "OUT_" + output,
                 map_exit,
                 "IN_" + input,
-                dace.memlet.Memlet.simple(data="OUT_" + output, subset_str=subset_str),
+                dace.memlet.Memlet.simple(
+                    data="OUT_" + output, subset_str=subset_str, num_accesses=acc_num
+                ),
             )
             mapped_shape = library_node.output_extents[output].shape
             # k_shape = library_node.k_range.ranges[0][1] - library_node.k_range.ranges[0][0] + 1
@@ -210,13 +234,13 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                         dtype=mapped_sdfg.arrays["OUT_" + output].dtype,
                         strides=mapped_sdfg.arrays["OUT_" + output].strides,
                         total_size=mapped_sdfg.arrays["OUT_" + output].total_size,
-                        storage=dace.StorageType.Register,
+                        storage=dace.StorageType.Default,
                     )
                 else:
                     tmp_sdfg.add_scalar(
                         "OUT_" + output,
                         dtype=mapped_sdfg.arrays["OUT_" + output].dtype,
-                        storage=dace.StorageType.Register,
+                        storage=dace.StorageType.Default,
                     )
             map_exit.add_out_connector("OUT_" + output)
 
@@ -244,7 +268,9 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 "OUT_" + output,
                 tmp_state.add_write("OUT_" + output),
                 None,
-                dace.memlet.Memlet.simple("OUT_" + output, subset_str=subset_str),
+                dace.memlet.Memlet.simple(
+                    "OUT_" + output, subset_str=subset_str, num_accesses=acc_num
+                ),
             )
 
         if len(library_node.inputs) == 0:
@@ -275,6 +301,15 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
         # ndrange = {iter_var: str(library_node.k_range) if limit_var == "K" else f"0:{limit_var}"}
 
         for input in library_node.inputs:
+            acc_num = (
+                dace.DYNAMIC
+                if all(
+                    acc.num == dace.DYNAMIC
+                    for acc in library_node.read_accesses.values()
+                    if input == acc.outer_name
+                )
+                else 1
+            )
             is_array = isinstance(mapped_sdfg.arrays["IN_" + input], dace_data.Array)
             subset_strs = []
             for i, var in enumerate("IJK"):
@@ -306,7 +341,9 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 None,
                 nsdfg_node,
                 "IN_" + input,
-                dace.memlet.Memlet.simple(data="IN_" + input, subset_str=subset_str),
+                dace.memlet.Memlet.simple(
+                    data="IN_" + input, subset_str=subset_str, num_accesses=acc_num
+                ),
             )
             mapped_shape = library_node.input_extents[input].shape
             # k_shape = library_node.k_range.ranges[0][1] - library_node.k_range.ranges[0][0] + 1
@@ -326,16 +363,25 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                     dtype=mapped_sdfg.arrays["IN_" + input].dtype,
                     strides=mapped_sdfg.arrays["IN_" + input].strides,
                     total_size=mapped_sdfg.arrays["IN_" + input].total_size,
-                    storage=dace.StorageType.Register,
+                    storage=dace.StorageType.Default,
                 )
             else:
                 tmp_sdfg.add_scalar(
                     "IN_" + input,
                     dtype=mapped_sdfg.arrays["IN_" + input].dtype,
-                    storage=dace.StorageType.Register,
+                    storage=dace.StorageType.Default,
                 )
 
         for output in library_node.outputs:
+            acc_num = (
+                dace.DYNAMIC
+                if all(
+                    acc.num == dace.DYNAMIC
+                    for acc in library_node.write_accesses.values()
+                    if output == acc.outer_name
+                )
+                else 1
+            )
             is_array = isinstance(mapped_sdfg.arrays["OUT_" + output], dace_data.Array)
 
             subset_strs = []
@@ -366,7 +412,9 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 "OUT_" + output,
                 tmp_state.add_write("OUT_" + output),
                 None,
-                dace.memlet.Memlet.simple(data="OUT_" + output, subset_str=subset_str),
+                dace.memlet.Memlet.simple(
+                    data="OUT_" + output, subset_str=subset_str, num_accesses=acc_num
+                ),
             )
             mapped_shape = library_node.output_extents[output].shape
             # k_shape = library_node.k_range.ranges[0][1] - library_node.k_range.ranges[0][0] + 1
@@ -389,13 +437,13 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                         dtype=mapped_sdfg.arrays["OUT_" + output].dtype,
                         strides=mapped_sdfg.arrays["OUT_" + output].strides,
                         total_size=mapped_sdfg.arrays["OUT_" + output].total_size,
-                        storage=dace.StorageType.Register,
+                        storage=dace.StorageType.Default,
                     )
                 else:
                     tmp_sdfg.add_scalar(
                         "OUT_" + output,
                         dtype=mapped_sdfg.arrays["OUT_" + output].dtype,
-                        storage=dace.StorageType.Register,
+                        storage=dace.StorageType.Default,
                     )
 
         if library_node.iteration_order == gt_ir.IterationOrder.BACKWARD:
@@ -445,7 +493,7 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
             parent_array = parent_sdfg.arrays[edge.data.data]
             if isinstance(parent_array, dace_data.Scalar):
                 tmp_sdfg.add_scalar(
-                    "IN_" + edge.data.data, parent_array.dtype, storage=dace.StorageType.Register
+                    "IN_" + edge.data.data, parent_array.dtype, storage=dace.StorageType.Default
                 )
             else:
                 tmp_sdfg.add_array(
@@ -463,13 +511,13 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                     #     }
                     # ),
                     total_size=parent_array.total_size,
-                    storage=dace.StorageType.Register,
+                    storage=dace.StorageType.Default,
                 )
         for edge in parent_state.out_edges(node):
             parent_array = parent_sdfg.arrays[edge.data.data]
             if isinstance(parent_array, dace_data.Scalar):
                 tmp_sdfg.add_scalar(
-                    "OUT_" + edge.data.data, parent_array.dtype, storage=dace.StorageType.Register
+                    "OUT_" + edge.data.data, parent_array.dtype, storage=dace.StorageType.Default
                 )
             else:
                 tmp_sdfg.add_array(
@@ -488,7 +536,7 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                     #                     }
                     #                 ),
                     total_size=parent_array.total_size,
-                    storage=dace.StorageType.Register,
+                    storage=dace.StorageType.Default,
                 )
 
         for name in set(acc.outer_name for acc in node.read_accesses.values()):
@@ -511,7 +559,9 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 None,
                 tasklet,
                 name,
-                dace.memlet.Memlet.simple("IN_" + acc.outer_name, subset_str=subset_str),
+                dace.memlet.Memlet.simple(
+                    "IN_" + acc.outer_name, subset_str=subset_str, num_accesses=acc.num
+                ),
             )
         for name, acc in node.write_accesses.items():
             offset_tuple = (acc.offset.get("I", 0), acc.offset.get("J", 0), acc.offset.get("K", 0))
@@ -530,7 +580,9 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 name,
                 write_accessors[acc.outer_name],
                 None,
-                dace.memlet.Memlet.simple("OUT_" + acc.outer_name, subset_str=subset_str),
+                dace.memlet.Memlet.simple(
+                    "OUT_" + acc.outer_name, subset_str=subset_str, num_accesses=acc.num
+                ),
             )
 
         tmp_sdfg.validate()
@@ -583,6 +635,7 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
             validate=False,
         )
         tmp_sdfg.apply_strict_transformations(validate=False)
+        dace.propagate_memlets_sdfg(tmp_sdfg)
         res = dace.nodes.NestedSDFG(
             label=node.label,
             sdfg=tmp_sdfg,

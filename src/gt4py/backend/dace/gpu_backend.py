@@ -54,7 +54,11 @@ class GPUDaceBackend(DaceBackend):
         for state in sdfg.nodes():
             for node in state.nodes():
                 if isinstance(node, ApplyMethodLibraryNode):
-                    node.loop_order = "IKJ"
+                    node.loop_order = "IJK"
+
+        from gt4py.backend.dace.sdfg.transforms import PruneTransientOutputs
+
+        sdfg.apply_transformations_repeated(PruneTransientOutputs, validate=False)
 
     @classmethod
     def transform_optimize(cls, sdfg):

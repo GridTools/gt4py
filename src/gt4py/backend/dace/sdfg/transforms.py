@@ -182,6 +182,127 @@ import dace.transformation.pattern_matching as pattern_matching
 from dace.properties import make_properties, Property, ShapeProperty
 from dace import nodes
 import dace.sdfg.utils
+import gt4py
+
+from gt4py.backend.dace.sdfg import library
+
+
+@registry.autoregister_params(singlestate=True)
+class PruneTransientOutputs(pattern_matching.Transformation):
+
+    _library_node = dace.nodes.LibraryNode("")
+    _access_node = nodes.AccessNode("")
+
+    @staticmethod
+    def expressions():
+        return [
+            dace.sdfg.utils.node_path_graph(
+                PruneTransientOutputs._library_node, PruneTransientOutputs._access_node
+            )
+        ]
+
+    @staticmethod
+    def _overlap(subset_a: dace.memlet.subsets.Subset, subset_b: dace.memlet.subsets.Subset):
+        return True
+
+    @staticmethod
+    def _check_reads(state: dace.SDFGState, candidate_subset, sorted_accesses):
+
+        for acc in sorted_accesses:
+            out_edges = state.out_edges(acc)
+            if len(out_edges) == 0:
+                assert acc.access == dace.dtypes.AccessType.WriteOnly
+            for edge in out_edges:
+                if not edge.data.data == acc.data:
+                    return False
+                if PruneTransientOutputs._overlap(edge.data.subset, candidate_subset):
+                    return False
+        return True
+
+    @staticmethod
+    def can_be_applied(
+        graph: dace.sdfg.SDFGState, candidate, expr_index, sdfg: dace.SDFG, strict=False
+    ):
+        # TODO improvement: state-graphs that are not just sequences
+        # TODO improvement: can still apply if read is shadowed by another write
+
+        library_node: dace.nodes.LibraryNode = graph.node(
+            candidate[PruneTransientOutputs._library_node]
+        )
+
+        if not isinstance(library_node, library.ApplyMethodLibraryNode):
+            return False
+        access_node: dace.nodes.AccessNode = graph.node(
+            candidate[PruneTransientOutputs._access_node]
+        )
+
+        edges = graph.edges_between(library_node, access_node)
+        if len(edges) != 1:
+            return False
+        candidate_edge = edges[0]
+        assert candidate_edge.data.data == access_node.data
+        assert access_node.access != dace.dtypes.AccessType.ReadOnly
+
+        candidate_subset = candidate_edge.data.subset
+        if not sdfg.arrays[access_node.data].transient:
+            return False
+
+        import networkx as nx
+
+        sorted_accesses = [access_node] + [
+            node
+            for node in nx.algorithms.dag.topological_sort(graph.nx)
+            if isinstance(node, dace.nodes.AccessNode) and node.data == access_node.data
+        ]
+
+        if not PruneTransientOutputs._check_reads(graph, candidate_subset, sorted_accesses):
+            return False
+
+        boundary_states = sdfg.successors(graph)
+        visited_states = {graph}
+        while len(boundary_states) == 1:
+            state = boundary_states[0]
+            if state in visited_states:
+                return False  # currently only apply if is linear sequence of states.
+            visited_states.add(state)
+            sorted_accesses = [
+                node
+                for node in nx.algorithms.dag.topological_sort(state.nx)
+                if isinstance(node, dace.nodes.AccessNode) and node.data == access_node.data
+            ]
+
+            if not PruneTransientOutputs._check_reads(state, candidate_subset, sorted_accesses):
+                return False
+
+            boundary_states = sdfg.successors(state)
+
+        return True
+
+    def apply(self, sdfg: dace.SDFG):
+        graph: dace.sdfg.SDFGState = sdfg.nodes()[self.state_id]
+        library_node: library.ApplyMethodLibraryNode = graph.node(
+            self.subgraph[PruneTransientOutputs._library_node]
+        )
+        access_node: dace.nodes.AccessNode = graph.node(
+            self.subgraph[PruneTransientOutputs._access_node]
+        )
+        edges = graph.edges_between(library_node, access_node)
+        if len(edges) != 1:
+            return False
+        in_edge = edges[0]
+
+        data = access_node.data
+
+        library_node.remove_out_connector("OUT_" + data)
+        library_node.outputs.remove(data)
+        for name, acc in dict(library_node.write_accesses.items()).items():
+            if acc.outer_name == data:
+                del library_node.write_accesses[name]
+        graph.remove_edge(in_edge)
+        if access_node.access == dace.dtypes.AccessType.ReadWrite:
+            access_node.access = dace.dtypes.AccessType.WriteOnly
+        if len(graph.out_edges(access_node)) == 0:
+            graph.remove_node(access_node)
 
 
 @registry.autoregister_params(singlestate=True)

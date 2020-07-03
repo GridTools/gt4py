@@ -142,13 +142,14 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
         #                     )
         #                     for n in sorted(self.implementation_ir.parameters)
         #                 ]
-        source = (
-            (
-                "\nI=np.int32(_domain_[0])\nJ=np.int32(_domain_[1])\nK=np.int32(_domain_[2])\n"
-                + total_field_sizes
-                + "\n"
-                + "\n".join(field_slices)
-                + """
+        if self.implementation_ir.multi_stages:
+            source = (
+                (
+                    "\nI=np.int32(_domain_[0])\nJ=np.int32(_domain_[1])\nK=np.int32(_domain_[2])\n"
+                    + total_field_sizes
+                    + "\n"
+                    + "\n".join(field_slices)
+                    + """
 dace_lib['__dace_init_{program_name}']({run_args}, {total_field_sizes})
 if exec_info is not None:
     exec_info['pyext_program_start_time'] = time.perf_counter()
@@ -157,24 +158,29 @@ if exec_info is not None:
     exec_info['pyext_program_end_time'] = time.perf_counter()
 dace_lib['__dace_exit_{program_name}']({run_args}, {total_field_sizes})
 """.format(
-                    program_name=self.implementation_ir.sdfg.name,
-                    run_args=", ".join(run_args_strs),
-                    total_field_sizes=",".join(v for k, v in sorted(symbol_ctype_strs.items())),
-                )
-            )
-            + "\n".join(
-                [
-                    "#{name}[{slice}] = {name}_copy".format(
-                        name=name,
-                        slice=",".join(
-                            f'_origin_["{name}"][{i}] - {-self.implementation_ir.fields_extents[name][i][0]}:_origin_["{name}"][{i}] - {-self.implementation_ir.fields_extents[name][i][0]}+_domain_[{i}] + {self.implementation_ir.fields_extents[name].frame_size[i]}'
-                            for i in range(len(self.implementation_ir.fields[name].axes))
+                        program_name=self.implementation_ir.sdfg.name,
+                        run_args=", ".join(run_args_strs),
+                        total_field_sizes=",".join(
+                            v for k, v in sorted(symbol_ctype_strs.items())
                         ),
                     )
-                    for name in self.implementation_ir.arg_fields
-                ]
+                )
+                + "\n".join(
+                    [
+                        "#{name}[{slice}] = {name}_copy".format(
+                            name=name,
+                            slice=",".join(
+                                f'_origin_["{name}"][{i}] - {-self.implementation_ir.fields_extents[name][i][0]}:_origin_["{name}"][{i}] - {-self.implementation_ir.fields_extents[name][i][0]}+_domain_[{i}] + {self.implementation_ir.fields_extents[name].frame_size[i]}'
+                                for i in range(len(self.implementation_ir.fields[name].axes))
+                            ),
+                        )
+                        for name in self.implementation_ir.arg_fields
+                    ]
+                )
             )
-        )
+
+        else:
+            source = "\n"
 
         source = source + (
             """
@@ -224,24 +230,22 @@ class DaceBackend(gt_backend.BaseBackend):
 
         save_sdfgs = {}
 
-        # sdfg.save(dace_build_path + os.path.sep + "00_raw.sdfg")
+        sdfg.save(dace_build_path + os.path.sep + "00_raw.sdfg")
 
         sdfg.apply_transformations_repeated(MergeArrays)
         sdfg.validate()
         from dace.transformation.interstate import StateFusion
 
-        sdfg.apply_transformations_repeated([StateFusion], validate=False)
+        sdfg.apply_transformations_repeated([StateFusion], strict=True, validate=False)
 
-        # sdfg.save(dace_build_path + os.path.sep + "01_fused_states.sdfg")
+        sdfg.save(dace_build_path + os.path.sep + "01_fused_states.sdfg")
         cls.transform_library(sdfg)
-        # sdfg.save(dace_build_path + os.path.sep + "02_library_nodes_optimized.sdfg")
+        sdfg.save(dace_build_path + os.path.sep + "02_library_nodes_optimized.sdfg")
         sdfg.expand_library_nodes()
-        sdfg.save("tmp.sdfg")
-        sdfg = dace.SDFG.from_file("tmp.sdfg")
         from dace.transformation.interstate import InlineSDFG
 
         sdfg.apply_transformations_repeated([InlineSDFG], validate=False)
-        # sdfg.save(dace_build_path + os.path.sep + "03_library_expanded.sdfg")
+        sdfg.save(dace_build_path + os.path.sep + "03_library_expanded.sdfg")
         cls.transform_to_device(sdfg)
         # sdfg.save(dace_build_path + os.path.sep + "04_on_device.sdfg")
         cls.transform_optimize(sdfg)

@@ -91,26 +91,54 @@ class SDFGBuilder:
             self.generic_visit(node)
 
         def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
-            self.tasklet_targets = set()
+            self.access_counts = dict()
             self.visit(node.body)
-            self.tasklet_targets = None
+            node.access_counts = self.access_counts
+            self.access_counts = None
 
         def visit_Assign(self, node: gt_ir.Assign):
             self.visit(node.value)
             self.visit(node.target, is_target=True)
 
+        def visit_If(self, node: gt_ir.If):
+
+            self.visit(node.condition)
+
+            access_counts = dict(self.access_counts)
+
+            self.visit(node.main_body)
+            access_counts_main = dict(self.access_counts)
+
+            self.access_counts = dict(access_counts)
+            self.visit(node.else_body)
+            access_counts_else = self.access_counts
+
+            for name in set(access_counts_main) & set(access_counts_else):
+                if name not in access_counts or access_counts[name] == dace.dtypes.DYNAMIC:
+                    access_counts[name] = 1
+            for name in set(access_counts_main) ^ set(access_counts_else):
+                access_counts.setdefault(name, dace.dtypes.DYNAMIC)
+
+            self.access_counts = access_counts
+
         def visit_FieldRef(self, node: gt_ir.FieldRef, is_target=False):
             key = (node.name, tuple((k, v) for k, v in node.offset.items()))
-            if is_target:
-                self.tasklet_targets.add(key)
-            node.was_output = key in self.tasklet_targets
+            # if is_target:
+            #     self.tasklet_targets.add(key)
+
+            node.was_output = (
+                is_target or local_name(node.name, node.offset, True) in self.access_counts
+            )
             node.local_name = local_name(node.name, node.offset, node.was_output)
+            self.access_counts[node.local_name] = 1
 
         def visit_VarRef(self, node: gt_ir.VarRef, is_target=False):
-            if is_target:
-                self.tasklet_targets.add((node.name, None))
-            node.was_output = (node.name, None) in self.tasklet_targets
+            # if is_target:
+            #     self.tasklet_targets.add((node.name, None))
+            # node.was_output = node.name in self.access_counts
+            node.was_output = is_target or local_name(node.name, None, True) in self.access_counts
             node.local_name = local_name(node.name, None, node.was_output)
+            self.access_counts[node.local_name] = 1
 
     class GenerateMappedMemletsPass(gt_ir.IRNodeVisitor):
         @classmethod
@@ -135,7 +163,7 @@ class SDFGBuilder:
             self.input_memlets = dict()
             self.output_memlets = dict()
             self.ranges = (node.i_range, node.j_range, node.k_range)
-
+            self.apply_block = node
             self.visit(node.body)
 
             node.mapped_input_memlets = dict()
@@ -145,17 +173,22 @@ class SDFGBuilder:
 
             for memlet_name, memlet_info in self.input_memlets.items():
                 node.mapped_input_memlets[memlet_name] = dace.Memlet.simple(
-                    memlet_info.outer_name, memlet_info.subset_str, num_accesses=memlet_info.num
+                    memlet_info.outer_name,
+                    memlet_info.subset_str,
+                    num_accesses=node.access_counts[memlet_info.local_name],
                 )
             for memlet_name, memlet_info in self.output_memlets.items():
                 node.mapped_output_memlets[memlet_name] = dace.Memlet.simple(
-                    memlet_info.outer_name, memlet_info.subset_str, num_accesses=memlet_info.num
+                    memlet_info.outer_name,
+                    memlet_info.subset_str,
+                    num_accesses=node.access_counts[memlet_info.local_name],
                 )
 
             self.input_memlets = None
             self.output_memlets = None
             self.tasklet_targets = None
             self.ranges = None
+            self.apply_block = None
 
         def visit_FieldRef(self, node: gt_ir.FieldRef):
             key = node.local_name
@@ -182,7 +215,7 @@ class SDFGBuilder:
                 subset_str = ", ".join(subset_list) if subset_list else "0"
 
                 memlet_dict[key] = MappedMemletInfo(
-                    num=1,
+                    num=self.apply_block.access_counts[key],
                     outer_name=node.name,
                     local_name=key,
                     subset_str=subset_str,
@@ -195,7 +228,11 @@ class SDFGBuilder:
                 memlet_dict = self.output_memlets if node.was_output else self.input_memlets
                 if key not in memlet_dict:
                     memlet_dict[key] = MappedMemletInfo(
-                        num=1, outer_name=node.name, local_name=key, subset_str="0", offset=dict()
+                        num=self.apply_block.access_counts[key],
+                        outer_name=node.name,
+                        local_name=key,
+                        subset_str="0",
+                        offset=dict(),
                     )
 
     class GenerateTaskletSourcePass(gt_ir.IRNodeVisitor):

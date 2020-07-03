@@ -35,6 +35,10 @@ class CPUDaceBackend(DaceBackend):
     def transform_library(cls, sdfg):
         from gt4py.backend.dace.sdfg.library.nodes import ApplyMethodLibraryNode
 
+        from gt4py.backend.dace.sdfg.transforms import PruneTransientOutputs
+
+        sdfg.apply_transformations_repeated(PruneTransientOutputs, validate=False)
+
         for state in sdfg.nodes():
             for node in state.nodes():
                 if isinstance(node, ApplyMethodLibraryNode):
@@ -49,4 +53,6 @@ class CPUDaceBackend(DaceBackend):
         # sdfg.apply_transformations_repeated([MapCollapse], validate=False)
         # sdfg.apply_strict_transformations(validate=False)
         # global_ij_tiling(sdfg, tile_size=(8, 8))
-        pass
+        from dace.transformation.interstate import StateFusion
+
+        # sdfg.apply_transformations_repeated([StateFusion], strict=False, validate=False)
