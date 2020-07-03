@@ -222,18 +222,18 @@ class SDFGBuilder:
                     offset=node.offset,
                 )
 
-        def visit_VarRef(self, node: gt_ir.VarRef):
-            if node.name in self.parameters:
-                key = node.local_name
-                memlet_dict = self.output_memlets if node.was_output else self.input_memlets
-                if key not in memlet_dict:
-                    memlet_dict[key] = MappedMemletInfo(
-                        num=self.apply_block.access_counts[key],
-                        outer_name=node.name,
-                        local_name=key,
-                        subset_str="0",
-                        offset=dict(),
-                    )
+        # def visit_VarRef(self, node: gt_ir.VarRef):
+        #     if node.name in self.parameters:
+        #         key = node.local_name
+        #         memlet_dict = self.output_memlets if node.was_output else self.input_memlets
+        #         if key not in memlet_dict:
+        #             memlet_dict[key] = MappedMemletInfo(
+        #                 num=self.apply_block.access_counts[key],
+        #                 outer_name=node.name,
+        #                 local_name=key,
+        #                 subset_str="0",
+        #                 offset=dict(),
+        #             )
 
     class GenerateTaskletSourcePass(gt_ir.IRNodeVisitor):
 
@@ -278,7 +278,7 @@ class SDFGBuilder:
             return str(node.value)
 
         def visit_VarRef(self, node: gt_ir.VarRef):
-            return node.local_name
+            return node.name
 
         def visit_FieldRef(self, node: gt_ir.FieldRef):
             return node.local_name
@@ -506,7 +506,7 @@ class SDFGBuilder:
                         lifetime=dace.dtypes.AllocationLifetime.Persistent,
                     )
             for k, v in node.parameters.items():
-                self.sdfg.add_scalar(k, v.data_type.dtype.type)
+                self.sdfg.add_symbol(k, v.data_type.dtype.type)
             self.generic_visit(node)
 
     @classmethod

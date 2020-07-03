@@ -9,6 +9,7 @@ from dace.codegen.compiler import CompiledSDFG, ReloadableDLL
 
 import gt4py.analysis as gt_analysis
 from gt4py import backend as gt_backend
+from gt4py.ir import DataType
 from gt4py.utils import text as gt_text
 
 from .sdfg.builder import SDFGBuilder
@@ -108,20 +109,18 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
         total_field_sizes = "\n".join(total_field_sizes)
         run_args_names = sorted(args)
         run_args_strs = []
-        for arg in run_args_names:
-            if arg not in self.implementation_ir.unreferenced:
-                if arg in self.implementation_ir.arg_fields:
-                    run_args_strs.append(f"ctypes.c_void_p({self.generate_field_ptr_str(arg)})")
-                else:
-                    run_args_strs.append(
-                        # "np.ctypeslib.as_ctypes(np.{dtype}({par_name}))".format(
-                        "ctypes.{ctype_name}(np.{numpy_type}({par_name}))".format(
-                            ctype_name=self.implementation_ir.parameters[arg].data_type.ctypes_str,
-                            numpy_type=self.implementation_ir.parameters[arg].data_type.dtype.name,
-                            dtype=self.implementation_ir.parameters[arg].data_type.dtype.name,
-                            par_name=arg,
-                        )
+        for name, datadescr in self.implementation_ir.sdfg.arglist().items():
+            if name in self.implementation_ir.arg_fields:
+                run_args_strs.append(f"ctypes.c_void_p({self.generate_field_ptr_str(name)})")
+            else:
+                run_args_strs.append(
+                    # "np.ctypeslib.as_ctypes(np.{dtype}({par_name}))".format(
+                    "ctypes.{ctype_name}(np.{numpy_type}({par_name}))".format(
+                        ctype_name=DataType.from_dtype(datadescr.dtype.type).ctypes_str,
+                        numpy_type=datadescr.dtype.type.__name__,
+                        par_name=name,
                     )
+                )
 
         # for str in []:
         #             field_run_args=", ".join(
@@ -150,13 +149,20 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
                     + "\n"
                     + "\n".join(field_slices)
                     + """
-dace_lib['__dace_init_{program_name}']({run_args}, {total_field_sizes})
+#dace_lib['__dace_init_{program_name}']({run_args}, {total_field_sizes})
+#if exec_info is not None:
+#    exec_info['pyext_program_start_time'] = time.perf_counter()
+#dace_lib['__program_{program_name}']({run_args}, {total_field_sizes})
+#if exec_info is not None:
+#    exec_info['pyext_program_end_time'] = time.perf_counter()
+#dace_lib['__dace_exit_{program_name}']({run_args}, {total_field_sizes})
+dace_lib['__dace_init_{program_name}']({run_args})
 if exec_info is not None:
     exec_info['pyext_program_start_time'] = time.perf_counter()
-dace_lib['__program_{program_name}']({run_args}, {total_field_sizes})
+dace_lib['__program_{program_name}']({run_args})
 if exec_info is not None:
     exec_info['pyext_program_end_time'] = time.perf_counter()
-dace_lib['__dace_exit_{program_name}']({run_args}, {total_field_sizes})
+dace_lib['__dace_exit_{program_name}']({run_args})
 """.format(
                         program_name=self.implementation_ir.sdfg.name,
                         run_args=", ".join(run_args_strs),

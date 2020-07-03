@@ -50,11 +50,17 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
         tmp_sdfg = dace.SDFG(library_node.label + f"_tmp_{limit_var}_sdfg")
         tmp_state = tmp_sdfg.add_state(library_node.label + f"_tmp_{limit_var}_state")
 
+        symbol_mapping = {}
+        for k in mapped_sdfg.free_symbols:
+            symbol_mapping[k] = dace.symbolic.symbol(k, mapped_sdfg.symbols[k])
+            tmp_sdfg.symbols[k] = mapped_sdfg.symbols[k]
+
         nsdfg_node = tmp_state.add_nested_sdfg(
             mapped_sdfg,
             tmp_sdfg,
             set("IN_" + inp for inp in library_node.inputs),
             set("OUT_" + outp for outp in library_node.outputs),
+            symbol_mapping=symbol_mapping,
         )
 
         tmp_sdfg.save("tmp__map.sdfg")
@@ -291,11 +297,17 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
         tmp_sdfg = dace.SDFG(library_node.label + f"_tmp_{limit_var}_sdfg")
         tmp_state = tmp_sdfg.add_state(library_node.label + f"_tmp_{limit_var}_state")
 
+        symbol_mapping = {}
+        for k in mapped_sdfg.free_symbols:
+            symbol_mapping[k] = dace.symbolic.symbol(k, mapped_sdfg.symbols[k])
+            tmp_sdfg.symbols[k] = mapped_sdfg.symbols[k]
+
         nsdfg_node = tmp_state.add_nested_sdfg(
             mapped_sdfg,
             tmp_sdfg,
             set("IN_" + inp for inp in library_node.inputs),
             set("OUT_" + outp for outp in library_node.outputs),
+            symbol_mapping=symbol_mapping,
         )
 
         # ndrange = {iter_var: str(library_node.k_range) if limit_var == "K" else f"0:{limit_var}"}
@@ -584,8 +596,12 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                     "OUT_" + acc.outer_name, subset_str=subset_str, num_accesses=acc.num
                 ),
             )
+        #
+        # for k in tmp_sdfg.symbols.keys():
+        #     tmp_sdfg.symbols[k] = parent_sdfg.symbols[k]
+        for k in tasklet.free_symbols:
+            tmp_sdfg.symbols[k] = parent_sdfg.symbols[k]
 
-        tmp_sdfg.validate()
         not_yet_mapped_vars = set()
         for variable in reversed(node.loop_order):
             if variable == "K" and node.iteration_order is not gt_ir.IterationOrder.PARALLEL:
@@ -598,9 +614,11 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
                 )
             not_yet_mapped_vars.add(variable)
 
-        symbols_mapping = {k: k for k in tmp_sdfg.free_symbols}
+        symbol_mapping = {}
+        for k in tmp_sdfg.free_symbols:
+            symbol_mapping[k] = k
 
-        symbols_mapping.update(
+        symbol_mapping.update(
             _I_loc=f"I+{node.ranges[0][1] - node.ranges[0][0]}",
             _J_loc=f"J+{node.ranges[1][1] - node.ranges[1][0]}",
             _K_loc=f"({node.ranges[2][1]}) - ({node.ranges[2][0]})",
@@ -609,11 +627,11 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
         k_loc = dace.symbolic.pystr_to_symbolic(f"({node.ranges[2][1]}) - ({node.ranges[2][0]})")
 
         # if len(k_loc.free_symbols) == 0:
-        #     del symbols_mapping["_K_loc"]
+        #     del symbol_mapping["_K_loc"]
         #     # tmp_sdfg.add_constant("_K_loc", dace.dtypes.int32(int(k_loc)), dace.dtypes.int32())
         #     tmp_sdfg.replace("_K_loc", str(k_loc))
         # else:
-        #     symbols_mapping["_K_loc"] = k_loc
+        #     symbol_mapping["_K_loc"] = k_loc
 
         from dace.transformation.interstate import InlineSDFG
 
@@ -622,7 +640,7 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
         from gt4py.backend.dace.sdfg.api import replace_recursive
 
         for k in "IJK":
-            replace_recursive(tmp_sdfg, f"_{k}_loc", str(symbols_mapping[f"_{k}_loc"]))
+            replace_recursive(tmp_sdfg, f"_{k}_loc", str(symbol_mapping[f"_{k}_loc"]))
 
         from gt4py.backend.dace.sdfg.transforms import RemoveTrivialLoop
         from gt4py.backend.dace.sdfg.api import apply_transformations_repeated_recursive
@@ -641,7 +659,7 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
             sdfg=tmp_sdfg,
             inputs=node.in_connectors,
             outputs=node.out_connectors,
-            symbol_mapping=symbols_mapping,
+            symbol_mapping=symbol_mapping,
         )
         res.sdfg.parent = parent_state
         res.sdfg.parent_sdfg = parent_sdfg
@@ -726,5 +744,5 @@ class ForLoopExpandTransformation(dace.library.ExpandTransformation):
         #     sdfg=res_sdfg,
         #     inputs=node.in_connectors,
         #     outputs=node.out_connectors,
-        #     symbol_mapping=symbols_mapping,
+        #     symbol_mapping=symbol_mapping,
         # )
