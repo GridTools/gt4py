@@ -64,9 +64,9 @@ def copy_stencil_plus_one(field_a: Field3D, field_b: Field3D):
 
 
 Interval = gt_definitions.Interval
-skip_edges_region = (
-    dict(start=(Interval.START, 1), stop=(Interval.STOP, -1)),
-    dict(start=(Interval.START, 1), stop=(Interval.STOP, -1)),
+skip_edges_region = gt_definitions.Region(
+        types.SimpleNamespace(start=(Interval.START, 1), stop=(Interval.STOP, -1)),
+        types.SimpleNamespace(start=(Interval.START, 1), stop=(Interval.STOP, -1)),
 )
 
 

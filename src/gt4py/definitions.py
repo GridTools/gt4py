@@ -668,12 +668,6 @@ class Region:
     def __init__(self, *axes):
         if len(axes) != 2:
             raise TypeError("Requires two axis specifications")
-        if any((len(axis) != 2 if axis is not None else False for axis in axes)):
-            raise TypeError(
-                "Each axis must have format (interval, offset), where\n"
-                "\tinterval : one of gt_definitions.Interval.[START, STOP]\n"
-                "\toffset : an offset from the interval position (positive or negative)."
-            )
 
         self.axes = list()
         for axis in axes:
@@ -683,6 +677,14 @@ class Region:
                 self.axes.append(types.SimpleNamespace(start=axis.start, stop=axis.stop))
             else:
                 self.axes.append(types.SimpleNamespace(start=axis[0], stop=axis[1]))
+            if self.axes[-1] is not None and (
+                len(self.axes[-1].start) != 2 or len(self.axes[-1].stop) != 2
+            ):
+                raise TypeError(
+                    "Each axis must have format (interval, offset), where\n"
+                    "\tinterval : one of gt_definitions.Interval.[START, STOP]\n"
+                    "\toffset : an offset from the interval position (positive or negative)."
+                )
 
 
 def make_region_on_axis(axis, interval, start, stop):
