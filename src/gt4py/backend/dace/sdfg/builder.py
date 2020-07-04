@@ -278,7 +278,7 @@ class SDFGBuilder:
             return str(node.value)
 
         def visit_VarRef(self, node: gt_ir.VarRef):
-            return node.name
+            return node.local_name
 
         def visit_FieldRef(self, node: gt_ir.FieldRef):
             return node.local_name
@@ -506,7 +506,7 @@ class SDFGBuilder:
                         lifetime=dace.dtypes.AllocationLifetime.Persistent,
                     )
             for k, v in node.parameters.items():
-                self.sdfg.add_symbol(k, v.data_type.dtype.type)
+                self.sdfg.add_symbol(local_name(k, None, False), v.data_type.dtype.type)
             self.generic_visit(node)
 
     @classmethod

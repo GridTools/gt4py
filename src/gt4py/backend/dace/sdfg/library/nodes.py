@@ -1,7 +1,7 @@
 import dace
 from dace.properties import SymbolicProperty
 import dace.library
-from .expansions import ForLoopExpandTransformation
+from .expansions import StencilExpandTransformation
 
 from gt4py import ir as gt_ir
 from gt4py.backend.dace.util import axis_interval_to_range
@@ -10,7 +10,7 @@ from gt4py.backend.dace.sdfg.builder import MappedMemletInfo
 
 @dace.library.node
 class ApplyMethodLibraryNode(dace.library.LibraryNode):
-    implementations = {"loop": ForLoopExpandTransformation}
+    implementations = {"loop": StencilExpandTransformation}
     default_implementation = "loop"
 
     iteration_order = dace.properties.Property(

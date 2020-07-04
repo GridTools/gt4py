@@ -118,7 +118,7 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
                     "ctypes.{ctype_name}(np.{numpy_type}({par_name}))".format(
                         ctype_name=DataType.from_dtype(datadescr.dtype.type).ctypes_str,
                         numpy_type=datadescr.dtype.type.__name__,
-                        par_name=name,
+                        par_name=name if not name.startswith("_gt_loc__") else name[9:],
                     )
                 )
 
