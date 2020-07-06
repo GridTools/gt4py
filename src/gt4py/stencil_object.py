@@ -293,4 +293,3 @@ class StencilObject(abc.ABC):
 
         if debug_mode:
             test_builder.write_output(out_fields)
-

@@ -34,7 +34,9 @@ class TestBuilder:
 
         unit_test_name = "unit_test.cpp"
         unit_test_dir = (
-            os.path.join(unit_test_dir, cpython_id, backend.replace(":", ""), os.sep.join(components))
+            os.path.join(
+                unit_test_dir, cpython_id, backend.replace(":", ""), os.sep.join(components)
+            )
             + "_pyext_BUILD"
         )
 
@@ -50,7 +52,9 @@ class TestBuilder:
             ]
             if len(out_indices) < 1:
                 out_indices = [
-                    field_idx for field_idx, field_arg in enumerate(field_args) if field_arg in origins
+                    field_idx
+                    for field_idx, field_arg in enumerate(field_args)
+                    if field_arg in origins
                 ]
 
         for field_idx, field_arg in enumerate(field_args):
