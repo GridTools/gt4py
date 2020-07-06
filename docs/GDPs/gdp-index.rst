@@ -5,7 +5,7 @@ GT4Py Development
 This page provides an overview of the development decisions and priorities
 for GT4Py. Specifically, it contains a collections of GT4Py Development
 Proposals (GDPs) with proposed features for the framework in various
-stages of discussion or completion (see :doc:`gdp-0000`).
+stages of discussion or completion (see :doc:`gdp-0000-gdp-process`).
 
 Process GDPs (GDPs about GDPs or Processes)
 -------------------------------------------
@@ -13,7 +13,7 @@ Process GDPs (GDPs about GDPs or Processes)
 .. toctree::
    :maxdepth: 1
 
-   gdp-0000
+   gdp-0000-gdp-process
    gdp-template
 
 
