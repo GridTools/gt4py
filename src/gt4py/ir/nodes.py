@@ -602,6 +602,14 @@ class Assign(Statement):
 
 
 @attribclass
+class AugAssign(Statement):
+    target = attribute(of=Ref)
+    value = attribute(of=Expr)
+    op = attribute(of=BinaryOperator)
+    loc = attribute(of=Location, optional=True)
+
+
+@attribclass
 class If(Statement):
     condition = attribute(of=Expr)
     main_body = attribute(of=BlockStmt)

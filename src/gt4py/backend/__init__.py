@@ -20,10 +20,10 @@ from .debug_backend import *
 from .numpy_backend import *
 from .gt_backends import *
 
-# try:
-#     import dawn4py
-#     from .dawn_backends import *
-# except ImportError:
-#     pass  # dawn4py not installed
+try:
+    import dawn4py
+    from .dawn_backends import *
+except ImportError:
+    pass  # dawn4py not installed
 
 from . import python_generator

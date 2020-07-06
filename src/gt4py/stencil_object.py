@@ -7,6 +7,7 @@ import numpy as np
 
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_storage
+import gt4py.test_builder as gt_test_builder
 from gt4py.definitions import (
     AccessKind,
     Boundary,
@@ -277,8 +278,19 @@ class StencilObject(abc.ABC):
                     f"Shape of field {name} is {field.shape} but must be at least {min_shape} for given domain and origin."
                 )
 
+        debug_mode = "debug_mode" in self.options and self.options["debug_mode"]
+        if debug_mode:
+            test_builder = gt_test_builder.TestBuilder(self)
+            out_fields = test_builder.write_test(
+                self.backend, domain, origin, shapes, field_args, parameter_args
+            )
+
         self.run(
             _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
         )
         if exec_info is not None:
             exec_info["call_run_end_time"] = time.perf_counter()
+
+        if debug_mode:
+            test_builder.write_output(out_fields)
+
