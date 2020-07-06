@@ -23,7 +23,7 @@ GT4PY_INSTALLATION_PATH = os.path.dirname(os.path.abspath(__file__))
 
 # Default paths (taken from user's environment vars when possible)
 BOOST_ROOT: str = os.environ.get(
-    "BOOST_ROOT", os.environ.get("BOOST_HOME", os.path.abspath("/usr/local/include"))
+    "BOOST_ROOT", os.environ.get("BOOST_HOME", os.path.abspath("/usr/local"))
 )
 
 CUDA_ROOT: str = os.environ.get(
