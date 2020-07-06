@@ -23,4 +23,4 @@ jobs:
         python -m pip install .
     - name: Build documentation
       run: |
-        cd docs && SPHINXOPTS=-W make html
+        cd docs && SPHINXOPTS=-W make -e html

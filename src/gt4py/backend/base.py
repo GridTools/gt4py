@@ -61,12 +61,15 @@ class Backend(abc.ABC):
 
     #: Backend-specific options:
     #:  Dict[name: str, info: Dict[str, Any]]]
-    #:      + info:
-    #:          - versioning: bool
-    #:          - description [optional]: str
+    #:
+    #:  + info:
+    #:    - versioning: bool
+    #:    - description [optional]: str
+    #:
     options: ClassVar[Optional[Dict[str, Any]]] = None
 
     #: Backend-specific storage parametrization: Dict[str, Any]
+    #:
     #:  - "alignment": int (in bytes)
     #:  - "device": str ("cpu" | "gpu")
     #:  - "layout_map": Tuple[bool] -> Tuple[Union[int, None]]
