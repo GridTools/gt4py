@@ -654,6 +654,24 @@ class DawnNaiveBackend(BaseDawnBackend):
 
 
 @gt_backend.register
+class DawnOptBackend(BaseDawnBackend):
+
+    DAWN_BACKEND_NS = "cxxopt"
+    DAWN_BACKEND_NAME = "CXXOpt"
+    GT_BACKEND_T = "x86"
+
+    name = "dawn:cxxopt"
+    options = _DAWN_BACKEND_OPTIONS
+    storage_info = gt_backend.GTX86Backend.storage_info
+
+    @classmethod
+    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
+        return cls._generic_generate_extension(
+            stencil_id, definition_ir, options, uses_cuda=False, **kwargs
+        )
+
+
+@gt_backend.register
 class DawnCUDABackend(BaseDawnBackend):
 
     DAWN_BACKEND_NS = "cuda"
