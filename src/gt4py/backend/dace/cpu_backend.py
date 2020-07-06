@@ -20,7 +20,7 @@ class X86DaceOptimizer(DaceOptimizer):
     description = "GT x86 style transformations "
 
     def transform_library(self, sdfg):
-        from gt4py.backend.dace.sdfg.library.nodes import ApplyMethodLibraryNode
+        from gt4py.backend.dace.sdfg.library.nodes import StencilLibraryNode
 
         from gt4py.backend.dace.sdfg.transforms import PruneTransientOutputs
 
@@ -28,7 +28,7 @@ class X86DaceOptimizer(DaceOptimizer):
 
         for state in sdfg.nodes():
             for node in state.nodes():
-                if isinstance(node, ApplyMethodLibraryNode):
+                if isinstance(node, StencilLibraryNode):
                     node.loop_order = "IJK"
         return sdfg
 
@@ -41,7 +41,6 @@ class X86DaceOptimizer(DaceOptimizer):
         # sdfg.apply_strict_transformations(validate=False)
         # global_ij_tiling(sdfg, tile_size=(8, 8))
         from dace.transformation.interstate import StateFusion
-
         # sdfg.apply_transformations_repeated([StateFusion], strict=False, validate=False)
         return sdfg
 

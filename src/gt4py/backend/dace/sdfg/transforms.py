@@ -230,7 +230,7 @@ class PruneTransientOutputs(pattern_matching.Transformation):
             candidate[PruneTransientOutputs._library_node]
         )
 
-        if not isinstance(library_node, library.ApplyMethodLibraryNode):
+        if not isinstance(library_node, library.StencilLibraryNode):
             return False
         access_node: dace.nodes.AccessNode = graph.node(
             candidate[PruneTransientOutputs._access_node]
@@ -280,15 +280,14 @@ class PruneTransientOutputs(pattern_matching.Transformation):
 
     def apply(self, sdfg: dace.SDFG):
         graph: dace.sdfg.SDFGState = sdfg.nodes()[self.state_id]
-        library_node: library.ApplyMethodLibraryNode = graph.node(
+        library_node: library.StencilLibraryNode = graph.node(
             self.subgraph[PruneTransientOutputs._library_node]
         )
         access_node: dace.nodes.AccessNode = graph.node(
             self.subgraph[PruneTransientOutputs._access_node]
         )
         edges = graph.edges_between(library_node, access_node)
-        if len(edges) != 1:
-            return False
+
         in_edge = edges[0]
 
         data = access_node.data
@@ -298,11 +297,58 @@ class PruneTransientOutputs(pattern_matching.Transformation):
         for name, acc in dict(library_node.write_accesses.items()).items():
             if acc.outer_name == data:
                 del library_node.write_accesses[name]
+        for int in library_node.intervals:
+            # if data in int.input_extents:
+            #     del int.input_extents[data]
+            for state in int.sdfg.nodes():
+                tasklets = [n for n in state.nodes() if isinstance(n, dace.nodes.Tasklet)]
+                assert len(tasklets) == 1
+                tasklet: dace.nodes.Tasklet = tasklets[0]
+                remove_connectors = set()
+                for conn in tasklet.out_connectors:
+                    if conn.startswith(f"_gt_loc_out__{data}_"):
+                        remove_connectors.add(conn)
+                for conn in remove_connectors:
+                    tasklet.remove_out_connector(conn)
+
+                output_accessors = [
+                    n
+                    for n in state.nodes()
+                    if isinstance(n, dace.nodes.AccessNode)
+                    and n.access != dace.dtypes.AccessType.ReadOnly
+                    and n.data == data
+                ]
+                assert len(output_accessors) == 1
+                acc = output_accessors[0]
+                assert acc.access == dace.dtypes.AccessType.WriteOnly
+                inner_in_edge = state.in_edges(acc)
+                assert len(inner_in_edge) == 1
+                state.remove_edge(inner_in_edge[0])
+                state.remove_node(acc)
+                if (
+                    len(
+                        [
+                            n
+                            for n in state.nodes()
+                            if isinstance(n, dace.nodes.AccessNode) and n.data == data
+                        ]
+                    )
+                    == 0
+                ):
+                    int.sdfg.remove_data(data)
         graph.remove_edge(in_edge)
         if access_node.access == dace.dtypes.AccessType.ReadWrite:
             access_node.access = dace.dtypes.AccessType.WriteOnly
         if len(graph.out_edges(access_node)) == 0:
             graph.remove_node(access_node)
+
+        remove = True
+        for state in sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.AccessNode) and node.data == data:
+                    remove = False
+        if remove:
+            sdfg.remove_data(data)
 
 
 @registry.autoregister_params(singlestate=True)

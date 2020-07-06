@@ -387,8 +387,8 @@ class SDFGBuilder:
         def new_tasklet_name(self):
             return "tasklet_" + str(next(self.tasklet_counter))
 
-        def new_apply_method_name(self):
-            return "apply_method_" + str(next(self.apply_method_counter))
+        def new_stage_name(self):
+            return "stencil_" + str(next(self.apply_method_counter))
 
         def new_map_name(self):
             return "map_" + str(next(self.map_counter))
@@ -437,27 +437,54 @@ class SDFGBuilder:
 
             return state
 
+        def visit_FieldRef(self, node: gt_ir.FieldRef):
+            import copy
+            import dace.data
+
+            if node.name not in self.apply_block.arrays:
+                array: dace.data.Array = copy.deepcopy(self.sdfg.arrays[node.name])
+                array.transient = False
+                self.apply_block.arrays[node.name] = array
+
+        def visit_VarRef(self, node: gt_ir.VarRef):
+            if node.name not in self.apply_block.symbols:
+                self.apply_block.symbols[
+                    local_name(node.name, None, is_target=False)
+                ] = dace.symbol(
+                    local_name(node.name, None, is_target=False),
+                    dace.dtypes.typeclass(self.parameters[node.name].data_type.dtype.type),
+                )
+
         def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
+            node.arrays = {}
+            node.symbols = {}
+            self.apply_block = node
+            self.generic_visit(node)
+            self.apply_block = None
 
-            # if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
-            #     make_computation = self._make_parallel_computation
-            # if self.iteration_order == gt_ir.IterationOrder.FORWARD:
-            #     make_computation = self._make_forward_computation
-            # if self.iteration_order == gt_ir.IterationOrder.BACKWARD:
-            #     make_computation = self._make_backward_computation
-
-            # self._append_states(*make_computation(node))
-            from .library import ApplyMethodLibraryNode
+            from .library import StencilLibraryNode, ApplyMethod
 
             state = self.sdfg.add_state()
 
-            library_node = ApplyMethodLibraryNode(
-                name=self.new_apply_method_name(),
-                code=node.tasklet_code,
+            label = self.new_stage_name()
+            symbols = {}
+
+            apply_method = ApplyMethod(
+                label,
+                node.k_range,
+                arrays=node.arrays,
                 read_accesses=node.mapped_input_memlet_infos,
                 write_accesses=node.mapped_output_memlet_infos,
+                code=node.tasklet_code,
+                symbols=node.symbols,
+            )
+            library_node = StencilLibraryNode(
+                name=label,
                 iteration_order=self.iteration_order,
-                ranges=(node.i_range, node.j_range, node.k_range),
+                ij_range=(node.i_range, node.j_range),
+                intervals=[apply_method]
+                # read_accesses=node.mapped_input_memlet_infos,
+                # write_accesses=node.mapped_output_memlet_infos,
             )
             state.add_node(library_node)
 
@@ -510,7 +537,8 @@ class SDFGBuilder:
             self.iteration_order = None
 
         def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
-
+            self.fields = node.fields
+            self.parameters = node.parameters
             for field in node.fields.values():
                 if field.name in node.unreferenced:
                     continue

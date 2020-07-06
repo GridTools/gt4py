@@ -22,11 +22,11 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
     description = ""
 
     def transform_library(self, sdfg):
-        from gt4py.backend.dace.sdfg.library.nodes import ApplyMethodLibraryNode
+        from gt4py.backend.dace.sdfg.library.nodes import StencilLibraryNode
 
         for state in sdfg.nodes():
             for node in state.nodes():
-                if isinstance(node, ApplyMethodLibraryNode):
+                if isinstance(node, StencilLibraryNode):
                     node.loop_order = "IJK"
 
         from gt4py.backend.dace.sdfg.transforms import PruneTransientOutputs
