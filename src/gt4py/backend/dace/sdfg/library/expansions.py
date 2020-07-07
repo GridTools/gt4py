@@ -15,21 +15,6 @@ class StencilExpander:
         self.inner_sdfg = None
         self.inner_state = None
 
-    @classmethod
-    def _acc_nums(cls, names, accesses_dict):
-        res = dict()
-        for name in names:
-            res[name] = (
-                dace.DYNAMIC
-                if all(
-                    acc.num == dace.DYNAMIC
-                    for acc in accesses_dict.values()
-                    if name == acc.outer_name
-                )
-                else 1
-            )
-        return res
-
     def _add_edges_map(
         self,
         sdfg,
@@ -42,7 +27,6 @@ class StencilExpander:
         access_dict,
         variable,
     ):
-        acc_nums = self._acc_nums(names, access_dict)
         mapped_sdfg = nsdfg_node.sdfg
 
         subsets = {}
@@ -75,7 +59,7 @@ class StencilExpander:
                     nsdfg_node,
                     prefix + name,
                     dace.memlet.Memlet.simple(
-                        data=prefix + name, subset_str=subsets[name], num_accesses=acc_nums[name]
+                        data=prefix + name, subset_str=subsets[name], num_accesses=1
                     ),
                 )
             else:
@@ -86,7 +70,7 @@ class StencilExpander:
                     map_scope_delimiter,
                     "IN_" + name,
                     dace.memlet.Memlet.simple(
-                        data=prefix + name, subset_str=subsets[name], num_accesses=acc_nums[name]
+                        data=prefix + name, subset_str=subsets[name], num_accesses=1
                     ),
                 )
             mapped_shape = extents[name].shape
@@ -145,7 +129,7 @@ class StencilExpander:
                     map_scope_delimiter,
                     "IN_" + name,
                     dace.memlet.Memlet.simple(
-                        prefix + name, subset_str=subset_str, num_accesses=acc_nums[name]
+                        prefix + name, subset_str=subset_str, num_accesses=1
                     ),
                 )
             else:
@@ -156,15 +140,15 @@ class StencilExpander:
                     state.add_write(prefix + name),
                     None,
                     dace.memlet.Memlet.simple(
-                        prefix + name, subset_str=subset_str, num_accesses=acc_nums[name]
+                        prefix + name, subset_str=subset_str, num_accesses=1
                     ),
                 )
 
         if len(names) == 0:
             if isinstance(map_scope_delimiter, dace.nodes.MapEntry):
-                state.add_edge(map_scope_delimiter, None, nsdfg_node, None, dace.EmptyMemlet())
+                state.add_edge(map_scope_delimiter, None, nsdfg_node, None, dace.Memlet())
             else:
-                state.add_edge(nsdfg_node, None, map_scope_delimiter, None, dace.EmptyMemlet())
+                state.add_edge(nsdfg_node, None, map_scope_delimiter, None, dace.Memlet())
 
     def _map(self, variable):
         limit_var = variable.upper()
@@ -244,15 +228,6 @@ class StencilExpander:
         ################################### Loop ###################################
 
         for input in self.library_node.inputs:
-            acc_num = (
-                dace.DYNAMIC
-                if all(
-                    acc.num == dace.DYNAMIC
-                    for acc in self.library_node.read_accesses.values()
-                    if input == acc.outer_name
-                )
-                else 1
-            )
             subset_strs = []
             for i, var in enumerate("IJK"):
                 lower_extent, upper_extent = self.library_node.input_extents[input][i]
@@ -275,7 +250,7 @@ class StencilExpander:
                 nsdfg_node,
                 "IN_" + input,
                 dace.memlet.Memlet.simple(
-                    data="IN_" + input, subset_str=subset_str, num_accesses=acc_num
+                    data="IN_" + input, subset_str=subset_str, num_accesses=1
                 ),
             )
             mapped_shape = self.library_node.input_extents[input].shape
@@ -299,15 +274,6 @@ class StencilExpander:
             )
 
         for output in self.library_node.outputs:
-            acc_num = (
-                dace.DYNAMIC
-                if all(
-                    acc.num == dace.DYNAMIC
-                    for acc in self.library_node.write_accesses.values()
-                    if output == acc.outer_name
-                )
-                else 1
-            )
             is_array = isinstance(self.inner_sdfg.arrays["OUT_" + output], dace_data.Array)
 
             subset_strs = []
@@ -339,7 +305,7 @@ class StencilExpander:
                 state.add_write("OUT_" + output),
                 None,
                 dace.memlet.Memlet.simple(
-                    data="OUT_" + output, subset_str=subset_str, num_accesses=acc_num
+                    data="OUT_" + output, subset_str=subset_str, num_accesses=1
                 ),
             )
             mapped_shape = self.library_node.output_extents[output].shape
@@ -457,7 +423,7 @@ class StencilExpander:
                 tasklet,
                 name,
                 dace.memlet.Memlet.simple(
-                    "IN_" + acc.outer_name, subset_str=subset_str, num_accesses=acc.num
+                    "IN_" + acc.outer_name, subset_str=subset_str, num_accesses=1
                 ),
             )
         for name, acc in node.write_accesses.items():
@@ -472,7 +438,7 @@ class StencilExpander:
                 write_accessors[acc.outer_name],
                 None,
                 dace.memlet.Memlet.simple(
-                    "OUT_" + acc.outer_name, subset_str=subset_str, num_accesses=acc.num
+                    "OUT_" + acc.outer_name, subset_str=subset_str, num_accesses=1
                 ),
             )
         for k in sdfg.free_symbols:

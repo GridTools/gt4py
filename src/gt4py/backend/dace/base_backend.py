@@ -242,7 +242,7 @@ class DaceBackend(gt_backend.BaseBackend):
         sdfg.validate()
         from dace.transformation.interstate import StateFusion
 
-        sdfg.apply_transformations_repeated([StateFusion], strict=True, validate=False)
+        sdfg.apply_transformations_repeated([StateFusion], strict=False, validate=False)
 
         sdfg.save(dace_build_path + os.path.sep + "01_fused_states.sdfg")
         cls.transform_library(sdfg)

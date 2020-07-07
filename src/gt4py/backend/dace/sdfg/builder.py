@@ -1,5 +1,5 @@
 import itertools
-from collections import OrderedDict
+from typing import Union
 
 import dace
 
@@ -14,7 +14,7 @@ class MappedMemletInfo:
     local_name = attribute(of=str)
     subset_str = attribute(of=str, optional=True)
     offset = attribute(of=dict)
-    num = attribute(of=int)
+    dynamic = attribute(of=bool)
 
 
 def local_name(name, offset, is_target):
@@ -86,59 +86,91 @@ class SDFGBuilder:
             transormer = cls()
             transormer.visit(iir)
 
+        def generic_visit(self, node: gt_ir.Node, **kwargs):
+            res = super().generic_visit(node, **kwargs)
+            if res is None:
+                return set(), set()
+            return res
+
         def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
             self.parameters = node.parameters
             self.generic_visit(node)
 
         def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
-            self.access_counts = dict()
-            self.visit(node.body)
-            node.access_counts = self.access_counts
-            self.access_counts = None
+            node.accesses, node.dynamic_accesses = self.visit(node.body)
 
-        def visit_Assign(self, node: gt_ir.Assign):
-            self.visit(node.value)
-            self.visit(node.target, is_target=True)
-
-        def visit_If(self, node: gt_ir.If):
-
-            self.visit(node.condition)
-
-            access_counts = dict(self.access_counts)
-
-            self.visit(node.main_body)
-            access_counts_main = dict(self.access_counts)
-
-            self.access_counts = dict(access_counts)
-            self.visit(node.else_body)
-            access_counts_else = self.access_counts
-
-            for name in set(access_counts_main) & set(access_counts_else):
-                if name not in access_counts or access_counts[name] == dace.dtypes.DYNAMIC:
-                    access_counts[name] = 1
-            for name in set(access_counts_main) ^ set(access_counts_else):
-                access_counts.setdefault(name, dace.dtypes.DYNAMIC)
-
-            self.access_counts = access_counts
-
-        def visit_FieldRef(self, node: gt_ir.FieldRef, is_target=False):
-            key = (node.name, tuple((k, v) for k, v in node.offset.items()))
-            # if is_target:
-            #     self.tasklet_targets.add(key)
-
-            node.was_output = (
-                is_target or local_name(node.name, node.offset, True) in self.access_counts
+        def visit_Assign(self, node: gt_ir.Assign, *, accesses):
+            value_accesses, value_dynamic_accesses = self.visit(node.value, accesses=accesses)
+            target_accesses, target_dynamic_accesses = self.visit(
+                node.target, is_target=True, accesses=accesses
             )
-            node.local_name = local_name(node.name, node.offset, node.was_output)
-            self.access_counts[node.local_name] = 1
+            return (
+                value_accesses | target_accesses,
+                value_dynamic_accesses | target_dynamic_accesses,
+            )
 
-        def visit_VarRef(self, node: gt_ir.VarRef, is_target=False):
-            # if is_target:
-            #     self.tasklet_targets.add((node.name, None))
-            # node.was_output = node.name in self.access_counts
-            node.was_output = is_target or local_name(node.name, None, True) in self.access_counts
+        def _visit_branches(self, condition, if_branch, else_branch, **kwargs):
+
+            accesses_condition, accesses_dynamic_condition = self.visit(condition, **kwargs)
+
+            accesses_then, accesses_dynamic_then = self.visit(if_branch, **kwargs)
+
+            accesses_else, accesses_dynamic_else = self.visit(else_branch, **kwargs)
+
+            # accesses are those accessed in any of the branches
+            accesses = accesses_condition | accesses_then | accesses_else
+            # dynamic accesses are those accessed dynamically in any of the branches...
+            accesses_dynamic = (
+                accesses_dynamic_condition | accesses_dynamic_then | accesses_dynamic_else
+            )
+            # ...but not non-dynamically in the condition
+            accesses_dynamic -= accesses_condition - accesses_dynamic_condition
+            # ...and not non-dynamically in both if- and else branch.
+            accesses_dynamic -= (accesses_then - accesses_dynamic_then) & (
+                accesses_else - accesses_dynamic_else
+            )
+
+            return accesses, accesses_dynamic
+
+        def _visit_stmts(self, stmts, accesses=None):
+            if accesses is None:
+                accesses = set()
+            else:
+                accesses = set(accesses)
+            accesses_dynamic = set()
+            for stmt in stmts:
+                accesses_stmt, accesses_dynamic_stmt = self.visit(stmt, accesses=accesses)
+                accesses |= accesses_stmt
+                accesses_dynamic = (accesses_dynamic_stmt - (accesses - accesses_dynamic)) | (
+                    accesses_dynamic - (accesses_stmt - accesses_dynamic_stmt)
+                )
+            return accesses, accesses_dynamic
+
+        def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr, **kwargs):
+            return self._visit_branches(node.condition, node.then_expr, node.else_expr, **kwargs)
+
+        def visit_If(self, node: gt_ir.If, **kwargs):
+            return self._visit_branches(node.condition, node.main_body, node.else_body, **kwargs)
+
+        def visit_BlockStmt(self, node: gt_ir.BlockStmt, **kwargs):
+            return self._visit_stmts(node.stmts, **kwargs)
+
+        def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr, **kwargs):
+            return self.visit(node.arg, **kwargs)
+
+        def visit_BinaryOpExpr(self, node: gt_ir.BinOpExpr, **kwargs):
+            return self._visit_stmts([node.lhs, node.rhs], **kwargs)
+
+        def visit_FieldRef(self, node: gt_ir.FieldRef, is_target=False, *, accesses):
+            node.was_output = is_target or local_name(node.name, node.offset, True) in accesses
+            node.local_name = local_name(node.name, node.offset, node.was_output)
+
+            return {node.local_name}, set()
+
+        def visit_VarRef(self, node: gt_ir.VarRef, is_target=False, *, accesses):
+            node.was_output = is_target or local_name(node.name, None, True) in accesses
             node.local_name = local_name(node.name, None, node.was_output)
-            self.access_counts[node.local_name] = 1
+            return set(), set()
 
     class GenerateMappedMemletsPass(gt_ir.IRNodeVisitor):
         @classmethod
@@ -175,13 +207,15 @@ class SDFGBuilder:
                 node.mapped_input_memlets[memlet_name] = dace.Memlet.simple(
                     memlet_info.outer_name,
                     memlet_info.subset_str,
-                    num_accesses=node.access_counts[memlet_info.local_name],
+                    num_accesses=1,
+                    dynamic=memlet_info.dynamic,
                 )
             for memlet_name, memlet_info in self.output_memlets.items():
                 node.mapped_output_memlets[memlet_name] = dace.Memlet.simple(
                     memlet_info.outer_name,
                     memlet_info.subset_str,
-                    num_accesses=node.access_counts[memlet_info.local_name],
+                    num_accesses=1,
+                    dynamic=memlet_info.dynamic,
                 )
 
             self.input_memlets = None
@@ -215,11 +249,11 @@ class SDFGBuilder:
                 subset_str = ", ".join(subset_list) if subset_list else "0"
 
                 memlet_dict[key] = MappedMemletInfo(
-                    num=self.apply_block.access_counts[key],
                     outer_name=node.name,
                     local_name=key,
                     subset_str=subset_str,
                     offset=node.offset,
+                    dynamic=key in self.apply_block.dynamic_accesses,
                 )
 
         # def visit_VarRef(self, node: gt_ir.VarRef):
