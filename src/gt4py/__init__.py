@@ -37,7 +37,6 @@ from . import testing
 
 from .definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo, CartesianSpace
 from .stencil_object import StencilObject
-from .test_builder import TestBuilder
 
 from pkg_resources import get_distribution, DistributionNotFound
 
