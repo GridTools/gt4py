@@ -1,16 +1,16 @@
-
 ===========================================================
 GT4Py: GridTools for Python
 ===========================================================
 
-`GridTools <https://github.com/GridTools/gridtools>`_ allows you to write
-highly performant :emphasis:`and` portable :emphasis:`declarative` stencil 
-kernels for weather and climate simulations in C++.  Write closer to the 
-mathematical formulation and let the framework optimize performance for you.
+Write stencil operations for weather and climate simulations close to the
+mathematical formulation with little boiler plate code and get great performance
+across machine architectures.
 
-GT4Py takes it a step further: kernels written in GT4Py's GTScript language are
-even more concise and readable. Plus, being an extension of Python syntax,
-GTScript is easily readable for anyone who knows some Python.
+How does it work? - GT4Py takes your stencils written in GTScript and generates
+optimized C++ code from them, which is compiled just-in-time to deliver the best
+possible performance. GT4Py's GTScript language is highly readable and concise.
+As an extension of Python it has a familiar look and feel to anyone who knows
+Python. 
 
 Great! - so what does it look like in practice? Look at the following example of
 a laplacian operation coded in GTScript!
@@ -28,6 +28,14 @@ Note how similar the GTScript representation is to the mathematical notation:
 |            B = - 4 * A + ( A[1, 0, 0] + A[-1, 0, 0] + |                                       |
 |                            A[0, 1, 0] + A[0, -1, 0] ) |                                       |
 +-------------------------------------------------------+---------------------------------------+
+
+By default the generated code uses GridTools to target typical modern
+multi-core, multi-node and GPU accelerated HPC architectures, however GT4Py can
+be extended to use other frameworks.
+
+`GridTools <https://github.com/GridTools/gridtools>`_ Is a C++ framework
+developed by `CSCS <https://cscs.ch>`_ for writing performance-portable stencil
+operations. In contrast to GT4Py it operates on a much lower level.
 
 Features:
 
