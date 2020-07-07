@@ -7,7 +7,6 @@ import numpy as np
 
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_storage
-import gt4py.test_builder as gt_test_builder
 from gt4py.definitions import (
     AccessKind,
     Boundary,

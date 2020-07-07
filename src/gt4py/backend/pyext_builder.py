@@ -51,7 +51,7 @@ def get_gt_pyext_build_opts(
         ],
         nvcc=[
             "-std=c++14",
-            "-arch=sm_35",
+            "-arch={}".format(gt_config.build_settings["cuda_arch"]),
             "-isystem={}".format(gt_config.build_settings["gt_include_path"]),
             "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
             "-DBOOST_PP_VARIADICS",
