@@ -556,7 +556,7 @@ class MergeBlocksPass(TransformPass):
                 return False
 
             for candidate_axis, target_axis in zip(candidate, target):
-                if any((x != y for x, y in zip(candidate_axis, target_axis))):
+                if candidate_axis != target_axis:
                     return False
             return True
 
