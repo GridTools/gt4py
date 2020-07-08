@@ -49,11 +49,6 @@ namespace {{ stencil_unique_name }} {
 
 namespace {
 
-gt::uint_t halos_[] = {
-    GRIDTOOLS_DAWN_HALO_EXTENT, GRIDTOOLS_DAWN_HALO_EXTENT,
-    GRIDTOOLS_DAWN_HALO_EXTENT, GRIDTOOLS_DAWN_HALO_EXTENT, 0, 0
-};
-
 std::array<gt::uint_t, 3> get_min_origin(
     const std::initializer_list<const std::array<gt::uint_t, 3>>& origins) {
     std::array<gt::uint_t, 3> min_origin = *origins.begin();
@@ -70,13 +65,11 @@ gridtools::dawn::domain make_domain(const std::array<gt::uint_t, 3> &in_size,
                                     const std::array<gt::uint_t, 3> &min_origin) {
     std::array<gt::uint_t, 3> size;
     for (int i = 0; i < 3; ++i) {
-      if(min_origin[i] < halos_[i*2])
-          halos_[i*2] = halos_[i*2+1] = min_origin[i];
-      size[i] = halos_[i*2] + in_size[i] + halos_[i*2+1];
+      size[i] = in_size[i] + 2 * min_origin[i];
     }
 
     gridtools::dawn::domain d{size};
-    d.set_halos(halos_[0], halos_[1], halos_[2], halos_[3], halos_[4], halos_[5]);
+    d.set_halos(min_origin[0], min_origin[0], min_origin[1], min_origin[1], min_origin[2], min_origin[2]);
     return d;
 }
 
@@ -107,7 +100,6 @@ data_store_t make_data_store(const BufferInfo& bi,
     double* ptr = static_cast<double*>(bi.ptr);
     for (int i = 0; i < 3; ++i) {
         strides[i] = bi.strides[i] / sizeof(double);
-        ptr += strides[i] * (origin[i] - halos_[i*2]);
         dims[i] = compute_domain_shape[i]+2*origin[i];
     }
     return data_store_t{storage_info_t{dims, strides}, ptr,
@@ -159,7 +151,7 @@ void run(const std::array<gt::uint_t, 3>& domain,
 {%- for field in arg_fields -%}
         {{ comma() }}ds_{{ field.name }}
 {%- endfor %});
-        // computation_.sync_bound_data_stores();
+    // computation_.sync_bound_data_stores();
 }
 
 }  // namespace {{ stencil_unique_name }}

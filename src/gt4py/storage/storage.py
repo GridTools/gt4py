@@ -399,8 +399,6 @@ class ExplicitlySyncedGPUStorage(Storage):
 
     @property
     def data(self):
-        if cp is not None:
-            return cp.asnumpy(self._device_field)
         return self._device_field
 
     def synchronize(self):

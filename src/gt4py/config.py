@@ -42,7 +42,7 @@ build_settings: Dict[str, Any] = {
     "cuda_bin_path": os.path.join(CUDA_ROOT, "bin"),
     "cuda_include_path": os.path.join(CUDA_ROOT, "include"),
     "cuda_library_path": os.path.join(CUDA_ROOT, "lib64"),
-    "cuda_arch": os.environ.get("CUDA_ARCH", "sm_35"),
+    "cuda_arch": os.environ.get("CUDA_ARCH", None),
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
     "extra_compile_args": {"cxx": [], "nvcc": []},
     "extra_link_args": [],

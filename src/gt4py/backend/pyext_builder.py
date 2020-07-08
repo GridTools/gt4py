@@ -30,12 +30,33 @@ import pybind11
 from gt4py import config as gt_config
 
 
+def get_cuda_compute_capability():
+    try:
+        import cupy as cp
+
+        return cp.cuda.Device(0).compute_capability
+    except:
+        return None
+
+
 def get_gt_pyext_build_opts(
     *, debug_mode: bool = False, add_profile_info: bool = False, uses_cuda: bool = False
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
 
     include_dirs = [gt_config.build_settings["boost_include_path"]]
     extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
+
+    if uses_cuda:
+        compute_capability = get_cuda_compute_capability()
+        cuda_arch = gt_config.build_settings["cuda_arch"] or compute_capability
+        if not cuda_arch:
+            raise RuntimeError("CUDA architecture could not be determined")
+        elif compute_capability and int(compute_capability) < int(cuda_arch):
+            raise RuntimeError(
+                f"CUDA architecture {cuda_arch} exceeds compute capability {compute_capability}"
+            )
+    else:
+        cuda_arch = ""
 
     extra_compile_args = dict(
         cxx=[
@@ -51,7 +72,7 @@ def get_gt_pyext_build_opts(
         ],
         nvcc=[
             "-std=c++14",
-            "-arch={}".format(gt_config.build_settings["cuda_arch"]),
+            "-arch=sm_{}".format(cuda_arch),
             "-isystem={}".format(gt_config.build_settings["gt_include_path"]),
             "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
             "-DBOOST_PP_VARIADICS",
