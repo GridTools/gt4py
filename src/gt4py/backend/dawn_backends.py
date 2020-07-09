@@ -623,11 +623,11 @@ class DawnGTMCBackend(BaseDawnBackend):
 
     DAWN_BACKEND_NS = "gt"
     DAWN_BACKEND_NAME = "GridTools"
-    GT_BACKEND_T = "x86"  # "mc"
+    GT_BACKEND_T = "mc"
 
     name = "dawn:gtmc"
     options = _DAWN_BACKEND_OPTIONS
-    storage_info = gt_backend.GTX86Backend.storage_info
+    storage_info = gt_backend.GTMCBackend.storage_info
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
