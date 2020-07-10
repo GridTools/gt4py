@@ -15,18 +15,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import abc
+import copy
 import enum
 import inspect
 import numbers
 import os
 import re
 import types
-import copy
+from collections import OrderedDict
+from typing import List, Dict, Type
 
 import jinja2
 import numpy as np
-
-from typing import List, Dict, Type
 
 import dawn4py
 from dawn4py.serialization import SIR
@@ -103,10 +103,23 @@ class SIRConverter(gt_ir.IRNodeVisitor):
 
         return global_variables
 
-    def visit_Operator(self, op: enum.Enum):
-        if op in self.OP_TO_CPP:
-            return self.OP_TO_CPP[op]
-        return op.python_symbol
+    def _make_operator(self, op: enum.Enum):
+        return self.OP_TO_CPP.get(op, op.python_symbol)
+
+    def _make_pow_expr(self, left, right):
+        exponent = right.value
+        if exponent == "0":
+            return sir_utils.make_literal_access_expr("1", type=SIR.BuiltinType.Integer)
+        elif exponent == "1":
+            return sir_utils.make_unary_operator("+", left)
+        elif exponent == "2":
+            return sir_utils.make_binary_operator(left, "*", left)
+        elif exponent == "3":
+            return sir_utils.make_binary_operator(
+                left, "*", sir_utils.make_binary_operator(left, "*", left)
+            )
+        else:
+            return sir_utils.make_fun_call_expr("gridtools::dawn::math::pow", [left, right])
 
     def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral):
         if node.value == gt_ir.Builtin.TRUE:
@@ -142,7 +155,7 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         return sir_utils.make_field_access_expr(name=node.name, offset=offset)
 
     def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr, **kwargs):
-        op = self.visit_Operator(node.op)
+        op = self._make_operator(node.op)
         operand = self.visit(node.arg)
         return sir_utils.make_unary_operator(op, operand)
 
@@ -150,26 +163,11 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         left = self.visit(node.lhs)
         right = self.visit(node.rhs)
         if node.op.python_symbol == "**":
-            sir = self.visit_ExpOpExpr(left, right)
+            sir = self._make_pow_expr(left, right)
         else:
-            op = self.visit_Operator(node.op)
+            op = self._make_operator(node.op)
             sir = sir_utils.make_binary_operator(left, op, right)
         return sir
-
-    def visit_ExpOpExpr(self, left, right):
-        exponent = right.value
-        if exponent == "0":
-            return sir_utils.make_literal_access_expr("1", type=SIR.BuiltinType.Integer)
-        if exponent == "1":
-            return sir_utils.make_unary_operator("+", left)
-        if exponent == "2":
-            return sir_utils.make_binary_operator(left, "*", left)
-        elif exponent == "3":
-            return sir_utils.make_binary_operator(
-                left, "*", sir_utils.make_binary_operator(left, "*", left)
-            )
-        else:
-            return sir_utils.make_fun_call_expr("gridtools::dawn::math::pow", [left, right])
 
     def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr, **kwargs):
         cond = self.visit(node.condition)
@@ -192,7 +190,7 @@ class SIRConverter(gt_ir.IRNodeVisitor):
     def visit_AugAssign(self, node: gt_ir.AugAssign):
         bin_op = gt_ir.BinOpExpr(lhs=node.target, op=node.op, rhs=node.value)
         assign = gt_ir.Assign(target=node.target, value=bin_op)
-        return self.visit_Assign(assign)
+        return self.visit(assign)
 
     def visit_If(self, node: gt_ir.If, **kwargs):
         cond = sir_utils.make_expr_stmt(self.visit(node.condition))
@@ -234,7 +232,7 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         functions = []
         global_variables = self._make_global_variables(node.parameters, node.externals)
 
-        fields = FieldDeclCollector.apply(node)  # [self.visit(field) for field in node.api_fields]
+        fields = FieldDeclCollector.apply(node)
         stencil_ast = sir_utils.make_ast(
             [self.visit(computation) for computation in node.computations]
         )
@@ -291,6 +289,11 @@ class DawnPyModuleGenerator(gt_backend.PyExtModuleGenerator):
         empty_checks = []
         none_checks = []
 
+        # Other backends allow None to be passed to unreferenced fields or scalars.
+        # Dawn backends do not check for null values passed to parameters, so the
+        # None values must be replaced with defaults for the unreferenced parameters,
+        # (0,0,0) for the origins, np.empty for fields, and zero for scalars.
+
         for arg in self.implementation_ir.api_signature:
             args.append(arg.name)
             if arg.name in self.implementation_ir.fields:
@@ -342,7 +345,7 @@ cupy.cuda.Device(0).synchronize()
         output_field_names = [
             name
             for name, info in self.module_info["field_info"].items()
-            if info.access == gt_definitions.AccessKind.READ_WRITE
+            if info and info.access == gt_definitions.AccessKind.READ_WRITE
         ]
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])
 
