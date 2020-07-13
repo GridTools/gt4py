@@ -83,7 +83,7 @@ class BuildContext:
         self.validate_kwargs(self)
 
     def _set_no_replace(self, key, value):
-        if not key in self._data:
+        if key not in self._data:
             self._data[key] = value
 
     def get(self, key, default=None):
@@ -132,6 +132,9 @@ class BuildContext:
         if not backend:
             raise ValueError(f"invalid backend {original_value}")
         return backend
+
+    def unset_backend(self):
+        self._data["backend"] = None
 
 
 class BuildStage(abc.ABC):
@@ -207,6 +210,11 @@ class IRStage(BuildStage):
             externals=self.ctx["externals"],
             options=self.ctx["options"],
         )
+
+    def revert(self):
+        self.ctx.pop("options_id")
+        self.ctx.pop("id")
+        self.ctx.pop("ir")
 
     def next_stage(self):
         return IIRStage
@@ -319,7 +327,8 @@ class BindingsStage(BuildStage):
 
     Make context modifications:
 
-    * `bindings_src` is generated via the backend and should be a mapping of filenames to source strings
+    * `bindings_src` is generated via the backend and should be a mapping of filenames to source
+      strings
     * `pyext_module_name` is taken from `pyext_file_path_final`
     * `pyext_generator_options` records the options passed to the python extension generator.
     """
@@ -361,8 +370,8 @@ class CompileBindingsStage(BuildStage):
     * `backend` must support language bindings
     * `bindings` must be a non-empty list of languages supported by `backend`
     * `compile_bindings` must be True
-    * `bindings_src_files` must be a dict with a key for each language in `bindings` and a list for each
-        key containing existing source files for the compilation
+    * `bindings_src_files` must be a dict with a key for each language in `bindings` and a list for
+      each key containing existing source files for the compilation
     * `pyext_module_name` must be the name of the target module
     * `pyext_module_path` must be an existing directory
     * `pyext_opts`, optional options for the pyext builder
@@ -399,13 +408,15 @@ class LazyStencil:
     """
     A stencil object which defers compilation until it is needed.
 
-    Usually obtained using the :func:`gt4py.gtscript.lazy_stencil` decorator, not directly instanciated.
+    Usually obtained using the :func:`gt4py.gtscript.lazy_stencil` decorator, not directly
+    instanciated.
 
     This is done by keeping all the necessary information in a :class:`gt4py.build.BuildContex`
     object in the `ctx` attribute.
 
     Compilation happens implicitly on first access to the `implementation` property.
-    A step by step compilation process can be initiated by calling :func:`gt4py.build.LazyStencil.begin_build`.
+    A step by step compilation process can be initiated by calling
+    :func:`gt4py.build.LazyStencil.begin_build`.
     """
 
     def __init__(self, context):
@@ -471,10 +482,20 @@ class LazyStencil:
         This step is cached and will be skipped on subsequent builds starting from
         :func:`gt4py.gtscript.LazyStencil.begin_build`.
         """
-        BeginStage(self.ctx).make().make_next()
+        nobackend_set = bool("backend" not in self.ctx)
+        if nobackend_set:
+            self.ctx["backend"] = "debug"
+        ir_stage = BeginStage(self.ctx).make().make_next()
+        if nobackend_set:
+            ir_stage.revert()
+            self.ctx.unset_backend()
 
     def __call__(self, *args, **kwargs):
         """
         Execute the stencil, building the stencil if necessary.
         """
         self.implementation(*args, **kwargs)
+
+    def run(self, *args, **kwargs):
+        """Pass through to the implementation.run."""
+        self.implementation.run(*args, **kwargs)

@@ -37,7 +37,9 @@ def generate_test_module(name, backend, *, id_version, rebuild=True):
     options = gt_defs.BuildOptions(
         name=stencil_name, module=module_name, rebuild=rebuild, backend_opts=backend_opts
     )
-    decorator = gtscript.stencil(backend=backend.name, externals=EXTERNALS_REGISTRY[stencil_name])
+    decorator = gtscript.lazy_stencil(
+        backend=backend.name, externals=EXTERNALS_REGISTRY[stencil_name]
+    )
     stencil_definition = stencil_registry[name]
     return decorator(stencil_definition)
     # return build_def_ir_stencil(name, options, backend, id_version=id_version)

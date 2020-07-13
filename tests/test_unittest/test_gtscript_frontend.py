@@ -405,25 +405,25 @@ class TestDTypes:
 
 class TestAssignmentSyntax:
     def test_ellipsis(self):
-        @gtscript.stencil(backend="debug")
+        @gtscript.lazy_stencil(backend="debug")
         def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 out_field[...] = in_field
 
     def test_offset(self):
-        @gtscript.stencil(backend="debug")
+        @gtscript.lazy_stencil(backend="debug")
         def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 out_field[0, 0, 0] = in_field
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
-            @gtscript.stencil(backend="debug")
+            @gtscript.lazy_stencil(backend="debug")
             def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
                 with computation(PARALLEL), interval(...):
                     out_field[0, 0, 1] = in_field
 
-        @gtscript.stencil(backend="debug", externals={"offset": 0})
+        @gtscript.lazy_stencil(backend="debug", externals={"offset": 0})
         def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
             from gt4py.__externals__ import offset
 
@@ -432,7 +432,7 @@ class TestAssignmentSyntax:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
-            @gtscript.stencil(backend="debug", externals={"offset": 1})
+            @gtscript.lazy_stencil(backend="debug", externals={"offset": 1})
             def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
                 from gt4py.__externals__ import offset
 
@@ -443,7 +443,7 @@ class TestAssignmentSyntax:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
-            @gtscript.stencil(backend="debug")
+            @gtscript.lazy_stencil(backend="debug")
             def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
                 with computation(PARALLEL), interval(...):
                     out_field[:, :, :] = in_field
@@ -451,7 +451,7 @@ class TestAssignmentSyntax:
     def test_string(self):
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
-            @gtscript.stencil(backend="debug")
+            @gtscript.lazy_stencil(backend="debug")
             def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
                 with computation(PARALLEL), interval(...):
                     out_field["a_key"] = in_field
@@ -462,7 +462,7 @@ class TestAssignmentSyntax:
             match="No subscript allowed in assignment to temporaries",
         ):
 
-            @gtscript.stencil(backend="debug")
+            @gtscript.lazy_stencil(backend="debug")
             def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
                 with computation(PARALLEL), interval(...):
                     tmp[...] = in_field
@@ -473,7 +473,7 @@ class TestAssignmentSyntax:
             match="No subscript allowed in assignment to temporaries",
         ):
 
-            @gtscript.stencil(backend="debug")
+            @gtscript.lazy_stencil(backend="debug")
             def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
                 with computation(PARALLEL), interval(...):
                     tmp[0, 0, 0] = 2 * in_field

@@ -185,7 +185,7 @@ def lazy_stencil(
     name=None,
     rebuild=False,
     eager=False,
-    check_syntax=False,
+    check_syntax=True,
     **kwargs,
 ):
     """
@@ -221,7 +221,7 @@ def lazy_stencil(
         eager : `bool`, optional
             If true do not defer stencil building and instead return the fully built raw implementation object.
 
-        check_syntax: `bool`, optional
+        check_syntax: `bool`, default=True, optional
             If true, build and cache the IR build stage already, which checks stencil definition syntax.
 
         **kwargs: `dict`, optional
@@ -326,6 +326,9 @@ def computation(order):
 
 
 def interval(start, end):
+    import pdb
+
+    pdb.set_trace()  # XXX BREAKPOINT
     """Define the interval of computation in the 'K' sequential axis."""
     pass
 

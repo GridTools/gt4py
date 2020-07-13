@@ -66,7 +66,7 @@ def test_temporary_field_declared_in_if_raises():
 
     with pytest.raises(GTScriptSymbolError):
 
-        @gtscript.stencil(backend="debug")
+        @gtscript.lazy_stencil(backend="debug")
         def definition(field_a: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 if field_a < 0:

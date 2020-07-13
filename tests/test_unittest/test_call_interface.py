@@ -23,7 +23,7 @@ import gt4py.backend as gt_backend
 import gt4py.storage as gt_storage
 
 
-@gtscript.stencil(backend="numpy")
+@gtscript.lazy_stencil(backend="numpy")
 def stencil(
     field1: Field[np.float64],
     field2: Field[np.float64],
@@ -232,10 +232,10 @@ def avg_stencil(in_field: Field[np.float64], out_field: Field[np.float64]):
     ],
 )
 def test_default_arguments(backend):
-    branch_true = gtscript.stencil(
+    branch_true = gtscript.lazy_stencil(
         backend=backend, definition=a_stencil, externals={"BRANCH": True}, rebuild=True
     )
-    branch_false = gtscript.stencil(
+    branch_false = gtscript.lazy_stencil(
         backend=backend, definition=a_stencil, externals={"BRANCH": False}, rebuild=True
     )
 
@@ -299,7 +299,7 @@ def test_default_arguments(backend):
     ],
 )
 def test_halo_checks(backend):
-    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
+    stencil = gtscript.lazy_stencil(definition=avg_stencil, backend=backend)
 
     # test default works
     in_field = gt_storage.ones(
@@ -343,7 +343,7 @@ def test_halo_checks(backend):
 
 def test_np_int_types():
     backend = "numpy"
-    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
+    stencil = gtscript.lazy_stencil(definition=avg_stencil, backend=backend)
 
     # test numpy int types are accepted
     in_field = gt_storage.ones(
@@ -368,7 +368,7 @@ def test_np_int_types():
 
 def test_np_array_int_types():
     backend = "numpy"
-    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
+    stencil = gtscript.lazy_stencil(definition=avg_stencil, backend=backend)
 
     # test numpy int types are accepted
     in_field = gt_storage.ones(
@@ -394,7 +394,7 @@ def test_np_array_int_types():
 def test_ndarray_warning():
     """test that proper warnings are raised depending on field type."""
     backend = "numpy"
-    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
+    stencil = gtscript.lazy_stencil(definition=avg_stencil, backend=backend)
 
     # test numpy int types are accepted
     in_field = gt_storage.ones(
@@ -430,7 +430,7 @@ def test_ndarray_warning():
 @pytest.mark.parametrize("backend", ["debug", "numpy", "gtx86"])
 def test_exec_info(backend):
     """test that proper warnings are raised depending on field type."""
-    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
+    stencil = gtscript.lazy_stencil(definition=avg_stencil, backend=backend)
 
     exec_info = {}
     # test numpy int types are accepted
@@ -450,6 +450,7 @@ def test_exec_info(backend):
         domain=(20, 20, 10),
         exec_info=exec_info,
     )
+    print(exec_info)
     timings = ["call", "call_run", "run"]
     assert all([k + "_start_time" in exec_info for k in timings])
     assert all([k + "_end_time" in exec_info for k in timings])
