@@ -670,12 +670,13 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         stencil_id: gt_definitions.StencilID,
         definition_ir: gt_ir.StencilDefinition,
         options: gt_definitions.BuildOptions,
+        module_info: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> str:
 
         self.pyext_module_name = kwargs["pyext_module_name"]
         self.pyext_file_path = kwargs["pyext_file_path"]
-        return super().__call__(stencil_id, definition_ir, options, **kwargs)
+        return super().__call__(stencil_id, definition_ir, options, module_info, **kwargs)
 
     def generate_imports(self) -> str:
         source = """
