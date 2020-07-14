@@ -90,14 +90,8 @@ def test_temporary_field_declared_in_if_raises():
                 field_a = field_b
 
 
-@pytest.mark.parametrize(
-    "backend",
-    [
-        name
-        for name in gt_backend.REGISTRY.names
-        if gt_backend.from_name(name).storage_info["device"] == "cpu"
-    ],
-)
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_stage_without_effect(backend):
     @gtscript.stencil(backend=backend)
     def definition(field_a: gtscript.Field[np.float_]):
