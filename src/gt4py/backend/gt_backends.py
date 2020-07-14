@@ -582,6 +582,7 @@ class GTX86Backend(BaseGTBackend):
         "is_compatible_layout": x86_is_compatible_layout,
         "is_compatible_type": gtcpu_is_compatible_type,
     }
+    languages = {"computation": "c++", "bindings": ["python"]}
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
@@ -604,6 +605,7 @@ class GTMCBackend(BaseGTBackend):
         "is_compatible_layout": mc_is_compatible_layout,
         "is_compatible_type": gtcpu_is_compatible_type,
     }
+    languages = {"computation": "c++", "bindings": ["python"]}
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
@@ -644,6 +646,7 @@ class GTCUDABackend(BaseGTBackend):
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }
+    languages = {"computation": "cuda", "bindings": ["python"]}
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
