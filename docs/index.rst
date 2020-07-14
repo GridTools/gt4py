@@ -68,6 +68,7 @@ Features:
    :caption: Contents:
 
    quickstart
+   commandline
    apiref
    indices
    license

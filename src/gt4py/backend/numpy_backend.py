@@ -291,7 +291,7 @@ class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
         )
 
     def generate_module_members(self):
-        source = """       
+        source = """
 def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
     return np.choose(
         condition,
@@ -343,5 +343,6 @@ class NumPyBackend(gt_backend.BaseBackend):
         "is_compatible_layout": numpy_is_compatible_layout,
         "is_compatible_type": numpy_is_compatible_type,
     }
+    languages = {"computation": "python", "bindings": []}
 
     MODULE_GENERATOR_CLASS = NumPyModuleGenerator
