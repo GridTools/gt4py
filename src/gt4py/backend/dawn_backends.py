@@ -15,23 +15,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import abc
+import collections
 import copy
 import enum
 import inspect
+import jinja2
 import numbers
 import os
-import re
 import types
-from typing import Any, List, Dict, Type
-
-import jinja2
-import numpy as np
+from typing import Any, List, Dict
 
 import dawn4py
 from dawn4py.serialization import SIR
 from dawn4py.serialization import utils as sir_utils
 
-from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
@@ -48,21 +45,18 @@ def _enum_dict(enum):
 
 DAWN_PASS_GROUPS = _enum_dict(dawn4py.PassGroup)
 DAWN_CODEGEN_BACKENDS = _enum_dict(dawn4py.CodeGenBackend)
-DAWN_HALO_SIZE = 3
 
 
-class FieldDeclCollector(gt_ir.IRNodeVisitor):
+class FieldInfoCollector(gt_ir.IRNodeVisitor):
     @classmethod
     def apply(cls, definition_ir):
         return cls()(definition_ir)
 
     def __call__(self, definition_ir):
-        self.fields = []
-        self.accesses = {}
-        self.in_write = False
-        self.visit(definition_ir)
+        self.field_info = collections.OrderedDict()
+        self.visit(definition_ir, compute_extent=gt_definitions.Extent.zeros(), in_write=False)
 
-        return self.fields, self.accesses
+        return self.field_info
 
     def visit_FieldDecl(self, node: gt_ir.FieldDecl, **kwargs):
         # NOTE Add unstructured support here
@@ -70,24 +64,35 @@ class FieldDeclCollector(gt_ir.IRNodeVisitor):
             [1 if ax in node.axes else 0 for ax in DOMAIN_AXES]
         )
         is_temporary = not node.is_api
-        self.fields.append(
-            sir_utils.make_field(
+        self.field_info[node.name] = dict(
+            field_decl=sir_utils.make_field(
                 name=node.name, dimensions=field_dimensions, is_temporary=is_temporary
-            )
+            ),
+            access=None,
+            extent=gt_definitions.Extent.zeros(),
         )
 
     def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
         field_name = node.name
-        if self.in_write:
-            self.accesses[field_name] = gt_definitions.AccessKind.READ_WRITE
-        elif field_name not in self.accesses:
-            self.accesses[field_name] = gt_definitions.AccessKind.READ_ONLY
+        if kwargs["in_write"]:
+            self.field_info[field_name]["access"] = gt_definitions.AccessKind.READ_WRITE
+        elif self.field_info[field_name]["access"] is None:
+            self.field_info[field_name]["access"] = gt_definitions.AccessKind.READ_ONLY
+
+        offset = tuple(node.offset.values())
+        extent = gt_definitions.Extent(
+            [(offset[0], offset[0]), (offset[1], offset[1]), (0, 0)]
+        )  # exclude sequential axis
+
+        kwargs["compute_extent"] |= extent
+        accumulated_extent = kwargs["compute_extent"] + extent
+        self.field_info[field_name]["extent"] |= accumulated_extent
 
     def visit_Assign(self, node: gt_ir.Assign, **kwargs):
-        self.in_write = True
-        left = self.visit(node.target)
-        self.in_write = False
-        right = self.visit(node.value)
+        kwargs["in_write"] = True
+        self.visit(node.target, **kwargs)
+        kwargs["in_write"] = False
+        self.visit(node.value, **kwargs)
 
 
 class SIRConverter(gt_ir.IRNodeVisitor):
@@ -233,7 +238,9 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         functions = []
         global_variables = self._make_global_variables(node.parameters, node.externals)
 
-        fields, accesses = FieldDeclCollector.apply(node)
+        field_info = FieldInfoCollector.apply(node)
+        fields = [field_info[field_name]["field_decl"] for field_name in field_info]
+
         stencil_ast = sir_utils.make_ast(
             [self.visit(computation) for computation in node.computations]
         )
@@ -247,7 +254,7 @@ class SIRConverter(gt_ir.IRNodeVisitor):
             functions=functions,
             global_variables=global_variables,
         )
-        return sir, accesses
+        return sir, field_info
 
 
 _DAWN_BASE_OPTIONS = {
@@ -282,7 +289,7 @@ class DawnPyModuleGenerator(gt_backend.PyExtModuleGenerator):
         super().__init__(backend_class)
 
     @classmethod
-    def _generate_module_info(cls, definition_ir, options, accesses) -> Dict[str, Any]:
+    def _generate_module_info(cls, definition_ir, options, field_info) -> Dict[str, Any]:
         info = {}
         if definition_ir.sources is not None:
             info["sources"].update(
@@ -304,28 +311,26 @@ class DawnPyModuleGenerator(gt_backend.PyExtModuleGenerator):
         info["domain_info"] = repr(domain_info)
 
         info["docstring"] = definition_ir.docstring
-        info["field_info"] = field_info = {}
-        info["parameter_info"] = parameter_info = {}
+        info["field_info"] = {}
+        info["parameter_info"] = {}
         info["unreferenced"] = []
 
         fields = {item.name: item for item in definition_ir.api_fields}
         parameters = {item.name: item for item in definition_ir.parameters}
-        boundary = gt_definitions.Boundary(
-            ([(DAWN_HALO_SIZE, DAWN_HALO_SIZE)] * len(parallel_axes)) + [(0, 0)]
-        )
 
         for arg in definition_ir.api_signature:
             if arg.name in fields:
-                if arg.name in accesses:
-                    access = accesses[arg.name]
-                else:
+                access = field_info[arg.name]["access"]
+                if access is None:
                     access = gt_definitions.AccessKind.READ_ONLY
                     info["unreferenced"].append(arg.name)
-                field_info[arg.name] = gt_definitions.FieldInfo(
-                    access=access, dtype=fields[arg.name].data_type.dtype, boundary=boundary,
+                extent = field_info[arg.name]["extent"]
+                boundary = gt_definitions.Boundary([(-pair[0], pair[1]) for pair in extent])
+                info["field_info"][arg.name] = gt_definitions.FieldInfo(
+                    access=access, dtype=fields[arg.name].data_type.dtype, boundary=boundary
                 )
             else:
-                parameter_info[arg.name] = gt_definitions.ParameterInfo(
+                info["parameter_info"][arg.name] = gt_definitions.ParameterInfo(
                     dtype=parameters[arg.name].data_type.dtype
                 )
 
@@ -373,7 +378,7 @@ class DawnPyModuleGenerator(gt_backend.PyExtModuleGenerator):
                     )
                 else:
                     args.append("list(_origin_['{}'])".format(arg.name))
-            elif arg.name in self.definition_ir.parameters and arg.default == None:
+            elif arg.name in self.definition_ir.parameters and arg.default is None:
                 none_checks.append(f"{arg.name} = 0 if {arg.name} is None else {arg.name}")
 
         source = """
@@ -446,7 +451,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         gt_ir.DataType.FLOAT64: "double",
     }
 
-    _accesses = {}
+    _field_info = {}
 
     @classmethod
     def generate(
@@ -472,7 +477,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             # Dawn backends do not use the internal analysis pipeline, so a custom
             # module_info object should be passed to the module generator
             generator = cls.MODULE_GENERATOR_CLASS(cls)
-            module_info = generator._generate_module_info(definition_ir, options, cls._accesses)
+            module_info = generator._generate_module_info(definition_ir, options, cls._field_info)
 
             kwargs["pyext_module_name"] = pyext_module_name
             kwargs["pyext_file_path"] = pyext_file_path
@@ -490,8 +495,8 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
 
     @classmethod
     def generate_extension_sources(cls, stencil_id, definition_ir, options, gt_backend_t):
-        sir, accesses = SIRConverter.apply(definition_ir)
-        cls._accesses = accesses
+        sir, field_info = SIRConverter.apply(definition_ir)
+        cls._field_info = field_info
 
         stencil_short_name = stencil_id.qualified_name.split(".")[-1]
         backend_opts = dict(**options.backend_opts)
@@ -514,7 +519,8 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             pass_groups = [DAWN_PASS_GROUPS[k] for k in backend_opts["opt_groups"]]
             if "default_opt" in backend_opts:
                 raise ValueError(
-                    "Do not add 'default_opt' when opt 'opt_groups'. Instead, append dawn4py.default_pass_groups()"
+                    "Do not add 'default_opt' when opt 'opt_groups'. "
+                    + "Instead, append dawn4py.default_pass_groups()"
                 )
         else:
             pass_groups = dawn4py.default_pass_groups()
