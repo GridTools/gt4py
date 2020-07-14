@@ -541,6 +541,8 @@ class BasePyExtBackend(BaseBackend):
         cache_info["pyext_file_path"] = extra_cache_info["pyext_file_path"]
         cache_info["pyext_md5"] = hashlib.md5(
             open(cache_info["pyext_file_path"], "rb").read()
+            if cache_info["pyext_file_path"] is not None
+            else b""
         ).hexdigest()
 
         return cache_info
@@ -874,13 +876,15 @@ class PyExtModuleGenerator(BaseModuleGenerator):
     def generate_imports(self) -> str:
         source = """
 from gt4py import utils as gt_utils
-
+        """
+        if self.implementation_ir.multi_stages:
+            source += """
 pyext_module = gt_utils.make_module_from_file(
-    "{pyext_module_name}", "{pyext_file_path}", public_import=True
-)""".format(
-            pyext_module_name=self.pyext_module_name, pyext_file_path=self.pyext_file_path
-        )
-
+        "{pyext_module_name}", "{pyext_file_path}", public_import=True
+    )
+        """.format(
+                pyext_module_name=self.pyext_module_name, pyext_file_path=self.pyext_file_path
+            )
         return source
 
     def generate_implementation(self) -> str:
@@ -894,13 +898,16 @@ pyext_module = gt_utils.make_module_from_file(
                 if arg.name in api_fields:
                     args.append("list(_origin_['{}'])".format(arg.name))
 
-        source = """
+        if self.implementation_ir.multi_stages:
+            source = """
 # Load or generate a GTComputation object for the current domain size
 pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 """.format(
-            run_args=", ".join(args)
-        )
-        sources.extend(source.splitlines())
+                run_args=", ".join(args)
+            )
+            sources.extend(source.splitlines())
+        else:
+            source = "\n"
 
         return sources.text
 

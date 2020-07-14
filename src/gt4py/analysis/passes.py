@@ -865,3 +865,133 @@ class BuildIIRPass(TransformPass):
         result = gt_ir.AxisInterval(start=axis_bounds[0], end=axis_bounds[1])
 
         return result
+
+
+class DemoteLocalTemporariesToVariablesPass(TransformPass):
+    class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
+        def __call__(self, node):
+            assert isinstance(node, gt_ir.StencilImplementation)
+            self.demotables = set(node.temporary_fields)
+            self.seen_symbols = set()
+            self.stage_symbols = None
+            self.visit(node)
+            return self.demotables
+
+        def visit_Stage(self, node: gt_ir.Stage):
+            self.stage_symbols = set()
+
+            self.generic_visit(node)
+
+            for s in self.stage_symbols:
+                if s in self.seen_symbols:
+                    self.demotables.discard(s)
+                self.seen_symbols.add(s)
+            self.stage_symbols = None
+
+        def visit_FieldRef(self, node: gt_ir.FieldRef):
+            if any(v != 0 for v in node.offset.values()):
+                self.demotables.discard(node.name)
+            self.stage_symbols.add(node.name)
+
+    class DemoteSymbols(gt_ir.IRNodeMapper):
+        def __init__(self, demotables):
+            self.demotables = demotables
+            self.local_symbols = None
+
+        def __call__(self, node):
+            assert isinstance(node, gt_ir.StencilImplementation)
+            self.fields = node.fields
+            node = self.visit(node)
+            return node
+
+        def visit_FieldAccessor(self, path, node_name, node):
+            if node.symbol in self.demotables:
+                return False, None
+            else:
+                return True, node
+
+        def visit_StencilImplementation(
+            self, path: tuple, node_name: str, node: gt_ir.StencilImplementation
+        ):
+            self.iir = node
+            res = self.generic_visit(path, node_name, node)
+            for f in self.demotables:
+                assert f in node.temporary_fields, "Tried to demote api field to variable."
+                node.fields.pop(f)
+                node.fields_extents.pop(f)
+            return res
+
+        def visit_ApplyBlock(self, path: tuple, node_name: str, node: gt_ir.ApplyBlock):
+            self.local_symbols = {}
+
+            self.generic_visit(path, node_name, node)
+
+            node.local_symbols.update(self.local_symbols)
+            self.local_symbols = None
+            return True, node
+
+        def visit_FieldRef(self, path: tuple, node_name: str, node: gt_ir.FieldRef):
+            if node.name in self.demotables:
+                if node.name not in self.local_symbols:
+                    field_decl = self.fields[node.name]
+                    self.local_symbols[node.name] = gt_ir.VarDecl(
+                        name=node.name,
+                        data_type=field_decl.data_type,
+                        length=1,
+                        is_api=False,
+                        loc=field_decl.loc,
+                    )
+                return True, gt_ir.VarRef(name=node.name, index=0, loc=node.loc)
+
+            else:
+                return True, node
+
+    def apply(self, transform_data: TransformData):
+        collect_demotable_symbols = self.CollectDemotableSymbols()
+        demotables = collect_demotable_symbols(transform_data.implementation_ir)
+
+        demote_symbols = self.DemoteSymbols(demotables)
+        transform_data.implementation_ir = demote_symbols(transform_data.implementation_ir)
+
+        return transform_data
+
+
+class CleanUpPass(TransformPass):
+    class PruneEmptyNodes(gt_ir.IRNodeMapper):
+        def __call__(self, node):
+            assert isinstance(node, gt_ir.StencilImplementation)
+            self.visit(node)
+
+        def visit_Stage(self, path: tuple, node_name: str, node: gt_ir.Stage):
+            self.generic_visit(path, node_name, node)
+
+            if any(
+                isinstance(a, gt_ir.FieldAccessor) and (a.intent is gt_ir.AccessIntent.READ_WRITE)
+                for a in node.accessors
+            ):
+                return True, node
+            else:
+                return False, None
+
+        def visit_StageGroup(self, path: tuple, node_name: str, node: gt_ir.StageGroup):
+            self.generic_visit(path, node_name, node)
+
+            if node.stages:
+                return True, node
+            else:
+                return False, None
+
+        def visit_MultiStage(self, path: tuple, node_name: str, node: gt_ir.MultiStage):
+            self.generic_visit(path, node_name, node)
+
+            if node.groups:
+                return True, node
+            else:
+                return False, None
+
+    def apply(self, transform_data: TransformData):
+
+        prune_emtpy_nodes = self.PruneEmptyNodes()
+        prune_emtpy_nodes(transform_data.implementation_ir)
+
+        return transform_data
