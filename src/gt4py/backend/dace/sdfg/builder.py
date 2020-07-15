@@ -521,12 +521,12 @@ class SDFGBuilder:
                     )
                 ]
                 if field.name in node.arg_fields:
-                    I = dace.symbol(f"_{field.name}_I")
-                    J = dace.symbol(f"_{field.name}_J")
-                    K = dace.symbol(f"_{field.name}_K")
+                    I_stride = dace.symbol(f"_{field.name}_I_stride")
+                    J_stride = dace.symbol(f"_{field.name}_J_stride")
+                    K_stride = dace.symbol(f"_{field.name}_K_stride")
                     self.sdfg.add_array(
                         field.name,
-                        strides=(J * K, K, 1),
+                        strides=(I_stride, J_stride, K_stride),
                         shape=shape,
                         dtype=field.data_type.dtype.type,
                     )

@@ -60,15 +60,7 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
         for field_name in self.implementation_ir.arg_fields:
             if field_name not in self.implementation_ir.unreferenced:
                 field_slices.append(
-                    """#{name}_copy = np.array({name}.view(np.ndarray)[{slice}], copy=True) if {name} is not None else None
-#_{name}_I, _{name}_J, _{name}_K = {name}_copy.shape
-#if {name} is not None:
-#    assert {name}_copy.shape=={shape}, str({name}_copy.shape)+'!='+str({shape})
-#    assert {name}_copy.strides==tuple({name}_copy.itemsize*_gt_s_ for _gt_s_ in {strides}), str({name}_copy.strides)+'!='+str(tuple({name}.itemsize*_gt_s_ for _gt_s_ in {strides}))
-{name} = {name}[{slice}] if {name} is not None else None
-#if {name} is not None:
-#   assert {name}.shape=={shape}, str({name}.shape)+'!='+str({shape})
-#   assert {name}.strides==tuple({name}.itemsize*_gt_s_ for _gt_s_ in {strides}), str({name}.strides)+'!='+str(tuple({name}.itemsize*_gt_s_ for _gt_s_ in {strides}))""".format(
+                    """{name} = {name}[{slice}] if {name} is not None else None""".format(
                         name=field_name,
                         slice=",".join(
                             f'_origin_["{field_name}"][{i}] - {-self.implementation_ir.fields_extents[field_name][i][0]}:_origin_["{field_name}"][{i}] - {-self.implementation_ir.fields_extents[field_name][i][0]}+_domain_[{i}] + {self.implementation_ir.fields_extents[field_name].frame_size[i]}'
@@ -95,17 +87,18 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
         for field_name in self.implementation_ir.arg_fields:
             if field_name not in self.implementation_ir.unreferenced:
                 total_field_sizes.append(
-                    f"_{field_name}_K = np.int32({field_name}.strides[1])/{field_name}.itemsize if not {field_name} is None else 0.0"
+                    f"_{field_name}_I_stride, _{field_name}_J_stride, _{field_name}_K_stride = tuple(np.int32(s/{field_name}.itemsize) for s in {field_name}.strides)"
                 )
-                symbol_ctype_strs[f"_{field_name}_K"] = f"ctypes.c_int(np.int32(_{field_name}_K))"
-                total_field_sizes.append(
-                    f"_{field_name}_J = np.int32({field_name}.strides[0]/_{field_name}_K)/{field_name}.itemsize if not {field_name} is None else 0.0"
-                )
-                symbol_ctype_strs[f"_{field_name}_J"] = f"ctypes.c_int(np.int32(_{field_name}_J))"
-                total_field_sizes.append(
-                    # f"_{field_name}_I = np.int32({field_name}.strides[0]/_{field_name}_K)/{field_name}.itemsize if not {field_name} is None else 0.0"
-                    f"_{field_name}_I = np.int32({field_name}.shape[0]) if not {field_name} is None else 0.0"
-                )
+                symbol_ctype_strs[
+                    f"_{field_name}_I_stride"
+                ] = f"ctypes.c_int(np.int32(_{field_name}_I_stride))"
+                symbol_ctype_strs[
+                    f"_{field_name}_J_stride"
+                ] = f"ctypes.c_int(np.int32(_{field_name}_J_stride))"
+                symbol_ctype_strs[
+                    f"_{field_name}_K_stride"
+                ] = f"ctypes.c_int(np.int32(_{field_name}_K_stride))"
+
         total_field_sizes = "\n".join(total_field_sizes)
         run_args_names = sorted(args)
         run_args_strs = []
@@ -114,7 +107,6 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
                 run_args_strs.append(f"ctypes.c_void_p({self.generate_field_ptr_str(name)})")
             else:
                 run_args_strs.append(
-                    # "np.ctypeslib.as_ctypes(np.{dtype}({par_name}))".format(
                     "ctypes.{ctype_name}(np.{numpy_type}({par_name}))".format(
                         ctype_name=DataType.from_dtype(datadescr.dtype.type).ctypes_str,
                         numpy_type=datadescr.dtype.type.__name__,
@@ -122,40 +114,13 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
                     )
                 )
 
-        # for str in []:
-        #             field_run_args=", ".join(
-        #                 [
-        #                     f"ctypes.c_void_p({n}.ctypes.data)"
-        #                     # f"np.ctypeslib.as_ctypes({n})"
-        #                     for n in args
-        #                     if n in self.implementation_ir.arg_fields
-        #                 ]
-        #             ),
-        #             scalar_run_args=", ".join(
-        #                 [
-        #                     "ctypes.{ctype_name}({par_name})".format(
-        #                         ctype_name=np.ctypeslib.as_ctypes_type(
-        #                             self.implementation_ir.parameters[n].data_type.dtype
-        #                         ).__name__,
-        #                         par_name=n,
-        #                     )
-        #                     for n in sorted(self.implementation_ir.parameters)
-        #                 ]
         if self.implementation_ir.multi_stages:
             source = (
-                (
-                    "\nI=np.int32(_domain_[0])\nJ=np.int32(_domain_[1])\nK=np.int32(_domain_[2])\n"
-                    + total_field_sizes
-                    + "\n"
-                    + "\n".join(field_slices)
-                    + """
-#dace_lib['__dace_init_{program_name}']({run_args}, {total_field_sizes})
-#if exec_info is not None:
-#    exec_info['pyext_program_start_time'] = time.perf_counter()
-#dace_lib['__program_{program_name}']({run_args}, {total_field_sizes})
-#if exec_info is not None:
-#    exec_info['pyext_program_end_time'] = time.perf_counter()
-#dace_lib['__dace_exit_{program_name}']({run_args}, {total_field_sizes})
+                "\nI=np.int32(_domain_[0])\nJ=np.int32(_domain_[1])\nK=np.int32(_domain_[2])\n"
+                + total_field_sizes
+                + "\n"
+                + "\n".join(field_slices)
+                + """
 dace_lib['__dace_init_{program_name}']({run_args})
 if exec_info is not None:
     exec_info['pyext_program_start_time'] = time.perf_counter()
@@ -164,24 +129,9 @@ if exec_info is not None:
     exec_info['pyext_program_end_time'] = time.perf_counter()
 dace_lib['__dace_exit_{program_name}']({run_args})
 """.format(
-                        program_name=self.implementation_ir.sdfg.name,
-                        run_args=", ".join(run_args_strs),
-                        total_field_sizes=",".join(
-                            v for k, v in sorted(symbol_ctype_strs.items())
-                        ),
-                    )
-                )
-                + "\n".join(
-                    [
-                        "#{name}[{slice}] = {name}_copy".format(
-                            name=name,
-                            slice=",".join(
-                                f'_origin_["{name}"][{i}] - {-self.implementation_ir.fields_extents[name][i][0]}:_origin_["{name}"][{i}] - {-self.implementation_ir.fields_extents[name][i][0]}+_domain_[{i}] + {self.implementation_ir.fields_extents[name].frame_size[i]}'
-                                for i in range(len(self.implementation_ir.fields[name].axes))
-                            ),
-                        )
-                        for name in self.implementation_ir.arg_fields
-                    ]
+                    program_name=self.implementation_ir.sdfg.name,
+                    run_args=", ".join(run_args_strs),
+                    total_field_sizes=",".join(v for k, v in sorted(symbol_ctype_strs.items())),
                 )
             )
 
