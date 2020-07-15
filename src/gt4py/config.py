@@ -44,7 +44,7 @@ build_settings: Dict[str, Any] = {
     "cuda_library_path": os.path.join(CUDA_ROOT, "lib64"),
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
     "openmp_cppflags": os.environ.get("OPENMP_CPPFLAGS", "-fopenmp"),
-    "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", ""),
+    "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", "-fopenmp"),
     "extra_compile_args": {"cxx": [], "nvcc": []},
     "extra_link_args": [],
     "parallel_jobs": multiprocessing.cpu_count(),

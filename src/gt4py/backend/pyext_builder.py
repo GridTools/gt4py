@@ -100,7 +100,7 @@ def get_gt_pyext_build_opts(
 
         ld_flags = gt_config.build_settings["openmp_ldflags"]
         if ld_flags:
-            build_opts["extra_compile_args"].append(ld_flags)
+            build_opts["extra_link_args"].append(ld_flags)
 
     return build_opts
 
