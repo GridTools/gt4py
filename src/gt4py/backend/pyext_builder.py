@@ -94,12 +94,13 @@ def get_gt_pyext_build_opts(
         )
 
     if uses_openmp:
-        for opts_arg, settings_arg in zip(
-            ("extra_compile_args", "extra_link_args"), ("openmp_cppflags", "openmp_ldflags")
-        ):
-            setting = gt_config.build_settings[settings_arg]
-            if setting:
-                build_opts[opts_arg].append(setting)
+        cpp_flags = gt_config.build_settings["openmp_cppflags"]
+        if cpp_flags:
+            build_opts["extra_compile_args"].append(cpp_flags)
+
+        ld_flags = gt_config.build_settings["openmp_ldflags"]
+        if ld_flags:
+            build_opts["extra_compile_args"].append(ld_flags)
 
     return build_opts
 

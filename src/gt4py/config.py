@@ -36,10 +36,6 @@ GT_REPO_PATH: str = os.path.abspath(
 
 GT_INCLUDE_PATH: str = os.path.abspath(os.path.join(GT_REPO_PATH, "include"))
 
-# OpenMP preprocessor and link flags
-OPENMP_CPPFLAGS: str = os.environ.get("OPENMP_CPPFLAGS", "-fopenmp")
-OPENMP_LDFLAGS: str = os.environ.get("OPENMP_LDFLAGS", "")
-
 # Settings dict
 build_settings: Dict[str, Any] = {
     "boost_include_path": os.path.join(BOOST_ROOT, "include"),
@@ -47,8 +43,8 @@ build_settings: Dict[str, Any] = {
     "cuda_include_path": os.path.join(CUDA_ROOT, "include"),
     "cuda_library_path": os.path.join(CUDA_ROOT, "lib64"),
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
-    "openmp_cppflags": OPENMP_CPPFLAGS,
-    "openmp_ldflags": OPENMP_LDFLAGS,
+    "openmp_cppflags": os.environ.get("OPENMP_CPPFLAGS", "-fopenmp"),
+    "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", ""),
     "extra_compile_args": {"cxx": [], "nvcc": []},
     "extra_link_args": [],
     "parallel_jobs": multiprocessing.cpu_count(),
