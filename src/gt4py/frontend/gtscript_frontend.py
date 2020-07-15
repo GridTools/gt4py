@@ -1325,18 +1325,14 @@ class GTScriptFrontend(gt_frontend.Frontend):
 
     @classmethod
     def get_stencil_id(cls, qualified_name, definition, externals, options_id):
-        GTScriptParser.annotate_definition(definition)
-        resolved_externals = GTScriptParser.resolve_external_symbols(
-            definition._gtscript_["nonlocals"], definition._gtscript_["imported"], externals
-        )
-        definition._gtscript_["externals"] = resolved_externals
-
+        if not hasattr(definition, "_gtscript_"):
+            cls.prepare_stencil_definition(definition, externals)
         fingerprint = {
             "__main__": definition._gtscript_["canonical_ast"],
             "docstring": inspect.getdoc(definition),
             "api_annotations": f"[{', '.join(str(item) for item in definition._gtscript_['api_annotations'])}]",
         }
-        for name, value in resolved_externals.items():
+        for name, value in definition._gtscript_["externals"].items():
             fingerprint[name] = (
                 value._gtscript_["canonical_ast"] if hasattr(value, "_gtscript_") else value
             )
@@ -1348,6 +1344,16 @@ class GTScriptFrontend(gt_frontend.Frontend):
         return stencil_id
 
     @classmethod
+    def prepare_stencil_definition(cls, definition, externals):
+        GTScriptParser.annotate_definition(definition)
+        resolved_externals = GTScriptParser.resolve_external_symbols(
+            definition._gtscript_["nonlocals"], definition._gtscript_["imported"], externals
+        )
+        definition._gtscript_["externals"] = resolved_externals
+
+    @classmethod
     def generate(cls, definition, externals, options):
+        if not hasattr(definition, "_gtscript_"):
+            cls.prepare_stencil_definition(definition, externals)
         translator = GTScriptParser(definition, externals=externals, options=options)
         return translator.run()
