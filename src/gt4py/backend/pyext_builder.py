@@ -31,7 +31,11 @@ from gt4py import config as gt_config
 
 
 def get_gt_pyext_build_opts(
-    *, debug_mode: bool = False, add_profile_info: bool = False, uses_cuda: bool = False
+    *,
+    debug_mode: bool = False,
+    add_profile_info: bool = False,
+    uses_openmp: bool = True,
+    uses_cuda: bool = False,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
 
     include_dirs = [gt_config.build_settings["boost_include_path"]]
@@ -42,7 +46,6 @@ def get_gt_pyext_build_opts(
             "-std=c++14",
             "-ftemplate-depth=800",
             "-fvisibility=hidden",
-            "-fopenmp",
             "-fPIC",
             "-isystem{}".format(gt_config.build_settings["gt_include_path"]),
             "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
@@ -64,7 +67,7 @@ def get_gt_pyext_build_opts(
             *extra_compile_args_from_config["nvcc"],
         ],
     )
-    extra_link_args = ["-fopenmp", *gt_config.build_settings["extra_link_args"]]
+    extra_link_args = gt_config.build_settings["extra_link_args"]
 
     mode_flags = ["-O0", "-ggdb"] if debug_mode else ["-O3", "-DNDEBUG"]
     extra_compile_args["cxx"].extend(mode_flags)
@@ -89,6 +92,14 @@ def get_gt_pyext_build_opts(
             extra_compile_args=extra_compile_args["cxx"],
             extra_link_args=extra_link_args,
         )
+
+    if uses_openmp:
+        for opts_arg, settings_arg in zip(
+            ("extra_compile_args", "extra_link_args"), ("openmp_cppflags", "openmp_ldflags")
+        ):
+            setting = gt_config.build_settings[compile_arg]
+            if setting:
+                build_opts[opts_arg].append(setting)
 
     return build_opts
 
