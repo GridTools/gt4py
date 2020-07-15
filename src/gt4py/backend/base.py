@@ -61,18 +61,31 @@ class Backend(abc.ABC):
 
     #: Backend-specific options:
     #:  Dict[name: str, info: Dict[str, Any]]]
-    #:      + info:
-    #:          - versioning: bool
-    #:          - description [optional]: str
+    #:
+    #:  + info:
+    #:    - versioning: bool
+    #:    - description [optional]: str
+    #:
     options: ClassVar[Optional[Dict[str, Any]]] = None
 
     #: Backend-specific storage parametrization: Dict[str, Any]
+    #:
     #:  - "alignment": int (in bytes)
     #:  - "device": str ("cpu" | "gpu")
     #:  - "layout_map": Tuple[bool] -> Tuple[Union[int, None]]
     #:  - "is_compatible_layout": StorageLikeInstance -> bool
     #:  - "is_compatible_type": StorageLikeInstance -> bool
     storage_info: ClassVar[Optional[Dict[str, Any]]] = None
+
+    #: Language support:  Dict[str, Any]
+    #:
+    #:  - "computation": str Name of the language in which the compuation is implemented.
+    #:  - "bindings": List[str] Names of supported language bindings / wrappers.
+    #:    If a high-level language is compatible out-of-the-box, it should not be listed.
+    #:
+    #:  Languages should be spelled using the official spelling
+    #:  but lower case ("python", "fortran", "rust").
+    languages: ClassVar[Optional[Dict[str, Any]]] = None
 
     # __impl_opts:
     #   "disable-code-generation": bool

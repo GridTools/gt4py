@@ -49,7 +49,7 @@ extensions = [
     # 'sphinx.ext.coverage',
     "sphinx.ext.doctest",
     # "sphinx.ext.intersphinx",
-    # 'sphinx.ext.mathjax',
+    "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     # "sphinx.ext.todo",
     "sphinx.ext.viewcode",
@@ -188,6 +188,7 @@ autodoc_default_options = {
     # "member-order": "bysource",
     "special-members": "__call__"
 }
+autodoc_mock_imports = ["dawn4py"]
 
 # -- Options for intersphinx extension ---------------------------------------
 # intersphinx_mapping = {

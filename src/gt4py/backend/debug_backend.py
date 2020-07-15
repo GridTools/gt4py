@@ -173,7 +173,7 @@ class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
         )
 
     def generate_module_members(self):
-        source = """       
+        source = """
 class _Accessor:
     def __init__(self, array, origin):
         self.array = array
@@ -182,7 +182,7 @@ class _Accessor:
     def _shift(self, index):
         return tuple(i + offset for i, offset in zip(index, self.origin))
 
-    def __getitem__(self, index):        
+    def __getitem__(self, index):
         return self.array[self._shift(index)]
 
     def __setitem__(self, index, value):
@@ -222,5 +222,6 @@ class DebugBackend(gt_backend.BaseBackend):
         "is_compatible_layout": debug_is_compatible_layout,
         "is_compatible_type": debug_is_compatible_type,
     }
+    languages = {"computation": "python", "bindings": []}
 
     MODULE_GENERATOR_CLASS = DebugModuleGenerator
