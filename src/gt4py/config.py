@@ -23,7 +23,7 @@ GT4PY_INSTALLATION_PATH = os.path.dirname(os.path.abspath(__file__))
 
 # Default paths (taken from user's environment vars when possible)
 BOOST_ROOT: str = os.environ.get(
-    "BOOST_ROOT", os.environ.get("BOOST_HOME", os.path.abspath("/usr/local/include"))
+    "BOOST_ROOT", os.environ.get("BOOST_HOME", os.path.abspath("/usr/local"))
 )
 
 CUDA_ROOT: str = os.environ.get(
@@ -42,6 +42,7 @@ build_settings: Dict[str, Any] = {
     "cuda_bin_path": os.path.join(CUDA_ROOT, "bin"),
     "cuda_include_path": os.path.join(CUDA_ROOT, "include"),
     "cuda_library_path": os.path.join(CUDA_ROOT, "lib64"),
+    "cuda_arch": os.environ.get("CUDA_ARCH", None),
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
     "extra_compile_args": {"cxx": [], "nvcc": []},
     "extra_link_args": [],

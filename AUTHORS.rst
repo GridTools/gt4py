@@ -7,6 +7,7 @@ Authors
 * Benedicic, Lucas. ETH Zurich - CSCS
 * Cruz, Felipe. ETH Zurich - CSCS
 * Dahm, Johann. Vulcan Inc.
+* Davis, Eddie. Vulcan Inc.
 * Ehrengruber, Till. ETH Zurich - CSCS
 * González Paredes, Enrique. ETH Zurich - CSCS
 * Groner, Linus. ETH Zurich - CSCS
