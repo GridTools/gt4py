@@ -22,7 +22,7 @@ import os
 import pickle
 import sys
 import types
-from typing import Any, ClassVar, Dict, Optional, Tuple, Type
+from typing import Any, ClassVar, Dict, Optional, Tuple, Type, Mapping, Union, Callable
 
 import jinja2
 
@@ -56,8 +56,9 @@ def register(backend_cls: Type["Backend"]):
 
 
 class Backend(abc.ABC):
+
     #: Backend name: str
-    name: ClassVar[Optional[str]] = None
+    name: ClassVar[str]
 
     #: Backend-specific options:
     #:  Dict[name: str, info: Dict[str, Any]]]
@@ -66,7 +67,7 @@ class Backend(abc.ABC):
     #:    - versioning: bool
     #:    - description [optional]: str
     #:
-    options: ClassVar[Optional[Dict[str, Any]]] = None
+    options: ClassVar[Dict[str, Any]]
 
     #: Backend-specific storage parametrization: Dict[str, Any]
     #:
@@ -75,7 +76,7 @@ class Backend(abc.ABC):
     #:  - "layout_map": Tuple[bool] -> Tuple[Union[int, None]]
     #:  - "is_compatible_layout": StorageLikeInstance -> bool
     #:  - "is_compatible_type": StorageLikeInstance -> bool
-    storage_info: ClassVar[Optional[Dict[str, Any]]] = None
+    storage_info: ClassVar[Dict[str, Any]]
 
     #: Language support:  Dict[str, Any]
     #:
@@ -85,7 +86,7 @@ class Backend(abc.ABC):
     #:
     #:  Languages should be spelled using the official spelling
     #:  but lower case ("python", "fortran", "rust").
-    languages: ClassVar[Optional[Dict[str, Any]]] = None
+    languages: ClassVar[Dict[str, Any]]
 
     # __impl_opts:
     #   "disable-code-generation": bool
@@ -109,6 +110,32 @@ class Backend(abc.ABC):
         definition_func: types.FunctionType,
         options: gt_definitions.BuildOptions,
     ):
+        """
+        Load the stencil class from the generated python module.
+
+        Parameters
+        ----------
+
+        stencil_id: :py:class:`gt4py.definitions.StencilID`
+            The ID of the stencil that was already generated
+
+        definition_func: :py:class:`types.FunctionType`
+            The stencil definition function
+
+        options: :py:class`gt4py.definitions.BuildOptions`
+            The build options with which the stencil was generated.
+
+        Returns
+        -------
+
+        type:
+            The generated stencil class after loading through python's import API
+
+
+        This assumes that :py:meth:`Backend.generate` has been called already on the same stencil.
+        The python module therefore already exists and any python extensions have been compiled.
+        In case the stencil changed since the last generate call, it will not be rebuilt
+        """
         pass
 
     @classmethod
@@ -120,12 +147,118 @@ class Backend(abc.ABC):
         definition_func: types.FunctionType,
         options: gt_definitions.BuildOptions,
     ):
+        """
+        Generate the stencil class from GTScript's internal representation.
+
+        Parameters
+        ----------
+
+        stencil_id: :py:class:`gt4py.definitions.StencilID`
+            The ID of the stencil that should be generated
+
+        definition_ir: :py:class:`gt4py.ir.StencilDefinition`
+            The GTScript internal representation of the stencil definition function
+
+        definition_func: :py:class:`types.FunctionType`
+            The stencil definition function
+
+        options: :py:class`gt4py.definitions.BuildOptions`
+            The backend-specific build options for the generation / extension compilation process
+
+        Returns
+        -------
+
+        type:
+            The generated stencil class after loading through python's import API
+
+        In case the stencil class for the given ID is found in cache, this method can avoid
+        rebuilding it. Rebuilding can however be triggered through the :code:`options` parameter
+        if supported by the backend.
+        """
         pass
+
+
+class CLIBackendMixin:
+    @classmethod
+    @abc.abstractmethod
+    def generate_computation(
+        cls,
+        definition_ir: gt_ir.StencilDefinition,
+        options: gt_definitions.BuildOptions,
+        *,
+        stencil_id: Optional[gt_definitions.StencilID] = None,
+        **kwargs,
+    ) -> Mapping[str, Union[str, Mapping]]:
+        """
+        Generate the computation source code in a way agnostic of the way it is going to be used.
+
+
+        Parameters
+        ----------
+
+        definition_ir: :py:class:`gt4py.ir.StencilDefinition`
+            The GTScript Stencil IR object from which to generate the stencil source code.
+
+        options: :py:class:`gt4py.definitions.BuildOptions`
+            The build options.
+
+        stencil_id: :py:class:`gt4py.definitions.StencilID`, optional
+            The stencil if the build caching system is to be used. Note, this will cause
+            the source files and code objects inside them to have names which are unpredictable
+            for external tools.
+
+        Returns
+        -------
+
+        Mapping[str, str | Mapping] of source file names / directories -> contents:
+            If a key's value is a string it is interpreted as a file name and the value as the
+            source code of that file
+            If a key's value is a mapping, it is interpreted as a directory name and it's
+            value as a nested file hierarchy to which the same rules are applied recursively.
+
+        Raises
+        ------
+
+        NotImplementedError
+            If the backend does not support usage outside of JIT compilation / generation.
+
+        Example
+        -------
+
+        .. code-block:: python
+
+            def mystencil(...):
+                ...
+
+            options = BuildOptions(name="mystencil", ...)
+            ir = frontend.generate(mystencil, {}, options)
+            stencil_src = backend.generate_computation(ir, options)
+
+            print(stencil_src)
+
+            # this might be output from a fictional backend:
+            {
+                "mystencil_project": {
+                    "src": {
+                        "stencil.cpp",
+                        "helpers.cpp"
+                    },
+                    "include": {
+                        "stencil.hpp"
+                    },
+                }
+            }
+
+        This can now be automatically be turned into a folder hierarchy that makes sense
+        and can be incorporated into an external build system.
+
+        """
+        raise NotImplementedError
 
 
 class BaseBackend(Backend):
 
-    MODULE_GENERATOR_CLASS = None
+    MODULE_GENERATOR_CLASS: ClassVar[Type["BaseModuleGenerator"]]
 
     @classmethod
     def get_stencil_package_name(cls, stencil_id: gt_definitions.StencilID) -> str:
@@ -225,7 +358,7 @@ class BaseBackend(Backend):
 
         result = True
         try:
-            cache_info = types.SimpleNamespace(**cache_info)
+            cache_info_as_ns = types.SimpleNamespace(**cache_info)
 
             module_file_name = cls.get_stencil_module_path(stencil_id)
             with open(module_file_name, "r") as f:
@@ -234,10 +367,10 @@ class BaseBackend(Backend):
 
             if validate_hash:
                 result = (
-                    cache_info.backend == cls.name
-                    and cache_info.stencil_name == stencil_id.qualified_name
-                    and cache_info.stencil_version == stencil_id.version
-                    and cache_info.module_shash == module_shash
+                    cache_info_as_ns.backend == cls.name
+                    and cache_info_as_ns.stencil_name == stencil_id.qualified_name
+                    and cache_info_as_ns.stencil_version == stencil_id.version
+                    and cache_info_as_ns.module_shash == module_shash
                 )
 
         except Exception:
@@ -308,8 +441,9 @@ class BaseBackend(Backend):
         **kwargs,
     ):
         file_name = cls.get_stencil_module_path(stencil_id)
-        generator = cls.MODULE_GENERATOR_CLASS(cls)
-        module_source = generator(stencil_id, definition_ir, options, **kwargs)
+        module_source = cls._generate_module_source(
+            definition_ir, options, stencil_id=stencil_id, **kwargs
+        )
 
         if not options._impl_opts.get("disable-code-generation", False):
             os.makedirs(os.path.dirname(file_name), exist_ok=True)
@@ -321,6 +455,25 @@ class BaseBackend(Backend):
         return cls._load(stencil_id, definition_func)
 
     @classmethod
+    def _generate_module_source(
+        cls,
+        definition_ir: gt_ir.StencilDefinition,
+        options: gt_definitions.BuildOptions,
+        *,
+        stencil_id: Optional[gt_definitions.StencilID] = None,
+        **kwargs,
+    ):
+        """Generate the module source code with or without stencil id."""
+        # Mypy does not recognize generated constructor of StencilID
+        stencil_id = stencil_id or gt_definitions.StencilID(options.name, "")  # type: ignore
+        source = cls.MODULE_GENERATOR_CLASS(cls)(stencil_id, definition_ir, options, **kwargs)
+        return source
+
+    @classmethod
+    def _naive_file_name(cls, options):
+        return f"{options.name}.py"
+
+    @classmethod
     def generate(
         cls,
         stencil_id: gt_definitions.StencilID,
@@ -330,6 +483,31 @@ class BaseBackend(Backend):
     ):
         cls._check_options(options)
         return cls._generate_module(stencil_id, definition_ir, definition_func, options)
+
+
+class PurePythonBackendCLIMixin(CLIBackendMixin):
+    """Mixin for CLI support for backends deriving from BaseBackend."""
+
+    _naive_file_name: Callable[[gt_definitions.BuildOptions], str]
+    _generate_module_source: Callable
+
+    @classmethod
+    def generate_computation(
+        cls,
+        definition_ir: gt_ir.StencilDefinition,
+        options: gt_definitions.BuildOptions,
+        *,
+        stencil_id: Optional[gt_definitions.StencilID] = None,
+        **kwargs,
+    ):
+        """
+        Generate the computation source code in a way agnostic of the way it is going to be used.
+        """
+        file_name = cls._naive_file_name(options)
+        source = cls._generate_module_source(
+            definition_ir, options, stencil_id=stencil_id, **kwargs
+        )
+        return {file_name: source}
 
 
 class BasePyExtBackend(BaseBackend):
@@ -461,14 +639,14 @@ class BaseModuleGenerator(abc.ABC):
     def __init__(self, backend_class: Type[Backend]):
         assert issubclass(backend_class, BaseBackend)
         self.backend_class = backend_class
-        self.options = None
-        self.stencil_id = None
-        self.definition_ir = None
+        self.options: gt_definitions.BuildOptions
+        self.stencil_id: gt_definitions.StencilID
+        self.definition_ir: gt_ir.StencilDefinition
         with open(self.TEMPLATE_PATH, "r") as f:
             self.template = jinja2.Template(f.read())
 
-        self.implementation_ir = None
-        self.module_info = None
+        self.implementation_ir: gt_ir.StencilImplementation
+        self.module_info: Dict[str, Any]
 
     def __call__(
         self,
@@ -542,7 +720,7 @@ class BaseModuleGenerator(abc.ABC):
         return implementation_ir
 
     def _generate_module_info(self) -> Dict[str, Any]:
-        info = {}
+        info: Dict[str, Any] = {}
         implementation_ir = self.implementation_ir
 
         if self.definition_ir.sources is not None:
@@ -567,8 +745,10 @@ class BaseModuleGenerator(abc.ABC):
             )
         )
 
-        info["field_info"] = field_info = {}
-        info["parameter_info"] = parameter_info = {}
+        field_info: Dict[str, Optional[gt_definitions.FieldInfo]] = {}
+        info["field_info"] = field_info
+        parameter_info: Dict[str, Optional[gt_definitions.ParameterInfo]] = {}
+        info["parameter_info"] = parameter_info
 
         # Collect access type per field
         out_fields = set()

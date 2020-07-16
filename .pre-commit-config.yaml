@@ -16,7 +16,6 @@ repos:
           src/gt4py/analysis/infos.py |
           src/gt4py/analysis/passes.py |
           src/gt4py/analysis/transformer.py |
-          src/gt4py/backend/base.py |
           src/gt4py/backend/dawn_backends.py |
           src/gt4py/backend/debug_backend.py |
           src/gt4py/backend/gt_backends.py |

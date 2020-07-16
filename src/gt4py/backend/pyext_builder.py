@@ -20,7 +20,7 @@ import distutils
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
 import setuptools
 from setuptools.command.build_ext import build_ext
@@ -127,6 +127,14 @@ def get_gt_pyext_build_opts(
     return build_opts
 
 
+# The following tells mypy to accept unpacking kwargs
+@overload
+def build_pybind_ext(
+    name: str, sources: list, build_path: str, target_path: str, **kwargs: str,
+) -> Tuple[str, str]:
+    pass
+
+
 def build_pybind_ext(
     name: str,
     sources: list,
@@ -206,6 +214,14 @@ def build_pybind_ext(
         distutils.sysconfig._config_vars[key] = value
 
     return module_name, dest_path
+
+
+# The following tells mypy to accept unpacking kwargs
+@overload
+def build_pybind_cuda_ext(
+    name: str, sources: list, build_path: str, target_path: str, **kwargs: str,
+) -> Tuple[str, str]:
+    pass
 
 
 def build_pybind_cuda_ext(
