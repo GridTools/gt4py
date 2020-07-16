@@ -38,7 +38,7 @@ py::array apply_function(gt::uint_t d1,
     gt::uint_t d2_loc = d2 + extent[1][0] + extent[1][1];
     gt::uint_t d3_loc = d3 + extent[2][0] + extent[2][1];
 
-    DType ptr[d1_loc * d2_loc * d3_loc];
+    DType* ptr = new DType[d1_loc * d2_loc * d3_loc];
 
     for (gt::uint_t i = 0; i < d1_loc; i++) {
         for (gt::uint_t j = 0; j < d2_loc; j++) {
@@ -192,8 +192,8 @@ namespace horizontal_diffusion {
 } // namespace horizontal_diffusion
 
 PYBIND11_MODULE(reference_cpp_regression, m) {
-    m.def("tridiagonal_solver", &tridiagonal_solver::get<double>);
-    m.def("vertical_advection_dycore", &vertical_advection_dycore::get<double>);
-    m.def("vertical_advection_dycore_with_scalar_storage", &vertical_advection_dycore_with_scalar_storage::get<double>);
-    m.def("horizontal_diffusion", &horizontal_diffusion::get<double>);
+    m.def("tridiagonal_solver", &tridiagonal_solver::get<double>, py::return_value_policy::move);
+    m.def("vertical_advection_dycore", &vertical_advection_dycore::get<double>, py::return_value_policy::move);
+    m.def("vertical_advection_dycore_with_scalar_storage", &vertical_advection_dycore_with_scalar_storage::get<double>, py::return_value_policy::move);
+    m.def("horizontal_diffusion", &horizontal_diffusion::get<double>, py::return_value_policy::move);
 }
