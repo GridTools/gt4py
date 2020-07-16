@@ -212,7 +212,9 @@ def debug_is_compatible_type(field):
 
 
 @gt_backend.register
-class DebugBackend(gt_backend.BaseBackend):
+class DebugBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):
+    """Pure Python backend, unoptimized for debugging."""
+
     name = "debug"
     options = {}
     storage_info = {

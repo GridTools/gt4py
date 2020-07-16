@@ -1,6 +1,5 @@
 """Unit tests for the command line interface (CLI)."""
 import re
-import sys
 
 import pytest
 from click.testing import CliRunner
@@ -22,14 +21,7 @@ def backend_name(request):
 
 
 @pytest.fixture
-def clean_imports():
-    impdata = [sys.path.copy(), sys.meta_path.copy(), sys.modules.copy()]
-    yield
-    sys.path, sys.meta_path, sys.modules = impdata
-
-
-@pytest.fixture
-def simple_stencil(tmp_path, clean_imports):
+def simple_stencil(tmp_path):
     """Provide a gtscript file with a simple stencil."""
     module_file = tmp_path / "stencil.gtpy"
     module_file.write_text(
@@ -46,7 +38,7 @@ def simple_stencil(tmp_path, clean_imports):
     yield module_file
 
 
-class NonCliBackend(backend.BaseBackend):
+class NonCliBackend(backend.Backend):
     """This represents a non-CLI-enabled backend."""
 
     name = "nocli"
@@ -67,11 +59,17 @@ def nocli_backend():
 
 
 BACKEND_ROW_PATTERN_BY_NAME = {
-    "debug": r"^\s*debug\s*python\s*No",
-    "numpy": r"^\s*numpy\s*python\s*No",
-    "gtx86": r"^\s*gtx86\s*c\+\+\s*python\s*No",
-    "gtmc": r"^\s*gtmc\s*c\+\+\s*python\s*No",
-    "gtcuda": r"^\s*gtcuda\s*cuda\s*python\s*No",
+    "debug": r"^\s*debug\s*python\s*Yes",
+    "numpy": r"^\s*numpy\s*python\s*Yes",
+    "gtx86": r"^\s*gtx86\s*c\+\+\s*python\s*Yes",
+    "gtmc": r"^\s*gtmc\s*c\+\+\s*python\s*Yes",
+    "gtcuda": r"^\s*gtcuda\s*cuda\s*python\s*Yes",
+    "dawn:gtx86": r"^\s*dawn:gtx86\s*\?\s*\?\s*No",
+    "dawn:gtmc": r"^\s*dawn:gtmc\s*\?\s*\?\s*No",
+    "dawn:gtcuda": r"^\s*dawn:gtcuda\s*\?\s*\?\s*No",
+    "dawn:naive": r"^\s*dawn:naive\s*\?\s*\?\s*No",
+    "dawn:cxxopt": r"^\s*dawn:cxxopt\s*\?\s*\?\s*No",
+    "dawn:cuda": r"^\s*dawn:cuda\s*\?\s*\?\s*No",
 }
 
 
@@ -79,6 +77,11 @@ BACKEND_ROW_PATTERN_BY_NAME = {
 def list_backends_line_pattern(backend_name):
 
     yield BACKEND_ROW_PATTERN_BY_NAME[backend_name]
+
+
+@pytest.fixture
+def backend_enabled(backend_name):
+    yield not backend_name.startswith("dawn")
 
 
 @pytest.fixture(params=[[], ["--list-backends"]])
@@ -168,7 +171,6 @@ def test_backend_choice(backend_name):
     Test the :py:cls:`gt4py.cli.BackendChoice` class interface.
     """
     assert backend_name in cli.BackendChoice.get_backend_names()
-    assert not cli.BackendChoice.is_enabled(backend_name)
 
 
 def test_unenabled_backend_choice(clirunner, nocli_backend, simple_stencil):
@@ -196,7 +198,7 @@ def test_unenabled_backend_choice(clirunner, nocli_backend, simple_stencil):
     assert re.findall(r".*Backend is not CLI-enabled\..*", result.output)
 
 
-def test_enabled_backend_choice(clirunner, simple_stencil, backend_name):
+def test_enabled_backend_choice(clirunner, simple_stencil, backend_name, backend_enabled):
     """
     Test an enabled backend.
 
@@ -214,4 +216,4 @@ def test_enabled_backend_choice(clirunner, simple_stencil, backend_name):
         cli.gtpyc, ["--backend", backend_name, str(simple_stencil.absolute())]
     )
 
-    assert result.exit_code == 0
+    assert result.exit_code == 0 if backend_enabled else 2

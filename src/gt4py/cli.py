@@ -18,6 +18,7 @@ class BackendChoice(click.Choice):
         param: typing.Optional[click.Parameter],
         ctx: typing.Optional[click.Context],
     ):
+        """Convert a CLI option argument to a backend."""
         name = super().convert(value, param, ctx)
         if not self.is_enabled(name):
             self.fail("Backend is not CLI-enabled.")
@@ -29,6 +30,7 @@ class BackendChoice(click.Choice):
 
     @staticmethod
     def is_enabled(backend_name: str):
+        """Check if a given backend is enabled for CLI."""
         backend_cls = gt4py.backend.from_name(backend_name)
         if hasattr(backend_cls, "generate_computation"):
             return True
@@ -36,16 +38,18 @@ class BackendChoice(click.Choice):
 
     @classmethod
     def backend_table(cls):
+        """Build a string with a table of backend compatibilities."""
         headers = ["computation", "bindings", "CLI-enabled"]
         names = cls.get_backend_names()
         backends = [gt4py.backend.from_name(name) for name in names]
         comp_langs = [
-            backend.languages["computation"] for backend in backends if backend.languages
+            backend.languages["computation"] if backend.languages else "?" for backend in backends
         ]
         binding_langs = [
-            ", ".join(backend.languages["bindings"]) for backend in backends if backend.languages
+            ", ".join(backend.languages["bindings"]) if backend.languages else "?"
+            for backend in backends
         ]
-        enabled = [cls.is_enabled(name) and "Yes" or "No" for name in names]
+        enabled = [cls.is_enabled(name) and "Yes" or "No" for name in names] + ["No"]
         data = zip(names, comp_langs, binding_langs, enabled)
         return tabulate.tabulate(data, headers=headers)
 
