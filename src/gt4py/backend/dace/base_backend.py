@@ -199,9 +199,84 @@ if exec_info is not None:
         return sources.text
 
 
+class DaceOptimizer:
+
+    description = "no optimization"
+
+    def transform_library(self, sdfg):
+        return sdfg
+
+    def transform_to_device(self, sdfg):
+        return sdfg
+
+    def transform_optimize(self, sdfg):
+        return sdfg
+
+
+class CudaDaceOptimizer(DaceOptimizer):
+    description = "no optimization on GPU"
+
+    def transform_to_device(self, sdfg):
+        for name, array in sdfg.arrays.items():
+            array.storage = dace.dtypes.StorageType.GPU_Global
+        from dace.transformation.interstate.gpu_transform_sdfg import GPUTransformSDFG
+
+        sdfg.apply_transformations(
+            [GPUTransformSDFG], options={"strict_transform": False}, strict=False, validate=False
+        )
+
+        for st in sdfg.nodes():
+            for node in st.nodes():
+                parent = st.entry_node(node)
+                if isinstance(node, dace.nodes.NestedSDFG) and (
+                    parent is None or parent.schedule != dace.ScheduleType.GPU_Device
+                ):
+                    CudaDaceOptimizer.transform_to_device(node.sdfg)
+        return sdfg
+
+
+class SDFGInjector(DaceOptimizer):
+
+    description = "externally provided SDFG"
+
+    def __init__(self, sdfg):
+        if isinstance(sdfg, str):
+            sdfg = dace.SDFG.from_file(sdfg)
+        self.sdfg: dace.SDFG = sdfg
+
+    def transform_optimize(self, sdfg):
+
+        if len(sdfg.signature_arglist()) != len(self.sdfg.signature_arglist()):
+            raise ValueError(
+                "SDFG to inject does not have matching signature length. ({here} != {raw})".format(
+                    here=len(self.sdfg.signature_arglist()), raw=len(sdfg.signature_arglist())
+                )
+            )
+        if not all(
+            here == res
+            for here, res in zip(sdfg.signature_arglist(), self.sdfg.signature_arglist())
+        ):
+            l = list(
+                (here, res)
+                for here, res in zip(sdfg.signature_arglist(), self.sdfg.signature_arglist())
+                if here != res
+            )
+            raise ValueError(
+                "SDFG to inject does not have matching signature. ({here} != {raw})".format(
+                    here=l[0][0], raw=l[0][1]
+                )
+            )
+        res = copy.deepcopy(self.sdfg)
+        return res
+
+
 class DaceBackend(gt_backend.BaseBackend):
     name = "dace"
-    options = {}
+    options = {
+        "optimizer": {"versioning": True},
+        "save_intermediate": {"versioning": True},
+        "validate": {"versioning": True},
+    }
     storage_info = {
         "alignment": 1,
         "device": "cpu",
@@ -211,6 +286,7 @@ class DaceBackend(gt_backend.BaseBackend):
     }
 
     GENERATOR_CLASS = DacePyModuleGenerator
+    DEFAULT_OPTIMIZER = DaceOptimizer()
 
     @classmethod
     def get_dace_module_path(cls, stencil_id):
@@ -228,36 +304,54 @@ class DaceBackend(gt_backend.BaseBackend):
         dace_build_path = os.path.relpath(cls.get_dace_module_path(stencil_id))
         os.makedirs(dace_build_path, exist_ok=True)
 
-        # sdfg = performance_ir.sdfg
-
-        import json
+        save = options.backend_opts.get("save_intermediate", False)
+        optimizer = options.backend_opts.get("optimizer", cls.DEFAULT_OPTIMIZER)
+        if "optimizer" in options.backend_opts:
+            options.backend_opts["optimizer"] = optimizer.__class__.__name__
+        validate = options.backend_opts.get("validate", True)
 
         from dace.transformation.dataflow.merge_arrays import MergeArrays
 
-        save_sdfgs = {}
-
-        sdfg.save(dace_build_path + os.path.sep + "00_raw.sdfg")
+        if save:
+            sdfg.save(dace_build_path + os.path.sep + "00_raw.sdfg")
 
         sdfg.apply_transformations_repeated(MergeArrays)
-        sdfg.validate()
         from dace.transformation.interstate import StateFusion
 
         sdfg.apply_transformations_repeated([StateFusion], strict=False, validate=False)
 
-        sdfg.save(dace_build_path + os.path.sep + "01_fused_states.sdfg")
-        cls.transform_library(sdfg)
-        sdfg.save(dace_build_path + os.path.sep + "02_library_nodes_optimized.sdfg")
+        if save:
+            sdfg.save(dace_build_path + os.path.sep + "01_fused_states.sdfg")
+
+        sdfg = optimizer.transform_library(sdfg)
+
+        if save:
+            sdfg.save(dace_build_path + os.path.sep + "02_library_nodes_optimized.sdfg")
+
         sdfg.expand_library_nodes()
         from dace.transformation.interstate import InlineSDFG
 
         sdfg.apply_transformations_repeated([InlineSDFG], validate=False)
-        sdfg.save(dace_build_path + os.path.sep + "03_library_expanded.sdfg")
-        cls.transform_to_device(sdfg)
-        # sdfg.save(dace_build_path + os.path.sep + "04_on_device.sdfg")
-        cls.transform_optimize(sdfg)
-        # sdfg.save(dace_build_path + os.path.sep + "05_optimized.sdfg")
-        sdfg.validate()
-        implementation_ir.sdfg = sdfg
+
+        if save:
+            sdfg.save(dace_build_path + os.path.sep + "03_library_expanded.sdfg")
+
+        sdfg = optimizer.transform_to_device(sdfg)
+
+        if save:
+            sdfg.save(dace_build_path + os.path.sep + "04_on_device.sdfg")
+
+        sdfg = optimizer.transform_optimize(sdfg)
+
+        if save:
+            sdfg.save(dace_build_path + os.path.sep + "05_optimized.sdfg")
+
+        if validate:
+            sdfg.validate()
+        sdfg.save(dace_build_path + os.path.sep + "tmp.sdfg")
+        sdfg = dace.SDFG.from_file(dace_build_path + os.path.sep + "tmp.sdfg")
+
+        implementation_ir.sdfg = copy.deepcopy(sdfg)
 
         program_folder = dace.codegen.compiler.generate_program_folder(
             sdfg=sdfg, code_objects=generate_code(sdfg), out_path=dace_build_path
@@ -290,15 +384,3 @@ class DaceBackend(gt_backend.BaseBackend):
         return super(DaceBackend, cls)._generate_module(
             stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info
         )
-
-    @classmethod
-    def transform_library(cls, sdfg):
-        raise NotImplementedError("This method must be implemented in a subclass.")
-
-    @classmethod
-    def transform_to_device(cls, sdfg):
-        raise NotImplementedError("This method must be implemented in a subclass.")
-
-    @classmethod
-    def transform_optimize(cls, sdfg):
-        raise NotImplementedError("This method must be implemented in a subclass.")

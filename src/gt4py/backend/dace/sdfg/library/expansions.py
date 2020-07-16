@@ -338,26 +338,38 @@ class StencilExpander:
                         storage=dace.StorageType.Default,
                     )
 
+        guard_state = sdfg.add_state(self.library_node.label + f"_guard")
         if self.library_node.iteration_order == gt_ir.IterationOrder.BACKWARD:
-            sdfg.add_loop(
-                sdfg.add_state(f"_tmp_{limit_var}_init_state"),
-                state,
-                sdfg.add_state(f"_tmp_{limit_var}_end_state"),
-                loop_var=iter_var,
-                initialize_expr=f"_{limit_var}_loc-1",
-                condition_expr=f"{iter_var}>=0",
-                increment_expr=f"{iter_var}-1",
-            )
+            initialize_expr = f"_{limit_var}_loc-1"
+            condition_expr = f"{iter_var}>=0"
+            increment_expr = f"{iter_var}-1"
         else:
-            sdfg.add_loop(
-                sdfg.add_state(f"_tmp_{limit_var}_init_state"),
-                state,
-                sdfg.add_state(f"_tmp_{limit_var}_end_state"),
-                loop_var=iter_var,
-                initialize_expr=f"0",
-                condition_expr=f"{iter_var}<_{limit_var}_loc",
-                increment_expr=f"{iter_var}+1",
-            )
+            initialize_expr = f"0"
+            condition_expr = f"{iter_var}<_{limit_var}_loc"
+            increment_expr = f"{iter_var}+1"
+        init_state = sdfg.add_state(self.library_node.label + f"_tmp_{limit_var}_init_state")
+        exit_state = sdfg.add_state(self.library_node.label + f"_tmp_{limit_var}_end_state")
+        from dace import properties as dace_properties
+
+        sdfg.add_edge(
+            init_state, guard_state, dace.InterstateEdge(assignments={iter_var: initialize_expr})
+        )
+
+        sdfg.add_edge(
+            guard_state,
+            state,
+            dace.InterstateEdge(condition=dace_properties.CodeBlock(condition_expr).code),
+        )
+        sdfg.add_edge(
+            state, guard_state, dace.InterstateEdge(assignments={iter_var: increment_expr})
+        )
+        sdfg.add_edge(
+            guard_state,
+            exit_state,
+            dace.InterstateEdge(
+                condition=dace_properties.CodeBlock(f"not ({condition_expr})").code
+            ),
+        )
 
         from dace.transformation.interstate import InlineSDFG
 

@@ -37,19 +37,19 @@ def register(cpp_regression_test):
     return cpp_regression_test
 
 
-def get_reference(test_name, backend, domain, origins, shapes, masks=None):
+def get_reference(test_name, backend, domain, origins, shapes, dtype=np.float64, masks=None):
 
     reference_data = reference_module.__dict__[test_name](*domain)
 
     res = {}
     for k, data in reference_data.items():
         if np.isscalar(data):
-            res[k] = np.float_(data)
+            res[k] = dtype(data)
         else:
             try:
                 field = gt_store.from_array(
                     data,
-                    dtype=np.float_,
+                    dtype=dtype,
                     default_origin=origins[k],
                     shape=shapes[k],
                     backend=backend.name,
@@ -57,7 +57,7 @@ def get_reference(test_name, backend, domain, origins, shapes, masks=None):
             except KeyError:
                 field = gt_store.from_array(
                     data,
-                    dtype=np.float_,
+                    dtype=dtype,
                     default_origin=origins[k[: -len("_reference")]],
                     shape=shapes[k[: -len("_reference")]],
                     backend=backend.name,

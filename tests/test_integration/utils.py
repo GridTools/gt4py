@@ -26,14 +26,15 @@ from .stencil_definitions import EXTERNALS_REGISTRY
 from ..utils import id_version
 
 
-def generate_test_module(name, backend, *, id_version, rebuild=True):
+def generate_test_module(name, backend, *, id_version, rebuild=True, **kwargs):
     module_name = "_test_module." + name
     stencil_name = name
-    backend_opts = {}
+    backend_opts = {**kwargs}
     if issubclass(backend, gt_back.BaseGTBackend):
         backend_opts["debug_mode"] = False
         backend_opts["add_profile_info"] = True
         backend_opts["verbose"] = True
+    backend_opts.update(**kwargs)
     options = gt_defs.BuildOptions(
         name=stencil_name, module=module_name, rebuild=rebuild, backend_opts=backend_opts
     )

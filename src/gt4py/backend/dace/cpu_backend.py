@@ -2,6 +2,7 @@ from gt4py import backend as gt_backend
 
 from .base_backend import (
     DaceBackend,
+    DaceOptimizer,
     DacePyModuleGenerator,
     dace_layout,
     dace_is_compatible_layout,
@@ -14,25 +15,11 @@ class CPUDacePyModuleGenerator(DacePyModuleGenerator):
         return f"{arg}.ctypes.data"
 
 
-@gt_backend.register
-class CPUDaceBackend(DaceBackend):
-    name = "dacex86"
-    options = {}
-    storage_info = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": dace_layout,
-        "is_compatible_layout": dace_is_compatible_layout,
-        "is_compatible_type": dace_is_compatible_type,
-    }
-    GENERATOR_CLASS = CPUDacePyModuleGenerator
+class X86DaceOptimizer(DaceOptimizer):
 
-    @classmethod
-    def transform_to_device(cls, sdfg):
-        pass
+    description = "GT x86 style transformations "
 
-    @classmethod
-    def transform_library(cls, sdfg):
+    def transform_library(self, sdfg):
         from gt4py.backend.dace.sdfg.library.nodes import ApplyMethodLibraryNode
 
         from gt4py.backend.dace.sdfg.transforms import PruneTransientOutputs
@@ -43,9 +30,9 @@ class CPUDaceBackend(DaceBackend):
             for node in state.nodes():
                 if isinstance(node, ApplyMethodLibraryNode):
                     node.loop_order = "IJK"
+        return sdfg
 
-    @classmethod
-    def transform_optimize(cls, sdfg):
+    def transform_optimize(self, sdfg):
         # from dace.transformation.dataflow.map_collapse import MapCollapse
         #
         # from gt4py.backend.dace.sdfg.transforms import global_ij_tiling
@@ -56,3 +43,18 @@ class CPUDaceBackend(DaceBackend):
         from dace.transformation.interstate import StateFusion
 
         # sdfg.apply_transformations_repeated([StateFusion], strict=False, validate=False)
+        return sdfg
+
+
+@gt_backend.register
+class CPUDaceBackend(DaceBackend):
+    name = "dacex86"
+    storage_info = {
+        "alignment": 1,
+        "device": "cpu",
+        "layout_map": dace_layout,
+        "is_compatible_layout": dace_is_compatible_layout,
+        "is_compatible_type": dace_is_compatible_type,
+    }
+    GENERATOR_CLASS = CPUDacePyModuleGenerator
+    DEFAULT_OPTIMIZER = X86DaceOptimizer()
