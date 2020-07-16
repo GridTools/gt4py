@@ -372,9 +372,13 @@ if __name__ == "__main__":
         pass
 
     class SpecializingInjector(SDFGInjector):
+        def __init__(self, sdfg, domain):
+            super().__init__(sdfg)
+            self.domain = domain
+
         def transform_optimize(self, sdfg):
             res = super().transform_optimize(sdfg)
-            res.specialize(dict(I=128, J=128, K=80))
+            res.specialize({var: d for var, d in zip("IJK", self.domain)})
             return res
 
     print("##vertical advection")
@@ -400,7 +404,9 @@ if __name__ == "__main__":
         domain=domain,
         backend="dacecuda",
         dtype=dtype,
-        backend_opts=dict(optimizer=SpecializingInjector("/scratch/snx3000tds/gronerl/vadv.sdfg")),
+        backend_opts=dict(
+            optimizer=SpecializingInjector("/scratch/snx3000tds/gronerl/vadv.sdfg", domain)
+        ),
         validation_domain=validation_domain,
     )
     print("start gtcuda")
