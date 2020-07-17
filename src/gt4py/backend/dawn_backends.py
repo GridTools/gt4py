@@ -257,7 +257,6 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         stencil_ast = sir_utils.make_ast(
             [self.visit(computation) for computation in node.computations]
         )
-
         name = node.name.split(".")[-1]
         stencils.append(sir_utils.make_stencil(name=name, ast=stencil_ast, fields=fields))
 
