@@ -374,7 +374,8 @@ In this case, the symbol must further be imported from ``__externals__`` in the 
 System Setup
 ------------
 
-The following variables, found in `src/gt4py/config.py` control compilation settings
+The following variables, found in `src/gt4py/config.py <https://github.com/GridTools/gt4py/blob/master/src/gt4py/config.py>`_
+control compilation settings:
 
 * ``BOOST_ROOT`` or ``BOOST_HOME``: root of the boost library headers.
 * ``CUDA_ROOT`` or ``CUDA_HOME``: installation prefix of the CUDA toolkit.
