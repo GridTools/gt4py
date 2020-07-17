@@ -231,6 +231,7 @@ class SIRConverter(gt_ir.IRNodeVisitor):
 
     def visit_ComputationBlock(self, node: gt_ir.ComputationBlock, **kwargs):
         interval = self.visit(node.interval)
+
         body_ast = sir_utils.make_ast(self.visit(node.body, make_block=False))
 
         loop_order = (
