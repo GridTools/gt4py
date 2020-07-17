@@ -318,7 +318,7 @@ class DataType(enum.Enum):
 
     @classmethod
     def from_dtype(cls, py_dtype):
-        if isinstance(py_dtype, type):
+        if isinstance(py_dtype, (type, str)):
             py_dtype = np.dtype(py_dtype)
         assert isinstance(py_dtype, np.dtype)
         return cls.NUMPY_TO_NATIVE_TYPE.get(py_dtype.name, cls.INVALID)

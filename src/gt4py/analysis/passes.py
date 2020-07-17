@@ -700,9 +700,73 @@ class DataTypePass(TransformPass):
                 node.then_expr.data_type, node.else_expr.data_type
             )
 
+    class SetDataTypes(gt_ir.IRNodeVisitor):
+        def __init__(self, dtype):
+            self.dtype = gt_ir.nodes.DataType.from_dtype(dtype)
+
+        def __call__(self, node):
+            assert isinstance(node, gt_ir.StencilImplementation)
+            self.vars = node.parameters
+            self.fields = node.fields
+            self.visit(node)
+
+        def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
+            for i, n in node.fields.items():
+                node.fields[i].data_type = self.dtype
+            for i, n in node.parameters.items():
+                node.parameters[i].data_type = self.dtype
+            self.generic_visit(node)
+
+        def visit_ApplyBlock(self, node: gt_ir.Node, **kwargs):
+            self.generic_visit(node)
+            for i, n in enumerate(node.local_symbols):
+                node.local_symbosl[i].data_type = self.dtype
+
+        def visit_VarRef(self, node: gt_ir.Node, apply_block_symbols={}, **kwargs):
+            self.generic_visit(node, **kwargs)
+            node.data_type = self.dtype
+
+        def visit_FieldRef(self, node: gt_ir.Node, **kwargs):
+            self.generic_visit(node, **kwargs)
+            node.data_type = self.dtype
+
+        def visit_UnaryOpExpr(self, node: gt_ir.Node, **kwargs):
+            self.generic_visit(node, **kwargs)
+            node.data_type = self.dtype
+
+        def visit_BinOpExpr(self, node: gt_ir.Node, **kwargs):
+            self.generic_visit(node, **kwargs)
+            assert node.lhs.data_type is not gt_ir.DataType.AUTO
+            assert node.rhs.data_type is not gt_ir.DataType.AUTO
+            if node.op.value in [
+                gt_ir.BinaryOperator.OR,
+                gt_ir.BinaryOperator.EQ,
+                gt_ir.BinaryOperator.NE,
+                gt_ir.BinaryOperator.LT,
+                gt_ir.BinaryOperator.LE,
+                gt_ir.BinaryOperator.GT,
+                gt_ir.BinaryOperator.GE,
+            ]:
+                node.data_type = gt_ir.DataType.from_dtype(bool)
+            else:
+                node.data_type = self.dtype
+
+        def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr, **kwargs):
+            self.generic_visit(node, **kwargs)
+            node.data_type = self.dtype
+
     def apply(self, transform_data: TransformData):
-        collect_data_type = self.CollectDataTypes()
-        collect_data_type(transform_data.implementation_ir)
+        if "enforce_dtype" in transform_data.options.backend_opts:
+            dtype = gt_ir.nodes.DataType.from_dtype(
+                transform_data.options.backend_opts["enforce_dtype"]
+            )
+            transform_data.options.backend_opts[
+                "enforce_dtype"
+            ] = gt_ir.nodes.DataType.NATIVE_TYPE_TO_NUMPY[dtype]
+            visitor = self.SetDataTypes(transform_data.options.backend_opts["enforce_dtype"])
+        else:
+            visitor = self.CollectDataTypes()
+        visitor(transform_data.implementation_ir)
         return transform_data
 
 

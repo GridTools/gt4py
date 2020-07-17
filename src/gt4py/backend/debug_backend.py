@@ -216,7 +216,7 @@ def debug_is_compatible_type(field):
 @gt_backend.register
 class DebugBackend(gt_backend.BaseBackend):
     name = "debug"
-    options = {}
+    options = {"enforce_dtype": {"versioning": True}}
     storage_info = {
         "alignment": 1,
         "device": "cpu",

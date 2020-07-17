@@ -279,7 +279,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
     def __init__(self, backend_class, options):
         super().__init__(backend_class, options)
-        assert len(self.options.backend_opts) == 0
+        # assert len(self.options.backend_opts) == 0
 
         self.source_generator = NumPySourceGenerator(
             indent_size=self.TEMPLATE_INDENT_SIZE,
@@ -337,7 +337,7 @@ def numpy_is_compatible_type(field):
 @gt_backend.register
 class NumPyBackend(gt_backend.BaseBackend):
     name = "numpy"
-    options = {}
+    options = {"enforce_dtype": {"versioning": True}}
     storage_info = {
         "alignment": 1,
         "device": "cpu",

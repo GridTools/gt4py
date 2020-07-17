@@ -1,14 +1,13 @@
 import numpy as np
 
+import gt4py
 from gt4py import gtscript
 from gt4py import storage as gt_store
 from tests.test_integration.stencil_definitions import REGISTRY as stencil_registry
 from tests.test_integration.test_cpp_regression import get_reference, generate_test_module
 
 
-def run_horizontal_diffusion(
-    niter, domain, backend, dtype, backend_opts={}, validation_domain=(10, 10, 10), rebuild=True
-):
+def run_horizontal_diffusion(niter, domain, backend, dtype, backend_opts={}, rebuild=True):
     origins = {"in_field": (2, 2, 0), "out_field": (0, 0, 0), "coeff": (0, 0, 0)}
 
     import gt4py.gtscript
@@ -28,20 +27,24 @@ def run_horizontal_diffusion(
                 flx_field[0, 0, 0] - flx_field[-1, 0, 0] + fly_field[0, 0, 0] - fly_field[0, -1, 0]
             )
 
-    reference_module = gtscript.stencil(backend="numpy", definition=horizontal_diffusion)
+    reference_module = gtscript.stencil(
+        backend="numpy", definition=horizontal_diffusion, enforce_dtype=dtype
+    )
     test_module = gtscript.stencil(
-        backend=backend, definition=horizontal_diffusion, rebuild=rebuild, **backend_opts
+        backend=backend,
+        definition=horizontal_diffusion,
+        rebuild=rebuild,
+        enforce_dtype=dtype,
+        **backend_opts,
     )
 
-    # validation on domain===validation_domain
     validate_shapes = {
-        k: tuple(validation_domain[i] + 2 * origins[k][i] for i in range(3))
-        for k in origins.keys()
+        k: tuple(domain[i] + 2 * origins[k][i] for i in range(3)) for k in origins.keys()
     }
     arg_fields_reference = get_reference(
         "horizontal_diffusion",
         gt4py.backend.from_name("numpy"),
-        domain=validation_domain,
+        domain=domain,
         origins=origins,
         shapes=validate_shapes,
         dtype=dtype,
@@ -49,7 +52,7 @@ def run_horizontal_diffusion(
     arg_fields_test = get_reference(
         "horizontal_diffusion",
         gt4py.backend.from_name(backend),
-        domain=validation_domain,
+        domain=domain,
         origins=origins,
         shapes=validate_shapes,
         dtype=dtype,
@@ -62,26 +65,33 @@ def run_horizontal_diffusion(
     for k in arg_fields_reference.keys():
         arg_fields_reference[k].host_to_device()
         arg_fields_test[k].host_to_device()
-    reference_module.run(
-        **arg_fields_reference, _domain_=validation_domain, _origin_=origins, exec_info=None
-    )
-    test_module.run(
-        **arg_fields_test, _domain_=validation_domain, _origin_=origins, exec_info=None
-    )
+    reference_module.run(**arg_fields_reference, _domain_=domain, _origin_=origins, exec_info=None)
+    test_module.run(**arg_fields_test, _domain_=domain, _origin_=origins, exec_info=None)
     for k in arg_fields_reference.keys():
         arg_fields_reference[k].device_to_host(force=True)
         arg_fields_test[k].device_to_host(force=True)
         if not np.allclose(
             arg_fields_test[k].view(np.ndarray), arg_fields_reference[k].view(np.ndarray)
         ):
-            import warnings
-
-            warnings.warn(
-                "Large error in field {k}. (||err||=={err})".format(
+            raise RuntimeError(
+                "Large error in field {k}. (||err||=={err}, max_atol={atol}, max_rtol={rtol})".format(
                     k=k,
-                    err=np.norm(
+                    err=np.linalg.norm(
                         arg_fields_test[k].view(np.ndarray)
                         - arg_fields_reference[k].view(np.ndarray)
+                    ),
+                    atol=np.max(
+                        np.abs(
+                            arg_fields_test[k].view(np.ndarray)
+                            - arg_fields_reference[k].view(np.ndarray)
+                        )
+                    ),
+                    rtol=np.max(
+                        np.abs(
+                            arg_fields_test[k].view(np.ndarray)
+                            - arg_fields_reference[k].view(np.ndarray)
+                        )
+                        / np.abs(arg_fields_reference[k].view(np.ndarray))
                     ),
                 )
             )
@@ -115,7 +125,7 @@ def run_horizontal_diffusion(
 
 
 def run_vertical_advection(
-    niter, domain, backend, dtype, backend_opts={}, validation_domain=(10, 10, 10)
+    niter, domain, backend, dtype, backend_opts={}, validation_domain=(10, 10, 10),
 ):
     origins = {
         "utens_stage": (0, 0, 0),
@@ -223,11 +233,13 @@ def run_vertical_advection(
         backend="numpy",
         definition=vertical_advection_dycore,
         externals={"BET_M": 0.5, "BET_P": 0.5},
+        enforce_dtype=dtype,
     )
     test_module = gtscript.stencil(
         backend=backend,
         definition=vertical_advection_dycore,
         externals={"BET_M": 0.5, "BET_P": 0.5},
+        enforce_dtype=dtype,
         **backend_opts,
     )
 
@@ -277,9 +289,7 @@ def run_vertical_advection(
             if not np.allclose(
                 arg_fields_test[k].view(np.ndarray), arg_fields_reference[k].view(np.ndarray)
             ):
-                import warnings
-
-                warnings.warn(
+                raise RuntimeError(
                     "Large error in field {k}. (||err||=={err}, max_atol={atol}, max_rtol={rtol})".format(
                         k=k,
                         err=np.linalg.norm(
@@ -354,118 +364,64 @@ def summary(exec_infos):
     return res
 
 
+from gt4py.backend.dace.base_backend import SDFGInjector
+
+
+class SpecializingInjector(SDFGInjector):
+    def __init__(self, sdfg, domain):
+        super().__init__(sdfg)
+        self.domain = domain
+
+    def transform_optimize(self, sdfg):
+        res = super().transform_optimize(sdfg)
+
+        res.specialize({var: d for var, d in zip("IJK", self.domain)})
+
+        return res
+
+
 if __name__ == "__main__":
-    import gt4py.backend as gt_backend
-
     niter = 10
-    # domain = (256, 256, 64)
-    # domain = (16, 16, 32)
     domain = (128, 128, 80)
-    validation_domain = (128, 128, 80)
-    # domain = (16, 16, 32)
+    data_layout = (0, 1, 2)
+    function = "horizontal_diffusion"
     dtype = np.float32
-    from gt4py.backend.dace.base_backend import DaceOptimizer
-    from gt4py.backend.dace.base_backend import CudaDaceOptimizer
-    from gt4py.backend.dace.base_backend import SDFGInjector
+    backend = "gtx86"
+    import sys
 
-    class CudaNoOpt(CudaDaceOptimizer):
-        pass
-
-    class SpecializingInjector(SDFGInjector):
-        def __init__(self, sdfg, domain):
-            super().__init__(sdfg)
-            self.domain = domain
-
-        def transform_optimize(self, sdfg):
-            res = super().transform_optimize(sdfg)
-            res.specialize({var: d for var, d in zip("IJK", self.domain)})
-            return res
-
-    print("##vertical advection")
-    print("start dace")
-    # dace_exec_infos = run_vertical_advection(
-    #     niter=niter, domain=domain, backend=gt_backend.from_name("dacex86")
-    # )
-    # print("start gt")
-    # gt_exec_infos = run_vertical_advection(
-    #     niter=niter, domain=domain, backend=gt_backend.from_name("gtmc")
-    # )
-    #
-    # print("dace times:")
-    # for k, v in summary(dace_exec_infos).items():
-    #     print("\t{}: {}".format(k, v))
-    # print("gt times:")
-    # for k, v in summary(gt_exec_infos).items():
-    #     print("\t{}: {}".format(k, v))
-
-    print("start dacecuda")
-    dace_exec_infos = run_vertical_advection(
-        niter=niter,
-        domain=domain,
-        backend="dacecuda",
-        dtype=dtype,
-        backend_opts=dict(
-            optimizer=SpecializingInjector("/scratch/snx3000tds/gronerl/vadv.sdfg", domain)
-        ),
-        validation_domain=validation_domain,
+    if len(sys.argv) > 1:
+        path = sys.argv[1]
+    else:
+        path = None
+    optimizer = (
+        SpecializingInjector(path, domain)
+        if path is not None
+        else gt4py.backend.dace.cpu_backend.X86DaceOptimizer()
     )
-    print("start gtcuda")
-    gt_exec_infos = run_vertical_advection(
-        niter=niter,
-        domain=domain,
-        backend="gtcuda",
-        dtype=dtype,
-        validation_domain=validation_domain,
+    from gt4py.backend import register as register_backend
+    from gt4py.backend.dace.base_backend import DaceBackend
+    from gt4py.backend.dace.cpu_backend import CPUDaceBackend
+    from gt4py.backend.dace.gpu_backend import GPUDaceBackend
+
+    @register_backend
+    # class AdHocBackend(CPUDaceBackend):
+    class AdHocBackend(GPUDaceBackend):
+        name = "adhoc"
+        storage_info = {
+            "alignment": 1,  # will not affect temporaries currently
+            "device": "gpu",  # change me
+            "layout_map": lambda m: data_layout,
+            "is_compatible_layout": lambda m: True,
+            "is_compatible_type": lambda m: True,
+        }
+        DEFAULT_OPTIMIZER = optimizer
+
+    print(f"start {backend}")
+    backend_opts = dict()
+    exec_infos = globals()[f"run_{function}"](
+        niter=niter, domain=domain, backend=backend, dtype=dtype, backend_opts=backend_opts,
     )
 
-    print("dace times:")
-    for k, v in summary(dace_exec_infos).items():
-        print("\t{}: {}us per call".format(k, int(v * 1e6 / 10)))
-    print("gt times:")
-    for k, v in summary(gt_exec_infos).items():
-        print("\t{}: {}us per call".format(k, int(v * 1e6 / 10)))
-
-    #########################################################
-
-    print("##horizontal diffusion")
-    # print("start dace")
-    # dace_exec_infos = run_horizontal_diffusion(
-    #     niter=niter, domain=domain, backend=gt_backend.from_name("dacex86")
-    # )
-    # print("start gt")
-    # gt_exec_infos = run_horizontal_diffusion(
-    #     niter=niter, domain=domain, backend=gt_backend.from_name("gtmc")
-    # )
-    # print("dace times:")
-    # for k, v in summary(dace_exec_infos).items():
-    #     print("\t{}: {}".format(k, v))
-    # print("gt times:")
-    # for k, v in summary(gt_exec_infos).items():
-    #     print("\t{}: {}".format(k, v))
-
-    print("start dacecuda")
-    dace_exec_infos = run_horizontal_diffusion(
-        niter=niter,
-        domain=domain,
-        backend="dacecuda",
-        dtype=dtype,
-        backend_opts=dict(),
-        validation_domain=validation_domain,
-    )
-    print("start gtcuda")
-    gt_exec_infos = run_horizontal_diffusion(
-        niter=niter,
-        domain=domain,
-        backend="gtcuda",
-        dtype=dtype,
-        validation_domain=validation_domain,
-    )
-    print("dace times:")
-    for k, v in summary(dace_exec_infos).items():
-        print("\t{}: {}us per call".format(k, int(v * 1e6 / 10)))
-    print("gt times:")
-    for k, v in summary(gt_exec_infos).items():
-        print("\t{}: {}us per call".format(k, int(v * 1e6 / 10)))
-    import gt4py.backend as gt_backend
-
-    #############################################
+    print("times:")
+    for k, v in summary(exec_infos).items():
+        print("\t{}: {}us per call".format(k, int(v * 1e6 / niter)))

@@ -456,6 +456,7 @@ class BaseGTBackend(gt_backend.BaseBackend):
         "gtcache_size": {"versioning": True},
         "debug_mode": {"versioning": True},
         "add_profile_info": {"versioning": True},
+        "enforce_dtype": {"versioning": True},
     }
 
     @classmethod
