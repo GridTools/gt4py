@@ -533,7 +533,6 @@ class SDFGBuilder:
                 else:
                     assert field.name in node.temporary_fields
                     self.sdfg.add_transient(
-                        # field.name, shape=shape, dtype=field.data_type.dtype.type, toplevel=True
                         field.name,
                         shape=shape,
                         dtype=field.data_type.dtype.type,

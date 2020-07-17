@@ -226,6 +226,7 @@ class DaceBackend(gt_backend.BaseBackend):
         "optimizer": {"versioning": True},
         "save_intermediate": {"versioning": True},
         "validate": {"versioning": True},
+        "enforce_dtype": {"versioning": True},
     }
     storage_info = {
         "alignment": 1,
@@ -250,6 +251,17 @@ class DaceBackend(gt_backend.BaseBackend):
     @classmethod
     def generate_dace(cls, stencil_id, implementation_ir, options):
         sdfg = SDFGBuilder.apply(implementation_ir)
+        for array in sdfg.arrays:
+            import dace.data
+
+            if isinstance(array, dace.data.Array) and array.transient:
+                layout = cls.storage_info["layout_map"]([True] * 3)
+                stride = 1
+                strides = [None] * 3
+                for i in reversed(np.argsort(layout)):
+                    strides[i] = stride
+                    stride = stride * array.shape[i]
+                array.strides = strides
 
         dace_build_path = os.path.relpath(cls.get_dace_module_path(stencil_id))
         os.makedirs(dace_build_path, exist_ok=True)

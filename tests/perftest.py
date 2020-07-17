@@ -125,7 +125,7 @@ def run_horizontal_diffusion(niter, domain, backend, dtype, backend_opts={}, reb
 
 
 def run_vertical_advection(
-    niter, domain, backend, dtype, backend_opts={}, validation_domain=(10, 10, 10),
+    niter, domain, backend, dtype, backend_opts={},
 ):
     origins = {
         "utens_stage": (0, 0, 0),
@@ -244,8 +244,7 @@ def run_vertical_advection(
     )
 
     validate_shapes = {
-        k: tuple(validation_domain[i] + 2 * origins[k][i] for i in range(3))
-        for k in origins.keys()
+        k: tuple(domain[i] + 2 * origins[k][i] for i in range(3)) for k in origins.keys()
     }
     validate_shapes["wcon"] = tuple(
         s + 1 if i == 0 else s for i, s in enumerate(validate_shapes["wcon"])
@@ -253,7 +252,7 @@ def run_vertical_advection(
     arg_fields_reference = get_reference(
         "vertical_advection_dycore",
         gt4py.backend.from_name("numpy"),
-        domain=validation_domain,
+        domain=domain,
         origins=origins,
         shapes=validate_shapes,
         dtype=dtype,
@@ -261,7 +260,7 @@ def run_vertical_advection(
     arg_fields_test = get_reference(
         "vertical_advection_dycore",
         gt4py.backend.from_name(backend),
-        domain=validation_domain,
+        domain=domain,
         origins=origins,
         shapes=validate_shapes,
         dtype=dtype,
@@ -276,12 +275,8 @@ def run_vertical_advection(
             arg_fields_reference[k].host_to_device()
             arg_fields_test[k].host_to_device()
 
-    reference_module.run(
-        **arg_fields_reference, _domain_=validation_domain, _origin_=origins, exec_info=None
-    )
-    test_module.run(
-        **arg_fields_test, _domain_=validation_domain, _origin_=origins, exec_info=None
-    )
+    reference_module.run(**arg_fields_reference, _domain_=domain, _origin_=origins, exec_info=None)
+    test_module.run(**arg_fields_test, _domain_=domain, _origin_=origins, exec_info=None)
     for k in arg_fields_reference.keys():
         if not np.isscalar(arg_fields_test[k]):
             arg_fields_reference[k].device_to_host(force=True)
@@ -373,20 +368,55 @@ class SpecializingInjector(SDFGInjector):
         self.domain = domain
 
     def transform_optimize(self, sdfg):
-        res = super().transform_optimize(sdfg)
+        import copy
+        import dace
 
+        res: dace.SDFG = copy.deepcopy(self.sdfg)
+
+        strides = [None] * 3
+        layout = gt4py.backend.from_name("adhoc").storage_info["layout_map"]((True, True, True))
+        print(layout)
+        stride = 1
+        domain = [dace.symbolic.symbol(d) for d in "IJK"]
+        for i in reversed(np.argsort(layout)):
+            strides[i] = stride
+            stride = stride * domain[i]
+
+        for var, d in zip("IJK", strides):
+            res.replace(f"_ccol_{var}_stride", str(d))
+            res.replace(f"_dcol_{var}_stride", str(d))
+
+        if len(res.signature_arglist()) != len(sdfg.signature_arglist()):
+            raise ValueError(
+                "SDFG to inject does not have matching signature length. ({here} != {raw})".format(
+                    here=len(res.signature_arglist()), raw=len(sdfg.signature_arglist())
+                )
+            )
+        if not all(
+            here == res for here, res in zip(res.signature_arglist(), sdfg.signature_arglist())
+        ):
+            l = list(
+                (here, res)
+                for here, res in zip(res.signature_arglist(), sdfg.signature_arglist())
+                if here != res
+            )
+            raise ValueError(
+                "SDFG to inject does not have matching signature. ({here} != {raw})".format(
+                    here=l[0][0], raw=l[0][1]
+                )
+            )
         res.specialize({var: d for var, d in zip("IJK", self.domain)})
-
+        dace.Config.set("compiler", "cuda", "default_block_size", value="128, 1, 1")
         return res
 
 
 if __name__ == "__main__":
-    niter = 10
+    niter = 1000
     domain = (128, 128, 80)
-    data_layout = (0, 1, 2)
-    function = "horizontal_diffusion"
+    data_layout = (1, 2, 0)
+    function = "vertical_advection"
     dtype = np.float32
-    backend = "gtx86"
+    backend = "adhoc"
     import sys
 
     if len(sys.argv) > 1:
@@ -417,7 +447,7 @@ if __name__ == "__main__":
         DEFAULT_OPTIMIZER = optimizer
 
     print(f"start {backend}")
-    backend_opts = dict()
+    backend_opts = dict(rebuild=True)
     exec_infos = globals()[f"run_{function}"](
         niter=niter, domain=domain, backend=backend, dtype=dtype, backend_opts=backend_opts,
     )
