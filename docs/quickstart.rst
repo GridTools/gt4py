@@ -374,7 +374,9 @@ In this case, the symbol must further be imported from ``__externals__`` in the 
 System Setup
 ------------
 
-Compilation settings for GT4Py backends generating C++ or CUDA code might be modified when needed by updating the default values in the  `gt4py.config <https://github.com/GridTools/gt4py/blob/master/src/gt4py/config.py>`_ module. Note that most of the system dependent settings may be also modified  using the following environment variables:
+Compilation settings for GT4Py backends generating C++ or CUDA code might be modified when needed by updating
+the default values in the `gt4py.config <https://github.com/GridTools/gt4py/blob/master/src/gt4py/config.py>`_ module.
+Note that most of the system dependent settings may be also modified using the following environment variables:
 
 * ``BOOST_ROOT`` or ``BOOST_HOME``: root of the boost library headers.
 * ``CUDA_ROOT`` or ``CUDA_HOME``: installation prefix of the CUDA toolkit.
