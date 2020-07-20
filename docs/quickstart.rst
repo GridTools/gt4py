@@ -374,12 +374,11 @@ In this case, the symbol must further be imported from ``__externals__`` in the 
 System Setup
 ------------
 
-The following variables, found in `src/gt4py/config.py <https://github.com/GridTools/gt4py/blob/master/src/gt4py/config.py>`_
-control compilation settings:
+Compilation settings for GT4Py backends generating C++ or CUDA code might be modified when needed by updating the default values in the  `gt4py.config <https://github.com/GridTools/gt4py/blob/master/src/gt4py/config.py>`_ module. Note that most of the system dependent settings may be also modified  using the following environment variables:
 
 * ``BOOST_ROOT`` or ``BOOST_HOME``: root of the boost library headers.
 * ``CUDA_ROOT`` or ``CUDA_HOME``: installation prefix of the CUDA toolkit.
-* ``GT_INCLUDE_PATH``: path prefix to GridTools header files.
+* ``GT_INCLUDE_PATH``: path prefix to an alternative installation of GridTools header files.
 * ``OPENMP_CPPFLAGS``: preprocessor arguments for OpenMP support.
 * ``OPENMP_LDFLAGS``: arguments when linking executables with OpenMP support.
 
@@ -389,14 +388,14 @@ MacOS
 
 The clang compiler supplied with the MacOS Command Line Tools does not support the ``-fopenmp`` flag, but it does have
 support for OpenMP in the C preprocessor and can link with OpenMP support if the libomp package is installed using
-homebrew. Then set the following environment variables:
+``homebrew`` (https://brew.sh/). Then set the following environment variables:
 
 .. code:: bash
 
     export OPENMP_CPPFLAGS="-Xpreprocessor -fopenmp"
     export OPENMP_LDFLAGS="$(brew --prefix libomp)/lib/libomp.a"
 
-Similarly, boost headers are most easily installed using homebrew. Then set the corresponding environment variable:
+Similarly, boost headers are most easily installed using ``homebrew``. Then set the corresponding environment variable:
 
 .. code:: bash
 
