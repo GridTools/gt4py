@@ -278,7 +278,7 @@ class StencilObject(abc.ABC):
 
         for name, field in used_field_args.items():
             origin.setdefault(name, origin["_all_"] if "_all_" in origin else field.default_origin)
-        print(gt_config.debug)
+
         # Domain
         if domain is None:
             domain = Shape([sys.maxsize] * self.domain_info.ndims)
