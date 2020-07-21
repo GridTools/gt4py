@@ -20,8 +20,8 @@ import os
 
 from typing import Any, Dict
 
-# Debug flag (referenced from stencil objects)
-debug: bool = True
+# If True, validates stencil input arguments (can be changed by user)
+validate_args: bool = True
 
 GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
 
