@@ -19,7 +19,7 @@ from gt4py.definitions import (
     Index,
 )
 
-from gt4py.config import debug
+import gt4py.config as gt_config
 
 
 class StencilObject(abc.ABC):
@@ -278,7 +278,7 @@ class StencilObject(abc.ABC):
 
         for name, field in used_field_args.items():
             origin.setdefault(name, origin["_all_"] if "_all_" in origin else field.default_origin)
-
+        print(gt_config.debug)
         # Domain
         if domain is None:
             domain = Shape([sys.maxsize] * self.domain_info.ndims)
@@ -288,7 +288,7 @@ class StencilObject(abc.ABC):
         else:
             domain = normalize_domain(domain)
 
-        if debug:
+        if gt_config.debug:
             self._validate_args(used_field_args, used_param_args, domain, origin, exec_info)
 
         self.run(
