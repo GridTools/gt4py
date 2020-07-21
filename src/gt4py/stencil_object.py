@@ -121,6 +121,7 @@ class StencilObject(abc.ABC):
     def _validate_args(
         self, used_field_args, used_param_args, domain, origin, max_domain, exec_info=None
     ):
+        """Validate input arguments to self._call_run."""
         for name, field_info in self.field_info.items():
             if field_info is not None and used_field_args[name] is None:
                 raise ValueError(f"Field '{name}' is None.")
