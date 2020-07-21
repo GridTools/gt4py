@@ -122,12 +122,6 @@ class StencilObject(abc.ABC):
         self, used_field_args, used_param_args, domain, origin, max_domain, exec_info=None
     ):
         """Validate input arguments to self._call_run."""
-        for name, field_info in self.field_info.items():
-            if field_info is not None and used_field_args[name] is None:
-                raise ValueError(f"Field '{name}' is None.")
-        for name, parameter_info in self.parameter_info.items():
-            if parameter_info is not None and used_param_args[name] is None:
-                raise ValueError(f"Parameter '{name}' is None.")
 
         # assert compatibility of fields with stencil
         for name, field in used_field_args.items():
@@ -263,13 +257,20 @@ class StencilObject(abc.ABC):
         used_field_args = {
             name: field
             for name, field in field_args.items()
-            if name in self.field_info and self.field_info[name] is not None
+            if self.field_info.get(name, None) is not None
         }
+        for name, field_info in self.field_info.items():
+            if field_info is not None and used_field_args[name] is None:
+                raise ValueError(f"Field '{name}' is None.")
+
         used_param_args = {
             name: param
             for name, param in parameter_args.items()
-            if name in self.parameter_info and self.parameter_info[name] is not None
+            if self.parameter_info.get(name, None) is not None
         }
+        for name, parameter_info in self.parameter_info.items():
+            if parameter_info is not None and used_param_args[name] is None:
+                raise ValueError(f"Parameter '{name}' is None.")
 
         # Origins
         if origin is None:
