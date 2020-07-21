@@ -118,9 +118,7 @@ class StencilObject(abc.ABC):
     def __call__(self, *args, **kwargs):
         pass
 
-    def _validate_args(
-        self, used_field_args, used_param_args, domain, origin, max_domain, exec_info=None
-    ):
+    def _validate_args(self, used_field_args, used_param_args, domain, origin, exec_info=None):
         """Validate input arguments to self._call_run."""
 
         # assert compatibility of fields with stencil
