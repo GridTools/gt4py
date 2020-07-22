@@ -19,8 +19,6 @@ from gt4py.definitions import (
     Index,
 )
 
-import gt4py.config as gt_config
-
 
 class StencilObject(abc.ABC):
     """Generic singleton implementation of a stencil function.
