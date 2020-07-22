@@ -288,7 +288,7 @@ class StencilObject(abc.ABC):
         else:
             domain = normalize_domain(domain)
 
-        if gt_config.debug:
+        if not gt_config.disable_stencil_argument_validation:
             self._validate_args(used_field_args, used_param_args, domain, origin, exec_info)
 
         self.run(
