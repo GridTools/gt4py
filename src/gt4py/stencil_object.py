@@ -118,6 +118,15 @@ class StencilObject(abc.ABC):
     def __call__(self, *args, **kwargs):
         pass
 
+    def _get_max_domain(self, field_args, origin):
+        """Get the maximum domain size possible."""
+        max_domain = Shape([sys.maxsize] * self.domain_info.ndims)
+        shapes = {name: Shape(field.shape) for name, field in field_args.items()}
+        for name, shape in shapes.items():
+            upper_boundary = Index(self.field_info[name].boundary.upper_indices)
+            max_domain &= shape - (Index(origin[name]) + upper_boundary)
+        return max_domain
+
     def _validate_args(self, used_field_args, used_param_args, domain, origin, exec_info=None):
         """Validate input arguments to self._call_run."""
 
@@ -171,13 +180,7 @@ class StencilObject(abc.ABC):
         if not domain > Shape.zeros(self.domain_info.ndims):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")
 
-        # determine maximum domain
-        max_domain = Shape([sys.maxsize] * self.domain_info.ndims)
-        shapes = {name: Shape(field.shape) for name, field in used_field_args.items()}
-        for name, shape in shapes.items():
-            upper_boundary = Index(self.field_info[name].boundary.upper_indices)
-            max_domain &= shape - (Index(origin[name]) + upper_boundary)
-
+        max_domain = self._get_max_domain(used_field_args, origin)
         if not domain <= max_domain:
             raise ValueError(
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
@@ -281,10 +284,7 @@ class StencilObject(abc.ABC):
 
         # Domain
         if domain is None:
-            domain = Shape([sys.maxsize] * self.domain_info.ndims)
-            for name, field in used_field_args.items():
-                upper_boundary = Index(self.field_info[name].boundary.upper_indices)
-                domain &= Shape(field.shape) - (Index(origin[name]) + upper_boundary)
+            domain = self._get_max_domain(used_field_args, origin)
         else:
             domain = normalize_domain(domain)
 
