@@ -16,10 +16,9 @@ repos:
           src/gt4py/analysis/infos.py |
           src/gt4py/analysis/passes.py |
           src/gt4py/analysis/transformer.py |
-          src/gt4py/backend/base_gt_backend.py |
+          src/gt4py/backend/dawn_backends.py |
           src/gt4py/backend/debug_backend.py |
-          src/gt4py/backend/gt_cpu_backend.py |
-          src/gt4py/backend/gt_cuda_backend.py |
+          src/gt4py/backend/gt_backends.py |
           src/gt4py/backend/numpy_backend.py |
           src/gt4py/backend/pyext_builder.py |
           src/gt4py/backend/python_generator.py |
@@ -28,11 +27,12 @@ repos:
           src/gt4py/ir/utils.py |
           src/gt4py/stencil_object.py |
           src/gt4py/utils/meta.py |
-          tests/_disabled/test_iir/test_validation.py |
+          tests/definitions.py |
           tests/test_integration/stencil_definitions.py |
           tests/test_integration/test_code_generation.py |
           tests/test_unittest/test_call_interface.py |
           tests/test_unittest/test_gtscript_frontend.py |
+          tests/test_unittest/test_storage.py |
           )$
 
 -   repo: https://gitlab.com/PyCQA/flake8
@@ -52,8 +52,9 @@ repos:
           src/gt4py/analysis/passes.py |
           src/gt4py/analysis/transformer.py |
           src/gt4py/backend/__init__.py |
-          src/gt4py/backend/base_gt_backend.py |
+          src/gt4py/backend/dawn_backends.py |
           src/gt4py/backend/debug_backend.py |
+          src/gt4py/backend/gt_backends.py |
           src/gt4py/backend/numpy_backend.py |
           src/gt4py/backend/pyext_builder.py |
           src/gt4py/backend/python_generator.py |

@@ -277,10 +277,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
 
 class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
-    def __init__(self, backend_class, options):
-        super().__init__(backend_class, options)
-        assert len(self.options.backend_opts) == 0
-
+    def __init__(self, backend_class):
+        super().__init__(backend_class)
         self.source_generator = NumPySourceGenerator(
             indent_size=self.TEMPLATE_INDENT_SIZE,
             origin_marker="__O",
@@ -293,7 +291,7 @@ class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
         )
 
     def generate_module_members(self):
-        source = """       
+        source = """
 def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
     return np.choose(
         condition,
@@ -335,7 +333,9 @@ def numpy_is_compatible_type(field):
 
 
 @gt_backend.register
-class NumPyBackend(gt_backend.BaseBackend):
+class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):
+    """Pure Python backend using numpy for faster computations than the debug backend."""
+
     name = "numpy"
     options = {}
     storage_info = {
@@ -345,5 +345,6 @@ class NumPyBackend(gt_backend.BaseBackend):
         "is_compatible_layout": numpy_is_compatible_layout,
         "is_compatible_type": numpy_is_compatible_type,
     }
+    languages = {"computation": "python", "bindings": []}
 
-    GENERATOR_CLASS = NumPyModuleGenerator
+    MODULE_GENERATOR_CLASS = NumPyModuleGenerator

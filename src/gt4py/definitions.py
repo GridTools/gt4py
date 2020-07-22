@@ -25,6 +25,7 @@ from gt4py.utils.attrib import (
     attribute,
     attribclass,
     attribkwclass,
+    AttributeClassLike,
     Any,
     Dict as DictOf,
     List as ListOf,
@@ -657,7 +658,7 @@ class ParameterInfo(collections.namedtuple("ParameterInfoNamedTuple", ["dtype"])
 
 
 @attribkwclass
-class BuildOptions:
+class BuildOptions(AttributeClassLike):
     """Build options."""
 
     name = attribute(of=str)
@@ -665,6 +666,7 @@ class BuildOptions:
     backend_opts = attribute(of=DictOf[str, Any], factory=dict)
     build_info = attribute(of=dict, optional=True)
     rebuild = attribute(of=bool, default=False)
+    _impl_opts = attribute(of=DictOf[str, Any], factory=dict)
 
     @property
     def qualified_name(self):
@@ -681,7 +683,7 @@ class BuildOptions:
 
 
 @attribclass(frozen=True)
-class StencilID:
+class StencilID(AttributeClassLike):
     qualified_name = attribute(of=str)
     version = attribute(of=str)
 

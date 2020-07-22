@@ -14,12 +14,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import abc
 import functools
-import hashlib
 import numbers
 import os
+import types
+from typing import Optional
 
 import jinja2
+import numpy as np
 
 from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
@@ -27,6 +30,91 @@ from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
+from . import pyext_builder
+
+
+def make_x86_layout_map(mask):
+    ctr = iter(range(sum(mask)))
+    if len(mask) < 3:
+        layout = [next(ctr) if m else None for m in mask]
+    else:
+        swapped_mask = [*mask[3:], *mask[:3]]
+        layout = [next(ctr) if m else None for m in swapped_mask]
+
+        layout = [*layout[-3:], *layout[:-3]]
+
+    return tuple(layout)
+
+
+def x86_is_compatible_layout(field):
+    stride = 0
+    layout_map = make_x86_layout_map(field.mask)
+    if len(field.strides) < len(layout_map):
+        return False
+    for dim in reversed(np.argsort(layout_map)):
+        if field.strides[dim] < stride:
+            return False
+        stride = field.strides[dim]
+    return True
+
+
+def gtcpu_is_compatible_type(field):
+    return isinstance(field, np.ndarray)
+
+
+def make_mc_layout_map(mask):
+    ctr = reversed(range(sum(mask)))
+    if len(mask) < 3:
+        layout = [next(ctr) if m else None for m in mask]
+    else:
+        swapped_mask = list(mask)
+        tmp = swapped_mask[1]
+        swapped_mask[1] = swapped_mask[2]
+        swapped_mask[2] = tmp
+
+        layout = [next(ctr) if m else None for m in swapped_mask]
+
+        tmp = layout[1]
+        layout[1] = layout[2]
+        layout[2] = tmp
+
+    return tuple(layout)
+
+
+def mc_is_compatible_layout(field):
+    stride = 0
+    layout_map = make_mc_layout_map(field.mask)
+    if len(field.strides) < len(layout_map):
+        return False
+    for dim in reversed(np.argsort(layout_map)):
+        if field.strides[dim] < stride:
+            return False
+        stride = field.strides[dim]
+    return True
+
+
+def cuda_layout(mask):
+    ctr = reversed(range(sum(mask)))
+    return tuple([next(ctr) if m else None for m in mask])
+
+
+def cuda_is_compatible_layout(field):
+    stride = 0
+    layout_map = cuda_layout(field.mask)
+    if len(field.strides) < len(layout_map):
+        return False
+    for dim in reversed(np.argsort(layout_map)):
+        if field.strides[dim] < stride:
+            return False
+        stride = field.strides[dim]
+    return True
+
+
+def cuda_is_compatible_type(field):
+    # ToDo: find a better way to remove the import cycle
+    from gt4py.storage.storage import GPUStorage, ExplicitlySyncedGPUStorage
+
+    return isinstance(field, (GPUStorage, ExplicitlySyncedGPUStorage))
 
 
 class _MaxKOffsetExtractor(gt_ir.IRNodeVisitor):
@@ -85,10 +173,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         gt_ir.DataType.FLOAT64: "float64_t",
     }
 
-    def __init__(self, class_name, module_name, backend, options):
+    def __init__(self, class_name, module_name, gt_backend_t, options):
         self.class_name = class_name
         self.module_name = module_name
-        self.backend = backend
+        self.gt_backend_t = gt_backend_t
         self.options = options
 
         self.templates = {}
@@ -361,7 +449,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         template_args = dict(
             arg_fields=arg_fields,
             constants=constants,
-            gt_backend=self.backend,
+            gt_backend=self.gt_backend_t,
             halo_sizes=halo_sizes,
             k_axis=k_axis,
             module_name=self.module_name,
@@ -379,141 +467,218 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         return sources
 
 
-class GTPyModuleGenerator(gt_backend.BaseModuleGenerator):
+class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
-    DEFAULT_GTCACHE_SIZE = 2
+    GT_BACKEND_OPTS = {
+        "add_profile_info": {"versioning": True},
+        "clean": {"versioning": False},
+        "debug_mode": {"versioning": True},
+        "verbose": {"versioning": False},
+    }
 
-    def __init__(self, backend_class, options):
-        super().__init__(backend_class, options)
-        self.options.backend_opts.setdefault("gtcache_size", self.DEFAULT_GTCACHE_SIZE)
+    GT_BACKEND_T = None
 
-    def generate_imports(self):
-        source = """
-import functools
-
-from gt4py import utils as gt_utils
-
-pyext_module = gt_utils.make_module_from_file("{pyext_module_name}", "{pyext_file_path}", public_import=True)
-        """.format(
-            pyext_module_name=self.options.pyext_module_name,
-            pyext_file_path=self.options.pyext_file_path,
-        )
-
-        return source
-
-    def generate_implementation(self):
-        sources = gt_text.TextBlock(
-            indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE
-        )
-
-        args = []
-        for arg in self.implementation_ir.api_signature:
-            if arg.name not in self.implementation_ir.unreferenced:
-                args.append(arg.name)
-                if arg.name in self.implementation_ir.fields:
-                    args.append("list(_origin_['{}'])".format(arg.name))
-
-        source = """
-# Load or generate a GTComputation object for the current domain size
-pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
-""".format(
-            run_args=", ".join(args)
-        )
-        if self.backend_name == "gtcuda":
-            source = (
-                source
-                + """import cupy
-cupy.cuda.Device(0).synchronize()
-"""
-            )
-        sources.extend(source.splitlines())
-
-        return sources.text
-
-
-class BaseGTBackend(gt_backend.BaseBackend):
-
-    GENERATOR_CLASS = GTPyModuleGenerator
+    MODULE_GENERATOR_CLASS = gt_backend.PyExtModuleGenerator
 
     PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
-    GT_BACKEND_OPTS = {
-        "verbose": {"versioning": False},
-        "clean": {"versioning": False},
-        "gtcache_size": {"versioning": True},
-        "debug_mode": {"versioning": True},
-        "add_profile_info": {"versioning": True},
-    }
-
     @classmethod
-    def get_pyext_module_name(cls, stencil_id, *, qualified=False):
-        module_name = cls.get_stencil_module_name(stencil_id, qualified=qualified) + "_pyext"
-        return module_name
-
-    @classmethod
-    def get_pyext_class_name(cls, stencil_id):
-        module_name = cls.get_stencil_class_name(stencil_id) + "_pyext"
-        return module_name
-
-    @classmethod
-    def get_pyext_build_path(cls, stencil_id):
-        path = os.path.join(
-            cls.get_stencil_package_path(stencil_id),
-            cls.get_pyext_module_name(stencil_id) + "_BUILD",
-        )
-
-        return path
-
-    @classmethod
-    def generate_extension(cls, stencil_id, implementation_ir, options):
-        raise NotImplementedError(
-            "'generate_extension()' method must be implemented by subclasses"
-        )
-
-    @classmethod
-    def generate_cache_info(cls, stencil_id, extra_cache_info):
-        cache_info = super(BaseGTBackend, cls).generate_cache_info(stencil_id, {})
-
-        cache_info["pyext_file_path"] = extra_cache_info["pyext_file_path"]
-        cache_info["pyext_md5"] = hashlib.md5(
-            open(cache_info["pyext_file_path"], "rb").read()
-        ).hexdigest()
-
-        return cache_info
-
-    @classmethod
-    def validate_cache_info(cls, stencil_id, cache_info):
-        try:
-            assert super(BaseGTBackend, cls).validate_cache_info(stencil_id, cache_info)
-            pyext_md5 = hashlib.md5(open(cache_info["pyext_file_path"], "rb").read()).hexdigest()
-            result = pyext_md5 == cache_info["pyext_md5"]
-
-        except Exception:
-            result = False
-
-        return result
-
-    @classmethod
-    def generate(cls, stencil_id, definition_ir, definition_func, options):
+    def generate(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        definition_ir: gt_ir.StencilDefinition,
+        definition_func: types.FunctionType,
+        options: gt_definitions.BuildOptions,
+    ):
+        # TODO: move this import to the top and find a better way to avoid circular imports
         from gt4py import gt_src_manager
 
         cls._check_options(options)
-        implementation_ir = gt_analysis.transform(definition_ir, options)
 
         # Generate the Python binary extension (checking if GridTools sources are installed)
         if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
+
+        implementation_ir = gt_analysis.transform(definition_ir, options)
         pyext_module_name, pyext_file_path = cls.generate_extension(
-            stencil_id, implementation_ir, options
+            stencil_id, definition_ir, options, implementation_ir=implementation_ir
         )
 
         # Generate and return the Python wrapper class
-        generator_options = options.as_dict()
-        generator_options["pyext_module_name"] = pyext_module_name
-        generator_options["pyext_file_path"] = pyext_file_path
+        return cls._generate_module(
+            stencil_id,
+            definition_ir,
+            definition_func,
+            options,
+            extra_cache_info={"pyext_file_path": pyext_file_path},
+            implementation_ir=implementation_ir,
+            pyext_module_name=pyext_module_name,
+            pyext_file_path=pyext_file_path,
+        )
 
-        extra_cache_info = {"pyext_file_path": pyext_file_path}
+    @classmethod
+    def _generic_generate_extension(
+        cls, stencil_id, definition_ir, options, *, uses_cuda=False, **kwargs
+    ):
+        implementation_ir = kwargs["implementation_ir"]
 
-        return super(BaseGTBackend, cls)._generate_module(
-            stencil_id, implementation_ir, definition_func, generator_options, extra_cache_info
+        # Generate source
+        if not options._impl_opts.get("disable-code-generation", False):
+            gt_pyext_sources = cls._generate_computation_src(
+                implementation_ir, options, stencil_id=stencil_id
+            )
+        else:
+            # Pass NOTHING to the builder means try to reuse the source code files
+            gt_pyext_sources = {key: gt_utils.NOTHING for key in cls.TEMPLATE_FILES.keys()}
+
+        final_ext = ".cu" if uses_cuda else ".cpp"
+        keys = list(gt_pyext_sources.keys())
+        for key in keys:
+            if key.split(".")[-1] == "src":
+                new_key = key.replace(".src", final_ext)
+                gt_pyext_sources[new_key] = gt_pyext_sources.pop(key)
+
+        # Build extension module
+        pyext_opts = dict(
+            verbose=options.backend_opts.get("verbose", False),
+            clean=options.backend_opts.get("clean", False),
+            **pyext_builder.get_gt_pyext_build_opts(
+                debug_mode=options.backend_opts.get("debug_mode", False),
+                add_profile_info=options.backend_opts.get("add_profile_info", False),
+                uses_cuda=uses_cuda,
+            ),
+        )
+
+        return cls.build_extension_module(
+            stencil_id, gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda
+        )
+
+    @classmethod
+    def _generate_computation_src(
+        cls, implementation_ir, options, *, stencil_id: Optional[gt_definitions.StencilID]
+    ):
+        """Generate the source for the stencil independently from use case."""
+        class_name = cls.get_pyext_class_name(stencil_id) if stencil_id else options.name
+        module_name = (
+            cls.get_pyext_module_name(stencil_id) if stencil_id else f"{options.name}_pyext"
+        )
+        gt_pyext_generator = cls.PYEXT_GENERATOR_CLASS(
+            class_name, module_name, cls.GT_BACKEND_T, options
+        )
+        return gt_pyext_generator(implementation_ir)
+
+    @classmethod
+    def generate_computation(
+        cls,
+        definition_ir: gt_ir.StencilDefinition,
+        options: gt_definitions.BuildOptions,
+        *,
+        stencil_id: Optional[gt_definitions.StencilID] = None,
+        **kwargs,
+    ):
+        implementation_ir = kwargs.get(
+            "implementation_ir", gt_analysis.transform(definition_ir, options)
+        )
+        dir_name = f"{options.name}_src"
+        src_files = cls._generate_computation_src(
+            implementation_ir, options, stencil_id=stencil_id
+        )
+        return {dir_name: src_files}
+
+    @classmethod
+    @abc.abstractmethod
+    def generate_extension(
+        cls,
+        stencil_id: gt_definitions.StencilID,
+        definition_ir: gt_ir.StencilDefinition,
+        options: gt_definitions.BuildOptions,
+        **kwargs,
+    ):
+        pass
+
+
+@gt_backend.register
+class GTX86Backend(BaseGTBackend):
+
+    GT_BACKEND_T = "x86"
+
+    name = "gtx86"
+    options = BaseGTBackend.GT_BACKEND_OPTS
+    storage_info = {
+        "alignment": 1,
+        "device": "cpu",
+        "layout_map": make_x86_layout_map,
+        "is_compatible_layout": x86_is_compatible_layout,
+        "is_compatible_type": gtcpu_is_compatible_type,
+    }
+    languages = {"computation": "c++", "bindings": ["python"]}
+
+    @classmethod
+    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
+        return cls._generic_generate_extension(
+            stencil_id, definition_ir, options, uses_cuda=False, **kwargs
+        )
+
+
+@gt_backend.register
+class GTMCBackend(BaseGTBackend):
+
+    GT_BACKEND_T = "mc"
+
+    name = "gtmc"
+    options = BaseGTBackend.GT_BACKEND_OPTS
+    storage_info = {
+        "alignment": 8,
+        "device": "cpu",
+        "layout_map": make_mc_layout_map,
+        "is_compatible_layout": mc_is_compatible_layout,
+        "is_compatible_type": gtcpu_is_compatible_type,
+    }
+    languages = {"computation": "c++", "bindings": ["python"]}
+
+    @classmethod
+    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
+        return cls._generic_generate_extension(
+            stencil_id, definition_ir, options, uses_cuda=False, **kwargs
+        )
+
+
+class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
+    def generate_pre_run(self) -> str:
+        field_names = self.module_info["field_info"].keys()
+
+        return "\n".join([f + ".host_to_device()" for f in field_names])
+
+    def generate_post_run(self) -> str:
+        output_field_names = [
+            name
+            for name, info in self.module_info["field_info"].items()
+            if info.access == gt_definitions.AccessKind.READ_WRITE
+        ]
+
+        return "\n".join([f + "._set_device_modified()" for f in output_field_names])
+
+
+@gt_backend.register
+class GTCUDABackend(BaseGTBackend):
+
+    MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
+
+    GT_BACKEND_T = "cuda"
+
+    name = "gtcuda"
+    options = BaseGTBackend.GT_BACKEND_OPTS
+    storage_info = {
+        "alignment": 32,
+        "device": "gpu",
+        "layout_map": cuda_layout,
+        "is_compatible_layout": cuda_is_compatible_layout,
+        "is_compatible_type": cuda_is_compatible_type,
+    }
+    languages = {"computation": "cuda", "bindings": ["python"]}
+
+    @classmethod
+    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
+        return cls._generic_generate_extension(
+            stencil_id, definition_ir, options, uses_cuda=True, **kwargs
         )

@@ -14,30 +14,29 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import gt4py.definitions as gt_defs
-import gt4py.backend as gt_back
-import gt4py as gt
+import gt4py.definitions as gt_definitions
 import gt4py.gtscript as gtscript
 
-# from .def_ir_stencil_definitions import build_def_ir_stencil
 from .stencil_definitions import REGISTRY as stencil_registry
 from .stencil_definitions import EXTERNALS_REGISTRY
 
-from ..utils import id_version
+from ..definitions import id_version
 
 
 def generate_test_module(name, backend, *, id_version, rebuild=True):
     module_name = "_test_module." + name
     stencil_name = name
     backend_opts = {}
-    if issubclass(backend, gt_back.BaseGTBackend):
+    if "debug_mode" in backend.options:
         backend_opts["debug_mode"] = False
+    if "add_profile_info" in backend.options:
         backend_opts["add_profile_info"] = True
+    if "verbose" in backend.options:
         backend_opts["verbose"] = True
-    options = gt_defs.BuildOptions(
+    options = gt_definitions.BuildOptions(
         name=stencil_name, module=module_name, rebuild=rebuild, backend_opts=backend_opts
     )
     decorator = gtscript.stencil(backend=backend.name, externals=EXTERNALS_REGISTRY[stencil_name])
     stencil_definition = stencil_registry[name]
+
     return decorator(stencil_definition)
-    # return build_def_ir_stencil(name, options, backend, id_version=id_version)

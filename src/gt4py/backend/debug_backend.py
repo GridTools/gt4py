@@ -161,10 +161,8 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
 
 class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
-    def __init__(self, backend_class, options):
-        super().__init__(backend_class, options)
-        assert len(self.options.backend_opts) == 0
-
+    def __init__(self, backend_class):
+        super().__init__(backend_class)
         self.source_generator = DebugSourceGenerator(
             indent_size=self.TEMPLATE_INDENT_SIZE,
             origin_marker="_at",
@@ -175,7 +173,7 @@ class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
         )
 
     def generate_module_members(self):
-        source = """       
+        source = """
 class _Accessor:
     def __init__(self, array, origin):
         self.array = array
@@ -184,7 +182,7 @@ class _Accessor:
     def _shift(self, index):
         return tuple(i + offset for i, offset in zip(index, self.origin))
 
-    def __getitem__(self, index):        
+    def __getitem__(self, index):
         return self.array[self._shift(index)]
 
     def __setitem__(self, index, value):
@@ -214,7 +212,9 @@ def debug_is_compatible_type(field):
 
 
 @gt_backend.register
-class DebugBackend(gt_backend.BaseBackend):
+class DebugBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):
+    """Pure Python backend, unoptimized for debugging."""
+
     name = "debug"
     options = {}
     storage_info = {
@@ -224,5 +224,6 @@ class DebugBackend(gt_backend.BaseBackend):
         "is_compatible_layout": debug_is_compatible_layout,
         "is_compatible_type": debug_is_compatible_type,
     }
+    languages = {"computation": "python", "bindings": []}
 
-    GENERATOR_CLASS = DebugModuleGenerator
+    MODULE_GENERATOR_CLASS = DebugModuleGenerator

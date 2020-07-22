@@ -19,15 +19,19 @@ import pytest
 import numpy as np
 import itertools
 
+import hypothesis as hyp
+import hypothesis.strategies as hyp_st
+
 import gt4py.storage as gt_store
 import gt4py.backend as gt_backend
 
 from .utils import id_version  # import fixture used by pytest
+from .utils import generate_test_module
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS, id_version
 from ..reference_cpp_regression import reference_module
 
-from .utils import generate_test_module
-import hypothesis as hyp
-import hypothesis.strategies as hyp_st
+INTERNAL_CPU_BACKENDS = list(set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
+INTERNAL_GPU_BACKENDS = list(set(GPU_BACKENDS) & set(INTERNAL_BACKENDS))
 
 REGISTRY = list()
 
@@ -211,32 +215,15 @@ def run_vertical_advection_dycore(backend, id_version, domain):
 
 
 @pytest.mark.parametrize(
-    ["backend", "function"],
-    itertools.product(
-        [
-            gt_backend.from_name(name)
-            for name in gt_backend.REGISTRY.names
-            # for name in ["numpy"]
-            if gt_backend.from_name(name).storage_info["device"] == "cpu"
-        ],
-        REGISTRY,
-    ),
+    ["backend", "function"], itertools.product(INTERNAL_CPU_BACKENDS, REGISTRY)
 )
 def test_cpp_regression_cpu(backend, id_version, function):
-    function(backend, id_version)
+    function(gt_backend.from_name(backend), id_version)
 
 
 @pytest.mark.requires_gpu
 @pytest.mark.parametrize(
-    ["backend", "function"],
-    itertools.product(
-        [
-            gt_backend.from_name(name)
-            for name in gt_backend.REGISTRY.names
-            if gt_backend.from_name(name).storage_info["device"] == "gpu"
-        ],
-        REGISTRY,
-    ),
+    ["backend", "function"], itertools.product(INTERNAL_GPU_BACKENDS, REGISTRY)
 )
 def test_cpp_regression_gpu(backend, id_version, function):
-    function(backend, id_version)
+    function(gt_backend.from_name(backend), id_version)

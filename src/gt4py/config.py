@@ -17,35 +17,43 @@
 import multiprocessing
 import os
 
+from typing import Any, Dict
 
-BOOST_ROOT = os.environ.get(
-    "BOOST_ROOT", os.environ.get("BOOST_HOME", os.path.abspath("/usr/local/include"))
+GT4PY_INSTALLATION_PATH = os.path.dirname(os.path.abspath(__file__))
+
+# Default paths (taken from user's environment vars when possible)
+BOOST_ROOT: str = os.environ.get(
+    "BOOST_ROOT", os.environ.get("BOOST_HOME", os.path.abspath("/usr/local"))
 )
 
-CUDA_ROOT = os.environ.get(
+CUDA_ROOT: str = os.environ.get(
     "CUDA_HOME", os.environ.get("CUDA_PATH", os.path.abspath("/usr/local/cuda"))
 )
 
-GT_REPO_PATH = os.path.abspath(
+GT_REPO_PATH: str = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "_external_src", "gridtools")
 )
 
-GT_INCLUDE_PATH = os.path.abspath(os.path.join(GT_REPO_PATH, "include"))
+GT_INCLUDE_PATH: str = os.path.abspath(os.path.join(GT_REPO_PATH, "include"))
 
-build_settings = {
+# Settings dict
+build_settings: Dict[str, Any] = {
     "boost_include_path": os.path.join(BOOST_ROOT, "include"),
     "cuda_bin_path": os.path.join(CUDA_ROOT, "bin"),
     "cuda_include_path": os.path.join(CUDA_ROOT, "include"),
     "cuda_library_path": os.path.join(CUDA_ROOT, "lib64"),
+    "cuda_arch": os.environ.get("CUDA_ARCH", None),
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
-    "extra_compile_args": [],
+    "openmp_cppflags": os.environ.get("OPENMP_CPPFLAGS", "-fopenmp"),
+    "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", "-fopenmp"),
+    "extra_compile_args": {"cxx": [], "nvcc": []},
     "extra_link_args": [],
     "parallel_jobs": multiprocessing.cpu_count(),
 }
 
-cache_settings = {
+cache_settings: Dict[str, Any] = {
     "dir_name": os.environ.get("GT_CACHE_DIR_NAME", ".gt_cache"),
     "root_path": os.environ.get("GT_CACHE_ROOT", os.path.abspath(".")),
 }
 
-code_settings = {"root_package_name": "_GT_"}
+code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}
