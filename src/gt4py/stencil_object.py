@@ -119,7 +119,20 @@ class StencilObject(abc.ABC):
         pass
 
     def _get_max_domain(self, field_args, origin):
-        """Get the maximum domain size possible."""
+        """Return the maximum domain size possible
+
+        Parameters
+        ----------
+            field_args: `dict`
+                Mapping from field names to actually passed data arrays.
+
+            origin: `{'field_name': [int * ndims]}`
+                The origin for each field.
+
+        Returns
+        -------
+            `Shape`: the maximum domain size.
+        """
         max_domain = Shape([sys.maxsize] * self.domain_info.ndims)
         shapes = {name: Shape(field.shape) for name, field in field_args.items()}
         for name, shape in shapes.items():
@@ -127,8 +140,17 @@ class StencilObject(abc.ABC):
             max_domain &= shape - (Index(origin[name]) + upper_boundary)
         return max_domain
 
-    def _validate_args(self, used_field_args, used_param_args, domain, origin, exec_info=None):
-        """Validate input arguments to self._call_run."""
+    def _validate_args(self, used_field_args, used_param_args, domain, origin):
+        """Validate input arguments to _call_run.
+
+        Raises
+        -------
+            ValueError
+                If invalid data or inconsistent options are specified.
+
+            TypeError
+                If an incorrect field or parameter data type is passed.
+        """
 
         # assert compatibility of fields with stencil
         for name, field in used_field_args.items():
@@ -202,11 +224,15 @@ class StencilObject(abc.ABC):
                     f"Shape of field {name} is {field.shape} but must be at least {min_shape} for given domain and origin."
                 )
 
-    def _call_run(self, field_args, parameter_args, domain, origin, exec_info=None):
+    def _call_run(
+        self, field_args, parameter_args, domain, origin, *, validate_args=True, exec_info=None
+    ):
         """Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
 
         Note that this function will always try to expand simple parameter values to
         complete data structures by repeating the same value as many times as needed.
+
+        See _validate_args for a list of exceptions raised by this method.
 
         Parameters
         ----------
@@ -237,6 +263,9 @@ class StencilObject(abc.ABC):
                 so a 0-based origin will only be acceptable for fields with
                 a 0-area support region.
 
+            validate_args : `bool`
+                If True, ensures all input arguments are valid for the stencil run.
+
             exec_info : `dict`, optional
                 Dictionary used to store information about the stencil execution.
                 (`None` by default).
@@ -244,11 +273,6 @@ class StencilObject(abc.ABC):
         Returns
         -------
             `None`
-
-        Raises
-        -------
-            ValueError
-                If invalid data or inconsistent options are specified.
         """
 
         if exec_info is not None:
@@ -288,8 +312,8 @@ class StencilObject(abc.ABC):
         else:
             domain = normalize_domain(domain)
 
-        if not gt_config.disable_stencil_argument_validation:
-            self._validate_args(used_field_args, used_param_args, domain, origin, exec_info)
+        if validate_args:
+            self._validate_args(used_field_args, used_param_args, domain, origin)
 
         self.run(
             _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args

@@ -20,11 +20,6 @@ import os
 
 from typing import Any, Dict
 
-# Can change this setting in an application:
-#   import gt4py.config as gt_config
-#   gt_config.disable_stencil_argument_validation = True
-disable_stencil_argument_validation: bool = False
-
 GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
 
 # Default paths (taken from user's environment vars when possible)
