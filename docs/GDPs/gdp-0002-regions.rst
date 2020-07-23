@@ -2,7 +2,7 @@
 GDP 2 — Specializations Near Boundaries
 =======================================
 
-:Author: Rhea George <rheag@vulcan.com> - Vulcan Climate Modeling
+:Author: Johann Dahm <johannd@vulcan.com> - Vulcan Climate Modeling
 :Status: Draft
 :Type: Feature
 :Created: 21-04-2020
