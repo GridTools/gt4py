@@ -476,3 +476,12 @@ class TestAssignmentSyntax:
                 with computation(PARALLEL), interval(...):
                     tmp[0, 0, 0] = 2 * in_field
                     out_field = tmp
+
+    def test_augmented(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += 2.0
+                in_field -= 0.5
+                in_field /= 0.5
+                in_field *= 4.0
