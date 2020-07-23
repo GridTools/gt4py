@@ -1390,6 +1390,7 @@ class GTScriptFrontend(gt_frontend.Frontend):
             definition._gtscript_["nonlocals"], definition._gtscript_["imported"], externals
         )
         definition._gtscript_["externals"] = resolved_externals
+        return definition
 
     @classmethod
     def generate(cls, definition, externals, options):
