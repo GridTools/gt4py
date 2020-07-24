@@ -477,12 +477,11 @@ class TestAssignmentSyntax:
                     tmp[0, 0, 0] = 2 * in_field
                     out_field = tmp
 
+
 class TestRaceConditions:
     def test_offset_access(self):
-        with pytest.raises(
-            gt_frontend.GTScriptSyntaxError,
-            match="Race condition",
-        ):
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Race condition"):
+
             @gtscript.stencil(backend="debug")
             def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
                 with computation(PARALLEL), interval(...):
