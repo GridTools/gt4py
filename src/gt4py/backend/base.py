@@ -898,6 +898,9 @@ pyext_module = gt_utils.make_module_from_file(
                 if arg.name in api_fields:
                     args.append("list(_origin_['{}'])".format(arg.name))
 
+        # only generate implementation if any multi_stages are present. e.g. if no statement in the
+        # stencil has any effect on the API fields, this may not be the case since they could be
+        # pruned.
         if self.implementation_ir.multi_stages:
             source = """
 # Load or generate a GTComputation object for the current domain size
