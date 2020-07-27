@@ -510,6 +510,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             generator_options["pyext_file_path"] = pyext_file_path
 
         else:
+            # if no computation has effect, there is no need to create an extension
             pyext_module_name, pyext_file_path = None, None
         # Generate and return the Python wrapper class
         return cls._generate_module(
