@@ -410,10 +410,6 @@ class RaceConditionChecker(gt_ir.IRNodeVisitor):
     def __call__(self, definition_ir):
         self.visit(definition_ir)
 
-    def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
-        for computation in node.computations:
-            self.visit(computation)
-
     def visit_FieldRef(self, node: gt_ir.FieldRef):
         if node.offset["I"] > 0 or node.offset["J"] > 0:
             self.horiz_offcenter_reads.append(node.name)
