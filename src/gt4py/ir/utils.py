@@ -743,19 +743,5 @@ class AST2IRVisitor(ast.NodeVisitor):
             result = stmts
         return result
 
-    def visit_Call(self, node: ast.Call):
-        func_id = node.func.id
-
-        symbol_to_ir_node = {
-            value: key for key, value in NativeFunction.IR_OP_TO_PYTHON_SYMBOL.items()
-        }
-
-        arguments = self.generic_visit(node.args)
-        tmp =  NativeFuncCall(
-            func=symbol_to_ir_node[func_id], args=arguments, loc=gt_ir.Location.from_ast_node(node)
-        )
-
-        return tmp
-
 
 make_computations = AST2IRVisitor.apply

@@ -227,7 +227,10 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        if isinstance(node.value, ast.Call):
+        if (
+            isinstance(node.value, ast.Call)
+            and node.value.func.id not in gt_ir.NativeFunction.IR_OP_TO_PYTHON_SYMBOL.values()
+        ):
             assert len(node.targets) == 1
             self.visit(node.value, target_node=node.targets[0])
             # This node can be now removed since the trivial assignment has been already done
@@ -238,6 +241,11 @@ class CallInliner(ast.NodeTransformer):
 
     def visit_Call(self, node: ast.Call, *, target_node=None):
         call_name = node.func.id
+
+        if call_name in gt_ir.NativeFunction.IR_OP_TO_PYTHON_SYMBOL.values():
+            node.args = [self.visit(arg) for arg in node.args]
+            return node
+
         assert call_name in self.context and hasattr(self.context[call_name], "_gtscript_")
 
         # Recursively inline any possible nested subroutine call
@@ -810,6 +818,20 @@ class IRMaker(ast.NodeVisitor):
         self.in_if = False
 
         return result
+
+    def visit_Call(self, node: ast.Call):
+        func_id = node.func.id
+
+        symbol_to_ir_node = {
+            value: key for key, value in gt_ir.NativeFunction.IR_OP_TO_PYTHON_SYMBOL.items()
+        }
+
+        args = [self.visit(arg) for arg in node.args]
+        tmp = gt_ir.NativeFuncCall(
+            func=symbol_to_ir_node[func_id], args=args, loc=gt_ir.Location.from_ast_node(node)
+        )
+
+        return tmp
 
     # -- Statement nodes --
     def visit_Assign(self, node: ast.Assign) -> list:
