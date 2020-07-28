@@ -421,6 +421,59 @@ class NativeFunction(enum.Enum):
     CEIL = 112
     TRUNC = 113
 
+    @property
+    def python_numargs(self):
+        return type(self).IR_OP_TO_NUM_ARGS[self]
+
+    @property
+    def python_symbol(self):
+        return type(self).IR_OP_TO_PYTHON_SYMBOL[self]
+
+NativeFunction.IR_OP_TO_NUM_ARGS = {
+    NativeFunction.ABS : 1,
+    NativeFunction.MOD : 2,
+
+    NativeFunction.SIN : 1,
+    NativeFunction.COS : 1,
+    NativeFunction.TAN : 1,
+    NativeFunction.ARCSIN : 1,
+    NativeFunction.ARCCOS : 1,
+    NativeFunction.ARCTAN : 1,
+
+    NativeFunction.SQRT : 1,
+    NativeFunction.EXP : 1,
+    NativeFunction.LOG : 1,
+
+    NativeFunction.ISFINITE : 1,
+    NativeFunction.ISINF : 1,
+    NativeFunction.ISNAN : 1,
+    NativeFunction.FLOOR : 1,
+    NativeFunction.CEIL : 1,
+    NativeFunction.TRUNC : 1,
+}
+
+NativeFunction.IR_OP_TO_PYTHON_SYMBOL = {
+    NativeFunction.ABS : "abs",
+    NativeFunction.MOD : "mod",
+
+    NativeFunction.SIN : "sin",
+    NativeFunction.COS : "cos",
+    NativeFunction.TAN : "tan",
+    NativeFunction.ARCSIN : "asin",
+    NativeFunction.ARCCOS : "acos",
+    NativeFunction.ARCTAN : "atan",
+
+    NativeFunction.SQRT : "sqrt",
+    NativeFunction.EXP : "exp",
+    NativeFunction.LOG : "log",
+
+    NativeFunction.ISFINITE : "isfinite",
+    NativeFunction.ISINF : "isinf",
+    NativeFunction.ISNAN : "isnan",
+    NativeFunction.FLOOR : "floor",
+    NativeFunction.CEIL : "ceil",
+    NativeFunction.TRUNC : "trunc",
+}
 
 @attribclass
 class NativeFuncCall(Expr):

@@ -1087,9 +1087,12 @@ class GTScriptParser(ast.NodeVisitor):
 
         nonlocal_symbols = {}
 
+        builtins = gtscript.builtins
+        builtins |= set(gt_ir.NativeFunction.IR_OP_TO_PYTHON_SYMBOL.values())
+
         name_nodes = gt_meta.collect_names(definition)
         for collected_name in name_nodes.keys():
-            if collected_name not in gtscript.builtins:
+            if collected_name not in builtins:
                 root_name = collected_name.split(".")[0]
                 if root_name in imported_symbols:
                     imported_symbols[root_name].setdefault(
