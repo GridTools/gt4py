@@ -485,3 +485,13 @@ class TestAssignmentSyntax:
                 in_field -= 0.5
                 in_field /= 0.5
                 in_field *= 4.0
+
+class TestMathFunctions:
+    def test_self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += 2.0
+                in_field -= 0.5
+                in_field /= 0.5
+                in_field *= 4.0
