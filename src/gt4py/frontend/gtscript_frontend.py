@@ -829,7 +829,7 @@ class IRMaker(ast.NodeVisitor):
         native_fcn = symbol_to_enum[func_id]
 
         args = [self.visit(arg) for arg in node.args]
-        if len(args) != gt_ir.NativeFunction.IR_OP_TO_NUM_ARGS[native_fcn]:
+        if len(args) != native_fcn.numargs:
             raise GTScriptSyntaxError(
                 "Invalid native function call", loc=gt_ir.Location.from_ast_node(node)
             )

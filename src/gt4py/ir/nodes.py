@@ -424,7 +424,7 @@ class NativeFunction(enum.Enum):
     TRUNC = 113
 
     @property
-    def python_numargs(self):
+    def numargs(self):
         return type(self).IR_OP_TO_NUM_ARGS[self]
 
     @property
