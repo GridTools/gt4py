@@ -246,7 +246,8 @@ class CallInliner(ast.NodeTransformer):
             node.args = [self.visit(arg) for arg in node.args]
             return node
 
-        assert call_name in self.context and hasattr(self.context[call_name], "_gtscript_")
+        elif call_name not in self.context and not hasattr(self.context[call_name], "_gtscript_"):
+            raise GTScriptSyntaxError("Unknown call", loc=gt_ir.Location.from_ast_node(node))
 
         # Recursively inline any possible nested subroutine call
         call_info = self.context[call_name]._gtscript_
