@@ -469,6 +469,7 @@ class StencilExpander:
                 self._loop(variable=variable)
             else:
                 self._map(variable=variable)
+            self.not_yet_mapped_variables.add(variable)
         return self.inner_sdfg
 
     @staticmethod
