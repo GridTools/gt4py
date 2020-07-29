@@ -486,6 +486,7 @@ class TestAssignmentSyntax:
                 in_field /= 0.5
                 in_field *= 4.0
 
+
 class TestMathFunctions:
     def test_nested_calls(self):
         @gtscript.stencil(backend="debug")
