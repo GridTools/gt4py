@@ -490,6 +490,6 @@ class TestAssignmentSyntax:
 class TestMathFunctions:
     def test_nested_calls(self):
         @gtscript.stencil(backend="debug")
-        def func(in_f: gtscript.Field[np.float_]):
+        def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field += min(abs(sin(add_external_const(in_field))), -0.5)

@@ -47,7 +47,7 @@ BinaryOperator enumeration (:class:`BinaryOperator`)
 
 NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
-    [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ASIN`, `ACOS`, `ATAN`,
+    [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
     `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
 AccessIntent enumeration (:class:`AccessIntent`)
