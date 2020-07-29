@@ -28,7 +28,7 @@ std::array<std::array<gt::uint_t, 2>, 3> make_extent(
 }
 
 template <typename DType, typename Function>
-py::array apply_function(gt::uint_t d1,
+py::array_t<DType> apply_function(gt::uint_t d1,
     gt::uint_t d2,
     gt::uint_t d3,
     Function func,
@@ -38,25 +38,21 @@ py::array apply_function(gt::uint_t d1,
     gt::uint_t d2_loc = d2 + extent[1][0] + extent[1][1];
     gt::uint_t d3_loc = d3 + extent[2][0] + extent[2][1];
 
-    DType ptr[d1_loc * d2_loc * d3_loc];
-
+    auto result = py::array_t<DType>({d1_loc, d2_loc, d3_loc});
+    size_t i_stride = result.strides()[0]/8;
+    size_t j_stride = result.strides()[1]/8;
+    size_t k_stride = result.strides()[2]/8;
+    DType* ptr = static_cast<DType*>(result.request().ptr);
+    
     for (gt::uint_t i = 0; i < d1_loc; i++) {
         for (gt::uint_t j = 0; j < d2_loc; j++) {
             for (gt::uint_t k = 0; k < d3_loc; k++) {
-                auto it = func(i + origin[0], j + origin[1], k + origin[2]);
-                ptr[i * d2_loc * d3_loc + j * d3_loc + k] = it;
+                auto value = func(i + origin[0], j + origin[1], k + origin[2]);
+                ptr[i * i_stride + j * j_stride + k * k_stride] = value;
             }
         }
     }
-    py::buffer_info binfo{
-        static_cast<void *>(ptr),
-        sizeof(DType),
-        py::format_descriptor<DType>::format(),
-        3,                                                                       /*ndim*/
-        {d1_loc, d2_loc, d3_loc},                                                /*shape*/
-        {d2_loc * d3_loc * sizeof(DType), d3_loc * sizeof(DType), sizeof(DType)} /*strides*/
-    };
-    return py::array(binfo);
+    return result;
 }
 
 namespace tridiagonal_solver {

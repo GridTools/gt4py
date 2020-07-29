@@ -220,8 +220,9 @@ def a_stencil(
             arg1 = arg2 + arg3 * par1 * par2 * par3
 
 
-def avg_stencil(in_field: Field[np.float64], out_field: Field[np.float64]):
-    with computation(PARALLEL), interval(...):
+## The following type ignores are there because mypy get's confused by gtscript
+def avg_stencil(in_field: Field[np.float64], out_field: Field[np.float64]):  # type: ignore
+    with computation(PARALLEL), interval(...):  # type: ignore
         out_field = 0.25 * (
             +in_field[0, 1, 0] + in_field[0, -1, 0] + in_field[1, 0, 0] + in_field[-1, 0, 0]
         )

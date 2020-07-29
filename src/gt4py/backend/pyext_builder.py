@@ -20,7 +20,7 @@ import distutils
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
 import setuptools
 from setuptools.command.build_ext import build_ext
@@ -40,7 +40,11 @@ def get_cuda_compute_capability():
 
 
 def get_gt_pyext_build_opts(
-    *, debug_mode: bool = False, add_profile_info: bool = False, uses_cuda: bool = False
+    *,
+    debug_mode: bool = False,
+    add_profile_info: bool = False,
+    uses_openmp: bool = True,
+    uses_cuda: bool = False,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
 
     include_dirs = [gt_config.build_settings["boost_include_path"]]
@@ -63,7 +67,6 @@ def get_gt_pyext_build_opts(
             "-std=c++14",
             "-ftemplate-depth=800",
             "-fvisibility=hidden",
-            "-fopenmp",
             "-fPIC",
             "-isystem{}".format(gt_config.build_settings["gt_include_path"]),
             "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
@@ -86,7 +89,7 @@ def get_gt_pyext_build_opts(
             *extra_compile_args_from_config["nvcc"],
         ],
     )
-    extra_link_args = ["-fopenmp", *gt_config.build_settings["extra_link_args"]]
+    extra_link_args = gt_config.build_settings["extra_link_args"]
 
     mode_flags = ["-O0", "-ggdb"] if debug_mode else ["-O3", "-DNDEBUG"]
     extra_compile_args["cxx"].extend(mode_flags)
@@ -112,7 +115,24 @@ def get_gt_pyext_build_opts(
             extra_link_args=extra_link_args,
         )
 
+    if uses_openmp:
+        cpp_flags = gt_config.build_settings["openmp_cppflags"]
+        if cpp_flags:
+            build_opts["extra_compile_args"].extend(cpp_flags)
+
+        ld_flags = gt_config.build_settings["openmp_ldflags"]
+        if ld_flags:
+            build_opts["extra_link_args"].extend(ld_flags)
+
     return build_opts
+
+
+# The following tells mypy to accept unpacking kwargs
+@overload
+def build_pybind_ext(
+    name: str, sources: list, build_path: str, target_path: str, **kwargs: str,
+) -> Tuple[str, str]:
+    pass
 
 
 def build_pybind_ext(
@@ -194,6 +214,14 @@ def build_pybind_ext(
         distutils.sysconfig._config_vars[key] = value
 
     return module_name, dest_path
+
+
+# The following tells mypy to accept unpacking kwargs
+@overload
+def build_pybind_cuda_ext(
+    name: str, sources: list, build_path: str, target_path: str, **kwargs: str,
+) -> Tuple[str, str]:
+    pass
 
 
 def build_pybind_cuda_ext(
