@@ -33,29 +33,6 @@ from gt4py.utils import text as gt_text
 from . import pyext_builder
 
 
-native_function_calls = {
-    gt_ir.NativeFunction.ABS : "fabs",
-    gt_ir.NativeFunction.MOD : "fmod",
-
-    gt_ir.NativeFunction.SIN : "sin",
-    gt_ir.NativeFunction.COS : "cos",
-    gt_ir.NativeFunction.TAN : "tan",
-    gt_ir.NativeFunction.ARCSIN : "asin",
-    gt_ir.NativeFunction.ARCCOS : "acos",
-    gt_ir.NativeFunction.ARCTAN : "atan",
-
-    gt_ir.NativeFunction.SQRT : "sqrt",
-    gt_ir.NativeFunction.EXP : "exp",
-    gt_ir.NativeFunction.LOG : "log",
-
-    gt_ir.NativeFunction.ISFINITE : "isfinite",
-    gt_ir.NativeFunction.ISINF : "isinf",
-    gt_ir.NativeFunction.ISNAN : "isnan",
-    gt_ir.NativeFunction.FLOOR : "floor",
-    gt_ir.NativeFunction.CEIL : "ceil",
-    gt_ir.NativeFunction.TRUNC : "trunc",
-}
-
 def make_x86_layout_map(mask):
     ctr = iter(range(sum(mask)))
     if len(mask) < 3:
@@ -196,6 +173,26 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         gt_ir.DataType.FLOAT64: "float64_t",
     }
 
+    NATIVE_FUNC_TO_CPP = {
+        gt_ir.NativeFunction.ABS: "fabs",
+        gt_ir.NativeFunction.MOD: "fmod",
+        gt_ir.NativeFunction.SIN: "sin",
+        gt_ir.NativeFunction.COS: "cos",
+        gt_ir.NativeFunction.TAN: "tan",
+        gt_ir.NativeFunction.ARCSIN: "asin",
+        gt_ir.NativeFunction.ARCCOS: "acos",
+        gt_ir.NativeFunction.ARCTAN: "atan",
+        gt_ir.NativeFunction.SQRT: "sqrt",
+        gt_ir.NativeFunction.EXP: "exp",
+        gt_ir.NativeFunction.LOG: "log",
+        gt_ir.NativeFunction.ISFINITE: "isfinite",
+        gt_ir.NativeFunction.ISINF: "isinf",
+        gt_ir.NativeFunction.ISNAN: "isnan",
+        gt_ir.NativeFunction.FLOOR: "floor",
+        gt_ir.NativeFunction.CEIL: "ceil",
+        gt_ir.NativeFunction.TRUNC: "trunc",
+    }
+
     def __init__(self, class_name, module_name, gt_backend_t, options):
         self.class_name = class_name
         self.module_name = module_name
@@ -313,7 +310,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         return source
 
     def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
-        call = native_function_calls[node.func]
+        call = self.NATIVE_FUNC_TO_CPP[node.func]
         if self.gt_backend_t != "cuda":
             call = "std::" + call
         args = ",".join([self.visit(arg) for arg in node.args])

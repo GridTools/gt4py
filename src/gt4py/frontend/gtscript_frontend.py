@@ -822,13 +822,16 @@ class IRMaker(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call):
         func_id = node.func.id
 
-        symbol_to_ir_node = {
+        symbol_to_enum = {
             value: key for key, value in gt_ir.NativeFunction.IR_OP_TO_PYTHON_SYMBOL.items()
         }
 
+        enum_val = symbol_to_enum[func_id]
+
         args = [self.visit(arg) for arg in node.args]
+        expected_num_args = gt_ir.NativeFunction.IR_OP_TO_NUM_ARGS[enum_val]
         tmp = gt_ir.NativeFuncCall(
-            func=symbol_to_ir_node[func_id], args=args, loc=gt_ir.Location.from_ast_node(node)
+            func=enum_val, args=args, loc=gt_ir.Location.from_ast_node(node)
         )
 
         return tmp
