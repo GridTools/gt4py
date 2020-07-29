@@ -826,15 +826,17 @@ class IRMaker(ast.NodeVisitor):
             value: key for key, value in gt_ir.NativeFunction.IR_OP_TO_PYTHON_SYMBOL.items()
         }
 
-        enum_val = symbol_to_enum[func_id]
+        native_fcn = symbol_to_enum[func_id]
 
         args = [self.visit(arg) for arg in node.args]
-        expected_num_args = gt_ir.NativeFunction.IR_OP_TO_NUM_ARGS[enum_val]
-        tmp = gt_ir.NativeFuncCall(
-            func=enum_val, args=args, loc=gt_ir.Location.from_ast_node(node)
-        )
+        if len(args) != gt_ir.NativeFunction.IR_OP_TO_NUM_ARGS[native_fcn]:
+            raise GTScriptSyntaxError(
+                "Invalid native function call", loc=gt_ir.Location.from_ast_node(node)
+            )
 
-        return tmp
+        return gt_ir.NativeFuncCall(
+            func=native_fcn, args=args, loc=gt_ir.Location.from_ast_node(node)
+        )
 
     # -- Statement nodes --
     def visit_Assign(self, node: ast.Assign) -> list:

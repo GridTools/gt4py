@@ -31,6 +31,8 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
     NATIVE_FUNC_TO_PYTHON = {
         gt_ir.NativeFunction.ABS: "np.abs",
+        gt_ir.NativeFunction.MIN: "np.min",
+        gt_ir.NativeFunction.MAX: "np.max",
         gt_ir.NativeFunction.MOD: "np.mod",
         gt_ir.NativeFunction.SIN: "np.sin",
         gt_ir.NativeFunction.COS: "np.cos",

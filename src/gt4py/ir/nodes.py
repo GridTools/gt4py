@@ -47,8 +47,8 @@ BinaryOperator enumeration (:class:`BinaryOperator`)
 
 NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
-    [`ABS`, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`, `SQRT`, `EXP`, `LOG`,
-    `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
+    [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ASIN`, `ACOS`, `ATAN`,
+    `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
 AccessIntent enumeration (:class:`AccessIntent`)
     Access permissions
@@ -401,7 +401,9 @@ class FieldRef(Ref):
 @enum.unique
 class NativeFunction(enum.Enum):
     ABS = 1
-    MOD = 2
+    MIN = 2
+    MAX = 3
+    MOD = 4
 
     SIN = 11
     COS = 12
@@ -431,6 +433,8 @@ class NativeFunction(enum.Enum):
 
 NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.ABS : 1,
+    NativeFunction.MIN : 2,
+    NativeFunction.MAX : 2,
     NativeFunction.MOD : 2,
 
     NativeFunction.SIN : 1,
@@ -454,6 +458,8 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
 
 NativeFunction.IR_OP_TO_PYTHON_SYMBOL = {
     NativeFunction.ABS : "abs",
+    NativeFunction.MIN : "min",
+    NativeFunction.MAX : "max",
     NativeFunction.MOD : "mod",
 
     NativeFunction.SIN : "sin",

@@ -175,6 +175,8 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
     NATIVE_FUNC_TO_CPP = {
         gt_ir.NativeFunction.ABS: "fabs",
+        gt_ir.NativeFunction.MIN: "min",
+        gt_ir.NativeFunction.MAX: "max",
         gt_ir.NativeFunction.MOD: "fmod",
         gt_ir.NativeFunction.SIN: "sin",
         gt_ir.NativeFunction.COS: "cos",
