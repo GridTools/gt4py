@@ -37,7 +37,9 @@ class CPUWithPersistent(CPUCodeGen):
                     state_id,
                     node,
                 )
-                self._dispatcher.defined_vars.add(name, DefinedType.Pointer)
+                self._dispatcher.defined_vars.add(
+                    name, DefinedType.Pointer, "%s *" % nodedesc.dtype.ctype
+                )
                 self.allocated_symbols.add(name)
             elif nodedesc.storage == dtypes.StorageType.CPU_ThreadLocal:
                 # Check if array is already allocated
@@ -71,7 +73,9 @@ class CPUWithPersistent(CPUCodeGen):
                     state_id,
                     node,
                 )
-                self._dispatcher.defined_vars.add(name, DefinedType.Pointer)
+                self._dispatcher.defined_vars.add(
+                    name, DefinedType.Pointer, "%s *" % nodedesc.dtype.ctype
+                )
                 self.allocated_symbols.add(name)
         else:
             super().allocate_array(sdfg, dfg, state_id, node, function_stream, callsite_stream)
