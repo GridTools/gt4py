@@ -399,7 +399,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         assert implementation.backend == test["backend"]
 
         assert all(
-            field_info.boundary >= cls.global_boundaries[name]
+            field_info.boundary == cls.global_boundaries[name]
             for name, field_info in implementation.field_info.items()
         )
 

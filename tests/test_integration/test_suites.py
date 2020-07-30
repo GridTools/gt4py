@@ -580,3 +580,36 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
 
     def validation(outfield, *, a, b, c, domain, origin, **kwargs):
         outfield[...] = 1 if a > 0 or b > 0 or c > 0 else 0
+
+
+#from typing import overload
+# class TestVolumeVorticityMean(gt_testing.StencilTestSuite):
+#     """Compute mean relative vorticity in a 3D volume.
+#     """
+#
+#     dtypes = (np.float_,)
+#     domain_range = [(10, 10), (10, 10), (10, 10)]
+#     backends = ["dawn:gtmc"] #CPU_BACKENDS
+#     symbols = dict(
+#         ut=gt_testing.field(in_range=(-10, 10), boundary=[(0, 1), (0, 0), (0, 0)]),
+#         vt=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 1), (0, 0)]),
+#         rarea=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+#         wk=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+#     )
+#
+#     @overload
+#     def test_implementation(self, test, parameters_dict):
+#         super().test_implementation(test, parameters_dict)
+#         fields, exec_info = parameters_dict
+#         for implementation in implementation_list:
+#             assert all(
+#                 field_info.boundary == cls.global_boundaries[name]
+#                 for name, field_info in implementation.field_info.items()
+#             )
+#
+#     def definition(ut, vt, rarea, wk):
+#         with computation(PARALLEL), interval(...):
+#             wk = rarea * (vt - vt[0, 1, 0] - ut + ut[1, 0, 0])
+#
+#     def validation(ut, vt, rarea, wk, domain, origin, **kwargs):
+#         wk[...] = rarea[1:-1, :, :] * (vt[:, 1:-1, :] - vt[:, 2:, :] - ut[1:-1, :, :] + ut[2:, :, :])
