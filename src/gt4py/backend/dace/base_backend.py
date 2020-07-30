@@ -251,7 +251,7 @@ class DaceBackend(gt_backend.BaseBackend):
     @classmethod
     def generate_dace(cls, stencil_id, implementation_ir, options):
         sdfg = SDFGBuilder.apply(implementation_ir)
-        for array in sdfg.arrays:
+        for array in sdfg.arrays.values():
             import dace.data
 
             if isinstance(array, dace.data.Array) and array.transient:
