@@ -114,7 +114,13 @@ def tridiagonal_solver(inf: Field3D, diag: Field3D, sup: Field3D, rhs: Field3D, 
 
 @register(externals={"BET_M": 0.5, "BET_P": 0.5})
 def vertical_advection_dycore(
-    utens_stage: Field3D, u_stage: Field3D, wcon: Field3D, u_pos: Field3D, utens: Field3D, *, dtr_stage: float,
+    utens_stage: Field3D,
+    u_stage: Field3D,
+    wcon: Field3D,
+    u_pos: Field3D,
+    utens: Field3D,
+    *,
+    dtr_stage: float,
 ):
     from __externals__ import BET_M, BET_P
 
@@ -128,7 +134,12 @@ def vertical_advection_dycore(
 
             # update the d column
             correction_term = -cs * (u_stage[0, 0, 1] - u_stage[0, 0, 0])
-            dcol = dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
+            dcol = (
+                dtr_stage * u_pos[0, 0, 0]
+                + utens[0, 0, 0]
+                + utens_stage[0, 0, 0]
+                + correction_term
+            )
 
             # Thomas forward
             divided = 1.0 / bcol[0, 0, 0]
@@ -147,8 +158,15 @@ def vertical_advection_dycore(
             bcol = dtr_stage - acol[0, 0, 0] - ccol[0, 0, 0]
 
             # update the d column
-            correction_term = -as_ * (u_stage[0, 0, -1] - u_stage[0, 0, 0]) - cs * (u_stage[0, 0, 1] - u_stage[0, 0, 0])
-            dcol = dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
+            correction_term = -as_ * (u_stage[0, 0, -1] - u_stage[0, 0, 0]) - cs * (
+                u_stage[0, 0, 1] - u_stage[0, 0, 0]
+            )
+            dcol = (
+                dtr_stage * u_pos[0, 0, 0]
+                + utens[0, 0, 0]
+                + utens_stage[0, 0, 0]
+                + correction_term
+            )
 
             # Thomas forward
             divided = 1.0 / (bcol[0, 0, 0] - ccol[0, 0, -1] * acol[0, 0, 0])
@@ -163,7 +181,12 @@ def vertical_advection_dycore(
 
             # update the d column
             correction_term = -as_ * (u_stage[0, 0, -1] - u_stage[0, 0, 0])
-            dcol = dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
+            dcol = (
+                dtr_stage * u_pos[0, 0, 0]
+                + utens[0, 0, 0]
+                + utens_stage[0, 0, 0]
+                + correction_term
+            )
 
             # Thomas forward
             divided = 1.0 / (bcol[0, 0, 0] - ccol[0, 0, -1] * acol[0, 0, 0])
