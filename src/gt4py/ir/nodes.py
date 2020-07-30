@@ -481,6 +481,7 @@ NativeFunction.IR_OP_TO_PYTHON_SYMBOL = {
 class NativeFuncCall(Expr):
     func = attribute(of=NativeFunction)
     args = attribute(of=ListOf[Expr])
+    data_type = attribute(of=DataType)
     loc = attribute(of=Location, optional=True)
 
 

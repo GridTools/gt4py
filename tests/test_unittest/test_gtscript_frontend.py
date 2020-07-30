@@ -33,14 +33,7 @@ frontend = gt_frontend.GTScriptFrontend
 
 
 def compile_definition(
-    definition_func,
-    name: str,
-    module: str,
-    *,
-    externals: dict = None,
-    dtypes: dict = None,
-    rebuild=False,
-    **kwargs,
+    definition_func, name: str, module: str, *, externals: dict = None, dtypes: dict = None, rebuild=False, **kwargs,
 ):
     gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
     build_options = gt_definitions.BuildOptions(
@@ -48,12 +41,8 @@ def compile_definition(
     )
 
     options_id = gt_utils.shashed_id(build_options)
-    stencil_id = frontend.get_stencil_id(
-        build_options.qualified_name, definition_func, externals, options_id
-    )
-    gt_frontend.GTScriptParser(
-        definition_func, externals=externals or {}, options=build_options
-    ).run()
+    stencil_id = frontend.get_stencil_id(build_options.qualified_name, definition_func, externals, options_id)
+    gt_frontend.GTScriptParser(definition_func, externals=externals or {}, options=build_options).run()
 
     return stencil_id
 
@@ -76,6 +65,11 @@ def identity(field_in):
     return field_in
 
 
+@gtscript.function
+def sinus(field_in):
+    return sin(field_in)
+
+
 class TestInlinedExternals:
     def test_all_legal_combinations(self, id_version):
         module = f"TestInlinedExternals_test_module_{id_version}"
@@ -96,9 +90,7 @@ class TestInlinedExternals:
                     else 0
                 )
 
-        compile_definition(
-            definition_func, "test_all_legal_combinations", module, externals=externals
-        )
+        compile_definition(definition_func, "test_all_legal_combinations", module, externals=externals)
 
     def test_missing(self, id_version):
         module = f"TestInlinedExternals_test_module_{id_version}"
@@ -119,12 +111,8 @@ class TestInlinedExternals:
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + GLOBAL_NESTED_CONSTANTS.missing
 
-        with pytest.raises(
-            gt_frontend.GTScriptDefinitionError, match=r".*GLOBAL_NESTED_CONSTANTS.missing.*"
-        ):
-            compile_definition(
-                definition_func, "test_missing_nested_symbol", module, externals=externals
-            )
+        with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*GLOBAL_NESTED_CONSTANTS.missing.*"):
+            compile_definition(definition_func, "test_missing_nested_symbol", module, externals=externals)
 
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, id_version, value_type):
@@ -150,9 +138,7 @@ class TestImportedExternals:
             BOOL_CONSTANT=-1.0,
             CONSTANT=-2.0,
             NESTED_CONSTANTS=types.SimpleNamespace(A=-100, B=-200),
-            VERY_NESTED_CONSTANTS=types.SimpleNamespace(
-                nested=types.SimpleNamespace(A=-1000, B=-2000)
-            ),
+            VERY_NESTED_CONSTANTS=types.SimpleNamespace(nested=types.SimpleNamespace(A=-1000, B=-2000)),
         )
 
         def definition_func(inout_field: gtscript.Field[float]):
@@ -166,19 +152,12 @@ class TestImportedExternals:
 
             with computation(PARALLEL), interval(...):
                 inout_field = (
-                    (
-                        inout_field[0, 0, 0]
-                        + CONSTANT
-                        + NESTED_CONSTANTS.A
-                        + VERY_NESTED_CONSTANTS.nested.A
-                    )
+                    (inout_field[0, 0, 0] + CONSTANT + NESTED_CONSTANTS.A + VERY_NESTED_CONSTANTS.nested.A)
                     if GLOBAL_BOOL_CONSTANT
                     else 0
                 )
 
-        compile_definition(
-            definition_func, "test_all_legal_combinations", module, externals=externals
-        )
+        compile_definition(definition_func, "test_all_legal_combinations", module, externals=externals)
 
     def test_missing(self, id_version):
         module = f"TestImportedExternals_test_module_{id_version}"
@@ -201,12 +180,8 @@ class TestImportedExternals:
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + NESTED_CONSTANTS.missing
 
-        with pytest.raises(
-            gt_frontend.GTScriptDefinitionError, match=r".*NESTED_CONSTANTS.missing.*"
-        ):
-            compile_definition(
-                definition_func, "test_missing_nested_symbol", module, externals=externals
-            )
+        with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*NESTED_CONSTANTS.missing.*"):
+            compile_definition(definition_func, "test_missing_nested_symbol", module, externals=externals)
 
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, id_version, value_type):
@@ -276,9 +251,7 @@ class TestExternalsWithSubroutines:
             "stage_laplacian_x": _stage_laplacian_x,
             "stage_laplacian_y": _stage_laplacian_y,
         }
-        compile_definition(
-            definition_func, "test_all_legal_combinations", module, externals=externals
-        )
+        compile_definition(definition_func, "test_all_legal_combinations", module, externals=externals)
 
 
 class TestImports:
@@ -294,9 +267,7 @@ class TestImports:
 
         module = f"TestImports_test_module_{id_version}"
         externals = dict(EXTERNAL=1.0)
-        compile_definition(
-            definition_func, "test_all_legal_combinations", module, externals=externals
-        )
+        compile_definition(definition_func, "test_all_legal_combinations", module, externals=externals)
 
     @pytest.mark.parametrize(
         "id_case,import_line",
@@ -333,21 +304,16 @@ class TestImports:
         definition_func.__exec_source__ = definition_source
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
-            compile_definition(
-                definition_func, f"test_wrong_imports_{id_case}", module, externals=externals
-            )
+            compile_definition(definition_func, f"test_wrong_imports_{id_case}", module, externals=externals)
 
 
 class TestDTypes:
     @pytest.mark.parametrize(
-        "id_case,test_dtype",
-        list(enumerate([bool, np.bool, int, np.int32, np.int64, float, np.float32, np.float64])),
+        "id_case,test_dtype", list(enumerate([bool, np.bool, int, np.int32, np.int64, float, np.float32, np.float64])),
     )
     def test_all_legal_dtypes(self, id_case, test_dtype, id_version):
         def definition_func(
-            in_field: gtscript.Field[test_dtype],
-            out_field: gtscript.Field[test_dtype],
-            param: test_dtype,
+            in_field: gtscript.Field[test_dtype], out_field: gtscript.Field[test_dtype], param: test_dtype,
         ):
             with computation(PARALLEL), interval(...):
                 out_field = in_field + param
@@ -355,38 +321,26 @@ class TestDTypes:
         module = f"TestImports_test_module_{id_version}"
         compile_definition(definition_func, "test_all_legal_dtypes", module)
 
-        def definition_func(
-            in_field: gtscript.Field["dtype"], out_field: gtscript.Field["dtype"], param: "dtype"
-        ):
+        def definition_func(in_field: gtscript.Field["dtype"], out_field: gtscript.Field["dtype"], param: "dtype"):
             with computation(PARALLEL), interval(...):
                 out_field = in_field + param
 
         module = f"TestImports_test_module_{id_version}"
-        compile_definition(
-            definition_func, "test_all_legal_dtypes", module, dtypes={"dtype": test_dtype}
-        )
+        compile_definition(definition_func, "test_all_legal_dtypes", module, dtypes={"dtype": test_dtype})
 
-    @pytest.mark.parametrize(
-        "id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes]))
-    )
+    @pytest.mark.parametrize("id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes])))
     def test_invalid_inlined_dtypes(self, id_case, test_dtype, id_version):
         with pytest.raises(ValueError, match=r".*data type descriptor.*"):
 
             def definition_func(
-                in_field: gtscript.Field[test_dtype],
-                out_field: gtscript.Field[test_dtype],
-                param: test_dtype,
+                in_field: gtscript.Field[test_dtype], out_field: gtscript.Field[test_dtype], param: test_dtype,
             ):
                 with computation(PARALLEL), interval(...):
                     out_field = in_field + param
 
-    @pytest.mark.parametrize(
-        "id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes]))
-    )
+    @pytest.mark.parametrize("id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes])))
     def test_invalid_external_dtypes(self, id_case, test_dtype, id_version):
-        def definition_func(
-            in_field: gtscript.Field["dtype"], out_field: gtscript.Field["dtype"], param: "dtype"
-        ):
+        def definition_func(in_field: gtscript.Field["dtype"], out_field: gtscript.Field["dtype"], param: "dtype"):
             with computation(PARALLEL), interval(...):
                 out_field = in_field + param
 
@@ -394,10 +348,7 @@ class TestDTypes:
 
         with pytest.raises(ValueError, match=r".*data type descriptor.*"):
             compile_definition(
-                definition_func,
-                "test_invalid_external_dtypes",
-                module,
-                dtypes={"dtype": test_dtype},
+                definition_func, "test_invalid_external_dtypes", module, dtypes={"dtype": test_dtype},
             )
 
 
@@ -456,8 +407,7 @@ class TestAssignmentSyntax:
 
     def test_temporary(self):
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError,
-            match="No subscript allowed in assignment to temporaries",
+            gt_frontend.GTScriptSyntaxError, match="No subscript allowed in assignment to temporaries",
         ):
 
             @gtscript.stencil(backend="debug")
@@ -467,8 +417,7 @@ class TestAssignmentSyntax:
                     out_field = tmp
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError,
-            match="No subscript allowed in assignment to temporaries",
+            gt_frontend.GTScriptSyntaxError, match="No subscript allowed in assignment to temporaries",
         ):
 
             @gtscript.stencil(backend="debug")
@@ -487,9 +436,39 @@ class TestAssignmentSyntax:
                 in_field *= 4.0
 
 
-class TestMathFunctions:
+class TestNativeFunctions:
+    def test_simple_call(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sin(in_field)
+
+    def test_offset_arg(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sin(in_field[1, 0, 0])
+
     def test_nested_calls(self):
         @gtscript.stencil(backend="debug")
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
+                in_field += sin(abs(in_field))
+
+    def test_nested_external_call(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sin(add_external_const(in_field))
+
+    def test_multi_nested_calls(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
                 in_field += min(abs(sin(add_external_const(in_field))), -0.5)
+
+    def test_native_in_function(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sinus(in_field)

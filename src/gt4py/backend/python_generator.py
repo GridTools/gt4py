@@ -30,25 +30,25 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     }
 
     NATIVE_FUNC_TO_PYTHON = {
-        gt_ir.NativeFunction.ABS: "np.abs",
-        gt_ir.NativeFunction.MIN: "np.min",
-        gt_ir.NativeFunction.MAX: "np.max",
-        gt_ir.NativeFunction.MOD: "np.mod",
-        gt_ir.NativeFunction.SIN: "np.sin",
-        gt_ir.NativeFunction.COS: "np.cos",
-        gt_ir.NativeFunction.TAN: "np.tan",
-        gt_ir.NativeFunction.ARCSIN: "np.arcsin",
-        gt_ir.NativeFunction.ARCCOS: "np.arccos",
-        gt_ir.NativeFunction.ARCTAN: "np.arctan",
-        gt_ir.NativeFunction.SQRT: "np.sqrt",
-        gt_ir.NativeFunction.EXP: "np.exp",
-        gt_ir.NativeFunction.LOG: "np.log",
-        gt_ir.NativeFunction.ISFINITE: "np.isfinite",
-        gt_ir.NativeFunction.ISINF: "np.isinf",
-        gt_ir.NativeFunction.ISNAN: "np.isnan",
-        gt_ir.NativeFunction.FLOOR: "np.floor",
-        gt_ir.NativeFunction.CEIL: "np.ceil",
-        gt_ir.NativeFunction.TRUNC: "np.trunc",
+        gt_ir.NativeFunction.ABS: "abs",
+        gt_ir.NativeFunction.MIN: "min",
+        gt_ir.NativeFunction.MAX: "max",
+        gt_ir.NativeFunction.MOD: "math.fmod",
+        gt_ir.NativeFunction.SIN: "math.sin",
+        gt_ir.NativeFunction.COS: "math.cos",
+        gt_ir.NativeFunction.TAN: "math.tan",
+        gt_ir.NativeFunction.ARCSIN: "math.asin",
+        gt_ir.NativeFunction.ARCCOS: "math.acos",
+        gt_ir.NativeFunction.ARCTAN: "math.atan",
+        gt_ir.NativeFunction.SQRT: "math.sqrt",
+        gt_ir.NativeFunction.EXP: "math.exp",
+        gt_ir.NativeFunction.LOG: "math.log",
+        gt_ir.NativeFunction.ISFINITE: "math.isfinite",
+        gt_ir.NativeFunction.ISINF: "math.isinf",
+        gt_ir.NativeFunction.ISNAN: "math.isnan",
+        gt_ir.NativeFunction.FLOOR: "math.floor",
+        gt_ir.NativeFunction.CEIL: "math.ceil",
+        gt_ir.NativeFunction.TRUNC: "math.trunc",
     }
 
     def __init__(
@@ -178,7 +178,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         return source
 
     def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
-        call = NATIVE_FUNC_TO_PYTHON[node.func]
+        call = self.NATIVE_FUNC_TO_PYTHON[node.func]
         args = ",".join([self.visit(arg) for arg in node.args])
         return f"{call}({args})"
 

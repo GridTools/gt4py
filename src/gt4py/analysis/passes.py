@@ -255,6 +255,12 @@ class InitInfoPass(TransformPass):
 
             return result
 
+        def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
+            extents = []
+            for arg in node.args:
+                extents.extend(self.visit(arg))
+            return extents
+
         def visit_If(self, node: gt_ir.If):
             inputs = {}
             outputs = set()
@@ -699,6 +705,28 @@ class DataTypePass(TransformPass):
             node.data_type = gt_ir.DataType.merge(
                 node.then_expr.data_type, node.else_expr.data_type
             )
+
+        def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall, **kwargs):
+            self.generic_visit(node.args, **kwargs)
+
+            # Collect data types from each argument
+            data_type = set([arg.data_type for arg in node.args])
+            if len(data_type) > 1:
+                data_type -= {gt_ir.DataType.DEFAULT}
+
+            # Assert that all data types are the same
+            assert len(data_type) == 1
+            data_type = data_type.pop()
+
+            if node.func in (
+                gt_ir.NativeFunction.MIN,
+                gt_ir.NativeFunction.MAX,
+                gt_ir.NativeFunction.ABS,
+                gt_ir.NativeFunction.MOD,
+            ):
+                node.data_type = data_type
+            else:
+                node.data_type = gt_ir.DataType.DEFAULT
 
     def apply(self, transform_data: TransformData):
         collect_data_type = self.CollectDataTypes()

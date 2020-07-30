@@ -15,3 +15,4 @@ Authors
 * Madonna, Alberto. ETH Zurich - CSCS
 * Mariotti, Kean. ETH Zurich - CSCS
 * Vogt, Hannes. ETH Zurich - CSCS
+* Wicky, Tobias. Vulcan Inc.

@@ -189,7 +189,11 @@ class CallInliner(ast.NodeTransformer):
     def __init__(self, context: dict):
         self.context = context
         self.current_block = None
-        self.all_skip_names = set(gtscript.builtins | {"gt4py", "gtscript"})
+        self.all_skip_names = set(
+            gtscript.builtins
+            | {"gt4py", "gtscript"}
+            | set(gt_ir.NativeFunction.IR_OP_TO_PYTHON_SYMBOL.values())
+        )
 
     def __call__(self, func_node: ast.FunctionDef):
         self.visit(func_node)
@@ -836,7 +840,10 @@ class IRMaker(ast.NodeVisitor):
             )
 
         return gt_ir.NativeFuncCall(
-            func=native_fcn, args=args, loc=gt_ir.Location.from_ast_node(node)
+            func=native_fcn,
+            args=args,
+            data_type=gt_ir.DataType.AUTO,
+            loc=gt_ir.Location.from_ast_node(node),
         )
 
     # -- Statement nodes --

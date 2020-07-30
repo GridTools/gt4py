@@ -182,11 +182,10 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         return sir_utils.make_ternary_operator(cond, left, right)
 
     def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
-        call = (
-            "gridtools::dawn::math::" + gt_backend.GTPyExtGenerator.NATIVE_FUNC_TO_CPP[node.func]
+        return sir_utils.make_fun_call_expr(
+            "gridtools::dawn::math::" + gt_backend.GTPyExtGenerator.NATIVE_FUNC_TO_CPP[node.func],
+            [self.visit(arg) for arg in node.args],
         )
-        args = ",".join([self.visit(arg) for arg in node.args])
-        return f"{call}({args})"
 
     def visit_BlockStmt(self, node: gt_ir.BlockStmt, *, make_block=True, **kwargs):
         stmts = [self.visit(stmt) for stmt in node.stmts if not isinstance(stmt, gt_ir.FieldDecl)]
@@ -456,6 +455,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         gt_ir.DataType.INT64: "int",
         gt_ir.DataType.FLOAT32: "double",
         gt_ir.DataType.FLOAT64: "double",
+        gt_ir.DataType.DEFAULT: "double",
     }
 
     _field_info = {}
