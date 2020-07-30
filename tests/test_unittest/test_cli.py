@@ -64,12 +64,12 @@ BACKEND_ROW_PATTERN_BY_NAME = {
     "gtx86": r"^\s*gtx86\s*c\+\+\s*python\s*Yes",
     "gtmc": r"^\s*gtmc\s*c\+\+\s*python\s*Yes",
     "gtcuda": r"^\s*gtcuda\s*cuda\s*python\s*Yes",
-    "dawn:gtx86": r"^\s*dawn:gtx86\s*c\+\+\s*python\s*No",
-    "dawn:gtmc": r"^\s*dawn:gtmc\s*c\+\+\s*python\s*No",
-    "dawn:gtcuda": r"^\s*dawn:gtcuda\s*cuda\s*python\s*No",
-    "dawn:naive": r"^\s*dawn:naive\s*c\+\+\s*python\s*No",
-    "dawn:cxxopt": r"^\s*dawn:cxxopt\s*c\+\+\s*python\s*No",
-    "dawn:cuda": r"^\s*dawn:cuda\s*cuda\s*python\s*No",
+    "dawn:gtx86": r"^\s*dawn:gtx86\s*\?\s*\?\s*No",
+    "dawn:gtmc": r"^\s*dawn:gtmc\s*\?\s*\?\s*No",
+    "dawn:gtcuda": r"^\s*dawn:gtcuda\s*\?\s*\?\s*No",
+    "dawn:naive": r"^\s*dawn:naive\s*\?\s*\?\s*No",
+    "dawn:cxxopt": r"^\s*dawn:cxxopt\s*\?\s*\?\s*No",
+    "dawn:cuda": r"^\s*dawn:cuda\s*\?\s*\?\s*No",
 }
 
 
