@@ -105,7 +105,7 @@ def get_gt_pyext_build_opts(
     if uses_cuda:
         build_opts = dict(
             include_dirs=include_dirs,
-            extra_compile_args=extra_compile_args,
+            extra_compile_args=extra_compile_args["nvcc"],
             extra_link_args=extra_link_args,
         )
     else:
