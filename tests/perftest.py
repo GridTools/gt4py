@@ -7,7 +7,7 @@ from tests.test_integration.stencil_definitions import REGISTRY as stencil_regis
 from tests.test_integration.test_cpp_regression import get_reference, generate_test_module
 
 
-def run_horizontal_diffusion(niter, domain, backend, dtype, backend_opts={}, rebuild=True):
+def run_horizontal_diffusion(niter, domain, backend, dtype, backend_opts={}):
     origins = {"in_field": (2, 2, 0), "out_field": (0, 0, 0), "coeff": (0, 0, 0)}
 
     import gt4py.gtscript
@@ -31,11 +31,7 @@ def run_horizontal_diffusion(niter, domain, backend, dtype, backend_opts={}, reb
         backend="numpy", definition=horizontal_diffusion, enforce_dtype=dtype
     )
     test_module = gtscript.stencil(
-        backend=backend,
-        definition=horizontal_diffusion,
-        rebuild=rebuild,
-        enforce_dtype=dtype,
-        **backend_opts,
+        backend=backend, definition=horizontal_diffusion, enforce_dtype=dtype, **backend_opts,
     )
 
     validate_shapes = {
@@ -343,19 +339,21 @@ def run_vertical_advection(
 
 def summary(exec_infos):
     assert exec_infos
-    res = dict(pyext_time=0.0, run_time=0.0)
+    res = dict(run_time=0.0)
     if "start_run_cpp_time" in exec_infos[0]:
         res["cpp_time"] = 0.0
         res["cpp_time_inner"] = 0.0
+    if "pyext_program_start_time" in exec_infos[0]:
+        res["pyext_time"] = 0
     for info in exec_infos:
-        res["pyext_time"] += info["pyext_program_end_time"] - info["pyext_program_start_time"]
+        if "pyext_time" in res:
+            res["pyext_time"] += info["pyext_program_end_time"] - info["pyext_program_start_time"]
         res["run_time"] += info["run_end_time"] - info["run_start_time"]
         if "cpp_time" in res:
             res["cpp_time"] += info["end_run_cpp_time"] - info["start_run_cpp_time"]
             res["cpp_time_inner"] += (
                 info["end_run_cpp_time_inner"] - info["start_run_cpp_time_inner"]
             )
-
     return res
 
 
