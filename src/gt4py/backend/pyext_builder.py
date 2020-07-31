@@ -117,16 +117,16 @@ def get_gt_pyext_build_opts(
 
     if uses_openmp:
         cpp_flags = gt_config.build_settings["openmp_cppflags"]
-        if cpp_flags:
-            if uses_cuda:
-                cpp_flags = ["-Xcompiler"] + cpp_flags
-                build_opts["extra_compile_args"]["nvcc"].extend(cpp_flags)
-            else:
-                build_opts["extra_compile_args"].extend(cpp_flags)
+        if uses_cuda:
+            cuda_flags = []
+            for cpp_flag in cpp_flags:
+                cuda_flags.extend(["-Xcompiler", cpp_flag])
+            build_opts["extra_compile_args"]["nvcc"].extend(cuda_flags)
+        else:
+            build_opts["extra_compile_args"].extend(cpp_flags)
 
         ld_flags = gt_config.build_settings["openmp_ldflags"]
-        if ld_flags:
-            build_opts["extra_link_args"].extend(ld_flags)
+        build_opts["extra_link_args"].extend(ld_flags)
 
     return build_opts
 
