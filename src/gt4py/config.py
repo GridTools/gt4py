@@ -14,12 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+
 import multiprocessing
 import os
 
 from typing import Any, Dict
 
-GT4PY_INSTALLATION_PATH = os.path.dirname(os.path.abspath(__file__))
+GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
 
 # Default paths (taken from user's environment vars when possible)
 BOOST_ROOT: str = os.environ.get(
