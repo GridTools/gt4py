@@ -899,23 +899,49 @@ class IRMaker(ast.NodeVisitor):
             f"Invalid 'with' statement at line {loc.line} (column {loc.column})", loc=loc
         )
 
-        # Flatten representation if necessary
-        #  todo: this does not belong into the Definition IR
+        # If we find nested `with` blocks flatten them, i.e. transform
+        #  with computation(PARALLEL):
+        #   with interval(...):
+        #     ...
+        # into
+        #  with computation(PARALLEL), interval(...):
+        #    ...
+        # otherwise just parse the node
         if self.parsing_context == ParsingContext.CONTROL_FLOW and all(
             isinstance(child_node, ast.With) for child_node in node.body
         ):
-            # if we find nested `with` blocks flatten them, i.e. transform
-            #  with computation(PARALLEL):
-            #   with interval(...):
-            #     ...
-            # into
-            #  with computation(PARALLEL), interval(...):
-            #    ...
+            # Ensure top level `with` specifies the iteration order
+            if not any(
+                with_item.context_expr.func.id == "computation"
+                for with_item in node.items
+                if isinstance(with_item.context_expr, ast.Call)
+            ):
+                raise syntax_error
+
+            # Parse nested `with` blocks
             compute_blocks = []
-            #  merge with current with statement
             for with_node in node.body:
+                with_node = copy.deepcopy(with_node)  # Copy to avoid altering original ast
+                # Splice `withItems` of current/primary with statement into nested with
                 with_node.items.extend(node.items)
+
                 compute_blocks.append(self._visit_computation_node(with_node))
+
+            # Reorder blocks
+            #  the nested computation blocks need not to be specified in their order of execution, but the backends
+            #  expect them to the given in that order so sort them. The order of execution is such that the lowest
+            #  (highest) interval is processed first if the iteration order is forward (backward).
+            if len(compute_blocks) > 1:
+                # Validate invariant
+                assert all(
+                    comp_block.iteration_order == compute_blocks[0].iteration_order
+                    for comp_block in compute_blocks
+                )
+
+                # Vertical regions with variable references are not supported yet
+                compute_blocks.sort(key=self._sort_blocks_key)
+                if compute_blocks[0].iteration_order == gt_ir.IterationOrder.BACKWARD:
+                    compute_blocks.reverse()
 
             return compute_blocks
         elif self.parsing_context == ParsingContext.CONTROL_FLOW and not any(
@@ -923,7 +949,7 @@ class IRMaker(ast.NodeVisitor):
         ):
             return self._visit_computation_node(node)
         else:
-            # mixing nested `with` blocks with stmts not allowed
+            # Mixing nested `with` blocks with stmts not allowed
             raise syntax_error
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> list:
