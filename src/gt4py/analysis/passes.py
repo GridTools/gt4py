@@ -1045,8 +1045,6 @@ class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
         self.var_refs.append(node.name)
 
     def visit_Assign(self, node: gt_ir.Assign):
-        print(f"In visit_Assign {node}")
-
         target_name = node.target.name
 
         self._reset_refs()
@@ -1062,15 +1060,13 @@ class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
 create_field_dependency_graph = FieldDependencyGraphCreator.apply
 
 
-def _check_graph_offsets(graph, offset_check, message):
+def _check_graph_for_race(graph, fail_if, message):
     for cycle in nx.simple_cycles(graph):
-        print(cycle)
-        cycle_list = cycle + [cycle[0]]
-        for source, target in zip(cycle_list[:-1], cycle_list[1:]):
+        full_cycle = cycle + [cycle[0]]
+        for source, target in zip(full_cycle[:-1], full_cycle[1:]):
             offsets = graph.get_edge_data(source, target).get("offsets", {})
-            for offset in offsets:
-                if offset_check(offset):
-                    raise IRSpecificationError(message)
+            if any([fail_if(offset) for offset in offsets]):
+                raise IRSpecificationError(message)
 
 
 class RaceConditionCheck(gt_ir.IRNodeVisitor):
@@ -1095,13 +1091,13 @@ class RaceConditionCheck(gt_ir.IRNodeVisitor):
             return
 
         graph = create_field_dependency_graph(node)
-        _check_graph_offsets(
+        _check_graph_for_race(
             graph, lambda offset: offset["K"] != 0, "Vertical race condition detected"
         )
 
     def visit_Stage(self, node: gt_ir.Stage):
         graph = create_field_dependency_graph(node)
-        _check_graph_offsets(
+        _check_graph_for_race(
             graph,
             lambda offset: offset["I"] != 0 or offset["J"] != 0,
             "Horizontal race condition detected",
