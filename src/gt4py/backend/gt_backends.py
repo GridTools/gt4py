@@ -165,6 +165,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
     }
 
     DATA_TYPE_TO_CPP = {
+        gt_ir.DataType.BOOL: "bool",
         gt_ir.DataType.INT8: "int8_t",
         gt_ir.DataType.INT16: "int16_t",
         gt_ir.DataType.INT32: "int32_t",
