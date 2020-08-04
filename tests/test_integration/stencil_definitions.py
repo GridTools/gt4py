@@ -206,3 +206,9 @@ def horizontal_diffusion(in_field: Field3D, out_field: Field3D, coeff: Field3D):
         out_field = in_field[0, 0, 0] - coeff[0, 0, 0] * (
             flx_field[0, 0, 0] - flx_field[-1, 0, 0] + fly_field[0, 0, 0] - fly_field[0, -1, 0]
         )
+
+
+@register
+def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
+    with computation(PARALLEL), interval(...):
+        mask = in_field >= 0

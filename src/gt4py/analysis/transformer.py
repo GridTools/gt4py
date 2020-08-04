@@ -22,13 +22,15 @@ import pprint
 from gt4py import ir as gt_ir
 from gt4py.analysis import TransformData
 from .passes import (
-    InitInfoPass,
-    NormalizeBlocksPass,
-    MergeBlocksPass,
-    ComputeExtentsPass,
     BuildIIRPass,
-    DataTypePass,
+    CleanUpPass,
+    ComputeExtentsPass,
     ComputeUsedSymbolsPass,
+    DataTypePass,
+    DemoteLocalTemporariesToVariablesPass,
+    InitInfoPass,
+    MergeBlocksPass,
+    NormalizeBlocksPass,
     check_race_conditions,
 )
 
@@ -111,6 +113,15 @@ class IRTransformer:
         # Fill in missing dtypes
         data_type_pass = DataTypePass()
         data_type_pass.apply(self.transform_data)
+
+        # turn temporary fields that are only written and read within the same function
+        # into local scalars
+        demote_local_temporaries_to_variables_pass = DemoteLocalTemporariesToVariablesPass()
+        demote_local_temporaries_to_variables_pass.apply(self.transform_data)
+
+        # prune some stages that don't have effect
+        cleanup_pass = CleanUpPass()
+        cleanup_pass.apply(self.transform_data)
 
         if options.build_info is not None:
             options.build_info["def_ir"] = self.transform_data.definition_ir
