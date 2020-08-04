@@ -20,6 +20,8 @@
 import functools
 import itertools
 
+import networkx as nx
+
 from gt4py import definitions as gt_definitions
 from gt4py.definitions import Extent
 from gt4py import ir as gt_ir
@@ -865,3 +867,80 @@ class BuildIIRPass(TransformPass):
         result = gt_ir.AxisInterval(start=axis_bounds[0], end=axis_bounds[1])
 
         return result
+
+
+class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
+    @classmethod
+    def apply(cls, root_node):
+        return cls()(root_node)
+
+    def __call__(self, node):
+        self.graph = nx.DiGraph()
+        self.visit(node)
+        return self.graph
+
+    def visit_FieldRef(self, node: gt_ir.FieldRef):
+        if node.name not in self.graph.nodes:
+            self.graph.add_node(node.name)
+
+        if node.name in self.field_refs:
+            self.field_refs[node.name] |= node.offset
+        else:
+            self.field_refs[node.name] = node.offset
+
+    def visit_Assign(self, node: gt_ir.Assign):
+        if isinstance(node.target, gt_ir.FieldRef):
+            self.field_refs = {}
+            self.visit(node.target)
+
+            self.field_refs = {}
+            self.visit(node.value)
+
+            for field, offset in self.field_refs.items():
+                self.graph.add_edge(node.target.name, field, offset=offset)
+
+
+create_field_dependency_graph = FieldDependencyGraphCreator.apply
+
+
+class RaceConditionCheck(gt_ir.IRNodeVisitor):
+    @classmethod
+    def apply(cls, root_node):
+        return cls()(root_node)
+
+    def __init__(self):
+        self.iteration_order = None
+
+    def __call__(self, node):
+        self.visit(node)
+
+    def visit_MultiStage(self, node: gt_ir.MultiStage):
+        for group in node.groups:
+            self.visit(group)
+
+        # Catch vertical dependencies
+        iteration_order = node.iteration_order
+        if iteration_order != gt_ir.IterationOrder.PARALLEL:
+            return
+
+        # Otherwise, look for vertical race conditions
+        graph = create_field_dependency_graph(node)
+        for cycle in nx.simple_cycles(graph):
+            cycle_list = cycle + [cycle[0]]
+            for source, target in zip(cycle_list[:-1], cycle_list[1:]):
+                offset = graph.get_edge_data(source, target)["offset"]
+                if offset["K"] != 0:
+                    raise IRSpecificationError("Vertical race condition detected")
+
+    def visit_Stage(self, node: gt_ir.Stage):
+        graph = create_field_dependency_graph(node)
+
+        for cycle in nx.simple_cycles(graph):
+            cycle_list = cycle + [cycle[0]]
+            for source, target in zip(cycle_list[:-1], cycle_list[1:]):
+                offset = graph.get_edge_data(source, target)["offset"]
+                if offset["I"] != 0 or offset["J"] != 0:
+                    raise IRSpecificationError("Horizontal race condition detected")
+
+
+check_race_conditions = RaceConditionCheck.apply

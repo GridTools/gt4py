@@ -92,24 +92,16 @@ def test_temporary_field_declared_in_if_raises():
 
 def test_race_conditions():
 
-    from gt4py.frontend.gtscript_frontend import GTScriptSyntaxError
+    from gt4py.analysis.passes import IRSpecificationError
 
-    with pytest.raises(GTScriptSyntaxError, match="Race condition"):
+    with pytest.raises(IRSpecificationError, match="Horizontal race condition"):
 
         @gtscript.stencil(backend="debug")
         def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 out_field = in_field + out_field[1, 0, 0]
 
-    with pytest.raises(GTScriptSyntaxError, match="Race condition"):
-
-        @gtscript.stencil(backend="debug")
-        def func(field_a: gtscript.Field[np.float_]):
-            with computation(PARALLEL), interval(...):
-                tmp = field_a[0, 0, 1]
-                field_a = tmp
-
-    with pytest.raises(GTScriptSyntaxError, match="Race condition"):
+    with pytest.raises(IRSpecificationError, match="Horizontal race condition"):
 
         @gtscript.stencil(backend="debug")
         def func(
@@ -123,3 +115,11 @@ def test_race_conditions():
                 if flag:
                     tmp = in_field + out_field[1, 0, 0]
                     out_field = tmp
+
+    with pytest.raises(IRSpecificationError, match="Vertical race condition"):
+
+        @gtscript.stencil(backend="debug")
+        def func(field_a: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                tmp = field_a[0, 0, 1]
+                field_a = tmp
