@@ -398,29 +398,6 @@ class CompiledIfInliner(ast.NodeTransformer):
         return node if node else None
 
 
-class RaceConditionChecker(gt_ir.IRNodeVisitor):
-    @classmethod
-    def apply(cls, definition_ir):
-        checker = cls()
-        checker(definition_ir)
-
-    def __init__(self):
-        self.horiz_offcenter_reads = []
-
-    def __call__(self, definition_ir):
-        self.visit(definition_ir)
-
-    def visit_FieldRef(self, node: gt_ir.FieldRef):
-        if node.offset["I"] > 0 or node.offset["J"] > 0:
-            self.horiz_offcenter_reads.append(node.name)
-
-    def visit_Assign(self, node: gt_ir.Assign):
-        self.horiz_offcenter_reads = []
-        self.visit(node.value)
-        if node.target.name in self.horiz_offcenter_reads:
-            raise GTScriptSyntaxError(f"Race condition found", loc=node.loc)
-
-
 #
 # class Cleaner(gt_ir.IRNodeVisitor):
 #     @classmethod
@@ -1340,8 +1317,6 @@ class GTScriptParser(ast.NodeVisitor):
             externals=self.resolved_externals,
             docstring=inspect.getdoc(self.definition) or "",
         )
-
-        RaceConditionChecker.apply(self.definition_ir)
 
         return self.definition_ir
 
