@@ -876,9 +876,7 @@ class IRMaker(ast.NodeVisitor):
 
         assert len(target) == len(value)
         for left, right in zip(target, value):
-            result.append(
-                gt_ir.Assign(target=left, value=right, loc=gt_ir.Location.from_ast_node(node))
-            )
+            result.append(gt_ir.Assign(target=left, value=right))
 
         return result
 
