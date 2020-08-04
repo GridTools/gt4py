@@ -1062,6 +1062,17 @@ class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
 create_field_dependency_graph = FieldDependencyGraphCreator.apply
 
 
+def _check_graph_offsets(graph, offset_check, message):
+    for cycle in nx.simple_cycles(graph):
+        print(cycle)
+        cycle_list = cycle + [cycle[0]]
+        for source, target in zip(cycle_list[:-1], cycle_list[1:]):
+            offsets = graph.get_edge_data(source, target).get("offsets", {})
+            for offset in offsets:
+                if offset_check(offset):
+                    raise IRSpecificationError(message)
+
+
 class RaceConditionCheck(gt_ir.IRNodeVisitor):
     @classmethod
     def apply(cls, root_node):
@@ -1084,26 +1095,17 @@ class RaceConditionCheck(gt_ir.IRNodeVisitor):
             return
 
         graph = create_field_dependency_graph(node)
-        for cycle in nx.simple_cycles(graph):
-            print(cycle)
-            cycle_list = cycle + [cycle[0]]
-            for source, target in zip(cycle_list[:-1], cycle_list[1:]):
-                offsets = graph.get_edge_data(source, target).get("offsets", {})
-                for offset in offsets:
-                    if offset["K"] != 0:
-                        raise IRSpecificationError("Vertical race condition detected")
+        _check_graph_offsets(
+            graph, lambda offset: offset["K"] != 0, "Vertical race condition detected"
+        )
 
     def visit_Stage(self, node: gt_ir.Stage):
         graph = create_field_dependency_graph(node)
-
-        for cycle in nx.simple_cycles(graph):
-            print(cycle)
-            cycle_list = cycle + [cycle[0]]
-            for source, target in zip(cycle_list[:-1], cycle_list[1:]):
-                offsets = graph.get_edge_data(source, target).get("offsets", {})
-                for offset in offsets:
-                    if offset["I"] != 0 or offset["J"] != 0:
-                        raise IRSpecificationError("Horizontal race condition detected")
+        _check_graph_offsets(
+            graph,
+            lambda offset: offset["I"] != 0 or offset["J"] != 0,
+            "Horizontal race condition detected",
+        )
 
 
 check_race_conditions = RaceConditionCheck.apply
