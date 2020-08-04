@@ -1066,7 +1066,7 @@ def _check_graph_for_race(graph, fail_if, message):
         for source, target in zip(full_cycle[:-1], full_cycle[1:]):
             offsets = graph.get_edge_data(source, target).get("offsets", [])
             if any([fail_if(offset) for offset in offsets]):
-                raise IRSpecificationError(f"{message}. Cycle: {full_cycle}")
+                raise IRSpecificationError(f"{message}. Cycle: {','.join(full_cycle)}")
 
 
 class RaceConditionCheck(gt_ir.IRNodeVisitor):
