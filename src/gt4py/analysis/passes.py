@@ -1017,6 +1017,12 @@ class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
     def apply(cls, root_node):
         return cls()(root_node)
 
+    def _reset_field_refs(self):
+        self.field_refs = {}
+
+    def __init__(self):
+        self._reset_field_refs()
+
     def __call__(self, node):
         self.graph = nx.DiGraph()
         self.visit(node)
@@ -1033,10 +1039,10 @@ class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
 
     def visit_Assign(self, node: gt_ir.Assign):
         if isinstance(node.target, gt_ir.FieldRef):
-            self.field_refs = {}
+            self._reset_field_refs()
             self.visit(node.target)
 
-            self.field_refs = {}
+            self._reset_field_refs()
             self.visit(node.value)
 
             for field, offset in self.field_refs.items():
@@ -1058,15 +1064,15 @@ class RaceConditionCheck(gt_ir.IRNodeVisitor):
         self.visit(node)
 
     def visit_MultiStage(self, node: gt_ir.MultiStage):
+        # Look for horizontal race conditions within stages
         for group in node.groups:
             self.visit(group)
 
-        # Catch vertical dependencies
+        # Look for vertical race conditions
         iteration_order = node.iteration_order
         if iteration_order != gt_ir.IterationOrder.PARALLEL:
             return
 
-        # Otherwise, look for vertical race conditions
         graph = create_field_dependency_graph(node)
         for cycle in nx.simple_cycles(graph):
             cycle_list = cycle + [cycle[0]]
