@@ -14,9 +14,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+# Disable isort to avoid circular imports
+# isort: off
 from .infos import *
+# isort: on
 
-from . import transformer
-from . import passes
-
+from . import passes, transformer
 from .transformer import transform
