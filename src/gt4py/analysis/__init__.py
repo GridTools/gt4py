@@ -17,6 +17,7 @@
 # Disable isort to avoid circular imports
 # isort: off
 from .infos import *
+
 # isort: on
 
 from . import passes, transformer

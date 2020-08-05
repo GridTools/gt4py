@@ -27,9 +27,11 @@ from pkg_resources import DistributionNotFound, get_distribution
 # isort: off
 from . import config
 from . import utils
+
 #
 from . import definitions
 from . import gtscript
+
 #
 from . import ir
 from . import analysis
@@ -42,6 +44,7 @@ from . import testing
 
 from .definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo, CartesianSpace
 from .stencil_object import StencilObject
+
 # isort: on
 
 
