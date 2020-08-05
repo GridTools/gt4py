@@ -877,7 +877,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         source = """
 from gt4py import utils as gt_utils
         """
-        if self.implementation_ir.multi_stages:
+        if self.module_info or self.implementation_ir.multi_stages:
             source += """
 pyext_module = gt_utils.make_module_from_file(
         "{pyext_module_name}", "{pyext_file_path}", public_import=True

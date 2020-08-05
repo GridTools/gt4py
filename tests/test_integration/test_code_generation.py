@@ -22,6 +22,7 @@ import pytest
 import gt4py as gt
 from gt4py import gtscript
 from gt4py import backend as gt_backend
+from gt4py import definitions as gt_definitions
 from gt4py import storage as gt_storage
 
 from .stencil_definitions import REGISTRY as stencil_definitions
@@ -97,3 +98,20 @@ def test_stage_without_effect(backend):
     def definition(field_a: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             field_c = 0.0
+
+
+@pytest.mark.parametrize(
+    ["name", "backend"], itertools.product(stencil_definitions.names, CPU_BACKENDS)
+)
+def test_cache_info(name, backend):
+    stencil_definition = stencil_definitions[name]
+    externals = externals_registry[name]
+    stencil = gtscript.stencil(backend, stencil_definition, externals=externals)
+
+    module = stencil.options["module"]
+    qualified_name = f"{module}.{name}"
+    version = (str(stencil.__class__).split("_")[-1])[0:-2]
+    stencil_id = gt_definitions.StencilID(qualified_name, version)
+
+    backend_class = gt_backend.from_name(backend)
+    assert backend_class.check_cache(stencil_id)
