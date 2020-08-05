@@ -398,10 +398,17 @@ class StencilTestSuite(metaclass=SuiteMeta):
         assert isinstance(implementation, StencilObject)
         assert implementation.backend == test["backend"]
 
-        assert all(
-            field_info.boundary >= cls.global_boundaries[name]
-            for name, field_info in implementation.field_info.items()
-        )
+        # Assert strict equality for Dawn backends
+        if implementation.backend.startswith("dawn"):
+            assert all(
+                field_info.boundary == cls.global_boundaries[name]
+                for name, field_info in implementation.field_info.items()
+            )
+        else:
+            assert all(
+                field_info.boundary >= cls.global_boundaries[name]
+                for name, field_info in implementation.field_info.items()
+            )
 
         test["implementations"].append(implementation)
 
