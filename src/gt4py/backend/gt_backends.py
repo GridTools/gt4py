@@ -165,6 +165,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
     }
 
     DATA_TYPE_TO_CPP = {
+        gt_ir.DataType.BOOL: "bool",
         gt_ir.DataType.INT8: "int8_t",
         gt_ir.DataType.INT16: "int16_t",
         gt_ir.DataType.INT32: "int32_t",
@@ -495,15 +496,22 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         cls._check_options(options)
 
-        # Generate the Python binary extension (checking if GridTools sources are installed)
-        if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
-            raise RuntimeError("Missing GridTools sources.")
-
         implementation_ir = gt_analysis.transform(definition_ir, options)
-        pyext_module_name, pyext_file_path = cls.generate_extension(
-            stencil_id, definition_ir, options, implementation_ir=implementation_ir
-        )
 
+        generator_options = options.as_dict()
+        if implementation_ir.multi_stages:
+            # Generate the Python binary extension (checking if GridTools sources are installed)
+            if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
+                raise RuntimeError("Missing GridTools sources.")
+
+            pyext_module_name, pyext_file_path = cls.generate_extension(
+                stencil_id, definition_ir, options, implementation_ir=implementation_ir
+            )
+            generator_options["pyext_file_path"] = pyext_file_path
+
+        else:
+            # if no computation has effect, there is no need to create an extension
+            pyext_module_name, pyext_file_path = None, None
         # Generate and return the Python wrapper class
         return cls._generate_module(
             stencil_id,

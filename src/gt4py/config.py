@@ -14,12 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+
 import multiprocessing
 import os
 
 from typing import Any, Dict
 
-GT4PY_INSTALLATION_PATH = os.path.dirname(os.path.abspath(__file__))
+GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
 
 # Default paths (taken from user's environment vars when possible)
 BOOST_ROOT: str = os.environ.get(
@@ -46,7 +47,14 @@ build_settings: Dict[str, Any] = {
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
     "openmp_cppflags": os.environ.get("OPENMP_CPPFLAGS", "-fopenmp").split(),
     "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", "-fopenmp").split(),
-    "extra_compile_args": {"cxx": [], "nvcc": []},
+    "extra_compile_args": {
+        "cxx": [],
+        "nvcc": [
+            # disable warnings in nvcc as a workaround for
+            # 'catastrophic failure' error in nvcc < 11
+            "--disable-warnings",
+        ],
+    },
     "extra_link_args": [],
     "parallel_jobs": multiprocessing.cpu_count(),
 }
