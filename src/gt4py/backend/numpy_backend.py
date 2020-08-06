@@ -233,13 +233,20 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
             target = self.visit(stmt.target)
             value = self.visit(stmt.value)
+
+            data_type = (
+                self.block_info.symbols[target].data_type
+                if target in self.block_info.symbols
+                else stmt.target.data_type
+            )
+
             sources.append(
                 "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
                     condition=condition,
                     target=target,
                     then_expr=value,
                     else_expr=target,
-                    dtype=stmt.target.data_type.dtype.name,
+                    dtype=data_type.dtype.name,
                     np=self.numpy_prefix,
                 )
             )
