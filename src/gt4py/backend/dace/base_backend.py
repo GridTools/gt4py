@@ -293,7 +293,7 @@ class DaceBackend(gt_backend.BaseBackend):
         sdfg.expand_library_nodes()
         from dace.transformation.interstate import InlineSDFG
 
-        # sdfg.save(dace_build_path + os.path.sep + "03a_library_expanded_not_inlined.sdfg")
+        sdfg.save(dace_build_path + os.path.sep + "03a_library_expanded_not_inlined.sdfg")
         sdfg.apply_transformations_repeated([InlineSDFG], validate=False)
 
         if save:
