@@ -122,7 +122,10 @@ storing a reference to the piece of source code which originated the node.
         # start is included
         # end is excluded
 
-    ComputationBlock(interval: AxisInterval, order: IterationOrder, body: BlockStmt)
+    ComputationBlock(interval: AxisInterval,
+                     order: IterationOrder,
+                     body: BlockStmt,
+                     [parallel_interval: List[AxisInterval]])
 
     ArgumentInfo(name: str, is_keyword: bool, [default: Any])
 
@@ -146,7 +149,8 @@ Implementation IR
 
     ApplyBlock(interval: AxisInterval,
                local_symbols: Dict[str, VarDecl],
-               body: BlockStmt)
+               body: BlockStmt,
+               [parallel_interval: List[AxisInterval]])
 
     Stage(name: str,
           accessors: List[Accessor],
@@ -692,6 +696,7 @@ class ComputationBlock(Node):
     interval = attribute(of=AxisInterval)
     iteration_order = attribute(of=IterationOrder)
     body = attribute(of=BlockStmt)
+    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
     loc = attribute(of=Location, optional=True)
 
 
@@ -741,6 +746,7 @@ class ApplyBlock(Node):
     interval = attribute(of=AxisInterval)
     local_symbols = attribute(of=DictOf[str, VarDecl])
     body = attribute(of=BlockStmt)
+    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
 
 
 @attribclass
