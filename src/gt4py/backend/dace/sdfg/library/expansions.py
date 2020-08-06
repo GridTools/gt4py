@@ -604,7 +604,7 @@ class StencilExpandTransformation(dace.library.ExpandTransformation):
             inner_sdfg,
             [
                 StateFusion,
-                RemoveTrivialLoop,
+                # RemoveTrivialLoop,
                 EndStateElimination,
                 StateAssignElimination,
                 MapCollapse,
