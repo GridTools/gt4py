@@ -22,4 +22,5 @@ definitions for the keywords of the DSL.
 
 import sys
 
+
 sys.modules["__externals__"] = sys.modules["gt4py.__externals__"]

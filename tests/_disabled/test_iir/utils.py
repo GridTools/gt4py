@@ -15,12 +15,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import gt4py.definitions as gt_definitions
 import gt4py.backend as gt_back
-
-from .iir_stencil_definitions import build_iir_stencil
+import gt4py.definitions as gt_definitions
 
 from ..utils import id_version
+from .iir_stencil_definitions import build_iir_stencil
 
 
 def generate_test_module(name, backend, *, id_version, rebuild=True):

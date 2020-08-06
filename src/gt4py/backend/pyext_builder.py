@@ -17,15 +17,15 @@
 import contextlib
 import copy
 import distutils
+import distutils.sysconfig
 import io
 import os
 import shutil
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
+import pybind11
 import setuptools
 from setuptools.command.build_ext import build_ext
-import distutils.sysconfig
-import pybind11
 
 from gt4py import config as gt_config
 

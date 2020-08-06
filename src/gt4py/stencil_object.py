@@ -12,11 +12,11 @@ from gt4py.definitions import (
     Boundary,
     DomainInfo,
     FieldInfo,
+    Index,
     ParameterInfo,
+    Shape,
     normalize_domain,
     normalize_origin_mapping,
-    Shape,
-    Index,
 )
 
 

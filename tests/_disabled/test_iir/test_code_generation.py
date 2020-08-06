@@ -15,19 +15,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import pytest
 import itertools
-import numpy as np
 
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
+import numpy as np
+import pytest
 
 from gt4py import backend as gt_backend
 from gt4py import storage as gt_store
-from .iir_stencil_definitions import REGISTRY as iir_registry
-from .utils import generate_test_module
 
-from .utils import id_version
+from .iir_stencil_definitions import REGISTRY as iir_registry
+from .utils import generate_test_module, id_version
 
 
 @pytest.mark.parametrize(

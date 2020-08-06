@@ -21,6 +21,7 @@ import gt4py
 import gt4py.utils as gt_utils
 from gt4py.backend import pyext_builder
 
+
 GT4PY_INSTALLATION_PATH = os.path.dirname(inspect.getabsfile(gt4py))
 
 EXTERNAL_SRC_PATH = os.path.join(GT4PY_INSTALLATION_PATH, "_external_src")
