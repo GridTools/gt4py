@@ -48,14 +48,10 @@ def compile_definition(
     )
 
     options_id = gt_utils.shashed_id(build_options)
-    stencil_id = frontend.get_stencil_id(
-        build_options.qualified_name, definition_func, externals, options_id
-    )
-    gt_frontend.GTScriptParser(
+    frontend.get_stencil_id(build_options.qualified_name, definition_func, externals, options_id)
+    return gt_frontend.GTScriptParser(
         definition_func, externals=externals or {}, options=build_options
     ).run()
-
-    return stencil_id
 
 
 # ---- Tests-----
@@ -500,9 +496,8 @@ class TestRegions:
 
         def_ir = compile_definition(stencil, "stencil", module, externals=externals)
 
-        assert len(def_ir.computations) == len(self.regions)
-        for i in range(len(self.regions)):
-            assert def_ir.computations[i].parallel_interval is not None
+        assert len(def_ir.computations) == 1
+        assert def_ir.computations[0].parallel_interval is not None
 
     def test_with_default(self):
         module = f"TestRegion_with_default_{id_version}"
@@ -518,9 +513,10 @@ class TestRegions:
 
         def_ir = compile_definition(stencil, "stencil", module, externals=externals)
 
-        # assert len(def_ir.computations) == 1 + len(self.regions)
-        # for i in range(1, len(self.regions) + 1):
-        #     assert def_ir.computations[i].parallel_interval is not None
+        assert len(def_ir.computations) == 3
+        assert def_ir.computations[0].parallel_interval is None
+        assert def_ir.computations[1].parallel_interval is not None
+        assert def_ir.computations[2].parallel_interval is not None
 
     def test_multiple_with_default(self):
         module = f"TestRegion_multiple_with_default_{id_version}"
@@ -538,6 +534,11 @@ class TestRegions:
 
         def_ir = compile_definition(stencil, "stencil", module, externals=externals)
 
+        assert len(def_ir.computations) == 3
+        assert def_ir.computations[0].parallel_interval is None
+        assert def_ir.computations[1].parallel_interval is not None
+        assert def_ir.computations[2].parallel_interval is not None
+
     def test_error_nested(self):
         module = f"TestRegion_error_nested_{id_version}"
         externals = {}
@@ -552,5 +553,5 @@ class TestRegions:
                     with parallel(region[:, j0 : 1 + je]):
                         in_f = 2.0
 
-        with pytest.raises(gt_frontend.GTScriptSymbolError, match="Nested parallel intervals"):
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Invalid 'with' statement"):
             compile_definition(stencil, "stencil", module, externals=externals)
