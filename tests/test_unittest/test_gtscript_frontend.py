@@ -38,6 +38,7 @@ def compile_definition(
     module: str,
     *,
     externals: dict = None,
+    splitters: set = None,
     dtypes: dict = None,
     rebuild=False,
     **kwargs,
@@ -52,7 +53,10 @@ def compile_definition(
         build_options.qualified_name, definition_func, externals, options_id
     )
     gt_frontend.GTScriptParser(
-        definition_func, externals=externals or {}, options=build_options
+        definition_func,
+        externals=externals or {},
+        splitters=splitters or {},
+        options=build_options,
     ).run()
 
     return stencil_id
@@ -485,3 +489,80 @@ class TestAssignmentSyntax:
                 in_field -= 0.5
                 in_field /= 0.5
                 in_field *= 4.0
+
+
+class TestRegions:
+    def test_on_interval_only(self):
+        module = f"TestRegion_on_interval_only_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            from __splitters__ import i0, ie
+
+            with computation(PARALLEL), interval(...), parallel(region[i0 : 1 + ie, :]):
+                in_f = 1.0
+
+        def_ir = compile_definition(
+            stencil, "stencil", module, externals=externals, splitters={"i0", "ie"}
+        )
+
+        assert len(def_ir.computations) == len(self.regions)
+        for i in range(len(self.regions)):
+            assert def_ir.computations[i].parallel_interval is not None
+
+    def test_with_default(self):
+        module = f"TestRegion_with_default_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            from __splitters__ import i0, ie, j0, je
+
+            with computation(PARALLEL), interval(...):
+                in_f = in_f + 1.0
+                with parallel(region[i0 : 1 + ie, :], region[:, j0 : 1 + je]):
+                    in_f = 1.0
+
+        def_ir = compile_definition(
+            stencil, "stencil", module, externals=externals, splitters={"i0", "ie", "j0", "je"}
+        )
+
+        # assert len(def_ir.computations) == 1 + len(self.regions)
+        # for i in range(1, len(self.regions) + 1):
+        #     assert def_ir.computations[i].parallel_interval is not None
+
+    def test_multiple_with_default(self):
+        module = f"TestRegion_multiple_with_default_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            from __splitters__ import i0, ie, j0, je
+
+            with computation(PARALLEL), interval(...):
+                in_f = in_f + 1.0
+                with parallel(region[i0 : 1 + ie, :]):
+                    in_f = 1.0
+                with parallel(region[:, j0 : 1 + je]):
+                    in_f = 2.0
+
+        def_ir = compile_definition(
+            stencil, "stencil", module, externals=externals, splitters={"i0", "ie", "j0", "je"}
+        )
+
+    def test_error_nested(self):
+        module = f"TestRegion_error_nested_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            from __splitters__ import i0, ie, j0, je
+
+            with computation(PARALLEL), interval(...):
+                in_f = in_f + 1.0
+                with parallel(region[i0 : 1 + ie, :]):
+                    in_f = 1.0
+                    with parallel(region[:, j0 : 1 + je]):
+                        in_f = 2.0
+
+        with pytest.raises(gt_frontend.GTScriptSymbolError, match="Nested parallel intervals"):
+            compile_definition(
+                stencil, "stencil", module, externals=externals, splitters={"i0", "ie", "j0", "je"}
+            )
