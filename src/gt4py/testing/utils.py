@@ -14,11 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import gt4py.utils as gt_utils
 import collections
-import numpy as np
-import types
 import inspect
+import types
+
+import numpy as np
+
+import gt4py.utils as gt_utils
 
 
 def copy_func(f, name=None):

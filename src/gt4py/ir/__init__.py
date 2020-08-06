@@ -14,5 +14,5 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from .nodes import *
 from . import utils
+from .nodes import *

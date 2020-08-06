@@ -21,6 +21,7 @@
 # Version tag from setuptools_scm
 from pkg_resources import get_distribution
 
+
 full_version = get_distribution("gt4py").version
 
 

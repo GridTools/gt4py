@@ -176,19 +176,16 @@ import operator
 
 import numpy as np
 
-from gt4py.definitions import Extent, Index, CartesianSpace
 from gt4py import utils as gt_utils
-from gt4py.utils.attrib import (
-    attribute,
-    attribkwclass as attribclass,
-    attributes_of,
-    Any as Any,
-    Dict as DictOf,
-    List as ListOf,
-    Tuple as TupleOf,
-    Union as UnionOf,
-    Optional as OptionalOf,
-)
+from gt4py.definitions import CartesianSpace, Extent, Index
+from gt4py.utils.attrib import Any as Any
+from gt4py.utils.attrib import Dict as DictOf
+from gt4py.utils.attrib import List as ListOf
+from gt4py.utils.attrib import Optional as OptionalOf
+from gt4py.utils.attrib import Tuple as TupleOf
+from gt4py.utils.attrib import Union as UnionOf
+from gt4py.utils.attrib import attribkwclass as attribclass
+from gt4py.utils.attrib import attribute, attributes_of
 
 
 # ---- Foundations ----

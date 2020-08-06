@@ -26,6 +26,7 @@ import textwrap
 
 import black
 
+
 black_mode = black.FileMode(
     target_versions={black.TargetVersion.PY36, black.TargetVersion.PY37}, line_length=120
 )

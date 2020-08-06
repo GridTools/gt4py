@@ -25,6 +25,7 @@ import pytest
 
 from gt4py import config as gt_config
 
+
 # Delete cache folder
 shutil.rmtree(
     os.path.join(gt_config.cache_settings["root_path"], gt_config.cache_settings["dir_name"]),

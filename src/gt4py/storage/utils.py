@@ -16,8 +16,11 @@
 
 import math
 import numbers
+
 import numpy as np
+
 import gt4py.utils as gt_util
+
 
 try:
     import cupy as cp

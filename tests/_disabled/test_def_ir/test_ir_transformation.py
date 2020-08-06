@@ -14,16 +14,18 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import pytest
 import itertools
+
+import pytest
 
 from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
-
 from gt4py.definitions import StencilID
+
 from .def_ir_stencil_definitions import REGISTRY as def_ir_registry
+
 
 id_version_counter = itertools.count()
 

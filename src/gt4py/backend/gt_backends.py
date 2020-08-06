@@ -30,6 +30,7 @@ from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
+
 from . import pyext_builder
 
 
@@ -112,7 +113,7 @@ def cuda_is_compatible_layout(field):
 
 def cuda_is_compatible_type(field):
     # ToDo: find a better way to remove the import cycle
-    from gt4py.storage.storage import GPUStorage, ExplicitlySyncedGPUStorage
+    from gt4py.storage.storage import ExplicitlySyncedGPUStorage, GPUStorage
 
     return isinstance(field, (GPUStorage, ExplicitlySyncedGPUStorage))
 

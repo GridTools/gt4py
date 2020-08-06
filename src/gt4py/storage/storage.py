@@ -16,13 +16,15 @@
 
 import numpy as np
 
+
 try:
     import cupy as cp
 except ImportError:
     cp = None
 
-from . import utils as storage_utils
 from gt4py import backend as gt_backend
+
+from . import utils as storage_utils
 
 
 def empty(backend, default_origin, shape, dtype, mask=None, *, managed_memory=False):

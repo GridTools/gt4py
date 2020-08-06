@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from setuptools import setup, Command
+from setuptools import Command, setup
 
 
 if __name__ == "__main__":

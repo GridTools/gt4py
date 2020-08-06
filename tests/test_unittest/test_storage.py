@@ -21,6 +21,7 @@ import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
+
 try:
     import cupy as cp
 except ImportError:
@@ -29,8 +30,8 @@ except ImportError:
 # import gt4py.storage as gt_storage
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_store
-import gt4py.utils as gt_utils
 import gt4py.storage.utils as gt_storage_utils
+import gt4py.utils as gt_utils
 
 
 # ---- Hypothesis strategies ----
@@ -534,8 +535,8 @@ def test_slices_gpu():
     # assert (sliced == array[::2, ::2, ::2]).all()
     stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
 
+    import copy  # isort:skip
     import cupy as cp
-    import copy
 
     default_origin = (1, 1, 1)
     shape = (10, 10, 10)
@@ -571,8 +572,8 @@ def test_slices_gpu():
     # assert (sliced == array[::2, ::2, ::2]).all()
     stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
 
+    import copy  # isort:skip
     import cupy as cp
-    import copy
 
     default_origin = (1, 1, 1)
     shape = (10, 10, 10)

@@ -17,13 +17,14 @@
 import numpy as np
 
 import gt4py as gt
-from gt4py import gtscript
-from gt4py import ir as gt_ir
 from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
+from gt4py import gtscript
+from gt4py import ir as gt_ir
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
 from gt4py.definitions import Extent, StencilID
+
 
 REGISTRY = gt_utils.Registry()
 EXTERNALS_REGISTRY = gt_utils.Registry()
