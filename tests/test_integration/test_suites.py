@@ -582,34 +582,49 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
         outfield[...] = 1 if a > 0 or b > 0 or c > 0 else 0
 
 
-#from typing import overload
-# class TestVolumeVorticityMean(gt_testing.StencilTestSuite):
-#     """Compute mean relative vorticity in a 3D volume.
-#     """
-#
-#     dtypes = (np.float_,)
-#     domain_range = [(10, 10), (10, 10), (10, 10)]
-#     backends = ["dawn:gtmc"] #CPU_BACKENDS
-#     symbols = dict(
-#         ut=gt_testing.field(in_range=(-10, 10), boundary=[(0, 1), (0, 0), (0, 0)]),
-#         vt=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 1), (0, 0)]),
-#         rarea=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-#         wk=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-#     )
-#
-#     @overload
-#     def test_implementation(self, test, parameters_dict):
-#         super().test_implementation(test, parameters_dict)
-#         fields, exec_info = parameters_dict
-#         for implementation in implementation_list:
-#             assert all(
-#                 field_info.boundary == cls.global_boundaries[name]
-#                 for name, field_info in implementation.field_info.items()
-#             )
-#
-#     def definition(ut, vt, rarea, wk):
-#         with computation(PARALLEL), interval(...):
-#             wk = rarea * (vt - vt[0, 1, 0] - ut + ut[1, 0, 0])
-#
-#     def validation(ut, vt, rarea, wk, domain, origin, **kwargs):
-#         wk[...] = rarea[1:-1, :, :] * (vt[:, 1:-1, :] - vt[:, 2:, :] - ut[1:-1, :, :] + ut[2:, :, :])
+class TestQXWestEdge(gt_testing.StencilTestSuite):
+    """Compute mean relative vorticity in a 3D volume.
+    """
+
+    dtypes = (np.float_,)
+    domain_range = [(10, 10), (10, 10), (10, 10)]
+    backends = ["gtmc"]  # CPU_BACKENDS
+    symbols = dict(
+        qin=gt_testing.field(in_range=(-10, 10), boundary=[(1, 0), (0, 0), (0, 0)]),
+        dxa=gt_testing.field(in_range=(-10, 10), boundary=[(1, 0), (0, 0), (0, 0)]),
+        qx=gt_testing.field(in_range=(-10, 10), boundary=[(1, 1), (0, 0), (0, 0)]),
+    )
+
+    def definition(qin, dxa, qx):
+        with computation(PARALLEL), interval(...):
+            g_in = dxa / dxa[-1, 0, 0]
+            qx0 = qx
+            qx = (3.0 * (g_in * qin[-1, 0, 0] + qin) - (g_in * qx0[-1, 0, 0] + qx0[1, 0, 0])) / (
+                2.0 + 2.0 * g_in
+            )
+
+    def validation(qin, dxa, qx, domain, origin, **kwargs):
+        g_in = (
+            dxa[1 : 1 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]]
+            / dxa[1 - 1 : 1 + domain[0] - 1, 0 : 0 + domain[1], 0 : 0 + domain[2]]
+        )
+        qx0 = qx[1 - 1 : 1 + domain[0] + 1, 0 : 0 + domain[1], 0 : 0 + domain[2]]
+        qx[1 : 1 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]] = (
+            (
+                3.0
+                * (
+                    (
+                        g_in[0 : 0 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]]
+                        * qin[1 - 1 : 1 + domain[0] - 1, 0 : 0 + domain[1], 0 : 0 + domain[2]]
+                    )
+                    + qin[1 : 1 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]]
+                )
+            )
+            - (
+                (
+                    g_in[0 : 0 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]]
+                    * qx0[1 - 1 : 1 + domain[0] - 1, 0 : 0 + domain[1], 0 : 0 + domain[2]]
+                )
+                + qx0[1 + 1 : 1 + domain[0] + 1, 0 : 0 + domain[1], 0 : 0 + domain[2]]
+            )
+        ) / (2.0 + (2.0 * g_in[0 : 0 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]]))
