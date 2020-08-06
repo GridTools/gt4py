@@ -499,7 +499,7 @@ class TestNestedWithSyntax:
         def definition_fw(
             in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
         ):
-            from gt4py.__gtscript__ import computation, interval, FORWARD
+            from gt4py.__gtscript__ import FORWARD, computation, interval
 
             with computation(FORWARD):
                 with interval(1, 2):
@@ -510,7 +510,7 @@ class TestNestedWithSyntax:
         def definition_bw(
             in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
         ):
-            from gt4py.__gtscript__ import computation, interval, FORWARD
+            from gt4py.__gtscript__ import FORWARD, computation, interval
 
             with computation(BACKWARD):
                 with interval(1, 2):
