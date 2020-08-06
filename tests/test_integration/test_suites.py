@@ -588,7 +588,7 @@ class TestQXWestEdge(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(10, 10), (10, 10), (10, 10)]
-    backends = ["gtmc"]  # CPU_BACKENDS
+    backends = CPU_BACKENDS
     symbols = dict(
         qin=gt_testing.field(in_range=(-10, 10), boundary=[(1, 0), (0, 0), (0, 0)]),
         dxa=gt_testing.field(in_range=(-10, 10), boundary=[(1, 0), (0, 0), (0, 0)]),
@@ -604,27 +604,39 @@ class TestQXWestEdge(gt_testing.StencilTestSuite):
             )
 
     def validation(qin, dxa, qx, domain, origin, **kwargs):
-        g_in = (
-            dxa[1 : 1 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]]
-            / dxa[1 - 1 : 1 + domain[0] - 1, 0 : 0 + domain[1], 0 : 0 + domain[2]]
-        )
-        qx0 = qx[1 - 1 : 1 + domain[0] + 1, 0 : 0 + domain[1], 0 : 0 + domain[2]]
-        qx[1 : 1 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]] = (
+        qx[1 : 1 + domain[0], 0 : 0 + domain[1], 0 + 0 : 0 + domain[2]] = (
             (
                 3.0
                 * (
                     (
-                        g_in[0 : 0 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]]
-                        * qin[1 - 1 : 1 + domain[0] - 1, 0 : 0 + domain[1], 0 : 0 + domain[2]]
+                        (
+                            dxa[1 : 1 + domain[0], 0 : 0 + domain[1], 0 + 0 : 0 + domain[2]]
+                            / dxa[
+                                1 - 1 : 1 + domain[0] - 1, 0 : 0 + domain[1], 0 + 0 : 0 + domain[2]
+                            ]
+                        )
+                        * qin[1 - 1 : 1 + domain[0] - 1, 0 : 0 + domain[1], 0 + 0 : 0 + domain[2]]
                     )
-                    + qin[1 : 1 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]]
+                    + qin[1 : 1 + domain[0], 0 : 0 + domain[1], 0 + 0 : 0 + domain[2]]
                 )
             )
             - (
                 (
-                    g_in[0 : 0 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]]
-                    * qx0[1 - 1 : 1 + domain[0] - 1, 0 : 0 + domain[1], 0 : 0 + domain[2]]
+                    (
+                        dxa[1 : 1 + domain[0], 0 : 0 + domain[1], 0 + 0 : 0 + domain[2]]
+                        / dxa[1 - 1 : 1 + domain[0] - 1, 0 : 0 + domain[1], 0 + 0 : 0 + domain[2]]
+                    )
+                    * qx[1 - 1 : 1 + domain[0] - 1, 0 : 0 + domain[1], 0 + 0 : 0 + domain[2]]
                 )
-                + qx0[1 + 1 : 1 + domain[0] + 1, 0 : 0 + domain[1], 0 : 0 + domain[2]]
+                + qx[1 + 1 : 1 + domain[0] + 1, 0 : 0 + domain[1], 0 + 0 : 0 + domain[2]]
             )
-        ) / (2.0 + (2.0 * g_in[0 : 0 + domain[0], 0 : 0 + domain[1], 0 : 0 + domain[2]]))
+        ) / (
+            2.0
+            + (
+                2.0
+                * (
+                    dxa[1 : 1 + domain[0], 0 : 0 + domain[1], 0 + 0 : 0 + domain[2]]
+                    / dxa[1 - 1 : 1 + domain[0] - 1, 0 : 0 + domain[1], 0 + 0 : 0 + domain[2]]
+                )
+            )
+        )
