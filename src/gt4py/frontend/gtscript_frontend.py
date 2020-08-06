@@ -1055,6 +1055,7 @@ class GTScriptParser(ast.NodeVisitor):
         bare_imports, from_imports, relative_imports = gt_meta.collect_imported_symbols(definition)
         wrong_imports = list(bare_imports.keys()) + list(relative_imports.keys())
         imported_names = set()
+        splitters = set()
         for key, value in from_imports.items():
             if key != value:
                 # Aliasing imported names is not allowed
@@ -1063,12 +1064,17 @@ class GTScriptParser(ast.NodeVisitor):
                 for prefix in [
                     "__externals__.",
                     "gt4py.__externals__.",
+                    "__splitters__.",
+                    "gt4py.__splitters__.",
                     "__gtscript__.",
                     "gt4py.__gtscript__.",
                 ]:
                     if key.startswith(prefix):
-                        if "__externals__" in key:
-                            imported_names.add(value.replace(prefix, "", 1))
+                        tail_value = value.replace(prefix, "", 1)
+                        if "__externals__" in key or "__splitters__" in key:
+                            imported_names.add(tail_value)
+                        if "__splitters__" in key:
+                            splitters.add(tail_value)
                         break
                 else:
                     wrong_imports.append(key)
@@ -1107,6 +1113,11 @@ class GTScriptParser(ast.NodeVisitor):
                         name=collected_name,
                         loc=gt_ir.Location.from_ast_node(name_nodes[collected_name][0]),
                     )
+
+        # Splitters will be resolved at run-time. Keep resolve_external_symbols
+        # from trying to resolve them at compile-time.
+        for k in splitters:
+            imported_symbols.pop(k, None)
 
         return nonlocal_symbols, imported_symbols
 

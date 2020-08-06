@@ -38,7 +38,6 @@ def compile_definition(
     module: str,
     *,
     externals: dict = None,
-    splitters: set = None,
     dtypes: dict = None,
     rebuild=False,
     **kwargs,
@@ -53,10 +52,7 @@ def compile_definition(
         build_options.qualified_name, definition_func, externals, options_id
     )
     gt_frontend.GTScriptParser(
-        definition_func,
-        externals=externals or {},
-        splitters=splitters or {},
-        options=build_options,
+        definition_func, externals=externals or {}, options=build_options
     ).run()
 
     return stencil_id
@@ -502,9 +498,7 @@ class TestRegions:
             with computation(PARALLEL), interval(...), parallel(region[i0 : 1 + ie, :]):
                 in_f = 1.0
 
-        def_ir = compile_definition(
-            stencil, "stencil", module, externals=externals, splitters={"i0", "ie"}
-        )
+        def_ir = compile_definition(stencil, "stencil", module, externals=externals)
 
         assert len(def_ir.computations) == len(self.regions)
         for i in range(len(self.regions)):
@@ -522,9 +516,7 @@ class TestRegions:
                 with parallel(region[i0 : 1 + ie, :], region[:, j0 : 1 + je]):
                     in_f = 1.0
 
-        def_ir = compile_definition(
-            stencil, "stencil", module, externals=externals, splitters={"i0", "ie", "j0", "je"}
-        )
+        def_ir = compile_definition(stencil, "stencil", module, externals=externals)
 
         # assert len(def_ir.computations) == 1 + len(self.regions)
         # for i in range(1, len(self.regions) + 1):
@@ -544,9 +536,7 @@ class TestRegions:
                 with parallel(region[:, j0 : 1 + je]):
                     in_f = 2.0
 
-        def_ir = compile_definition(
-            stencil, "stencil", module, externals=externals, splitters={"i0", "ie", "j0", "je"}
-        )
+        def_ir = compile_definition(stencil, "stencil", module, externals=externals)
 
     def test_error_nested(self):
         module = f"TestRegion_error_nested_{id_version}"
@@ -563,6 +553,4 @@ class TestRegions:
                         in_f = 2.0
 
         with pytest.raises(gt_frontend.GTScriptSymbolError, match="Nested parallel intervals"):
-            compile_definition(
-                stencil, "stencil", module, externals=externals, splitters={"i0", "ie", "j0", "je"}
-            )
+            compile_definition(stencil, "stencil", module, externals=externals)
