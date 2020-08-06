@@ -20,13 +20,13 @@ import numpy as np
 import pytest
 
 import gt4py as gt
-from gt4py import gtscript
 from gt4py import backend as gt_backend
+from gt4py import gtscript
 from gt4py import storage as gt_storage
 
-from .stencil_definitions import REGISTRY as stencil_definitions
-from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
+from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
+from .stencil_definitions import REGISTRY as stencil_definitions
 
 
 @pytest.mark.parametrize(
@@ -88,3 +88,12 @@ def test_temporary_field_declared_in_if_raises():
                 else:
                     field_b = field_a
                 field_a = field_b
+
+
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
+def test_stage_without_effect(backend):
+    @gtscript.stencil(backend=backend)
+    def definition(field_a: gtscript.Field[np.float_]):
+        with computation(PARALLEL), interval(...):
+            field_c = 0.0

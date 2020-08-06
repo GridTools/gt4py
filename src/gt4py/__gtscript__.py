@@ -24,4 +24,5 @@ import sys
 
 from gt4py.gtscript import *
 
+
 sys.modules["__gtscript__"] = sys.modules["gt4py.__gtscript__"]

@@ -14,18 +14,20 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from itertools import count, product
 import sys
+from itertools import count, product
 
 import pytest
 
 import gt4py as gt
+import gt4py.definitions as gt_definitions
 from gt4py import gtscript
 from gt4py import storage as gt_storage
-import gt4py.definitions as gt_definitions
 from gt4py.stencil_object import StencilObject
+
 from .input_strategies import *
 from .utils import *
+
 
 counter = count()
 RTOL = 1e-05
@@ -398,10 +400,17 @@ class StencilTestSuite(metaclass=SuiteMeta):
         assert isinstance(implementation, StencilObject)
         assert implementation.backend == test["backend"]
 
-        assert all(
-            field_info.boundary == cls.global_boundaries[name]
-            for name, field_info in implementation.field_info.items()
-        )
+        # Assert strict equality for Dawn backends
+        if implementation.backend.startswith("dawn"):
+            assert all(
+                field_info.boundary == cls.global_boundaries[name]
+                for name, field_info in implementation.field_info.items()
+            )
+        else:
+            assert all(
+                field_info.boundary >= cls.global_boundaries[name]
+                for name, field_info in implementation.field_info.items()
+            )
 
         test["implementations"].append(implementation)
 

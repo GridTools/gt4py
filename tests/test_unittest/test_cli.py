@@ -4,8 +4,7 @@ import re
 import pytest
 from click.testing import CliRunner
 
-from gt4py import cli
-from gt4py import backend
+from gt4py import backend, cli
 
 
 @pytest.fixture

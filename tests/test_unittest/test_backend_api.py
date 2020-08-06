@@ -1,7 +1,7 @@
 import pytest
 
 import gt4py
-from gt4py.gtscript import Field, computation, interval, PARALLEL
+from gt4py.gtscript import PARALLEL, Field, computation, interval
 
 
 @pytest.fixture(

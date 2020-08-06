@@ -14,8 +14,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+# Disable isort to avoid circular imports
+# isort: off
 from .base import *
 
-from . import attrib
-from . import meta
-from . import text
+# isort: on
+
+from . import attrib, meta, text

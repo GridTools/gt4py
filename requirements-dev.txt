@@ -1,7 +1,9 @@
-check-manifest
-flake8
-pre-commit~=1.18.3
+check-manifest>=0.40
+flake8~=3.8
+isort~=5.1
+pre-commit~=1.18
 setuptools>=40.8.0
-sphinx~=2.0.0
-sphinx_rtd_theme~=0.4.2
+seed-isort-config~=2.1
+sphinx~=2.0
+sphinx_rtd_theme~=0.4
 tox~=3.14
