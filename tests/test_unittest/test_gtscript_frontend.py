@@ -48,10 +48,14 @@ def compile_definition(
     )
 
     options_id = gt_utils.shashed_id(build_options)
-    frontend.get_stencil_id(build_options.qualified_name, definition_func, externals, options_id)
-    return gt_frontend.GTScriptParser(
+    stencil_id = frontend.get_stencil_id(
+        build_options.qualified_name, definition_func, externals, options_id
+    )
+    definition_ir = gt_frontend.GTScriptParser(
         definition_func, externals=externals or {}, options=build_options
     ).run()
+
+    return stencil_id, definition_ir
 
 
 # ---- Tests-----
@@ -482,6 +486,57 @@ class TestAssignmentSyntax:
                 in_field /= 0.5
                 in_field *= 4.0
 
+class TestNestedWithSyntax:
+    def test_nested_with(self):
+        @gtscript.stencil(backend="debug")
+        def definition(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL):
+                with interval(...):
+                    in_field = out_field
+
+    def test_nested_with_reordering(self):
+        def definition_fw(
+            in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
+        ):
+            from gt4py.__gtscript__ import FORWARD, computation, interval
+
+            with computation(FORWARD):
+                with interval(1, 2):
+                    in_field = out_field + 1
+                with interval(0, 1):
+                    in_field = out_field + 2
+
+        def definition_bw(
+            in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
+        ):
+            from gt4py.__gtscript__ import FORWARD, computation, interval
+
+            with computation(BACKWARD):
+                with interval(1, 2):
+                    in_field = out_field + 1
+                with interval(0, 1):
+                    in_field = out_field + 2
+
+        definitions = [
+            # name, expected axis bounds, definition
+            ("fw", [(0, 1), (1, 2)], definition_fw),
+            ("bw", [(1, 2), (0, 1)], definition_bw),
+        ]
+
+        for name, axis_bounds, definition in definitions:
+            # generate DIR
+            _, definition_ir = compile_definition(
+                definition,
+                f"test_nested_with_reordering_{name}",
+                f"TestImports_test_module_{id_version}",
+            )
+
+            # test for correct ordering
+            for i, axis_bound in enumerate(axis_bounds):
+                interval = definition_ir.computations[i].interval
+                assert interval.start.offset == axis_bound[0]
+                assert interval.end.offset == axis_bound[1]
+
 
 class TestRegions:
     def test_on_interval_only(self):
@@ -494,7 +549,7 @@ class TestRegions:
             with computation(PARALLEL), interval(...), parallel(region[i0 : 1 + ie, :]):
                 in_f = 1.0
 
-        def_ir = compile_definition(stencil, "stencil", module, externals=externals)
+        stencil_id, def_ir = compile_definition(stencil, "stencil", module, externals=externals)
 
         assert len(def_ir.computations) == 1
         assert def_ir.computations[0].parallel_interval is not None
@@ -511,7 +566,7 @@ class TestRegions:
                 with parallel(region[i0 : 1 + ie, :], region[:, j0 : 1 + je]):
                     in_f = 1.0
 
-        def_ir = compile_definition(stencil, "stencil", module, externals=externals)
+        stencil_id, def_ir = compile_definition(stencil, "stencil", module, externals=externals)
 
         assert len(def_ir.computations) == 3
         assert def_ir.computations[0].parallel_interval is None
@@ -532,7 +587,7 @@ class TestRegions:
                 with parallel(region[:, j0 : 1 + je]):
                     in_f = 2.0
 
-        def_ir = compile_definition(stencil, "stencil", module, externals=externals)
+        stencil_id, def_ir = compile_definition(stencil, "stencil", module, externals=externals)
 
         assert len(def_ir.computations) == 3
         assert def_ir.computations[0].parallel_interval is None
