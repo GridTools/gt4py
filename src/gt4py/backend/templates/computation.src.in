@@ -89,12 +89,21 @@ using data_store_t =
     gt::storage_traits<backend_t>::data_store_t<T, storage_info_t<Id>>;
 
 // Placeholder definitions
+{% set arg_counter = 0 -%}
 {%- for field in arg_fields %}
-using p_{{ field.name }} = gt::arg<{{ loop.index0 }}, data_store_t<{{ field.dtype }}, {{ field.layout_id }}>>;
+using p_{{ field.name }} = gt::arg<{{ arg_counter + loop.index0 }}, data_store_t<{{ field.dtype }}, {{ field.layout_id }}>>;
 {%- endfor %}
+{% set arg_counter = arg_counter + arg_fields|length %}
 {% for param in parameters %}
-using p_{{ param.name }} = gt::arg<{{ loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
+using p_{{ param.name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
 {%- endfor %}
+{% set arg_counter = arg_counter + parameters|length %}
+{% if tmp_fields -%}
+{%- for field in tmp_fields %}
+using p_{{ field.name }} = gt::tmp_arg<{{ arg_counter + loop.index0 }}, data_store_t<{{ field.dtype }}, 0>>;
+{%- endfor %}
+{% set arg_counter = arg_counter + tmp_fields|length %}
+{%- endif %}
 
 // Computation
 using computation_t =
@@ -146,13 +155,6 @@ auto make_grid(const std::array<gt::uint_t, 3>& compute_domain_shape) {
                          make_halo_descriptor(compute_domain_shape[1]),
                          axis_t(compute_domain_shape[2]));
 }
-
-{% if tmp_fields -%}
-// Placeholder definitions
-{%- for field in tmp_fields %}
-using p_{{ field.name }} = gt::tmp_arg<{{ loop.index0 }}, data_store_t<{{ field.dtype }}, 0>>;
-{%- endfor %}
-{%- endif %}
 
 
 template<typename T, int Id>
