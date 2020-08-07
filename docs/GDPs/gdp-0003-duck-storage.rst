@@ -166,8 +166,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
 
         + :code:`shape: Sequence[int]`
           Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
-          shape of the storage, that is, the full addressable space in the allocated memory buffer.
-          (See also Section :ref:`domain_and_halo`)
+          shape of the storage.
 
     For common keyword-only arguments, please see below.
 
@@ -200,8 +199,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
 
         + :code:`shape: Sequence[int]`
           Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
-          shape of the storage, that is, the full addressable space in the allocated memory buffer.
-          (See also Section :ref:`domain_and_halo`)
+          shape of the storage.
 
         For common keyword-only arguments, please see below.
 
@@ -235,8 +233,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
 
         + :code:`shape: Sequence[int]`
           Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
-          shape of the storage, that is, the full addressable space in the allocated memory buffer.
-          (See also Section :ref:`domain_and_halo`)
+          shape of the storage.
 
     For common keyword-only arguments, please see below.
 
@@ -272,8 +269,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
 
         + :code:`shape: Sequence[int]`
           Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
-          shape of the storage, that is, the full addressable space in the allocated memory buffer.
-          (See also Section :ref:`domain_and_halo`)
+          shape of the storage.
 
     For common keyword-only arguments, please see below.
 
@@ -351,16 +347,15 @@ The definitions of the common parameters accepted by all the previous functions 
     :code:`np.float64`.
 
 :code:`shape: Sequence[int]`
-    Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the shape
-    of the storage, that is, the full addressable space in the allocated memory buffer. (See also
-    Section :ref:`domain_and_halo`)
+    Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
+    shape of the storage.
 
 Additionally, these **optional** keyword-only parameters are accepted:
 
 :code:`aligned_index: Sequence[int]`
     The index of the grid point to which the memory is aligned. Note that this only partly takes the
-    role of the former :code:`default_origin` parameter, since part of the functionality is now
-    taken over by the :code:`halo` attribute.
+    role of the former :code:`default_origin` parameter, since it does not imply anything about the
+    origin or domain when passed to a stencil.
 
 :code:`alignment_size: Optional[int]`
     The buffers are allocated such that :code:`mod(aligned_addr, alignment_size) == 0`, where
@@ -379,26 +374,18 @@ Additionally, these **optional** keyword-only parameters are accepted:
     Indicates whether the storage should contain a buffer on an accelerator device. Currently it
     only accepts :code:`"gpu"` or :code:`None`. Defaults to :code:`None`.
 
-:code:`halo: Optional[Sequence[Union[int, Tuple[int, int]]]`
-    Sequence of length :code:`ndim` where each entry is either an :code:`int` or a 2-tuple
-    of :code:`int` s. A sequence of integer numbers represent a symmetric halo with the specific
-    size per dimension, while a sequence of 2-tuple specifies the start and end boundary sizes on
-    the respective dimension, which can be used to denote asymmetric halos. It defaults to no halo,
-    i.e. :code:`(0, 0, 0)`. (See also Section :ref:`domain_and_halo`)
-
-:code:`layout: Optional[str]`
-    A length- string with the name of axes. The sequence indicates the order of strides in
-    decreasing order, i.e. the first entry in the sequence corresponds to the axis with the largest
-    stride. The layout map is always of length 3. The default value is "IJK".
+:code:`layout: Optional[Sequence[int]]`
+    A permutation of integers in :code:`[0 .. ndim]`. It indicates the order of strides in
+    ascending order. I.e. "0" indicates that the stride in that dimension is 0, while the largest
+    entry in the sequence corresponds to the axis with the largest stride.
 
     Default values as indicated by the :code:`defaults` parameter may depend on the axes. E.g. if
     :code:`defaults` is any of the compiled GridTools backends, the default value is defined
     according to the semantic meaning of each dimension. For example for the :code:`"gtx86"`
-    backend, the layout is always IJK, meaning the smallest stride is in the K dimension,
-    independently which index corresponds to the K dimension. On the other hand, we assume that if a
-    storage is created from an existing FORTRAN array, the first index has the smallest stride,
-    irrespective of its corresponding axis. I.e. the first index has the smallest stride in FORTRAN
-    for both IJK and KJI storages.
+    backend, the unit stride is always in the K dimension, independently of which index corresponds
+    to the K dimension. On the other hand, we assume that if a storage is created from an existing
+    FORTRAN array, the first index has the smallest stride, irrespective of its corresponding axis.
+    I.e. the layout of a 3d storage is always :code:`(0, 1, 2)` for both IJK and KJI storages.
 
     .. list-table:: Default :code:`layout` parameter when given :code:`defaults` and :code:`axes`
        :header-rows: 1
@@ -411,25 +398,20 @@ Additionally, these **optional** keyword-only parameters are accepted:
          - :code:`defaults="gtcuda"`
 
        * - :code:`axes="IJK"`
-         - :code:`layout="KJI"`
-         - :code:`layout="IJK"`
-         - :code:`layout="IJK"`
-         - :code:`layout="KJI"`
+         - :code:`layout=(0, 1, 2)`
+         - :code:`layout=(2, 1, 0)`
+         - :code:`layout=(2, 1, 0)`
+         - :code:`layout=(0, 1, 2)`
 
        * - :code:`axes="KJI"`
-         - :code:`layout="IJK"`
-         - :code:`layout="KJI"`
-         - :code:`layout="IJK"`
-         - :code:`layout="KJI"`
+         - :code:`layout=(0, 1, 2)`
+         - :code:`layout=(2, 1, 0)`
+         - :code:`layout=(0, 1, 2)`
+         - :code:`layout=(2, 1, 0)`
 
     The rationale behind this is that in this way, storages allocated with :code:`defaults` set to a
     backend will always get optimal performance, while :code:`defaults` set to :code:`"F"` or
     :code:`"C"` will have expected behavior when wrapping FORTRAN or C buffers, respectively.
-
-    The :code:`layout` parameter always has to be of length 3, so that in the case a storage is 1 or
-    2-dimensional, the place of the missing dimension is known. In this way, the result of ufunc's
-    involving only storages that were allocated for a certain backend, will always again result in
-    compatible storages. (See also Section :ref:`output_storage_parameters`)
 
 :code:`managed: Optional[str]`
     :code:`None`, :code:`"gt4py"` or :code:`"cuda"`. It only has effect if :code:`device="gpu"` and
@@ -447,25 +429,6 @@ first alternative source where the parameter is defined in the following search 
 
 
 .. _domain_and_halo:
-
-Storage Domain and Halo
-^^^^^^^^^^^^^^^^^^^^^^^
-
-Semantically, the :code:`halo` parameter is just a convenient marker for users to delimit the
-expected inner domain part. This separation is used to infer the compute domain when calling
-stencils, unless an origin and domain are explicitly specified. Further, the domain can be accessed
-in the storage through the :code:`domain_view` attribute of the storage. The result is again a
-storage but without the halo, such that the index :code:`storage.domain[0, 0, 0]` refers to a corner
-of the inner domain denoted by the halo.
-
-The halo can be changed after allocation by assigning to :code:`storage.halo` using the same values
-as in the :code:`halo` parameter above.
-
-The halo passed when allocating is used as a hint for alignment. If no :code:`aligned_index` is
-explicitly specified, the lower indices of the :code:`halo` parameter are used to align the memory
-which, when coinciding with the origin when calling stencils, potentially has performance benefits.
-When changing the halo after allocation, this has however no impact on the alignment and it is in
-general best to specify the same halo that is used in the computations already when allocating.
 
 Storage Attributes and NumPy API functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -524,11 +487,6 @@ Attributes and Properties
     at creation time. Note that this only partly takes the role of the former :code:`default_origin`
     parameter, since part of the functionality is now taken over by the :code:`halo` attribute.
 
-:code:`axes: str`
-    Domain axes represented in the current instance, e.g. :code:`"JI"` for a 2d field spanning
-    longitude and latitude but not the vertical, where the first index corresponds to the "J"
-    axis.
-
 :code:`data: Optional[memoryview]`
     If the instance contains a host memory buffer, the :code:`data` attribute of the underlying
     :code:`np.ndarray` instance backing the host memory buffer, :code:`None` otherwise.
@@ -545,23 +503,12 @@ Attributes and Properties
     If the instance contains a device memory buffer, the :code:`flags` attribute of the underlying
     :code:`cp.ndarray` instance backing the device memory buffer, :code:`None` otherwise.
 
-:code:`domain_view: Storage`
-    A view of the buffer with the halo removed. In the returned view instance, the index
-    :code:`[0, 0, 0]` corresponds to the first point in the domain.
-
 :code:`dtype: np.dtype`
    The NumPy :code:`dtype` of the storage.
 
 :code:`flags: Optional[np.flagsobj]`
     If the instance contains a host memory buffer, the :code:`flags` attribute of the underlying
     :code:`np.ndarray` instance backing the host memory buffer, :code:`None` otherwise.
-
-:code:`halo: Tuple[Tuple[int, int], ...]`
-    A tuple of length :code:`ndim` with entries which are 2-tuples of ints. Specifies the start and
-    end boundary sizes on the respective dimension. This property can be modified at run-time and
-    therefore has a corresponding setter, where values of the type
-    :code:`Tuple[Union[int,Tuple[int, int]], ...]` are accepted with the same meaning as for the
-    :code:`halo` parameter of the storage creation functions.
 
 :code:`nbytes: int`,
     Size of the buffer in bytes (excluding padding).
@@ -570,17 +517,17 @@ Attributes and Properties
     Number of allocated dimensions.
 
 :code:`shape: Tuple[int, ...]`
-    The shape of the buffer, i.e., a tuple of length :code:`ndim` with entries corresponding
-    to the axes indicated by :code:`axes`.
+    The shape of the buffer, i.e., a tuple of length :code:`ndim` with entries corresponding to the
+    axes indicated by :code:`axes`.
 
 :code:`strides: Tuple[int, ...]`
-    The strides of the buffer, i.e., a tuple of length :code:`ndim` with entries corresponding
-    to the axes indicated by :code:`axes`.
+    The strides of the buffer, i.e., a tuple of length :code:`ndim` with entries corresponding to
+    the axes indicated by :code:`axes`.
 
 :code:`sync_state: gt4py.storage.SyncState`
-    Indicates which buffer is currently modified in case of a :code:`SoftwareManagedGPUStorage`.
-    For more details on :code:`gt4py.storage.SyncState`, see :ref:`sync_state`.
-    Only an attribute of the :code:`SoftwareManagedGPUStorage` storage.
+    Indicates which buffer is currently modified in case of a :code:`SoftwareManagedGPUStorage`. For
+    more details on :code:`gt4py.storage.SyncState`, see :ref:`sync_state`. Only an attribute of the
+    :code:`SoftwareManagedGPUStorage` storage.
 
 Methods
 =======
@@ -596,12 +543,6 @@ Methods
     Get a value at a certain index, a storage view of a subregion of the underlying buffer or
     a ndarray of values at selected locations.
 
-    In case of those keys described as "Advanced Indexing" in the
-    `NumPy Indexing <https://numpy.org/doc/stable/reference/arrays.indexing.html>`_ page, the
-    result will be a linear 1-d array without any reference to spatial dimensions like in
-    fields. Since returning a Storage in this case would be misleading, the result is a CuPy
-    ndarray if the storage is GPU enabled, or a NumPy ndarray otherwise.
-
     Otherwise, i.e. in the case of "Basic Indexing", axes for which a single index is selected
     are removed from :code:`axes` in the returned Storage, while slices do not reduce
     dimensionality.
@@ -609,43 +550,23 @@ Methods
     Parameters:
         + :code:`key: index_like` Indicates the indices from which the data of the storage is to be
           returned. The same keys as in
-          `NumPy Indexing <https://numpy.org/doc/stable/reference/arrays.indexing.html>`_
-          are allowed, with the addition that
-
-          + keys can be :code:`cp.ndarrays` whenever a :code:`np.ndarray` is valid or
-
-          + a boolean or integer GT4Py storage with the same shape as :code:`self` (possibly with
-            permuted axes).
+          `NumPy Indexing <https://numpy.org/doc/stable/reference/arrays.indexing.html>`_ are
+          allowed, with the addition that keys can be any object implementing the interfaces
+          discussed in this proposal whenever a :code:`np.ndarray` is valid.
 
 
 :code:`__setitem__(self: Storage, key: key_like, Value) -> None`
     Set the data of the storage at a certain index, in a subregion or
-    at selected locations of the underlying buffer
+    at selected locations of the underlying buffer.
 
-    The :ref:`broadcasting` behavior and device selection are equivalent to that of a unary ufunc
-    with a provided output buffer. For example, :code:`stor_out[key] = stor2d` would be
-    equivalent to :code:`np.positive(stor2d, out=stor_out[key]`)
-
-    Parameters:
         + :code:`key: index_like` Indicates the locations at which the values are to be changed. The
-          same keys as for :code:`__setitem__` are supported.
+          same keys as for :code:`__getitem__` are supported.
 
-        + :code:`value: Union[Number, Storage, cp.ndarray, np.ndarray]` the values that are copied
-          to the storage at the locations indicated by :code:`key`.
+        + :code:`value: Union[Number, array_like]` the values that are copied to the storage at the
+          locations indicated by :code:`key`.
 
 :code:`copy(self: Storage) -> Storage`
     Create a new Storage instance with the same parameters as this instance and a copy of the data.
-
-:code:`reinterpret(self, axes) -> Storage`
-    Parameters:
-        + :code:`axes: Sequence[str]` the axes of the resulting storage
-
-    A view of the buffer, with the axes relabeled according to :code:`axes`. The behavior seems
-    similar to transpose, however the shape and strides remain unchanged, meaning that not only the
-    order of indexing changes, but also the semantic meaning attached to the data. For example, if
-    :code:`self` is an IJK-storage with :code:`shape==(10,20,30)`, and we call
-    :code:`self.reinterpret("KJI")`, a KJI-storage with the same shape as before is returned,
-    meaning that e.g. the size in the K-dimension will change from 30 to 10 in the result.
 
 :code:`to_cupy(self: Storage) -> cp.ndarray`
     Return a view of the underlying device buffer (CuPy :code:`ndarray`) if present or raise a
@@ -724,21 +645,6 @@ performed as a string.
 In the following subsections we describe the proposed behaviour for GT4Py storages when used in
 conjuction with NumPy ufuncs.
 
-.. _broadcasting:
-
-Broadcasting
-============
-
-With the term "broadcasting", NumPy describes the ways that different shapes are combined in
-assignments and mathematical operations. GT4Py storages should override the default NumPy behavior
-so that fields are broadcast along the same spatial dimension. For example, adding an :code:`IJ`
-field :code:`A` of shape :code:`(2, 3)` with a :code:`K` field :code:`B` of shape :code:`(4,)` will
-result in an :code:`IJK` field :code:`C` of shape :code:`(2, 3, 4)`, with `C[i,j,k] = A[i,j]+B[k]`.
-
-Similarly, fields of lower dimension are assigned to such of higher dimension by broadcasting along
-the missing axes. To keep compatibility with NumPy, dimensions of size 1 are treated like missing
-axes when broadcasting.
-
 .. _output_storage_parameters:
 
 Output Storage Parameters
@@ -748,42 +654,20 @@ If no output buffer is provided, the constructor parameters of the output storag
 inferred using the available information from the inputs.
 
 :code:`aligned_index`
-    It is chosen to be as the largest value per dimension across all inputs which are a GT4Py
-    Storage.
+    It is chosen to be as the largest value per dimension of the broadcast shape across all inputs
+    which are a GT4Py Storage.
 
 :code:`alignment_size`
    The resulting alignment is chosen as the least common multiple of the alignments of all inputs
    which are a GT4Py storage.
 
-:code:`axes`
-    If the :code:`axes` parameters of all operands agree, the output will have the same
-    :code:`axes`. Otherwise, if one input contains all axes of the other input, that input
-    determines the axes of the output. If none of these conditions are met, axes are chosen as the
-    union of all input storages. Their order will then be a sub-sequence of "IJK".
-
 :code:`dtype`
    The resulting dtype is determined by NumPy behavior.
 
-:code:`halo`
-    It is chosen such that the resulting inner domain, i.e. the part not in the halo, is the
-    intersection of all individual inner domains of the inputs. In other words, the resulting halo
-    is the maximum of all input halos per dimension and edge.
-
 :code:`layout`
-    The layout is chosen as the layout of the first input argument which is a GT4Py Storage
-
-
-Mixing Types
-============
-
-If a binary `ufunc` is applied to a storage and a non-storage array, the storage determines the
-behavior. Since non-storage arrays do not carry the necessary information to apply the usual
-broadcasting rules, we only implement the cases where:
-
-* the array has the same shape as the input storage or as the broadcast shape when considering a
-  provided output buffer
-
-* the array has a 3d shape where dimensions with shape :code:`1` in the array are broadcast.
+    The layout is chosen as the layout of the first input argument which is a GT4Py Storage and has
+    the same shape as the broadcast shape. If no such storage is present, the layout defaults to
+    C-layout, i.e. descending strides.
 
 Mixing Devices
 ==============
@@ -805,7 +689,7 @@ We assume that mixing these in the same application is not a common case. Should
 appear, the object that handles the ufunc will determine the behavior. (Where each of the classes
 will treat the other as on GPU.)
 
-For pure CPU storages, all inputs and output need to be compatible with `np.asarray`, for GPU
+For pure CPU storages, all inputs and outputs need to be compatible with `np.asarray`, for GPU
 storages with `cp.asarray`, otherwise an exception is raised.
 
 :code:`CudaManagedGPUStorage` and :code:`SoftwareManagedGPUStorage` shall both have a
@@ -814,6 +698,7 @@ is set to :code:`10`, meaning that managed storages have priority in handling th
 
 Implementation
 --------------
+
 Operators and `ufuncs` are handled by inheriting from :code:`numpy.NDArrayOperatorsMixin` and
 implementing the :code:`__array_ufunc__` interface. The internal implementation of the
 :code:`__array_ufunc__` will determine the proper broadcasting, output shape and compute device,
@@ -880,6 +765,10 @@ We believe the former to be non-controversial since it follows NumPy conventions
 implementation strategy, the only viable alternative could be to implement GT4Py storages as a
 NumPy `ndarray` subclass as in the current implementation. Due to the issues mentioned in the
 introduction, we consider that this strategy imposes more limitations than using `duck typing`.
+
+.. TODO: high level storage as alternative
+
+.. TODO: examples
 
 Copyright
 ---------
