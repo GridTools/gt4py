@@ -419,6 +419,9 @@ class RegionExtractor(ast.NodeVisitor):
     def visit_Constant(self, node: ast.Constant):
         return (None, int(node.value))
 
+    def visit_Num(self, node: ast.Num):
+        return (None, int(node.n))
+
     def visit_BinOp(self, node: ast.BinOp):
         left_level, left_offset = self.visit(node.left)
         right_level, right_offset = self.visit(node.right)
