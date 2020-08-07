@@ -28,6 +28,7 @@ from gt4py.utils.attrib import List as ListOf
 from gt4py.utils.attrib import Optional
 from gt4py.utils.attrib import Set as SetOf
 from gt4py.utils.attrib import Tuple as TupleOf
+from gt4py.utils.attrib import Union as UnionOf
 from gt4py.utils.attrib import attribclass, attribute
 
 
@@ -75,8 +76,8 @@ class IntervalInfo:
         End level and offset (not included)
     """
 
-    start = attribute(of=TupleOf[int, int])
-    end = attribute(of=TupleOf[int, int])
+    start = attribute(of=TupleOf[UnionOf[int, gt_ir.VarRef, gt_ir.LevelMarker], int])
+    end = attribute(of=TupleOf[UnionOf[int, gt_ir.VarRef, gt_ir.LevelMarker], int])
 
     def as_tuple(self, k_interval_sizes: list) -> NumericTuple:
         start = sum(k_interval_sizes[: self.start[0]]) + self.start[1]
@@ -139,12 +140,15 @@ class IntervalBlockInfo:
         ComputeUnitInfo Id.
     interval : int
         IntervalInfo Id.
+    parallel_interval : `list` [`IntervalInfo`]
+        The parallel interval used for all ij_blocks.
     stmts : `list` [`gridtools.ir.Statement`]
         List of operations in the regional computation.
     """
 
     id = attribute(of=int)
     interval = attribute(of=IntervalInfo)
+    parallel_interval = attribute(of=ListOf[IntervalInfo], optional=True)
     stmts = attribute(of=ListOf[StatementInfo], factory=list)
     inputs = attribute(of=DictOf[str, Extent], factory=dict)
     outputs = attribute(of=SetOf[str], factory=set)
@@ -160,12 +164,15 @@ class IJBlockInfo:
         ComputeUnitInfo Id.
     interval : int
         IntervalInfo Id.
+    parallel_interval : `list` [`IntervalInfo`]
+        The parallel interval used for all ij_blocks.
     stmts : `list` [`gridtools.ir.Statement`]
         List of operations in the regional computation.
     """
 
     id = attribute(of=int)
     intervals = attribute(of=SetOf[IntervalInfo])
+    parallel_interval = attribute(of=ListOf[IntervalInfo], optional=True)
     interval_blocks = attribute(of=ListOf[IntervalBlockInfo], factory=list)
     inputs = attribute(of=DictOf[str, Extent], factory=dict)
     outputs = attribute(of=SetOf[str], factory=set)
@@ -182,6 +189,8 @@ class DomainBlockInfo:
         ComputeUnitInfo Id.
     interval : int
         IntervalInfo Id.
+    parallel_interval : `list` [`IntervalInfo`]
+        The parallel interval used for all ij_blocks.
     stmts : `list` [`gridtools.ir.Statement`]
         List of operations in the regional computation.
     """
@@ -189,6 +198,7 @@ class DomainBlockInfo:
     id = attribute(of=int)
     iteration_order = attribute(of=gt_ir.IterationOrder)
     intervals = attribute(of=SetOf[IntervalInfo])
+    parallel_interval = attribute(of=ListOf[IntervalInfo], optional=True)
     ij_blocks = attribute(of=ListOf[IJBlockInfo], factory=list)
     inputs = attribute(of=DictOf[str, Extent], factory=dict)
     outputs = attribute(of=SetOf[str], factory=set)

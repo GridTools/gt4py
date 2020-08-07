@@ -61,6 +61,31 @@ class IntervalSpecificationError(IRSpecificationError):
         self.interval = interval
 
 
+def _make_parallel_interval_info(parallel_interval):
+    """Create a list of IntervalInfos from a list of AxisIntervals."""
+    if parallel_interval is None:
+        return None
+    else:
+        return [
+            IntervalInfo(
+                start=(interval.start.level, interval.start.offset),
+                end=(interval.end.level, interval.end.offset),
+            )
+            for interval in parallel_interval
+        ]
+
+
+def _make_parallel_interval_from_info(parallel_interval_info):
+    """Create a list of AxisInterval from list of IntervalInfos."""
+    return [
+        gt_ir.AxisInterval(
+            start=gt_ir.AxisBound(level=interval_info.start[0], offset=interval_info.start[1]),
+            end=gt_ir.AxisBound(level=interval_info.end[0], offset=interval_info.end[1]),
+        )
+        for interval_info in parallel_interval_info
+    ]
+
+
 class InitInfoPass(TransformPass):
 
     _DEFAULT_OPTIONS = {"redundant_temp_fields": False}
@@ -84,7 +109,7 @@ class InitInfoPass(TransformPass):
 
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
             # Add API symbols first
-            for decl in itertools.chain(node.api_fields, node.parameters):
+            for decl in itertools.chain(node.api_fields, node.parameters, node.splitters):
                 self._add_symbol(decl)
 
             # Build the information tables
@@ -286,7 +311,10 @@ class InitInfoPass(TransformPass):
 
         def visit_ComputationBlock(self, node: gt_ir.ComputationBlock):
             interval = next(iter(self.current_block_info.intervals))
-            interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
+            parallel_interval = self.current_block_info.parallel_interval
+            interval_block = IntervalBlockInfo(
+                self.data.id_generator.new, interval, parallel_interval
+            )
 
             assert node.body.stmts  # non-empty computation
             stmt_infos = [
@@ -332,7 +360,11 @@ class InitInfoPass(TransformPass):
             assert node.computations  # non-empty definition
             for computation, interval in zip(node.computations, self.computation_intervals):
                 self.current_block_info = DomainBlockInfo(
-                    self.data.id_generator.new, computation.iteration_order, {interval}, []
+                    id=self.data.id_generator.new,
+                    iteration_order=computation.iteration_order,
+                    intervals={interval},
+                    parallel_interval=_make_parallel_interval_info(computation.parallel_interval),
+                    ij_blocks=[],
                 )
                 self.visit(computation)
                 self.data.blocks.append(self.current_block_info)
@@ -342,6 +374,7 @@ class InitInfoPass(TransformPass):
                 self.data.id_generator.new,
                 {interval},
                 interval_blocks=[interval_block],
+                parallel_interval=interval_block.parallel_interval,
                 inputs={**interval_block.inputs},
                 outputs=set(interval_block.outputs),
                 compute_extent=self.zero_extent,
@@ -407,28 +440,32 @@ class NormalizeBlocksPass(TransformPass):
                     for interval_block in ij_block.interval_blocks:
                         for stmt_info in interval_block.stmts:
                             interval = interval_block.interval
+                            parallel_interval = interval_block.parallel_interval
                             new_interval_block = IntervalBlockInfo(
-                                transform_data.id_generator.new,
-                                interval,
-                                [stmt_info],
-                                stmt_info.inputs,
-                                stmt_info.outputs,
+                                id=transform_data.id_generator.new,
+                                interval=interval,
+                                parallel_interval=parallel_interval,
+                                stmts=[stmt_info],
+                                inputs=stmt_info.inputs,
+                                outputs=stmt_info.outputs,
                             )
                             new_ij_block = IJBlockInfo(
-                                transform_data.id_generator.new,
-                                {interval},
-                                [new_interval_block],
-                                {**new_interval_block.inputs},
-                                set(new_interval_block.outputs),
+                                id=transform_data.id_generator.new,
+                                intervals={interval},
+                                parallel_interval=parallel_interval,
+                                interval_blocks=[new_interval_block],
+                                inputs={**new_interval_block.inputs},
+                                outputs=set(new_interval_block.outputs),
                                 compute_extent=zero_extent,
                             )
                             new_block = DomainBlockInfo(
-                                transform_data.id_generator.new,
-                                block.iteration_order,
-                                set(new_ij_block.intervals),
-                                [new_ij_block],
-                                {**new_ij_block.inputs},
-                                set(new_ij_block.outputs),
+                                id=transform_data.id_generator.new,
+                                iteration_order=block.iteration_order,
+                                intervals=set(new_ij_block.intervals),
+                                parallel_interval=parallel_interval,
+                                ij_blocks=[new_ij_block],
+                                inputs={**new_ij_block.inputs},
+                                outputs=set(new_ij_block.outputs),
                             )
                             blocks.append(new_block)
             else:
@@ -509,7 +546,9 @@ class MergeBlocksPass(TransformPass):
         iteration_order: gt_ir.IterationOrder,
     ):
         # Check that the two stages have the same compute extent
-        if not (target.compute_extent == candidate.compute_extent):
+        if not (target.compute_extent == candidate.compute_extent) or not (
+            target.parallel_interval == candidate.parallel_interval
+        ):
             return False
 
         result = True
@@ -792,6 +831,7 @@ class BuildIIRPass(TransformPass):
 
             apply_block = gt_ir.ApplyBlock(
                 interval=self._make_axis_interval(int_block.interval),
+                parallel_interval=_make_parallel_interval_from_info(int_block.parallel_interval),
                 local_symbols=local_symbols,
                 body=gt_ir.BlockStmt(stmts=stmts),
             )

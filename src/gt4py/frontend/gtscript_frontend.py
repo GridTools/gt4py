@@ -412,28 +412,34 @@ class RegionExtractor(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name):
         if node.id not in self.splitters:
             raise GTScriptSyntaxError(
-                "Name is not a defined splitter", loc=gt_ir.Location.from_ast_node(node)
+                f"{node.id} is not a defined splitter", loc=gt_ir.Location.from_ast_node(node)
             )
         return (gt_ir.VarRef(name=node.id), 0)
 
     def visit_Constant(self, node: ast.Constant):
         return (None, int(node.value))
 
+    def visit_Num(self, node: ast.Num):
+        return (None, int(node.n))
+
     def visit_BinOp(self, node: ast.BinOp):
         left_level, left_offset = self.visit(node.left)
         right_level, right_offset = self.visit(node.right)
-
-        if not isinstance(node.op, (ast.Add, ast.Sub)):
-            raise GTScriptSyntaxError(
-                "Only addition and subtraction are allowed operators on splitter values",
-                loc=gt_ir.Location.from_ast_node(node),
-            )
 
         if left_level and right_level and left_level != right_level:
             raise GTScriptSyntaxError("Cannot only use one splitter in each slice expression")
 
         level = left_level if left_level else right_level
-        offset = left_offset + right_offset
+
+        if isinstance(node.op, ast.Add):
+            offset = left_offset + right_offset
+        elif isinstance(node.op, ast.Sub):
+            offset = left_offset - right_offset
+        else:
+            raise GTScriptSyntaxError(
+                "Only addition and subtraction are allowed operators on splitter values",
+                loc=gt_ir.Location.from_ast_node(node),
+            )
 
         return (level, offset)
 
@@ -1331,6 +1337,19 @@ class GTScriptParser(ast.NodeVisitor):
 
         return result
 
+    @staticmethod
+    def _create_splitter_decls(computations):
+        splitter_names = set()
+        for comp in filter(lambda comp: comp.parallel_interval is not None, computations):
+            for interval in comp.parallel_interval:
+                for axis_bound in (interval.start, interval.end):
+                    if isinstance(axis_bound.level, gt_ir.VarRef):
+                        splitter_names.add(axis_bound.level.name)
+        return [
+            gt_ir.VarDecl(name=name, data_type=gt_ir.DataType.INT64, length=1, is_api=False)
+            for name in splitter_names
+        ]
+
     def extract_arg_descriptors(self):
         api_signature = self.definition._gtscript_["api_signature"]
         api_annotations = self.definition._gtscript_["api_annotations"]
@@ -1474,6 +1493,7 @@ class GTScriptParser(ast.NodeVisitor):
             ],
             computations=computations,
             externals=self.resolved_externals,
+            splitters=self._create_splitter_decls(computations),
             docstring=inspect.getdoc(self.definition) or "",
         )
 

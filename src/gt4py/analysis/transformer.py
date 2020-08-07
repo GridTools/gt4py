@@ -74,6 +74,7 @@ class IRTransformer:
             domain=definition_ir.domain,
             fields={},
             parameters={},
+            splitters=definition_ir.splitters,
             multi_stages=[],
             fields_extents={},
             unreferenced=[],

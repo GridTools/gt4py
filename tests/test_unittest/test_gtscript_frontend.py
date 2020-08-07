@@ -539,6 +539,21 @@ class TestRegions:
         assert def_ir.computations[1].parallel_interval is not None
         assert def_ir.computations[2].parallel_interval is not None
 
+    def test_error_undefined(self):
+        module = f"TestRegion_error_undefined_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            from __splitters__ import i0  # forget to add 'ia'
+
+            with computation(PARALLEL), interval(...):
+                in_f = in_f + 1.0
+                with parallel(region[i0 : 1 + ia, :]):
+                    in_f = 1.0
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Unknown symbol"):
+            compile_definition(stencil, "stencil", module, externals=externals)
+
     def test_error_nested(self):
         module = f"TestRegion_error_nested_{id_version}"
         externals = {}

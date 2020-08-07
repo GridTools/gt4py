@@ -135,6 +135,7 @@ storing a reference to the piece of source code which originated the node.
                       domain: Domain,
                       api_fields: List[FieldDecl],
                       parameters: List[VarDecl],
+                      splitters: List[VarDecl],
                       computations: List[ComputationBlock],
                       [externals: Dict[str, Any], sources: Dict[str, str]])
 
@@ -166,6 +167,7 @@ Implementation IR
                           domain: Domain,
                           fields: Dict[str, FieldDecl],
                           parameters: Dict[str, VarDecl],
+                          splitters: List[VarDecl],
                           multi_stages: List[MultiStage],
                           fields_extents: Dict[str, Extent],
                           unreferenced: List[str],
@@ -714,6 +716,7 @@ class StencilDefinition(Node):
     api_signature = attribute(of=ListOf[ArgumentInfo])
     api_fields = attribute(of=ListOf[FieldDecl])
     parameters = attribute(of=ListOf[VarDecl])
+    splitters = attribute(of=ListOf[VarDecl])
     computations = attribute(of=ListOf[ComputationBlock])
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
@@ -806,6 +809,7 @@ class StencilImplementation(IIRNode):
     domain = attribute(of=Domain)
     fields = attribute(of=DictOf[str, FieldDecl])  # All fields, including temporaries
     parameters = attribute(of=DictOf[str, VarDecl])
+    splitters = attribute(of=ListOf[VarDecl])
     multi_stages = attribute(of=ListOf[MultiStage])
     fields_extents = attribute(of=DictOf[str, Extent])
     unreferenced = attribute(of=ListOf[str], factory=list)
