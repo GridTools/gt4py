@@ -14,20 +14,24 @@ Abstract
 --------
 
 We propose to replace the current storage implementation by a new `storage` class hierarchy
-which does not inherit from NumPy `ndarray`. Further, the new storage classes shall introduce
-the possibility to be constructed from externally allocated memory buffers and provide more
-control over the underlying memory.
+which does not inherit from NumPy `ndarray`. But instead the also established `__array_interface__`
+and `__cuda_array_interface__` interfaces. These new storage classes shall also introduce the
+possibility to be constructed from externally allocated memory buffers and provide more control over
+the underlying memory.
 
+Further, we propose the :code:`__gt_data_interface__` attribute which can be added to any object to
+provide the necessary information about how it can be used as a field in gt4py stencils. We also
+propose to accept the established `__array_interface__` and `__cuda_array_interface__` interfaces
+if these provide all necessary information.
 
 Motivation and Scope
 --------------------
 
 In the current state of GT4Py, we implemented storages as subclasses of NumPy :code:`ndarrays`.
 Although this strategy is fully documented and supported by NumPy API, it presents some drawbacks
-such as the possibility of missing some buffer metadata under certain operations of the NumPy API.
-Further, some NumPy API calls cause one-sided changes to coupled host/device buffers managed by
-GT4Py storages (e.g. :code:`ExplicitlySyncedGPUStorage` class) which cannot be tracked reliably,
-resulting in validation errors which are hard to find and fix.
+such as that one-sided changes to coupled host/device buffers managed by
+GT4Py storages (e.g. :code:`ExplicitlySyncedGPUStorage` class) cannot be tracked reliably, resulting
+in validation errors which are hard to find and fix.
 
 The current implementation of GT4Py storages as :code:`ndarray` subclasses was needed to use
 storages transparently with third-party frameworks relying on NumPy :code:`ndarray` implementation
@@ -43,8 +47,24 @@ frameworks.
 Additionally, we propose to take this opportunity to improve the interaction with existing codes by
 allowing the initialization of storages from external buffers without requiring a copying operation.
 To use this feature, some additional information about the provided buffers needs to be specified to
-both the :code:`__init__` method of the storages as well to GT4Py stencils at compile time.
+both the :code:`__init__` method of the storages.
 
+Lastly, with the adaption of our storages to the generic array interfaces, we will also add support
+for third-party objects implementing said interfaces that can the be passed to the stencils
+directly. While these interfaces provide all information needed to understand a buffer as an
+n-dimensional array, this may not be enough for all use cases of GT4Py. For example, objects may
+hold buffers in both the main memory and on a GPU. In this case, updating the respective other after
+changes to one is a concern. Also, with coming developments to gt4py, the need to provide additional
+semantic information with the buffers will arise. For example, the dimensions will evolve away from
+only the :code:`"I"`, :code:`"J"` and :code:`"K"` axes which arise from indexing 3-dimensional
+fields on cartesian grids.
+
+We propose to resolve these limitations of the array interfaces by defining another property, the
+:code:`__gt_data_interface__`, which can be implemented by third-party objects. It shall summarize
+the buffer infos of multiple devices while also adding information about the semantic meaning of
+dimensions and function handles to interact with the object to address the concerns of data
+synchronization between devices. If only default array interfaces are implemented, these shall
+nevertheless work, with a well-defined default behavior.
 
 Backward Compatibility
 ----------------------
@@ -68,7 +88,6 @@ ideally, users can treat GT4Py Storages as regular NumPy arrays in their codes a
 same results. The specific cases where behavior may differ because of the limitations of the NumPy
 API or the GT4Py Storage requirements, should be mentioned here and in the GT4Py documentation.
 
-
 We chose to use internally NumPy and CuPy `ndarrays` to store CPU and GPU buffers, respectively,
 since they are standard and realiable components of the Python ecosystem. We rely on those libraries
 to implement part of the functionality, like mathematical operators, by forwarding the calls to
@@ -78,6 +97,55 @@ functionality is restricted to the common denominator of CuPy and NumPy.
 .. note:: In this document, references to NumPy and CuPy objects or functions use the standard
     shorted prefiex for these libraries, that is :code:`np.` for NumPy and :code:`cp.` for CuPy.
 
+Data Interface
+^^^^^^^^^^^^^^
+
+Objects implementing the data interface have the attribute :code:`__gt_data_interface__`. This
+attribute is a dictionary which maps `device identifiers` to a dictionary similar to those
+defined as the :code:`__array_interface__` and the :code:`__cuda_array_interface__`.
+
+A device identifier can be one of:
+
++ :code:`None` denoting a buffer in main memory
++ :code:`"gpu"` denoting a buffer on a GPU.
+
+The mapped dictionary in turn must contain the following keys and mapped objects of pairs. Their
+meaning is the same as in the NumPy :code:`__array_interface__` and the
+:code:`__cuda_array_interface__`:
+
++ :code:`"shape": Tuple[int, ...]`
++ :code:`"typestr": str`
++ :code:`"data": Tuple[int, bool]`
++ :code:`"strides": Tuple[int, ...]`
+
+In Addition, the following optional keys can be contained:
+
++ :code:`"dims": Optional[Sequence[str]]]` Specifies the semantic dimensions to which the
+  respective dimensions of the object correspond. Currently meaningful are :code:`"I"`,
+  :code:`"J"`, :code:`"K"`.
++ :code:`"acquire": Optional[Callable[[], Any]]` Is called on all objects that are passed to a
+  stencil, before running computations. It can be used to trigger a copy to the respective device.
+  If the key is not in the dictionary or if the value is :code:`None`, no action is taken.
++ :code:`"release": Optional[Callable[[], Any]]` Is called on all objects that are passed to a
+  stencil after all computations have completed. If the key is not in the dictionary or if the value
+  is :code:`None`, no action is taken.
++ :code:`"touch": Optional[Callable[[], Any]]` Is called on all objects for which the underlying
+  memory has been changed after all computations have completed. If the key is not in the dictionary
+  or if the value is :code:`None`, no action is taken.
+
+Note that other entries can be contained in these buffer info dictionaries, but they will not have
+any effect. It is therefore legal to forward the :code:`__array_interface__` or
+:code:`__cuda_array_interface__` of NumPy and CuPy ndarrays, respectively.
+
+If the passed object does not have the :code:`__gt_data_interface__` attribute, the
+:code:`__array_interface__` and :code:`__cuda_array_interface__` attributes will be treated as
+descriptions of main memory or gpu buffers, respectively.
+
+Each backend is compiled for computation on either cpu or gpu. When calling the stencil, will use
+the buffer on the same device as the computation is to be performed. If no such buffer is present,
+but a buffer is present on the respective other device, the other buffer will be copied to a newly
+allocated buffer on the compute device and copied back after successful completion. In the latter
+case, a warning is printed, since these operations are typically expensive.
 
 .. _constructors:
 
@@ -97,7 +165,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
           :code:`np.float64`.
 
         + :code:`shape: Sequence[int]`
-          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the
+          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
           shape of the storage, that is, the full addressable space in the allocated memory buffer.
           (See also Section :ref:`domain_and_halo`)
 
@@ -131,7 +199,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
           :code:`np.float64`.
 
         + :code:`shape: Sequence[int]`
-          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the
+          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
           shape of the storage, that is, the full addressable space in the allocated memory buffer.
           (See also Section :ref:`domain_and_halo`)
 
@@ -166,7 +234,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
           :code:`np.float64`.
 
         + :code:`shape: Sequence[int]`
-          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the
+          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
           shape of the storage, that is, the full addressable space in the allocated memory buffer.
           (See also Section :ref:`domain_and_halo`)
 
@@ -203,7 +271,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
         + :code:`fill_value: Number`. The number to which the storage is initialized.
 
         + :code:`shape: Sequence[int]`
-          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the
+          Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
           shape of the storage, that is, the full addressable space in the allocated memory buffer.
           (See also Section :ref:`domain_and_halo`)
 
@@ -248,8 +316,8 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
         For common keyword-only arguments, please see below.
 
 :code:`storage(data: array_like = None, device_data: array_like = None, *, dtype: dtype_like = np.float64, copy=True, **kwargs) -> Storage`
-    Used to allocate a storage with values initialized to those of a given array.
-    If the argument :code:`copy` is set to :code:`False`, the behavior is that of :code:`as_storage`.
+    Used to allocate a storage with values initialized to those of a given array. If the argument
+    :code:`copy` is set to :code:`False`, the behavior is that of :code:`as_storage`.
 
     Parameters:
         + :code:`data: array_like`. The original array from which the storage is initialized.
@@ -275,10 +343,6 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
     :code:`empty()`). If :code:`data` or :code:`device_data` is provided, the consistency of the
     parameters with the buffers is validated.
 
-    If the field is not 3-D, as indicated by :code:`axes`, the length of parameters
-    :code:`aligned_index` and :code:`shape`, may either be of length 3 or of the actual dimension
-    of the storage, where the not needed entries are ignored in the latter case.
-
 
 The definitions of the common parameters accepted by all the previous functions are the following:
 
@@ -287,7 +351,7 @@ The definitions of the common parameters accepted by all the previous functions 
     :code:`np.float64`.
 
 :code:`shape: Sequence[int]`
-    Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions, maximum 3) with the shape
+    Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the shape
     of the storage, that is, the full addressable space in the allocated memory buffer. (See also
     Section :ref:`domain_and_halo`)
 
@@ -303,11 +367,6 @@ Additionally, these **optional** keyword-only parameters are accepted:
     :code:`aligned_addr` is the memory address of the grid point denoted by :code:`aligned_index`.
 
     It defaults to :code:`1`, which indicates no alignment.
-
-:code:`axes: str`
-    Any permutation of a sub-sequence of the :code:`"IJK"` string indicating the spatial dimensions
-    along which the field extends and their order for indexing operations in Python. The default
-    value is :code:`"IJK"`.
 
 :code:`defaults: Optional[str]`
     It can be used in the way of the current :code:`backend` parameter. For each backend, as well
@@ -328,7 +387,7 @@ Additionally, these **optional** keyword-only parameters are accepted:
     i.e. :code:`(0, 0, 0)`. (See also Section :ref:`domain_and_halo`)
 
 :code:`layout: Optional[str]`
-    A length-3 string with the name of axes. The sequence indicates the order of strides in
+    A length- string with the name of axes. The sequence indicates the order of strides in
     decreasing order, i.e. the first entry in the sequence corresponds to the axis with the largest
     stride. The layout map is always of length 3. The default value is "IJK".
 
