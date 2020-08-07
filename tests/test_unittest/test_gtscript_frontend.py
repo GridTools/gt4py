@@ -486,6 +486,7 @@ class TestAssignmentSyntax:
                 in_field /= 0.5
                 in_field *= 4.0
 
+
 class TestNestedWithSyntax:
     def test_nested_with(self):
         @gtscript.stencil(backend="debug")
@@ -623,5 +624,8 @@ class TestRegions:
                     with parallel(region[:, j0 : 1 + je]):
                         in_f = 2.0
 
-        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Invalid 'with' statement"):
+        # TODO This error could be improved
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Invalid 'computation' specification"
+        ):
             compile_definition(stencil, "stencil", module, externals=externals)
