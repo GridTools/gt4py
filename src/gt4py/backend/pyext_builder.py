@@ -17,15 +17,15 @@
 import contextlib
 import copy
 import distutils
+import distutils.sysconfig
 import io
 import os
 import shutil
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
+import pybind11
 import setuptools
 from setuptools.command.build_ext import build_ext
-import distutils.sysconfig
-import pybind11
 
 from gt4py import config as gt_config
 
@@ -117,12 +117,17 @@ def get_gt_pyext_build_opts(
 
     if uses_openmp:
         cpp_flags = gt_config.build_settings["openmp_cppflags"]
-        if cpp_flags:
-            build_opts["extra_compile_args"].append(cpp_flags)
+        if uses_cuda:
+            cuda_flags = []
+            for cpp_flag in cpp_flags:
+                cuda_flags.extend(["--compiler-options", cpp_flag])
+            build_opts["extra_compile_args"]["nvcc"].extend(cuda_flags)
+        elif cpp_flags:
+            build_opts["extra_compile_args"].extend(cpp_flags)
 
         ld_flags = gt_config.build_settings["openmp_ldflags"]
         if ld_flags:
-            build_opts["extra_link_args"].append(ld_flags)
+            build_opts["extra_link_args"].extend(ld_flags)
 
     return build_opts
 

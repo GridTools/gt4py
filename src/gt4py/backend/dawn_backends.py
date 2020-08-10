@@ -19,13 +19,13 @@ import collections
 import copy
 import enum
 import inspect
-import jinja2
 import numbers
 import os
 import types
-from typing import Any, List, Dict
+from typing import Any, Dict, List
 
 import dawn4py
+import jinja2
 from dawn4py.serialization import SIR
 from dawn4py.serialization import utils as sir_utils
 
@@ -34,7 +34,9 @@ from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
+
 from . import pyext_builder
+
 
 DOMAIN_AXES = gt_definitions.CartesianSpace.names
 
@@ -54,8 +56,7 @@ class FieldInfoCollector(gt_ir.IRNodeVisitor):
 
     def __call__(self, definition_ir):
         self.field_info = collections.OrderedDict()
-        self.visit(definition_ir, compute_extent=gt_definitions.Extent.zeros(), in_write=False)
-
+        self.visit(definition_ir, write_field="")
         return self.field_info
 
     def visit_FieldDecl(self, node: gt_ir.FieldDecl, **kwargs):
@@ -63,35 +64,33 @@ class FieldInfoCollector(gt_ir.IRNodeVisitor):
         field_dimensions = sir_utils.make_field_dimensions_cartesian(
             [1 if ax in node.axes else 0 for ax in DOMAIN_AXES]
         )
-        is_temporary = not node.is_api
         self.field_info[node.name] = dict(
             field_decl=sir_utils.make_field(
-                name=node.name, dimensions=field_dimensions, is_temporary=is_temporary
+                name=node.name, dimensions=field_dimensions, is_temporary=not node.is_api
             ),
             access=None,
             extent=gt_definitions.Extent.zeros(),
+            inputs=set(),
         )
 
     def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
         field_name = node.name
-        if kwargs["in_write"]:
+        if len(kwargs["write_field"]) < 1:
             self.field_info[field_name]["access"] = gt_definitions.AccessKind.READ_WRITE
         elif self.field_info[field_name]["access"] is None:
             self.field_info[field_name]["access"] = gt_definitions.AccessKind.READ_ONLY
+            if kwargs["write_field"] in self.field_info:
+                self.field_info[kwargs["write_field"]]["inputs"].add(field_name)
 
         offset = tuple(node.offset.values())
-        extent = gt_definitions.Extent(
+        self.field_info[field_name]["extent"] |= gt_definitions.Extent(
             [(offset[0], offset[0]), (offset[1], offset[1]), (0, 0)]
         )  # exclude sequential axis
 
-        kwargs["compute_extent"] |= extent
-        accumulated_extent = kwargs["compute_extent"] + extent
-        self.field_info[field_name]["extent"] |= accumulated_extent
-
     def visit_Assign(self, node: gt_ir.Assign, **kwargs):
-        kwargs["in_write"] = True
+        kwargs["write_field"] = ""
         self.visit(node.target, **kwargs)
-        kwargs["in_write"] = False
+        kwargs["write_field"] = node.target.name
         self.visit(node.value, **kwargs)
 
 
@@ -126,6 +125,22 @@ class SIRConverter(gt_ir.IRNodeVisitor):
 
     def _make_operator(self, op: enum.Enum):
         return self.OP_TO_CPP.get(op, op.python_symbol)
+
+    def _update_field_extents(self, field_info: Dict[str, Any]):
+        out_fields = [
+            field
+            for field in field_info.values()
+            if field["access"] == gt_definitions.AccessKind.READ_WRITE
+        ]
+
+        compute_extent = gt_definitions.Extent.zeros()
+        for i in range(len(out_fields) - 1, -1, -1):
+            out_field = out_fields[i]
+            compute_extent |= out_field["extent"]
+            for input in out_field["inputs"]:
+                in_field = field_info[input]
+                accumulated_extent = compute_extent + in_field["extent"]
+                in_field["extent"] |= accumulated_extent
 
     def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral):
         if node.value == gt_ir.Builtin.TRUE:
@@ -245,6 +260,7 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         global_variables = self._make_global_variables(node.parameters, node.externals)
 
         field_info = FieldInfoCollector.apply(node)
+        self._update_field_extents(field_info)
         fields = [field_info[field_name]["field_decl"] for field_name in field_info]
 
         stencil_ast = sir_utils.make_ast(
@@ -698,6 +714,7 @@ class DawnGTX86Backend(BaseDawnBackend):
     name = "dawn:gtx86"
     options = _DAWN_BACKEND_OPTIONS
     storage_info = gt_backend.GTX86Backend.storage_info
+    languages = gt_backend.GTX86Backend.languages
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
@@ -716,6 +733,7 @@ class DawnGTMCBackend(BaseDawnBackend):
     name = "dawn:gtmc"
     options = _DAWN_BACKEND_OPTIONS
     storage_info = gt_backend.GTMCBackend.storage_info
+    languages = gt_backend.GTMCBackend.languages
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
@@ -735,6 +753,7 @@ class DawnGTCUDABackend(BaseDawnBackend):
     name = "dawn:gtcuda"
     options = _DAWN_BACKEND_OPTIONS
     storage_info = gt_backend.GTCUDABackend.storage_info
+    languages = gt_backend.GTCUDABackend.languages
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
@@ -753,6 +772,7 @@ class DawnNaiveBackend(BaseDawnBackend):
     name = "dawn:naive"
     options = _DAWN_BACKEND_OPTIONS
     storage_info = gt_backend.GTX86Backend.storage_info
+    languages = gt_backend.GTX86Backend.languages
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
@@ -771,6 +791,7 @@ class DawnOptBackend(BaseDawnBackend):
     name = "dawn:cxxopt"
     options = _DAWN_BACKEND_OPTIONS
     storage_info = gt_backend.GTX86Backend.storage_info
+    languages = gt_backend.GTX86Backend.languages
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
@@ -790,6 +811,7 @@ class DawnCUDABackend(BaseDawnBackend):
     name = "dawn:cuda"
     options = _DAWN_BACKEND_OPTIONS
     storage_info = gt_backend.GTCUDABackend.storage_info
+    languages = gt_backend.GTCUDABackend.languages
 
     @classmethod
     def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):

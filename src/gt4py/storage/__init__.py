@@ -17,7 +17,8 @@
 """GridTools storages classes."""
 
 
-from .storage import empty, ones, zeros, from_array
+from .storage import empty, from_array, ones, zeros
+
 
 _numpy_patch = None
 
@@ -29,6 +30,7 @@ def prepare_numpy():
 
     if "__gt_array_patch__" not in np.__dict__:
         from functools import wraps
+
         from gt4py import utils as gt_utils
 
         global _numpy_patch

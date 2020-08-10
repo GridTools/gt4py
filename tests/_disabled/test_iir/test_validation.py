@@ -14,13 +14,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import numpy as np
-import pytest
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
+import numpy as np
+import pytest
 
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_store
+
 from .iir_stencil_definitions import make_test_vertical_regions
 from .utils import id_version  # import fixture used by pytest
 
