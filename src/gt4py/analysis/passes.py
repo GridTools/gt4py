@@ -42,24 +42,30 @@ class IRSpecificationError(gt_definitions.GTSpecificationError):
             if loc is None:
                 message = "Invalid specification"
             else:
-                message = "Invalid specification in '{scope}' (line: {line}, col: {col})".format(
-                    scope=loc.scope, line=loc.line, col=loc.column
+                message = (
+                    f"Invalid specification in '{loc.scope}' (line: {loc.line}, col: {loc.col})"
                 )
-        super().__init__(message)
-        self.loc = loc
+        super().__init__(message, loc=loc)
 
 
 class IntervalSpecificationError(IRSpecificationError):
     def __init__(self, interval, message=None, *, loc=None):
         if message is None:
             if loc is None:
-                message = "Invalid interval specification '{interval}' ".format(interval=interval)
+                message = f"Invalid interval specification '{interval}' "
             else:
-                message = "Invalid interval specification '{interval}' in '{scope}' (line: {line}, col: {col})".format(
-                    interval=interval, scope=loc.scope, line=loc.line, col=loc.column
-                )
+                message = f"Invalid interval specification '{interval}' in '{loc.scope}' (line: {loc.line}, col: {loc.col})"
         super().__init__(message, loc=loc)
-        self.interval = interval
+
+
+class DataTypeSpecificationError(IRSpecificationError):
+    def __init__(self, data_type, message=None, *, loc=None):
+        if message is None:
+            if loc is None:
+                message = f"Invalid data type specification '{data_type}'"
+            else:
+                message = f"Invalid data type specification '{data_type}' in '{loc.scope}' (line: {loc.line}, col: {loc.col})"
+        super().__init__(message, loc=loc)
 
 
 class InitInfoPass(TransformPass):
@@ -256,10 +262,7 @@ class InitInfoPass(TransformPass):
             return result
 
         def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
-            extents = []
-            for arg in node.args:
-                extents.extend(self.visit(arg))
-            return extents
+            return [extent for arg in node.args for extent in self.visit(arg)]
 
         def visit_If(self, node: gt_ir.If):
             inputs = {}
@@ -709,14 +712,14 @@ class DataTypePass(TransformPass):
         def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall, **kwargs):
             self.generic_visit(node.args, **kwargs)
 
-            # Collect data types from each argument
-            data_type = set([arg.data_type for arg in node.args])
+            data_type = set(
+                arg.data_type for arg in node.args if arg.data_type != gt_ir.DataType.DEFAULT
+            )
             if len(data_type) > 1:
-                data_type -= {gt_ir.DataType.DEFAULT}
-
-            # Assert that all data types are the same
-            assert len(data_type) == 1
-            data_type = data_type.pop()
+                raise DataTypeSpecificationError(
+                    "Builtin function call with mixed data types", loc=node.loc
+                )
+            data_type = data_type or gt_ir.DataType.DEFAULT
 
             if node.func in (
                 gt_ir.NativeFunction.MIN,
@@ -725,6 +728,18 @@ class DataTypePass(TransformPass):
                 gt_ir.NativeFunction.MOD,
             ):
                 node.data_type = data_type
+            elif node.func in (
+                gt_ir.NativeFunction.ISFINITE,
+                gt_ir.NativeFunction.ISINF,
+                gt_ir.NativeFunction.ISNAN,
+            ):
+                node.data_type = gt_ir.DataType.BOOL
+            elif node.func in (
+                gt_ir.NativeFunction.CEIL,
+                gt_ir.NativeFunction.FLOOR,
+                gt_ir.NativeFunction.TRUNC,
+            ):
+                node.data_type = gt_ir.DataType.INT64
             else:
                 node.data_type = gt_ir.DataType.DEFAULT
 

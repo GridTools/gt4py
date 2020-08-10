@@ -30,7 +30,6 @@ gt_default_origin, gt_options
 
 import time
 
-import math
 import numpy as np
 from numpy import dtype
 {{ imports }}

@@ -904,6 +904,15 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 
         return sources.text
 
+class DebugExtModuleGenerator(BaseModuleGenerator):
+    def generate_imports(self) -> str:
+        source = (
+            """
+import math
+"""
+            + super().generate_imports()
+        )
+        return source
 
 class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
     def generate_imports(self) -> str:

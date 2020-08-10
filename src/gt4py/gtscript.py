@@ -28,7 +28,7 @@ import numpy as np
 
 from gt4py import definitions as gt_definitions
 from gt4py import utils as gt_utils
-
+from gt4py import ir as gt_ir
 
 # GTScript builtins
 builtins = {
@@ -50,6 +50,7 @@ builtins = {
     "__gtscript__",
     "__externals__",
     "__INLINED",
+    *gt_ir.NativeFunction.values(),
 }
 
 __all__ = list(builtins) + ["function", "stencil"]

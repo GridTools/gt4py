@@ -92,7 +92,7 @@ storing a reference to the piece of source code which originated the node.
     Ref         = VarRef(name: str, [index: int])
                 | FieldRef(name: str, offset: Dict[str, int])
 
-    NativeFuncCall(func: NativeFunction, args: List[Expr])
+    NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
     Expr        = Literal | Ref | NativeFuncCall | CompositeExpr | InvalidBranch
 
@@ -400,36 +400,36 @@ class FieldRef(Ref):
 
 @enum.unique
 class NativeFunction(enum.Enum):
-    ABS = 1
-    MIN = 2
-    MAX = 3
-    MOD = 4
+    ABS = "abs"
+    MIN = "min"
+    MAX = "max"
+    MOD = "mod"
 
-    SIN = 11
-    COS = 12
-    TAN = 13
-    ARCSIN = 14
-    ARCCOS = 15
-    ARCTAN = 16
+    SIN = "sin"
+    COS = "cos"
+    TAN = "tan"
+    ARCSIN = "arcsin"
+    ARCCOS = "arccos"
+    ARCTAN = "arctan"
 
-    SQRT = 21
-    EXP = 22
-    LOG = 23
+    SQRT = "sqrt"
+    EXP = "exp"
+    LOG = "log"
 
-    ISFINITE = 101
-    ISINF = 102
-    ISNAN = 103
-    FLOOR = 111
-    CEIL = 112
-    TRUNC = 113
+    ISFINITE = "isfinite"
+    ISINF = "isinf"
+    ISNAN = "isnan"
+    FLOOR = "floor"
+    CEIL = "ceil"
+    TRUNC = "trunc"
 
     @property
-    def numargs(self):
+    def arity(self):
         return type(self).IR_OP_TO_NUM_ARGS[self]
 
-    @property
-    def python_symbol(self):
-        return type(self).IR_OP_TO_PYTHON_SYMBOL[self]
+    @staticmethod
+    def values():
+        return [func.value for func in NativeFunction]
 
 
 NativeFunction.IR_OP_TO_NUM_ARGS = {
@@ -452,28 +452,6 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.FLOOR: 1,
     NativeFunction.CEIL: 1,
     NativeFunction.TRUNC: 1,
-}
-
-NativeFunction.IR_OP_TO_PYTHON_SYMBOL = {
-    NativeFunction.ABS: "abs",
-    NativeFunction.MIN: "min",
-    NativeFunction.MAX: "max",
-    NativeFunction.MOD: "mod",
-    NativeFunction.SIN: "sin",
-    NativeFunction.COS: "cos",
-    NativeFunction.TAN: "tan",
-    NativeFunction.ARCSIN: "arcsin",
-    NativeFunction.ARCCOS: "arccos",
-    NativeFunction.ARCTAN: "arctan",
-    NativeFunction.SQRT: "sqrt",
-    NativeFunction.EXP: "exp",
-    NativeFunction.LOG: "log",
-    NativeFunction.ISFINITE: "isfinite",
-    NativeFunction.ISINF: "isinf",
-    NativeFunction.ISNAN: "isnan",
-    NativeFunction.FLOOR: "floor",
-    NativeFunction.CEIL: "ceil",
-    NativeFunction.TRUNC: "trunc",
 }
 
 
