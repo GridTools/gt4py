@@ -128,7 +128,8 @@ In Addition, the following optional keys can be contained:
   If the key is not in the dictionary or if the value is :code:`None`, no action is taken.
 + :code:`"release": Optional[Callable[[], Any]]` Is called on all objects that are passed to a
   stencil after all computations have completed. If the key is not in the dictionary or if the value
-  is :code:`None`, no action is taken.
+  is :code:`None`, no action is taken. We do not have the intention to use it in our own storage
+  implementation and it is added here to complement the :code:`"acquire"` method.
 + :code:`"touch": Optional[Callable[[], Any]]` Is called on all objects for which the underlying
   memory has been changed after all computations have completed. If the key is not in the dictionary
   or if the value is :code:`None`, no action is taken.
@@ -146,6 +147,28 @@ the buffer on the same device as the computation is to be performed. If no such 
 but a buffer is present on the respective other device, the other buffer will be copied to a newly
 allocated buffer on the compute device and copied back after successful completion. In the latter
 case, a warning is printed, since these operations are typically expensive.
+
+Default `xarray` Data Interface
+===============================
+
+For xarray :code:`DataArray` s, we propose to add a default accessor upon importing the root gt4py
+module.
+The behavior for a :code:`data_array` of type :code:`DataArray` shall be as follows:
+
+1) If `data_array.data` implements the :code:`__gt_data_interface__`, then this is returned, while
+   for each of the dictionaries per device, one of the following behavior will apply:
+
+   * If :code:`"dims"` is a key in the dictionary, an error is raised if it does not agree with
+     :code:`data_array.dims`
+   * Otherwise, the `"dims"` key is set to be `data_array.dims`.
+
+2) If `data_array.data` does not implement the :code:`__gt_data_interface__`, the
+   :code:`__array_interface__` and :code:`__cuda_array_interface__` properties of
+   :code:`data_array.data` are used as interfaces for the :code:`None` and :code:`"gpu"` device
+   keys, respectively. The :code:`"dims"` are then added based on :code:`data_array.dims` to each.
+
+Users can still override this accessor and define their own behavior. In this case, xarray will
+raise a warning when defining the accessor.
 
 .. _constructors:
 
@@ -755,20 +778,28 @@ of the storage. The :code:`state` attribute of the :code:`SyncState` instance ca
 Alternatives
 ------------
 
-The main aspects of this proposal are
 
-* construction from existing buffers
+Subclassing
+^^^^^^^^^^^
 
-* duck array versus subclassing
-
-We believe the former to be non-controversial since it follows NumPy conventions. For the actual
-implementation strategy, the only viable alternative could be to implement GT4Py storages as a
+For the implementation strategy, a viable alternative could be to implement GT4Py storages as a
 NumPy `ndarray` subclass as in the current implementation. Due to the issues mentioned in the
 introduction, we consider that this strategy imposes more limitations than using `duck typing`.
 
-.. TODO: high level storage as alternative
+Retaining `dims` information
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. TODO: examples
+In an earlier version of this proposal, we proposed to also hold the information that can now be
+passed through the :code:`"dims"` of the :code:`__gt_data_interface__` in the gt4py implementation
+which would have allowed us to
+
+However, these would still not have covered all cases, while taking away some freedom to implement
+the desired behavior from users. Further the interface proposed here was done with the move to
+:code:`GridTools 2.0` with which the `Stencil Iterable Data (SID)` concept will be supported in the
+generated code. With it, generated code will be valid for any stride order, although performance may
+still be better for certain combinations. With this change, the conservation of the layout under
+ufunc operations will be less important. We believe that the costs of having the :code:`dims` in the
+storage implementation rather than the interface proposed here will then outweigh the benefits.
 
 Copyright
 ---------
