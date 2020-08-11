@@ -150,13 +150,7 @@ class {{ class_name }}(StencilObject):
             exec_info["domain"] = _domain_
             exec_info["origin"] = _origin_
             exec_info["run_start_time"] = time.perf_counter()
-{%- if gt_backend == "numpy" %}
-{% set indent_width = 12 %}
-        with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):
-{%- else %}
-{% set indent_width = 8 %}
-{%- endif %}
-{%- filter indent(width=indent_width) %}
+{%- filter indent(width=8) %}
 {{- implementation }}
 {%- endfilter %}
         if exec_info is not None:
