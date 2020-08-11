@@ -14,12 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import numpy as np
 import textwrap
 
+import numpy as np
+
 from gt4py import backend as gt_backend
-from gt4py import ir as gt_ir
 from gt4py import definitions as gt_definitions
+from gt4py import ir as gt_ir
 from gt4py.utils import text as gt_text
 
 from .python_generator import PythonSourceGenerator
