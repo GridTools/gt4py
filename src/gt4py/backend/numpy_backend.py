@@ -160,6 +160,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
     def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
         self.sources.empty_line()
 
+        if len(node.splitters) > 0:
+            raise NotImplementedError("Splitters are not yet supported in the numpy backend")
+
         # Accessors for IO fields
         self.sources.append("# Sliced views of the stencil fields (domain + borders)")
         for info in node.api_signature:

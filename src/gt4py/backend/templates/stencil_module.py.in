@@ -84,6 +84,8 @@ class {{ class_name }}(StencilObject):
 
     _gt_options_ = {{ gt_options }}
 
+    _gt_splitters_ = {{ gt_splitters }}
+
     @property
     def backend(self):
         return type(self)._gt_backend_
@@ -112,8 +114,12 @@ class {{ class_name }}(StencilObject):
     def options(self) -> dict:
         return type(self)._gt_options_
 
+    @property
+    def splitters(self) -> list:
+        return type(self)._gt_splitters_
+
     def __call__(
-        self, {{ stencil_signature }}, domain=None, origin=None, validate_args=True, exec_info=None
+        self, {{ stencil_signature }}, domain=None, origin=None, splitters=None, validate_args=True, exec_info=None
     ):
         if exec_info is not None:
             exec_info["call_start_time"] = time.perf_counter()
@@ -134,6 +140,7 @@ class {{ class_name }}(StencilObject):
             parameter_args=parameter_args,
             domain=domain,
             origin=origin,
+            splitters=spliiters,
             validate_args=validate_args,
             exec_info=exec_info,
         )
@@ -145,7 +152,7 @@ class {{ class_name }}(StencilObject):
         if exec_info is not None:
             exec_info["call_end_time"] = time.perf_counter()
 
-    def run(self, _domain_, _origin_, exec_info, *, {{- field_names|join(", ") -}}, {{- param_names|join(", ") -}}):
+    def run(self, _domain_, _origin_, exec_info, *, {{- field_names|join(", ") -}}, {{- param_names|join(", ") -}}, {{- splitters|join(", ") -}}):
         if exec_info is not None:
             exec_info["domain"] = _domain_
             exec_info["origin"] = _origin_

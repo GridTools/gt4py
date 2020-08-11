@@ -121,6 +121,9 @@ class DebugSourceGenerator(PythonSourceGenerator):
     def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
         self.sources.empty_line()
 
+        if len(node.splitters) > 0:
+            raise NotImplementedError("Splitters are not yet supported in the debug backend")
+
         # Accessors for IO fields
         self.sources.append("# Accessors for origin-based indexing")
         for info in node.api_signature:

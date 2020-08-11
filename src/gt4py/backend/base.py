@@ -695,6 +695,7 @@ class BaseModuleGenerator(abc.ABC):
             gt_domain_info=module_info["domain_info"],
             gt_field_info=repr(module_info["field_info"]),
             gt_parameter_info=repr(module_info["parameter_info"]),
+            gt_splitters=[splitter.name for splitter in definition_ir.splitters],
             gt_constants=module_info["gt_constants"],
             gt_options=module_info["gt_options"],
             stencil_signature=stencil_signature,

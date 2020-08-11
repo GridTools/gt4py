@@ -223,7 +223,15 @@ class StencilObject(abc.ABC):
                 )
 
     def _call_run(
-        self, field_args, parameter_args, domain, origin, *, validate_args=True, exec_info=None
+        self,
+        field_args,
+        parameter_args,
+        domain,
+        origin,
+        *,
+        splitters=None,
+        validate_args=True,
+        exec_info=None,
     ):
         """Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
 
@@ -261,6 +269,10 @@ class StencilObject(abc.ABC):
                 so a 0-based origin will only be acceptable for fields with
                 a 0-area support region.
 
+            splitters : `dict`, optional
+                Dictionary that gives integer values to each splitter variable.
+                (`None` by default).
+
             validate_args : `bool`
                 If True, ensures all input arguments are valid for the stencil run.
 
@@ -295,6 +307,9 @@ class StencilObject(abc.ABC):
             if parameter_info is not None and used_param_args[name] is None:
                 raise ValueError(f"Parameter '{name}' is None.")
 
+        # Filter splitters that are used
+        stencil_splitters = {splitters[var] for var in self.splitters}
+
         # Origins
         if origin is None:
             origin = {}
@@ -314,7 +329,12 @@ class StencilObject(abc.ABC):
             self._validate_args(used_field_args, used_param_args, domain, origin)
 
         self.run(
-            _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
+            _domain_=domain,
+            _origin_=origin,
+            _exec_info=exec_info,
+            **field_args,
+            **parameter_args,
+            **stencil_splitters,
         )
 
         if exec_info is not None:

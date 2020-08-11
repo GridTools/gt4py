@@ -499,6 +499,9 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         implementation_ir = gt_analysis.transform(definition_ir, options)
 
+        if len(implementation_ir.splitters) > 0:
+            raise NotImplementedError("Splitters are not yet supported in the GridTools backends")
+
         generator_options = options.as_dict()
         if implementation_ir.multi_stages:
             # Generate the Python binary extension (checking if GridTools sources are installed)

@@ -253,6 +253,9 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         functions = []
         global_variables = self._make_global_variables(node.parameters, node.externals)
 
+        if len(node.splitters) > 0:
+            raise NotImplementedError("Splitters are not yet supported in the dawn backends")
+
         field_info = FieldInfoCollector.apply(node)
         self._update_field_extents(field_info)
         fields = [field_info[field_name]["field_decl"] for field_name in field_info]
