@@ -424,9 +424,9 @@ class NativeFunction(enum.Enum):
     def arity(self):
         return type(self).IR_OP_TO_NUM_ARGS[self]
 
-    @staticmethod
-    def values():
-        return [func.value for func in NativeFunction]
+    @classmethod
+    def values(cls):
+        return [func.value for func in cls]
 
 
 NativeFunction.IR_OP_TO_NUM_ARGS = {
