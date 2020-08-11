@@ -110,8 +110,7 @@ def test_cache_info(name, backend):
 
     module = stencil.options["module"]
     qualified_name = f"{module}.{name}"
-    version = (str(stencil.__class__).split("_")[-1])[0:-2]
-    stencil_id = gt_definitions.StencilID(qualified_name, version)
+    stencil_id = gt_definitions.StencilID(qualified_name, stencil._gt_id_)
 
     backend_class = gt_backend.from_name(backend)
     assert backend_class.check_cache(stencil_id)
