@@ -580,4 +580,3 @@ class TestNativeFunctions:
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field += sinus(in_field)
-
