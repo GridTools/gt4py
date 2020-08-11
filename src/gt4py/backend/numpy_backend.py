@@ -312,11 +312,12 @@ def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
         return source
 
     def generate_implementation(self):
-        sources = (
+        sources = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
+        sources.append(
             "with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):"
         )
         with sources.indented():
-            sources += self.source_generator(self.implementation_ir, sources)
+            self.source_generator(self.implementation_ir, sources)
 
         return sources.text
 
