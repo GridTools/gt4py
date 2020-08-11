@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
+import textwrap
 
 from gt4py import backend as gt_backend
 from gt4py import ir as gt_ir
@@ -312,17 +313,14 @@ def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
         return source
 
     def generate_implementation(self):
-        sources = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
+        block = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
+        self.source_generator(self.implementation_ir, block)
         if self.options.backend_opts.get("ignore_np_errstate", True):
-            sources.append(
-                "with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):"
-            )
-            with sources.indented():
-                self.source_generator(self.implementation_ir, sources)
+            source = "with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):\n"
+            source += textwrap.indent(block.text, " " * self.TEMPLATE_INDENT_SIZE)
         else:
-            self.source_generator(self.implementation_ir, sources)
-
-        return sources.text
+            source = block.text
+        return source
 
 
 def numpy_layout(mask):
@@ -345,9 +343,9 @@ class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
 
     Options
     -------
-        ignore_np_errstate: `bool`
-            If False, does not ignore numpy floating-point errors.
-            (`True` by default.)
+    ignore_np_errstate: `bool`
+        If False, does not ignore numpy floating-point errors.
+        (`True` by default.)
     """
 
     name = "numpy"
