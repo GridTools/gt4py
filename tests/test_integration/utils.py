@@ -17,10 +17,9 @@
 import gt4py.definitions as gt_definitions
 import gt4py.gtscript as gtscript
 
-from .stencil_definitions import REGISTRY as stencil_registry
-from .stencil_definitions import EXTERNALS_REGISTRY
-
 from ..definitions import id_version
+from .stencil_definitions import EXTERNALS_REGISTRY
+from .stencil_definitions import REGISTRY as stencil_registry
 
 
 def generate_test_module(name, backend, *, id_version, rebuild=True):

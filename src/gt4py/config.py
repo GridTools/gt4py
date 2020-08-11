@@ -17,8 +17,8 @@
 
 import multiprocessing
 import os
-
 from typing import Any, Dict
+
 
 GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
 

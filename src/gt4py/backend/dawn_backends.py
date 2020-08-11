@@ -19,13 +19,13 @@ import collections
 import copy
 import enum
 import inspect
-import jinja2
 import numbers
 import os
 import types
-from typing import Any, List, Dict
+from typing import Any, Dict, List
 
 import dawn4py
+import jinja2
 from dawn4py.serialization import SIR
 from dawn4py.serialization import utils as sir_utils
 
@@ -34,7 +34,9 @@ from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
+
 from . import pyext_builder
+
 
 DOMAIN_AXES = gt_definitions.CartesianSpace.names
 

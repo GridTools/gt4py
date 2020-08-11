@@ -22,7 +22,7 @@ import os
 import pickle
 import sys
 import types
-from typing import Any, ClassVar, Dict, Optional, Tuple, Type, Mapping, Union, Callable
+from typing import Any, Callable, ClassVar, Dict, Mapping, Optional, Tuple, Type, Union
 
 import jinja2
 
@@ -31,6 +31,7 @@ from gt4py import config as gt_config
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
+
 from . import pyext_builder
 
 

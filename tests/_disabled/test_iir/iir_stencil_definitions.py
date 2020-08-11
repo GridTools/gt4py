@@ -16,10 +16,11 @@
 
 
 import gt4py as gt
-from gt4py import ir as gt_ir
-from gt4py.definitions import Extent, StencilID
 import gt4py.backend as gt_backend
 import gt4py.utils as gt_utils
+from gt4py import ir as gt_ir
+from gt4py.definitions import Extent, StencilID
+
 
 REGISTRY = gt_utils.Registry()
 

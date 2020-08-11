@@ -14,5 +14,5 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from .input_strategies import field, global_name, parameter
 from .suites import StencilTestSuite
-from .input_strategies import global_name, field, parameter
