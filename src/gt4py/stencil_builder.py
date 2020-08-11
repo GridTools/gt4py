@@ -1,7 +1,6 @@
 import pathlib
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, TypeVar, Union
 
-import gt4py
 from gt4py.definitions import BuildOptions, StencilID
 from gt4py.ir import StencilDefinition, StencilImplementation
 from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
@@ -45,6 +44,8 @@ class StencilBuilder:
         options: Optional[BuildOptions] = None,
         frontend: Optional["FrontendType"] = None,
     ):
+        import gt4py
+
         self._definition = definition_func
         # type ignore explanation: Attribclass generated init not recognized by mypy
         self.options = options or BuildOptions(  # type: ignore
@@ -79,6 +80,8 @@ class StencilBuilder:
         -----
         Resets all cached build data.
         """
+        import gt4py
+
         self._build_data = {}
         self.caching = gt4py.caching.strategy_factory(caching_strategy_name, self, *args, **kwargs)
         return self
@@ -116,6 +119,8 @@ class StencilBuilder:
         -----
         Resets all cached build data.
         """
+        import gt4py
+
         self._build_data = {}
         self.backend = gt4py.backend.from_name(backend_name)(self)
         return self
@@ -155,6 +160,8 @@ class StencilBuilder:
 
     @property
     def root_pkg_name(self) -> str:
+        import gt4py
+
         return self._build_data.setdefault(
             "root_pkg_name", gt4py.config.code_settings["root_package_name"]
         )
@@ -183,6 +190,8 @@ class StencilBuilder:
 
     @property
     def implementation_ir(self) -> StencilImplementation:
+        import gt4py
+
         return self._build_data.setdefault(
             "iir", gt4py.analysis.transform(self.definition_ir, self.options)
         )
