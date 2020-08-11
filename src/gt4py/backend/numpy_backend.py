@@ -313,10 +313,13 @@ def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
 
     def generate_implementation(self):
         sources = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
-        sources.append(
-            "with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):"
-        )
-        with sources.indented():
+        if self.options.backend_opts.get("ignore_np_errstate", True):
+            sources.append(
+                "with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):"
+            )
+            with sources.indented():
+                self.source_generator(self.implementation_ir, sources)
+        else:
             self.source_generator(self.implementation_ir, sources)
 
         return sources.text
@@ -338,10 +341,17 @@ def numpy_is_compatible_type(field):
 
 @gt_backend.register
 class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):
-    """Pure Python backend using numpy for faster computations than the debug backend."""
+    """Pure Python backend using numpy for faster computations than the debug backend.
+
+    Options
+    -------
+        ignore_np_errstate: `bool`
+            If False, does not ignore numpy floating-point errors.
+            (`True` by default.)
+    """
 
     name = "numpy"
-    options = {}
+    options = {"ignore_np_errstate": {"versioning": True}}
     storage_info = {
         "alignment": 1,
         "device": "cpu",
