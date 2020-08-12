@@ -347,22 +347,19 @@ class BasePyExtBackend(BaseBackend):
         pyext_target_file_path = self.builder.pkg_path
         qualified_pyext_name = self.pyext_module_path
 
+        pyext_build_args = dict(
+            qualified_pyext_name,
+            sources=sources,
+            build_path=str(pyext_build_path),
+            target_path=str(pyext_target_file_path),
+            **pyext_build_opts,
+        )
+
         if uses_cuda:
-            module_name, file_path = pyext_builder.build_pybind_cuda_ext(
-                qualified_pyext_name,
-                sources=sources,
-                build_path=str(pyext_build_path),
-                target_path=str(pyext_target_file_path),
-                **pyext_build_opts,
-            )
+            module_name, file_path = pyext_builder.build_pybind_cuda_ext(**pyext_build_args)
         else:
-            module_name, file_path = pyext_builder.build_pybind_ext(
-                qualified_pyext_name,
-                sources=sources,
-                build_path=str(pyext_build_path),
-                target_path=str(pyext_target_file_path),
-                **pyext_build_opts,
-            )
+            module_name, file_path = pyext_builder.build_pybind_ext(**pyext_build_args)
+
         assert module_name == qualified_pyext_name
 
         self.builder.with_backend_data(
