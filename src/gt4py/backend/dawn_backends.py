@@ -21,19 +21,18 @@ import enum
 import inspect
 import numbers
 import os
-from typing import Any, Dict, List, Optional, Type, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 
 import dawn4py
 import jinja2
 from dawn4py.serialization import SIR
 from dawn4py.serialization import utils as sir_utils
 
-from gt4py import analysis as gt_analysis
+from gt4py import StencilObject
 from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
-from gt4py import StencilObject
 from gt4py.utils import text as gt_text
 
 from . import pyext_builder
@@ -494,8 +493,6 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
 
         self._check_options(self.builder.options)
 
-        implementation_ir = gt_analysis.transform(self.builder.definition_ir, self.builder.options)
-
         # Generate the Python binary extension (checking if GridTools sources are installed)
         if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
@@ -509,7 +506,6 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
 
             kwargs["pyext_module_name"] = pyext_module_name
             kwargs["pyext_file_path"] = pyext_file_path
-            kwargs["implementation_ir"] = implementation_ir
 
             module_source = generator(module_info=module_info, **kwargs)
 

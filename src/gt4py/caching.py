@@ -21,7 +21,7 @@ import pathlib
 import pickle
 import sys
 import types
-from typing import Any, Dict, Optional, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import gt4py
 import gt4py.definitions
@@ -258,8 +258,8 @@ class JITCachingStrategy(CachingStrategy):
             if validate_hash:
                 result = (
                     cache_info_ns.backend == self.builder.backend.name
-                    and cache_info_ns.stencil_name == self.builder.stencil_id.qualified_name
-                    and cache_info_ns.stencil_version == self.builder.stencil_id.version
+                    and cache_info_ns.stencil_name == self.stencil_id.qualified_name
+                    and cache_info_ns.stencil_version == self.stencil_id.version
                     and cache_info_ns.module_shash == module_shash
                 )
                 if validate_extra:

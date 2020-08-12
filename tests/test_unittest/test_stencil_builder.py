@@ -1,3 +1,5 @@
+import numpy
+
 from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 from gt4py.stencil_object import StencilObject
@@ -12,6 +14,11 @@ def simple_stencil(field: Field[float]):  # type: ignore
 
     with computation(PARALLEL), interval(...):  # type: ignore
         field += a  # type: ignore
+
+
+def assign_bool_float(f64_field: Field[numpy.float64], bool_field: Field[numpy.bool]):  # type: ignore  # noqa
+    with computation(PARALLEL), interval(...):  # type: ignore
+        bool_field = f64_field >= 0  # type: ignore  # noqa
 
 
 def test_setters():
@@ -89,3 +96,18 @@ def test_usage_numpy_nocaching(tmp_path):
     assert tmp_path.joinpath("simple_stencil", "simple_stencil.py").exists(), list(
         tmp_path.iterdir()
     )
+
+
+def test_regression_run_analysis_twice(tmp_path):
+    builder = (
+        StencilBuilder(assign_bool_float)
+        .with_backend("numpy")
+        .with_externals({"a": 1.0})
+        .with_caching("nocaching", output_path=tmp_path)
+        .with_options(name="simple_stencil", module="", rebuild=True)
+    )
+
+    # property caching should not reevaluate the analysis pipeline as a side effect.
+    ir = builder.implementation_ir
+    # this raises an error if the analysis pipeline is reevaluated:
+    assert ir is builder.implementation_ir

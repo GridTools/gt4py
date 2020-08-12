@@ -1,6 +1,7 @@
 import pathlib
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, TypeVar, Union
 
+import gt4py
 from gt4py.definitions import BuildOptions, StencilID
 from gt4py.ir import StencilDefinition, StencilImplementation
 from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
@@ -44,13 +45,12 @@ class StencilBuilder:
         options: Optional[BuildOptions] = None,
         frontend: Optional["FrontendType"] = None,
     ):
-        import gt4py
-
         self._definition = definition_func
         # type ignore explanation: Attribclass generated init not recognized by mypy
         self.options = options or BuildOptions(  # type: ignore
             name=definition_func.__name__, module=definition_func.__module__
         )
+        print(options)
         self.backend: "BackendType" = backend(self) if backend else gt4py.backend.from_name(
             "debug"
         )(self)
@@ -80,8 +80,6 @@ class StencilBuilder:
         -----
         Resets all cached build data.
         """
-        import gt4py
-
         self._build_data = {}
         self.caching = gt4py.caching.strategy_factory(caching_strategy_name, self, *args, **kwargs)
         return self
@@ -119,22 +117,22 @@ class StencilBuilder:
         -----
         Resets all cached build data.
         """
-        import gt4py
-
         self._build_data = {}
         self.backend = gt4py.backend.from_name(backend_name)(self)
         return self
 
     @property
     def definition(self) -> AnnotatedStencilFunc:
-        return self._build_data.setdefault(
+        return self._build_data.get("prepared_def") or self._build_data.setdefault(
             "prepared_def",
             self.frontend.prepare_stencil_definition(self._definition, self.externals),
         )
 
     @property
     def externals(self) -> Dict[str, Any]:
-        return self._build_data.setdefault("externals", self._externals.copy())
+        return self._build_data.get("externals") or self._build_data.setdefault(
+            "externals", self._externals.copy()
+        )
 
     def with_externals(self: SelfType, externals: Dict[str, Any]) -> SelfType:
         """
@@ -160,8 +158,6 @@ class StencilBuilder:
 
     @property
     def root_pkg_name(self) -> str:
-        import gt4py
-
         return self._build_data.setdefault(
             "root_pkg_name", gt4py.config.code_settings["root_package_name"]
         )
@@ -184,15 +180,13 @@ class StencilBuilder:
 
     @property
     def definition_ir(self) -> StencilDefinition:
-        return self._build_data.setdefault(
+        return self._build_data.get("ir") or self._build_data.setdefault(
             "ir", self.frontend.generate(self.definition, self.externals, self.options)
         )
 
     @property
     def implementation_ir(self) -> StencilImplementation:
-        import gt4py
-
-        return self._build_data.setdefault(
+        return self._build_data.get("iir") or self._build_data.setdefault(
             "iir", gt4py.analysis.transform(self.definition_ir, self.options)
         )
 

@@ -23,7 +23,6 @@ from typing import Any, Dict, List, Tuple, Type, Union
 import jinja2
 import numpy as np
 
-from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import gt_src_manager
@@ -488,7 +487,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     def generate(self) -> Type[StencilObject]:
         self._check_options(self.builder.options)
 
-        implementation_ir = gt_analysis.transform(self.builder.definition_ir, self.builder.options)
+        implementation_ir = self.builder.implementation_ir
 
         # if no computation has effect, there is no need to create an extension
         pyext_module_name, pyext_file_path = None, None
@@ -498,9 +497,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
                 raise RuntimeError("Missing GridTools sources.")
 
-            pyext_module_name, pyext_file_path = self.generate_extension(
-                implementation_ir=implementation_ir
-            )
+            pyext_module_name, pyext_file_path = self.generate_extension()
 
         # Generate and return the Python wrapper class
         return self._generate_module(

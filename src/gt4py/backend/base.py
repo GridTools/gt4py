@@ -24,17 +24,16 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Optional, Tuple
 
 import jinja2
 
-from gt4py import analysis as gt_analysis
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
-from gt4py.stencil_object import StencilObject
 
 from . import pyext_builder
 
 
 if TYPE_CHECKING:
     from gt4py.stencil_builder import StencilBuilder
+    from gt4py.stencil_object import StencilObject
 
 REGISTRY = gt_utils.Registry()
 
@@ -110,7 +109,7 @@ class Backend(abc.ABC):
         return filtered_options
 
     @abc.abstractmethod
-    def load(self) -> Optional[Type[StencilObject]]:
+    def load(self) -> Optional[Type["StencilObject"]]:
         """
         Load the stencil class from the generated python module.
 
@@ -125,7 +124,7 @@ class Backend(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> Type["StencilObject"]:
         """
         Generate the stencil class from GTScript's internal representation.
 
@@ -216,7 +215,7 @@ class BaseBackend(Backend):
         if unknown_options:
             raise ValueError("Unknown backend options: '{}'".format(unknown_options))
 
-    def _load(self) -> Type[StencilObject]:
+    def _load(self) -> Type["StencilObject"]:
         stencil_class_name = self.builder.class_name
         file_name = str(self.builder.module_path)
         stencil_module = gt_utils.make_module_from_file(stencil_class_name, file_name)
@@ -227,7 +226,7 @@ class BaseBackend(Backend):
 
         return stencil_class
 
-    def load(self) -> Optional[Type[StencilObject]]:
+    def load(self) -> Optional[Type["StencilObject"]]:
         stencil_class = None
         if self.builder.stencil_id is not None:
             self._check_options(self.builder.options)
@@ -243,7 +242,7 @@ class BaseBackend(Backend):
 
     def _generate_module(
         self, *, extra_cache_info: Optional[Dict[str, Any]] = None, **kwargs: Any,
-    ) -> Type[StencilObject]:
+    ) -> Type["StencilObject"]:
         file_path = self.builder.module_path
         module_source = self._generate_module_source(**kwargs)
 
@@ -260,7 +259,7 @@ class BaseBackend(Backend):
         source = self.MODULE_GENERATOR_CLASS(builder=self.builder)(**kwargs)
         return source
 
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> Type["StencilObject"]:
         self._check_options(self.builder.options)
         return self._generate_module()
 
@@ -371,7 +370,7 @@ class BasePyExtBackend(BaseBackend):
         return module_name, file_path
 
     @abc.abstractmethod
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> Type["StencilObject"]:
         pass
 
 
@@ -455,7 +454,7 @@ class BaseModuleGenerator(abc.ABC):
         return self.backend_class.name
 
     def _generate_implementation_ir(self) -> gt_ir.StencilImplementation:
-        implementation_ir = gt_analysis.transform(self.definition_ir, self.options)
+        implementation_ir = self.builder.implementation_ir
         return implementation_ir
 
     def _generate_module_info(
