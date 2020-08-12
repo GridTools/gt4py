@@ -339,7 +339,7 @@ class JITCachingStrategy(CachingStrategy):
     @property
     def module_postfix(self) -> str:
         backend_name = gt4py.utils.slugify(self.builder.backend.name)
-        id_version = self.builder.stencil_id.version
+        id_version = self.stencil_id.version
         return f"__{backend_name}_{id_version}"
 
     @property
