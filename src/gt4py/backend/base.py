@@ -396,16 +396,23 @@ class BaseModuleGenerator(abc.ABC):
         self.implementation_ir: gt_ir.StencilImplementation
         self.module_info: Dict[str, Any]
 
-    def __call__(self, module_info: Optional[Dict[str, Any]] = None, **kwargs: Any) -> str:
+    def __call__(
+        self,
+        *,
+        module_info: Optional[Dict[str, Any]] = None,
+        implementation_ir: Optional[gt_ir.StencilImplementation] = None,
+        **kwargs: Any,
+    ) -> str:
 
         self.options = self.builder.options
         self.stencil_id = self.builder.stencil_id
         self.definition_ir = self.builder.definition_ir
-        self.implementation_ir = kwargs.get("implementation_ir", None)
+        self.implementation_ir = implementation_ir
 
         if module_info is None:
             # If a `module_info dict` is not explicitly provided by a subclass, it will be
             # generated from a `implementation_ir` object
+            assert self.implementation_ir
             self.module_info = self._generate_module_info()
         else:
             # External toolchains should provide a `module_info dict`
@@ -595,11 +602,18 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         self.pyext_module_name = None
         self.pyext_file_path = None
 
-    def __call__(self, module_info: Optional[Dict[str, Any]] = None, **kwargs: Any) -> str:
-
+    def __call__(
+        self,
+        *,
+        module_info: Optional[Dict[str, Any]] = None,
+        implementation_ir: Optional[gt_ir.StencilImplementation] = None,
+        **kwargs: Any,
+    ) -> str:
         self.pyext_module_name = kwargs["pyext_module_name"]
         self.pyext_file_path = kwargs["pyext_file_path"]
-        return super().__call__(module_info, **kwargs)
+        return super().__call__(
+            module_info=module_info, implementation_ir=implementation_ir, **kwargs
+        )
 
     def generate_imports(self) -> str:
         source = """
