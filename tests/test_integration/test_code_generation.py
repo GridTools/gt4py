@@ -36,7 +36,7 @@ from .stencil_definitions import REGISTRY as stencil_definitions
 def test_generation_cpu(name, backend):
     stencil_definition = stencil_definitions[name]
     externals = externals_registry[name]
-    stencil = gtscript.stencil(backend, stencil_definition, externals=externals)
+    stencil = gtscript.stencil(backend, stencil_definition, externals=externals, rebuild=True)
     args = {}
     for k, v in stencil_definition.__annotations__.items():
         if isinstance(v, gtscript._FieldDescriptor):
