@@ -171,7 +171,7 @@ class StencilBuilder:
         return self.options.name
 
     @property
-    def pkg_qualified_name(self) -> str:
+    def pkg_qualname(self) -> str:
         return self.root_pkg_name + "." + self.options.qualified_name
 
     @property
@@ -195,8 +195,8 @@ class StencilBuilder:
         return self.caching.module_prefix + self.options.name + self.caching.module_postfix
 
     @property
-    def module_qualified_name(self) -> str:
-        return f"{self.pkg_qualified_name}.{self.module_name}"
+    def module_qualname(self) -> str:
+        return f"{self.pkg_qualname}.{self.module_name}"
 
     @property
     def module_path(self) -> pathlib.Path:

@@ -220,7 +220,7 @@ class BaseBackend(Backend):
         file_name = str(self.builder.module_path)
         stencil_module = gt_utils.make_module_from_file(stencil_class_name, file_name)
         stencil_class = getattr(stencil_module, stencil_class_name)
-        stencil_class.__module__ = self.builder.module_qualified_name
+        stencil_class.__module__ = self.builder.module_qualname
         stencil_class._gt_id_ = self.builder.stencil_id.version
         stencil_class.definition_func = staticmethod(self.builder.definition)
 
@@ -288,7 +288,7 @@ class BasePyExtBackend(BaseBackend):
 
     @property
     def pyext_module_path(self) -> str:
-        return self.builder.module_qualified_name + "_pyext"
+        return self.builder.module_qualname + "_pyext"
 
     @property
     def pyext_class_name(self) -> str:
