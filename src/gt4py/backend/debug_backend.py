@@ -14,14 +14,20 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from gt4py import backend as gt_backend
-from gt4py import ir as gt_ir
 from gt4py import definitions as gt_definitions
+from gt4py import ir as gt_ir
 from gt4py.utils import text as gt_text
 
 from .python_generator import PythonSourceGenerator
+
+
+if TYPE_CHECKING:
+    from gt4py.stencil_builder import StencilBuilder
 
 
 class DebugSourceGenerator(PythonSourceGenerator):
@@ -161,8 +167,8 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
 
 class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
-    def __init__(self, backend_class):
-        super().__init__(backend_class)
+    def __init__(self, builder: "StencilBuilder"):
+        super().__init__(builder)
         self.source_generator = DebugSourceGenerator(
             indent_size=self.TEMPLATE_INDENT_SIZE,
             origin_marker="_at",
@@ -224,6 +230,7 @@ class DebugBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
         "is_compatible_layout": debug_is_compatible_layout,
         "is_compatible_type": debug_is_compatible_type,
     }
+
     languages = {"computation": "python", "bindings": []}
 
     MODULE_GENERATOR_CLASS = DebugModuleGenerator

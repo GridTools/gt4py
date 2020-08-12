@@ -20,10 +20,10 @@ import types
 import numpy as np
 import pytest
 
-from gt4py import gtscript
 from gt4py import definitions as gt_definitions
-from gt4py.frontend import gtscript_frontend as gt_frontend
+from gt4py import gtscript
 from gt4py import utils as gt_utils
+from gt4py.frontend import gtscript_frontend as gt_frontend
 
 from ..definitions import id_version
 
@@ -51,11 +51,11 @@ def compile_definition(
     stencil_id = frontend.get_stencil_id(
         build_options.qualified_name, definition_func, externals, options_id
     )
-    gt_frontend.GTScriptParser(
+    definition_ir = gt_frontend.GTScriptParser(
         definition_func, externals=externals or {}, options=build_options
     ).run()
 
-    return stencil_id
+    return stencil_id, definition_ir
 
 
 # ---- Tests-----
@@ -82,7 +82,7 @@ class TestInlinedExternals:
         externals = {}
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = (
@@ -105,7 +105,7 @@ class TestInlinedExternals:
         externals = {}
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + MISSING_CONSTANT
@@ -114,7 +114,7 @@ class TestInlinedExternals:
             compile_definition(definition_func, "test_missing_symbol", module, externals=externals)
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + GLOBAL_NESTED_CONSTANTS.missing
@@ -134,7 +134,7 @@ class TestInlinedExternals:
         WRONG_VALUE_CONSTANT = value_type()
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
@@ -156,13 +156,13 @@ class TestImportedExternals:
         )
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
             from gt4py.__externals__ import (
                 BOOL_CONSTANT,
                 CONSTANT,
                 NESTED_CONSTANTS,
                 VERY_NESTED_CONSTANTS,
             )
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = (
@@ -185,8 +185,8 @@ class TestImportedExternals:
         externals = dict(CONSTANT=-2.0, NESTED_CONSTANTS=types.SimpleNamespace(A=-100, B=-200))
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
             from gt4py.__externals__ import MISSING_CONSTANT
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + MISSING_CONSTANT
@@ -195,8 +195,8 @@ class TestImportedExternals:
             compile_definition(definition_func, "test_missing_symbol", module, externals=externals)
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
             from gt4py.__externals__ import NESTED_CONSTANTS
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + NESTED_CONSTANTS.missing
@@ -211,8 +211,8 @@ class TestImportedExternals:
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, id_version, value_type):
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
             from gt4py.__externals__ import WRONG_VALUE_CONSTANT
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
@@ -255,8 +255,8 @@ class TestExternalsWithSubroutines:
             dx: float,
             dy: float,
         ):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL, FORWARD, BACKWARD
             from gt4py.__externals__ import stage_laplacian, stage_laplacian_x, stage_laplacian_y
+            from gt4py.__gtscript__ import BACKWARD, FORWARD, PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 lap = stage_laplacian(dx=dx, dy=dy, phi=in_phi) + GLOBAL_CONSTANT
@@ -284,10 +284,10 @@ class TestExternalsWithSubroutines:
 class TestImports:
     def test_all_legal_combinations(self, id_version):
         def definition_func(inout_field: gtscript.Field[float]):
-            from __gtscript__ import computation, interval, PARALLEL, FORWARD, BACKWARD
             from __externals__ import EXTERNAL
-            from gt4py.__gtscript__ import computation, interval, PARALLEL, FORWARD, BACKWARD
+            from __gtscript__ import BACKWARD, FORWARD, PARALLEL, computation, interval
             from gt4py.__externals__ import EXTERNAL
+            from gt4py.__gtscript__ import BACKWARD, FORWARD, PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + EXTERNAL
@@ -485,3 +485,55 @@ class TestAssignmentSyntax:
                 in_field -= 0.5
                 in_field /= 0.5
                 in_field *= 4.0
+
+
+class TestNestedWithSyntax:
+    def test_nested_with(self):
+        @gtscript.stencil(backend="debug")
+        def definition(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL):
+                with interval(...):
+                    in_field = out_field
+
+    def test_nested_with_reordering(self):
+        def definition_fw(
+            in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
+        ):
+            from gt4py.__gtscript__ import FORWARD, computation, interval
+
+            with computation(FORWARD):
+                with interval(1, 2):
+                    in_field = out_field + 1
+                with interval(0, 1):
+                    in_field = out_field + 2
+
+        def definition_bw(
+            in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
+        ):
+            from gt4py.__gtscript__ import FORWARD, computation, interval
+
+            with computation(BACKWARD):
+                with interval(1, 2):
+                    in_field = out_field + 1
+                with interval(0, 1):
+                    in_field = out_field + 2
+
+        definitions = [
+            # name, expected axis bounds, definition
+            ("fw", [(0, 1), (1, 2)], definition_fw),
+            ("bw", [(1, 2), (0, 1)], definition_bw),
+        ]
+
+        for name, axis_bounds, definition in definitions:
+            # generate DIR
+            _, definition_ir = compile_definition(
+                definition,
+                f"test_nested_with_reordering_{name}",
+                f"TestImports_test_module_{id_version}",
+            )
+
+            # test for correct ordering
+            for i, axis_bound in enumerate(axis_bounds):
+                interval = definition_ir.computations[i].interval
+                assert interval.start.offset == axis_bound[0]
+                assert interval.end.offset == axis_bound[1]

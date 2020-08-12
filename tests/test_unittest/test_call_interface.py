@@ -17,12 +17,13 @@
 import numpy as np
 import pytest
 
-import gt4py.gtscript as gtscript
-from gt4py.gtscript import Field
 import gt4py.backend as gt_backend
+import gt4py.gtscript as gtscript
 import gt4py.storage as gt_storage
+from gt4py.gtscript import Field
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
+
 
 INTERNAL_CPU_BACKENDS = list(set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
 

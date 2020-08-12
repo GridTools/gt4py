@@ -314,7 +314,7 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
     )
 
     def definition(u, diffusion, *, weight):
-        from __externals__ import fwd_diff, BRANCH
+        from __externals__ import BRANCH, fwd_diff
 
         with computation(PARALLEL), interval(...):
             laplacian = lap_op(u=u)
@@ -375,7 +375,7 @@ class TestHorizontalDiffusionSubroutines3(gt_testing.StencilTestSuite):
         diffusion : 3D float field, output
         weight : diffusion coefficient
         """
-        from __externals__ import fwd_diff, BRANCH
+        from __externals__ import BRANCH, fwd_diff
 
         with computation(PARALLEL), interval(...):
             laplacian = lap_op(u=u)

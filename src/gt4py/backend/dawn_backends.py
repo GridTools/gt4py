@@ -19,13 +19,12 @@ import collections
 import copy
 import enum
 import inspect
-import jinja2
 import numbers
 import os
-import types
-from typing import Any, List, Dict
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 
 import dawn4py
+import jinja2
 from dawn4py.serialization import SIR
 from dawn4py.serialization import utils as sir_utils
 
@@ -34,12 +33,19 @@ from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
+
 from . import pyext_builder
+
+
+if TYPE_CHECKING:
+    from gt4py import StencilObject
+    from gt4py.stencil_builder import StencilBuilder
+
 
 DOMAIN_AXES = gt_definitions.CartesianSpace.names
 
 
-def _enum_dict(enum):
+def _enum_dict(enum: enum.Enum) -> Dict[str, Any]:
     return {k: v for k, v in enum.__dict__.items() if not k.startswith("__") and not k == "name"}
 
 
@@ -49,63 +55,61 @@ DAWN_CODEGEN_BACKENDS = _enum_dict(dawn4py.CodeGenBackend)
 
 class FieldInfoCollector(gt_ir.IRNodeVisitor):
     @classmethod
-    def apply(cls, definition_ir):
+    def apply(cls, definition_ir: gt_ir.StencilDefinition) -> Dict[str, Any]:
         return cls()(definition_ir)
 
-    def __call__(self, definition_ir):
-        self.field_info = collections.OrderedDict()
-        self.visit(definition_ir, compute_extent=gt_definitions.Extent.zeros(), in_write=False)
-
+    def __call__(self, definition_ir: gt_ir.StencilDefinition) -> Dict[str, Any]:
+        self.field_info: Dict[str, Any] = collections.OrderedDict()
+        self.visit(definition_ir, write_field="")
         return self.field_info
 
-    def visit_FieldDecl(self, node: gt_ir.FieldDecl, **kwargs):
+    def visit_FieldDecl(self, node: gt_ir.FieldDecl, **kwargs: Any) -> None:
         # NOTE Add unstructured support here
         field_dimensions = sir_utils.make_field_dimensions_cartesian(
             [1 if ax in node.axes else 0 for ax in DOMAIN_AXES]
         )
-        is_temporary = not node.is_api
         self.field_info[node.name] = dict(
             field_decl=sir_utils.make_field(
-                name=node.name, dimensions=field_dimensions, is_temporary=is_temporary
+                name=node.name, dimensions=field_dimensions, is_temporary=not node.is_api
             ),
             access=None,
             extent=gt_definitions.Extent.zeros(),
+            inputs=set(),
         )
 
-    def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
+    def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> None:
         field_name = node.name
-        if kwargs["in_write"]:
+        if len(kwargs["write_field"]) < 1:
             self.field_info[field_name]["access"] = gt_definitions.AccessKind.READ_WRITE
         elif self.field_info[field_name]["access"] is None:
             self.field_info[field_name]["access"] = gt_definitions.AccessKind.READ_ONLY
+            if kwargs["write_field"] in self.field_info:
+                self.field_info[kwargs["write_field"]]["inputs"].add(field_name)
 
         offset = tuple(node.offset.values())
-        extent = gt_definitions.Extent(
+        self.field_info[field_name]["extent"] |= gt_definitions.Extent(
             [(offset[0], offset[0]), (offset[1], offset[1]), (0, 0)]
         )  # exclude sequential axis
 
-        kwargs["compute_extent"] |= extent
-        accumulated_extent = kwargs["compute_extent"] + extent
-        self.field_info[field_name]["extent"] |= accumulated_extent
-
-    def visit_Assign(self, node: gt_ir.Assign, **kwargs):
-        kwargs["in_write"] = True
+    def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
+        kwargs["write_field"] = ""
         self.visit(node.target, **kwargs)
-        kwargs["in_write"] = False
+        kwargs["write_field"] = node.target.name
         self.visit(node.value, **kwargs)
 
 
 class SIRConverter(gt_ir.IRNodeVisitor):
-    OP_TO_CPP = gt_backend.GTPyExtGenerator.OP_TO_CPP
+    # mypy is unable to determine the type for some reason
+    OP_TO_CPP = gt_backend.GTPyExtGenerator.OP_TO_CPP  # type: ignore
 
     @classmethod
-    def apply(cls, definition_ir):
+    def apply(cls, definition_ir: gt_ir.StencilDefinition) -> Tuple[SIR.SIR, Dict[str, Any]]:
         return cls()(definition_ir)
 
-    def __call__(self, definition_ir):
+    def __call__(self, definition_ir: gt_ir.StencilDefinition) -> Tuple[SIR.SIR, Dict[str, Any]]:
         return self.visit(definition_ir)
 
-    def _make_global_variables(self, parameters: list, externals: dict):
+    def _make_global_variables(self, parameters: list, externals: dict) -> SIR.GlobalVariableMap:
         global_variables = SIR.GlobalVariableMap()
 
         for param in parameters:
@@ -124,10 +128,28 @@ class SIRConverter(gt_ir.IRNodeVisitor):
 
         return global_variables
 
-    def _make_operator(self, op: enum.Enum):
-        return self.OP_TO_CPP.get(op, op.python_symbol)
+    def _make_operator(self, op: gt_ir.UnaryOperator) -> str:
+        # This should be limited to the Enum subclass representing an operator
+        # where the :code:`python_symbol` is defined.
+        return self.OP_TO_CPP.get(op, op.python_symbol)  # type: ignore
 
-    def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral):
+    def _update_field_extents(self, field_info: Dict[str, Any]) -> None:
+        out_fields = [
+            field
+            for field in field_info.values()
+            if field["access"] == gt_definitions.AccessKind.READ_WRITE
+        ]
+
+        compute_extent = gt_definitions.Extent.zeros()
+        for i in range(len(out_fields) - 1, -1, -1):
+            out_field = out_fields[i]
+            compute_extent |= out_field["extent"]
+            for input in out_field["inputs"]:
+                in_field = field_info[input]
+                accumulated_extent = compute_extent + in_field["extent"]
+                in_field["extent"] |= accumulated_extent
+
+    def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral) -> SIR.LiteralAccessExpr:
         if node.value == gt_ir.Builtin.TRUE:
             source = "true"
         elif node.value == gt_ir.Builtin.FALSE:
@@ -136,7 +158,9 @@ class SIRConverter(gt_ir.IRNodeVisitor):
             source = "nullptr"
         return sir_utils.make_literal_access_expr(source, type=SIR.BuiltinType.Boolean)
 
-    def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral, **kwargs):
+    def visit_ScalarLiteral(
+        self, node: gt_ir.ScalarLiteral, **kwargs: Any
+    ) -> SIR.LiteralAccessExpr:
         assert node.data_type != gt_ir.DataType.INVALID
         if node.data_type in (gt_ir.DataType.AUTO, gt_ir.DataType.DEFAULT):
             sir_type = SIR.BuiltinType.type_id = SIR.BuiltinType.Auto
@@ -153,19 +177,19 @@ class SIRConverter(gt_ir.IRNodeVisitor):
             assert False, "Unrecognized data type"
         return sir_utils.make_literal_access_expr(value=repr(node.value), type=sir_type)
 
-    def visit_VarRef(self, node: gt_ir.VarRef, **kwargs):
+    def visit_VarRef(self, node: gt_ir.VarRef, **kwargs: Any) -> SIR.VarAccessExpr:
         return sir_utils.make_var_access_expr(name=node.name, is_external=True)
 
-    def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
+    def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> SIR.FieldAccessExpr:
         offset = [node.offset[ax] if ax in node.offset else 0 for ax in DOMAIN_AXES]
         return sir_utils.make_field_access_expr(name=node.name, offset=offset)
 
-    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr, **kwargs):
+    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr, **kwargs: Any) -> SIR.UnaryOperator:
         op = self._make_operator(node.op)
         operand = self.visit(node.arg)
         return sir_utils.make_unary_operator(op, operand)
 
-    def visit_BinOpExpr(self, node: gt_ir.BinOpExpr, **kwargs):
+    def visit_BinOpExpr(self, node: gt_ir.BinOpExpr, **kwargs: Any) -> SIR.BinaryOperator:
         left = self.visit(node.lhs)
         right = self.visit(node.rhs)
         if node.op.python_symbol == "**":
@@ -175,48 +199,53 @@ class SIRConverter(gt_ir.IRNodeVisitor):
             sir = sir_utils.make_binary_operator(left, op, right)
         return sir
 
-    def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr, **kwargs):
+    def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr, **kwargs: Any) -> SIR.TernaryOperator:
         cond = self.visit(node.condition)
         left = self.visit(node.then_expr)
         right = self.visit(node.else_expr)
         return sir_utils.make_ternary_operator(cond, left, right)
 
-    def visit_BlockStmt(self, node: gt_ir.BlockStmt, *, make_block=True, **kwargs):
+    def visit_BlockStmt(
+        self, node: gt_ir.BlockStmt, *, make_block: bool = True, **kwargs: Any
+    ) -> SIR.BlockStmt:
         stmts = [self.visit(stmt) for stmt in node.stmts if not isinstance(stmt, gt_ir.FieldDecl)]
         if make_block:
             stmts = sir_utils.make_block_stmt(stmts)
         return stmts
 
-    def visit_Assign(self, node: gt_ir.Assign, **kwargs):
+    def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> SIR.AssignmentExpr:
         left = self.visit(node.target)
         right = self.visit(node.value)
         stmt = sir_utils.make_assignment_stmt(left, right, "=")
         return stmt
 
-    def visit_AugAssign(self, node: gt_ir.AugAssign):
-        bin_op = gt_ir.BinOpExpr(lhs=node.target, op=node.op, rhs=node.value)
-        assign = gt_ir.Assign(target=node.target, value=bin_op)
+    def visit_AugAssign(self, node: gt_ir.AugAssign) -> SIR.AssignmentExpr:
+        # ignore types due to attribclass problem
+        bin_op = gt_ir.BinOpExpr(lhs=node.target, op=node.op, rhs=node.value)  # type: ignore
+        assign = gt_ir.Assign(target=node.target, value=bin_op)  # type: ignore
         return self.visit(assign)
 
-    def visit_If(self, node: gt_ir.If, **kwargs):
+    def visit_If(self, node: gt_ir.If, **kwargs: Any) -> SIR.IfStmt:
         cond = sir_utils.make_expr_stmt(self.visit(node.condition))
         then_part = self.visit(node.main_body)
         else_part = self.visit(node.else_body)
         stmt = sir_utils.make_if_stmt(cond, then_part, else_part)
         return stmt
 
-    def visit_AxisBound(self, node: gt_ir.AxisBound, **kwargs):
+    def visit_AxisBound(self, node: gt_ir.AxisBound, **kwargs: Any) -> Tuple[int, int]:
         assert isinstance(node.level, gt_ir.LevelMarker)
         level = SIR.Interval.Start if node.level == gt_ir.LevelMarker.START else SIR.Interval.End
         offset = node.offset
         return level, offset
 
-    def visit_AxisInterval(self, node: gt_ir.AxisInterval, **kwargs):
+    def visit_AxisInterval(self, node: gt_ir.AxisInterval, **kwargs: Any) -> SIR.Interval:
         lower_level, lower_offset = self.visit(node.start)
         upper_level, upper_offset = self.visit(node.end)
         return sir_utils.make_interval(lower_level, upper_level, lower_offset, upper_offset)
 
-    def visit_ComputationBlock(self, node: gt_ir.ComputationBlock, **kwargs):
+    def visit_ComputationBlock(
+        self, node: gt_ir.ComputationBlock, **kwargs: Any
+    ) -> SIR.VerticalRegionStmt:
         interval = self.visit(node.interval)
 
         body_ast = sir_utils.make_ast(self.visit(node.body, make_block=False))
@@ -233,12 +262,15 @@ class SIRConverter(gt_ir.IRNodeVisitor):
 
         return vertical_region_stmt
 
-    def visit_StencilDefinition(self, node: gt_ir.StencilDefinition, **kwargs):
+    def visit_StencilDefinition(
+        self, node: gt_ir.StencilDefinition, **kwargs: Any
+    ) -> Tuple[SIR.SIR, Dict[str, Any]]:
         stencils = []
-        functions = []
+        functions: List = []
         global_variables = self._make_global_variables(node.parameters, node.externals)
 
         field_info = FieldInfoCollector.apply(node)
+        self._update_field_extents(field_info)
         fields = [field_info[field_name]["field_decl"] for field_name in field_info]
 
         stencil_ast = sir_utils.make_ast(
@@ -285,12 +317,13 @@ _DAWN_BACKEND_OPTIONS = {**_DAWN_BASE_OPTIONS, **_DAWN_TOOLCHAIN_OPTIONS}
 
 
 class DawnPyModuleGenerator(gt_backend.PyExtModuleGenerator):
-    def __init__(self, backend_class):
-        super().__init__(backend_class)
+    def __init__(self, builder: "StencilBuilder"):
+        super().__init__(builder)
 
-    @classmethod
-    def _generate_module_info(cls, definition_ir, options, field_info) -> Dict[str, Any]:
-        info = {}
+    def _generate_module_info(self, field_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        info: Dict[str, Any] = {}
+        definition_ir = self.builder.definition_ir
+        field_info = field_info or {}
         if definition_ir.sources is not None:
             info["sources"].update(
                 {
@@ -344,12 +377,14 @@ class DawnPyModuleGenerator(gt_backend.PyExtModuleGenerator):
             info["gt_constants"] = {}
 
         info["gt_options"] = {
-            key: value for key, value in options.as_dict().items() if key not in ["build_info"]
+            key: value
+            for key, value in self.builder.options.as_dict().items()
+            if key not in ["build_info"]
         }
 
         return info
 
-    def generate_implementation(self):
+    def generate_implementation(self) -> str:
         sources = gt_text.TextBlock(
             indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE
         )
@@ -397,10 +432,10 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 
 
 class DawnCUDAPyModuleGenerator(DawnPyModuleGenerator):
-    def __init__(self, backend_class):
-        super().__init__(backend_class)
+    def __init__(self, builder: "StencilBuilder"):
+        super().__init__(builder)
 
-    def generate_implementation(self):
+    def generate_implementation(self) -> str:
         source = super().generate_implementation()
         return source + (
             """
@@ -424,11 +459,11 @@ cupy.cuda.Device(0).synchronize()
 
 class BaseDawnBackend(gt_backend.BasePyExtBackend):
 
-    DAWN_BACKEND_NS = None
-    DAWN_BACKEND_NAME = None
-    DAWN_BACKEND_OPTS = copy.deepcopy(_DAWN_BASE_OPTIONS)
+    DAWN_BACKEND_NS: str
+    DAWN_BACKEND_NAME: str
+    DAWN_BACKEND_OPTS: Dict[str, Any] = copy.deepcopy(_DAWN_BASE_OPTIONS)
 
-    GT_BACKEND_T = None
+    GT_BACKEND_T: str
 
     MODULE_GENERATOR_CLASS = DawnPyModuleGenerator
 
@@ -451,56 +486,42 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         gt_ir.DataType.FLOAT64: "double",
     }
 
-    _field_info = {}
+    _field_info: Dict[str, Optional[gt_definitions.FieldInfo]] = {}
 
-    @classmethod
-    def generate(
-        cls,
-        stencil_id: gt_definitions.StencilID,
-        definition_ir: gt_ir.StencilDefinition,
-        definition_func: types.FunctionType,
-        options: gt_definitions.BuildOptions,
-        **kwargs,
-    ):
+    def generate(self, **kwargs: Any) -> Type["StencilObject"]:
         from gt4py import gt_src_manager
 
-        cls._check_options(options)
+        self._check_options(self.builder.options)
 
         # Generate the Python binary extension (checking if GridTools sources are installed)
         if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
-        pyext_module_name, pyext_file_path = cls.generate_extension(
-            stencil_id, definition_ir, options, **kwargs
-        )
+        pyext_module_name, pyext_file_path = self.generate_extension(**kwargs)
 
-        if not options._impl_opts.get("disable-code-generation", False):
+        if not self.builder.options._impl_opts.get("disable-code-generation", False):
             # Dawn backends do not use the internal analysis pipeline, so a custom
             # module_info object should be passed to the module generator
-            generator = cls.MODULE_GENERATOR_CLASS(cls)
-            module_info = generator._generate_module_info(definition_ir, options, cls._field_info)
+            generator = self.MODULE_GENERATOR_CLASS(self.builder)
+            module_info = generator._generate_module_info(self._field_info)
 
             kwargs["pyext_module_name"] = pyext_module_name
             kwargs["pyext_file_path"] = pyext_file_path
 
-            module_source = generator(
-                stencil_id, definition_ir, options, module_info=module_info, **kwargs
-            )
+            module_source = generator(module_info=module_info, **kwargs)
 
-            file_name = cls.get_stencil_module_path(stencil_id)
-            os.makedirs(os.path.dirname(file_name), exist_ok=True)
-            with open(file_name, "w") as file:
-                file.write(module_source)
+            file_path = self.builder.module_path
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(module_source)
 
-        return cls._load(stencil_id, definition_func)
+        return self._load()
 
-    @classmethod
-    def generate_extension_sources(cls, stencil_id, definition_ir, options, gt_backend_t):
-        sir, field_info = SIRConverter.apply(definition_ir)
-        cls._field_info = field_info
+    def generate_extension_sources(self, gt_backend_t: str) -> Dict[str, Any]:
+        sir, field_info = SIRConverter.apply(self.builder.definition_ir)
+        self._field_info = field_info
 
-        stencil_short_name = stencil_id.qualified_name.split(".")[-1]
-        backend_opts = dict(**options.backend_opts)
-        dawn_namespace = cls.DAWN_BACKEND_NS
+        stencil_short_name = self.builder.stencil_id.qualified_name.split(".")[-1]
+        backend_opts = dict(**self.builder.options.backend_opts)
+        dawn_namespace = self.DAWN_BACKEND_NS
 
         dump_sir_opt = backend_opts.get("dump_sir", False)
         if dump_sir_opt:
@@ -526,7 +547,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             pass_groups = dawn4py.default_pass_groups()
 
         # If present, parse backend string
-        dawn_backend = DAWN_CODEGEN_BACKENDS[cls.DAWN_BACKEND_NAME or "GridTools"]
+        dawn_backend = DAWN_CODEGEN_BACKENDS[self.DAWN_BACKEND_NAME or "GridTools"]
 
         dawn_opts = {
             key: value
@@ -536,17 +557,17 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         source = dawn4py.compile(
             sir, groups=pass_groups, backend=dawn_backend, run_with_sync=False, **dawn_opts
         )
-        stencil_unique_name = cls.get_pyext_class_name(stencil_id)
-        module_name = cls.get_pyext_module_name(stencil_id)
+        stencil_unique_name = self.pyext_class_name
+        module_name = self.pyext_module_name
         pyext_sources = {f"_dawn_{stencil_short_name}.hpp": source}
 
         arg_fields = [
-            {"name": field.name, "dtype": cls._DATA_TYPE_TO_CPP[field.data_type], "layout_id": i}
-            for i, field in enumerate(definition_ir.api_fields)
+            {"name": field.name, "dtype": self._DATA_TYPE_TO_CPP[field.data_type], "layout_id": i}
+            for i, field in enumerate(self.builder.definition_ir.api_fields)
         ]
         header_file = "computation.hpp"
         parameters = []
-        for parameter in definition_ir.parameters:
+        for parameter in self.builder.definition_ir.parameters:
             if parameter.data_type in [gt_ir.DataType.BOOL]:
                 dtype = "bool"
             elif parameter.data_type in [
@@ -573,47 +594,44 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             stencil_unique_name=stencil_unique_name,
         )
 
-        for key, file_name in cls.TEMPLATE_FILES.items():
-            with open(os.path.join(cls.TEMPLATE_DIR, file_name), "r") as f:
+        for key, file_name in self.TEMPLATE_FILES.items():
+            with open(os.path.join(self.TEMPLATE_DIR, file_name), "r") as f:
                 template = jinja2.Template(f.read())
                 pyext_sources[key] = template.render(**template_args)
 
         return pyext_sources
 
-    @classmethod
     def build_extension_module(
-        cls,
-        stencil_id: gt_definitions.StencilID,
+        self,
         pyext_sources: Dict[str, str],
         pyext_build_opts: Dict[str, str],
         *,
         pyext_extra_include_dirs: List[str] = None,
         uses_cuda: bool = False,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> Tuple[str, str]:
 
         # Build extension module
-        pyext_build_path = os.path.relpath(cls.get_pyext_build_path(stencil_id))
-        os.makedirs(pyext_build_path, exist_ok=True)
+        pyext_build_path = self.pyext_build_dir_path
+        pyext_build_path.mkdir(parents=True, exist_ok=True)
         sources = []
         for key, source in pyext_sources.items():
-            src_file_name = os.path.join(pyext_build_path, key)
-            src_ext = src_file_name.split(".")[-1]
-            if src_ext not in ["h", "hpp"]:
-                sources.append(src_file_name)
+            src_file_path = pyext_build_path / key
+            src_ext = src_file_path.suffix
+            if src_ext not in [".h", ".hpp"]:
+                sources.append(str(src_file_path))
 
             if source is not gt_utils.NOTHING:
-                with open(src_file_name, "w") as f:
-                    f.write(source)
+                src_file_path.write_text(source)
 
-        pyext_target_path = cls.get_stencil_package_path(stencil_id)
-        qualified_pyext_name = cls.get_pyext_module_name(stencil_id, qualified=True)
+        pyext_target_path = str(self.builder.pkg_path)
+        qualified_pyext_name = self.pyext_module_path
 
         if uses_cuda:
             module_name, file_path = pyext_builder.build_pybind_cuda_ext(
                 qualified_pyext_name,
                 sources=sources,
-                build_path=pyext_build_path,
+                build_path=str(pyext_build_path),
                 target_path=pyext_target_path,
                 **pyext_build_opts,
             )
@@ -621,7 +639,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             module_name, file_path = pyext_builder.build_pybind_ext(
                 qualified_pyext_name,
                 sources=sources,
-                build_path=pyext_build_path,
+                build_path=str(pyext_build_path),
                 target_path=pyext_target_path,
                 **pyext_build_opts,
             )
@@ -629,20 +647,17 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
 
         return module_name, file_path
 
-    @classmethod
     def _generic_generate_extension(
-        cls, stencil_id, definition_ir, options, *, uses_cuda=False, **kwargs
-    ):
-        dawn_src_file = f"_dawn_{stencil_id.qualified_name.split('.')[-1]}.hpp"
+        self, *, uses_cuda: bool = False, **kwargs: Any
+    ) -> Tuple[str, str]:
+        dawn_src_file = f"_dawn_{self.builder.stencil_id.qualified_name.split('.')[-1]}.hpp"
 
         # Generate source
-        if not options._impl_opts.get("disable-code-generation", False):
-            gt_pyext_sources = cls.generate_extension_sources(
-                stencil_id, definition_ir, options, cls.GT_BACKEND_T
-            )
+        if not self.builder.options._impl_opts.get("disable-code-generation", False):
+            gt_pyext_sources = self.generate_extension_sources(self.GT_BACKEND_T)
         else:
-            # Pass NOTHING to the builder means try to reuse the source code files
-            gt_pyext_sources = {key: gt_utils.NOTHING for key in cls.TEMPLATE_FILES.keys()}
+            # Pass NOTHING to the self.builder means try to reuse the source code files
+            gt_pyext_sources = {key: gt_utils.NOTHING for key in self.TEMPLATE_FILES.keys()}
             gt_pyext_sources[dawn_src_file] = gt_utils.NOTHING
 
         final_ext = ".cu" if uses_cuda else ".cpp"
@@ -654,11 +669,11 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
 
         # Build extension module
         pyext_opts = dict(
-            verbose=options.backend_opts.get("verbose", False),
-            clean=options.backend_opts.get("clean", False),
+            verbose=self.builder.options.backend_opts.get("verbose", False),
+            clean=self.builder.options.backend_opts.get("clean", False),
             **pyext_builder.get_gt_pyext_build_opts(
-                debug_mode=options.backend_opts.get("debug_mode", False),
-                add_profile_info=options.backend_opts.get("add_profile_info", False),
+                debug_mode=self.builder.options.backend_opts.get("debug_mode", False),
+                add_profile_info=self.builder.options.backend_opts.get("add_profile_info", False),
                 uses_cuda=uses_cuda,
             ),
         )
@@ -671,13 +686,12 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             ]
         )
 
-        return cls.build_extension_module(
-            stencil_id, gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda, **kwargs
+        return self.build_extension_module(
+            gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda, **kwargs
         )
 
-    @classmethod
     @abc.abstractmethod
-    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         pass
 
 
@@ -690,13 +704,12 @@ class DawnGTX86Backend(BaseDawnBackend):
 
     name = "dawn:gtx86"
     options = _DAWN_BACKEND_OPTIONS
-    storage_info = gt_backend.GTX86Backend.storage_info
+    # ignore types because mypy is bugging out on those
+    storage_info = gt_backend.GTX86Backend.storage_info  # type: ignore
+    languages = gt_backend.GTX86Backend.languages  # type: ignore
 
-    @classmethod
-    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
-        return cls._generic_generate_extension(
-            stencil_id, definition_ir, options, uses_cuda=False, **kwargs
-        )
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return self._generic_generate_extension(uses_cuda=False, **kwargs)
 
 
 @gt_backend.register
@@ -708,13 +721,12 @@ class DawnGTMCBackend(BaseDawnBackend):
 
     name = "dawn:gtmc"
     options = _DAWN_BACKEND_OPTIONS
-    storage_info = gt_backend.GTMCBackend.storage_info
+    # ignore types because mypy is bugging out on those
+    storage_info = gt_backend.GTMCBackend.storage_info  # type: ignore
+    languages = gt_backend.GTMCBackend.languages  # type: ignore
 
-    @classmethod
-    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
-        return cls._generic_generate_extension(
-            stencil_id, definition_ir, options, uses_cuda=False, **kwargs
-        )
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return self._generic_generate_extension(uses_cuda=False, **kwargs)
 
 
 @gt_backend.register
@@ -727,13 +739,12 @@ class DawnGTCUDABackend(BaseDawnBackend):
 
     name = "dawn:gtcuda"
     options = _DAWN_BACKEND_OPTIONS
-    storage_info = gt_backend.GTCUDABackend.storage_info
+    # ignore types because mypy is bugging out on those
+    storage_info = gt_backend.GTCUDABackend.storage_info  # type: ignore
+    languages = gt_backend.GTCUDABackend.languages  # type: ignore
 
-    @classmethod
-    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
-        return cls._generic_generate_extension(
-            stencil_id, definition_ir, options, uses_cuda=True, **kwargs
-        )
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return self._generic_generate_extension(uses_cuda=True, **kwargs)
 
 
 @gt_backend.register
@@ -745,13 +756,12 @@ class DawnNaiveBackend(BaseDawnBackend):
 
     name = "dawn:naive"
     options = _DAWN_BACKEND_OPTIONS
-    storage_info = gt_backend.GTX86Backend.storage_info
+    # ignore types because mypy is bugging out on those
+    storage_info = gt_backend.GTX86Backend.storage_info  # type: ignore
+    languages = gt_backend.GTX86Backend.languages  # type: ignore
 
-    @classmethod
-    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
-        return cls._generic_generate_extension(
-            stencil_id, definition_ir, options, uses_cuda=False, **kwargs
-        )
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return self._generic_generate_extension(uses_cuda=False, **kwargs)
 
 
 @gt_backend.register
@@ -763,13 +773,12 @@ class DawnOptBackend(BaseDawnBackend):
 
     name = "dawn:cxxopt"
     options = _DAWN_BACKEND_OPTIONS
-    storage_info = gt_backend.GTX86Backend.storage_info
+    # ignore types because mypy is bugging out on those
+    storage_info = gt_backend.GTX86Backend.storage_info  # type: ignore
+    languages = gt_backend.GTX86Backend.languages  # type: ignore
 
-    @classmethod
-    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
-        return cls._generic_generate_extension(
-            stencil_id, definition_ir, options, uses_cuda=False, **kwargs
-        )
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return self._generic_generate_extension(uses_cuda=False, **kwargs)
 
 
 @gt_backend.register
@@ -782,10 +791,9 @@ class DawnCUDABackend(BaseDawnBackend):
 
     name = "dawn:cuda"
     options = _DAWN_BACKEND_OPTIONS
-    storage_info = gt_backend.GTCUDABackend.storage_info
+    # ignore types because mypy is bugging out on those
+    storage_info = gt_backend.GTCUDABackend.storage_info  # type: ignore
+    languages = gt_backend.GTCUDABackend.languages  # type: ignore
 
-    @classmethod
-    def generate_extension(cls, stencil_id, definition_ir, options, **kwargs):
-        return cls._generic_generate_extension(
-            stencil_id, definition_ir, options, uses_cuda=True, **kwargs
-        )
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return self._generic_generate_extension(uses_cuda=True, **kwargs)

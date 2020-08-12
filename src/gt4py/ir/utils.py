@@ -20,9 +20,11 @@ import numbers
 import textwrap
 import types
 
-from .nodes import *
-from gt4py.utils import NOTHING
 import gt4py.gtscript as gtscript
+from gt4py.utils import NOTHING
+
+from .nodes import *
+
 
 # --- Definition IR ---
 DEFAULT_LAYOUT_ID = "_default_layout_id_"

@@ -14,20 +14,21 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
-import pytest
-import numpy as np
 import itertools
+import os
 
-import gt4py.storage as gt_store
-import gt4py.backend as gt_backend
-
-from .utils import id_version  # import fixture used by pytest
-from ..reference_cpp_regression import reference_module
-
-from .utils import generate_test_module
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
+import numpy as np
+import pytest
+
+import gt4py.backend as gt_backend
+import gt4py.storage as gt_store
+
+from ..reference_cpp_regression import reference_module
+from .utils import id_version  # import fixture used by pytest
+from .utils import generate_test_module
+
 
 REGISTRY = list()
 

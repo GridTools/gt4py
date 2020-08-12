@@ -21,18 +21,18 @@ import itertools
 from typing import Optional, Set, Tuple, Union
 
 from gt4py import definitions as gt_definitions
-from gt4py.definitions import Extent
 from gt4py import ir as gt_ir
 from gt4py.analysis import (
-    SymbolInfo,
+    DomainBlockInfo,
+    IJBlockInfo,
+    IntervalBlockInfo,
     IntervalInfo,
     StatementInfo,
-    IntervalBlockInfo,
-    IJBlockInfo,
-    DomainBlockInfo,
+    SymbolInfo,
     TransformData,
     TransformPass,
 )
+from gt4py.definitions import Extent
 
 
 class IRSpecificationError(gt_definitions.GTSpecificationError):

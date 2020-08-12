@@ -20,13 +20,13 @@ import numpy as np
 import pytest
 
 import gt4py as gt
-from gt4py import gtscript
 from gt4py import backend as gt_backend
+from gt4py import gtscript
 from gt4py import storage as gt_storage
 
-from .stencil_definitions import REGISTRY as stencil_definitions
-from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
+from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
+from .stencil_definitions import REGISTRY as stencil_definitions
 
 
 @pytest.mark.parametrize(
@@ -35,7 +35,7 @@ from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BAC
 def test_generation_cpu(name, backend):
     stencil_definition = stencil_definitions[name]
     externals = externals_registry[name]
-    stencil = gtscript.stencil(backend, stencil_definition, externals=externals)
+    stencil = gtscript.stencil(backend, stencil_definition, externals=externals, rebuild=True)
     args = {}
     for k, v in stencil_definition.__annotations__.items():
         if isinstance(v, gtscript._FieldDescriptor):

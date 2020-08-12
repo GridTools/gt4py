@@ -14,6 +14,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from .concepts import *
+# Disable isort to avoid circular imports
+# isort: off
+from .base import *
+
+# isort: on
 
 from . import gtscript_frontend

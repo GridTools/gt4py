@@ -14,21 +14,22 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
-import pytest
-import numpy as np
 import itertools
+import os
 
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
+import numpy as np
+import pytest
 
-import gt4py.storage as gt_store
 import gt4py.backend as gt_backend
+import gt4py.storage as gt_store
 
-from .utils import id_version  # import fixture used by pytest
-from .utils import generate_test_module
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS, id_version
 from ..reference_cpp_regression import reference_module
+from .utils import id_version  # import fixture used by pytest
+from .utils import generate_test_module
+
 
 INTERNAL_CPU_BACKENDS = list(set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
 INTERNAL_GPU_BACKENDS = list(set(GPU_BACKENDS) & set(INTERNAL_BACKENDS))

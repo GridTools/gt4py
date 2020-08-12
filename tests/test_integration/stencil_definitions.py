@@ -17,13 +17,14 @@
 import numpy as np
 
 import gt4py as gt
-from gt4py import gtscript
-from gt4py import ir as gt_ir
 from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
+from gt4py import gtscript
+from gt4py import ir as gt_ir
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
 from gt4py.definitions import Extent, StencilID
+
 
 REGISTRY = gt_utils.Registry()
 EXTERNALS_REGISTRY = gt_utils.Registry()
@@ -212,3 +213,15 @@ def horizontal_diffusion(in_field: Field3D, out_field: Field3D, coeff: Field3D):
 def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
     with computation(PARALLEL), interval(...):
         mask = in_field >= 0
+
+
+@register
+def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3D, qmin: float):
+    with computation(PARALLEL), interval(...):
+        diff_23 = 0.0
+        if extm and extm[0, 0, -1]:
+            a4_2 = a4_1
+        elif extm and extm[0, 0, 1]:
+            a4_3 = a4_1
+        else:
+            diff_23 = a4_2 - a4_3
