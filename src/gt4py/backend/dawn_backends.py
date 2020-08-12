@@ -28,7 +28,6 @@ import jinja2
 from dawn4py.serialization import SIR
 from dawn4py.serialization import utils as sir_utils
 
-from gt4py import StencilObject
 from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
@@ -39,6 +38,7 @@ from . import pyext_builder
 
 
 if TYPE_CHECKING:
+    from gt4py import StencilObject
     from gt4py.stencil_builder import StencilBuilder
 
 
@@ -432,7 +432,7 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 
 
 class DawnCUDAPyModuleGenerator(DawnPyModuleGenerator):
-    def __init__(self, builder: StencilBuilder):
+    def __init__(self, builder: "StencilBuilder"):
         super().__init__(builder)
 
     def generate_implementation(self) -> str:
@@ -488,7 +488,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
 
     _field_info: Dict[str, Optional[gt_definitions.FieldInfo]] = {}
 
-    def generate(self, **kwargs: Any) -> Type[StencilObject]:
+    def generate(self, **kwargs: Any) -> Type["StencilObject"]:
         from gt4py import gt_src_manager
 
         self._check_options(self.builder.options)

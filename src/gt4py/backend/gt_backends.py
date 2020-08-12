@@ -18,7 +18,7 @@ import abc
 import functools
 import numbers
 import os
-from typing import Any, Dict, List, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Type, Union
 
 import jinja2
 import numpy as np
@@ -28,10 +28,13 @@ from gt4py import definitions as gt_definitions
 from gt4py import gt_src_manager
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
-from gt4py.stencil_object import StencilObject
 from gt4py.utils import text as gt_text
 
 from . import pyext_builder
+
+
+if TYPE_CHECKING:
+    from gt4py.stencil_object import StencilObject
 
 
 def make_x86_layout_map(mask: tuple):
@@ -484,7 +487,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> Type["StencilObject"]:
         self._check_options(self.builder.options)
 
         implementation_ir = self.builder.implementation_ir

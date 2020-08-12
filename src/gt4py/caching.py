@@ -362,8 +362,8 @@ class NoCachingStrategy(CachingStrategy):
     All methods related to generating or checking the cache info are noops and cache validation
     always fails.
 
-    Params
-    ------
+    Parameters
+    ----------
     builder:
         A stencil builder instance
 
