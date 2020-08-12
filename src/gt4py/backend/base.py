@@ -142,10 +142,12 @@ class Backend(abc.ABC):
 
     @property
     def extra_cache_info(self) -> Dict[str, Any]:
+        """Hook for storing additional data in cache info file."""
         return {}
 
     @property
     def extra_cache_validation_data(self) -> Dict[str, Any]:
+        """Hook for validating additional data from cache info file during consistency check."""
         return {}
 
 
