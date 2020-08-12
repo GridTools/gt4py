@@ -33,8 +33,11 @@ class StencilBuilder:
     frontend:
         Frontend class to be used
 
+    Notes
+    -----
     Backends can use the :py:meth:`with_backend_data` method the :py:meth:`backend_data` property
     to set and retrieve backend specific information for use in later steps.
+
     """
 
     def __init__(
@@ -88,8 +91,8 @@ class StencilBuilder:
         """
         Fluidly set the build options.
 
-        Params
-        ------
+        Parameters
+        ----------
         name:
             Name of the stencil
 
@@ -98,6 +101,7 @@ class StencilBuilder:
 
         kwargs:
             passed through to the options instance
+
         """
         self._build_data = {}
         # mypy attribkwclass bug
@@ -108,14 +112,16 @@ class StencilBuilder:
         """
         Fluidly set the backend type from backend name.
 
-        Params
-        ------
+        Parameters
+        ----------
         backend_name:
             Name of the backend type.
 
         Notes
         -----
         Resets all cached build data.
+
+
         """
         self._build_data = {}
         self.backend = gt4py.backend.from_name(backend_name)(self)

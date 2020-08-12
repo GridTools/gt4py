@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import TYPE_CHECKING
+
 import numpy as np
 
 from gt4py import backend as gt_backend

@@ -1,7 +1,7 @@
 import pytest
 
 import gt4py
-from gt4py.gtscript import computation, interval, PARALLEL, Field
+from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
 

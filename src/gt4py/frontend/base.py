@@ -20,7 +20,7 @@ from typing import Any, Dict, Union
 from gt4py import utils as gt_utils
 from gt4py.definitions import BuildOptions, StencilID
 from gt4py.ir import StencilDefinition
-from gt4py.type_hints import StencilFunc, AnnotatedStencilFunc
+from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
 
 
 REGISTRY = gt_utils.Registry()
