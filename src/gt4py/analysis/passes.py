@@ -77,13 +77,16 @@ def _make_parallel_interval_info(parallel_interval):
 
 def _make_parallel_interval_from_info(parallel_interval_info):
     """Create a list of AxisInterval from list of IntervalInfos."""
-    return [
-        gt_ir.AxisInterval(
-            start=gt_ir.AxisBound(level=interval_info.start[0], offset=interval_info.start[1]),
-            end=gt_ir.AxisBound(level=interval_info.end[0], offset=interval_info.end[1]),
-        )
-        for interval_info in parallel_interval_info
-    ]
+    if parallel_interval_info is None:
+        return None
+    else:
+        return [
+            gt_ir.AxisInterval(
+                start=gt_ir.AxisBound(level=interval_info.start[0], offset=interval_info.start[1]),
+                end=gt_ir.AxisBound(level=interval_info.end[0], offset=interval_info.end[1]),
+            )
+            for interval_info in parallel_interval_info
+        ]
 
 
 class InitInfoPass(TransformPass):
