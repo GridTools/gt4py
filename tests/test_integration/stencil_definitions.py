@@ -213,3 +213,15 @@ def horizontal_diffusion(in_field: Field3D, out_field: Field3D, coeff: Field3D):
 def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
     with computation(PARALLEL), interval(...):
         mask = in_field >= 0
+
+
+@register
+def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3D, qmin: float):
+    with computation(PARALLEL), interval(...):
+        diff_23 = 0.0
+        if extm and extm[0, 0, -1]:
+            a4_2 = a4_1
+        elif extm and extm[0, 0, 1]:
+            a4_3 = a4_1
+        else:
+            diff_23 = a4_2 - a4_3

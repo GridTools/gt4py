@@ -24,6 +24,7 @@ import types
 
 from gt4py import backend as gt_backend
 from gt4py import frontend as gt_frontend
+from gt4py.stencil_builder import StencilBuilder
 
 
 def load_stencil(frontend_name, backend_name, definition_func, externals, build_options):
@@ -31,28 +32,23 @@ def load_stencil(frontend_name, backend_name, definition_func, externals, build_
     """
 
     # Load components
-    backend = gt_backend.from_name(backend_name)
-    if backend is None:
+    backend_cls = gt_backend.from_name(backend_name)
+    if backend_cls is None:
         raise ValueError("Unknown backend name ({name})".format(name=backend_name))
 
     frontend = gt_frontend.from_name(frontend_name)
     if frontend is None:
         raise ValueError("Invalid frontend specification ({name})".format(name=frontend_name))
 
-    # Create ID
-    options_id = backend.get_options_id(build_options)
-    stencil_id = frontend.get_stencil_id(
-        build_options.qualified_name, definition_func, externals, options_id
-    )
+    builder = StencilBuilder(
+        definition_func, options=build_options, backend=backend_cls, frontend=frontend
+    ).with_externals(externals)
 
     # Load or generate class
-    stencil_class = (
-        None if build_options.rebuild else backend.load(stencil_id, definition_func, build_options)
-    )
+    stencil_class = None if build_options.rebuild else builder.backend.load()
 
     if stencil_class is None:
-        definition_ir = frontend.generate(definition_func, externals, build_options)
-        stencil_class = backend.generate(stencil_id, definition_ir, definition_func, build_options)
+        stencil_class = builder.backend.generate()
 
     return stencil_class
 

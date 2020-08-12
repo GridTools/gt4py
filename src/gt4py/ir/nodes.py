@@ -179,6 +179,7 @@ import collections
 import copy
 import enum
 import operator
+from typing import List
 
 import numpy as np
 
@@ -660,6 +661,8 @@ class AxisBound(Node):
     level = attribute(of=UnionOf[LevelMarker, VarRef])
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
+    name: str
+    index: List
 
 
 @attribclass
@@ -667,15 +670,6 @@ class AxisInterval(Node):
     start = attribute(of=AxisBound)
     end = attribute(of=AxisBound)
     loc = attribute(of=Location, optional=True)
-
-    @classmethod
-    def full_interval(cls):
-        interval = cls(
-            start=AxisBound(level=LevelMarker.START, offset=0),
-            end=AxisBound(level=LevelMarker.END, offset=0),
-        )
-
-        return interval
 
     @classmethod
     def full_interval(cls, order=IterationOrder.PARALLEL):
