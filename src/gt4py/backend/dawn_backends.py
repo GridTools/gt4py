@@ -506,7 +506,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             os.makedirs(os.path.dirname(file_name), exist_ok=True)
             with open(file_name, "w") as file:
                 file.write(module_source)
-            cls.update_cache(stencil_id, dict(pyext_file_path=pyext_file_path))
+            self.builder.caching.update_cache_info(stencil_id, dict(pyext_file_path=pyext_file_path))
 
         return cls._load(stencil_id, definition_func)
 
