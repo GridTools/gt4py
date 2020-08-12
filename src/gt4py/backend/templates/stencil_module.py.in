@@ -140,7 +140,7 @@ class {{ class_name }}(StencilObject):
             parameter_args=parameter_args,
             domain=domain,
             origin=origin,
-            splitters=spliiters,
+            splitters=splitters,
             validate_args=validate_args,
             exec_info=exec_info,
         )
@@ -152,7 +152,10 @@ class {{ class_name }}(StencilObject):
         if exec_info is not None:
             exec_info["call_end_time"] = time.perf_counter()
 
-    def run(self, _domain_, _origin_, exec_info, *, {{- field_names|join(", ") -}}, {{- param_names|join(", ") -}}, {{- splitters|join(", ") -}}):
+    def run(self, _domain_, _origin_, exec_info, *,
+            {{- field_names|join(", ") -}}
+            {% if param_names|length > 0 %},{% endif %}{{- param_names|join(", ") -}}
+            {% if gt_splitters|length > 0 %},{% endif %}{{- gt_splitters|join(", ") -}}):
         if exec_info is not None:
             exec_info["domain"] = _domain_
             exec_info["origin"] = _origin_

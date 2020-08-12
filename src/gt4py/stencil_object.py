@@ -308,7 +308,10 @@ class StencilObject(abc.ABC):
                 raise ValueError(f"Parameter '{name}' is None.")
 
         # Filter splitters that are used
-        stencil_splitters = {splitters[var] for var in self.splitters}
+        if splitters is not None:
+            stencil_splitters = {var: splitters[var] for var in self.splitters}
+        else:
+            stencil_splitters = dict()
 
         # Origins
         if origin is None:
@@ -331,7 +334,7 @@ class StencilObject(abc.ABC):
         self.run(
             _domain_=domain,
             _origin_=origin,
-            _exec_info=exec_info,
+            exec_info=exec_info,
             **field_args,
             **parameter_args,
             **stencil_splitters,
