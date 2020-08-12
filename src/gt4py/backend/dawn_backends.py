@@ -245,7 +245,7 @@ class SIRConverter(gt_ir.IRNodeVisitor):
 
     def visit_ComputationBlock(
         self, node: gt_ir.ComputationBlock, **kwargs: Any
-    ) -> SIR.VerticalRegionStmt:
+    ) -> SIR.VerticalRegionDeclStmt:
         interval = self.visit(node.interval)
 
         body_ast = sir_utils.make_ast(self.visit(node.body, make_block=False))
@@ -512,7 +512,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             file_path = self.builder.module_path
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(module_source)
-            self.builder.caching.update_cache_info(stencil_id, dict(pyext_file_path=pyext_file_path))
+            self.builder.caching.update_cache_info()
 
         return self._load()
 

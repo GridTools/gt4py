@@ -23,6 +23,7 @@ import gt4py as gt
 from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import gtscript
+from gt4py import stencil_builder as gt_builder
 from gt4py import storage as gt_storage
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
@@ -108,9 +109,11 @@ def test_cache_info(name, backend):
     externals = externals_registry[name]
     stencil = gtscript.stencil(backend, stencil_definition, externals=externals)
 
-    module = stencil.options["module"]
-    qualified_name = f"{module}.{name}"
-    stencil_id = gt_definitions.StencilID(qualified_name, stencil._gt_id_)
+    builder = gt_builder.StencilBuilder(
+        stencil_definition,
+        backend=gt_backend.from_name(backend),
+        options=gt_definitions.BuildOptions(name=name, module=stencil.options["module"]),
+    )
+    builder.with_externals(externals)
 
-    backend_class = gt_backend.from_name(backend)
-    assert backend_class.check_cache(stencil_id)
+    assert builder.caching.is_cache_info_available_and_consistent(validate_hash=True)
