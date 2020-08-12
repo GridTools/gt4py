@@ -405,12 +405,10 @@ class BaseModuleGenerator(abc.ABC):
 
         if module_info is None:
             # If a `module_info dict` is not explicitly provided by a subclass, it will be
-            # generated from a `implementation_ir` object. If this is also not provided, the
-            # internal analysis pipeline would be used as a fallback to generate both
-            if self.implementation_ir is None:
-                self.implementation_ir = self._generate_implementation_ir()
+            # generated from a `implementation_ir` object
             self.module_info = self._generate_module_info()
         else:
+            # External toolchains should provide a `module_info dict`
             self.module_info = module_info
 
         module_info = self.module_info
