@@ -347,8 +347,8 @@ class BasePyExtBackend(BaseBackend):
         pyext_target_file_path = self.builder.pkg_path
         qualified_pyext_name = self.pyext_module_path
 
-        pyext_build_args = dict(
-            qualified_pyext_name,
+        pyext_build_args: Dict[str, Any] = dict(
+            name=qualified_pyext_name,
             sources=sources,
             build_path=str(pyext_build_path),
             target_path=str(pyext_target_file_path),

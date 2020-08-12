@@ -18,7 +18,7 @@ import abc
 import functools
 import numbers
 import os
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import jinja2
 import numpy as np
@@ -37,12 +37,12 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-def make_x86_layout_map(mask: tuple):
+def make_x86_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     ctr = iter(range(sum(mask)))
     if len(mask) < 3:
-        layout = [next(ctr) if m else None for m in mask]
+        layout: List[Optional[int]] = [next(ctr) if m else None for m in mask]
     else:
-        swapped_mask = [*mask[3:], *mask[:3]]
+        swapped_mask: List[Optional[int]] = [*mask[3:], *mask[:3]]
         layout = [next(ctr) if m else None for m in swapped_mask]
 
         layout = [*layout[-3:], *layout[:-3]]
@@ -66,12 +66,12 @@ def gtcpu_is_compatible_type(field):
     return isinstance(field, np.ndarray)
 
 
-def make_mc_layout_map(mask: tuple):
+def make_mc_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     ctr = reversed(range(sum(mask)))
     if len(mask) < 3:
-        layout = [next(ctr) if m else None for m in mask]
+        layout: List[Optional[int]] = [next(ctr) if m else None for m in mask]
     else:
-        swapped_mask = list(mask)
+        swapped_mask: List[Optional[int]] = list(mask)
         tmp = swapped_mask[1]
         swapped_mask[1] = swapped_mask[2]
         swapped_mask[2] = tmp
@@ -97,7 +97,7 @@ def mc_is_compatible_layout(field):
     return True
 
 
-def cuda_layout(mask: tuple):
+def cuda_layout(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     ctr = reversed(range(sum(mask)))
     return tuple([next(ctr) if m else None for m in mask])
 
