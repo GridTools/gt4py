@@ -216,7 +216,7 @@ class BaseBackend(Backend):
     def load(self) -> Optional[Type["StencilObject"]]:
         stencil_class = None
         if self.builder.stencil_id is not None:
-            self._check_options(self.builder.options)
+            self.check_options(self.builder.options)
             validate_hash = not self.builder.options._impl_opts.get(
                 "disable-cache-validation", False
             )
@@ -228,33 +228,8 @@ class BaseBackend(Backend):
         return stencil_class
 
     def generate(self) -> Type["StencilObject"]:
-        self._check_options(self.builder.options)
-        return self._generate_module()
-
-    def _check_options(self, options: gt_definitions.BuildOptions) -> None:
-        assert self.options is not None
-        unknown_options = set(options.backend_opts.keys()) - set(self.options.keys())
-        if unknown_options:
-            raise ValueError("Unknown backend options: '{}'".format(unknown_options))
-
-    def _generate_module(self, **kwargs: Any,) -> Type["StencilObject"]:
-        file_path = self.builder.module_path
-        module_source = self._generate_module_source(**kwargs)
-
-        if not self.builder.options._impl_opts.get("disable-code-generation", False):
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            file_path.write_text(module_source)
-            self.builder.caching.update_cache_info()
-
-        return self._load()
-
-    def _generate_module_source(
-        self, *, args_data: Optional[Dict[str, Any]] = None, **kwargs: Any
-    ) -> str:
-        """Generate the module source code with or without stencil id."""
-        args_data = args_data or self.make_args_data_from_iir(self.builder.implementation_ir)
-        source = self.MODULE_GENERATOR_CLASS()(self.builder, args_data, **kwargs)
-        return source
+        self.check_options(self.builder.options)
+        return self.make_module()
 
     def _load(self) -> Type["StencilObject"]:
         stencil_class_name = self.builder.class_name
@@ -266,6 +241,31 @@ class BaseBackend(Backend):
         stencil_class.definition_func = staticmethod(self.builder.definition)
 
         return stencil_class
+
+    def check_options(self, options: gt_definitions.BuildOptions) -> None:
+        assert self.options is not None
+        unknown_options = set(options.backend_opts.keys()) - set(self.options.keys())
+        if unknown_options:
+            raise ValueError("Unknown backend options: '{}'".format(unknown_options))
+
+    def make_module(self, **kwargs: Any,) -> Type["StencilObject"]:
+        file_path = self.builder.module_path
+        module_source = self.make_module_source(**kwargs)
+
+        if not self.builder.options._impl_opts.get("disable-code-generation", False):
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(module_source)
+            self.builder.caching.update_cache_info()
+
+        return self._load()
+
+    def make_module_source(
+        self, *, args_data: Optional[Dict[str, Any]] = None, **kwargs: Any
+    ) -> str:
+        """Generate the module source code with or without stencil id."""
+        args_data = args_data or self.make_args_data_from_iir(self.builder.implementation_ir)
+        source = self.MODULE_GENERATOR_CLASS()(self.builder, args_data, **kwargs)
+        return source
 
     @staticmethod
     def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> Dict[str, Any]:
@@ -318,13 +318,13 @@ class PurePythonBackendCLIMixin(CLIBackendMixin):
 
     #: stencil python source generator method:
     #:  In order to use this mixin, the backend class must implement
-    #:  a :py:meth:`_generate_module_source` method or derive from
+    #:  a :py:meth:`make_module_source` method or derive from
     #:  :py:meth:`BaseBackend`.
-    _generate_module_source: Callable
+    make_module_source: Callable
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         file_name = self.builder.module_path.name
-        source = self._generate_module_source(implementation_ir=self.builder.implementation_ir)
+        source = self.make_module_source(implementation_ir=self.builder.implementation_ir)
         return {str(file_name): source}
 
 
@@ -366,6 +366,10 @@ class BasePyExtBackend(BaseBackend):
             return {}
         pyext_md5 = hashlib.md5(pyext_file_path.read_bytes()).hexdigest()
         return {**super().extra_cache_info, "pyext_md5": pyext_md5}
+
+    @abc.abstractmethod
+    def generate(self) -> Type["StencilObject"]:
+        pass
 
     def build_extension_module(
         self,
@@ -412,10 +416,6 @@ class BasePyExtBackend(BaseBackend):
         )
 
         return module_name, file_path
-
-    @abc.abstractmethod
-    def generate(self) -> Type["StencilObject"]:
-        pass
 
 
 class BaseModuleGenerator(abc.ABC):
@@ -509,6 +509,10 @@ class BaseModuleGenerator(abc.ABC):
     def backend_name(self) -> str:
         return self.builder.backend.name
 
+    @abc.abstractmethod
+    def generate_implementation(self) -> str:
+        pass
+
     def generate_imports(self) -> str:
         source = ""
         return source
@@ -551,10 +555,6 @@ class BaseModuleGenerator(abc.ABC):
     def generate_post_run(self) -> str:
         source = ""
         return source
-
-    @abc.abstractmethod
-    def generate_implementation(self) -> str:
-        pass
 
 
 class PyExtModuleGenerator(BaseModuleGenerator):
@@ -612,26 +612,26 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
             )
             sources.extend(source.splitlines())
         else:
-            source = "\n"
+            sources.extend("\n")
 
         return sources.text
 
 
 class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
+    def generate_implementation(self) -> str:
+        source = (
+            super().generate_implementation()
+            + """
+    cupy.cuda.Device(0).synchronize()
+    """
+        )
+        return source
+
     def generate_imports(self) -> str:
         source = (
             """
 import cupy
 """
             + super().generate_imports()
-        )
-        return source
-
-    def generate_implementation(self) -> str:
-        source = (
-            super().generate_implementation()
-            + """
-cupy.cuda.Device(0).synchronize()
-"""
         )
         return source
