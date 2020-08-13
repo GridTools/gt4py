@@ -179,7 +179,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
     def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
         call = self.NATIVE_FUNC_TO_PYTHON[node.func]
-        args = ",".join([self.visit(arg) for arg in node.args])
+        args = ",".join(self.visit(arg) for arg in node.args)
         return f"{call}({args})"
 
     def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr):

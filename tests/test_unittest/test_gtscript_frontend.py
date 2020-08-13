@@ -580,3 +580,22 @@ class TestNativeFunctions:
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field += sinus(in_field)
+
+    def test_native_function_unary(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field = not isfinite(in_field)
+
+    def test_native_function_binary(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field = asin(in_field) + 1
+
+    def test_native_function_ternary(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field = asin(in_field) + 1 if 1 < in_field else sin(in_field)
+

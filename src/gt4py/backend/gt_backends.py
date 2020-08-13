@@ -318,7 +318,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         call = self.NATIVE_FUNC_TO_CPP[node.func]
         if self.gt_backend_t != "cuda":
             call = "std::" + call
-        args = ",".join([self.visit(arg) for arg in node.args])
+        args = ",".join(self.visit(arg) for arg in node.args)
         return f"{call}({args})"
 
     def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr):

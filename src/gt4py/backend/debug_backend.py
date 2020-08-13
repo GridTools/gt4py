@@ -196,6 +196,15 @@ class _Accessor:
 
         return sources.text
 
+    def generate_imports(self) -> str:
+        source = (
+            """
+import math
+"""
+            + super().generate_imports()
+        )
+        return source
+
 
 def debug_layout(mask):
     ctr = iter(range(sum(mask)))

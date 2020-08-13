@@ -397,36 +397,32 @@ class FieldRef(Ref):
 
 @enum.unique
 class NativeFunction(enum.Enum):
-    ABS = "abs"
-    MIN = "min"
-    MAX = "max"
-    MOD = "mod"
+    ABS = 1
+    MIN = 2
+    MAX = 3
+    MOD = 4
 
-    SIN = "sin"
-    COS = "cos"
-    TAN = "tan"
-    ARCSIN = "arcsin"
-    ARCCOS = "arccos"
-    ARCTAN = "arctan"
+    SIN = 5
+    COS = 6
+    TAN = 7
+    ARCSIN = 8
+    ARCCOS = 9
+    ARCTAN = 10
 
-    SQRT = "sqrt"
-    EXP = "exp"
-    LOG = "log"
+    SQRT = 11
+    EXP = 12
+    LOG = 13
 
-    ISFINITE = "isfinite"
-    ISINF = "isinf"
-    ISNAN = "isnan"
-    FLOOR = "floor"
-    CEIL = "ceil"
-    TRUNC = "trunc"
+    ISFINITE = 14
+    ISINF = 15
+    ISNAN = 16
+    FLOOR = 17
+    CEIL = 18
+    TRUNC = 19
 
     @property
     def arity(self):
         return type(self).IR_OP_TO_NUM_ARGS[self]
-
-    @classmethod
-    def values(cls):
-        return [func.value for func in cls]
 
 
 NativeFunction.IR_OP_TO_NUM_ARGS = {

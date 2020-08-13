@@ -234,10 +234,7 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        if (
-            isinstance(node.value, ast.Call)
-            and node.value.func.id not in gt_ir.NativeFunction.values()
-        ):
+        if isinstance(node.value, ast.Call) and node.value.func.id not in gtscript._MATH_BUILTINS:
             assert len(node.targets) == 1
             self.visit(node.value, target_node=node.targets[0])
             # This node can be now removed since the trivial assignment has been already done
@@ -249,7 +246,7 @@ class CallInliner(ast.NodeTransformer):
     def visit_Call(self, node: ast.Call, *, target_node=None):
         call_name = node.func.id
 
-        if call_name in gt_ir.NativeFunction.values():
+        if call_name in gtscript._MATH_BUILTINS:
             node.args = [self.visit(arg) for arg in node.args]
             return node
 
@@ -497,6 +494,27 @@ class IRMaker(ast.NodeVisitor):
         self.extra_temp_decls = extra_temp_decls or {}
         self.parsing_context = None
         self.in_if = False
+        gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
+            "abs": gt_ir.NativeFunction.ABS,
+            "min": gt_ir.NativeFunction.MIN,
+            "max": gt_ir.NativeFunction.MAX,
+            "mod": gt_ir.NativeFunction.MOD,
+            "sin": gt_ir.NativeFunction.SIN,
+            "cos": gt_ir.NativeFunction.COS,
+            "tan": gt_ir.NativeFunction.TAN,
+            "asin": gt_ir.NativeFunction.ARCSIN,
+            "acos": gt_ir.NativeFunction.ARCCOS,
+            "atan": gt_ir.NativeFunction.ARCTAN,
+            "sqrt": gt_ir.NativeFunction.SQRT,
+            "exp": gt_ir.NativeFunction.EXP,
+            "log": gt_ir.NativeFunction.LOG,
+            "isfinite": gt_ir.NativeFunction.ISFINITE,
+            "isinf": gt_ir.NativeFunction.ISINF,
+            "isnan": gt_ir.NativeFunction.ISNAN,
+            "floor": gt_ir.NativeFunction.FLOOR,
+            "ceil": gt_ir.NativeFunction.CEIL,
+            "trunc": gt_ir.NativeFunction.TRUNC,
+        }
 
     def __call__(self, ast_root: ast.AST):
         assert (
@@ -833,7 +851,7 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_Call(self, node: ast.Call):
-        native_fcn = gt_ir.NativeFunction(node.func.id)
+        native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 
         args = [self.visit(arg) for arg in node.args]
         if len(args) != native_fcn.arity:
