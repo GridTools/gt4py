@@ -160,7 +160,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
         return ["".join([str(item) for item in line]) for line in body_sources.lines]
 
 
-class DebugModuleGenerator(gt_backend.DebugExtModuleGenerator):
+class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
     def __init__(self, backend_class):
         super().__init__(backend_class)
         self.source_generator = DebugSourceGenerator(
