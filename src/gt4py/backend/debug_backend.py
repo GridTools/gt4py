@@ -62,6 +62,20 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
+    def _make_positional_ij_loops(self, parallel_definition):
+        par_axis_names = [axis.name for axis in self.impl_node.domain.parallel_axes]
+        conditions = []
+        for interval, axis_name in zip(parallel_definition, par_axis_names):
+            for axis_bound in (interval.start, interval.end):
+                if isinstance(axis_bound.level, gt_ir.VarRef):
+                    conditions.append(
+                        f"{axis_name} >= {axis_bound.level.name} + {axis_bound.offset}"
+                    )
+                elif isinstance(axis_bound.level, int):
+                    conditions.append(f"{axis_name} >= {axis_bound.level} + {axis_bound.offset}")
+
+        return ["if " + " and ".join(conditions) + ":"]
+
     def make_temporary_field(
         self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent
     ):
@@ -75,40 +89,38 @@ class DebugSourceGenerator(PythonSourceGenerator):
         lower_extent = extent.lower_indices
         upper_extent = extent.upper_indices
         seq_axis_name = self.impl_node.domain.sequential_axis.name
-        axes_names = self.impl_node.domain.axes_names
+        par_axis_names = [axis.name for axis in self.impl_node.domain.parallel_axes]
 
         # Create IJ for-loops
-        ij_loop_lines = []
-        for d in range(extent.ndims):
-            axis_name = axes_names[d]
-            if axis_name != seq_axis_name:
-                i = d + 1
-                start_expr = "{:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
-                size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
-                size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
-                range_expr = "range({args})".format(
-                    args=", ".join(a for a in (start_expr, size_expr, "") if a)
-                )
-                ij_loop_lines.append(
-                    " " * self.indent_size * i
-                    + "for {ax} in {range_expr}:".format(ax=axis_name, range_expr=range_expr)
-                )
+        ij_loop_lines = gt_text.TextBlock(indent_size=self.indent_size)
+        for d, axis_name in enumerate(par_axis_names):
+            start_expr = "{:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
+            size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
+            size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
+            args = ", ".join(a for a in (start_expr, size_expr, "") if a)
+            ij_loop_lines.append(f"for {axis_name} in range({args}):", indent_steps=d)
 
         # Create K for-loop: computation body is split in different vertical regions
-        source_lines = []
+        source_lines = gt_text.TextBlock(indent_size=self.indent_size)
         regions = sorted(regions)
         if iteration_order == gt_ir.IterationOrder.BACKWARD:
             regions = reversed(regions)
 
-        for bounds, body_sources in regions:
-            region_lines = self._make_regional_computation(iteration_order, bounds)
-            source_lines.extend(region_lines)
-            source_lines.extend(ij_loop_lines)
-            source_lines.extend(
-                " " * self.indent_size * extent.ndims + line for line in body_sources
-            )
+        for bounds, parallel_bounds, body_sources in regions:
+            source_lines.extend(self._make_regional_computation(iteration_order, bounds))
+            with source_lines.indented(steps=1):
+                source_lines.extend(ij_loop_lines.text)
 
-        return source_lines
+            if parallel_bounds:
+                with source_lines.indented(steps=extent.ndims):
+                    source_lines.extend(self._make_positional_ij_loops(parallel_bounds))
+                with source_lines.indented(steps=extent.ndims + 1):
+                    source_lines.extend(body_sources)
+            else:
+                with source_lines.indented(steps=extent.ndims):
+                    source_lines.extend(body_sources)
+
+        return source_lines.text
 
     # ---- Visitor handlers ----
     def visit_FieldRef(self, node: gt_ir.FieldRef):
