@@ -117,15 +117,16 @@ class StencilObject(abc.ABC):
         pass
 
     def _get_max_domain(self, field_args, origin):
-        """Return the maximum domain size possible
+        r"""Return the maximum domain size possible
         
         Parameters
         ----------
             field_args: `dict`
                 Mapping from field names to actually passed data arrays.
 
-            origin: `\{'field_name': [int * ndims] \} `
+            origin: `{'field_name': [int * ndims]}`
                 The origin for each field.
+
 
         Returns
         -------

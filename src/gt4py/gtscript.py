@@ -461,4 +461,3 @@ def ceil(x):
 def trunc(x):
     """Return the Real value x truncated to an Integral (usually an integer)"""
     pass
-
