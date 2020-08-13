@@ -92,6 +92,8 @@ class Backend(abc.ABC):
     #   "disable-code-generation": bool
     #   "disable-cache-validation": bool
 
+    builder: "StencilBuilder"
+
     def __init__(self, builder: "StencilBuilder"):
         self.builder = builder
 
@@ -211,23 +213,6 @@ class BaseBackend(Backend):
 
     MODULE_GENERATOR_CLASS: ClassVar[Type["BaseModuleGenerator"]]
 
-    def _check_options(self, options: gt_definitions.BuildOptions) -> None:
-        assert self.options is not None
-        unknown_options = set(options.backend_opts.keys()) - set(self.options.keys())
-        if unknown_options:
-            raise ValueError("Unknown backend options: '{}'".format(unknown_options))
-
-    def _load(self) -> Type["StencilObject"]:
-        stencil_class_name = self.builder.class_name
-        file_name = str(self.builder.module_path)
-        stencil_module = gt_utils.make_module_from_file(stencil_class_name, file_name)
-        stencil_class = getattr(stencil_module, stencil_class_name)
-        stencil_class.__module__ = self.builder.module_qualname
-        stencil_class._gt_id_ = self.builder.stencil_id.version
-        stencil_class.definition_func = staticmethod(self.builder.definition)
-
-        return stencil_class
-
     def load(self) -> Optional[Type["StencilObject"]]:
         stencil_class = None
         if self.builder.stencil_id is not None:
@@ -242,28 +227,88 @@ class BaseBackend(Backend):
 
         return stencil_class
 
-    def _generate_module(
-        self, *, extra_cache_info: Optional[Dict[str, Any]] = None, **kwargs: Any,
-    ) -> Type["StencilObject"]:
+    def generate(self) -> Type["StencilObject"]:
+        self._check_options(self.builder.options)
+        return self._generate_module()
+
+    def _check_options(self, options: gt_definitions.BuildOptions) -> None:
+        assert self.options is not None
+        unknown_options = set(options.backend_opts.keys()) - set(self.options.keys())
+        if unknown_options:
+            raise ValueError("Unknown backend options: '{}'".format(unknown_options))
+
+    def _generate_module(self, **kwargs: Any,) -> Type["StencilObject"]:
         file_path = self.builder.module_path
         module_source = self._generate_module_source(**kwargs)
 
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(module_source)
-            extra_cache_info = {**self.extra_cache_info, **(extra_cache_info or {})}
             self.builder.caching.update_cache_info()
 
         return self._load()
 
-    def _generate_module_source(self, **kwargs: Any) -> str:
+    def _generate_module_source(
+        self, *, args_data: Optional[Dict[str, Any]] = None, **kwargs: Any
+    ) -> str:
         """Generate the module source code with or without stencil id."""
-        source = self.MODULE_GENERATOR_CLASS(builder=self.builder)(**kwargs)
+        args_data = args_data or self.make_args_data_from_iir(self.builder.implementation_ir)
+        source = self.MODULE_GENERATOR_CLASS()(self.builder, args_data, **kwargs)
         return source
 
-    def generate(self) -> Type["StencilObject"]:
-        self._check_options(self.builder.options)
-        return self._generate_module()
+    def _load(self) -> Type["StencilObject"]:
+        stencil_class_name = self.builder.class_name
+        file_name = str(self.builder.module_path)
+        stencil_module = gt_utils.make_module_from_file(stencil_class_name, file_name)
+        stencil_class = getattr(stencil_module, stencil_class_name)
+        stencil_class.__module__ = self.builder.module_qualname
+        stencil_class._gt_id_ = self.builder.stencil_id.version
+        stencil_class.definition_func = staticmethod(self.builder.definition)
+
+        return stencil_class
+
+    @staticmethod
+    def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> Dict[str, Any]:
+        data: Dict[str, Any] = {"field_info": {}, "parameter_info": {}, "unreferenced": {}}
+
+        # Collect access type per field
+        out_fields = set()
+        for ms in implementation_ir.multi_stages:
+            for sg in ms.groups:
+                for st in sg.stages:
+                    for acc in st.accessors:
+                        if (
+                            isinstance(acc, gt_ir.FieldAccessor)
+                            and acc.intent == gt_ir.AccessIntent.READ_WRITE
+                        ):
+                            out_fields.add(acc.symbol)
+
+        for arg in implementation_ir.api_signature:
+            if arg.name in implementation_ir.fields:
+                access = (
+                    gt_definitions.AccessKind.READ_WRITE
+                    if arg.name in out_fields
+                    else gt_definitions.AccessKind.READ_ONLY
+                )
+                if arg.name not in implementation_ir.unreferenced:
+                    data["field_info"][arg.name] = gt_definitions.FieldInfo(
+                        access=access,
+                        dtype=implementation_ir.fields[arg.name].data_type.dtype,
+                        boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
+                    )
+                else:
+                    data["field_info"][arg.name] = None
+            else:
+                if arg.name not in implementation_ir.unreferenced:
+                    data["parameter_info"][arg.name] = gt_definitions.ParameterInfo(
+                        dtype=implementation_ir.parameters[arg.name].data_type.dtype
+                    )
+                else:
+                    data["parameter_info"][arg.name] = None
+
+        data["unreferenced"] = implementation_ir.unreferenced
+
+        return data
 
 
 class PurePythonBackendCLIMixin(CLIBackendMixin):
@@ -383,69 +428,76 @@ class BaseModuleGenerator(abc.ABC):
 
     TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "stencil_module.py.in")
 
-    def __init__(self, builder: "StencilBuilder"):
-        assert isinstance(builder.backend, BaseBackend)
-        self.backend_class = builder.backend
-        self.builder = builder
-        self.options: gt_definitions.BuildOptions
-        self.stencil_id: gt_definitions.StencilID
-        self.definition_ir: gt_ir.StencilDefinition
+    builder: "StencilBuilder"
+    args_data: Dict[str, Any]
+    template: jinja2.Template
+
+    def __init__(self):
         with open(self.TEMPLATE_PATH, "r") as f:
             self.template = jinja2.Template(f.read())
 
-        self.implementation_ir: gt_ir.StencilImplementation
-        self.module_info: Dict[str, Any]
-
     def __call__(
-        self,
-        *,
-        module_info: Optional[Dict[str, Any]] = None,
-        implementation_ir: Optional[gt_ir.StencilImplementation] = None,
-        **kwargs: Any,
+        self, builder: "StencilBuilder", args_data: Dict[str, Any], **kwargs: Any,
     ) -> str:
+        """Generate source code for a Python module containing a StencilObject."""
 
-        self.options = self.builder.options
-        self.stencil_id = self.builder.stencil_id
-        self.definition_ir = self.builder.definition_ir
-        self.implementation_ir = implementation_ir
+        self.builder = builder
+        self.args_data = args_data
 
-        if module_info is None:
-            # If a `module_info dict` is not explicitly provided by a subclass, it will be
-            # generated from a `implementation_ir` object
-            assert self.implementation_ir
-            self.module_info = self._generate_module_info()
+        definition_ir = self.builder.definition_ir
+
+        if definition_ir.sources is not None:
+            sources = {
+                key: gt_utils.text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
+                for key, value in definition_ir.sources
+            }
         else:
-            # External toolchains should provide a `module_info dict`
-            self.module_info = module_info
+            sources = {}
 
-        module_info = self.module_info
-        stencil_signature = self.generate_signature()
-        imports = self.generate_imports()
-        module_members = self.generate_module_members()
-        class_members = self.generate_class_members()
-        implementation = self.generate_implementation()
-        pre_run = self.generate_pre_run()
-        post_run = self.generate_post_run()
+        if definition_ir.externals:
+            constants = {
+                name: repr(value)
+                for name, value in definition_ir.externals.items()
+                if isinstance(value, numbers.Number)
+            }
+        else:
+            constants = {}
+
+        options = {
+            key: value
+            for key, value in self.builder.options.as_dict().items()
+            if key not in ["build_info"]
+        }
+
+        parallel_axes = definition_ir.domain.parallel_axes or []
+        sequential_axis = definition_ir.domain.sequential_axis.name
+        domain_info = repr(
+            gt_definitions.DomainInfo(
+                parallel_axes=tuple(ax.name for ax in parallel_axes),
+                sequential_axis=sequential_axis,
+                ndims=len(parallel_axes) + (1 if sequential_axis else 0),
+            )
+        )
 
         module_source = self.template.render(
-            imports=imports,
-            module_members=module_members,
+            imports=self.generate_imports(),
+            module_members=self.generate_module_members(),
             class_name=self.builder.class_name,
-            class_members=class_members,
-            docstring=module_info["docstring"],
+            class_members=self.generate_class_members(),
+            docstring=definition_ir.docstring,
             gt_backend=self.backend_name,
-            gt_source=module_info["sources"],
-            gt_domain_info=module_info["domain_info"],
-            gt_field_info=repr(module_info["field_info"]),
-            gt_parameter_info=repr(module_info["parameter_info"]),
-            gt_constants=module_info["gt_constants"],
-            gt_options=module_info["gt_options"],
-            stencil_signature=stencil_signature,
-            field_names=module_info["field_info"].keys(),
-            param_names=module_info["parameter_info"].keys(),
-            pre_run=pre_run,
-            post_run=post_run,
-            implementation=implementation,
+            gt_source=sources,
+            gt_domain_info=domain_info,
+            gt_field_info=repr(self.args_data["field_info"]),
+            gt_parameter_info=repr(self.args_data["parameter_info"]),
+            gt_constants=constants,
+            gt_options=options,
+            stencil_signature=self.generate_signature(),
+            field_names=self.args_data["field_info"].keys(),
+            param_names=self.args_data["parameter_info"].keys(),
+            pre_run=self.generate_pre_run(),
+            post_run=self.generate_post_run(),
+            implementation=self.generate_implementation(),
         )
         module_source = gt_utils.text.format_source(
             module_source, line_length=self.SOURCE_LINE_LENGTH
@@ -455,98 +507,7 @@ class BaseModuleGenerator(abc.ABC):
 
     @property
     def backend_name(self) -> str:
-        return self.backend_class.name
-
-    def _generate_implementation_ir(self) -> gt_ir.StencilImplementation:
-        implementation_ir = self.builder.implementation_ir
-        return implementation_ir
-
-    def _generate_module_info(
-        self, field_info: Optional[Dict[str, Optional[gt_definitions.FieldInfo]]] = None
-    ) -> Dict[str, Any]:
-        info: Dict[str, Any] = {}
-        implementation_ir = self.implementation_ir
-
-        if self.definition_ir.sources is not None:
-            info["sources"].update(
-                {
-                    key: gt_utils.text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
-                    for key, value in self.definition_ir.sources
-                }
-            )
-        else:
-            info["sources"] = {}
-
-        info["docstring"] = implementation_ir.docstring
-
-        parallel_axes = implementation_ir.domain.parallel_axes or []
-        sequential_axis = implementation_ir.domain.sequential_axis.name
-        info["domain_info"] = repr(
-            gt_definitions.DomainInfo(
-                parallel_axes=tuple(ax.name for ax in parallel_axes),
-                sequential_axis=sequential_axis,
-                ndims=len(parallel_axes) + (1 if sequential_axis else 0),
-            )
-        )
-
-        field_info = field_info or {}
-        info["field_info"] = field_info
-        parameter_info: Dict[str, Optional[gt_definitions.ParameterInfo]] = {}
-        info["parameter_info"] = parameter_info
-
-        # Collect access type per field
-        out_fields = set()
-        for ms in implementation_ir.multi_stages:
-            for sg in ms.groups:
-                for st in sg.stages:
-                    for acc in st.accessors:
-                        if (
-                            isinstance(acc, gt_ir.FieldAccessor)
-                            and acc.intent == gt_ir.AccessIntent.READ_WRITE
-                        ):
-                            out_fields.add(acc.symbol)
-
-        for arg in implementation_ir.api_signature:
-            if arg.name in implementation_ir.fields:
-                access = (
-                    gt_definitions.AccessKind.READ_WRITE
-                    if arg.name in out_fields
-                    else gt_definitions.AccessKind.READ_ONLY
-                )
-                if arg.name not in implementation_ir.unreferenced:
-                    field_info[arg.name] = gt_definitions.FieldInfo(
-                        access=access,
-                        dtype=implementation_ir.fields[arg.name].data_type.dtype,
-                        boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
-                    )
-                else:
-                    field_info[arg.name] = None
-            else:
-                if arg.name not in implementation_ir.unreferenced:
-                    parameter_info[arg.name] = gt_definitions.ParameterInfo(
-                        dtype=implementation_ir.parameters[arg.name].data_type.dtype
-                    )
-                else:
-                    parameter_info[arg.name] = None
-
-        if implementation_ir.externals:
-            info["gt_constants"] = {
-                name: repr(value)
-                for name, value in implementation_ir.externals.items()
-                if isinstance(value, numbers.Number)
-            }
-        else:
-            info["gt_constants"] = {}
-
-        info["gt_options"] = {
-            key: value
-            for key, value in self.options.as_dict().items()
-            if key not in ["build_info"]
-        }
-
-        info["unreferenced"] = self.implementation_ir.unreferenced
-
-        return info
+        return self.builder.backend.name
 
     def generate_imports(self) -> str:
         source = ""
@@ -563,7 +524,7 @@ class BaseModuleGenerator(abc.ABC):
     def generate_signature(self) -> str:
         args = []
         keyword_args = ["*"]
-        for arg in self.definition_ir.api_signature:
+        for arg in self.builder.definition_ir.api_signature:
             if arg.is_keyword:
                 if arg.default is not gt_ir.Empty:
                     keyword_args.append(
@@ -597,29 +558,27 @@ class BaseModuleGenerator(abc.ABC):
 
 
 class PyExtModuleGenerator(BaseModuleGenerator):
-    def __init__(self, builder: "StencilBuilder"):
-        super().__init__(builder)
-        self.pyext_module_name = None
-        self.pyext_file_path = None
+
+    pyext_module_name: str
+    pyext_file_path: str
+
+    def __init__(self):
+        super().__init__()
+        self.pyext_module_name = ""
+        self.pyext_file_path = ""
 
     def __call__(
-        self,
-        *,
-        module_info: Optional[Dict[str, Any]] = None,
-        implementation_ir: Optional[gt_ir.StencilImplementation] = None,
-        **kwargs: Any,
+        self, builder: "StencilBuilder", args_data: Dict[str, Any], **kwargs: Any,
     ) -> str:
         self.pyext_module_name = kwargs["pyext_module_name"]
         self.pyext_file_path = kwargs["pyext_file_path"]
-        return super().__call__(
-            module_info=module_info, implementation_ir=implementation_ir, **kwargs
-        )
+        return super().__call__(builder, args_data, **kwargs)
 
     def generate_imports(self) -> str:
         source = """
 from gt4py import utils as gt_utils
         """
-        if self.implementation_ir.multi_stages:
+        if self.builder.implementation_ir.multi_stages:
             source += """
 pyext_module = gt_utils.make_module_from_file(
         "{pyext_module_name}", "{pyext_file_path}", public_import=True
@@ -630,12 +589,13 @@ pyext_module = gt_utils.make_module_from_file(
         return source
 
     def generate_implementation(self) -> str:
+        definition_ir = self.builder.definition_ir
         sources = gt_utils.text.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
 
         args = []
-        api_fields = set(field.name for field in self.definition_ir.api_fields)
-        for arg in self.definition_ir.api_signature:
-            if arg.name not in self.module_info["unreferenced"]:
+        api_fields = set(field.name for field in definition_ir.api_fields)
+        for arg in definition_ir.api_signature:
+            if arg.name not in self.args_data["unreferenced"]:
                 args.append(arg.name)
                 if arg.name in api_fields:
                     args.append("list(_origin_['{}'])".format(arg.name))
@@ -643,7 +603,7 @@ pyext_module = gt_utils.make_module_from_file(
         # only generate implementation if any multi_stages are present. e.g. if no statement in the
         # stencil has any effect on the API fields, this may not be the case since they could be
         # pruned.
-        if self.implementation_ir.multi_stages:
+        if self.builder.implementation_ir.multi_stages:
             source = """
 # Load or generate a GTComputation object for the current domain size
 pyext_module.run_computation(list(_domain_), {run_args}, exec_info)

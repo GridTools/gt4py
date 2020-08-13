@@ -504,10 +504,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         # Generate and return the Python wrapper class
         return self._generate_module(
-            extra_cache_info=self.extra_cache_info,
-            implementation_ir=implementation_ir,
-            pyext_module_name=pyext_module_name,
-            pyext_file_path=pyext_file_path,
+            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path,
         )
 
     def _generic_generate_extension(self, *, uses_cuda: bool = False) -> Tuple[str, str]:
@@ -615,14 +612,14 @@ class GTMCBackend(BaseGTBackend):
 
 class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
     def generate_pre_run(self) -> str:
-        field_names = self.module_info["field_info"].keys()
+        field_names = self.args_data["field_info"].keys()
 
         return "\n".join([f + ".host_to_device()" for f in field_names])
 
     def generate_post_run(self) -> str:
         output_field_names = [
             name
-            for name, info in self.module_info["field_info"].items()
+            for name, info in self.args_data["field_info"].items()
             if info.access == gt_definitions.AccessKind.READ_WRITE
         ]
 
