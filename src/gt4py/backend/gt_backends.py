@@ -496,6 +496,8 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
 
+        pyext_module_name: Optional[str]
+        pyext_file_path: Optional[str]
         if implementation_ir.multi_stages:
             pyext_module_name, pyext_file_path = self.generate_extension()
         else:

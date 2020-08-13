@@ -442,7 +442,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         dir_name = f"{self.builder.options.name}_src"
-        src_files = self.make_extension_sources()
+        src_files = self.make_extension_sources(self.GT_BACKEND_T)
         return {dir_name: src_files}
 
     @abc.abstractmethod
