@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from gt4py import backend as gt_backend
@@ -22,6 +24,10 @@ from gt4py import ir as gt_ir
 from gt4py.utils import text as gt_text
 
 from .python_generator import PythonSourceGenerator
+
+
+if TYPE_CHECKING:
+    from gt4py.stencil_builder import StencilBuilder
 
 
 class NumPySourceGenerator(PythonSourceGenerator):
@@ -255,13 +261,20 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
             target = self.visit(stmt.target)
             value = self.visit(stmt.value)
+
+            data_type = (
+                self.block_info.symbols[target].data_type
+                if target in self.block_info.symbols
+                else stmt.target.data_type
+            )
+
             sources.append(
                 "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
                     condition=condition,
                     target=target,
                     then_expr=value,
                     else_expr=target,
-                    dtype=stmt.target.data_type.dtype.name,
+                    dtype=data_type.dtype.name,
                     np=self.numpy_prefix,
                 )
             )
@@ -299,8 +312,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
 
 class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
-    def __init__(self, backend_class):
-        super().__init__(backend_class)
+    def __init__(self, builder: "StencilBuilder"):
+        super().__init__(builder)
         self.source_generator = NumPySourceGenerator(
             indent_size=self.TEMPLATE_INDENT_SIZE,
             origin_marker="__O",
@@ -367,6 +380,7 @@ class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
         "is_compatible_layout": numpy_is_compatible_layout,
         "is_compatible_type": numpy_is_compatible_type,
     }
+
     languages = {"computation": "python", "bindings": []}
 
     MODULE_GENERATOR_CLASS = NumPyModuleGenerator

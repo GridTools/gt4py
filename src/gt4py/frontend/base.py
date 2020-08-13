@@ -15,11 +15,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import abc
+from typing import Any, Dict, Union
 
 from gt4py import utils as gt_utils
+from gt4py.definitions import BuildOptions, StencilID
+from gt4py.ir import StencilDefinition
+from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
 
 
 REGISTRY = gt_utils.Registry()
+AnyStencilFunc = Union[StencilFunc, AnnotatedStencilFunc]
 
 
 def from_name(name: str):
@@ -36,10 +41,25 @@ class Frontend(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def get_stencil_id(cls, qualified_name, definition, externals, options_id):
+    def get_stencil_id(
+        cls,
+        qualified_name: str,
+        definition: AnyStencilFunc,
+        externals: Dict[str, Any],
+        options_id: str,
+    ) -> StencilID:
         pass
 
     @classmethod
     @abc.abstractmethod
-    def generate(cls, definition, options):
+    def generate(
+        cls, definition: AnyStencilFunc, externals: Dict[str, Any], options: BuildOptions
+    ) -> StencilDefinition:
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def prepare_stencil_definition(
+        cls, definition: AnyStencilFunc, externals: Dict[str, Any]
+    ) -> AnnotatedStencilFunc:
         pass

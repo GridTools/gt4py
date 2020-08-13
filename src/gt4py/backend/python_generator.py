@@ -242,7 +242,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
         interval_definition = self.visit(node.interval)
         self.block_info.interval = interval_definition
-        self.block_info.symbols = set(node.local_symbols.keys())
+        self.block_info.symbols = node.local_symbols
         body_sources = self.visit(node.body)
 
         return interval_definition, body_sources

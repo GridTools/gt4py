@@ -2,13 +2,14 @@ import pytest
 
 import gt4py
 from gt4py.gtscript import PARALLEL, Field, computation, interval
+from gt4py.stencil_builder import StencilBuilder
 
 
 @pytest.fixture(
     params=[
         pytest.param(
             name,
-            marks=pytest.mark.xfail(
+            marks=pytest.mark.skip(
                 name.startswith("dawn"), reason="dawn backends not yet supported"
             ),
         )
@@ -44,10 +45,8 @@ def test_generate_computation(backend):
         The computation source code and file hierarchy specification is returned.
 
     """
-    options = gt4py.definitions.BuildOptions(name=init_1.__name__, module=init_1.__module__)
-    frontend = gt4py.frontend.from_name("gtscript")
-    init_1_ir = frontend.generate(init_1, externals={}, options=options)
-    result = backend.generate_computation(init_1_ir, options=options)
+    builder = StencilBuilder(init_1, backend=backend).with_caching("nocaching")
+    result = builder.backend.generate_computation()
 
     py_result = backend.languages["computation"] == "python" and "init_1.py" in result
     gt_result = (
