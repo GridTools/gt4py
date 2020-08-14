@@ -622,7 +622,7 @@ class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
         source = (
             super().generate_implementation()
             + """
-    cupy.cuda.Device(0).synchronize()
+cupy.cuda.Device(0).synchronize()
     """
         )
         return source
