@@ -598,3 +598,51 @@ class TestNativeFunctions:
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field = asin(in_field) + 1 if 1 < in_field else sin(in_field)
+
+class TestParallelComputations:
+    def test_horizontal_race_condition(self):
+        module = f"TestParallelComputations_test_race_condition_{id_version}"
+        externals = {}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Horizontal race condition detected in parallel computation",
+        ):
+            def func_err(in_field: gtscript.Field[np.float_]):
+                with computation(PARALLEL), interval(...):
+                    tmp = in_field
+                    in_field = tmp[1, 0, 0]
+
+            compile_definition(func_err, "func_err", module)
+
+
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(FORWARD), interval(...):
+                tmp = in_field
+                in_field = tmp[1, 0, 0]
+
+        compile_definition(func, "func", module)
+
+    def test_vertical_race_condition(self):
+        module = f"TestParallelComputations_test_race_condition_{id_version}"
+        externals = {}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Vertical race condition detected in parallel computation",
+        ):
+            def func_err(in_field: gtscript.Field[np.float_]):
+                with computation(PARALLEL), interval(...):
+                    tmp = in_field
+                    in_field = tmp[0, 0, 1]
+
+            compile_definition(func_err, "func_err", module)
+
+
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(FORWARD), interval(...):
+                tmp = in_field
+                in_field = tmp[0, 0, 1]
+
+        compile_definition(func, "func", module)
+

@@ -20,6 +20,8 @@ import numbers
 import textwrap
 import types
 
+import networkx as nx
+
 import gt4py.gtscript as gtscript
 from gt4py.utils import NOTHING
 
@@ -747,3 +749,51 @@ class AST2IRVisitor(ast.NodeVisitor):
 
 
 make_computations = AST2IRVisitor.apply
+
+
+class FieldDependencyGraphCreator(IRNodeVisitor):
+    @classmethod
+    def apply(cls, root_node):
+        return cls()(root_node)
+
+    def _reset_refs(self):
+        self.field_refs = {}
+        self.var_refs = []
+
+    def __init__(self):
+        self._reset_refs()
+
+    def __call__(self, node):
+        self.graph = nx.DiGraph()
+        self.visit(node)
+        return self.graph
+
+    def visit_FieldRef(self, node: FieldRef):
+        if node.name not in self.graph.nodes:
+            self.graph.add_node(node.name)
+
+        if node.name in self.field_refs:
+            self.field_refs[node.name].append(node.offset)
+        else:
+            self.field_refs[node.name] = [node.offset]
+
+    def visit_VarRef(self, node: VarRef):
+        if node.name not in self.graph.nodes:
+            self.graph.add_node(node.name)
+
+        self.var_refs.append(node.name)
+
+    def visit_Assign(self, node: Assign):
+        target_name = node.target.name
+
+        self._reset_refs()
+        self.visit(node.value)
+
+        for value_field, offsets in self.field_refs.items():
+            self.graph.add_edge(target_name, value_field, offsets=offsets)
+
+        for value_ref in self.var_refs:
+            self.graph.add_edge(target_name, value_ref)
+
+
+create_field_dependency_graph = FieldDependencyGraphCreator.apply
