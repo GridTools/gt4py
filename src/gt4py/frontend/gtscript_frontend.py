@@ -234,7 +234,7 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        if isinstance(node.value, ast.Call) and node.value.func.id not in gtscript._MATH_BUILTINS:
+        if isinstance(node.value, ast.Call) and node.value.func.id not in gtscript.MATH_BUILTINS:
             assert len(node.targets) == 1
             self.visit(node.value, target_node=node.targets[0])
             # This node can be now removed since the trivial assignment has been already done

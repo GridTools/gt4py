@@ -31,7 +31,7 @@ from gt4py import utils as gt_utils
 
 
 # GTScript builtins
-_MATH_BUILTINS = {
+MATH_BUILTINS = {
     "abs",
     "min",
     "max",
@@ -72,7 +72,7 @@ builtins = {
     "__gtscript__",
     "__externals__",
     "__INLINED",
-    *_MATH_BUILTINS,
+    *MATH_BUILTINS,
 }
 
 __all__ = list(builtins) + ["function", "stencil"]
@@ -368,6 +368,7 @@ def __INLINED(compile_if_expression):
     pass
 
 
+# GTScript builtins: math functions
 def abs(x):
     """Return the absolute value of the argument"""
     pass

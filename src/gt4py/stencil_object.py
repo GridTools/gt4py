@@ -117,7 +117,7 @@ class StencilObject(abc.ABC):
         pass
 
     def _get_max_domain(self, field_args, origin):
-        r"""Return the maximum domain size possible
+        """Return the maximum domain size possible
         
         Parameters
         ----------
@@ -226,7 +226,7 @@ class StencilObject(abc.ABC):
     def _call_run(
         self, field_args, parameter_args, domain, origin, *, validate_args=True, exec_info=None
     ):
-        r"""Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
+        """Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
 
         Note that this function will always try to expand simple parameter values to
         complete data structures by repeating the same value as many times as needed.
@@ -248,7 +248,7 @@ class StencilObject(abc.ABC):
                 largest feasible domain according to the provided input fields
                 and origin values (`None` by default).
 
-            origin :  `[int * ndims]` or \{'field_name': [int * ndims] \} , optional
+            origin :  `[int * ndims]` or {'field_name': [int * ndims]} , optional
                 If a single offset is passed, it will be used for all fields.
                 If a `dict` is passed, there could be an entry for each field.
                 A special key '_all_' will represent the value to be used for all
