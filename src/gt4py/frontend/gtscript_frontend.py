@@ -246,7 +246,7 @@ class CallInliner(ast.NodeTransformer):
     def visit_Call(self, node: ast.Call, *, target_node=None):
         call_name = node.func.id
 
-        if call_name in gtscript._MATH_BUILTINS:
+        if call_name in gtscript.MATH_BUILTINS:
             node.args = [self.visit(arg) for arg in node.args]
             return node
 
