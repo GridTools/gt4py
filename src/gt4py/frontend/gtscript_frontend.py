@@ -420,19 +420,20 @@ class ParallelRaceConditionChecker(gt_ir.IRNodeVisitor):
         self.iteration_order = None
 
     def __call__(self, node):
+        assert isinstance(node, gt_ir.StencilDefinition)
+        self.stencil_name = node.name
         self.visit(node)
 
-    @staticmethod
-    def _check(graph: nx.DiGraph):
-        error_message = "race condition detected in parallel computation"
+    def _check(self, graph: nx.DiGraph):
+        error_message = f"race condition detected in stencil: {self.stencil_name}"
         for cycle in nx.simple_cycles(graph):
             full_cycle = cycle + [cycle[0]]
             for source, target in zip(full_cycle[:-1], full_cycle[1:]):
                 offsets = graph.get_edge_data(source, target).get("offsets", [])
                 if any([offset["I"] != 0 or offset["J"] != 0 for offset in offsets]):
-                    raise GTScriptSyntaxError(f"Horizontal {error_message}. Cycle: {','.join(full_cycle)}")
+                    raise GTScriptSyntaxError(f"Horizontal {error_message}.\n\tCycle: {', '.join(full_cycle)}")
                 elif any([offset["K"] != 0 for offset in offsets]):
-                    raise GTScriptSyntaxError(f"Vertical {error_message}. Cycle: {','.join(full_cycle)}")
+                    raise GTScriptSyntaxError(f"Vertical {error_message}.\n\tCycle: {', '.join(full_cycle)}")
 
     def visit_ComputationBlock(self, node: gt_ir.ComputationBlock):
         # Look for vertical race conditions
