@@ -719,7 +719,7 @@ class DataTypePass(TransformPass):
                 raise DataTypeSpecificationError(
                     "Builtin function call with mixed data types", loc=node.loc
                 )
-            data_type = data_type or gt_ir.DataType.DEFAULT
+            data_type = data_type.pop() if len(data_type) else gt_ir.DataType.DEFAULT
 
             if node.func in (
                 gt_ir.NativeFunction.MIN,
