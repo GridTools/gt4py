@@ -352,7 +352,7 @@ def numpy_is_compatible_type(field):
 
 @gt_backend.register
 class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):
-    """Pure Python backend using numpy for faster computations than the debug backend.
+    """Pure Python backend using NumPy for faster computations than the debug backend.
 
     Other Parameters
     ----------------
