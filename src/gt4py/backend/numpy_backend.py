@@ -358,7 +358,7 @@ class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
     ----------------
     Backend options include:
     - ignore_np_errstate: `bool`
-        If False, does not ignore numpy floating-point errors. (`True` by default.)
+        If False, does not ignore NumPy floating-point errors. (`True` by default.)
     """
 
     name = "numpy"
