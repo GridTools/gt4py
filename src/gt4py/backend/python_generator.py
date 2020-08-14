@@ -29,6 +29,28 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         **gt_ir.BinaryOperator.IR_OP_TO_PYTHON_SYMBOL,
     }
 
+    NATIVE_FUNC_TO_PYTHON = {
+        gt_ir.NativeFunction.ABS: "abs",
+        gt_ir.NativeFunction.MIN: "min",
+        gt_ir.NativeFunction.MAX: "max",
+        gt_ir.NativeFunction.MOD: "math.fmod",
+        gt_ir.NativeFunction.SIN: "math.sin",
+        gt_ir.NativeFunction.COS: "math.cos",
+        gt_ir.NativeFunction.TAN: "math.tan",
+        gt_ir.NativeFunction.ARCSIN: "math.asin",
+        gt_ir.NativeFunction.ARCCOS: "math.acos",
+        gt_ir.NativeFunction.ARCTAN: "math.atan",
+        gt_ir.NativeFunction.SQRT: "math.sqrt",
+        gt_ir.NativeFunction.EXP: "math.exp",
+        gt_ir.NativeFunction.LOG: "math.log",
+        gt_ir.NativeFunction.ISFINITE: "math.isfinite",
+        gt_ir.NativeFunction.ISINF: "math.isinf",
+        gt_ir.NativeFunction.ISNAN: "math.isnan",
+        gt_ir.NativeFunction.FLOOR: "math.floor",
+        gt_ir.NativeFunction.CEIL: "math.ceil",
+        gt_ir.NativeFunction.TRUNC: "math.trunc",
+    }
+
     def __init__(
         self,
         *,
@@ -154,6 +176,11 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         )
 
         return source
+
+    def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
+        call = self.NATIVE_FUNC_TO_PYTHON[node.func]
+        args = ",".join(self.visit(arg) for arg in node.args)
+        return f"{call}({args})"
 
     def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr):
         then_fmt = "({})" if isinstance(node.then_expr, gt_ir.CompositeExpr) else "{}"

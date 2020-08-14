@@ -31,6 +31,28 @@ if TYPE_CHECKING:
 
 
 class NumPySourceGenerator(PythonSourceGenerator):
+    NATIVE_FUNC_TO_PYTHON = {
+        gt_ir.NativeFunction.ABS: "np.abs",
+        gt_ir.NativeFunction.MIN: "np.minimum",
+        gt_ir.NativeFunction.MAX: "np.maximum",
+        gt_ir.NativeFunction.MOD: "np.mod",
+        gt_ir.NativeFunction.SIN: "np.sin",
+        gt_ir.NativeFunction.COS: "np.cos",
+        gt_ir.NativeFunction.TAN: "np.tan",
+        gt_ir.NativeFunction.ARCSIN: "np.arcsin",
+        gt_ir.NativeFunction.ARCCOS: "np.arccos",
+        gt_ir.NativeFunction.ARCTAN: "np.arctan",
+        gt_ir.NativeFunction.SQRT: "np.sqrt",
+        gt_ir.NativeFunction.EXP: "np.exp",
+        gt_ir.NativeFunction.LOG: "np.log",
+        gt_ir.NativeFunction.ISFINITE: "np.isfinite",
+        gt_ir.NativeFunction.ISINF: "np.isinf",
+        gt_ir.NativeFunction.ISNAN: "np.isnan",
+        gt_ir.NativeFunction.FLOOR: "np.floor",
+        gt_ir.NativeFunction.CEIL: "np.ceil",
+        gt_ir.NativeFunction.TRUNC: "np.trunc",
+    }
+
     def __init__(self, *args, interval_k_start_name, interval_k_end_name, **kwargs):
         super().__init__(*args, **kwargs)
         self.interval_k_start_name = interval_k_start_name

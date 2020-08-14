@@ -182,6 +182,12 @@ class ReturnReplacer(ast.NodeTransformer):
 
 
 class CallInliner(ast.NodeTransformer):
+    """Inlines calls to gtscript.function calls.
+
+    Calls to NativeFunctions (intrinsic math functions) are kept in the IR and
+    dealt with in the IRMaker.
+    """
+
     @classmethod
     def apply(cls, func_node: ast.FunctionDef, context: dict):
         inliner = cls(context)
@@ -229,7 +235,7 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        if isinstance(node.value, ast.Call):
+        if isinstance(node.value, ast.Call) and node.value.func.id not in gtscript.MATH_BUILTINS:
             assert len(node.targets) == 1
             self.visit(node.value, target_node=node.targets[0])
             # This node can be now removed since the trivial assignment has been already done
@@ -240,7 +246,13 @@ class CallInliner(ast.NodeTransformer):
 
     def visit_Call(self, node: ast.Call, *, target_node=None):
         call_name = node.func.id
-        assert call_name in self.context and hasattr(self.context[call_name], "_gtscript_")
+
+        if call_name in gtscript.MATH_BUILTINS:
+            node.args = [self.visit(arg) for arg in node.args]
+            return node
+
+        elif call_name not in self.context and not hasattr(self.context[call_name], "_gtscript_"):
+            raise GTScriptSyntaxError("Unknown call", loc=gt_ir.Location.from_ast_node(node))
 
         # Recursively inline any possible nested subroutine call
         call_info = self.context[call_name]._gtscript_
@@ -552,6 +564,27 @@ class IRMaker(ast.NodeVisitor):
         self.splitters = splitters or {}
         self.parsing_context = None
         self.in_if = False
+        gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
+            "abs": gt_ir.NativeFunction.ABS,
+            "min": gt_ir.NativeFunction.MIN,
+            "max": gt_ir.NativeFunction.MAX,
+            "mod": gt_ir.NativeFunction.MOD,
+            "sin": gt_ir.NativeFunction.SIN,
+            "cos": gt_ir.NativeFunction.COS,
+            "tan": gt_ir.NativeFunction.TAN,
+            "asin": gt_ir.NativeFunction.ARCSIN,
+            "acos": gt_ir.NativeFunction.ARCCOS,
+            "atan": gt_ir.NativeFunction.ARCTAN,
+            "sqrt": gt_ir.NativeFunction.SQRT,
+            "exp": gt_ir.NativeFunction.EXP,
+            "log": gt_ir.NativeFunction.LOG,
+            "isfinite": gt_ir.NativeFunction.ISFINITE,
+            "isinf": gt_ir.NativeFunction.ISINF,
+            "isnan": gt_ir.NativeFunction.ISNAN,
+            "floor": gt_ir.NativeFunction.FLOOR,
+            "ceil": gt_ir.NativeFunction.CEIL,
+            "trunc": gt_ir.NativeFunction.TRUNC,
+        }
 
     def __call__(self, ast_root: ast.AST):
         assert (
@@ -894,6 +927,22 @@ class IRMaker(ast.NodeVisitor):
         self.in_if = False
 
         return result
+
+    def visit_Call(self, node: ast.Call):
+        native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
+
+        args = [self.visit(arg) for arg in node.args]
+        if len(args) != native_fcn.arity:
+            raise GTScriptSyntaxError(
+                "Invalid native function call", loc=gt_ir.Location.from_ast_node(node)
+            )
+
+        return gt_ir.NativeFuncCall(
+            func=native_fcn,
+            args=args,
+            data_type=gt_ir.DataType.AUTO,
+            loc=gt_ir.Location.from_ast_node(node),
+        )
 
     # -- Statement nodes --
     def visit_Assign(self, node: ast.Assign) -> list:

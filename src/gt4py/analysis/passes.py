@@ -41,24 +41,30 @@ class IRSpecificationError(gt_definitions.GTSpecificationError):
             if loc is None:
                 message = "Invalid specification"
             else:
-                message = "Invalid specification in '{scope}' (line: {line}, col: {col})".format(
-                    scope=loc.scope, line=loc.line, col=loc.column
+                message = (
+                    f"Invalid specification in '{loc.scope}' (line: {loc.line}, col: {loc.col})"
                 )
-        super().__init__(message)
-        self.loc = loc
+        super().__init__(message, loc=loc)
 
 
 class IntervalSpecificationError(IRSpecificationError):
     def __init__(self, interval, message=None, *, loc=None):
         if message is None:
             if loc is None:
-                message = "Invalid interval specification '{interval}' ".format(interval=interval)
+                message = f"Invalid interval specification '{interval}' "
             else:
-                message = "Invalid interval specification '{interval}' in '{scope}' ".format(
-                    interval=interval, scope=loc.scope
-                ) + "(line: {line}, col: {col})".format(line=loc.line, col=loc.column)
+                message = f"Invalid interval specification '{interval}' in '{loc.scope}' (line: {loc.line}, col: {loc.col})"
         super().__init__(message, loc=loc)
-        self.interval = interval
+
+
+class DataTypeSpecificationError(IRSpecificationError):
+    def __init__(self, data_type, message=None, *, loc=None):
+        if message is None:
+            if loc is None:
+                message = f"Invalid data type specification '{data_type}'"
+            else:
+                message = f"Invalid data type specification '{data_type}' in '{loc.scope}' (line: {loc.line}, col: {loc.col})"
+        super().__init__(message, loc=loc)
 
 
 def _make_parallel_interval_info(parallel_interval):
@@ -281,6 +287,9 @@ class InitInfoPass(TransformPass):
             result = StatementInfo(self.data.id_generator.new, node, inputs, {target_name})
 
             return result
+
+        def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
+            return [extent for arg in node.args for extent in self.visit(arg)]
 
         def visit_If(self, node: gt_ir.If):
             inputs = {}
@@ -741,6 +750,40 @@ class DataTypePass(TransformPass):
             node.data_type = gt_ir.DataType.merge(
                 node.then_expr.data_type, node.else_expr.data_type
             )
+
+        def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall, **kwargs):
+            self.generic_visit(node.args, **kwargs)
+
+            data_type = set(
+                arg.data_type for arg in node.args if arg.data_type != gt_ir.DataType.DEFAULT
+            )
+            if len(data_type) > 1:
+                raise DataTypeSpecificationError(
+                    "Builtin function call with mixed data types", loc=node.loc
+                )
+            data_type = data_type.pop() if len(data_type) else gt_ir.DataType.DEFAULT
+
+            if node.func in (
+                gt_ir.NativeFunction.MIN,
+                gt_ir.NativeFunction.MAX,
+                gt_ir.NativeFunction.ABS,
+                gt_ir.NativeFunction.MOD,
+            ):
+                node.data_type = data_type
+            elif node.func in (
+                gt_ir.NativeFunction.ISFINITE,
+                gt_ir.NativeFunction.ISINF,
+                gt_ir.NativeFunction.ISNAN,
+            ):
+                node.data_type = gt_ir.DataType.BOOL
+            elif node.func in (
+                gt_ir.NativeFunction.CEIL,
+                gt_ir.NativeFunction.FLOOR,
+                gt_ir.NativeFunction.TRUNC,
+            ):
+                node.data_type = gt_ir.DataType.INT64
+            else:
+                node.data_type = gt_ir.DataType.DEFAULT
 
     def apply(self, transform_data: TransformData):
         collect_data_type = self.CollectDataTypes()
