@@ -62,17 +62,20 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
-    def _make_positional_ij_loops(self, parallel_definition):
+    def _make_positional_ij_condition(self, parallel_definition):
         par_axis_names = [axis.name for axis in self.impl_node.domain.parallel_axes]
         conditions = []
         for interval, axis_name in zip(parallel_definition, par_axis_names):
-            for axis_bound in (interval.start, interval.end):
+            symbols = (">=", "<")
+            for axis_bound, symbol in zip((interval.start, interval.end), symbols):
                 if isinstance(axis_bound.level, gt_ir.VarRef):
                     conditions.append(
-                        f"{axis_name} >= {axis_bound.level.name} + {axis_bound.offset}"
+                        f"{axis_name} {symbol} {axis_bound.level.name}{axis_bound.offset:+d}"
                     )
                 elif isinstance(axis_bound.level, int):
-                    conditions.append(f"{axis_name} >= {axis_bound.level} + {axis_bound.offset}")
+                    conditions.append(
+                        f"{axis_name} {symbol} {axis_bound.level}{axis_bound.offset:+d}"
+                    )
 
         return ["if " + " and ".join(conditions) + ":"]
 
@@ -113,7 +116,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
             if parallel_bounds:
                 with source_lines.indented(steps=extent.ndims):
-                    source_lines.extend(self._make_positional_ij_loops(parallel_bounds))
+                    source_lines.extend(self._make_positional_ij_condition(parallel_bounds))
                 with source_lines.indented(steps=extent.ndims + 1):
                     source_lines.extend(body_sources)
             else:

@@ -99,7 +99,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         if iteration_order == gt_ir.IterationOrder.BACKWARD:
             regions = reversed(regions)
 
-        for bounds, body in regions:
+        for bounds, parallel_interval, body in regions:
             region_lines = self._make_regional_computation(iteration_order, bounds, body)
             source_lines.extend(region_lines)
 
@@ -111,6 +111,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
         extent = self.block_info.extent
+
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
 
@@ -122,18 +123,44 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         index = []
         for d in range(2):
+            # max({name}{marker}[{d}]{start}, lower_parallel) : min({name}{marker}[{d}] + {size}, upper_parallel)
             start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
             size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
             size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
-            index.append(
-                "{name}{marker}[{d}]{start}: {name}{marker}[{d}] + {size}".format(
-                    name=node.name,
-                    start=start_expr,
-                    marker=self.origin_marker,
-                    d=d,
-                    size=size_expr,
-                )
-            )
+
+            lower_index = f"{node.name}{self.origin_marker}[{d}]{start_expr}"
+            upper_index = f"{node.name}{self.origin_marker}[{d}] + {size_expr}"
+
+            if not self.block_info.parallel_interval:
+                index.append(f"{lower_index}: {upper_index}")
+            else:
+                axis_interval = self.block_info.parallel_interval[d]
+                bounds = []
+
+                operators = ("max", "min")
+                for regular_bound, axis_bound, operator in zip(
+                    (lower_index, upper_index), (axis_interval.start, axis_interval.end), operators
+                ):
+                    if isinstance(axis_bound.level, gt_ir.VarRef):
+                        this_bound = f"{axis_bound.level.name}{axis_bound.offset:+d}"
+                    elif isinstance(axis_bound.level, int):
+                        this_bound = f"{axis_bound.level}{axis_bound.offset:+d}"
+                    else:
+                        this_bound = ""
+
+                    if this_bound:
+                        bounds.append(f"{operator}({regular_bound}, {this_bound})")
+                    else:
+                        bounds.append(f"{regular_bound}")
+                index.append(" : ".join(bounds))
+        # for interval, axis_name in zip(parallel_definition, par_axis_names):
+        #     for axis_bound in (interval.start, interval.end):
+        #         if isinstance(axis_bound.level, gt_ir.VarRef):
+        #             conditions.append(
+        #                 f"{axis_name} >= {axis_bound.level.name} + {axis_bound.offset}"
+        #             )
+        #         elif isinstance(axis_bound.level, int):
+        #             conditions.append(f"{axis_name} >= {axis_bound.level} + {axis_bound.offset}")
 
         k_ax = self.domain.sequential_axis.name
         k_offset = node.offset.get(k_ax, 0)
@@ -165,9 +192,6 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
     def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
         self.sources.empty_line()
-
-        if len(node.splitters) > 0:
-            raise NotImplementedError("Splitters are not yet supported in the numpy backend")
 
         # Accessors for IO fields
         self.sources.append("# Sliced views of the stencil fields (domain + borders)")
