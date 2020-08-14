@@ -56,6 +56,17 @@ def copy_stencil(field_a: Field3D, field_b: Field3D):
         field_b = field_a[0, 0, 0]
 
 
+@gtscript.function
+def afunc(b):
+    return sqrt(b[0, 1, 0])
+
+
+@register
+def native_functions(field_a: Field3D, field_b: Field3D):
+    with computation(PARALLEL), interval(...):
+        field_a = min(afunc(field_b), field_b)
+
+
 @register
 def copy_stencil_plus_one(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
