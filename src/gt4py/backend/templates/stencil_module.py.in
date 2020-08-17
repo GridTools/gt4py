@@ -161,7 +161,7 @@ class {{ class_name }}(StencilObject):
             exec_info["origin"] = _origin_
             exec_info["run_start_time"] = time.perf_counter()
 {%- filter indent(width=8) %}
-{{- implementation }}
+{{ implementation }}
 {%- endfilter %}
         if exec_info is not None:
             exec_info["run_end_time"] = time.perf_counter()
