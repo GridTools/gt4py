@@ -120,4 +120,4 @@ def test_ignore_np_errstate():
         setup_and_run(backend="debug")
 
     with pytest.warns(RuntimeWarning, match="divide by zero encountered"):
-        setup_and_run(backend="numpy", ignore_np_errstate=False
+        setup_and_run(backend="numpy", ignore_np_errstate=False)
