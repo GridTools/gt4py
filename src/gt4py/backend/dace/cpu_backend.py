@@ -55,16 +55,18 @@ class X86DaceOptimizer(DaceOptimizer):
         #     fusion = SubgraphFusion()
         #     fusion.apply(sdfg, subgraph)
 
-        sdfg.apply_transformations_repeated(MapCollapse, validate=False)
-        for name, descr in sdfg.arrays.items():
-            if descr.transient:
-                for state in sdfg.nodes():
-                    for node in state.nodes():
-                        if isinstance(node, dace.nodes.NestedSDFG):
-                            node.sdfg.apply_transformations(
-                                BasicRegisterCache, options=dict(array=name)
-                            )
-
+        # sdfg.apply_transformations_repeated(MapCollapse, validate=False)
+        # for state in sdfg.nodes():
+        #     for node in state.nodes():
+        #         if isinstance(node, dace.nodes.NestedSDFG):
+        #             for name, descr in node.sdfg.arrays.items():
+        #                 if name == "data_col":
+        #                     node.sdfg.apply_transformations(
+        #                         BasicRegisterCache, options=dict(array=name), validate=False
+        #                     )
+        from gt4py.backend.dace.sdfg.transforms import LoopPeel
+        sdfg.apply_transformations_repeated(LoopPeel, validate=False)
+        sdfg.validate()
         return sdfg
 
 

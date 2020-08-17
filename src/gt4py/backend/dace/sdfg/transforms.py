@@ -846,3 +846,119 @@ def outer_k_loop_to_inner_map(sdfg: dace.SDFG, state: dace.SDFGState):
         for edge in sdfg.edges_between(s, state):
             sdfg.remove_edge(edge)
     sdfg.remove_node(state)
+
+
+@registry.autoregister
+@make_properties
+class LoopPeel(EnhancedDetectLoop):
+
+    peel_first = dace.properties.Property(
+        dtype=bool,
+        default=False,
+        desc="Indicates whether the first iteration is moved to a separate state.",
+    )
+    peel_last = dace.properties.Property(
+        dtype=bool,
+        default=True,
+        desc="Indicates whether the first iteration is moved to a separate state.",
+    )
+
+    @staticmethod
+    def _get_context_subgraph(subgraph, sdfg):
+        # Obtain loop information
+        guard: dace.SDFGState = sdfg.node(subgraph[DetectLoop._loop_guard])
+        begin: dace.SDFGState = sdfg.node(subgraph[DetectLoop._loop_begin])
+        after_state: dace.SDFGState = sdfg.node(subgraph[DetectLoop._exit_state])
+
+        # Obtain iteration variable, range, and stride
+        guard_inedges = sdfg.in_edges(guard)
+        condition_edge = sdfg.edges_between(guard, begin)[0]
+        itervar = list(guard_inedges[0].data.assignments.keys())[0]
+        condition = condition_edge.data.condition_sympy()
+        rng = LoopUnroll._loop_range(itervar, guard_inedges, condition)
+
+        # Find the state prior to the loop
+        if rng[0] == symbolic.pystr_to_symbolic(guard_inedges[0].data.assignments[itervar]):
+            before_state: dace.SDFGState = guard_inedges[0].src
+            last_state: dace.SDFGState = guard_inedges[1].src
+        else:
+            before_state: dace.SDFGState = guard_inedges[1].src
+            last_state: dace.SDFGState = guard_inedges[0].src
+
+        return guard, begin, last_state, before_state, after_state
+
+    @staticmethod
+    def can_be_applied(graph, candidate, expr_index, sdfg, strict=False):
+
+        if not DetectLoop.can_be_applied(graph, candidate, expr_index, sdfg, strict):
+            return False
+
+        guard, begin, last_state, before_state, after_state = LoopPeel._get_context_subgraph(
+            candidate, sdfg
+        )
+        condition = sdfg.edges_between(guard, begin)
+        assert len(condition) == 1
+        condition: dace.properties.CodeBlock = condition[0].data.condition
+
+        step = sdfg.edges_between(last_state, guard)
+        assert len(step) == 1
+        step = step[0].data.assignments
+        assert len(step) == 1
+        itervar, step = next(iter(step.items()))
+
+        init = sdfg.edges_between(before_state, guard)
+        assert len(init) == 1
+        init = init[0].data.assignments
+        assert len(init) == 1
+        assert itervar in init
+        _, init = next(iter(init.items()))
+
+        num_iterations = 0
+        test_condition = dace.symbolic.pystr_to_symbolic(condition.as_string)
+
+        def subs(expr, var, val):
+            itersym = [sym for sym in expr.free_symbols if str(sym) == var][0]
+            return expr.subs({itersym: val})
+
+        def test_str_condition(condition, itervar, iterval):
+            itersym = [sym for sym in condition.free_symbols if str(sym) == itervar][0]
+            condition_sym = subs(condition, itervar, iterval)
+            try:
+                return bool(condition_sym)
+            except TypeError:
+                return True
+
+        iterval = init
+        while num_iterations < 2 and test_str_condition(test_condition, itervar, iterval):
+            test_condition = subs(test_condition, itervar, step)
+            num_iterations = num_iterations + 1
+
+        min_iterations = int(self.peel_first + self.peel_last)
+        # if num_iterations is symbolic or num_iterations>=min_iterations:
+        #     return True
+
+        return False
+
+    def apply(self, sdfg: dace.SDFG):
+        pass
+        #
+        # num_iter = 0
+        # if condition:
+        #
+        #
+        #
+        # if self.peel_first:
+        #     # insert state
+        #     # move edge from before->guard to before->inserted state
+        #     # copy edge from loopend->guard state, put it at inserted->guard
+        # if self.peel_last:
+        #     # insert state
+        #     # move edge from guard->after to inserted->after state
+        #     # copy edge from loopend->guard state, put it at inserted->guard
+        #
+        #
+        #
+        # min_iterations = int(self.peel_first + self.peel_last)
+        # if num_iterations == min_iterations:
+        #     #remove loop states,
+        #     pass
