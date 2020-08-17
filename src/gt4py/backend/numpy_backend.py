@@ -352,13 +352,13 @@ def numpy_is_compatible_type(field):
 
 @gt_backend.register
 class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):
-    """Pure Python backend using numpy for faster computations than the debug backend.
+    """Pure Python backend using NumPy for faster computations than the debug backend.
 
     Other Parameters
     ----------------
     Backend options include:
     - ignore_np_errstate: `bool`
-        If False, does not ignore numpy floating-point errors. (`True` by default.)
+        If False, does not ignore NumPy floating-point errors. (`True` by default.)
     """
 
     name = "numpy"
