@@ -19,10 +19,10 @@ import copy
 import enum
 import inspect
 import itertools
-import networkx as nx
 import numbers
 import types
 
+import networkx as nx
 import numpy as np
 
 from gt4py import definitions as gt_definitions
@@ -411,6 +411,7 @@ class CompiledIfInliner(ast.NodeTransformer):
 
         return node if node else None
 
+
 class ParallelRaceConditionChecker(gt_ir.IRNodeVisitor):
     @classmethod
     def apply(cls, root_node):
@@ -431,9 +432,13 @@ class ParallelRaceConditionChecker(gt_ir.IRNodeVisitor):
             for source, target in zip(full_cycle[:-1], full_cycle[1:]):
                 offsets = graph.get_edge_data(source, target).get("offsets", [])
                 if any([offset["I"] != 0 or offset["J"] != 0 for offset in offsets]):
-                    raise GTScriptSyntaxError(f"Horizontal {error_message}.\n\tCycle: {', '.join(full_cycle)}")
+                    raise GTScriptSyntaxError(
+                        f"Horizontal {error_message}.\n\tCycle: {', '.join(full_cycle)}"
+                    )
                 elif any([offset["K"] != 0 for offset in offsets]):
-                    raise GTScriptSyntaxError(f"Vertical {error_message}.\n\tCycle: {', '.join(full_cycle)}")
+                    raise GTScriptSyntaxError(
+                        f"Vertical {error_message}.\n\tCycle: {', '.join(full_cycle)}"
+                    )
 
     def visit_ComputationBlock(self, node: gt_ir.ComputationBlock):
         # Look for vertical race conditions
