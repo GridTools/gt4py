@@ -53,7 +53,6 @@ class StencilBuilder:
         self.options = options or BuildOptions(  # type: ignore
             name=definition_func.__name__, module=definition_func.__module__
         )
-        print(options)
         self.backend: "BackendType" = backend(self) if backend else gt4py.backend.from_name(
             "debug"
         )(self)
