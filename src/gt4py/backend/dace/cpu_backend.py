@@ -41,7 +41,30 @@ class X86DaceOptimizer(DaceOptimizer):
         # sdfg.apply_strict_transformations(validate=False)
         # global_ij_tiling(sdfg, tile_size=(8, 8))
         from dace.transformation.interstate import StateFusion
+
         # sdfg.apply_transformations_repeated([StateFusion], strict=False, validate=False)
+        from daceperiments.transforms import BasicRegisterCache
+        from dace.transformation.dataflow import MapCollapse
+        import dace.sdfg.utils
+        from dace.transformation.subgraph.subgraph_fusion import SubgraphFusion
+
+        # for graph in sdfg.nodes():
+        #     subgraph = dace.sdfg.graph.SubgraphView(
+        #         graph, [node for node in graph.nodes() if graph.out_degree(node) > 0]
+        #     )
+        #     fusion = SubgraphFusion()
+        #     fusion.apply(sdfg, subgraph)
+
+        sdfg.apply_transformations_repeated(MapCollapse, validate=False)
+        for name, descr in sdfg.arrays.items():
+            if descr.transient:
+                for state in sdfg.nodes():
+                    for node in state.nodes():
+                        if isinstance(node, dace.nodes.NestedSDFG):
+                            node.sdfg.apply_transformations(
+                                BasicRegisterCache, options=dict(array=name)
+                            )
+
         return sdfg
 
 
