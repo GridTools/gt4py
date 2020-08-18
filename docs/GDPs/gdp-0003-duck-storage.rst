@@ -14,24 +14,24 @@ Abstract
 --------
 
 We propose to replace the current storage implementation by a new `storage` class hierarchy
-which does not inherit from NumPy `ndarray`. But instead the also established `__array_interface__`
-and `__cuda_array_interface__` interfaces. These new storage classes shall also introduce the
-possibility to be constructed from externally allocated memory buffers and provide more control over
-the underlying memory.
+which does not inherit from NumPy `ndarray`. Instead we propose to support the also established
+`__array_interface__` and `__cuda_array_interface__` interfaces. These new storage classes shall
+also introduce the possibility to be constructed from externally allocated memory buffers and
+provide more control over the underlying memory.
 
 Further, we propose the :code:`__gt_data_interface__` attribute which can be added to any object to
 provide the necessary information about how it can be used as a field in gt4py stencils. We also
-propose to accept the established `__array_interface__` and `__cuda_array_interface__` interfaces
-if these provide all necessary information.
+propose to accept the `__array_interface__` and `__cuda_array_interface__` interfaces if these
+provide all necessary information.
 
 Motivation and Scope
 --------------------
 
 In the current state of GT4Py, we implemented storages as subclasses of NumPy :code:`ndarrays`.
 Although this strategy is fully documented and supported by NumPy API, it presents some drawbacks
-such as that one-sided changes to coupled host/device buffers managed by
-GT4Py storages (e.g. :code:`ExplicitlySyncedGPUStorage` class) cannot be tracked reliably, resulting
-in validation errors which are hard to find and fix.
+such as that one-sided changes to coupled host/device buffers managed by GT4Py storages (e.g.
+:code:`ExplicitlySyncedGPUStorage` class) cannot be tracked reliably, resulting in validation errors
+which are hard to find and fix.
 
 The current implementation of GT4Py storages as :code:`ndarray` subclasses was needed to use
 storages transparently with third-party frameworks relying on NumPy :code:`ndarray` implementation
@@ -50,7 +50,7 @@ To use this feature, some additional information about the provided buffers need
 both the :code:`__init__` method of the storages.
 
 Lastly, with the adaption of our storages to the generic array interfaces, we will also add support
-for third-party objects implementing said interfaces that can the be passed to the stencils
+for third-party objects implementing said interfaces that can then be passed to the stencils
 directly. While these interfaces provide all information needed to understand a buffer as an
 n-dimensional array, this may not be enough for all use cases of GT4Py. For example, objects may
 hold buffers in both the main memory and on a GPU. In this case, updating the respective other after
@@ -183,13 +183,13 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
     Allocate a storage with uninitialized (undefined) values.
 
     Parameters:
-        + :code:`dtype: dtype_like`
-          The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
-          :code:`np.float64`.
-
         + :code:`shape: Sequence[int]`
           Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
           shape of the storage.
+
+        + :code:`dtype: dtype_like`
+          The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
+          :code:`np.float64`.
 
     For common keyword-only arguments, please see below.
 
@@ -207,7 +207,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
           The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
           :code:`data.dtype`
 
-    The common keyword-only arguments can also be overriden. Please see below for their description.
+    The common keyword-only arguments can also be overridden. Please see below for their description.
 
     Note that :code:`shape` is not a parameter and can not be overridden, implying that also the
     :code:`axes` can not be overridden.
@@ -216,13 +216,13 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
     Allocate a storage with values initialized to 0.
 
     Parameters:
-        + :code:`dtype: dtype_like`
-          The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
-          :code:`np.float64`.
-
         + :code:`shape: Sequence[int]`
           Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
           shape of the storage.
+
+        + :code:`dtype: dtype_like`
+          The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
+          :code:`np.float64`.
 
         For common keyword-only arguments, please see below.
 
@@ -250,13 +250,13 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
     Allocate a storage with values initialized to 1.
 
     Parameters:
-        + :code:`dtype: dtype_like`
-          The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
-          :code:`np.float64`.
-
         + :code:`shape: Sequence[int]`
           Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
           shape of the storage.
+
+        + :code:`dtype: dtype_like`
+          The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
+          :code:`np.float64`.
 
     For common keyword-only arguments, please see below.
 
@@ -284,15 +284,15 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
     Allocate a storage with values initialized to the scalar given in :code:`fill_value`.
 
     Parameters:
-        + :code:`dtype: dtype_like`
-          The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
-          :code:`np.float64`.
-
-        + :code:`fill_value: Number`. The number to which the storage is initialized.
-
         + :code:`shape: Sequence[int]`
           Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
           shape of the storage.
+
+        + :code:`fill_value: Number`. The number to which the storage is initialized.
+
+        + :code:`dtype: dtype_like`
+          The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
+          :code:`np.float64`.
 
     For common keyword-only arguments, please see below.
 
@@ -304,11 +304,11 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
         + :code:`data: Storage` Not explicitly overridden parameters are chosen as the value used in
           this :code:`Storage`
 
+        + :code:`fill_value: Number`. The number to which the storage is initialized.
+
         + :code:`dtype: dtype_like`
           The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
           :code:`data.dtype`
-
-        + :code:`fill_value: Number`. The number to which the storage is initialized.
 
     The common keyword-only arguments can also be overridden. Please see below for their description.
 
@@ -397,20 +397,27 @@ Additionally, these **optional** keyword-only parameters are accepted:
     Indicates whether the storage should contain a buffer on an accelerator device. Currently it
     only accepts :code:`"gpu"` or :code:`None`. Defaults to :code:`None`.
 
-:code:`layout: Optional[Sequence[int]]`
-    A permutation of integers in :code:`[0 .. ndim]`. It indicates the order of strides in
-    ascending order. I.e. "0" indicates that the stride in that dimension is 0, while the largest
-    entry in the sequence corresponds to the axis with the largest stride.
+:code:`dims: Optional[Sequence[str]`
+    Sequence indicating the semantic meaning of the dimensions of this storage. This is used to
+    determine the default layout for the storage. Currently supported will be :code:`"I"`,
+    :code:`"J"`, :code:`"K"` and additional dimensions as string representations of integers,
+    starting at :code:`"0"`.
 
-    Default values as indicated by the :code:`defaults` parameter may depend on the axes. E.g. if
-    :code:`defaults` is any of the compiled GridTools backends, the default value is defined
+:code:`layout: Optional[Sequence[int]]`
+    A permutation of integers in :code:`[0 .. ndim-1]`. It indicates the order of strides in
+    decreasing order. I.e. "0" indicates that the stride in that dimension is the largest, while the
+    entry `0` in the layout sequence correspondes to the deminesion with the smallest stride, which
+    typically is contiguous in memory.
+
+    Default values as indicated by the :code:`defaults` parameter may depend on the dimensions. E.g.
+    if :code:`defaults` is any of the compiled GridTools backends, the default value is defined
     according to the semantic meaning of each dimension. For example for the :code:`"gtx86"`
     backend, the unit stride is always in the K dimension, independently of which index corresponds
     to the K dimension. On the other hand, we assume that if a storage is created from an existing
     FORTRAN array, the first index has the smallest stride, irrespective of its corresponding axis.
-    I.e. the layout of a 3d storage is always :code:`(0, 1, 2)` for both IJK and KJI storages.
+    I.e. the layout of a 3d storage is always :code:`(2, 1, 0)` for both IJK and KJI storages.
 
-    .. list-table:: Default :code:`layout` parameter when given :code:`defaults` and :code:`axes`
+    .. list-table:: Default :code:`layout` parameter when given :code:`defaults` and :code:`dims`
        :header-rows: 1
        :stub-columns: 1
 
@@ -420,17 +427,17 @@ Additionally, these **optional** keyword-only parameters are accepted:
          - :code:`defaults="gtx86"`
          - :code:`defaults="gtcuda"`
 
-       * - :code:`axes="IJK"`
-         - :code:`layout=(0, 1, 2)`
-         - :code:`layout=(2, 1, 0)`
+       * - :code:`dims="IJK"`
          - :code:`layout=(2, 1, 0)`
          - :code:`layout=(0, 1, 2)`
+         - :code:`layout=(0, 1, 2)`
+         - :code:`layout=(2, 1, 0)`
 
-       * - :code:`axes="KJI"`
-         - :code:`layout=(0, 1, 2)`
+       * - :code:`dims="KJI"`
          - :code:`layout=(2, 1, 0)`
          - :code:`layout=(0, 1, 2)`
          - :code:`layout=(2, 1, 0)`
+         - :code:`layout=(0, 1, 2)`
 
     The rationale behind this is that in this way, storages allocated with :code:`defaults` set to a
     backend will always get optimal performance, while :code:`defaults` set to :code:`"F"` or
@@ -532,6 +539,13 @@ Attributes and Properties
 :code:`flags: Optional[np.flagsobj]`
     If the instance contains a host memory buffer, the :code:`flags` attribute of the underlying
     :code:`np.ndarray` instance backing the host memory buffer, :code:`None` otherwise.
+
+:code:`layout: Sequence[int]`
+    The memory layout as specified in the creation routines: A permutation of integers in
+    :code:`[0 .. ndim-1]`. It indicates the order of strides in decreasing order. I.e. "0" indicates
+    that the stride in that dimension is the largest, while the entry `0` in the layout sequence
+    correspondes to the deminesion with the smallest stride, which typically is contiguous in
+    memory.
 
 :code:`nbytes: int`,
     Size of the buffer in bytes (excluding padding).
