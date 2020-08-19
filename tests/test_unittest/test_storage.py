@@ -890,21 +890,11 @@ def test_sum_gpu():
     jslice = slice(3, 4, None)
     shape = (5, 5, 5)
     q1 = gt_store.from_array(
-        cp.zeros(shape),
-        backend="gtcuda",
-        dtype=np.float64,
-        default_origin=(0, 0, 0),
-        shape=shape,
+        cp.zeros(shape), backend="gtcuda", dtype=np.float64, default_origin=(0, 0, 0), shape=shape,
     )
 
     q2 = gt_store.from_array(
-        cp.ones(shape),
-        backend="gtcuda",
-        dtype=np.float64,
-        default_origin=(0, 0, 0),
-        shape=shape,
+        cp.ones(shape), backend="gtcuda", dtype=np.float64, default_origin=(0, 0, 0), shape=shape,
     )
 
-    q1[i1:i2 + 1, jslice, 0] = cp.sum(
-        q2[i1:i2 + 1, jslice, :], axis=2
-    )
+    q1[i1 : i2 + 1, jslice, 0] = cp.sum(q2[i1 : i2 + 1, jslice, :], axis=2)
