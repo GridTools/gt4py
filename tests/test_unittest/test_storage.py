@@ -881,3 +881,30 @@ def test_managed_memory():
     assert cpu_view[0, 0, 0] == 123
     cpu_view[1, 1, 1] = 321
     assert gpu_arr[1, 1, 1] == 321
+
+
+@pytest.mark.requires_gpu
+def test_sum_gpu():
+    i1 = 3
+    i2 = 4
+    jslice = slice(3, 4, None)
+    shape = (5, 5, 5)
+    q1 = gt_store.from_array(
+        cp.zeros(shape),
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+    )
+
+    q2 = gt_store.from_array(
+        cp.ones(shape),
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+    )
+
+    q1[i1:i2 + 1, jslice, 0] = cp.sum(
+        q2[i1:i2 + 1, jslice, :], axis=2
+    )
