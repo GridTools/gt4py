@@ -40,6 +40,27 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
             if array.transient:
                 array.lifetime = dace.dtypes.AllocationLifetime.Persistent
         dace.Config.set("compiler", "cuda", "default_block_size", value="64,2,1")
+
+        from gt4py.backend.dace.sdfg.transforms import PrefetchingKCachesTransform
+        from dace.transformation.subgraph.subgraph_fusion import SubgraphFusion
+        from dace.sdfg.graph import SubgraphView
+
+        for graph in sdfg.nodes():
+            subgraph = SubgraphView(
+                graph, [node for node in graph.nodes() if graph.out_degree(node) > 0]
+            )
+            fusion = SubgraphFusion()
+            fusion.apply(sdfg, subgraph)
+
+        for state in sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.NestedSDFG):
+                    node.sdfg.apply_transformations(
+                        PrefetchingKCachesTransform,
+                        options={"storage_type": dace.dtypes.StorageType.Register},
+                        validate=False,
+                    )
+
         return sdfg
 
 

@@ -854,6 +854,13 @@ from dace.transformation.interstate import LoopPeeling
 @registry.autoregister
 @make_properties
 class PrefetchingKCachesTransform(LoopPeeling):
+
+    storage_type = dace.properties.Property(
+        dtype=dace.dtypes.StorageType,
+        default=dace.dtypes.StorageType.Default,
+        desc="the StorageType of local buffers",
+    )
+
     def collect_subset_info(self, state, name, var_idx):
         in_subsets = set()
         out_subsets = set()
@@ -1030,6 +1037,11 @@ class PrefetchingKCachesTransform(LoopPeeling):
                 stride < 0 and subset.ranges[var_idx][0] < newest_subset.ranges[var_idx][0]
             ):
                 newest_subset = subset
+        from dace.subsets import union as subset_union
+
+        for subset in in_subsets:
+            if subset.ranges[var_idx][0] == newest_subset.ranges[var_idx][0]:
+                newest_subset = subset_union(newest_subset, subset)
 
         subset = copy.deepcopy(newest_subset)
         other_subset = copy.deepcopy(newest_subset)
@@ -1295,7 +1307,7 @@ class PrefetchingKCachesTransform(LoopPeeling):
                     name=f"_loc_buf_{name}",
                     shape=shape,
                     dtype=array.dtype,
-                    storage=dace.dtypes.StorageType.Default,
+                    storage=self.storage_type,
                     transient=True,
                     lifetime=dace.dtypes.AllocationLifetime.SDFG,
                 )
