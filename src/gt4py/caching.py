@@ -88,27 +88,6 @@ class CachingStrategy(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def is_cache_info_consistent(
-        self, cache_info: Dict[str, Any], *, validate_hash: bool,
-    ) -> bool:
-        """
-        Validate the passed cache info by comparing it to the stored data.
-
-        A backend can cause additional keys to be validated by overriding
-        :py:meth:`gt4py.backend.base.Backend.extra_cache_validate`.  These keys must also be
-        present in it's overload of :py:meth:`gt4py.backend.base.Backend.extra_cache_info`.
-
-        Parameters
-        ----------
-        cache_info:
-            The cache info to be compared to file
-
-        validate_hash:
-            Should the stencil fingerprint and source code hash be validated or not
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
     def is_cache_info_available_and_consistent(self, *, validate_hash: bool) -> bool:
         """
         Check if the cache can be read and is consistent.
@@ -245,11 +224,14 @@ class JITCachingStrategy(CachingStrategy):
         with self.cache_info_path.open("wb") as cache_info_file:
             pickle.dump(cache_info, cache_info_file)
 
-    def is_cache_info_consistent(
-        self, cache_info: Dict[str, Any], *, validate_hash: bool, catch_exceptions: bool = True
+    def is_cache_info_available_and_consistent(
+        self, *, validate_hash: bool, catch_exceptions: bool = True
     ) -> bool:
         result = True
+        if not self.cache_info_path and catch_exceptions:
+            return False
         try:
+            cache_info = self.generate_cache_info()
             cache_info_ns = types.SimpleNamespace(**cache_info)
             validate_extra = self.builder.backend.extra_cache_validation_data
             source = self.builder.module_path.read_text()
@@ -271,20 +253,6 @@ class JITCachingStrategy(CachingStrategy):
                 raise err
             result = False
 
-        return result
-
-    def is_cache_info_available_and_consistent(
-        self, *, validate_hash: bool, catch_exceptions: bool = True
-    ) -> bool:
-        try:
-            assert isinstance(self.cache_info, dict)
-            result = self.is_cache_info_consistent(
-                self.generate_cache_info(), validate_hash=validate_hash
-            )
-        except Exception as err:
-            if not catch_exceptions:
-                raise err
-            result = False
         return result
 
     @property
@@ -398,11 +366,6 @@ class NoCachingStrategy(CachingStrategy):
 
     def update_cache_info(self) -> None:
         pass
-
-    def is_cache_info_consistent(
-        self, cache_info: Dict[str, Any], *, validate_hash: bool,
-    ) -> bool:
-        return False
 
     def is_cache_info_available_and_consistent(self, *, validate_hash: bool) -> bool:
         return False
