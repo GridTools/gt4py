@@ -233,7 +233,11 @@ class JITCachingStrategy(CachingStrategy):
         try:
             cache_info = self.generate_cache_info()
             cache_info_ns = types.SimpleNamespace(**cache_info)
-            validate_extra = self.builder.backend.extra_cache_validation_data
+            validate_extra = {
+                k: v
+                for k, v in self.builder.backend.extra_cache_info.items()
+                if k in self.builder.backend.extra_cache_validation_keys
+            }
             source = self.builder.module_path.read_text()
             module_shash = gt4py.utils.shash(source)
 

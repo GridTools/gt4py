@@ -20,7 +20,7 @@ import hashlib
 import numbers
 import os
 import pathlib
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Optional, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional, Tuple, Type, Union
 
 import jinja2
 
@@ -148,9 +148,9 @@ class Backend(abc.ABC):
         return {}
 
     @property
-    def extra_cache_validation_data(self) -> Dict[str, Any]:
-        """Hook for validating additional data from cache info file during consistency check."""
-        return {}
+    def extra_cache_validation_keys(self) -> List[str]:
+        """List keys from extra_cache_info to be validated during consistency check."""
+        return []
 
 
 class CLIBackendMixin:
@@ -358,14 +358,8 @@ class BasePyExtBackend(BaseBackend):
         }
 
     @property
-    def extra_cache_validation_data(self) -> Dict[str, Any]:
-        if "pyext_file_path" not in self.builder.backend_data:
-            return {}
-        pyext_file_path = pathlib.Path(self.builder.backend_data["pyext_file_path"])
-        if not pyext_file_path.exists():
-            return {}
-        pyext_md5 = hashlib.md5(pyext_file_path.read_bytes()).hexdigest()
-        return {**super().extra_cache_info, "pyext_md5": pyext_md5}
+    def extra_cache_validation_keys(self) -> List[str]:
+        return [*super().extra_cache_validation_keys, "pyext_md5"]
 
     @abc.abstractmethod
     def generate(self) -> Type["StencilObject"]:
