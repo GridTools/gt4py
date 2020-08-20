@@ -848,117 +848,651 @@ def outer_k_loop_to_inner_map(sdfg: dace.SDFG, state: dace.SDFGState):
     sdfg.remove_node(state)
 
 
+from dace.transformation.interstate import LoopPeeling
+
+
 @registry.autoregister
 @make_properties
-class LoopPeel(EnhancedDetectLoop):
+class PrefetchingKCachesTransform(LoopPeeling):
+    def collect_subset_info(self, state, name, var_idx):
+        in_subsets = set()
+        out_subsets = set()
+        for node in state.nodes():
+            if isinstance(node, dace.nodes.AccessNode) and node.data == name:
+                if node.access == dace.dtypes.AccessType.ReadOnly and all(
+                    isinstance(edge.dst, dace.nodes.Tasklet) for edge in state.out_edges(node)
+                ):
+                    for edge in state.out_edges(node):
+                        in_subsets.add(copy.deepcopy(edge.data.subset))
 
-    peel_first = dace.properties.Property(
-        dtype=bool,
-        default=False,
-        desc="Indicates whether the first iteration is moved to a separate state.",
-    )
-    peel_last = dace.properties.Property(
-        dtype=bool,
-        default=True,
-        desc="Indicates whether the first iteration is moved to a separate state.",
-    )
+                if node.access == dace.dtypes.AccessType.WriteOnly and all(
+                    isinstance(edge.src, dace.nodes.Tasklet) for edge in state.in_edges(node)
+                ):
+                    for edge in state.in_edges(node):
+                        out_subsets.add(copy.deepcopy(edge.data.subset))
 
-    @staticmethod
-    def _get_context_subgraph(subgraph, sdfg):
+        indices = set(subs.ranges[var_idx][0] for subs in in_subsets | out_subsets)
+        length = max(indices) - min(indices) + 3
+
+        return length, in_subsets, out_subsets
+
+    # def rename_arrays(self, sdfg):
+    #     for name, array in list(sdfg.arrays.items()):
+    #         sdfg.add_datadesc(f"_loc_buf_{name}", array)
+    #         sdfg.arrays[f"_loc_buf_{name}"].transient = True
+    #         sdfg.arrays[f"_loc_buf_{name}"].lifetime = dace.dtypes.AllocationLifetime.SDFG
+    #         sdfg.arrays[f"_loc_buf_{name}"].lifetime = dace.dtypes.AllocationLifetime.SDFG
+    #         for state in sdfg.nodes():
+    #             for node in state.nodes():
+    #                 if isinstance(node, dace.nodes.AccessNode) and node.data == name:
+    #                     node.data = f"_loc_buf_{name}"
+    #             for edge in state.edges():
+    #                 if edge.data.data == name:
+    #                     edge.data.data = f"_loc_buf_{name}"
+    def add_prefetch_all(self, state, name, itervar, var_idx, in_subsets, value, length):
+        if not in_subsets:
+            return
+        itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
+        read_acc = state.add_read(name)
+        write_acc = state.add_write(f"_loc_buf_{name}")
+
+        for subset in in_subsets:
+            subset = copy.deepcopy(subset)
+            other_subset = copy.deepcopy(subset)
+            ranges = list(subset.ranges[var_idx])
+            other_ranges = list(subset.ranges[var_idx])
+            for i, sym in enumerate(ranges):
+                ranges[i] = ranges[i].subs(itervar_sym, value)
+                other_ranges[i] = ranges[i].subs(itervar_sym, value)
+            other_ranges[0] = other_ranges[0] % length
+            other_ranges[1] = other_ranges[1] % length
+            subset.ranges[var_idx] = tuple(ranges)
+            other_subset.ranges[var_idx] = tuple(other_ranges)
+            state.add_edge(
+                read_acc,
+                None,
+                write_acc,
+                None,
+                dace.Memlet.simple(
+                    name, subset_str=str(subset), other_subset_str=str(other_subset)
+                ),
+            )
+
+    def add_store_all(self, state, name, itervar, var_idx, out_subsets, value, length):
+        if not out_subsets:
+            return
+        itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
+        write_acc = state.add_write(name)
+        read_acc = state.add_read(f"_loc_buf_{name}")
+
+        for subset in out_subsets:
+            subset = copy.deepcopy(subset)
+            other_subset = copy.deepcopy(subset)
+            ranges = list(subset.ranges[var_idx])
+            other_ranges = list(subset.ranges[var_idx])
+            for i, sym in enumerate(ranges):
+                ranges[i] = ranges[i].subs(itervar_sym, value)
+                other_ranges[i] = ranges[i].subs(itervar_sym, value)
+            other_ranges[0] = other_ranges[0] % length
+            other_ranges[1] = other_ranges[1] % length
+            subset.ranges[var_idx] = tuple(ranges)
+            other_subset.ranges[var_idx] = tuple(other_ranges)
+            state.add_edge(
+                read_acc,
+                None,
+                write_acc,
+                None,
+                dace.Memlet.simple(
+                    f"_loc_buf_{name}", other_subset_str=str(subset), subset_str=str(other_subset)
+                ),
+            )
+
+    def localize_tasklet_input(
+        self, state, name, itervar, var_idx, in_subsets, value, length, stride
+    ):
+        if not in_subsets:
+            return
+
+        nodes = []
+        for node in state.nodes():
+            if (
+                isinstance(node, dace.nodes.AccessNode)
+                and node.access == dace.AccessType.ReadOnly
+                and node.data == name
+                and all(isinstance(edge.dst, dace.nodes.Tasklet) for edge in state.out_edges(node))
+            ):
+                nodes.append(node)
+        assert len(nodes) == 1
+        node = nodes[0]
+        node.data = f"_loc_buf_{name}"
+
+        # change write from tasklet
+        for edge in state.out_edges(node):
+            edge.data.data = f"_loc_buf_{name}"
+            subset = copy.deepcopy(edge.data.subset)
+            ranges = list(subset.ranges[var_idx])
+            ranges[0] = ranges[0] % length
+            ranges[1] = ranges[1] % length
+            subset.ranges[var_idx] = tuple(ranges)
+            edge.data.subset = subset
+
+    def localize_tasklet_output(
+        self, state, name, itervar, var_idx, out_subsets, value, length, stride
+    ):
+        if not out_subsets:
+            return
+
+        nodes = []
+        for node in state.nodes():
+            if (
+                isinstance(node, dace.nodes.AccessNode)
+                and node.access == dace.AccessType.WriteOnly
+                and node.data == name
+                and all(isinstance(edge.src, dace.nodes.Tasklet) for edge in state.in_edges(node))
+            ):
+                nodes.append(node)
+        assert len(nodes) == 1
+        node = nodes[0]
+        node.data = f"_loc_buf_{name}"
+
+        # change write from tasklet
+        for edge in state.in_edges(node):
+            edge.data.data = f"_loc_buf_{name}"
+            subset = copy.deepcopy(edge.data.subset)
+            ranges = list(subset.ranges[var_idx])
+            ranges[0] = ranges[0] % length
+            ranges[1] = ranges[1] % length
+            subset.ranges[var_idx] = tuple(ranges)
+            edge.data.subset = subset
+
+    def add_prefetch(
+        self, state, name, itervar, var_idx, in_subsets, out_offsets, value, length, stride
+    ):
+        value = dace.symbolic.pystr_to_symbolic(value)
+        if not in_subsets:
+            return
+        in_indices = [subset.ranges[var_idx][0] for subset in in_subsets]
+        if out_offsets:
+            out_idx = next(iter(out_offsets)).ranges[var_idx][0]
+            if (stride > 0 and max(in_indices) < out_idx) or (
+                stride < 0 and min(in_indices) > out_idx
+            ):
+                return
+
+        itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
+        write_acc = state.add_write(f"_loc_buf_{name}")
+        read_acc = state.add_read(name)
+
+        # read next index == newest_index + stride
+        newest_subset = next(iter(in_subsets))
+        for subset in in_subsets:
+            if (stride > 0 and subset.ranges[var_idx][0] > newest_subset.ranges[var_idx][0]) or (
+                stride < 0 and subset.ranges[var_idx][0] < newest_subset.ranges[var_idx][0]
+            ):
+                newest_subset = subset
+
+        subset = copy.deepcopy(newest_subset)
+        other_subset = copy.deepcopy(newest_subset)
+        ranges = list(subset[var_idx])
+        other_ranges = list(other_subset[var_idx])
+        ranges[0] = ranges[0].subs(itervar_sym, value + stride)
+        ranges[1] = ranges[1].subs(itervar_sym, value + stride)
+        other_ranges[0] = other_ranges[0].subs(itervar_sym, value + stride) % length
+        other_ranges[1] = other_ranges[1].subs(itervar_sym, value + stride) % length
+        subset[var_idx] = tuple(ranges)
+        other_subset[var_idx] = tuple(other_ranges)
+        state.add_edge(
+            read_acc,
+            None,
+            write_acc,
+            None,
+            dace.Memlet.simple(name, subset_str=str(subset), other_subset_str=str(other_subset)),
+        )
+
+    def add_store(self, state, name, itervar, var_idx, out_subsets, value, length, stride):
+        value = dace.symbolic.pystr_to_symbolic(value)
+        if not out_subsets:
+            return
+
+        itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
+        write_acc = state.add_write(name)
+        read_acc = state.add_read(f"_loc_buf_{name}")
+
+        # write to previous index == current index - stride
+        assert len(out_subsets) == 1
+        subset = copy.deepcopy(next(iter(out_subsets)))
+        other_subset = copy.deepcopy(next(iter(out_subsets)))
+        ranges = list(subset.ranges[var_idx])
+        other_ranges = list(other_subset.ranges[var_idx])
+        ranges[0] = ranges[0].subs(itervar_sym, value - stride)
+        ranges[1] = ranges[1].subs(itervar_sym, value - stride)
+        other_ranges[0] = other_ranges[0].subs(itervar_sym, value - stride) % length
+        other_ranges[1] = other_ranges[1].subs(itervar_sym, value - stride) % length
+        subset.ranges[var_idx] = tuple(ranges)
+        other_subset.ranges[var_idx] = tuple(other_ranges)
+        state.add_edge(
+            read_acc,
+            None,
+            write_acc,
+            None,
+            dace.Memlet.simple(
+                f"_loc_buf_{name}", subset_str=str(other_subset), other_subset_str=str(subset)
+            ),
+        )
+
+        #
+        # # add prefetch
+        # for subset in out_subsets:
+        #     pass
+        # msubset = copy.deepcopy(subset)
+        # other_subset = copy.deepcopy(subset)
+        # ranges = list(subset.ranges[var_idx])
+        # other_ranges = list(subset.ranges[var_idx])
+        # for i, sym in enumerate(ranges):
+        #     ranges[i] = ranges[i].subs(itervar_sym, value)
+        #     other_ranges[i] = ranges[i].subs(itervar_sym, value)
+        # other_ranges[0] = other_ranges[0] % length
+        # other_ranges[1] = other_ranges[1] % length
+        # subset.ranges[var_idx] = tuple(ranges)
+        # other_subset.ranges[var_idx] = tuple(other_ranges)
+        # state.add_edge(
+        #     read_acc,
+        #     None,
+        #     write_acc,
+        #     None,
+        #     dace.Memlet.simple(
+        #         f"_loc_buf_{name}", other_subset_str=str(subset), subset_str=str(other_subset)
+        #     ),
+        # )
+
+    # def add_prefetch(self):
+    # loop_state_nodes = list(loop_state.nodes())
+    # for node in loop_state_nodes:
+    #     if (
+    #         isinstance(node, dace.nodes.AccessNode)
+    #         and node.access == dace.dtypes.AccessType.ReadOnly
+    #         and node.data == name
+    #     ):
+    #
+    #         buf_write_acc = state.add_write(f"_loc_buf_{name}")
+    #         field_read_acc = state.add_read(name)
+    #         # loop_offsets = set()
+    #         offsets = set()
+    #         # for edge in loop_state.out_edges(node):
+    #         #     loop_offsets.add(edge.data.subset.ranges[var_idx][1])
+    #         for edge in loop_state.out_edges(node):
+    #             offsets.add(edge.data.subset.ranges[var_idx][1])
+    #         for edge in loop_state.out_edges(node):
+    #             offset = edge.data.subset.ranges[var_idx]
+    #             raw_subset = copy.deepcopy(loop_state.out_edges(node)[0].data.subset)
+    #             other_subset = copy.deepcopy(loop_state.out_edges(node)[0].data.subset)
+    #             offset = tuple(
+    #                 o.subs(dace.symbolic.pystr_to_symbolic(itervar), value) for o in offset
+    #             )
+    #
+    #             raw_subset.ranges[var_idx] = offset
+    #             other_subset.ranges[var_idx] = (
+    #                 (offset[0]) % (max(offsets) - min(offsets) + 2),
+    #                 (offset[1]) % (max(offsets) - min(offsets) + 2),
+    #                 offset[2],
+    #             )
+    #             state.add_edge(
+    #                 field_read_acc,
+    #                 None,
+    #                 buf_write_acc,
+    #                 None,
+    #                 dace.memlet.Memlet.simple(
+    #                     name, subset_str=str(raw_subset), other_subset_str=str(other_subset)
+    #                 ),
+    #             )
+
+    # def add_prefetch(self, sdfg, loop_state, state, name, itervar, var_idx, value):
+    #     loop_state_nodes = list(loop_state.nodes())
+    #     state_nodes = list(state.nodes())
+    #     for node in loop_state_nodes:
+    #         if (
+    #             isinstance(node, dace.nodes.AccessNode)
+    #             and node.access == dace.dtypes.AccessType.ReadOnly
+    #             and node.data == name
+    #         ):
+    #             modify_node = [
+    #                 n
+    #                 for n in state_nodes
+    #                 if isinstance(n, dace.nodes.AccessNode)
+    #                 and n.access == dace.dtypes.AccessType.ReadOnly
+    #                 and n.data == name
+    #             ]
+    #             assert len(modify_node) == 1
+    #             modify_node = modify_node[0]
+    #
+    #             buf_write_acc = state.add_write(f"_loc_buf_{name}")
+    #             field_read_acc = state.add_read(name)
+    #             # loop_offsets = set()
+    #             offsets = set()
+    #             # for edge in loop_state.out_edges(node):
+    #             #     loop_offsets.add(edge.data.subset.ranges[var_idx][1])
+    #             for edge in state.out_edges(modify_node):
+    #                 offsets.add(edge.data.subset.ranges[var_idx][1])
+    #             raw_subset = copy.deepcopy(state.out_edges(modify_node)[0].data.subset)
+    #             other_subset = copy.deepcopy(state.out_edges(modify_node)[0].data.subset)
+    #             offset = dace.symbolic.pystr_to_symbolic(str(max(offsets)))
+    #             raw_subset.ranges[var_idx] = (
+    #                 (offset + 1),
+    #                 (offset + 1),
+    #                 raw_subset.ranges[var_idx][2],
+    #             )
+    #             other_subset.ranges[var_idx] = (
+    #                 (offset + 1) % (max(offsets) - min(offsets) + 2),
+    #                 (offset + 1) % (max(offsets) - min(offsets) + 2),
+    #                 other_subset.ranges[var_idx][2],
+    #             )
+    #             state.add_edge(
+    #                 field_read_acc,
+    #                 None,
+    #                 buf_write_acc,
+    #                 None,
+    #                 dace.memlet.Memlet.simple(
+    #                     name, subset_str=str(raw_subset), other_subset_str=str(other_subset)
+    #                 ),
+    #             )
+    #             for edge in state.out_edges(modify_node):
+    #                 offset = edge.data.subset.ranges[var_idx]
+    #                 edge.data.subset.ranges[var_idx] = (
+    #                     offset[0] % (max(offsets) - min(offsets) + 2),
+    #                     offset[1] % (max(offsets) - min(offsets) + 2),
+    #                     offset[2],
+    #                 )
+    #             modify_node.data = f"_loc_buf_{name}"
+
+    def apply(self, sdfg):
+        ####################################################################
         # Obtain loop information
-        guard: dace.SDFGState = sdfg.node(subgraph[DetectLoop._loop_guard])
-        begin: dace.SDFGState = sdfg.node(subgraph[DetectLoop._loop_begin])
-        after_state: dace.SDFGState = sdfg.node(subgraph[DetectLoop._exit_state])
+        guard: dace.SDFGState = sdfg.node(self.subgraph[DetectLoop._loop_guard])
+        begin: dace.SDFGState = sdfg.node(self.subgraph[DetectLoop._loop_begin])
+        after_state: dace.SDFGState = sdfg.node(self.subgraph[DetectLoop._exit_state])
 
         # Obtain iteration variable, range, and stride
         guard_inedges = sdfg.in_edges(guard)
         condition_edge = sdfg.edges_between(guard, begin)[0]
+        not_condition_edge = sdfg.edges_between(guard, after_state)[0]
         itervar = list(guard_inedges[0].data.assignments.keys())[0]
+        itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
         condition = condition_edge.data.condition_sympy()
-        rng = LoopUnroll._loop_range(itervar, guard_inedges, condition)
-
+        rng = self._loop_range(itervar, guard_inedges, condition)
         # Find the state prior to the loop
         if rng[0] == symbolic.pystr_to_symbolic(guard_inedges[0].data.assignments[itervar]):
+            init_edge: dace.InterstateEdge = guard_inedges[0]
             before_state: dace.SDFGState = guard_inedges[0].src
             last_state: dace.SDFGState = guard_inedges[1].src
         else:
+            init_edge: dace.InterstateEdge = guard_inedges[1]
             before_state: dace.SDFGState = guard_inedges[1].src
             last_state: dace.SDFGState = guard_inedges[0].src
 
-        return guard, begin, last_state, before_state, after_state
-
-    @staticmethod
-    def can_be_applied(graph, candidate, expr_index, sdfg, strict=False):
-
-        if not DetectLoop.can_be_applied(graph, candidate, expr_index, sdfg, strict):
-            return False
-
-        guard, begin, last_state, before_state, after_state = LoopPeel._get_context_subgraph(
-            candidate, sdfg
+        # Get loop states
+        loop_states = list(
+            dace.sdfg.utils.dfs_conditional(
+                sdfg, sources=[begin], condition=lambda _, child: child != guard
+            )
         )
-        condition = sdfg.edges_between(guard, begin)
-        assert len(condition) == 1
-        condition: dace.properties.CodeBlock = condition[0].data.condition
+        assert len(loop_states) == 1
+        loop_state = loop_states[0]
 
-        step = sdfg.edges_between(last_state, guard)
-        assert len(step) == 1
-        step = step[0].data.assignments
-        assert len(step) == 1
-        itervar, step = next(iter(step.items()))
+        try:
+            niter = int(abs(rng[1] - rng[0]) / abs(rng[2])) + 1
+        except TypeError:
+            # if the range is non-constant, assume it is large enough to fully peel the loop
+            niter = 3
 
-        init = sdfg.edges_between(before_state, guard)
-        assert len(init) == 1
-        init = init[0].data.assignments
-        assert len(init) == 1
-        assert itervar in init
-        _, init = next(iter(init.items()))
+        if niter == 1:
+            # just inline the only present state, no prefetching needed
+            apply_count = sdfg.apply_transformations(
+                LoopPeeling, options={"count": 1, "begin": True}
+            )
+            assert apply_count == 1
 
-        num_iterations = 0
-        test_condition = dace.symbolic.pystr_to_symbolic(condition.as_string)
+        elif niter >= 2:
+            ## peel both ends, add prefetching
+            # peel first iteration
+            apply_count = sdfg.apply_transformations(
+                LoopPeeling, options={"count": 1, "begin": True},
+            )
+            assert apply_count == 1
+            assert guard in sdfg.nodes()
+            peeled_first = next(
+                edge.src for edge in sdfg.in_edges(guard) if edge.src is not loop_state
+            )
 
-        def subs(expr, var, val):
-            itersym = [sym for sym in expr.free_symbols if str(sym) == var][0]
-            return expr.subs({itersym: val})
+            # peel last iteration
+            apply_count = sdfg.apply_transformations(
+                LoopPeeling, options={"count": 1, "begin": False},
+            )
+            assert apply_count == 1
+            assert guard in sdfg.nodes()
+            peeled_last = next(
+                edge.dst for edge in sdfg.out_edges(guard) if edge.dst is not loop_state
+            )
 
-        def test_str_condition(condition, itervar, iterval):
-            itersym = [sym for sym in condition.free_symbols if str(sym) == itervar][0]
-            condition_sym = subs(condition, itervar, iterval)
-            try:
-                return bool(condition_sym)
-            except TypeError:
-                return True
+            prefetch_state = sdfg.add_state(sdfg.label + "_prefetch_state")
+            sdfg.add_edge(prefetch_state, peeled_first, dace.InterstateEdge())
+            sdfg.add_edge(before_state, prefetch_state, dace.InterstateEdge())
+            sdfg.remove_edge(sdfg.edges_between(before_state, peeled_first)[0])
+            store_state = sdfg.add_state(sdfg.label + "_store_state")
+            sdfg.add_edge(peeled_last, store_state, dace.InterstateEdge())
+            sdfg.add_edge(store_state, after_state, dace.InterstateEdge())
+            sdfg.remove_edge(sdfg.edges_between(peeled_last, after_state)[0])
+            from daceperiments.transforms import BasicRegisterCache
 
-        iterval = init
-        while num_iterations < 2 and test_str_condition(test_condition, itervar, iterval):
-            test_condition = subs(test_condition, itervar, step)
-            num_iterations = num_iterations + 1
+            # self.rename_arrays(sdfg)
+            # add prefetching to peeled_first and loop_state, add prefetch-only state
+            for name, array in list(sdfg.arrays.items()):
+                length, in_subsets, out_subsets = self.collect_subset_info(
+                    loop_state, name, var_idx=2
+                )
+                shape = list(array.shape)
+                shape[2] = length
+                sdfg.add_array(
+                    name=f"_loc_buf_{name}",
+                    shape=shape,
+                    dtype=array.dtype,
+                    storage=dace.dtypes.StorageType.Default,
+                    transient=True,
+                    lifetime=dace.dtypes.AllocationLifetime.SDFG,
+                )
 
-        min_iterations = int(self.peel_first + self.peel_last)
-        # if num_iterations is symbolic or num_iterations>=min_iterations:
-        #     return True
+                self.add_prefetch_all(prefetch_state, name, itervar, 2, in_subsets, rng[0], length)
+                self.add_store_all(store_state, name, itervar, 2, out_subsets, rng[1], length)
+                self.localize_tasklet_input(
+                    peeled_first, name, itervar, 2, in_subsets, rng[0], length, rng[2]
+                )
+                self.localize_tasklet_input(
+                    loop_state, name, itervar, 2, in_subsets, "k", length, rng[2]
+                )
+                self.localize_tasklet_input(
+                    peeled_last, name, itervar, 2, in_subsets, rng[1], length, rng[2]
+                )
+                # self.add_store(loop_state, name, itervar, 2, out_subsets, "k", length, rng[2])
+                # self.add_store(peeled_last, name, itervar, 2, out_subsets, rng[1], length, rng[2])
+                #
+                self.localize_tasklet_output(
+                    peeled_first, name, itervar, 2, out_subsets, rng[0], length, rng[2]
+                )
+                self.localize_tasklet_output(
+                    loop_state, name, itervar, 2, out_subsets, "k", length, rng[2]
+                )
+                self.localize_tasklet_output(
+                    peeled_last, name, itervar, 2, out_subsets, rng[1], length, rng[2]
+                )
+                self.add_prefetch(
+                    loop_state, name, itervar, 2, in_subsets, out_subsets, "k", length, rng[2]
+                )
+                self.add_prefetch(
+                    peeled_first, name, itervar, 2, in_subsets, out_subsets, rng[0], length, rng[2]
+                )
+                self.add_store(loop_state, name, itervar, 2, out_subsets, "k", length, rng[2])
+                self.add_store(peeled_last, name, itervar, 2, out_subsets, rng[1], length, rng[2])
 
-        return False
+            # #
+            # self.add_prefetch(loop_state, name, itervar, 2, in_subsets, rng[0])
+            # self.add_store(loop_state, name, itervar, 2, out_subsets, rng[0])
+            #
+            # self.add_prefetch(peeled_first, name, itervar, 2, in_subsets, rng[0])
+            # self.add_store(peeled_last, name, itervar, 2, out_subsets, rng[0])
 
-    def apply(self, sdfg: dace.SDFG):
-        pass
+            # inputs = [
+            #     node.data
+            #     for node in loop_state.nodes()
+            #     if isinstance(node, dace.nodes.AccessNode)
+            #     and node.access == dace.dtypes.AccessType.ReadOnly
+            # ]
+            # for name in inputs:
+            #     self.add_prefetch(
+            #         sdfg, loop_state, peeled_first, name, itervar, 2, rng[0] + rng[2]
+            #     )
+            #     self.add_prefetch_all(sdfg, loop_state, prefetch_state, name, itervar, 2, rng[0])
+            #     self.add_prefetch(
+            #         sdfg, loop_state, loop_state, name, itervar, 2, itervar_sym + rng[2]
+            #     )  # this modifies the loop_state and it has to be the last of the 3
+
+            # add store to peeled_last and loop_state, add store-only state
+            # outputs = [
+            #     node.data
+            #     for node in loop_state.nodes()
+            #     if isinstance(node, dace.nodes.AccessNode)
+            #     and node.access == dace.dtypes.AccessType.WriteOnly
+            # ]
+            # for name in outputs:
+            #     self.add_store_all(sdfg, loop_state, store_state, name, itervar, rng[1])
+            #     self.add_store(sdfg, loop_state, loop_state, name, itervar, itervar_sym - rng[2])
+            #     self.add_store(sdfg, loop_state, peeled_last, name, itervar, rng[1] - rng[2])
+
+            # for name in sdfg.arrays.keys():
+            #     sdfg.apply_transformations(
+            #         BasicRegisterCache, options={"array": name}, validate=False
+            #     )
+
+        if niter < 3:
+            # remove loop after peeling if the loop is never actually executed.
+            before_state = [e.src for e in sdfg.in_edges(guard) if e.src is not loop_state][0]
+            after_state = [e.dst for e in sdfg.out_edges(guard) if e.dst is not loop_state][0]
+
+            init_edges = sdfg.edges_between(before_state, guard)
+            assert len(init_edges) == 1
+            init_edge = init_edges[0]
+            sdfg.remove_edge(init_edge)
+            # add edge from pred directly to loop states
+
+            # sdfg.add_edge(before_state, first_state, dace.InterstateEdge(assignments=init_edge.assignments))
+            exit_edge = sdfg.edges_between(last_state, guard)[0]
+            sdfg.remove_edge(exit_edge)
+            sdfg.remove_node(loop_state)
+            sdfg.remove_node(guard)
+
+            sdfg.add_edge(
+                before_state,
+                after_state,
+                dace.InterstateEdge(
+                    condition=exit_edge.data.condition, assignments=init_edge.data.assignments
+                ),
+            )
+            # # remove guard
+            # sdfg.remove_edge(sdfg.edges_between(guard, loop_state)[0])
+            # sdfg.remove_edge(sdfg.edges_between(guard, after_state)[0])
+
         #
-        # num_iter = 0
-        # if condition:
+        # guard, begin, last_state, before_state, after_state = EnhancedDetectLoop._get_context_subgraph(
+        #     candidate, sdfg
+        # )
+        # condition = sdfg.edges_between(guard, begin)
+        # assert len(condition) == 1
+        # condition: dace.properties.CodeBlock = condition[0].data.condition
         #
+        # step = sdfg.edges_between(last_state, guard)
+        # assert len(step) == 1
+        # step = step[0].data.assignments
+        # assert len(step) == 1
+        # itervar, step = next(iter(step.items()))
         #
+        # init = sdfg.edges_between(before_state, guard)
+        # assert len(init) == 1
+        # init = init[0].data.assignments
+        # assert len(init) == 1
+        # assert itervar in init
+        # _, init = next(iter(init.items()))
         #
-        # if self.peel_first:
-        #     # insert state
-        #     # move edge from before->guard to before->inserted state
-        #     # copy edge from loopend->guard state, put it at inserted->guard
-        # if self.peel_last:
-        #     # insert state
-        #     # move edge from guard->after to inserted->after state
-        #     # copy edge from loopend->guard state, put it at inserted->guard
+        # num_iterations = 0
+        # test_condition = dace.symbolic.pystr_to_symbolic(condition.as_string)
         #
+        # def subs(expr, var, val):
+        #     itersym = [sym for sym in expr.free_symbols if str(sym) == var][0]
+        #     return expr.subs({itersym: val})
         #
+        # def test_str_condition(condition, itervar, iterval):
+        #     condition_sym = subs(condition, itervar, iterval)
+        #     try:
+        #         return bool(condition_sym)
+        #     except TypeError:
+        #         return True
         #
-        # min_iterations = int(self.peel_first + self.peel_last)
-        # if num_iterations == min_iterations:
-        #     #remove loop states,
-        #     pass
+        # iterval = init
+        # while num_iterations < 3 and test_str_condition(test_condition, itervar, iterval):
+        #     test_condition = subs(test_condition, itervar, step)
+        #     num_iterations = num_iterations + 1
+        # if num_iterations < 3:
+        #     return False
+        #
+        # return True
+
+    #
+    # def apply(self, sdfg: dace.SDFG):
+    #
+    #
+    #     guard, begin, last_state, before_state, after_state = EnhancedDetectLoop._get_context_subgraph(
+    #         self.subgraph, sdfg
+    #     )
+    #     condition = sdfg.edges_between(guard, begin)
+    #     assert len(condition) == 1
+    #     condition: dace.properties.CodeBlock = condition[0].data.condition
+    #
+    #     step = sdfg.edges_between(last_state, guard)
+    #     assert len(step) == 1
+    #     step = step[0].data.assignments
+    #     assert len(step) == 1
+    #     itervar, step = next(iter(step.items()))
+    #
+    #     init = sdfg.edges_between(before_state, guard)
+    #     assert len(init) == 1
+    #     init = init[0].data.assignments
+    #     assert len(init) == 1
+    #     assert itervar in init
+    #     _, init = next(iter(init.items()))
+    #
+    #     # test_condition = dace.symbolic.pystr_to_symbolic(condition.as_string)
+    #
+    #     def subs(expr, var, val):
+    #         itersym = [sym for sym in expr.free_symbols if str(sym) == var][0]
+    #         return expr.subs({itersym: val})
+    #
+    #
+    #     iterval = init
+    #     while num_iterations < 3 and test_str_condition(test_condition, itervar, iterval):
+    #         test_condition = subs(test_condition, itervar, step)
+    #         num_iterations = num_iterations + 1
+    #
+    #     # peel first
+    #     prefetch_state= dsfg.add_state('prefetch_state')
+    #     peeled_first_state = graph.add_state('peeled_first_state')
+    #         # insert state
+    #     #     # move edge from before->guard to before->inserted state
+    #     #     # copy edge from loopend->guard state, put it at inserted->guard
+    #     # if self.peel_last:
+    #     #     # insert state
+    #     #     # move edge from guard->after to inserted->after state
+    #     #     # copy edge from loopend->guard state, put it at inserted->guard
+    #     #
+    #     #
+    #     #
+    #     # min_iterations = int(self.peel_first + self.peel_last)
+    #     # if num_iterations == min_iterations:
+    #     #     #remove loop states,
+    #     #     pass

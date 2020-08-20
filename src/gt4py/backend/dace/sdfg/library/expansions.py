@@ -234,7 +234,10 @@ class StencilExpander:
                     input,
                     dace.memlet.Memlet.simple(data=input, subset_str=subset_str, num_accesses=1),
                 )
-                mapped_shape = self._input_extents[i][input].shape
+                extent = self._input_extents[i][input]
+                if input in self.library_node.outputs:
+                    extent = extent.union(gt_ir.Extent([(0, 0), (0, 0), (0, 0)]))
+                mapped_shape = extent.shape
                 # k_shape = library_node.k_range.ranges[0][1] - library_node.k_range.ranges[0][0] + 1
                 full_shape = (
                     f"_I_loc+{mapped_shape[0]-1}",
@@ -542,7 +545,6 @@ class StencilExpander:
                 self._map(variable=variable)
             if variable == "K":
                 self._make_state_machine()
-
 
             self.not_yet_mapped_variables.add(variable)
 

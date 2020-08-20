@@ -64,8 +64,29 @@ class X86DaceOptimizer(DaceOptimizer):
         #                     node.sdfg.apply_transformations(
         #                         BasicRegisterCache, options=dict(array=name), validate=False
         #                     )
-        from gt4py.backend.dace.sdfg.transforms import LoopPeel
-        sdfg.apply_transformations_repeated(LoopPeel, validate=False)
+        from dace.transformation.interstate import LoopPeeling
+
+        # for state in sdfg.nodes():
+        #     for node in state.nodes():
+        #         if isinstance(node, dace.nodes.NestedSDFG) and node.label.startswith("stencil_2"):
+        #             node.sdfg.apply_transformations(
+        #                 LoopPeeling, options=dict(count=1), validate=False
+        #             )
+        # for state in sdfg.nodes():
+        #     for node in state.nodes():
+        #         if isinstance(node, dace.nodes.NestedSDFG) and node.label.startswith("stencil_2"):
+        #             node.sdfg.apply_transformations(
+        #                 LoopPeeling, options=dict(count=1, begin=False), validate=False
+        #             )
+        from gt4py.backend.dace.sdfg.transforms import PrefetchingKCachesTransform
+
+        for state in sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.NestedSDFG):
+                    node.sdfg.apply_transformations(PrefetchingKCachesTransform, validate=False)
+        from dace.transformation.dataflow import MapFusion
+
+        sdfg.apply_transformations_repeated([MapFusion, MapCollapse], validate=False)
         sdfg.validate()
         return sdfg
 

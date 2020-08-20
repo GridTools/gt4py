@@ -272,12 +272,12 @@ class DaceBackend(gt_backend.BaseBackend):
             options.backend_opts["optimizer"] = optimizer.__class__.__name__
         validate = options.backend_opts.get("validate", True)
 
-        from dace.transformation.dataflow.merge_arrays import MergeArrays
+        from dace.transformation.dataflow.merge_arrays import InMergeArrays
 
         if save:
             sdfg.save(dace_build_path + os.path.sep + "00_raw.sdfg")
 
-        sdfg.apply_transformations_repeated(MergeArrays)
+        sdfg.apply_transformations_repeated(InMergeArrays)
         from dace.transformation.interstate import StateFusion
 
         sdfg.apply_transformations_repeated([StateFusion], strict=False, validate=False)

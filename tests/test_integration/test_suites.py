@@ -557,7 +557,7 @@ class TestTernaryOp(gt_testing.StencilTestSuite):
 class TestSimple(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
-    domain_range = [(1, 1), (1, 1), (3, 3)]
+    domain_range = [(1, 1), (1, 1), (10, 10)]
     backends = ["numpy", "dacex86"]
     symbols = dict(
         inf=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -593,14 +593,16 @@ class TestSimple(gt_testing.StencilTestSuite):
         for k in range(domain[-1] - 2, -1, -1):
             out[:, :, k] = rhs[:, :, k] - sup[:, :, k] * out[:, :, k + 1]
 
+
 class TestKScan(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
-    domain_range = [(1, 10), (1, 10), (3, 10)]
+    domain_range = [(1, 10), (1, 10), (10, 10)]
     backends = ["dacex86"]
     symbols = dict(
         inp=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         out=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
     )
+
     def definition(inp, out):
         with computation(FORWARD):
             with interval(0, 1):
@@ -615,6 +617,7 @@ class TestKScan(gt_testing.StencilTestSuite):
             with interval(-1, None):
                 buf = inp[0, 0, -1] / 2
                 out = buf + buf[0, 0, -1] / 4 + buf[0, 0, -2] / 8
+
     def validation(inp, out, *, domain, origin, **kwargs):
         assert inp.shape == out.shape == domain
         assert all(o == (0, 0, 0) for o in origin.values())
@@ -627,7 +630,5 @@ class TestKScan(gt_testing.StencilTestSuite):
         out[:, :, 1] = buf[:, :, 1] + buf[:, :, 0] / 4
         for j in range(2, nk - 1):
             buf[:, :, j + 1] = inp[:, :, j] / 2
-            out[:, :, j] = (buf[:, :, j] + buf[:, :, j - 1] / 4 +
-                            buf[:, :, j - 2] / 8)
-        out[:, :, nk - 1] = (buf[:, :, nk - 1] + buf[:, :, nk - 2] / 4 +
-                             buf[:, :, nk - 3] / 8)
+            out[:, :, j] = buf[:, :, j] + buf[:, :, j - 1] / 4 + buf[:, :, j - 2] / 8
+        out[:, :, nk - 1] = buf[:, :, nk - 1] + buf[:, :, nk - 2] / 4 + buf[:, :, nk - 3] / 8
