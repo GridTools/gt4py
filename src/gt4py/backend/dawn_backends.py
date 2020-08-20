@@ -204,6 +204,12 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         right = self.visit(node.else_expr)
         return sir_utils.make_ternary_operator(cond, left, right)
 
+    def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
+        return sir_utils.make_fun_call_expr(
+            "gridtools::dawn::math::" + gt_backend.GTPyExtGenerator.NATIVE_FUNC_TO_CPP[node.func],
+            [self.visit(arg) for arg in node.args],
+        )
+
     def visit_BlockStmt(
         self, node: gt_ir.BlockStmt, *, make_block: bool = True, **kwargs: Any
     ) -> SIR.BlockStmt:
@@ -423,6 +429,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         gt_ir.DataType.INT64: "int",
         gt_ir.DataType.FLOAT32: "double",
         gt_ir.DataType.FLOAT64: "double",
+        gt_ir.DataType.DEFAULT: "double",
     }
 
     sir: Any

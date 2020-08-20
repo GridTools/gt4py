@@ -47,8 +47,8 @@ BinaryOperator enumeration (:class:`BinaryOperator`)
 
 NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
-    [`ABS`, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`, `SQRT`, `EXP`, `LOG`,
-    `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
+    [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
+    `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
 AccessIntent enumeration (:class:`AccessIntent`)
     Access permissions
@@ -92,7 +92,7 @@ storing a reference to the piece of source code which originated the node.
     Ref         = VarRef(name: str, [index: int])
                 | FieldRef(name: str, offset: Dict[str, int])
 
-    NativeFuncCall(func: NativeFunction, args: List[Expr])
+    NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
     Expr        = Literal | Ref | NativeFuncCall | CompositeExpr | InvalidBranch
 
@@ -399,31 +399,61 @@ class FieldRef(Ref):
 @enum.unique
 class NativeFunction(enum.Enum):
     ABS = 1
-    MOD = 2
+    MIN = 2
+    MAX = 3
+    MOD = 4
 
-    SIN = 11
-    COS = 12
-    TAN = 13
-    ARCSIN = 14
-    ARCCOS = 15
-    ARCTAN = 16
+    SIN = 5
+    COS = 6
+    TAN = 7
+    ARCSIN = 8
+    ARCCOS = 9
+    ARCTAN = 10
 
-    SQRT = 21
-    EXP = 22
-    LOG = 23
+    SQRT = 11
+    EXP = 12
+    LOG = 13
 
-    ISFINITE = 101
-    ISINF = 102
-    ISNAN = 103
-    FLOOR = 111
-    CEIL = 112
-    TRUNC = 113
+    ISFINITE = 14
+    ISINF = 15
+    ISNAN = 16
+    FLOOR = 17
+    CEIL = 18
+    TRUNC = 19
+
+    @property
+    def arity(self):
+        return type(self).IR_OP_TO_NUM_ARGS[self]
+
+
+NativeFunction.IR_OP_TO_NUM_ARGS = {
+    NativeFunction.ABS: 1,
+    NativeFunction.MIN: 2,
+    NativeFunction.MAX: 2,
+    NativeFunction.MOD: 2,
+    NativeFunction.SIN: 1,
+    NativeFunction.COS: 1,
+    NativeFunction.TAN: 1,
+    NativeFunction.ARCSIN: 1,
+    NativeFunction.ARCCOS: 1,
+    NativeFunction.ARCTAN: 1,
+    NativeFunction.SQRT: 1,
+    NativeFunction.EXP: 1,
+    NativeFunction.LOG: 1,
+    NativeFunction.ISFINITE: 1,
+    NativeFunction.ISINF: 1,
+    NativeFunction.ISNAN: 1,
+    NativeFunction.FLOOR: 1,
+    NativeFunction.CEIL: 1,
+    NativeFunction.TRUNC: 1,
+}
 
 
 @attribclass
 class NativeFuncCall(Expr):
     func = attribute(of=NativeFunction)
     args = attribute(of=ListOf[Expr])
+    data_type = attribute(of=DataType)
     loc = attribute(of=Location, optional=True)
 
 
