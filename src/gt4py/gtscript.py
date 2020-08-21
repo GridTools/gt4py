@@ -365,6 +365,11 @@ def interval(start, end):
     pass
 
 
+def parallel(*args):
+    """Define restricted computations in the parallel 'I-J' plane."""
+    pass
+
+
 def __INLINED(compile_if_expression):
     """Evaluate condition at compile time and inline statements from selected branch."""
     pass
