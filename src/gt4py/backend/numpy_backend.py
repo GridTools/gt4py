@@ -124,7 +124,13 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         for bounds, parallel_interval, body in regions:
             region_lines = self._make_regional_computation(iteration_order, bounds, body)
-            source_lines.extend(region_lines)
+            parallel_bounds = getattr(self.block_info, "parallel_bounds", None)
+            if parallel_bounds:
+                bound_strs = [" < ".join(a) for a in parallel_bounds]
+                source_lines.append(f"if {' and '.join(bound_strs)}:")
+                source_lines.extend([(" " * self.indent_size) + line for line in region_lines])
+            else:
+                source_lines.extend(region_lines)
 
         return source_lines
 
@@ -145,8 +151,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 upper_extent[d] += idx
 
         index = []
+        self.block_info.parallel_bounds = []
         for d in range(2):
-            # max({name}{marker}[{d}]{start}, lower_parallel) : min({name}{marker}[{d}] + {size}, upper_parallel)
             start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
             size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
             size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
@@ -176,6 +182,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     else:
                         bounds.append(f"{regular_bound}")
                 index.append(" : ".join(bounds))
+                # TODO need this for both axes
+                self.block_info.parallel_bounds.append(bounds)
         # for interval, axis_name in zip(parallel_definition, par_axis_names):
         #     for axis_bound in (interval.start, interval.end):
         #         if isinstance(axis_bound.level, gt_ir.VarRef):
