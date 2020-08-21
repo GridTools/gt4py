@@ -264,7 +264,7 @@ class BaseBackend(Backend):
     ) -> str:
         """Generate the module source code with or without stencil id."""
         args_data = args_data or self.make_args_data_from_iir(self.builder.implementation_ir)
-        source = self.MODULE_GENERATOR_CLASS()(self.builder, args_data, **kwargs)
+        source = self.MODULE_GENERATOR_CLASS()(args_data, self.builder, **kwargs)
         return source
 
     @staticmethod
@@ -359,7 +359,10 @@ class BasePyExtBackend(BaseBackend):
 
     @property
     def extra_cache_validation_keys(self) -> List[str]:
-        return [*super().extra_cache_validation_keys, "pyext_md5"]
+        keys = super().extra_cache_validation_keys
+        if self.extra_cache_info["pyext_md5"]:
+            keys.append("pyext_md5")
+        return keys
 
     @abc.abstractmethod
     def generate(self) -> Type["StencilObject"]:
@@ -422,20 +425,23 @@ class BaseModuleGenerator(abc.ABC):
 
     TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "stencil_module.py.in")
 
-    builder: "StencilBuilder"
+    _builder: Optional["StencilBuilder"]
     args_data: Dict[str, Any]
     template: jinja2.Template
 
-    def __init__(self):
+    def __init__(self, builder: Optional["StencilBuilder"] = None):
+        self._builder = builder
+        self.args_data = {}
         with open(self.TEMPLATE_PATH, "r") as f:
             self.template = jinja2.Template(f.read())
 
     def __call__(
-        self, builder: "StencilBuilder", args_data: Dict[str, Any], **kwargs: Any,
+        self, args_data: Dict[str, Any], builder: Optional["StencilBuilder"] = None, **kwargs: Any,
     ) -> str:
         """Generate source code for a Python module containing a StencilObject."""
 
-        self.builder = builder
+        if builder:
+            self._builder = builder
         self.args_data = args_data
 
         definition_ir = self.builder.definition_ir
@@ -500,6 +506,19 @@ class BaseModuleGenerator(abc.ABC):
         return module_source
 
     @property
+    def builder(self) -> "StencilBuilder":
+        """
+        Buider reference
+
+        Raises a runtime error if the builder reference is not initialized.
+        This is necessary because other parts of the public API depend on it before it is
+        guaranteed to be initialized.
+        """
+        if not self._builder:
+            raise RuntimeError("Builder attribute not initialized!")
+        return self._builder
+
+    @property
     def backend_name(self) -> str:
         return self.builder.backend.name
 
@@ -562,11 +581,11 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         self.pyext_file_path = ""
 
     def __call__(
-        self, builder: "StencilBuilder", args_data: Dict[str, Any], **kwargs: Any,
+        self, args_data: Dict[str, Any], builder: Optional["StencilBuilder"] = None, **kwargs: Any,
     ) -> str:
         self.pyext_module_name = kwargs["pyext_module_name"]
         self.pyext_file_path = kwargs["pyext_file_path"]
-        return super().__call__(builder, args_data, **kwargs)
+        return super().__call__(args_data, builder, **kwargs)
 
     def generate_imports(self) -> str:
         source = """
