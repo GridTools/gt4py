@@ -3,25 +3,23 @@ import functools
 import importlib
 import pathlib
 import sys
-import typing
+from typing import Any, Callable, Dict, KeysView, List, Optional, Tuple, Type, Union
 
 import click
 import tabulate
 
 import gt4py
-from gt4py.lazy_stencil import LazyStencil
 from gt4py import gtsimport
+from gt4py.backend.base import Backend
+from gt4py.lazy_stencil import LazyStencil
 
 
 class BackendChoice(click.Choice):
     name = "backend"
 
     def convert(
-        self,
-        value: str,
-        param: typing.Optional[click.Parameter],
-        ctx: typing.Optional[click.Context],
-    ):
+        self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context],
+    ) -> Type[Backend]:
         """Convert a CLI option argument to a backend."""
         name = super().convert(value, param, ctx)
         if not self.is_enabled(name):
@@ -29,11 +27,11 @@ class BackendChoice(click.Choice):
         return gt4py.backend.from_name(name)
 
     @staticmethod
-    def get_backend_names():
+    def get_backend_names() -> KeysView:
         return gt4py.backend.REGISTRY.keys()
 
     @staticmethod
-    def is_enabled(backend_name: str):
+    def is_enabled(backend_name: str) -> bool:
         """Check if a given backend is enabled for CLI."""
         backend_cls = gt4py.backend.from_name(backend_name)
         if hasattr(backend_cls, "generate_computation"):
@@ -41,7 +39,7 @@ class BackendChoice(click.Choice):
         return False
 
     @classmethod
-    def backend_table(cls):
+    def backend_table(cls) -> str:
         """Build a string with a table of backend compatibilities."""
         headers = ["computation", "bindings", "CLI-enabled"]
         names = cls.get_backend_names()
@@ -65,11 +63,11 @@ class BackendOption(click.ParamType):
 
     def _convert_value(
         self,
-        type_spec: typing.Type,
-        value: typing.Optional[str],
-        param: click.Parameter,
-        ctx: click.Context,
-    ):
+        type_spec: Type,
+        value: str,
+        param: Optional[click.Parameter],
+        ctx: Optional[click.Context],
+    ) -> Any:
         if type_spec in self.converter_map:
             return self.converter_map[type_spec].convert(value, param, ctx)
         elif hasattr(type_spec, "convert"):
@@ -77,8 +75,12 @@ class BackendOption(click.ParamType):
         else:
             return type_spec(value)
 
-    def convert(self, value: typing.Optional[str], param: click.Parameter, ctx: click.Context):
-        backend = ctx.params["backend"]
+    def convert(
+        self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context]
+    ) -> Tuple[str, Any]:
+        backend = gt4py.backend.from_name("debug")
+        if ctx:
+            backend = ctx.params["backend"]
         if value:
             name, value = value.split("=")
             if name.strip() not in backend.options:
@@ -94,25 +96,84 @@ class Reporter:
     """Wrapper around click echo functions or noops depending on the `silent` constructor param."""
 
     def __init__(self, silent: bool = False):
-        self.echo: typing.Callable = self._noop
-        self.secho: typing.Callable = self._noop
+        self.echo: Callable = self._noop
+        self.secho: Callable = self._noop
         if not silent:
             self.echo = click.echo
             self.secho = click.secho
         self.error = functools.partial(click.echo, file=sys.stderr)
 
     @staticmethod
-    def _noop(*args, **kwargs):
+    def _noop(*args: Tuple[Any], **kwargs: Dict[str, Any]) -> None:
         pass
 
 
-def get_param_by_name(ctx: click.Context, name: str):
+def get_param_by_name(ctx: click.Context, name: str) -> click.Parameter:
     params = ctx.command.params
     by_name = {param.name: param for param in params}
     return by_name[name]
 
 
-@click.command()
+def write_computation_src(
+    root_path: pathlib.Path, computation_src: Dict[str, Union[str, Dict]], reporter: Reporter
+) -> None:
+    for path_name, content in computation_src.items():
+        if isinstance(content, Dict):
+            root_path.joinpath(path_name).mkdir(exist_ok=True)
+            write_computation_src(root_path / path_name, content, reporter)
+        else:
+            file_path = root_path / path_name
+            reporter.echo(f"Writing source file: {file_path}")
+            file_path.write_text(content)
+
+
+def generate_stencils(
+    stencils: List[LazyStencil],
+    reporter: Reporter,
+    *,
+    output_path: pathlib.Path,
+    backend: Optional[Backend] = None,
+    build_options: Optional[Dict[str, Any]] = None,
+) -> None:
+    for proto_stencil in stencils:
+        reporter.echo(f"Building stencil {proto_stencil.builder.options.name}")
+        builder = proto_stencil.builder
+        if backend:
+            builder.with_backend(backend.name)
+        if build_options:
+            builder.with_changed_options(**build_options)
+        builder.with_caching("nocaching", output_path=output_path)
+        # how to tell mypy there can only be enabled backends here
+        computation_src = builder.backend.generate_computation()  # type: ignore
+        write_computation_src(builder.caching.root_path, computation_src, reporter)
+
+
+def report_stencil_names(stencils: List[LazyStencil], reporter: Reporter) -> None:
+    stencils_msg = "No stencils found."
+    if stencils:
+        stencil_names = ", ".join('"' + st.builder.options.name + '"' for st in stencils)
+        stencils_msg = f"Found {len(stencils)} stencils: {stencil_names}."
+    reporter.echo(stencils_msg)
+
+
+@click.group()
+def gtpyc():
+    """
+    GT4Py (GritTools for Python) stencil generator & compiler.
+
+    This utility is currently only partially implemented.
+    """
+
+
+@gtpyc.command()
+def list_backends():
+    """List available backends."""
+    reporter = Reporter(silent=False)
+    reporter.echo(f"\n{BackendChoice.backend_table()}\n")
+    return 0
+
+
+@gtpyc.command()
 @click.option(
     "--backend",
     "-b",
@@ -135,28 +196,16 @@ def get_param_by_name(ctx: click.Context, name: str):
     type=BackendOption(),
     help="Backend option (multiple allowed), format: -O key=value",
 )
-@click.option("--list-backends", is_flag=True, help="list backends and exit")
 @click.option("--silent", "-s", is_flag=True, help="suppress console output")
-@click.pass_context
 @click.argument(
-    "input_path", required=False, type=click.Path(file_okay=True, dir_okay=True, exists=True)
+    "input_path", required=True, type=click.Path(file_okay=True, dir_okay=True, exists=True)
 )
-def gtpyc(ctx, backend, output_path, options, input_path, list_backends, silent):
-    """
-    GT4Py (GritTools for Python) stencil generator & compiler.
-
-    This utility is currently only partially implemented.
-    """
-    reporter = Reporter(silent)
-    if list_backends:
-        reporter.echo(f"\n{BackendChoice.backend_table()}\n")
-        return 0
-    elif input_path is None:
-        raise click.MissingParameter(ctx=ctx, param=get_param_by_name(ctx, "input_path"))
-
+def gen(backend, output_path, options, input_path, silent):
+    """Generate stencils from gtscript modules or packages."""
+    reporter = Reporter(silent=silent)
     input_path = pathlib.Path(input_path)
     output_path = pathlib.Path(output_path)
-    finder = gtsimport.install(search_path=[input_path.parent])
+    gtsimport.install(search_path=[input_path.parent])
     reporter.echo("reading input file {input_path}")
     input_module = importlib.import_module(input_path.stem.split(".")[0])
     reporter.echo(f"input file loaded as module {input_module}")
@@ -166,21 +215,7 @@ def gtpyc(ctx, backend, output_path, options, input_path, list_backends, silent)
         for k, v in input_module.__dict__.items()
         if k.startswith != "_" and isinstance(v, LazyStencil)
     ]
-    stencils_msg = "No stencils found."
-    if stencils:
-        stencil_names = ", ".join('"' + st.builder.options.name + '"' for st in stencils)
-        stencils_msg = f"Found {len(stencils)} stencils: {stencil_names}."
-    reporter.echo(stencils_msg)
-
-    for proto_stencil in stencils:
-        reporter.echo(f"Building stencil {proto_stencil.builder.options.name}")
-        builder = proto_stencil.builder
-        if backend:
-            builder.with_backend(backend)
-        builder.with_changed_options(**build_options)
-        builder.with_caching("nocaching", output_path=output_path)
-        computation_src = builder.backend.generate_computation()
-        for file_name, file_content in computation_src.items():
-            file_path = builder.caching.root_path / file_name
-            reporter.echo(f"Writing source file: {file_path}")
-            file_path.write_text(file_content)
+    report_stencil_names(stencils, reporter)
+    generate_stencils(
+        stencils, reporter, backend=backend, build_options=build_options, output_path=output_path
+    )

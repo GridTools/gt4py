@@ -91,86 +91,43 @@ def backend_enabled(backend_name):
     yield not backend_name.startswith("dawn")
 
 
-@pytest.fixture(params=[[], ["--list-backends"]])
-def options_for_silent(request, simple_stencil):
-    """These options combinations are tested to not print output when combined with --silent."""
-    yield request.param + [str(simple_stencil.absolute())]
-
-
 def test_list_backends(clirunner, list_backends_line_pattern):
     """
-    Test the --list-backend flag of gtpyc.
-
-    Assumptions:
-
-        * cli.gtpyc is available (cli is importable)
-        * cli.gtpyc takes a --list-backends option
-        * The expected output line has been made available to the
-          :py:func`list_backends_line_pattern` fixture
-
-    Actions:
-
-        .. code-block:: bash
-
-            $ gtpyc --list-backends
-
-    Outcome:
-
-        gtpyc echos a table with a line per backend, listing the
-        primary and secondary language and CLI compatibility for each.
-
+    Test the list-backend subcommand of gtpyc.
     """
-    result = clirunner.invoke(cli.gtpyc, ["--list-backends"], catch_exceptions=False)
+    result = clirunner.invoke(cli.gtpyc, ["list-backends"], catch_exceptions=False)
 
     assert result.exit_code == 0
     assert re.findall(list_backends_line_pattern, result.output, re.MULTILINE)
 
 
-def test_silent(clirunner, options_for_silent):
+def test_gen_silent(clirunner, simple_stencil, tmp_path):
     """
     Test the --silent flag.
-
-    Assumptions:
-
-        * The :py:func:`options_for_silent` fixture contains option / arg combinations that should
-          be silent.
-
-    Actions:
-
-        .. code-block:: bash
-
-            $ gtpyc --silent [<parametrized option1>, ...] <simple_stencil_path>
-
-    Outcome:
-
-        The stdout output is empty.
     """
-    result = clirunner.invoke(cli.gtpyc, ["--silent"] + options_for_silent)
+    result = clirunner.invoke(
+        cli.gtpyc,
+        [
+            "gen",
+            "--output-path",
+            str(tmp_path / "test_gen_silent"),
+            "--silent",
+            str(simple_stencil.absolute()),
+        ],
+    )
 
     assert result.exit_code == 0
     assert not result.output
 
 
-def test_missing_arg(clirunner):
+def test_gen_missing_arg(clirunner):
     """
-    Test when no input path argument is passed (and also not --list-backends).
-
-    Actions:
-
-        .. code-block:: bash
-
-            $ gtpyc --backend=debug
-
-    Outcome:
-
-        An error message warns the user that no input path was given. The command aborts with error
-        code 2.
-
+    Test when no input path argument is passed to gen.
     """
-    result = clirunner.invoke(cli.gtpyc, [])
+    result = clirunner.invoke(cli.gtpyc, ["gen"])
 
     assert result.exit_code == 2
-    assert "Missing argument '[INPUT_PATH]'." in result.output
+    assert "Missing argument 'INPUT_PATH'." in result.output
 
 
 def test_backend_choice(backend_name):
@@ -180,61 +137,59 @@ def test_backend_choice(backend_name):
     assert backend_name in cli.BackendChoice.get_backend_names()
 
 
-def test_unenabled_backend_choice(clirunner, nocli_backend, simple_stencil):
+def test_gen_unenabled_backend_choice(clirunner, nocli_backend, simple_stencil, tmp_path):
     """
     Test the --backend option when an unenabled backend name is passed.
-
-    The :py:func:`nocli_backend` fixture temporarily injects a dummy backend named "nocli", which
-    is not CLI enabled (and provides no functionality in fact).
-
-    Actions:
-
-        .. code-block:: bash
-
-            $ gtpyc --backend=nocli <simple_stencil_path>
-
-    Outcome:
-
-        An error message warns the user that the chosen backend is not enabled for CLI.
-        The command aborts with error code 2.
-
     """
-    result = clirunner.invoke(cli.gtpyc, ["--backend=nocli", str(simple_stencil.absolute())])
+    result = clirunner.invoke(
+        cli.gtpyc,
+        [
+            "gen",
+            "--backend=nocli",
+            str(simple_stencil.absolute()),
+            "--output-path",
+            str(tmp_path / "test_gen_unenabled"),
+        ],
+    )
 
     assert result.exit_code == 2
     assert re.findall(r".*Backend is not CLI-enabled\..*", result.output)
 
 
-def test_enabled_backend_choice(clirunner, simple_stencil, backend_name, backend_enabled):
+def test_gen_enabled_backend_choice(
+    clirunner, simple_stencil, backend_name, backend_enabled, tmp_path
+):
     """
     Test an enabled backend.
-
-    Actions:
-
-        .. code-block:: bash
-
-            $ gtpyc --backend <parametrized backend_name> <simple_stencil path>
-
-    Outcome:
-
-        The command writes the computation source to the current directory.
     """
     result = clirunner.invoke(
-        cli.gtpyc, ["--backend", backend_name, str(simple_stencil.absolute())]
+        cli.gtpyc,
+        [
+            "gen",
+            "--backend",
+            backend_name,
+            str(simple_stencil.absolute()),
+            "--output-path",
+            str(tmp_path / "test_gen_unenabled"),
+        ],
+        catch_exceptions=False,
     )
 
-    assert result.exit_code == 0 if backend_enabled else 2
+    if backend_enabled:
+        assert result.exit_code == 0
+    else:
+        assert result.exit_code == 2
 
 
-def test_generate_gtx86(clirunner, simple_stencil, tmp_path):
+def test_gen_gtx86(clirunner, simple_stencil, tmp_path):
     """Only generate the c++ files."""
-    output_path = tmp_path / "gtpyc_test_nopy"
+    output_path = tmp_path / "test_gen_gtx86"
     result = clirunner.invoke(
         cli.gtpyc,
-        [f"--output-path={output_path}", "--backend=gtx86", str(simple_stencil)],
+        ["gen", f"--output-path={output_path}", "--backend=gtx86", str(simple_stencil)],
         catch_exceptions=False,
     )
     assert result.exit_code == 0
-    src_path = output_path
+    src_path = output_path / "init_1_src"
     src_files = [path.name for path in src_path.iterdir()]
-    assert set(["computation.hpp", "computation.cpp"]) == set(src_files)
+    assert set(["computation.hpp", "computation.cpp"]) == set(src_files), result.output

@@ -550,12 +550,12 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
                 key: gt_utils.NOTHING for key in self.PYEXT_GENERATOR_CLASS.TEMPLATE_FILES.keys()
             }
 
-        final_ext = ".cu" if uses_cuda else ".cpp"
-        keys = list(gt_pyext_sources.keys())
-        for key in keys:
-            if key.split(".")[-1] == "src":
-                new_key = key.replace(".src", final_ext)
-                gt_pyext_sources[new_key] = gt_pyext_sources.pop(key)
+        # final_ext = ".cu" if uses_cuda else ".cpp"
+        # keys = list(gt_pyext_sources.keys())
+        # for key in keys:
+        #    if key.split(".")[-1] == "src":
+        #        new_key = key.replace(".src", final_ext)
+        #        gt_pyext_sources[new_key] = gt_pyext_sources.pop(key)
 
         # Build extension module
         pyext_opts = dict(
@@ -584,11 +584,27 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         gt_pyext_generator = self.PYEXT_GENERATOR_CLASS(
             class_name, module_name, self.GT_BACKEND_T, self.builder.options
         )
-        return gt_pyext_generator(self.builder.implementation_ir)
+        gt_pyext_sources = gt_pyext_generator(self.builder.implementation_ir)
+        final_ext = ".cu" if self.languages and self.languages["computation"] == "cuda" else ".cpp"
+        for key in [k for k in gt_pyext_sources.keys() if k.endswith(".src")]:
+            gt_pyext_sources[key.replace(".src", final_ext)] = gt_pyext_sources.pop(key)
+        return gt_pyext_sources
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
-        dir_name = f"{self.builder.options.name}_src"
-        src_files = self._generate_computation_src()
+        src_files = self.builder.backend_data.get("computation_src", None)
+        if not src_files:
+            dir_name = f"{self.builder.options.name}_src"
+            src_files = self._generate_computation_src()
+        return {dir_name: {k: v for k, v in src_files.items() if not k.startswith("bindings")}}
+
+    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
+        if language_name != "python":
+            return {}
+        src_files = self.builder.backend_data.get("computation_src", None)
+        if not src_files:
+            dir_name = f"{self.builder.options.name}_src"
+            src_files = self._generate_computation_src()
+        src_files = {k: v for k, v in src_files if k.startswith("bindings")}
         return {dir_name: src_files}
 
     @abc.abstractmethod

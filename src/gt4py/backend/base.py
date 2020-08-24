@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 REGISTRY = gt_utils.Registry()
 
 
-def from_name(name: str) -> Type:
+def from_name(name: str) -> Type["Backend"]:
     return REGISTRY.get(name, None)
 
 
