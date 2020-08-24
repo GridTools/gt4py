@@ -115,6 +115,11 @@ class StencilBuilder:
         self.options = BuildOptions(name=name, module=module, **kwargs)  # type: ignore
         return self
 
+    def with_changed_options(self, **kwargs: Dict[str, Any]) -> SelfType:
+        old_options = self.options.as_dict()
+        old_options["impl_opts"] = old_options.pop("_impl_opts")
+        return self.with_options(**{**old_options, **kwargs})
+
     def with_backend(self: SelfType, backend_name: str) -> SelfType:
         """
         Fluidly set the backend type from backend name.

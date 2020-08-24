@@ -1,5 +1,6 @@
 """Unit tests for the command line interface (CLI)."""
 import re
+import sys
 
 import pytest
 from click.testing import CliRunner
@@ -20,9 +21,16 @@ def backend_name(request):
 
 
 @pytest.fixture
-def simple_stencil(tmp_path):
+def clean_imports():
+    impdata = [sys.path.copy(), sys.meta_path.copy(), sys.modules.copy()]
+    yield
+    sys.path, sys.meta_path, sys.modules = impdata
+
+
+@pytest.fixture
+def simple_stencil(tmp_path, clean_imports):
     """Provide a gtscript file with a simple stencil."""
-    module_file = tmp_path / "stencil.gtpy"
+    module_file = tmp_path / "stencil.gt.py"
     module_file.write_text(
         (
             "## using-dsl: gtscript\n"
@@ -216,3 +224,17 @@ def test_enabled_backend_choice(clirunner, simple_stencil, backend_name, backend
     )
 
     assert result.exit_code == 0 if backend_enabled else 2
+
+
+def test_generate_gtx86(clirunner, simple_stencil, tmp_path):
+    """Only generate the c++ files."""
+    output_path = tmp_path / "gtpyc_test_nopy"
+    result = clirunner.invoke(
+        cli.gtpyc,
+        [f"--output-path={output_path}", "--backend=gtx86", str(simple_stencil)],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    src_path = output_path
+    src_files = [path.name for path in src_path.iterdir()]
+    assert set(["computation.hpp", "computation.cpp"]) == set(src_files)

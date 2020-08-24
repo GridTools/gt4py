@@ -382,6 +382,8 @@ class NoCachingStrategy(CachingStrategy):
     @property
     def root_path(self) -> pathlib.Path:
         """Get stencil code output path set during initialization."""
+        if not self._output_path.exists():
+            self._output_path.mkdir(parents=True)
         return self._output_path
 
     @property
