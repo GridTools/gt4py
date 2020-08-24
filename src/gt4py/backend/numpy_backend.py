@@ -167,8 +167,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 bounds = []
 
                 operators = ("max", "min")
-                for regular_bound, axis_bound, operator in zip(
-                    (lower_index, upper_index), (axis_interval.start, axis_interval.end), operators
+                for regular_bound, axis_bound, extent, operator in zip(
+                    (lower_index, upper_index),
+                    (axis_interval.start, axis_interval.end),
+                    (lower_extent[d], upper_extent[d]),
+                    operators,
                 ):
                     if isinstance(axis_bound.level, gt_ir.VarRef):
                         this_bound = f"{axis_bound.level.name}{axis_bound.offset:+d}"
@@ -178,11 +181,12 @@ class NumPySourceGenerator(PythonSourceGenerator):
                         this_bound = ""
 
                     if this_bound:
-                        bounds.append(f"{operator}({regular_bound}, {this_bound})")
+                        bounds.append(
+                            f"{operator}({regular_bound}, {node.name}{self.origin_marker}[{d}] + {this_bound} {extent:+d})"
+                        )
                     else:
                         bounds.append(f"{regular_bound}")
                 index.append(" : ".join(bounds))
-                # TODO need this for both axes
                 self.block_info.parallel_bounds.append(bounds)
         # for interval, axis_name in zip(parallel_definition, par_axis_names):
         #     for axis_bound in (interval.start, interval.end):
