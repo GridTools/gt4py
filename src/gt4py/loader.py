@@ -44,13 +44,7 @@ def load_stencil(frontend_name, backend_name, definition_func, externals, build_
         definition_func, options=build_options, backend=backend_cls, frontend=frontend
     ).with_externals(externals)
 
-    # Load or generate class
-    stencil_class = None if build_options.rebuild else builder.backend.load()
-
-    if stencil_class is None:
-        stencil_class = builder.backend.generate()
-
-    return stencil_class
+    return builder.build()
 
 
 def gtscript_loader(definition_func, backend, build_options, externals):
