@@ -24,6 +24,11 @@ provide the necessary information about how it can be used as a field in gt4py s
 propose to accept the `__array_interface__` and `__cuda_array_interface__` interfaces if these
 provide all necessary information.
 
+Lastly, these storages shall focus on providing a mechanism that allows users to write code with
+only minimal dependence on the backend while achieving optimal performance. Since this goal is
+funcamentally difficult to achieve under some operations that we previously targeted such as
+`universal functions`, we propose to remove these functionality.
+
 Motivation and Scope
 --------------------
 
@@ -44,12 +49,12 @@ using the interface introduced in the NEP18 allows GT4Py to retain full control 
 behavior of complex operations, while keeping interoperability with third-party scientific
 frameworks.
 
-Additionally, we propose to take this opportunity to improve the interaction with existing codes by
+We propose to take this opportunity to improve the interaction with existing codes by
 allowing the initialization of storages from external buffers without requiring a copying operation.
 To use this feature, some additional information about the provided buffers needs to be specified to
 both the :code:`__init__` method of the storages.
 
-Lastly, with the adaption of our storages to the generic array interfaces, we will also add support
+With the adaption of our storages to the generic array interfaces, we will also add support
 for third-party objects implementing said interfaces that can then be passed to the stencils
 directly. While these interfaces provide all information needed to understand a buffer as an
 n-dimensional array, this may not be enough for all use cases of GT4Py. For example, objects may
@@ -59,12 +64,19 @@ semantic information with the buffers will arise. For example, the dimensions wi
 only the :code:`"I"`, :code:`"J"` and :code:`"K"` axes which arise from indexing 3-dimensional
 fields on cartesian grids.
 
-We propose to resolve these limitations of the array interfaces by defining another property, the
+To resolve these limitations of the array interfaces we propose to define another property, the
 :code:`__gt_data_interface__`, which can be implemented by third-party objects. It shall summarize
 the buffer infos of multiple devices while also adding information about the semantic meaning of
 dimensions and function handles to interact with the object to address the concerns of data
 synchronization between devices. If only default array interfaces are implemented, these shall
 nevertheless work, with a well-defined default behavior.
+
+Finally, without internally keeping information about the semantic meaning of dimensions, e.g. the
+best layout and proper broadcasting for the resulting storage can not be determined. Further,
+implementations would depend on the availability of a library implementing the operations for a
+given device. We have already observed performance problems when using cupy on AMD hardware. For
+future hardware, these libraries might be entirely unavailable. Therefore, we will not commit to
+supporting such operations.
 
 Backward Compatibility
 ----------------------
@@ -75,6 +87,9 @@ arguments and attributes. These changes are expected to break most of existing u
 existing GT4Py functionality will remain or be extended and thus updating codebases to the new
 interface amounts mostly to updating attribute and keyword argument names.
 
+The removal of universal functions will require codes relying on ufuncs to be re-written by
+implementing these using third-party libraries.
+
 
 Detailed Description
 --------------------
@@ -82,16 +97,10 @@ Detailed Description
 Functionality
 ^^^^^^^^^^^^^
 
-Our main goal is to make GT4Py `storages` behave as close as possible to NumPy `ndarrays`
-for the base cases while providing additional domain-specific functionality. This means that,
-ideally, users can treat GT4Py Storages as regular NumPy arrays in their codes and expect the
-same results. The specific cases where behavior may differ because of the limitations of the NumPy
-API or the GT4Py Storage requirements, should be mentioned here and in the GT4Py documentation.
-
 We chose to use internally NumPy and CuPy `ndarrays` to store CPU and GPU buffers, respectively,
-since they are standard and realiable components of the Python ecosystem. We rely on those libraries
-to implement part of the functionality, like mathematical operators, by forwarding the calls to
-the appropriate NumPy/CuPy function call. As a consequence, support for `dtypes` and other
+since they are standard and reliable components of the Python ecosystem. We rely on those libraries
+to implement part of the functionality, like `__setitem__` and `__getitem__`, by forwarding the
+calls to the appropriate NumPy/CuPy function call. As a consequence, support for `dtypes` and other
 functionality is restricted to the common denominator of CuPy and NumPy.
 
 .. note:: In this document, references to NumPy and CuPy objects or functions use the standard
@@ -156,7 +165,7 @@ module.
 The behavior for a :code:`data_array` of type :code:`DataArray` shall be as follows:
 
 1) If `data_array.data` implements the :code:`__gt_data_interface__`, then this is returned, while
-   for each of the dictionaries per device, one of the following behavior will apply:
+   for each of the dictionaries per device, one of the following behaviors will apply:
 
    * If :code:`"dims"` is a key in the dictionary, an error is raised if it does not agree with
      :code:`data_array.dims`
@@ -463,28 +472,12 @@ first alternative source where the parameter is defined in the following search 
 Storage Attributes and NumPy API functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As we mentioned above, keeping compatibility with NumPy is an essential requirement for GT4Py
-Storages and therefore they should support the most relevant parts of the NumPy API. An
-initial proposal of supported features is presented here. By features we mean NumPy functions
+An initial proposal of supported features is presented here. By features we mean NumPy functions
 (:code:`np.function()` -like) that work well with GT4Py storages, as well as attributes
 (:code:`ndarray.attribute`) and methods (:code:`ndarray.method()`) of the :code:`ndarray` class.
 
-We are aware that this is by no means an exhaustive list and we ask for additional input from the
-community to collect other features that should be supported.
-
 NumPy Functions
 ===============
-:code:`np.all`
-    same semantics as :code:`np.logical_and.reduce`, when applied to all axes.
-
-:code:`np.any`
-    same semantics as :code:`np.logical_or.reduce`, when applied to all axes.
-
-:code:`np.max`
-    same semantics as :code:`np.max.reduce`, when applied to all axes.
-
-:code:`np.min`
-    same semantics as :code:`np.min.reduce`, when applied to all axes.
 
 :code:`np.transpose`
     permutation of the axes. In addition to the parameters of :code:`np.transpose`, when applied to
@@ -504,18 +497,13 @@ Attributes and Properties
     The *CUDA Array Interface* descriptor of this storage (only supported on instances with an
     actual GPU device buffer).
 
-:code:`alignment_size: int`
-    The value of :code:`alignment_size` which was given as a parameter in the storage creation
-    routine.
-
-    This indicates that the buffers were allocated such that
-    :code:`mod(aligned_addr, alignment_size) == 0`, where :code:`aligned_addr` is the memory address
-    of the grid point denoted by :code:`aligned_index`.
-
-:code:`aligned_index: Tuple[int]`
-    The index of the grid point to which the memory is aligned, based on the value which was given
-    at creation time. Note that this only partly takes the role of the former :code:`default_origin`
-    parameter, since part of the functionality is now taken over by the :code:`halo` attribute.
+:code:`__gt_data_interface__: Dict[str, Dict[str, Any]]`
+    The high-level descriptor of this storage as documented above. The :code:`None` and
+    :code:`"gpu"` keys will point to the :code:`__array_interface__` and
+    :code:`__cuda_array_interface__` respectively, with the added :code:`"acquire"` and
+    :code:`"touch"` keys of each interface set to point to the :code:`device_to_host`,
+    :code:`host_to_device`, :code:`set_host_modified` and :code:`set_device_modified` methods,
+    respectively. The :code:`"dims"` and :code:`"release"` keys will not be used.
 
 :code:`data: Optional[memoryview]`
     If the instance contains a host memory buffer, the :code:`data` attribute of the underlying
@@ -529,23 +517,8 @@ Attributes and Properties
     If the instance contains a device memory buffer, the :code:`data` attribute of the underlying
     :code:`cp.ndarray` instance backing the device memory buffer, :code:`None` otherwise.
 
-:code:`device_flags: Optional[cp.core.flags.Flags]`
-    If the instance contains a device memory buffer, the :code:`flags` attribute of the underlying
-    :code:`cp.ndarray` instance backing the device memory buffer, :code:`None` otherwise.
-
 :code:`dtype: np.dtype`
    The NumPy :code:`dtype` of the storage.
-
-:code:`flags: Optional[np.flagsobj]`
-    If the instance contains a host memory buffer, the :code:`flags` attribute of the underlying
-    :code:`np.ndarray` instance backing the host memory buffer, :code:`None` otherwise.
-
-:code:`layout: Sequence[int]`
-    The memory layout as specified in the creation routines: A permutation of integers in
-    :code:`[0 .. ndim-1]`. It indicates the order of strides in decreasing order. I.e. "0" indicates
-    that the stride in that dimension is the largest, while the entry `0` in the layout sequence
-    correspondes to the deminesion with the smallest stride, which typically is contiguous in
-    memory.
 
 :code:`nbytes: int`,
     Size of the buffer in bytes (excluding padding).
@@ -617,6 +590,10 @@ Methods
     Return a view of the underlying host buffer (NumPy :code:`ndarray`) if present or raise a
     :code:`GTNoSuchBufferError` if this instance does not contain a host buffer.
 
+:code:`transpose(self: Storage, *axes: Optional[Sequence[int]]) -> Storage`
+    Return a view of the underlying host buffer with the strides permuted in the order indicated by
+    :code:`axes`.
+
 The following methods are used to ensure that one-sided modifications to the host or device
 buffers of a storage instance are tracked properly when the synchronization is managed by GT4Py.
 The use of these methods should only be necessary if a reference to the internal Storage buffers
@@ -650,102 +627,24 @@ user code can be agnostic of the backend and the synchronization mode.
     Triggers a copy between host and device buffers if the host or device, respectively are
     marked as modified. The buffers are marked as in sync after the operation.
 
-Universal Functions (ufuncs)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-`Universal Functions <https://numpy.org/doc/stable/reference/ufuncs.html>`_ are a subset of the
-NumPy API which mostly implements mathematical operator functions and have a particular structure:
-They are subclasses of :code:`np.ufunc` and can be invoked through the
-`methods <https://numpy.org/doc/stable/reference/ufuncs.html#methods>`_ :code:`reduce`,
-:code:`accumulate`, :code:`reduceat`, :code:`outer`, :code:`at` and :code:`__call__`. We propose to
-use the `mixin` functionality and to implement the :code:`__array_ufunc__` interface to support
-these functions: NumPy provides the :code:`numpy.lib.mixins.NDArrayOperatorsMixin` class, from which
-a duck array can inherit from. Doing so forwards mathematical operators using python syntax (such as
-binary :code:`+` or unary :code:`-`) to the :code:`__array_ufunc__` method where own behavior can
-be defined.
-
-Using mathematical operators with the mixin is equivalent to calling the ufuncs through the
-:code:`__call__` method. (E.g. :code:`np.add(storage1, storage2)` or
-:code:`np.negative(storage)`) alternatively, some ufuncs can be used to perform reductions.
-In this case, one can explicitly call the :code:`reduce` method (e.g. :code:`np.add.reduce(axis=1)`
-to accumulate the values along a given axis.
-
-We propose to support the methods :code:`__call__` and :code:`reduce` of the NumPy ufunc
-mechanism.
-
-If the :code:`reduce` method of `ufuncs` is used, this results in a Storage with the axis along
-which the reduction was performed removed from the Storage. (For example taking the sum over the K
-axis of an IJK storage will result in an IJ storage). In addition to vanilla numpy behavior, the
-:code:`axis` keyword of the :code:`reduce` method accepts the axis along which the reduction is
-performed as a string.
-
-In the following subsections we describe the proposed behaviour for GT4Py storages when used in
-conjuction with NumPy ufuncs.
-
-.. _output_storage_parameters:
-
-Output Storage Parameters
-=========================
-
-If no output buffer is provided, the constructor parameters of the output storage have to be
-inferred using the available information from the inputs.
-
-:code:`aligned_index`
-    It is chosen to be as the largest value per dimension of the broadcast shape across all inputs
-    which are a GT4Py Storage.
-
-:code:`alignment_size`
-   The resulting alignment is chosen as the least common multiple of the alignments of all inputs
-   which are a GT4Py storage.
-
-:code:`dtype`
-   The resulting dtype is determined by NumPy behavior.
-
-:code:`layout`
-    The layout is chosen as the layout of the first input argument which is a GT4Py Storage and has
-    the same shape as the broadcast shape. If no such storage is present, the layout defaults to
-    C-layout, i.e. descending strides.
-
 Mixing Devices
 ==============
 
-For the synchronized memory classes (be it by CUDA or by GT4Py), the compute device is chosen
-depending on
+For the synchronized memory classes (be it by CUDA or by GT4Py), the the device where data is
+written in setitem is chosen depending on
 
 :code:`CudaManagedGPUStorage`
-    The compute device is chosen to be GPU if and only if the inputs are compatible with
+    The device is chosen to be GPU if and only if the input value is compatible with
     :code:`cp.asarray`.
 
 :code:`SoftwareManagedGPUStorage`
     Here, the array is considered a GPU array if it is compatible with :code:`cp.asarray`. If a
-    storage is modified on CPU, it is considered a CPU array here. The compute device is chosen as
-    GPU unless all inputs are not GPU arrays (including if all inputs are
+    storage is modified on CPU, it is considered a CPU array here. The device to write the data is
+    chosen as GPU unless both input and output are not GPU arrays (including if both are
     :code:`SoftwareManagedGPUStorage` but are modified on CPU).
-
-We assume that mixing these in the same application is not a common case. Should it nevertheless
-appear, the object that handles the ufunc will determine the behavior. (Where each of the classes
-will treat the other as on GPU.)
 
 For pure CPU storages, all inputs and outputs need to be compatible with `np.asarray`, for GPU
 storages with `cp.asarray`, otherwise an exception is raised.
-
-:code:`CudaManagedGPUStorage` and :code:`SoftwareManagedGPUStorage` shall both have a
-:code:`__array_priority__` set to :code:`11`, while for :code:`CPUStorage` and :code:`GPUStorage` it
-is set to :code:`10`, meaning that managed storages have priority in handling these cases.
-
-Implementation
---------------
-
-Operators and `ufuncs` are handled by inheriting from :code:`numpy.NDArrayOperatorsMixin` and
-implementing the :code:`__array_ufunc__` interface. The internal implementation of the
-:code:`__array_ufunc__` will determine the proper broadcasting, output shape and compute device,
-and then allocate the appropriate output buffers and  dispatch the actual computation to NumPy or
-CuPy, respectively. This strategy should work perfectly since all CPU buffers are implemented using
-NumPy `ndarrays` and GPU buffers are stored as CuPy `ndarrays`, except for the CUDA-managed GPU
-storages, where CuPy views of the buffer are created as necessary. (see :ref:`storage_types`).
-
-Other numpy API functions will be handled by means of the :code:`__array_function__`
-protocol.
 
 .. _storage_types:
 
@@ -814,6 +713,17 @@ generated code. With it, generated code will be valid for any stride order, alth
 still be better for certain combinations. With this change, the conservation of the layout under
 ufunc operations will be less important. We believe that the costs of having the :code:`dims` in the
 storage implementation rather than the interface proposed here will then outweigh the benefits.
+
+Implementing ufuncs and other NumPy API functionality
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Previously, it was possible to call mathematical operations on the storages, and an earlier version
+of this GDP proposed to implement this using the functionality offered by the `NumPy Enhancment
+Proposals` NEP13 and NEP18. However, it could not be guaranteed that in this way, the requirements
+for the best performance for a given backend could always be infered under these operations.
+Further, approaches to implementation of these interfaces depend on the availability of third party
+libraries implementing the operations on a lower level. However, this can not be assumed to be
+extensible for upcoming hardware.
 
 Copyright
 ---------
