@@ -18,7 +18,7 @@
 """
 
 import itertools
-from typing import Optional, Set, Tuple, Union
+from typing import Any, Dict, Optional, Set, Tuple, Union
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
@@ -1003,6 +1003,58 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
         demote_symbols = self.DemoteSymbols(demotables)
         transform_data.implementation_ir = demote_symbols(transform_data.implementation_ir)
 
+        return transform_data
+
+
+class ReduceTemporaryStoragesPass(TransformPass):
+    class StorageReducer(gt_ir.IRNodeMapper):
+        def __init__(self, field_info: Dict[str, Any] = {}):
+            self.field_info = field_info
+            self.local_symbols = None
+
+        def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
+            assert isinstance(node, gt_ir.StencilImplementation)
+            return self.visit(node)
+
+        def visit_StencilImplementation(
+            self, path: tuple, node_name: str, node: gt_ir.StencilImplementation
+        ) -> gt_ir.StencilImplementation:
+            self.iir = node
+            res = self.generic_visit(path, node_name, node)
+            for field_name in self.field_info:
+                assert field_name in node.temporary_fields, "Tried to reduce api field storage size."
+                node.fields.pop(f)
+                node.fields_extents.pop(f)
+            return res
+
+        def visit_FieldAccessor(
+            self, path: tuple, node_name: str, node: gt_ir.FieldAccessor
+        ) -> Tuple[bool, Optional[gt_ir.FieldAccessor]]:
+            if node.symbol in self.iir.temporary_fields:
+                node.extent = self.iir.fields_extents[node.symbol]
+            return True, node
+
+        def visit_FieldRef(
+            self, path: tuple, node_name: str, node: gt_ir.FieldRef
+        ) -> Tuple[bool, Union[gt_ir.FieldRef, gt_ir.VarRef]]:
+            if node.name in self.iir.temporary_fields:
+                if node.name not in self.local_symbols:
+                    field_decl = self.fields[node.name]
+                    self.local_symbols[node.name] = gt_ir.VarDecl(
+                        name=node.name,
+                        data_type=field_decl.data_type,
+                        length=1,
+                        is_api=False,
+                        loc=field_decl.loc,
+                    )
+                return True, gt_ir.VarRef(name=node.name, index=0, loc=node.loc)
+
+            else:
+                return True, node
+
+    def apply(self, transform_data: TransformData) -> TransformData:
+        storage_reducer = self.StorageReducer()
+        transform_data.implementation_ir = storage_reducer(transform_data.implementation_ir)
         return transform_data
 
 
