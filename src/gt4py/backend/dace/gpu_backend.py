@@ -35,13 +35,30 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
         return sdfg
 
     def transform_optimize(self, sdfg):
+        import dace
+        from dace.transformation.dataflow import MapCollapse
+
+        sdfg.apply_transformations_repeated(MapCollapse, validate=False)
         sdfg.apply_strict_transformations(validate=False)
         for name, array in sdfg.arrays.items():
             if array.transient:
                 array.lifetime = dace.dtypes.AllocationLifetime.Persistent
         dace.Config.set("compiler", "cuda", "default_block_size", value="64,2,1")
+        from daceperiments.transforms import OnTheFlyMapFusion
+
+        sdfg.apply_transformations_repeated(OnTheFlyMapFusion, validate=False)
 
         from gt4py.backend.dace.sdfg.transforms import PrefetchingKCachesTransform
+
+        for state in sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.NestedSDFG):
+                    node.sdfg.apply_transformations(
+                        PrefetchingKCachesTransform,
+                        options={"storage_type": dace.dtypes.StorageType.GPU_Shared},
+                        validate=False,
+                    )
+
         from dace.transformation.subgraph.subgraph_fusion import SubgraphFusion
         from dace.sdfg.graph import SubgraphView
 
@@ -50,16 +67,22 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
                 graph, [node for node in graph.nodes() if graph.out_degree(node) > 0]
             )
             fusion = SubgraphFusion()
+            fusion.transient_allocation = dace.dtypes.StorageType.Register
             fusion.apply(sdfg, subgraph)
+            for name, array in sdfg.arrays.items():
+                if array.transient:
+                    array.lifetime = dace.dtypes.AllocationLifetime.Scope
 
-        for state in sdfg.nodes():
-            for node in state.nodes():
-                if isinstance(node, dace.nodes.NestedSDFG):
-                    node.sdfg.apply_transformations(
-                        PrefetchingKCachesTransform,
-                        options={"storage_type": dace.dtypes.StorageType.Register},
-                        validate=False,
-                    )
+                    for node in graph.nodes():
+                        if isinstance(node, dace.nodes.NestedSDFG):
+                            for inner_name, inner_array in node.sdfg.arrays.items():
+                                if inner_name == name:
+                                    inner_array.storage = dace.dtypes.StorageType.Register
+
+        # for name, array in sdfg.arrays.items():
+        #     if array.transient:
+        #         array.lifetime = dace.dtypes.AllocationLifetime.Scope
+        #         array.storage = dace.dtypes.StorageType.Register
 
         return sdfg
 

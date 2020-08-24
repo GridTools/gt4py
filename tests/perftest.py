@@ -3,8 +3,7 @@ import numpy as np
 import gt4py
 from gt4py import gtscript
 from gt4py import storage as gt_store
-from tests.test_integration.stencil_definitions import REGISTRY as stencil_registry
-from tests.test_integration.test_cpp_regression import get_reference, generate_test_module
+from tests.test_integration.test_cpp_regression import get_reference
 
 
 def run_horizontal_diffusion(niter, domain, backend, dtype, backend_opts={}):
@@ -383,6 +382,7 @@ class SpecializingInjector(SDFGInjector):
         for var, d in zip("IJK", strides):
             res.replace(f"_ccol_{var}_stride", str(d))
             res.replace(f"_dcol_{var}_stride", str(d))
+            res.replace(f"_data_col_{var}_stride", str(d))
 
         if len(res.signature_arglist()) != len(sdfg.signature_arglist()):
             raise ValueError(
@@ -408,10 +408,43 @@ class SpecializingInjector(SDFGInjector):
         return res
 
 
+from gt4py.backend.dace.gpu_backend import GPUDaceOptimizer
+
+
+class SpecializingGPUDaceOptimizer(GPUDaceOptimizer):
+    def __init__(self, domain):
+        self.domain = domain
+
+    def transform_optimize(self, sdfg):
+        import copy
+        import dace
+
+        res: dace.SDFG = super().transform_optimize(sdfg)
+
+        strides = [None] * 3
+        layout = gt4py.backend.from_name("adhoc").storage_info["layout_map"]((True, True, True))
+        print(layout)
+        stride = 1
+        domain = [dace.symbolic.symbol(d) for d in "IJK"]
+        for i in reversed(np.argsort(layout)):
+            strides[i] = stride
+            stride = stride * domain[i]
+
+        for var, d in zip("IJK", strides):
+            res.replace(f"_ccol_{var}_stride", str(d))
+            res.replace(f"_dcol_{var}_stride", str(d))
+
+        res.specialize({var: d for var, d in zip("IJK", self.domain)})
+        # dace.Config.set("compiler", "cuda", "default_block_size", value="128, 1, 1")
+        return res
+
+
 if __name__ == "__main__":
-    niter = 1000
+    niter = 10
     domain = (128, 128, 80)
-    data_layout = (1, 2, 0)
+    # domain = (3, 3, 10)
+
+    data_layout = (0, 1, 2)
     function = "vertical_advection"
     dtype = np.float32
     backend = "adhoc"
@@ -421,11 +454,7 @@ if __name__ == "__main__":
         path = sys.argv[1]
     else:
         path = None
-    optimizer = (
-        SpecializingInjector(path, domain)
-        if path is not None
-        else gt4py.backend.dace.cpu_backend.X86DaceOptimizer()
-    )
+    optimizer = SpecializingGPUDaceOptimizer(domain)
     from gt4py.backend import register as register_backend
     from gt4py.backend.dace.base_backend import DaceBackend
     from gt4py.backend.dace.cpu_backend import CPUDaceBackend
@@ -445,7 +474,7 @@ if __name__ == "__main__":
         DEFAULT_OPTIMIZER = optimizer
 
     print(f"start {backend}")
-    backend_opts = dict(rebuild=True)
+    backend_opts = dict(rebuild=True, save_intermediate=True)
     exec_infos = globals()[f"run_{function}"](
         niter=niter, domain=domain, backend=backend, dtype=dtype, backend_opts=backend_opts,
     )

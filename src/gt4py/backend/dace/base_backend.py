@@ -181,7 +181,7 @@ class CudaDaceOptimizer(DaceOptimizer):
                 if isinstance(node, dace.nodes.NestedSDFG) and (
                     parent is None or parent.schedule != dace.ScheduleType.GPU_Device
                 ):
-                    CudaDaceOptimizer.transform_to_device(node.sdfg)
+                    self.transform_to_device(node.sdfg)
         return sdfg
 
 
