@@ -476,7 +476,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             for group in multi_stage.groups:
                 for stage in group.stages:
                     compute_extent = stage.compute_extent
-                    extents = []
+                    extents: List[int] = []
                     for i in range(compute_extent.ndims - 1):
                         extents.extend(
                             (compute_extent.lower_indices[i], compute_extent.upper_indices[i])
