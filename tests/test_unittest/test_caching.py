@@ -61,9 +61,9 @@ def stencil_fingerprints_are_equal(builder_a, builder_b):
     return builder_a.caching.stencil_id.version == builder_b.caching.stencil_id.version
 
 
-def could_load_stencil_from_cache(builder):
+def could_load_stencil_from_cache(builder, catch_exceptions=False):
     return builder.caching.is_cache_info_available_and_consistent(
-        validate_hash=True, catch_exceptions=False
+        validate_hash=True, catch_exceptions=catch_exceptions
     )
 
 
@@ -93,8 +93,8 @@ def test_jit_version(builder):
     assert could_load_stencil_from_cache(withdoc)
 
     original.definition.__doc__ = "Added docstring." ""
-    assert not could_load_stencil_from_cache(original)
-    assert not could_load_stencil_from_cache(duplicate)
+    assert not could_load_stencil_from_cache(original, catch_exceptions=True)
+    assert not could_load_stencil_from_cache(duplicate, catch_exceptions=True)
     # fingerprint has changed and with it the file paths, new cache_info file does not exist.
     assert not original.caching.cache_info
     assert not duplicate.caching.cache_info
