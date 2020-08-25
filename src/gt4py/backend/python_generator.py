@@ -284,7 +284,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
                 field = node.fields[name]
                 self.sources.extend(
                     self.make_temporary_field(
-                        field.name, field.data_type, node.fields_extents[field.name]
+                        field.name, field.data_type, node.fields_extents[field.name] #, field.axes
                     )
                 )
             self.sources.empty_line()
