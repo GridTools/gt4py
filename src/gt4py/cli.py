@@ -206,7 +206,7 @@ def gen(backend, output_path, options, input_path, silent):
     input_path = pathlib.Path(input_path)
     output_path = pathlib.Path(output_path)
     gtsimport.install(search_path=[input_path.parent])
-    reporter.echo("reading input file {input_path}")
+    reporter.echo(f"reading input file {input_path}")
     input_module = importlib.import_module(input_path.stem.split(".")[0])
     reporter.echo(f"input file loaded as module {input_module}")
     build_options = dict(options)

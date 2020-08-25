@@ -35,7 +35,7 @@ def make_single_file(tmp_path, extension, reset_importsys):
         gts_file = tmp_path / f"{module_name}{extension}"
         gts_file.write_text(
             (
-                "## using-dsl: gtscript\n"
+                "# [GT] using-dsl: gtscript\n"
                 "\n"
                 "\n"
                 "@lazy_stencil()\n"
@@ -76,7 +76,7 @@ def make_two_files(tmp_path, extension, reset_importsys):
 
         module_one.write_text(
             (
-                "## using-dsl: gtscript\n"
+                "# [GT] using-dsl: gtscript\n"
                 "import numpy\n"  # make sure thirdparty pkg can be imported
                 f"import {prefix}_two\n"
                 f"from {prefix}_two import square\n"
@@ -95,7 +95,7 @@ def make_two_files(tmp_path, extension, reset_importsys):
 
         module_two.write_text(
             (
-                "## using-dsl: gtscript\n"
+                "# [GT] using-dsl: gtscript\n"
                 "import numpy"  # make sure thirdparty pkg can be imported
                 "\n"
                 "\n"
@@ -155,7 +155,7 @@ def make_package(tmp_path, extension, reset_importsys):
         # write files
         module_file.write_text(
             (
-                "## using-dsl: gtscript\n\n\n"
+                "# [GT] using-dsl: gtscript\n\n\n"
                 f"from {prefix}_lib import CONST, sf1, sss\n"
                 "SENTINEL = 1\n\n\n"
                 "@function\n"
@@ -178,7 +178,7 @@ def make_package(tmp_path, extension, reset_importsys):
         )
         sub_1_path.write_text(
             (
-                "## using-dsl: gtscript\n\n"
+                "# [GT] using-dsl: gtscript\n\n"
                 f"from .{prefix}_sub2.{prefix}_sub_sub import SENTINEL as SS_SENT\n\n\n"
                 "@function\n"
                 "def sf1(b):\n"
@@ -188,7 +188,7 @@ def make_package(tmp_path, extension, reset_importsys):
         )
         sub_2_init.write_text(
             (
-                "## using-dsl: gtscript\n\n"
+                "# [GT] using-dsl: gtscript\n\n"
                 f"from ..{prefix}_sub1 import SENTINEL as S1_SENT\n"
                 f"from . import {prefix}_sub_sub\n"
                 f"from .{prefix}_sub_sub import sss\n\n\n"
@@ -197,7 +197,7 @@ def make_package(tmp_path, extension, reset_importsys):
         )
         sub_sub_path.write_text(
             (
-                "## using-dsl: gtscript\n\n\n"
+                "# [GT] using-dsl: gtscript\n\n\n"
                 "@lazy_stencil()\n"
                 "def sss(a: Field[float]):\n"
                 "    with computation(PARALLEL), interval(...):\n"

@@ -33,7 +33,7 @@ def simple_stencil(tmp_path, clean_imports):
     module_file = tmp_path / "stencil.gt.py"
     module_file.write_text(
         (
-            "## using-dsl: gtscript\n"
+            "# [GT] using-dsl: gtscript\n"
             "\n"
             "\n"
             "@lazy_stencil()\n"
