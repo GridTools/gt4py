@@ -565,7 +565,7 @@ class Extent(FrameTuple):
         return Boundary([(-1 * d[0], d[1]) for d in self])
 
     def _apply(self, other, left_func, right_func=None):
-        if not isinstance(other, FrameTuple) or len(self) != len(other):
+        if not isinstance(other, FrameTuple):  # or len(self) != len(other):
             raise ValueError("Incompatible instance '{obj}'".format(obj=other))
 
         right_func = right_func or left_func

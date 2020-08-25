@@ -107,9 +107,13 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return source_lines
 
     def make_temporary_field(
-        self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent
+        self,
+        name: str,
+        dtype: gt_ir.DataType,
+        extent: gt_definitions.Extent,
+        axes: list = gt_definitions.CartesianSpace.names,
     ):
-        source_lines = super().make_temporary_field(name, dtype, extent)
+        source_lines = super().make_temporary_field(name, dtype, extent, axes)
         source_lines.extend(self._make_field_origin(name, extent.to_boundary().lower_indices))
 
         return source_lines
@@ -182,6 +186,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                         idx=idx,
                     )
                 )
+        else:
+            index.append("0")
 
         source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
 

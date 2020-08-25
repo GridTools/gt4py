@@ -108,7 +108,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         return self.sources
 
     def make_temporary_field(
-        self, name: str, data_type: gt_ir.DataType, extent: gt_definitions.Extent
+        self, name: str, data_type: gt_ir.DataType, extent: gt_definitions.Extent, axes: list
     ):
         source_lines = []
         boundary = extent.to_boundary()
@@ -117,7 +117,10 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
                 domain=self.domain_arg_name, d=d, size=" {:+d}".format(size) if size > 0 else ""
             )
             for d, size in enumerate(boundary.frame_size)
+            if d < len(axes)
         )
+        for i in range(len(extent) - len(axes)):
+            shape += ", 1"
         source_lines.append(
             "{name} = {np_prefix}.empty(({shape}), dtype={np_prefix}.{dtype})".format(
                 name=name, np_prefix=self.numpy_prefix, shape=shape, dtype=data_type.dtype.name
@@ -283,7 +286,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
                 field = node.fields[name]
                 self.sources.extend(
                     self.make_temporary_field(
-                        field.name, field.data_type, node.fields_extents[field.name] #, field.axes
+                        field.name, field.data_type, node.fields_extents[field.name], field.axes
                     )
                 )
             self.sources.empty_line()

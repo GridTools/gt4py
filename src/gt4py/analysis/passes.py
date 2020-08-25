@@ -1032,7 +1032,7 @@ class ReduceTemporaryStoragesPass(TransformPass):
 
         def visit_FieldRef(
             self, path: tuple, node_name: str, node: gt_ir.FieldRef
-        ) -> Tuple[bool, Union[gt_ir.FieldRef, gt_ir.VarRef]]:
+        ) -> Tuple[bool, gt_ir.FieldRef]:
             iir = self.iir
             field_name = node.name
 
@@ -1044,7 +1044,7 @@ class ReduceTemporaryStoragesPass(TransformPass):
                 extent = iir.fields_extents[field_name]
                 ndims = extent.ndims - 1
                 if extent.lower_indices[ndims] == 0 and extent.upper_indices[ndims] == 0:
-                    iir.fields_extents[field_name] = Extent(extent[0], extent[1])
+                    # iir.fields_extents[field_name] = Extent(extent[0], extent[1])
                     iir.fields[field_name].axes.pop()
                     self.reduced_fields.add(field_name)
 
