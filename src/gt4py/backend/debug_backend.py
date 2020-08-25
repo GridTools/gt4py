@@ -109,14 +109,14 @@ class DebugSourceGenerator(PythonSourceGenerator):
         if iteration_order == gt_ir.IterationOrder.BACKWARD:
             regions = reversed(regions)
 
-        for bounds, parallel_bounds, body_sources in regions:
+        for bounds, parallel_interval, body_sources in regions:
             source_lines.extend(self._make_regional_computation(iteration_order, bounds))
             with source_lines.indented(steps=1):
                 source_lines.extend(ij_loop_lines.text)
 
-            if parallel_bounds:
+            if parallel_interval:
                 with source_lines.indented(steps=extent.ndims):
-                    source_lines.extend(self._make_positional_ij_condition(parallel_bounds))
+                    source_lines.extend(self._make_positional_ij_condition(parallel_interval))
                 with source_lines.indented(steps=extent.ndims + 1):
                     source_lines.extend(body_sources)
             else:
