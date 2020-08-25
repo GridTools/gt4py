@@ -314,8 +314,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
 
 class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
-    def __init__(self, builder: "StencilBuilder"):
-        super().__init__(builder)
+    def __init__(self):
+        super().__init__()
         self.source_generator = NumPySourceGenerator(
             indent_size=self.TEMPLATE_INDENT_SIZE,
             origin_marker="__O",
@@ -350,8 +350,8 @@ def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
 
     def generate_implementation(self):
         block = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
-        self.source_generator(self.implementation_ir, block)
-        if self.options.backend_opts.get("ignore_np_errstate", True):
+        self.source_generator(self.builder.implementation_ir, block)
+        if self.builder.options.backend_opts.get("ignore_np_errstate", True):
             source = "with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):\n"
             source += textwrap.indent(block.text, " " * self.TEMPLATE_INDENT_SIZE)
         else:
