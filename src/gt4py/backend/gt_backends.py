@@ -18,7 +18,7 @@ import abc
 import functools
 import numbers
 import os
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import jinja2
 import numpy as np
@@ -37,12 +37,12 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-def make_x86_layout_map(mask: tuple):
+def make_x86_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     ctr = iter(range(sum(mask)))
     if len(mask) < 3:
-        layout = [next(ctr) if m else None for m in mask]
+        layout: List[Optional[int]] = [next(ctr) if m else None for m in mask]
     else:
-        swapped_mask = [*mask[3:], *mask[:3]]
+        swapped_mask: List[Optional[int]] = [*mask[3:], *mask[:3]]
         layout = [next(ctr) if m else None for m in swapped_mask]
 
         layout = [*layout[-3:], *layout[:-3]]
@@ -66,12 +66,12 @@ def gtcpu_is_compatible_type(field):
     return isinstance(field, np.ndarray)
 
 
-def make_mc_layout_map(mask: tuple):
+def make_mc_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     ctr = reversed(range(sum(mask)))
     if len(mask) < 3:
-        layout = [next(ctr) if m else None for m in mask]
+        layout: List[Optional[int]] = [next(ctr) if m else None for m in mask]
     else:
-        swapped_mask = list(mask)
+        swapped_mask: List[Optional[int]] = list(mask)
         tmp = swapped_mask[1]
         swapped_mask[1] = swapped_mask[2]
         swapped_mask[2] = tmp
@@ -97,7 +97,7 @@ def mc_is_compatible_layout(field):
     return True
 
 
-def cuda_layout(mask: tuple):
+def cuda_layout(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     ctr = reversed(range(sum(mask)))
     return tuple([next(ctr) if m else None for m in mask])
 
@@ -518,32 +518,45 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
     def generate(self) -> Type["StencilObject"]:
-        self._check_options(self.builder.options)
+        self.check_options(self.builder.options)
 
         implementation_ir = self.builder.implementation_ir
 
-        # if no computation has effect, there is no need to create an extension
-        pyext_module_name, pyext_file_path = None, None
+        # Generate the Python binary extension (checking if GridTools sources are installed)
+        if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
+            raise RuntimeError("Missing GridTools sources.")
 
+        pyext_module_name: Optional[str]
+        pyext_file_path: Optional[str]
         if implementation_ir.multi_stages:
-            # Generate the Python binary extension (checking if GridTools sources are installed)
-            if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
-                raise RuntimeError("Missing GridTools sources.")
-
             pyext_module_name, pyext_file_path = self.generate_extension()
+        else:
+            # if computation has no effect, there is no need to create an extension
+            pyext_module_name, pyext_file_path = None, None
 
         # Generate and return the Python wrapper class
-        return self._generate_module(
-            extra_cache_info=self.extra_cache_info,
-            implementation_ir=implementation_ir,
-            pyext_module_name=pyext_module_name,
-            pyext_file_path=pyext_file_path,
+        return self.make_module(
+            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path,
         )
 
-    def _generic_generate_extension(self, *, uses_cuda: bool = False) -> Tuple[str, str]:
+    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
+        dir_name = f"{self.builder.options.name}_src"
+        src_files = self.make_extension_sources()
+        return {dir_name: src_files}
+
+    @abc.abstractmethod
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        """
+        Generate and build a python extension for the stencil computation.
+
+        Returns the name and file path (as string) of the compiled extension ".so" module.
+        """
+        pass
+
+    def make_extension(self, *, uses_cuda: bool = False) -> Tuple[str, str]:
         # Generate source
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
-            gt_pyext_sources: Dict[str, Any] = self._generate_computation_src()
+            gt_pyext_sources: Dict[str, Any] = self.make_extension_sources()
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
             gt_pyext_sources = {
@@ -571,7 +584,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         result = self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
         return result
 
-    def _generate_computation_src(self) -> Dict[str, str]:
+    def make_extension_sources(self) -> Dict[str, str]:
         """Generate the source for the stencil independently from use case."""
         class_name = (
             self.pyext_class_name if self.builder.stencil_id else self.builder.options.name
@@ -585,20 +598,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             class_name, module_name, self.GT_BACKEND_T, self.builder.options
         )
         return gt_pyext_generator(self.builder.implementation_ir)
-
-    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
-        dir_name = f"{self.builder.options.name}_src"
-        src_files = self._generate_computation_src()
-        return {dir_name: src_files}
-
-    @abc.abstractmethod
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        """
-        Generate and build a python extension for the stencil computation.
-
-        Returns the name and file path (as string) of the compiled extension ".so" module.
-        """
-        pass
 
 
 @gt_backend.register
@@ -619,7 +618,7 @@ class GTX86Backend(BaseGTBackend):
     languages = {"computation": "c++", "bindings": ["python"]}
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self._generic_generate_extension(uses_cuda=False)
+        return self.make_extension(uses_cuda=False)
 
 
 @gt_backend.register
@@ -640,19 +639,19 @@ class GTMCBackend(BaseGTBackend):
     languages = {"computation": "c++", "bindings": ["python"]}
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self._generic_generate_extension(uses_cuda=False)
+        return self.make_extension(uses_cuda=False)
 
 
 class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
     def generate_pre_run(self) -> str:
-        field_names = self.module_info["field_info"].keys()
+        field_names = self.args_data["field_info"].keys()
 
         return "\n".join([f + ".host_to_device()" for f in field_names])
 
     def generate_post_run(self) -> str:
         output_field_names = [
             name
-            for name, info in self.module_info["field_info"].items()
+            for name, info in self.args_data["field_info"].items()
             if info.access == gt_definitions.AccessKind.READ_WRITE
         ]
 
@@ -679,4 +678,4 @@ class GTCUDABackend(BaseGTBackend):
     languages = {"computation": "cuda", "bindings": ["python"]}
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self._generic_generate_extension(uses_cuda=True)
+        return self.make_extension(uses_cuda=True)
