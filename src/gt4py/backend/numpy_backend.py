@@ -137,7 +137,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
 
-        for d, ax in enumerate(self.domain.axes_names):
+        for d, ax in enumerate(node.offset.keys()):
             idx = node.offset.get(ax, 0)
             if idx:
                 lower_extent[d] += idx
@@ -159,28 +159,29 @@ class NumPySourceGenerator(PythonSourceGenerator):
             )
 
         k_ax = self.domain.sequential_axis.name
-        k_offset = node.offset.get(k_ax, 0)
-        if is_parallel:
-            start_expr = self.interval_k_start_name
-            start_expr += " {:+d}".format(k_offset) if k_offset else ""
-            end_expr = self.interval_k_end_name
-            end_expr += " {:+d}".format(k_offset) if k_offset else ""
-            index.append(
-                "{name}{marker}[2] + {start}:{name}{marker}[2] + {stop}".format(
-                    name=node.name, start=start_expr, marker=self.origin_marker, stop=end_expr
+        if k_ax in node.offset:
+            k_offset = node.offset.get(k_ax, 0)
+            if is_parallel:
+                start_expr = self.interval_k_start_name
+                start_expr += " {:+d}".format(k_offset) if k_offset else ""
+                end_expr = self.interval_k_end_name
+                end_expr += " {:+d}".format(k_offset) if k_offset else ""
+                index.append(
+                    "{name}{marker}[2] + {start}:{name}{marker}[2] + {stop}".format(
+                        name=node.name, start=start_expr, marker=self.origin_marker, stop=end_expr
+                    )
                 )
-            )
-        else:
-            idx = "{:+d}".format(k_offset) if k_offset else ""
-            index.append(
-                "{name}{marker}[{d}] + {ax}{idx}".format(
-                    name=node.name,
-                    marker=self.origin_marker,
-                    d=len(self.domain.parallel_axes),
-                    ax=k_ax,
-                    idx=idx,
+            else:
+                idx = "{:+d}".format(k_offset) if k_offset else ""
+                index.append(
+                    "{name}{marker}[{d}] + {ax}{idx}".format(
+                        name=node.name,
+                        marker=self.origin_marker,
+                        d=len(self.domain.parallel_axes),
+                        ax=k_ax,
+                        idx=idx,
+                    )
                 )
-            )
 
         source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
 

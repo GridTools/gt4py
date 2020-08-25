@@ -1022,8 +1022,9 @@ class ReduceTemporaryStoragesPass(TransformPass):
             self.iir = node
             for temp_field in node.temporary_fields:
                 extent = node.fields_extents[temp_field]
-                dim = extent.ndims - 1
-                if extent.lower_indices[dim] == 0 and extent.upper_indices[dim] == 0:
+                ndims = extent.ndims - 1
+                if extent.lower_indices[ndims] == 0 and extent.upper_indices[ndims] == 0:
+                    node.fields_extents[temp_field] = Extent(extent[0], extent[1])
                     node.fields[temp_field].axes.pop()
                     self.reduced_fields.add(temp_field)
             return self.generic_visit(path, node_name, node)
