@@ -1008,8 +1008,9 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
 class ReduceTemporaryStoragesPass(TransformPass):
     class StorageReducer(gt_ir.IRNodeMapper):
-        def __init__(self, field_info: Dict[str, Any] = {}):
-            self.field_info = field_info
+        def __init__(self):
+            self.iir = None
+            self.iteration_order = None
             self.reduced_fields = set()
 
         def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
@@ -1020,22 +1021,38 @@ class ReduceTemporaryStoragesPass(TransformPass):
             self, path: tuple, node_name: str, node: gt_ir.StencilImplementation
         ) -> gt_ir.StencilImplementation:
             self.iir = node
-            for temp_field in node.temporary_fields:
-                extent = node.fields_extents[temp_field]
-                ndims = extent.ndims - 1
-                if extent.lower_indices[ndims] == 0 and extent.upper_indices[ndims] == 0:
-                    # node.fields_extents[temp_field] = Extent(extent[0], extent[1])
-                    node.fields[temp_field].axes.pop()
-                    self.reduced_fields.add(temp_field)
             return self.generic_visit(path, node_name, node)
+
+        def visit_MultiStage(
+            self, path: tuple, node_name: str, node: gt_ir.MultiStage
+        ) -> Tuple[bool, Optional[gt_ir.MultiStage]]:
+            self.iteration_order = node.iteration_order
+            self.generic_visit(path, node_name, node)
+            return True, node
 
         def visit_FieldRef(
             self, path: tuple, node_name: str, node: gt_ir.FieldRef
         ) -> Tuple[bool, Union[gt_ir.FieldRef, gt_ir.VarRef]]:
-            if node.name in self.reduced_fields:
-                field_decl = self.iir.fields[node.name]
+            iir = self.iir
+            field_name = node.name
+
+            if (
+                self.iteration_order != gt_ir.IterationOrder.PARALLEL
+                and field_name in self.iir.temporary_fields
+                and field_name not in self.reduced_fields
+            ):
+                extent = iir.fields_extents[field_name]
+                ndims = extent.ndims - 1
+                if extent.lower_indices[ndims] == 0 and extent.upper_indices[ndims] == 0:
+                    iir.fields_extents[field_name] = Extent(extent[0], extent[1])
+                    iir.fields[field_name].axes.pop()
+                    self.reduced_fields.add(field_name)
+
+            if field_name in self.reduced_fields:
+                field_decl = iir.fields[field_name]
                 new_offset = {axis: node.offset[axis] for axis in field_decl.axes}
                 node.offset = new_offset
+
             return True, node
 
     def apply(self, transform_data: TransformData) -> TransformData:
