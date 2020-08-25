@@ -661,7 +661,7 @@ class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
         output_field_names = [
             name
             for name, info in self.args_data["field_info"].items()
-            if info.access == gt_definitions.AccessKind.READ_WRITE
+            if info and info.access == gt_definitions.AccessKind.READ_WRITE
         ]
 
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])
