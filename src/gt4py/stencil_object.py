@@ -118,7 +118,7 @@ class StencilObject(abc.ABC):
 
     def _get_max_domain(self, field_args, origin):
         """Return the maximum domain size possible
-
+        
         Parameters
         ----------
             field_args: `dict`
@@ -126,6 +126,7 @@ class StencilObject(abc.ABC):
 
             origin: `{'field_name': [int * ndims]}`
                 The origin for each field.
+
 
         Returns
         -------
@@ -230,8 +231,6 @@ class StencilObject(abc.ABC):
         Note that this function will always try to expand simple parameter values to
         complete data structures by repeating the same value as many times as needed.
 
-        See _validate_args for a list of exceptions raised by this method.
-
         Parameters
         ----------
             field_args: `dict`
@@ -249,10 +248,10 @@ class StencilObject(abc.ABC):
                 largest feasible domain according to the provided input fields
                 and origin values (`None` by default).
 
-            origin :  `[int * ndims]` or `{'field_name': [int * ndims]}`, optional
+            origin :  `[int * ndims]` or {'field_name': [int * ndims]} , optional
                 If a single offset is passed, it will be used for all fields.
                 If a `dict` is passed, there could be an entry for each field.
-                A special key *'_all_'* will represent the value to be used for all
+                A special key '_all_' will represent the value to be used for all
                 the fields not explicitly defined. If `None` is passed or it is
                 not possible to assign a value to some field according to the
                 previous rule, the value will be inferred from the global boundaries
@@ -261,9 +260,6 @@ class StencilObject(abc.ABC):
                 so a 0-based origin will only be acceptable for fields with
                 a 0-area support region.
 
-            validate_args : `bool`
-                If True, ensures all input arguments are valid for the stencil run.
-
             exec_info : `dict`, optional
                 Dictionary used to store information about the stencil execution.
                 (`None` by default).
@@ -271,6 +267,11 @@ class StencilObject(abc.ABC):
         Returns
         -------
             `None`
+
+        Raises
+        -------
+            ValueError
+                If invalid data or inconsistent options are specified.
         """
 
         if exec_info is not None:

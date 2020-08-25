@@ -58,6 +58,9 @@
 #include <array>
 #include <cassert>
 #include <stdexcept>
+{%- if gt_backend != "cuda" %}
+#include <cmath>
+{%- endif %}
 
 namespace {{ stencil_unique_name }} {
 

@@ -51,11 +51,11 @@ def compile_definition(
     stencil_id = frontend.get_stencil_id(
         build_options.qualified_name, definition_func, externals, options_id
     )
-    gt_frontend.GTScriptParser(
+    definition_ir = gt_frontend.GTScriptParser(
         definition_func, externals=externals or {}, options=build_options
     ).run()
 
-    return stencil_id
+    return stencil_id, definition_ir
 
 
 # ---- Tests-----
@@ -74,6 +74,11 @@ def add_external_const(a):
 @gtscript.function
 def identity(field_in):
     return field_in
+
+
+@gtscript.function
+def sinus(field_in):
+    return sin(field_in)
 
 
 class TestInlinedExternals:
@@ -485,3 +490,111 @@ class TestAssignmentSyntax:
                 in_field -= 0.5
                 in_field /= 0.5
                 in_field *= 4.0
+
+
+class TestNestedWithSyntax:
+    def test_nested_with(self):
+        @gtscript.stencil(backend="debug")
+        def definition(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL):
+                with interval(...):
+                    in_field = out_field
+
+    def test_nested_with_reordering(self):
+        def definition_fw(
+            in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
+        ):
+            from gt4py.__gtscript__ import FORWARD, computation, interval
+
+            with computation(FORWARD):
+                with interval(1, 2):
+                    in_field = out_field + 1
+                with interval(0, 1):
+                    in_field = out_field + 2
+
+        def definition_bw(
+            in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
+        ):
+            from gt4py.__gtscript__ import FORWARD, computation, interval
+
+            with computation(BACKWARD):
+                with interval(1, 2):
+                    in_field = out_field + 1
+                with interval(0, 1):
+                    in_field = out_field + 2
+
+        definitions = [
+            # name, expected axis bounds, definition
+            ("fw", [(0, 1), (1, 2)], definition_fw),
+            ("bw", [(1, 2), (0, 1)], definition_bw),
+        ]
+
+        for name, axis_bounds, definition in definitions:
+            # generate DIR
+            _, definition_ir = compile_definition(
+                definition,
+                f"test_nested_with_reordering_{name}",
+                f"TestImports_test_module_{id_version}",
+            )
+
+            # test for correct ordering
+            for i, axis_bound in enumerate(axis_bounds):
+                interval = definition_ir.computations[i].interval
+                assert interval.start.offset == axis_bound[0]
+                assert interval.end.offset == axis_bound[1]
+
+
+class TestNativeFunctions:
+    def test_simple_call(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sin(in_field)
+
+    def test_offset_arg(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sin(in_field[1, 0, 0])
+
+    def test_nested_calls(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sin(abs(in_field))
+
+    def test_nested_external_call(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sin(add_external_const(in_field))
+
+    def test_multi_nested_calls(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += min(abs(sin(add_external_const(in_field))), -0.5)
+
+    def test_native_in_function(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sinus(in_field)
+
+    def test_native_function_unary(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field = not isfinite(in_field)
+
+    def test_native_function_binary(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field = asin(in_field) + 1
+
+    def test_native_function_ternary(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field = asin(in_field) + 1 if 1 < in_field else sin(in_field)

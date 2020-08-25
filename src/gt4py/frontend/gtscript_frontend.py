@@ -181,6 +181,12 @@ class ReturnReplacer(ast.NodeTransformer):
 
 
 class CallInliner(ast.NodeTransformer):
+    """Inlines calls to gtscript.function calls.
+
+    Calls to NativeFunctions (intrinsic math functions) are kept in the IR and
+    dealt with in the IRMaker.
+    """
+
     @classmethod
     def apply(cls, func_node: ast.FunctionDef, context: dict):
         inliner = cls(context)
@@ -228,7 +234,7 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        if isinstance(node.value, ast.Call):
+        if isinstance(node.value, ast.Call) and node.value.func.id not in gtscript.MATH_BUILTINS:
             assert len(node.targets) == 1
             self.visit(node.value, target_node=node.targets[0])
             # This node can be now removed since the trivial assignment has been already done
@@ -239,7 +245,13 @@ class CallInliner(ast.NodeTransformer):
 
     def visit_Call(self, node: ast.Call, *, target_node=None):
         call_name = node.func.id
-        assert call_name in self.context and hasattr(self.context[call_name], "_gtscript_")
+
+        if call_name in gtscript.MATH_BUILTINS:
+            node.args = [self.visit(arg) for arg in node.args]
+            return node
+
+        elif call_name not in self.context and not hasattr(self.context[call_name], "_gtscript_"):
+            raise GTScriptSyntaxError("Unknown call", loc=gt_ir.Location.from_ast_node(node))
 
         # Recursively inline any possible nested subroutine call
         call_info = self.context[call_name]._gtscript_
@@ -455,7 +467,6 @@ class CompiledIfInliner(ast.NodeTransformer):
 class ParsingContext(enum.Enum):
     CONTROL_FLOW = 1
     COMPUTATION = 2
-    INTERVAL = 3
 
 
 class IRMaker(ast.NodeVisitor):
@@ -483,6 +494,27 @@ class IRMaker(ast.NodeVisitor):
         self.extra_temp_decls = extra_temp_decls or {}
         self.parsing_context = None
         self.in_if = False
+        gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
+            "abs": gt_ir.NativeFunction.ABS,
+            "min": gt_ir.NativeFunction.MIN,
+            "max": gt_ir.NativeFunction.MAX,
+            "mod": gt_ir.NativeFunction.MOD,
+            "sin": gt_ir.NativeFunction.SIN,
+            "cos": gt_ir.NativeFunction.COS,
+            "tan": gt_ir.NativeFunction.TAN,
+            "asin": gt_ir.NativeFunction.ARCSIN,
+            "acos": gt_ir.NativeFunction.ARCCOS,
+            "atan": gt_ir.NativeFunction.ARCTAN,
+            "sqrt": gt_ir.NativeFunction.SQRT,
+            "exp": gt_ir.NativeFunction.EXP,
+            "log": gt_ir.NativeFunction.LOG,
+            "isfinite": gt_ir.NativeFunction.ISFINITE,
+            "isinf": gt_ir.NativeFunction.ISINF,
+            "isnan": gt_ir.NativeFunction.ISNAN,
+            "floor": gt_ir.NativeFunction.FLOOR,
+            "ceil": gt_ir.NativeFunction.CEIL,
+            "trunc": gt_ir.NativeFunction.TRUNC,
+        }
 
     def __call__(self, ast_root: ast.AST):
         assert (
@@ -529,20 +561,16 @@ class IRMaker(ast.NodeVisitor):
         key += start.offset
         return key
 
-    def _visit_computation_node(self, node: ast.With) -> list:
-        loc = gt_ir.Location.from_ast_node(node)
-        syntax_error = GTScriptSyntaxError(
-            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
-            loc=loc,
-        )
-
-        comp_node = node.items[0].context_expr
+    def _visit_iteration_order_node(self, node: ast.withitem, loc: gt_ir.Location):
+        comp_node = node.context_expr
         if len(comp_node.args) + len(comp_node.keywords) != 1 or any(
             keyword.arg not in ["order"] for keyword in comp_node.keywords
         ):
-            raise syntax_error
+            raise GTScriptSyntaxError(
+                f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
+                loc=loc,
+            )
 
-        # Iteration order
         if comp_node.args:
             iteration_order_node = comp_node.args[0]
         else:
@@ -552,42 +580,22 @@ class IRMaker(ast.NodeVisitor):
             or iteration_order_node.id not in gt_ir.IterationOrder.__members__
         ):
             raise syntax_error
-        iteration_order = gt_ir.IterationOrder[iteration_order_node.id]
 
-        # Body
-        body = list(node.body)
-        if len(node.items) == 2:
-            nested_with_stmt = copy.deepcopy(node)
-            nested_with_stmt.items = [node.items[1]]
-            nested_with_stmt.body = body
-            body = [nested_with_stmt]
-        elif len(node.items) > 2:
-            raise syntax_error
+        return gt_ir.IterationOrder[iteration_order_node.id]
 
-        self.parsing_context = ParsingContext.COMPUTATION
-        result = []
-        for item in body:
-            block = self.visit(item)
-            assert isinstance(block, gt_ir.ComputationBlock)
-            block.iteration_order = iteration_order
-            result.append(block)
-        self.parsing_context = ParsingContext.CONTROL_FLOW
-
-        if len(result) > 1:
-            # Vertical regions with variable references are not supported yet
-            result.sort(key=self._sort_blocks_key)
-            if iteration_order == gt_ir.IterationOrder.BACKWARD:
-                result.reverse()
-
-        return result
-
-    def _visit_interval_node(self, node: ast.With) -> gt_ir.ComputationBlock:
-        loc = gt_ir.Location.from_ast_node(node)
+    def _visit_interval_node(self, node: ast.withitem, loc: gt_ir.Location):
+        # initialize possible exceptions
         interval_error = GTScriptSyntaxError(
             f"Invalid 'interval' specification at line {loc.line} (column {loc.column})", loc=loc
         )
+        range_error = GTScriptSyntaxError(
+            f"Invalid interval range specification at line {loc.line} (column {loc.column})",
+            loc=loc,
+        )
 
-        interval_node = node.items[0].context_expr
+        interval_node = node.context_expr
+
+        # validate interval specification
         if (
             (len(interval_node.args) + len(interval_node.keywords) < 1)
             or (len(interval_node.args) + len(interval_node.keywords) > 2)
@@ -595,11 +603,7 @@ class IRMaker(ast.NodeVisitor):
         ):
             raise interval_error
 
-        loc = gt_ir.Location.from_ast_node(node)
-        range_error = GTScriptSyntaxError(
-            f"Invalid interval range specification at line {loc.line} (column {loc.column})",
-            loc=loc,
-        )
+        # parse interval
         if interval_node.args:
             range_node = interval_node.args
         else:
@@ -617,16 +621,50 @@ class IRMaker(ast.NodeVisitor):
         else:
             raise range_error
 
-        self.parsing_context = ParsingContext.INTERVAL
+        return interval
+
+    def _visit_computation_node(self, node: ast.With) -> list:
+        loc = gt_ir.Location.from_ast_node(node)
+        syntax_error = GTScriptSyntaxError(
+            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
+            loc=loc,
+        )
+
+        # Parse computation specification, i.e. `withItems` nodes
+        iteration_order = None
+        interval = None
+
+        try:
+            for item in node.items:
+                if (
+                    isinstance(item.context_expr, ast.Call)
+                    and item.context_expr.func.id == "computation"
+                ):
+                    assert iteration_order is None  # only one spec allowed
+                    iteration_order = self._visit_iteration_order_node(item, loc)
+                elif (
+                    isinstance(item.context_expr, ast.Call)
+                    and item.context_expr.func.id == "interval"
+                ):
+                    assert interval is None  # only one spec allowed
+                    interval = self._visit_interval_node(item, loc)
+                else:
+                    raise syntax_error
+        except AssertionError as e:
+            raise syntax_error from e
+
+        if iteration_order is None or interval is None:
+            raise syntax_error
+
+        #  Parse `With` body into computation blocks
+        self.parsing_context = ParsingContext.COMPUTATION
         stmts = []
         for stmt in node.body:
             stmts.extend(gt_utils.listify(self.visit(stmt)))
-        self.parsing_context = ParsingContext.COMPUTATION
+        self.parsing_context = ParsingContext.CONTROL_FLOW
 
         result = gt_ir.ComputationBlock(
-            interval=interval,
-            iteration_order=gt_ir.IterationOrder.PARALLEL,
-            body=gt_ir.BlockStmt(stmts=stmts),
+            interval=interval, iteration_order=iteration_order, body=gt_ir.BlockStmt(stmts=stmts)
         )
 
         return result
@@ -812,6 +850,22 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
+    def visit_Call(self, node: ast.Call):
+        native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
+
+        args = [self.visit(arg) for arg in node.args]
+        if len(args) != native_fcn.arity:
+            raise GTScriptSyntaxError(
+                "Invalid native function call", loc=gt_ir.Location.from_ast_node(node)
+            )
+
+        return gt_ir.NativeFuncCall(
+            func=native_fcn,
+            args=args,
+            data_type=gt_ir.DataType.AUTO,
+            loc=gt_ir.Location.from_ast_node(node),
+        )
+
     # -- Statement nodes --
     def visit_Assign(self, node: ast.Assign) -> list:
         result = []
@@ -895,30 +949,57 @@ class IRMaker(ast.NodeVisitor):
             f"Invalid 'with' statement at line {loc.line} (column {loc.column})", loc=loc
         )
 
-        if self.parsing_context == ParsingContext.CONTROL_FLOW:
-            comp_node = node.items[0]
-            if (
-                comp_node.optional_vars is not None
-                or not isinstance(comp_node.context_expr, ast.Call)
-                or not isinstance(comp_node.context_expr.func, ast.Name)
-                or comp_node.context_expr.func.id != "computation"
+        # If we find nested `with` blocks flatten them, i.e. transform
+        #  with computation(PARALLEL):
+        #   with interval(...):
+        #     ...
+        # into
+        #  with computation(PARALLEL), interval(...):
+        #    ...
+        # otherwise just parse the node
+        if self.parsing_context == ParsingContext.CONTROL_FLOW and all(
+            isinstance(child_node, ast.With) for child_node in node.body
+        ):
+            # Ensure top level `with` specifies the iteration order
+            if not any(
+                with_item.context_expr.func.id == "computation"
+                for with_item in node.items
+                if isinstance(with_item.context_expr, ast.Call)
             ):
                 raise syntax_error
-            else:
-                return self._visit_computation_node(node)
 
-        elif self.parsing_context == ParsingContext.COMPUTATION:
-            interval_node = node.items[0]
-            if (
-                interval_node.optional_vars is not None
-                or not isinstance(interval_node.context_expr, ast.Call)
-                or not isinstance(interval_node.context_expr.func, ast.Name)
-                or interval_node.context_expr.func.id != "interval"
-            ):
-                raise syntax_error
-            else:
-                return self._visit_interval_node(node)
+            # Parse nested `with` blocks
+            compute_blocks = []
+            for with_node in node.body:
+                with_node = copy.deepcopy(with_node)  # Copy to avoid altering original ast
+                # Splice `withItems` of current/primary with statement into nested with
+                with_node.items.extend(node.items)
+
+                compute_blocks.append(self._visit_computation_node(with_node))
+
+            # Reorder blocks
+            #  the nested computation blocks need not to be specified in their order of execution, but the backends
+            #  expect them to the given in that order so sort them. The order of execution is such that the lowest
+            #  (highest) interval is processed first if the iteration order is forward (backward).
+            if len(compute_blocks) > 1:
+                # Validate invariant
+                assert all(
+                    comp_block.iteration_order == compute_blocks[0].iteration_order
+                    for comp_block in compute_blocks
+                )
+
+                # Vertical regions with variable references are not supported yet
+                compute_blocks.sort(key=self._sort_blocks_key)
+                if compute_blocks[0].iteration_order == gt_ir.IterationOrder.BACKWARD:
+                    compute_blocks.reverse()
+
+            return compute_blocks
+        elif self.parsing_context == ParsingContext.CONTROL_FLOW and not any(
+            isinstance(child_node, ast.With) for child_node in node.body
+        ):
+            return self._visit_computation_node(node)
         else:
+            # Mixing nested `with` blocks with stmts not allowed
             raise syntax_error
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> list:
@@ -1358,6 +1439,7 @@ class GTScriptFrontend(gt_frontend.Frontend):
             definition._gtscript_["nonlocals"], definition._gtscript_["imported"], externals
         )
         definition._gtscript_["externals"] = resolved_externals
+        return definition
 
     @classmethod
     def generate(cls, definition, externals, options):

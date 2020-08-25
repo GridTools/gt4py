@@ -34,9 +34,7 @@ repos:
           src/gt4py/analysis/passes.py |
           src/gt4py/analysis/transformer.py |
           src/gt4py/backend/__init__.py |
-          src/gt4py/backend/dawn_backends.py |
           src/gt4py/backend/debug_backend.py |
-          src/gt4py/backend/gt_backends.py |
           src/gt4py/backend/numpy_backend.py |
           src/gt4py/backend/pyext_builder.py |
           src/gt4py/backend/python_generator.py |
@@ -86,9 +84,7 @@ repos:
           src/gt4py/analysis/infos.py |
           src/gt4py/analysis/passes.py |
           src/gt4py/analysis/transformer.py |
-          src/gt4py/backend/dawn_backends.py |
           src/gt4py/backend/debug_backend.py |
-          src/gt4py/backend/gt_backends.py |
           src/gt4py/backend/numpy_backend.py |
           src/gt4py/backend/pyext_builder.py |
           src/gt4py/backend/python_generator.py |

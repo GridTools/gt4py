@@ -31,6 +31,28 @@ from gt4py import utils as gt_utils
 
 
 # GTScript builtins
+MATH_BUILTINS = {
+    "abs",
+    "min",
+    "max",
+    "mod",
+    "sin",
+    "cos",
+    "tan",
+    "asin",
+    "acos",
+    "atan",
+    "sqrt",
+    "exp",
+    "log",
+    "isfinite",
+    "isinf",
+    "isnan",
+    "floor",
+    "ceil",
+    "trunc",
+}
+
 builtins = {
     "I",
     "J",
@@ -50,6 +72,7 @@ builtins = {
     "__gtscript__",
     "__externals__",
     "__INLINED",
+    *MATH_BUILTINS,
 }
 
 __all__ = list(builtins) + ["function", "stencil"]
@@ -342,4 +365,100 @@ def interval(start, end):
 
 def __INLINED(compile_if_expression):
     """Evaluate condition at compile time and inline statements from selected branch."""
+    pass
+
+
+# GTScript builtins: math functions
+def abs(x):
+    """Return the absolute value of the argument"""
+    pass
+
+
+def min(x, y):
+    """Return the smallest of two or more arguments."""
+    pass
+
+
+def max(x, y):
+    """Return the largest of two or more arguments."""
+    pass
+
+
+def mod(x, y):
+    """returns the first argument modulo the second one"""
+    pass
+
+
+def sin(x):
+    """Return the sine of x radians"""
+    pass
+
+
+def cos(x):
+    """Return the cosine of x radians."""
+    pass
+
+
+def tan(x):
+    """Return the tangent of x radians."""
+    pass
+
+
+def asin(x):
+    """return the arc sine of x, in radians."""
+    pass
+
+
+def acos(x):
+    """Return the arc cosine of x, in radians."""
+    pass
+
+
+def atan(x):
+    """Return the arc tangent of x, in radians."""
+    pass
+
+
+def sqrt(x):
+    """Return the square root of x."""
+    pass
+
+
+def exp(x):
+    """Return e raised to the power x, where e is the base of natural logarithms."""
+    pass
+
+
+def log(x):
+    """Return the natural logarithm of x (to base e)."""
+    pass
+
+
+def isfinite(x):
+    """Return True if x is neither an infinity nor a NaN, and False otherwise. (Note that 0.0 is considered finite.)"""
+    pass
+
+
+def isinf(x):
+    """Return True if x is a positive or negative infinity, and False otherwise."""
+    pass
+
+
+def isnan(x):
+    """Return True if x is a NaN (not a number), and False otherwise."""
+    pass
+
+
+def floor(x):
+    """Return the floor of x, the largest integer less than or equal to x."""
+    pass
+
+
+def ceil(x):
+    """Return the ceiling of x, the smallest integer greater than or equal to x."""
+    pass
+
+
+def trunc(x):
+    """Return the Real value x truncated to an Integral (usually an integer)"""
     pass

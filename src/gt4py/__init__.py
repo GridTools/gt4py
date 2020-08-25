@@ -41,6 +41,7 @@ from . import stencil_object
 from . import loader
 from . import storage
 from . import testing
+from . import caching
 
 from .definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo, CartesianSpace
 from .stencil_object import StencilObject

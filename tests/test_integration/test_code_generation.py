@@ -35,7 +35,7 @@ from .stencil_definitions import REGISTRY as stencil_definitions
 def test_generation_cpu(name, backend):
     stencil_definition = stencil_definitions[name]
     externals = externals_registry[name]
-    stencil = gtscript.stencil(backend, stencil_definition, externals=externals)
+    stencil = gtscript.stencil(backend, stencil_definition, externals=externals, rebuild=True)
     args = {}
     for k, v in stencil_definition.__annotations__.items():
         if isinstance(v, gtscript._FieldDescriptor):
@@ -97,3 +97,27 @@ def test_stage_without_effect(backend):
     def definition(field_a: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             field_c = 0.0
+
+
+def test_ignore_np_errstate():
+    def setup_and_run(backend, **kwargs):
+        field_a = gt_storage.zeros(
+            dtype=np.float_, backend=backend, shape=(3, 3, 1), default_origin=(0, 0, 0),
+        )
+
+        @gtscript.stencil(backend=backend, **kwargs)
+        def divide_by_zero(field_a: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                field_a = 1.0 / field_a
+
+        divide_by_zero(field_a)
+
+    # Usual behavior: with the numpy backend there is no error
+    setup_and_run(backend="numpy")
+
+    # Expect warning with debug or numpy + ignore_np_errstate=False
+    with pytest.warns(RuntimeWarning, match="divide by zero encountered"):
+        setup_and_run(backend="debug")
+
+    with pytest.warns(RuntimeWarning, match="divide by zero encountered"):
+        setup_and_run(backend="numpy", ignore_np_errstate=False)

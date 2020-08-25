@@ -14,6 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import textwrap
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from gt4py import backend as gt_backend
@@ -24,7 +27,33 @@ from gt4py.utils import text as gt_text
 from .python_generator import PythonSourceGenerator
 
 
+if TYPE_CHECKING:
+    from gt4py.stencil_builder import StencilBuilder
+
+
 class NumPySourceGenerator(PythonSourceGenerator):
+    NATIVE_FUNC_TO_PYTHON = {
+        gt_ir.NativeFunction.ABS: "np.abs",
+        gt_ir.NativeFunction.MIN: "np.minimum",
+        gt_ir.NativeFunction.MAX: "np.maximum",
+        gt_ir.NativeFunction.MOD: "np.mod",
+        gt_ir.NativeFunction.SIN: "np.sin",
+        gt_ir.NativeFunction.COS: "np.cos",
+        gt_ir.NativeFunction.TAN: "np.tan",
+        gt_ir.NativeFunction.ARCSIN: "np.arcsin",
+        gt_ir.NativeFunction.ARCCOS: "np.arccos",
+        gt_ir.NativeFunction.ARCTAN: "np.arctan",
+        gt_ir.NativeFunction.SQRT: "np.sqrt",
+        gt_ir.NativeFunction.EXP: "np.exp",
+        gt_ir.NativeFunction.LOG: "np.log",
+        gt_ir.NativeFunction.ISFINITE: "np.isfinite",
+        gt_ir.NativeFunction.ISINF: "np.isinf",
+        gt_ir.NativeFunction.ISNAN: "np.isnan",
+        gt_ir.NativeFunction.FLOOR: "np.floor",
+        gt_ir.NativeFunction.CEIL: "np.ceil",
+        gt_ir.NativeFunction.TRUNC: "np.trunc",
+    }
+
     def __init__(self, *args, interval_k_start_name, interval_k_end_name, **kwargs):
         super().__init__(*args, **kwargs)
         self.interval_k_start_name = interval_k_start_name
@@ -233,13 +262,20 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
             target = self.visit(stmt.target)
             value = self.visit(stmt.value)
+
+            data_type = (
+                self.block_info.symbols[target].data_type
+                if target in self.block_info.symbols
+                else stmt.target.data_type
+            )
+
             sources.append(
                 "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
                     condition=condition,
                     target=target,
                     then_expr=value,
                     else_expr=target,
-                    dtype=stmt.target.data_type.dtype.name,
+                    dtype=data_type.dtype.name,
                     np=self.numpy_prefix,
                 )
             )
@@ -277,8 +313,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
 
 class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
-    def __init__(self, backend_class):
-        super().__init__(backend_class)
+    def __init__(self):
+        super().__init__()
         self.source_generator = NumPySourceGenerator(
             indent_size=self.TEMPLATE_INDENT_SIZE,
             origin_marker="__O",
@@ -312,10 +348,14 @@ def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
         return source
 
     def generate_implementation(self):
-        sources = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
-        self.source_generator(self.implementation_ir, sources)
-
-        return sources.text
+        block = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
+        self.source_generator(self.builder.implementation_ir, block)
+        if self.builder.options.backend_opts.get("ignore_np_errstate", True):
+            source = "with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):\n"
+            source += textwrap.indent(block.text, " " * self.TEMPLATE_INDENT_SIZE)
+        else:
+            source = block.text
+        return source
 
 
 def numpy_layout(mask):
@@ -334,10 +374,17 @@ def numpy_is_compatible_type(field):
 
 @gt_backend.register
 class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):
-    """Pure Python backend using numpy for faster computations than the debug backend."""
+    """Pure Python backend using NumPy for faster computations than the debug backend.
+
+    Other Parameters
+    ----------------
+    Backend options include:
+    - ignore_np_errstate: `bool`
+        If False, does not ignore NumPy floating-point errors. (`True` by default.)
+    """
 
     name = "numpy"
-    options = {}
+    options = {"ignore_np_errstate": {"versioning": True}}
     storage_info = {
         "alignment": 1,
         "device": "cpu",
@@ -345,6 +392,7 @@ class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
         "is_compatible_layout": numpy_is_compatible_layout,
         "is_compatible_type": numpy_is_compatible_type,
     }
+
     languages = {"computation": "python", "bindings": []}
 
     MODULE_GENERATOR_CLASS = NumPyModuleGenerator
