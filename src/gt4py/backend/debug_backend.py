@@ -63,9 +63,13 @@ class DebugSourceGenerator(PythonSourceGenerator):
         return source_lines
 
     def make_temporary_field(
-        self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent
+        self,
+        name: str,
+        dtype: gt_ir.DataType,
+        extent: gt_definitions.Extent,
+        axes: list = gt_definitions.CartesianSpace.names,
     ):
-        source_lines = super().make_temporary_field(name, dtype, extent)
+        source_lines = super().make_temporary_field(name, dtype, extent, axes)
         source_lines.extend(self._make_field_accessor(name, extent.to_boundary().lower_indices))
 
         return source_lines
@@ -114,10 +118,12 @@ class DebugSourceGenerator(PythonSourceGenerator):
     def visit_FieldRef(self, node: gt_ir.FieldRef):
         assert node.name in self.block_info.accessors
         index = []
-        for ax in self.domain.axes_names:
+        for d, ax in enumerate(node.offset.keys()):
             offset = "{:+d}".format(node.offset[ax]) if ax in node.offset else ""
             index.append("{ax}{offset}".format(ax=ax, offset=offset))
 
+        while len(index) < len(self.block_info.extent):
+            index.append("0")
         source = "{name}{marker}[{index}]".format(
             marker=self.origin_marker, name=node.name, index=", ".join(index)
         )
