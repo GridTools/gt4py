@@ -722,6 +722,10 @@ class DataTypePass(TransformPass):
             for i, n in enumerate(node.local_symbols):
                 node.local_symbosl[i].data_type = self.dtype
 
+        def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral, **kwargs):
+            self.generic_visit(node, **kwargs)
+            node.data_type = self.dtype
+
         def visit_VarRef(self, node: gt_ir.Node, apply_block_symbols={}, **kwargs):
             self.generic_visit(node, **kwargs)
             node.data_type = self.dtype
