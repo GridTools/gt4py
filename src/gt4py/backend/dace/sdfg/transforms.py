@@ -850,6 +850,13 @@ def outer_k_loop_to_inner_map(sdfg: dace.SDFG, state: dace.SDFGState):
 
 from dace.transformation.interstate import LoopPeeling
 
+@registry.autoregister
+@make_properties
+class AlwaysApplyLoopPeeling(LoopPeeling):
+
+    @staticmethod
+    def can_be_applied(graph, candidate, expr_index, sdfg, strict=False):
+        return True
 
 @registry.autoregister
 @make_properties
@@ -1181,7 +1188,7 @@ class PrefetchingKCachesTransform(LoopPeeling):
         if niter == 1:
             # just inline the only present state, no prefetching needed
             apply_count = sdfg.apply_transformations(
-                LoopPeeling, options={"count": 1, "begin": True}
+                AlwaysApplyLoopPeeling, options={"count": 1, "begin": True}
             )
             assert apply_count == 1
 
@@ -1189,7 +1196,7 @@ class PrefetchingKCachesTransform(LoopPeeling):
             ## peel both ends, add prefetching
             # peel first iteration
             apply_count = sdfg.apply_transformations(
-                LoopPeeling, options={"count": 1, "begin": True},
+                AlwaysApplyLoopPeeling, options={"count": 1, "begin": True},
             )
             assert apply_count == 1
             assert guard in sdfg.nodes()
@@ -1199,7 +1206,7 @@ class PrefetchingKCachesTransform(LoopPeeling):
 
             # peel last iteration
             apply_count = sdfg.apply_transformations(
-                LoopPeeling, options={"count": 1, "begin": False},
+                AlwaysApplyLoopPeeling, options={"count": 1, "begin": False},
             )
             assert apply_count == 1
             assert guard in sdfg.nodes()

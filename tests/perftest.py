@@ -447,7 +447,7 @@ if __name__ == "__main__":
     data_layout = (0, 1, 2)
     function = "vertical_advection"
     dtype = np.float32
-    backend = "adhoc"
+    backend = "dacecuda"
     import sys
 
     if len(sys.argv) > 1:

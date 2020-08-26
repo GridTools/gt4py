@@ -182,6 +182,13 @@ class CudaDaceOptimizer(DaceOptimizer):
                     parent is None or parent.schedule != dace.ScheduleType.GPU_Device
                 ):
                     self.transform_to_device(node.sdfg)
+
+        from dace.sdfg.utils import consolidate_edges
+
+        for state in sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.NestedSDFG):
+                    consolidate_edges(node.sdfg)
         return sdfg
 
 
