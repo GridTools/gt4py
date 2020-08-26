@@ -208,6 +208,29 @@ class CLIBackendMixin:
         """
         raise NotImplementedError
 
+    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
+        """
+        Generate language bindings source code.
+
+        Returns
+        -------
+
+        Analog to :py:meth:`generate_computation` but containing bindings source code.
+
+        Raises
+        ------
+        RuntimeError
+            If the backend does not support the bindings language
+
+        """
+        languages = getattr(self, "languages") or {"bindings": {}}
+        name = getattr(self, "name") or ""
+        if language_name not in languages["bindings"]:
+            raise NotImplementedError(
+                f"Backend {name} does not implement bindings for {language_name}"
+            )
+        return {}
+
 
 class BaseBackend(Backend):
 

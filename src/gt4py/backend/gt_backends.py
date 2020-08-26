@@ -548,7 +548,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
         if language_name != "python":
-            return {}
+            return super().generate_bindings(language_name)
         src_files = self.builder.backend_data.get("computation_src", None)
         if not src_files:
             dir_name = f"{self.builder.options.name}_src"
