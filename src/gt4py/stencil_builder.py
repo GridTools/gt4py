@@ -3,13 +3,13 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
 import gt4py
 from gt4py.definitions import BuildOptions, StencilID
-from gt4py.ir import StencilDefinition, StencilImplementation
 from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
 
 
 if TYPE_CHECKING:
     from gt4py.backend.base import Backend as BackendType
     from gt4py.frontend.base import Frontend as FrontendType
+    from gt4py.ir import StencilDefinition, StencilImplementation
 
 
 class StencilBuilder:
@@ -218,13 +218,13 @@ class StencilBuilder:
         return self.caching.backend_root_path.joinpath(*self.options.qualified_name.split("."))
 
     @property
-    def definition_ir(self) -> StencilDefinition:
+    def definition_ir(self) -> "StencilDefinition":
         return self._build_data.get("ir") or self._build_data.setdefault(
             "ir", self.frontend.generate(self.definition, self.externals, self.options)
         )
 
     @property
-    def implementation_ir(self) -> StencilImplementation:
+    def implementation_ir(self) -> "StencilImplementation":
         return self._build_data.get("iir") or self._build_data.setdefault(
             "iir", gt4py.analysis.transform(self.definition_ir, self.options)
         )

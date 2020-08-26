@@ -5,12 +5,11 @@ from typing import TYPE_CHECKING, Any, Dict
 
 from cached_property import cached_property
 
-from gt4py.stencil_builder import StencilBuilder
-from gt4py.stencil_object import StencilObject
-
 
 if TYPE_CHECKING:
     from gt4py.backend.base import Backend
+    from gt4py.stencil_builder import StencilBuilder
+    from gt4py.stencil_object import StencilObject
 
 
 class LazyStencil:
@@ -26,11 +25,11 @@ class LazyStencil:
     Low-level build utilities are accessible through the public :code:`builder` attribute.
     """
 
-    def __init__(self, builder: StencilBuilder):
+    def __init__(self, builder: "StencilBuilder"):
         self.builder = builder
 
     @cached_property
-    def implementation(self) -> StencilObject:
+    def implementation(self) -> "StencilObject":
         """
         The compiled backend-specific python callable which executes the stencil.
 
