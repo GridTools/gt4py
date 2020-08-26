@@ -167,6 +167,11 @@ class CudaDaceOptimizer(DaceOptimizer):
     description = "no optimization on GPU"
 
     def transform_to_device(self, sdfg):
+        import dace
+        from dace.transformation.dataflow import MapCollapse
+
+        sdfg.apply_transformations_repeated(MapCollapse, validate=False)
+
         for name, array in sdfg.arrays.items():
             array.storage = dace.dtypes.StorageType.GPU_Global
         from dace.transformation.interstate.gpu_transform_sdfg import GPUTransformSDFG
