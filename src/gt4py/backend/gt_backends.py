@@ -553,7 +553,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         if not src_files:
             dir_name = f"{self.builder.options.name}_src"
             src_files = self.make_extension_sources()
-        src_files = {k: v for k, v in src_files if k.startswith("bindings")}
+        src_files = {k: v for k, v in src_files.items() if k.startswith("bindings")}
         return {dir_name: src_files}
 
     @abc.abstractmethod

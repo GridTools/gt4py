@@ -9,7 +9,7 @@ from gt4py.stencil_builder import StencilBuilder
     params=[
         pytest.param(
             name,
-            marks=pytest.mark.skip(
+            marks=pytest.mark.skipif(
                 name.startswith("dawn"), reason="dawn backends not yet supported"
             ),
         )
@@ -28,9 +28,9 @@ def init_1(input_field: Field[float]):  # type: ignore
         input_field = 1  # noqa - unused var is in/out field
 
 
-def test_generate_computation(backend):
+def test_generate_computation(backend, tmp_path):
     """
-    Test the :py:meth:`gt4py.backend.Backend.generate_computation` method.
+    Test the :py:meth:`gt4py.backend.CLIBackendMixin.generate_computation` method.
 
     Assumption:
 
@@ -45,7 +45,9 @@ def test_generate_computation(backend):
         The computation source code and file hierarchy specification is returned.
 
     """
-    builder = StencilBuilder(init_1, backend=backend).with_caching("nocaching")
+    builder = StencilBuilder(init_1, backend=backend).with_caching(
+        "nocaching", output_path=tmp_path / __name__ / "generate_computation"
+    )
     result = builder.backend.generate_computation()
 
     py_result = backend.languages["computation"] == "python" and "init_1.py" in result
@@ -53,5 +55,22 @@ def test_generate_computation(backend):
         backend.languages["computation"] in {"c++", "cuda"}
         and "init_1_src" in result
         and "computation.hpp" in result["init_1_src"]
+        and "bindings.cpp" not in result["init_1_src"]
     )
     assert py_result or gt_result
+
+
+def test_generate_bindings(backend, tmp_path):
+    """
+    Test :py:meth:`gt4py.backend.CLIBackendMixin.generate_bindings.
+    """
+    builder = StencilBuilder(init_1, backend=backend).with_caching(
+        "nocaching", output_path=tmp_path / __name__ / "generate_bindings"
+    )
+    if backend.languages["computation"] == "python":
+        with pytest.raises(NotImplementedError):
+            result = builder.backend.generate_bindings("python")
+    else:
+        result = builder.backend.generate_bindings("python")
+        assert "init_1_src" in result
+        assert "bindings.cpp" in result["init_1_src"]
