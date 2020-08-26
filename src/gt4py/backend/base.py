@@ -208,6 +208,7 @@ class CLIBackendMixin:
         """
         raise NotImplementedError
 
+    @abc.abstractmethod
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
         """
         Generate language bindings source code.
@@ -349,6 +350,10 @@ class PurePythonBackendCLIMixin(CLIBackendMixin):
         file_name = self.builder.module_path.name
         source = self.make_module_source(implementation_ir=self.builder.implementation_ir)
         return {str(file_name): source}
+
+    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
+        """Pure python backends typically will not support bindings."""
+        return super().generate_bindings(language_name)
 
 
 class BasePyExtBackend(BaseBackend):
