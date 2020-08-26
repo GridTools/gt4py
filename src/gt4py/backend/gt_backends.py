@@ -115,7 +115,6 @@ def cuda_is_compatible_layout(field):
 
 
 def cuda_is_compatible_type(field):
-    # ToDo: find a better way to remove the import cycle
     from gt4py.storage.storage import ExplicitlySyncedGPUStorage, GPUStorage
 
     return isinstance(field, (GPUStorage, ExplicitlySyncedGPUStorage))
@@ -224,14 +223,6 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
         self.domain = impl_node.domain
         self.k_splitters: List[Tuple[str, int]] = []
-        # k_ax = self.domain.sequential_axis.name
-        # if k_ax in self.impl_node.axis_splitters:
-        #     for item in self.impl_node.axis_splitters[k_ax]:
-        #         if item.is_scalar:
-        #             values = [(item.name, None)]
-        #         else:
-        #             values = [(item.name, i) for i in range(item.length)]
-        #         self.k_splitters.extend(values)
 
         source = self.visit(impl_node)
 
@@ -388,11 +379,6 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         return (start_splitter, start_offset), (end_splitter, end_offset)
 
     def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
-        # if node.intervals:
-        #     assert set(node.intervals.keys()) == {self.domain.sequential_axis.name}
-        #     interval_definition = self.visit(node.intervals[self.domain.sequential_axis.name])
-        # else:
-        #     interval_definition = (None, None)
         interval_definition = self.visit(node.interval)
 
         self.declared_symbols = set()
@@ -574,13 +560,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             gt_pyext_sources = {
                 key: gt_utils.NOTHING for key in self.PYEXT_GENERATOR_CLASS.TEMPLATE_FILES.keys()
             }
-
-        # final_ext = ".cu" if uses_cuda else ".cpp"
-        # keys = list(gt_pyext_sources.keys())
-        # for key in keys:
-        #    if key.split(".")[-1] == "src":
-        #        new_key = key.replace(".src", final_ext)
-        #        gt_pyext_sources[new_key] = gt_pyext_sources.pop(key)
 
         # Build extension module
         pyext_opts = dict(
