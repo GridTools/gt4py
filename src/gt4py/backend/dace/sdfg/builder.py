@@ -309,7 +309,9 @@ class SDFGBuilder:
             return body_sources
 
         def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral):
-            return str(node.value)
+            dtype: gt_ir.DataType = node.data_type
+            ctype = dace.dtypes.DTYPE_TO_TYPECLASS[dtype.dtype.type].ctype
+            return str(f"{ctype}({node.value})")
 
         def visit_VarRef(self, node: gt_ir.VarRef):
             return node.local_name
