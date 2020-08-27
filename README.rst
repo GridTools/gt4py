@@ -1,6 +1,8 @@
-.. figure:: https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?branch=master
+|tox| |format|
+
+.. |tox| image:: https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?branch=master
    :alt:
-.. figure:: https://github.com/GridTools/gt4py/workflows/Formatting%20&%20compliance/badge.svg?branch=master
+.. |format| image:: https://github.com/GridTools/gt4py/workflows/Formatting%20&%20compliance/badge.svg?branch=master
    :alt:
 
 
