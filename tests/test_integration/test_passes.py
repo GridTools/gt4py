@@ -37,9 +37,25 @@ def double_smul_forward(in_f: Field[float], out_f: Field[float]):
 
 def test_demote_temporaries_to_variables_pass_parallel():
     builder = StencilBuilder(double_smul_parallel)
-    assert builder.implementation_ir.temporary_fields == ["tmp_f"]
+    iir = builder.implementation_ir
+    assert iir.temporary_fields == ["tmp_f"]
+
+    multi_stage = iir.multi_stages[0]
+    assert len(multi_stage.groups) == 2
+
+    for i in range(len(multi_stage.groups)):
+        stage = multi_stage.groups[i].stages[0]
+        assert len(stage.apply_blocks[0].body.stmts) == 2
 
 
 def test_demote_temporaries_to_variables_pass_forward():
     builder = StencilBuilder(double_smul_forward)
-    assert builder.implementation_ir.temporary_fields == ["tmp_f"]
+    iir = builder.implementation_ir
+    assert iir.temporary_fields == ["tmp_f"]
+
+    multi_stage = iir.multi_stages[0]
+    assert len(multi_stage.groups) == 2
+
+    for i in range(len(multi_stage.groups)):
+        stage = multi_stage.groups[i].stages[0]
+        assert len(stage.apply_blocks[0].body.stmts) == 2
