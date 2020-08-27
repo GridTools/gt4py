@@ -36,8 +36,7 @@ class _SymbolValueTuple(types.SimpleNamespace):
 
 
 def global_name(*, singleton=None, symbol=None, one_of=None, in_range=None):
-    """Define a *global* symbol.
-    """
+    """Define a *global* symbol."""
 
     if singleton is not None:
         assert symbol is None and one_of is None and in_range is None
@@ -69,8 +68,7 @@ def global_name(*, singleton=None, symbol=None, one_of=None, in_range=None):
 
 
 def field(*, in_range, boundary=None, extent=None):
-    """Define a *field* symbol.
-    """
+    """Define a *field* symbol."""
     assert (boundary is not None or extent is not None) and len(in_range) == 2
     boundary = boundary or [(abs(e[0]), abs(e[1])) for e in extent]
     extent = extent or [(-b[0], b[1]) for b in boundary]
@@ -83,8 +81,7 @@ def field(*, in_range, boundary=None, extent=None):
 
 
 def parameter(*, one_of=None, in_range=None):
-    """Define a *parameter* symbol.
-    """
+    """Define a *parameter* symbol."""
     if one_of is not None:
         assert in_range is None and isinstance(one_of, collections.abc.Sequence)
         return _SymbolStrategy(
@@ -107,8 +104,7 @@ def parameter(*, one_of=None, in_range=None):
 
 # ---- Custom Hypothesis strategies ----
 def scalar_value_st(dtype, min_value, max_value, allow_nan=False):
-    """Hypothesis strategy for `dtype` scalar values in range [min_value, max_value].
-    """
+    """Hypothesis strategy for `dtype` scalar values in range [min_value, max_value]."""
     allow_infinity = not (np.isfinite(min_value) and np.isfinite(max_value))
 
     if issubclass(dtype.type, numbers.Real):
@@ -126,8 +122,7 @@ def scalar_value_st(dtype, min_value, max_value, allow_nan=False):
 
 
 def one_of_values_st(args):
-    """Hypothesis strategy returning one of the values passed in the arguments.
-    """
+    """Hypothesis strategy returning one of the values passed in the arguments."""
     if len(args) == 0:
         return hyp_st.just(None)
     else:
@@ -135,8 +130,7 @@ def one_of_values_st(args):
 
 
 def ndarray_shape_st(sizes):
-    """Hypothesis strategy for shapes of `ndims` dimensions and size within `size_range`.
-    """
+    """Hypothesis strategy for shapes of `ndims` dimensions and size within `size_range`."""
     # assert len(size_range) == 2
     # return hyp_np.array_shapes(
     #     min_dims=ndims, max_dims=ndims, min_side=size_range[0], max_side=size_range[1]
@@ -146,14 +140,12 @@ def ndarray_shape_st(sizes):
 
 
 def padded_shape_st(shape_st, extra):
-    """Hypothesis strategy for extending shapes generated from a provided strategy with some extra padding.
-    """
+    """Hypothesis strategy for extending shapes generated from a provided strategy with some extra padding."""
     return hyp_st.builds(lambda shape: tuple([d + e for d, e in zip(shape, extra)]), shape_st)
 
 
 def ndarray_in_range_st(dtype, shape_st, value_range):
-    """Hypothesis strategy for ndarrays generated using the provided `dtype` and `shape` strategies and the `value_range`.
-    """
+    """Hypothesis strategy for ndarrays generated using the provided `dtype` and `shape` strategies and the `value_range`."""
     return hyp_np.arrays(
         dtype=dtype,
         shape=shape_st,
@@ -163,8 +155,7 @@ def ndarray_in_range_st(dtype, shape_st, value_range):
 
 
 def ndarray_st(dtype, shape_strategy, value_st_factory):
-    """Hypothesis strategy for ndarrays generated using the provided `dtype` and `shape` and `value_st_factory` strategies/factories.
-    """
+    """Hypothesis strategy for ndarrays generated using the provided `dtype` and `shape` and `value_st_factory` strategies/factories."""
     tmp = hyp_np.arrays(
         dtype=dtype,
         shape=shape_strategy,
@@ -219,8 +210,7 @@ def composite_strategy_factory(dtypes, strategy_factories):
 def composite_implementation_strategy_factory(
     dtypes, validation_strategy_factories, global_boundaries
 ):
-    """Generate strategy for run-time :class:`StencilTestSuite` parameters.
-    """
+    """Generate strategy for run-time :class:`StencilTestSuite` parameters."""
     strategy_dict = dict()
     for name, factory in validation_strategy_factories.items():
         strategy_dict[name] = factory(dtypes[name])
