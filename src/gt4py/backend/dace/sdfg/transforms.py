@@ -850,22 +850,74 @@ def outer_k_loop_to_inner_map(sdfg: dace.SDFG, state: dace.SDFGState):
 
 from dace.transformation.interstate import LoopPeeling
 
+
 @registry.autoregister
 @make_properties
 class AlwaysApplyLoopPeeling(LoopPeeling):
-
     @staticmethod
     def can_be_applied(graph, candidate, expr_index, sdfg, strict=False):
         return True
 
 @registry.autoregister
 @make_properties
-class PrefetchingKCachesTransform(LoopPeeling):
+class PrefetchingKCachesTransform(dace.transformation.pattern_matching.Transformation):
+    _nsdfg_node = dace.nodes.LibraryNode("")
 
     storage_type = dace.properties.Property(
         dtype=dace.dtypes.StorageType,
         default=dace.dtypes.StorageType.Default,
         desc="the StorageType of local buffers",
+    )
+
+    @staticmethod
+    def expressions():
+        return [
+            dace.sdfg.utils.node_path_graph(
+                PruneTransientOutputs._nsdfg_node
+            )
+        ]
+
+
+    @staticmethod
+    def can_be_applied(graph, candidate, expr_index, sdfg, strict=False):
+        return True
+
+    def apply(self, sdfg):
+        graph: dace.sdfg.SDFGState = sdfg.nodes()[self.state_id]
+        nsdfg_node: library.StencilLibraryNode = graph.node(
+            self.subgraph[PrefetchingKCachesTransform._nsdfg_node]
+        )
+        for name, array in nsdfg_node.sdfg.arrays.items():
+            out_accessor = 1
+            store = True
+            if out_accessor:
+                if False: #not read later:
+                    store= False
+            apply_count = nsdfg_node.sdfg.apply_transformations(PrefetchFieldTransform, options={'storage_type': self.storage_type, 'array': name, 'store':store})
+            if not store:
+                pass
+                # remove nsdfg out connector, out_access node, memlet path
+
+
+
+@registry.autoregister
+@make_properties
+class PrefetchFieldTransform(LoopPeeling):
+
+    storage_type = dace.properties.Property(
+        dtype=dace.dtypes.StorageType,
+        default=dace.dtypes.StorageType.Default,
+        desc="the StorageType of local buffers",
+    )
+
+    array = dace.properties.Property(
+        dtype=str, default=None, allow_none=True, desc="List of  names of the array to prefetch",
+    )
+
+    store = dace.properties.Property(
+        dtype=bool,
+        default=True,
+        desc="Indicates whether to write out the results to the original array",
     )
 
     @staticmethod
@@ -1225,7 +1277,11 @@ class PrefetchingKCachesTransform(LoopPeeling):
 
             # self.rename_arrays(sdfg)
             # add prefetching to peeled_first and loop_state, add prefetch-only state
-            for name, array in list(sdfg.arrays.items()):
+            if self.array is not None:
+                arrays = {self.array: sdfg.arrays[self.array]}
+            else:
+                arrays = dict(sdfg.arrays.items())
+            for name, array in arrays.items():
                 length, in_subsets, out_subsets = self.collect_subset_info(
                     loop_state, name, var_idx=2
                 )
@@ -1241,7 +1297,9 @@ class PrefetchingKCachesTransform(LoopPeeling):
                 )
 
                 self.add_prefetch_all(prefetch_state, name, itervar, 2, in_subsets, rng[0], length)
-                self.add_store_all(store_state, name, itervar, 2, out_subsets, rng[1], length)
+
+                if self.store:
+                    self.add_store_all(store_state, name, itervar, 2, out_subsets, rng[1], length)
                 self.localize_tasklet_input(
                     peeled_first, name, itervar, 2, in_subsets, rng[0], length, rng[2]
                 )
@@ -1266,47 +1324,9 @@ class PrefetchingKCachesTransform(LoopPeeling):
                 self.add_prefetch(
                     peeled_first, name, itervar, 2, in_subsets, out_subsets, rng[0], length, rng[2]
                 )
-                self.add_store(loop_state, name, itervar, 2, out_subsets, "k", length, rng[2])
-                self.add_store(peeled_last, name, itervar, 2, out_subsets, rng[1], length, rng[2])
-
-            # #
-            # self.add_prefetch(loop_state, name, itervar, 2, in_subsets, rng[0])
-            # self.add_store(loop_state, name, itervar, 2, out_subsets, rng[0])
-            #
-            # self.add_prefetch(peeled_first, name, itervar, 2, in_subsets, rng[0])
-            # self.add_store(peeled_last, name, itervar, 2, out_subsets, rng[0])
-
-            # inputs = [
-            #     node.data
-            #     for node in loop_state.nodes()
-            #     if isinstance(node, dace.nodes.AccessNode)
-            #     and node.access == dace.dtypes.AccessType.ReadOnly
-            # ]
-            # for name in inputs:
-            #     self.add_prefetch(
-            #         sdfg, loop_state, peeled_first, name, itervar, 2, rng[0] + rng[2]
-            #     )
-            #     self.add_prefetch_all(sdfg, loop_state, prefetch_state, name, itervar, 2, rng[0])
-            #     self.add_prefetch(
-            #         sdfg, loop_state, loop_state, name, itervar, 2, itervar_sym + rng[2]
-            #     )  # this modifies the loop_state and it has to be the last of the 3
-
-            # add store to peeled_last and loop_state, add store-only state
-            # outputs = [
-            #     node.data
-            #     for node in loop_state.nodes()
-            #     if isinstance(node, dace.nodes.AccessNode)
-            #     and node.access == dace.dtypes.AccessType.WriteOnly
-            # ]
-            # for name in outputs:
-            #     self.add_store_all(sdfg, loop_state, store_state, name, itervar, rng[1])
-            #     self.add_store(sdfg, loop_state, loop_state, name, itervar, itervar_sym - rng[2])
-            #     self.add_store(sdfg, loop_state, peeled_last, name, itervar, rng[1] - rng[2])
-
-            # for name in sdfg.arrays.keys():
-            #     sdfg.apply_transformations(
-            #         BasicRegisterCache, options={"array": name}, validate=False
-            #     )
+                if self.store:
+                    self.add_store(loop_state, name, itervar, 2, out_subsets, "k", length, rng[2])
+                    self.add_store(peeled_last, name, itervar, 2, out_subsets, rng[1], length, rng[2])
 
         if niter < 3:
             # remove loop after peeling if the loop is never actually executed.
@@ -1332,104 +1352,3 @@ class PrefetchingKCachesTransform(LoopPeeling):
                     condition=exit_edge.data.condition, assignments=init_edge.data.assignments
                 ),
             )
-            # # remove guard
-            # sdfg.remove_edge(sdfg.edges_between(guard, loop_state)[0])
-            # sdfg.remove_edge(sdfg.edges_between(guard, after_state)[0])
-
-        #
-        # guard, begin, last_state, before_state, after_state = EnhancedDetectLoop._get_context_subgraph(
-        #     candidate, sdfg
-        # )
-        # condition = sdfg.edges_between(guard, begin)
-        # assert len(condition) == 1
-        # condition: dace.properties.CodeBlock = condition[0].data.condition
-        #
-        # step = sdfg.edges_between(last_state, guard)
-        # assert len(step) == 1
-        # step = step[0].data.assignments
-        # assert len(step) == 1
-        # itervar, step = next(iter(step.items()))
-        #
-        # init = sdfg.edges_between(before_state, guard)
-        # assert len(init) == 1
-        # init = init[0].data.assignments
-        # assert len(init) == 1
-        # assert itervar in init
-        # _, init = next(iter(init.items()))
-        #
-        # num_iterations = 0
-        # test_condition = dace.symbolic.pystr_to_symbolic(condition.as_string)
-        #
-        # def subs(expr, var, val):
-        #     itersym = [sym for sym in expr.free_symbols if str(sym) == var][0]
-        #     return expr.subs({itersym: val})
-        #
-        # def test_str_condition(condition, itervar, iterval):
-        #     condition_sym = subs(condition, itervar, iterval)
-        #     try:
-        #         return bool(condition_sym)
-        #     except TypeError:
-        #         return True
-        #
-        # iterval = init
-        # while num_iterations < 3 and test_str_condition(test_condition, itervar, iterval):
-        #     test_condition = subs(test_condition, itervar, step)
-        #     num_iterations = num_iterations + 1
-        # if num_iterations < 3:
-        #     return False
-        #
-        # return True
-
-    #
-    # def apply(self, sdfg: dace.SDFG):
-    #
-    #
-    #     guard, begin, last_state, before_state, after_state = EnhancedDetectLoop._get_context_subgraph(
-    #         self.subgraph, sdfg
-    #     )
-    #     condition = sdfg.edges_between(guard, begin)
-    #     assert len(condition) == 1
-    #     condition: dace.properties.CodeBlock = condition[0].data.condition
-    #
-    #     step = sdfg.edges_between(last_state, guard)
-    #     assert len(step) == 1
-    #     step = step[0].data.assignments
-    #     assert len(step) == 1
-    #     itervar, step = next(iter(step.items()))
-    #
-    #     init = sdfg.edges_between(before_state, guard)
-    #     assert len(init) == 1
-    #     init = init[0].data.assignments
-    #     assert len(init) == 1
-    #     assert itervar in init
-    #     _, init = next(iter(init.items()))
-    #
-    #     # test_condition = dace.symbolic.pystr_to_symbolic(condition.as_string)
-    #
-    #     def subs(expr, var, val):
-    #         itersym = [sym for sym in expr.free_symbols if str(sym) == var][0]
-    #         return expr.subs({itersym: val})
-    #
-    #
-    #     iterval = init
-    #     while num_iterations < 3 and test_str_condition(test_condition, itervar, iterval):
-    #         test_condition = subs(test_condition, itervar, step)
-    #         num_iterations = num_iterations + 1
-    #
-    #     # peel first
-    #     prefetch_state= dsfg.add_state('prefetch_state')
-    #     peeled_first_state = graph.add_state('peeled_first_state')
-    #         # insert state
-    #     #     # move edge from before->guard to before->inserted state
-    #     #     # copy edge from loopend->guard state, put it at inserted->guard
-    #     # if self.peel_last:
-    #     #     # insert state
-    #     #     # move edge from guard->after to inserted->after state
-    #     #     # copy edge from loopend->guard state, put it at inserted->guard
-    #     #
-    #     #
-    #     #
-    #     # min_iterations = int(self.peel_first + self.peel_last)
-    #     # if num_iterations == min_iterations:
-    #     #     #remove loop states,
-    #     #     pass
