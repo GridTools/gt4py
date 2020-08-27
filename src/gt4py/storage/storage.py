@@ -114,7 +114,7 @@ class Storage(np.ndarray):
     __array_subok__ = True
 
     def __new__(cls, shape, dtype, backend, default_origin, mask=None):
-        """"
+        """ "
 
         Parameters
         ----------
