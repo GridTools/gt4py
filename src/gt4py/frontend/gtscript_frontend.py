@@ -73,10 +73,8 @@ class GTScriptValueError(GTScriptDefinitionError):
             if loc is None:
                 message = "Invalid value for '{name}' symbol ".format(name=name)
             else:
-                message = (
-                    "Invalid value for '{name}' in '{scope}' (line: {line}, col: {col})".format(
-                        name=name, scope=loc.scope, line=loc.line, col=loc.column
-                    )
+                message = "Invalid value for '{name}' in '{scope}' (line: {line}, col: {col})".format(
+                    name=name, scope=loc.scope, line=loc.line, col=loc.column
                 )
         super().__init__(name, value, message, loc=loc)
 
@@ -463,23 +461,29 @@ class RegionExtractor(ast.NodeVisitor):
 
         parallel_interval = []
         for axis_slice in slice_tuple:
-            if axis_slice.lower is None:
-                offset = 0
-                level = gt_ir.LevelMarker.START
-            else:
-                level, offset = self.visit(axis_slice.lower)
-            lower = gt_ir.AxisBound(level=level, offset=offset)
+            if isinstance(axis_slice, ast.Slice):
+                if axis_slice.lower is None:
+                    offset = 0
+                    level = gt_ir.LevelMarker.START
+                else:
+                    level, offset = self.visit(axis_slice.lower)
+                lower = gt_ir.AxisBound(level=level, offset=offset)
 
-            if axis_slice.upper is None:
-                offset = 0
-                level = gt_ir.LevelMarker.END
+                if axis_slice.upper is None:
+                    offset = 0
+                    level = gt_ir.LevelMarker.END
+                else:
+                    level, offset = self.visit(axis_slice.upper)
+                upper = gt_ir.AxisBound(level=level, offset=offset)
             else:
-                level, offset = self.visit(axis_slice.upper)
-            upper = gt_ir.AxisBound(level=level, offset=offset)
+                level, offset = self.visit(axis_slice.value)
+                lower = gt_ir.AxisBound(level=level, offset=offset)
+                upper = gt_ir.AxisBound(level=level, offset=offset + 1)
 
             parallel_interval.append(
                 gt_ir.AxisInterval(start=lower, end=upper, loc=gt_ir.Location.from_ast_node(node))
             )
+
         return parallel_interval
 
     def visit_Call(self, node: ast.Call) -> list:

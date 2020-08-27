@@ -616,6 +616,21 @@ class TestRegions:
         assert len(def_ir.computations) == 1
         assert def_ir.computations[0].parallel_interval is not None
 
+    def test_single_on_interval_only(self):
+        module = f"TestRegion_single_on_interval_only_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            from __splitters__ import i0, ie
+
+            with computation(PARALLEL), interval(...), parallel(region[i0, :]):
+                in_f = 1.0
+
+        stencil_id, def_ir = compile_definition(stencil, "stencil", module, externals=externals)
+
+        assert len(def_ir.computations) == 1
+        assert def_ir.computations[0].parallel_interval is not None
+
     def test_with_default(self):
         module = f"TestRegion_with_default_{id_version}"
         externals = {}
