@@ -224,20 +224,6 @@ def run_vertical_advection(
                 data_col = datacol
                 utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
 
-    reference_module = gtscript.stencil(
-        backend="numpy",
-        definition=vertical_advection_dycore,
-        externals={"BET_M": 0.5, "BET_P": 0.5},
-        enforce_dtype=dtype,
-    )
-    test_module = gtscript.stencil(
-        backend=backend,
-        definition=vertical_advection_dycore,
-        externals={"BET_M": 0.5, "BET_P": 0.5},
-        enforce_dtype=dtype,
-        **backend_opts,
-    )
-
     validate_shapes = {
         k: tuple(domain[i] + 2 * origins[k][i] for i in range(3)) for k in origins.keys()
     }
@@ -265,12 +251,31 @@ def run_vertical_advection(
     }
     arg_fields_test = {k: v for k, v in arg_fields_test.items() if not k.endswith("_reference")}
 
-    for k in arg_fields_reference.keys():
+    specialize_symbols = dict()
+    for k in arg_fields_test.keys():
         if hasattr(arg_fields_reference[k], "host_to_device"):
             arg_fields_reference[k].host_to_device()
             arg_fields_test[k].host_to_device()
+        for var, stride in zip("IJK", arg_fields_test[k].strides):
+            specialize_symbols[f"_{k}_{var}_stride"] = stride // arg_fields_test[k].itemsize
+    reference_module = gtscript.stencil(
+        backend="numpy",
+        definition=vertical_advection_dycore,
+        externals={"BET_M": 0.5, "BET_P": 0.5},
+        enforce_dtype=dtype,
+    )
+    backend_opts["specialize_sdfg_vars"] = specialize_symbols
+    test_module = gtscript.stencil(
+        backend=backend,
+        definition=vertical_advection_dycore,
+        externals={"BET_M": 0.5, "BET_P": 0.5},
+        enforce_dtype=dtype,
+        **backend_opts,
+    )
 
     reference_module.run(**arg_fields_reference, _domain_=domain, _origin_=origins, exec_info=None)
+    for k, val in arg_fields_test.items():
+        print(k, val.strides)
     test_module.run(**arg_fields_test, _domain_=domain, _origin_=origins, exec_info=None)
     for k in arg_fields_reference.keys():
         if not np.isscalar(arg_fields_test[k]):
@@ -431,7 +436,6 @@ if __name__ == "__main__":
     niter = 10
     # domain = (128, 128, 80)
     domain = (3, 3, 10)
-
     data_layout = (2, 1, 0)
     function = "vertical_advection"
     dtype = np.float32

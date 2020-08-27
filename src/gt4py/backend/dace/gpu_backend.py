@@ -91,6 +91,18 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
                             for inner_name, inner_array in node.sdfg.arrays.items():
                                 if inner_name == name:
                                     inner_array.storage = array.storage
+                                    inner_array.strides = array.strides
+
+        from gt4py.backend.dace.sdfg.transforms import PrefetchingKCachesTransform
+
+        for state in sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.NestedSDFG):
+                    node.sdfg.apply_transformations(
+                        PrefetchingKCachesTransform,
+                        options={"storage_type": dace.dtypes.StorageType.Register},
+                        validate=False,
+                    )
 
         # for name, array in sdfg.arrays.items():
         #     if array.transient:

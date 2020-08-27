@@ -239,6 +239,7 @@ class DaceBackend(gt_backend.BaseBackend):
         "save_intermediate": {"versioning": True},
         "validate": {"versioning": True},
         "enforce_dtype": {"versioning": True},
+        "specialize_sdfg_vars": {"versioning": True},
     }
     storage_info = {
         "alignment": 1,
@@ -332,6 +333,11 @@ class DaceBackend(gt_backend.BaseBackend):
         if validate:
             sdfg.validate()
 
+        specialize_dict = options.backend_opts.get("specialize_sdfg_vars", {})
+        sdfg: dace.SDFG
+        sdfg.specialize(specialize_dict)
+        for sd in sdfg.all_sdfgs_recursive():
+            sd.specialize(specialize_dict)
         sdfg.save(dace_build_path + os.path.sep + "tmp.sdfg")
         sdfg = dace.SDFG.from_file(dace_build_path + os.path.sep + "tmp.sdfg")
 
