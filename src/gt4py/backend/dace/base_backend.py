@@ -239,6 +239,7 @@ class DaceBackend(gt_backend.BaseBackend):
         "save_intermediate": {"versioning": True},
         "validate": {"versioning": True},
         "enforce_dtype": {"versioning": True},
+        "specialize_sdfg_vars": {"versioning": True},
     }
     storage_info = {
         "alignment": 1,
@@ -263,7 +264,9 @@ class DaceBackend(gt_backend.BaseBackend):
     @classmethod
     def generate_dace(cls, stencil_id, implementation_ir, options):
         sdfg = SDFGBuilder.apply(implementation_ir)
-        for array in sdfg.arrays.values():
+        from gt4py.backend.dace.sdfg.library.nodes import StencilLibraryNode
+
+        for name, array in sdfg.arrays.items():
             import dace.data
 
             if isinstance(array, dace.data.Array) and array.transient:
@@ -274,6 +277,13 @@ class DaceBackend(gt_backend.BaseBackend):
                     strides[i] = stride
                     stride = stride * array.shape[i]
                 array.strides = strides
+
+                for state in sdfg.nodes():
+                    for node in state.nodes():
+                        if isinstance(node, StencilLibraryNode):
+                            for interval in node.intervals:
+                                if name in interval.sdfg.arrays:
+                                    interval.sdfg.arrays[name].strides = strides
 
         dace_build_path = os.path.relpath(cls.get_dace_module_path(stencil_id))
         os.makedirs(dace_build_path, exist_ok=True)
@@ -323,6 +333,11 @@ class DaceBackend(gt_backend.BaseBackend):
         if validate:
             sdfg.validate()
 
+        specialize_dict = options.backend_opts.get("specialize_sdfg_vars", {})
+        sdfg: dace.SDFG
+        sdfg.specialize(specialize_dict)
+        for sd in sdfg.all_sdfgs_recursive():
+            sd.specialize(specialize_dict)
         sdfg.save(dace_build_path + os.path.sep + "tmp.sdfg")
         sdfg = dace.SDFG.from_file(dace_build_path + os.path.sep + "tmp.sdfg")
 
