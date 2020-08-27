@@ -23,8 +23,8 @@ This additionally has the benefit of locating stencil-specific boundary calculat
 Motivation and Scope
 --------------------
 
-Numerical models, especially finite difference methods, commonly have specialized computation near boundaries to facilitate boundary conditions or grid-specific requirements.
-We are developing a weather model on the cubed-sphere multi-block structured grid, and have many stencils that require such specific treatment on and near the structured block boundaries.
+Numerical models, especially finite difference methods, commonly have specialized computation near boundaries to facilitate boundary conditions or other grid-specific requirements.
+We are developing a weather model on a cubed-sphere multi-block structured grid, and have many stencils that require such specific treatment on and near the structured block boundaries.
 
 We are currently working around the lack of a first-class feature by using the ``domain`` and ``origin`` keyword arguments to stencil calls, but doing so leads to inefficient code that is difficult for model developers to read.
 To illustrate the need for such a feature, consider a snippet of the model that computes a variable ``ub`` different based on location in the grid:
@@ -66,27 +66,27 @@ To illustrate the need for such a feature, consider a snippet of the model that 
 
 This example motivates requirements for the feature. It must be able to:
 
-1. Specify regions in the context of an application-defined grid inside a single stencil. This naturally incorporates the concept of domain decomposition.
+1. Specify regions in the context of a third frame of reference other than the field or stencil computational domains. This can then incorporate the concept of domain decomposition.
 2. Specify regions at and near the edges of the field data arrays, regardless of whether the computational domain exists there. If the stencil call's extended computational domain has a non-zero intersection with the region, it iterates over that portion.
 
-The specific feature that we are proposing is the addition of a ``region()`` keyword that specifies the horizontal iteration space.
-Arguments passed to the ``region()`` call are region objects that describe the restricted iteration space.
-In order to make this friendlier for applications, they can provide methods or classes that provide these objects specifying the local index region.
+The specific feature that we are proposing is the addition of a ``with parallel()`` context that specifies the horizontal iteration space using ``region`` objects.
+The ``region`` object's ``__getitem__`` method uses `splitters`, which are parameter-like call-time-defined variables, to select a region of the stencil computational domain in the parallel ``I`` and ``J`` axes.
 
-Using this concept, the example is transformed into:
+Using this specification, the example is transformed into:
 
 .. code-block:: python
 
     @gtscript.stencil()
     def stencil(uc: Field, vc: Field, cosa: Field, rsina: Field, ut: Field, ub: Field, dt5: float, dt4: float):
+        from __splitters__ import istart, iend, jstart, jend
         with computation(PARALLEL), interval(...):
             ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina
-            with region(WestEdge(0, 1), EastEdge(0, 1)):
+            with parallel(region[istart, :], region[iend, :]):
                 ub = dt5 * (ut[0, -1, 0] + ut)
-            with region(SouthEdge(0, 1), NorthEdge(0, 1)):
+            with parallel(region[:, jstart], region[:, jend]):
                 ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
 
-This reduces the complexity of the code and consolidates operations on `ub` - it is now immediately clear what the stencil is filling into ``ub`` everywhere.
+This reduces the complexity of the code and consolidates operations on ``ub`` - it is now immediately clear what the stencil is filling into ``ub`` everywhere.
 
 
 Usage and Impact
@@ -104,77 +104,34 @@ This GDP aims to be fully backward-compatible.
 Detailed Description
 --------------------
 
-As introduced above, we propose adding a new gtscript ``region()`` call that specializes the stencil on a region of the iteration space when a non-zero intersection between the written-to field's extended compute domain and the application domain occurs.
-Since stencils are designed without the use of absolute indexes, regions can only be specified as a set of offsets from an `edge`.
-
-
-An example
-++++++++++
-
-Let us begin with an illustrated example of what is required of regional computation.
-
-.. figure:: _static/gdp-0002/compute-domain.svg
-    :width: 300px
-
-    Two edge-based fields (blue and cyan), with halos (dotted lines) and a compute domain (red dashes).
-
-.. figure:: _static/gdp-0002/compute-domain-and-app-domain.svg
-    :width: 300px
-
-    Same setup as above, but with an application domain (purple dashes).
-
-.. figure:: _static/gdp-0002/domain1-top-and-bottom-regions.svg
-    :width: 300px
-
-    Same setup, and demonstrating top and bottom edge regions of some width. Note the top side is restricted by the application domain (purple).
-
-.. figure:: _static/gdp-0002/domain2-left-and-right-regions.svg
-    :width: 300px
-
-    Stencil called again with a different compute domain. This time the right region is restricted.
-
-Computation is only done in regions of the horizontal iteration space where the compute domain intersects with the region, so a distributed computation is naturally supported by specifying non-zero offsets on certain processors.
+As introduced above, we propose adding a new ``with parallel()`` context that specializes the stencil on a region of the horizontal axes bounds using variables with values defined at stencil call time.
+The ``parallel()`` call can have any number of arguments, each of which contain information about the horizontal region.
+We propse adding a `gtscript.region` object with ``__getitem__`` defined in order to make this easy.
 
 
 Region specification
 ++++++++++++++++++++
 
-The region specification is a nested tuple interface that defines offsets from the edges of on each axis of the application domain.
-Applications may define their own named versions of these to reduce code bulk.
-There are two parallel axes each with two endpoints, so the specification is a pair of pairs, where a pair is a 2-tuple.
-Each endpoint is itself a pair of a `gt4py.definitions.Interval` and an integer offset.
-For example, to fill a strip the `west` strip of a I-J plane of size 3, the region specification would be:
+Regions contain information about the horizontal restriction, with variable references, axis endpoints, absolute offsets, or a combination of these.
+Examples:
+
+1. ``region[:, jstart]``: This specifies a restriction in the ``J`` axis to a single column of the iteration space at ``jstart`` (defined at stencil call-time). There is no restriction on the ``I`` axis, and it will be naturally extended as far as needed for the computation.
+
+2. ``region[istart : iend, : jend]``: ``istart <= I < iend``, ``J <= jend``. As in the previous example, there is no lower restriction on ``J``.
+
+
+Splitters
++++++++++
+
+The variables used as splitters in the region specification, such as ``istart, iend, jend`` in the examples in the previous section, must to be given values at stencil call time.
+Since these are not traditional ordered stencil parameters, a dictionary must be passed to the keyword argument ``splitters`` at call time.
+Example:
 
 .. code-block:: python
 
-    (((Interval.START, 0), (Interval.START, 2)), ((Interval.START, 0), (Interval.STOP, 0)))
+    stencil(a, b, splitters={'istart': grid.istart, 'iend': grid.iend, 'jend': grid.jend})
 
-This specifies an iteration region over the first 3 points in ``i``` (``0,1,2``) from the application domain edge, and all ``j`` in the grid.
-Again, the computation will only happen on portions of the region that have an intersection with the written-to field's extended compute domain.
-
-
-Additional run-time information
-+++++++++++++++++++++++++++++++
-
-GT4Py currently stores information about the offsets between fields and the compute domain by specifying origins for each field that are referred to by ``(0,0)`` in the compute domain.
-Therefore the additional information that is needed for regional computation is to specify (1) the total size of the application domain and (2) how the fields relate to the application domain.
-
-The total size of the application domain can be represented as a numeric tuple of two `ints`.
-
-Currently, GT4Py ties the compute domain origin to each field's origin when a single origin is passed at stencil run time.
-**Specifying an origin to a stencil call overwrites the origin for each field.**
-When the storage rewrite is complete, fields will also have halo metadata, so this can be used to align the non-halo portion of a field relative to the application domain.
-The easiest method is to specify the origin offset between the bottom left non-halo point in the field (the natural/default origin) to the application domain.
-Much of the time this will be ``(0, 0)`` (in which case it does not need to be specified), but could be non-zero for staggered fields.
-This information should be collected in a dictionary of field name to numeric tuple, and passed to stencils at execution time.
-
-The call could then look like:
-
-.. code-block:: python
-
-    stencil(uc, vc, cosa, rsina, ut, ub, dt5, dt4,
-        app_domain=(grid.ni, grid.nj), app_origins={ub: (1,0)})
-
+Where ``grid`` could be an application-defined namespace.
 
 Temporary fields
 ^^^^^^^^^^^^^^^^
@@ -190,7 +147,7 @@ Take for example the double Laplacian example, with a special case before applyi
                 out_f: gtscript.Field[float]):
         with computation(PARALLEL), interval(...):
             tmp_f = lap(in_f)
-            with region(LeftEdge(-1, 0)):
+            with parallel(region[-1, :]):
                 tmp_f = 1.0
             out_f = lap(tmp_f)
 
@@ -218,7 +175,7 @@ Implementation
 
 The implementation on the GT4Py involves adding:
 
-1. the `region()` specifier parsing to the AST visitor in IRMaker_
+1. the ``with parallel()`` context parsing to the AST visitor in IRMaker_
 2. the reduced iteration space to the `internal IR`_
 3. region parsing tests
 4. backend support for the IR features and ensure correct code generation
@@ -314,18 +271,18 @@ FV3 Example
     with computation(PARALLEL), interval(...):
         uf = (u - 0.25*(va[0, -1, 0] + va)*(cos_sg4[0, -1, 0] + cos_sg2))  \
                                   *dyc*0.5*(sin_sg4[0, -1, 0] + sin_sg2)
-        with region(SouthEdge(0, 1), NorthEdge(-1, 0)):
+        with parallel(region[:, jstart], region[:, jend)):
             uf = u*dyc*0.5*(sin_sg4[0, -1, 0] + sin_sg2)
 
         vf = (v - 0.25*(ua[-1, 0, 0] + ua)*(cos_sg3[-1, 0, 0] + cos_sg1))  \
                                   *dxc*0.5*(sin_sg3[-1, 0, 0] + sin_sg1)
-        with region(WestEdge(0, 1), EastEdge(-1, 0)):
+        with parallel(region[istart, :], region[iend, :]):
             vf = v*dxc*0.5*(sin_sg3[-1, 0, 0] + sin_sg1)
 
         divg_d = rarea_c * (vf[0, -1, 0] - vf + uf[-1, 0, 0] - uf)
-        with region(SouthWestCorner((0, 1), (0, 1)), SoutEastCorner((0, 1), (-1, 0))):
+        with parallel(region[istart, jstart], region[istart, jend]):
             divg_d = rarea_c * (-vf + uf[-1, 0, 0] - uf)
-        with region(NorthEastCorner((-1, 0), (-1, 0)), NorthWestCorners((-1, 0), (0, 1)):
+        with parallel(region[iend, jstart], region[iend, jend]):
             divg_d = rarea_c * (vf[0, -1, 0] + uf[-1, 0, 0] - uf)
 
 
