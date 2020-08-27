@@ -27,7 +27,7 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
         for state in sdfg.nodes():
             for node in state.nodes():
                 if isinstance(node, StencilLibraryNode):
-                    node.loop_order = "IJK"
+                    node.loop_order = "JIK"
 
         from gt4py.backend.dace.sdfg.transforms import PruneTransientOutputs
 
@@ -36,10 +36,12 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
 
     def transform_optimize(self, sdfg):
         import dace
+
         from dace.transformation.dataflow import MapCollapse
 
         sdfg.apply_transformations_repeated(MapCollapse, validate=False)
         sdfg.apply_strict_transformations(validate=False)
+
         for name, array in sdfg.arrays.items():
             if array.transient:
                 array.lifetime = dace.dtypes.AllocationLifetime.Persistent
@@ -55,7 +57,7 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
                 if isinstance(node, dace.nodes.NestedSDFG):
                     node.sdfg.apply_transformations(
                         PrefetchingKCachesTransform,
-                        options={"storage_type": dace.dtypes.StorageType.GPU_Shared},
+                        options={"storage_type": dace.dtypes.StorageType.Register},
                         validate=False,
                     )
 
@@ -71,13 +73,14 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
             fusion.apply(sdfg, subgraph)
             for name, array in sdfg.arrays.items():
                 if array.transient:
-                    array.lifetime = dace.dtypes.AllocationLifetime.Scope
+                    if array.storage == dace.dtypes.StorageType.GPU_Global:
+                        array.lifetime = dace.dtypes.AllocationLifetime.Persistent
 
                     for node in graph.nodes():
                         if isinstance(node, dace.nodes.NestedSDFG):
                             for inner_name, inner_array in node.sdfg.arrays.items():
                                 if inner_name == name:
-                                    inner_array.storage = dace.dtypes.StorageType.Register
+                                    inner_array.storage = array.storage
 
         # for name, array in sdfg.arrays.items():
         #     if array.transient:

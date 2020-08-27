@@ -1,6 +1,6 @@
 import itertools
-from typing import Union
 
+import numpy as np
 import dace
 
 import gt4py.ir as gt_ir
@@ -311,7 +311,10 @@ class SDFGBuilder:
         def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral):
             dtype: gt_ir.DataType = node.data_type
             ctype = dace.dtypes.DTYPE_TO_TYPECLASS[dtype.dtype.type].ctype
-            return str(f"{ctype}({node.value})")
+            if np.issubdtype(dtype.dtype.type, np.floating):
+                return f"{ctype}({node.value})"
+            else:
+                return str(node.value)
 
         def visit_VarRef(self, node: gt_ir.VarRef):
             return node.local_name
@@ -562,6 +565,7 @@ class SDFGBuilder:
                     )
                 else:
                     assert field.name in node.temporary_fields
+
                     self.sdfg.add_transient(
                         field.name,
                         shape=shape,

@@ -82,6 +82,7 @@ class StencilExpander:
                         dtype=mapped_sdfg.arrays[name].dtype,
                         strides=mapped_sdfg.arrays[name].strides,
                         total_size=mapped_sdfg.arrays[name].total_size,
+                        lifetime=dace.dtypes.AllocationLifetime.SDFG,
                         storage=dace.StorageType.Default,
                     )
                 else:
@@ -254,6 +255,7 @@ class StencilExpander:
                     dtype=inner_sdfg.arrays[input].dtype,
                     strides=inner_sdfg.arrays[input].strides,
                     total_size=inner_sdfg.arrays[input].total_size,
+                    lifetime=dace.dtypes.AllocationLifetime.SDFG,
                     storage=dace.StorageType.Default,
                 )
 
@@ -308,6 +310,7 @@ class StencilExpander:
                             dtype=inner_sdfg.arrays[output].dtype,
                             strides=inner_sdfg.arrays[output].strides,
                             total_size=inner_sdfg.arrays[output].total_size,
+                            lifetime=dace.dtypes.AllocationLifetime.SDFG,
                             storage=dace.StorageType.Default,
                         )
                     else:
@@ -418,6 +421,7 @@ class StencilExpander:
                     for var, m, f in zip("IJK", mapped_shape, full_shape)
                 ),
                 dtype=array_dict[k].dtype,
+                lifetime=dace.dtypes.AllocationLifetime.SDFG,
                 strides=array_dict[k].strides,
             )
 
@@ -472,7 +476,7 @@ class StencilExpander:
             for acc in input_accessors:
                 name = acc.data
                 inner_extent = self._input_extents[i][name]
-                if name in output_accessors:
+                if name in [acc.data for acc in output_accessors]:
                     inner_extent = inner_extent.union(gt_ir.Extent([(0, 0), (0, 0), (0, 0)]))
                 global_extent = in_out_extents[name]
                 i_subset = "{offset_low}: {var} + {offset_high}".format(
