@@ -19,20 +19,20 @@ from gt4py.stencil_builder import StencilBuilder
 
 
 @function
-def smul_add(in_f, factor=-4.0):
-    return factor * (in_f[0, 0, 0] + in_f[1, 0, 0])
+def smul_add(in_f, factor=2.0):
+    return factor * (in_f + in_f[1, 0, 0])
 
 
-def double_smul_parallel(in_f: Field[float], out_f: Field[float]):
-    with computation(PARALLEL), interval(...):
+def double_smul_parallel(in_f: Field[float], out_f: Field[float]):  # type: ignore
+    with computation(PARALLEL), interval(...):  # type: ignore
         tmp_f = smul_add(in_f)
-        out_f = smul_add(tmp_f)
+        out_f = smul_add(tmp_f)  # type: ignore  # noqa
 
 
-def double_smul_forward(in_f: Field[float], out_f: Field[float]):
-    with computation(FORWARD), interval(...):
+def double_smul_forward(in_f: Field[float], out_f: Field[float]):  # type: ignore
+    with computation(FORWARD), interval(...):  # type: ignore
         tmp_f = smul_add(in_f)
-        out_f = smul_add(tmp_f)
+        out_f = smul_add(tmp_f)  # type: ignore  # noqa
 
 
 def test_demote_temporaries_to_variables_pass_parallel():

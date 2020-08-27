@@ -325,17 +325,13 @@ def patch_module(module, member, new_value, *, recursive=True):
 def restore_module(patch, *, verify=True):
     """Restore a module patched with the `patch_module()` function."""
 
-    if (
-        not isinstance(patch, dict)
-        or not {
-            "module",
-            "original_value",
-            "patched_value",
-            "recursive",
-            "originals",
-        }
-        <= set(patch.keys())
-    ):
+    if not isinstance(patch, dict) or not {
+        "module",
+        "original_value",
+        "patched_value",
+        "recursive",
+        "originals",
+    } <= set(patch.keys()):
         raise ValueError("Invalid 'patch' definition")
 
     patched_value = patch["patched_value"]

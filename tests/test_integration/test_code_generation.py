@@ -102,10 +102,7 @@ def test_stage_without_effect(backend):
 def test_ignore_np_errstate():
     def setup_and_run(backend, **kwargs):
         field_a = gt_storage.zeros(
-            dtype=np.float_,
-            backend=backend,
-            shape=(3, 3, 1),
-            default_origin=(0, 0, 0),
+            dtype=np.float_, backend=backend, shape=(3, 3, 1), default_origin=(0, 0, 0),
         )
 
         @gtscript.stencil(backend=backend, **kwargs)
