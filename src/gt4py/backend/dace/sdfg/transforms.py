@@ -887,24 +887,43 @@ class PrefetchingKCachesTransform(dace.transformation.pattern_matching.Transform
         nsdfg_node: library.StencilLibraryNode = graph.node(
             self.subgraph[PrefetchingKCachesTransform._nsdfg_node]
         )
+        names = dict()
         for name, array in dict(nsdfg_node.sdfg.arrays).items():
-            out_accessor = 1
-            store = True
-            for edge in [e for e in graph.out_edges(nsdfg_node) if e.data.data == name]:
+            store = False
+            outer_edges = [e for e in graph.out_edges(nsdfg_node) if e.data.data == name]
+            for edge in outer_edges:
                 path = graph.memlet_path(edge)
-                path[0].src
-                path[-1].dst
-            #
-            # if out_accessor:
-            #     if False:  # not read later:
-            #         store = False
-            # apply_count = nsdfg_node.sdfg.apply_transformations(
-            #     PrefetchFieldTransform,
-            #     options={"storage_type": self.storage_type, "array": name, "store": store},
-            # )
-            # if not store:
-            #     pass
-            #     # remove nsdfg out connector, out_access node, memlet path
+                if not (
+                    isinstance(path[-1].dst, dace.nodes.AccessNode)
+                    and path[-1].dst.access != dace.dtypes.AccessType.ReadOnly
+                    and len(graph.out_edges(path[-1].dst)) == 0
+                    and sdfg.arrays[name].transient
+                ):
+                    store = True
+            names[name] = store
+
+            if not store:
+                remove_edges = set()
+                remove_nodes = set()
+                for edge in outer_edges:
+                    path = graph.memlet_path(edge)
+                    for e in path:
+                        remove_edges.add(e)
+                    remove_nodes.add(path[-1].dst)
+                for edge in remove_edges:
+                    graph.remove_edge_and_connectors(edge)
+                for node in remove_nodes:
+                    graph.remove_node(node)
+
+        apply_count = nsdfg_node.sdfg.apply_transformations(
+            PrefetchFieldTransform,
+            options={
+                "storage_type": self.storage_type,
+                "arrays": list(names.keys()),
+                "store": list(k for k, v in names.items() if v),
+            },
+            validate=False,
+        )
 
 
 @registry.autoregister
@@ -917,14 +936,14 @@ class PrefetchFieldTransform(LoopPeeling):
         desc="the StorageType of local buffers",
     )
 
-    array = dace.properties.Property(
-        dtype=str, default=None, allow_none=True, desc="List of  names of the array to prefetch",
+    arrays = dace.properties.Property(
+        dtype=list, default=None, allow_none=True, desc="List of  names of the array to prefetch",
     )
 
     store = dace.properties.Property(
-        dtype=bool,
-        default=True,
-        desc="Indicates whether to write out the results to the original array",
+        dtype=list,
+        default=[],
+        desc="List of arrays for which to write out the results to the original array",
     )
 
     @staticmethod
@@ -1255,7 +1274,7 @@ class PrefetchFieldTransform(LoopPeeling):
             ## peel both ends, add prefetching
             # peel first iteration
             apply_count = sdfg.apply_transformations(
-                AlwaysApplyLoopPeeling, options={"count": 1, "begin": True},
+                AlwaysApplyLoopPeeling, options={"count": 1, "begin": True}, validate=False
             )
             assert apply_count == 1
             assert guard in sdfg.nodes()
@@ -1265,7 +1284,7 @@ class PrefetchFieldTransform(LoopPeeling):
 
             # peel last iteration
             apply_count = sdfg.apply_transformations(
-                AlwaysApplyLoopPeeling, options={"count": 1, "begin": False},
+                AlwaysApplyLoopPeeling, options={"count": 1, "begin": False}, validate=False
             )
             assert apply_count == 1
             assert guard in sdfg.nodes()
@@ -1284,8 +1303,8 @@ class PrefetchFieldTransform(LoopPeeling):
 
             # self.rename_arrays(sdfg)
             # add prefetching to peeled_first and loop_state, add prefetch-only state
-            if self.array is not None:
-                arrays = {self.array: sdfg.arrays[self.array]}
+            if self.arrays is not None:
+                arrays = {name: sdfg.arrays[name] for name in self.arrays}
             else:
                 arrays = dict(sdfg.arrays.items())
             for name, array in arrays.items():
@@ -1305,7 +1324,7 @@ class PrefetchFieldTransform(LoopPeeling):
 
                 self.add_prefetch_all(prefetch_state, name, itervar, 2, in_subsets, rng[0], length)
 
-                if self.store:
+                if name in self.store:
                     self.add_store_all(store_state, name, itervar, 2, out_subsets, rng[1], length)
                 self.localize_tasklet_input(
                     peeled_first, name, itervar, 2, in_subsets, rng[0], length, rng[2]
@@ -1331,7 +1350,7 @@ class PrefetchFieldTransform(LoopPeeling):
                 self.add_prefetch(
                     peeled_first, name, itervar, 2, in_subsets, out_subsets, rng[0], length, rng[2]
                 )
-                if self.store:
+                if name in self.store:
                     self.add_store(loop_state, name, itervar, 2, out_subsets, "k", length, rng[2])
                     self.add_store(
                         peeled_last, name, itervar, 2, out_subsets, rng[1], length, rng[2]

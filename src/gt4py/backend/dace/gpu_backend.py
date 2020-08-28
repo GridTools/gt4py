@@ -35,13 +35,17 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
         return sdfg
 
     def transform_optimize(self, sdfg):
+
         import dace
 
         from dace.transformation.dataflow import MapCollapse
 
         sdfg.apply_transformations_repeated(MapCollapse, validate=False)
-        sdfg.apply_strict_transformations(validate=False)
+        from daceperiments.transforms import OnTheFlyMapFusion
 
+        sdfg.apply_transformations_repeated(OnTheFlyMapFusion, validate=False)
+
+        sdfg.apply_strict_transformations(validate=False)
         for name, array in sdfg.arrays.items():
             if array.transient:
                 array.lifetime = dace.dtypes.AllocationLifetime.Persistent
@@ -54,20 +58,14 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
         for state in sdfg.nodes():
             for node in state.nodes():
                 if isinstance(node, dace.nodes.NestedSDFG):
-                    prefetching_subgraph = {
-                        PrefetchingKCachesTransform._nsdfg_node: state.node_id(node),
+                    kcache_subgraph = {
+                        PrefetchingKCachesTransform._nsdfg_node: state.node_id(node)
                     }
-                    prefetching_transform = PrefetchingKCachesTransform(
-                        sdfg.sdfg_id, sdfg.node_id(state), prefetching_subgraph, 0
+                    trafo = PrefetchingKCachesTransform(
+                        sdfg.sdfg_id, sdfg.node_id(state), kcache_subgraph, 0
                     )
-                    prefetching_transform.storage_type = dace.dtypes.StorageType.Register
-                    prefetching_transform.apply(sdfg)
-
-        sdfg.apply_transformations_repeated(
-            PrefetchingKCachesTransform,
-            options={"storage_type": dace.dtypes.StorageType.Register},
-            validate=False,
-        )
+                    trafo.storage_type = dace.dtypes.StorageType.Register
+                    trafo.apply(sdfg)
 
         from dace.transformation.subgraph.subgraph_fusion import SubgraphFusion
         from dace.sdfg.graph import SubgraphView
@@ -90,22 +88,6 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
                                 if inner_name == name:
                                     inner_array.storage = array.storage
                                     inner_array.strides = array.strides
-
-        from gt4py.backend.dace.sdfg.transforms import PrefetchingKCachesTransform
-
-        for state in sdfg.nodes():
-            for node in state.nodes():
-                if isinstance(node, dace.nodes.NestedSDFG):
-                    node.sdfg.apply_transformations(
-                        PrefetchingKCachesTransform,
-                        options={"storage_type": dace.dtypes.StorageType.Register},
-                        validate=False,
-                    )
-
-        # for name, array in sdfg.arrays.items():
-        #     if array.transient:
-        #         array.lifetime = dace.dtypes.AllocationLifetime.Scope
-        #         array.storage = dace.dtypes.StorageType.Register
 
         return sdfg
 
