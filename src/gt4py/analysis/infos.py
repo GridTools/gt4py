@@ -251,8 +251,7 @@ class TransformData:
 
 
 class TransformPass(abc.ABC):
-    """Abstract base class defining the interface of an analysis pass.
-    """
+    """Abstract base class defining the interface of an analysis pass."""
 
     @property
     def defaults(self):

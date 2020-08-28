@@ -410,38 +410,35 @@ class NormalizeBlocksPass(TransformPass):
         zero_extent = Extent.zeros(transform_data.ndims)
         blocks = []
         for block in transform_data.blocks:
-            if block.iteration_order == gt_ir.IterationOrder.PARALLEL:
-                # Put every statement in a single stage
-                for ij_block in block.ij_blocks:
-                    for interval_block in ij_block.interval_blocks:
-                        for stmt_info in interval_block.stmts:
-                            interval = interval_block.interval
-                            new_interval_block = IntervalBlockInfo(
-                                transform_data.id_generator.new,
-                                interval,
-                                [stmt_info],
-                                stmt_info.inputs,
-                                stmt_info.outputs,
-                            )
-                            new_ij_block = IJBlockInfo(
-                                transform_data.id_generator.new,
-                                {interval},
-                                [new_interval_block],
-                                {**new_interval_block.inputs},
-                                set(new_interval_block.outputs),
-                                compute_extent=zero_extent,
-                            )
-                            new_block = DomainBlockInfo(
-                                transform_data.id_generator.new,
-                                block.iteration_order,
-                                set(new_ij_block.intervals),
-                                [new_ij_block],
-                                {**new_ij_block.inputs},
-                                set(new_ij_block.outputs),
-                            )
-                            blocks.append(new_block)
-            else:
-                blocks.append(block)
+            # Put every statement in a single stage
+            for ij_block in block.ij_blocks:
+                for interval_block in ij_block.interval_blocks:
+                    for stmt_info in interval_block.stmts:
+                        interval = interval_block.interval
+                        new_interval_block = IntervalBlockInfo(
+                            transform_data.id_generator.new,
+                            interval,
+                            [stmt_info],
+                            stmt_info.inputs,
+                            stmt_info.outputs,
+                        )
+                        new_ij_block = IJBlockInfo(
+                            transform_data.id_generator.new,
+                            {interval},
+                            [new_interval_block],
+                            {**new_interval_block.inputs},
+                            set(new_interval_block.outputs),
+                            compute_extent=zero_extent,
+                        )
+                        new_block = DomainBlockInfo(
+                            transform_data.id_generator.new,
+                            block.iteration_order,
+                            set(new_ij_block.intervals),
+                            [new_ij_block],
+                            {**new_ij_block.inputs},
+                            set(new_ij_block.outputs),
+                        )
+                        blocks.append(new_block)
 
         transform_data.blocks = blocks
 

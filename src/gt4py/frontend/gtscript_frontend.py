@@ -72,8 +72,10 @@ class GTScriptValueError(GTScriptDefinitionError):
             if loc is None:
                 message = "Invalid value for '{name}' symbol ".format(name=name)
             else:
-                message = "Invalid value for '{name}' in '{scope}' (line: {line}, col: {col})".format(
-                    name=name, scope=loc.scope, line=loc.line, col=loc.column
+                message = (
+                    "Invalid value for '{name}' in '{scope}' (line: {line}, col: {col})".format(
+                        name=name, scope=loc.scope, line=loc.line, col=loc.column
+                    )
                 )
         super().__init__(name, value, message, loc=loc)
 
