@@ -46,7 +46,7 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
             if array.transient:
                 array.lifetime = dace.dtypes.AllocationLifetime.Persistent
         dace.Config.set("compiler", "cuda", "default_block_size", value="64,2,1")
-        from daceperiments.transforms import OnTheFlyMapFusion
+        from gt4py.backend.dace.sdfg.transforms import OnTheFlyMapFusion
 
         sdfg.apply_transformations_repeated(OnTheFlyMapFusion, validate=False)
         #

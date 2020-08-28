@@ -38,7 +38,7 @@ class X86DaceOptimizer(DaceOptimizer):
         from dace.transformation.dataflow import MapCollapse
 
         sdfg.apply_transformations_repeated(MapCollapse, validate=False)
-        from daceperiments.transforms import OnTheFlyMapFusion
+        from gt4py.backend.dace.sdfg.transforms import OnTheFlyMapFusion
 
         sdfg.apply_transformations_repeated(OnTheFlyMapFusion, validate=False)
         sdfg.apply_strict_transformations(validate=False)
