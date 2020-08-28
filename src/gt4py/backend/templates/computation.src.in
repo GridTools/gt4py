@@ -16,7 +16,7 @@
 
  ---- Template variables ----
 
-    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - arg_fields: [{ "name": str, "dtype": str, "axes": str, "layout_id": int }]
     - constants: { name:str : str }
     - gt_backend: str
     - halo_sizes: [int]
@@ -43,7 +43,7 @@
         }
     }
     - stencil_unique_name: str
-    - tmp_fields: [{ "name": str, "dtype": str }]
+    - tmp_fields: [{ "name": str, "dtype": str, "axes": str }]
 #}
 
 {%- if gt_backend == "cuda" %}
