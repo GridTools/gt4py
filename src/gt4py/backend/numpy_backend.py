@@ -59,6 +59,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         self.interval_k_start_name = interval_k_start_name
         self.interval_k_end_name = interval_k_end_name
         self.conditions_depth = 0
+        self.range_args = [None, None]
 
     def _make_field_origin(self, name: str, origin=None):
         if origin is None:
@@ -85,11 +86,13 @@ class NumPySourceGenerator(PythonSourceGenerator):
             range_args = [loop_bounds[1] + " -1", loop_bounds[0] + " -1", "-1"]
 
         if iteration_order != gt_ir.IterationOrder.PARALLEL:
-            range_expr = "range({args})".format(args=", ".join(a for a in range_args))
-            seq_axis = self.impl_node.domain.sequential_axis.name
-            source_lines.append(
-                "for {ax} in {range_expr}:".format(ax=seq_axis, range_expr=range_expr)
-            )
+            if self.range_args != range_args:
+                self.range_args = range_args
+                range_expr = "range({args})".format(args=", ".join(a for a in range_args))
+                seq_axis = self.impl_node.domain.sequential_axis.name
+                source_lines.append(
+                    "for {ax} in {range_expr}:".format(ax=seq_axis, range_expr=range_expr)
+                )
             source_lines.extend(" " * self.indent_size + line for line in body_sources)
         else:
             source_lines.append(
