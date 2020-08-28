@@ -193,3 +193,40 @@ def test_gen_gtx86(clirunner, simple_stencil, tmp_path):
     src_path = output_path / "init_1_src"
     src_files = [path.name for path in src_path.iterdir()]
     assert set(["computation.hpp", "computation.cpp"]) == set(src_files), result.output
+
+
+def test_backend_option_order(clirunner, simple_stencil, tmp_path):
+    """Make sure the order in which --backend and --option are passed does not matter."""
+    output_path1 = tmp_path / "backend_first"
+    # putting the option after the backend should definitely check against the chosen backend
+    assert (
+        clirunner.invoke(
+            cli.gtpyc,
+            [
+                "gen",
+                f"--output-path={output_path1}",
+                "--backend=numpy",
+                "-O",
+                "ignore_np_errstate=True",
+                str(simple_stencil),
+            ],
+            catch_exceptions=False,
+        ).exit_code
+        == 0
+    )
+    # putting the option before the backend should still check against the right backend
+    assert (
+        clirunner.invoke(
+            cli.gtpyc,
+            [
+                "gen",
+                f"--output-path={output_path1}",
+                "-O",
+                "ignore_np_errstate=True",
+                "--backend=numpy",
+                str(simple_stencil),
+            ],
+            catch_exceptions=False,
+        ).exit_code
+        == 0
+    )

@@ -491,10 +491,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     GT_BACKEND_OPTS = {
-        "add_profile_info": {"versioning": True},
-        "clean": {"versioning": False},
-        "debug_mode": {"versioning": True},
-        "verbose": {"versioning": False},
+        "add_profile_info": {"versioning": True, "type": bool},
+        "clean": {"versioning": False, "type": bool},
+        "debug_mode": {"versioning": True, "type": bool},
+        "verbose": {"versioning": False, "type": bool},
     }
 
     GT_BACKEND_T: str

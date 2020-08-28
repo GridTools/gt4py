@@ -15,6 +15,21 @@ from gt4py.lazy_stencil import LazyStencil
 
 
 class BackendChoice(click.Choice):
+    """
+    Backend commandline option type.
+
+    Converts from name to backend class.
+
+    Example
+    -------
+
+    .. code-block: bash
+
+        $ cmd --backend="debug"
+
+    gets converted to :py:class:`gt4py.backend.debug_backend.DebugBackend`.
+    """
+
     name = "backend"
 
     def convert(
@@ -57,6 +72,13 @@ class BackendChoice(click.Choice):
 
 
 class BackendOption(click.ParamType):
+    """
+    Backend specific build options for commandline usage.
+
+    convert from ``"key=value"`` strings to ``(key, value)`` tuples, where ``value`` is
+    converted to the type declared for the chosen backend (looked up in the context).
+    """
+
     name = "option"
 
     converter_map = {bool: click.BOOL, int: click.INT, float: click.FLOAT, str: click.STRING}
@@ -75,20 +97,29 @@ class BackendOption(click.ParamType):
         else:
             return type_spec(value)
 
+    def _try_split(self, value):
+        """Be helpful in case of formatting error."""
+        try:
+            name, value = value.split("=")
+            if not name:
+                raise ValueError("name can not be empty")
+            if not value:
+                raise ValueError("value can not be empty")
+            return name, value
+        except ValueError:
+            self.fail('Invalid backend option format: must be "<name>=<value>"')
+
     def convert(
         self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context]
     ) -> Tuple[str, Any]:
-        backend = gt4py.backend.from_name("debug")
-        if ctx:
-            backend = ctx.params["backend"]
-        if value:
-            name, value = value.split("=")
-            if name.strip() not in backend.options:
-                self.fail(f"Backend {backend.name} received unknown option: {name}!")
-            try:
-                value = self._convert_value(backend.options[name]["type"], value, param, ctx)
-            except click.BadParameter as conversion_error:
-                self.fail(f'Invalid value for backend option "{name}": {conversion_error.message}')
+        backend = ctx.params["backend"] if ctx else gt4py.backend.from_name("debug")
+        name, value = self._try_split(value)
+        if name.strip() not in backend.options:
+            self.fail(f"Backend {backend.name} received unknown option: {name}!")
+        try:
+            value = self._convert_value(backend.options[name]["type"], value, param, ctx)
+        except click.BadParameter as conversion_error:
+            self.fail(f'Invalid value for backend option "{name}": {conversion_error.message}')
         return (name, value)
 
 
@@ -96,11 +127,11 @@ class Reporter:
     """Wrapper around click echo functions or noops depending on the `silent` constructor param."""
 
     def __init__(self, silent: bool = False):
-        self.echo: Callable = self._noop
-        self.secho: Callable = self._noop
-        if not silent:
-            self.echo = click.echo
-            self.secho = click.secho
+        self.echo: Callable = click.echo
+        self.secho: Callable = click.secho
+        if silent:
+            self.echo = self._noop
+            self.secho = self._noop
         self.error = functools.partial(click.echo, file=sys.stderr)
 
     @staticmethod
@@ -141,9 +172,11 @@ def generate_stencils(
         if backend:
             builder.with_backend(backend.name)
         if build_options:
-            builder.with_changed_options(**build_options)
+            builder.with_changed_options(impl_opts=build_options)
         builder.with_caching("nocaching", output_path=output_path)
-        # how to tell mypy there can only be enabled backends here
+        # technically this could be called with an unenabled backend,
+        # however the CLI will fail before and never do it.
+        # Putting a runtime check here just to satisfy mypy seems overkill.
         computation_src = builder.backend.generate_computation()  # type: ignore
         write_computation_src(builder.caching.root_path, computation_src, reporter)
 

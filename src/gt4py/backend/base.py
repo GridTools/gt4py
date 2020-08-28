@@ -66,7 +66,7 @@ class Backend(abc.ABC):
     #:  + info:
     #:    - versioning: is versioning on?
     #:    - description [optional]
-    #:
+    #:    - type
     options: ClassVar[Dict[str, Any]]
 
     #: Backend-specific storage parametrization:
@@ -168,6 +168,7 @@ class CLIBackendMixin:
             source code of that file
             If a key's value is a Dict, it is interpreted as a directory name and it's
             value as a nested file hierarchy to which the same rules are applied recursively.
+            The root path is relative to the build directory.
 
         Raises
         ------
@@ -215,8 +216,9 @@ class CLIBackendMixin:
 
         Returns
         -------
-
-        Analog to :py:meth:`generate_computation` but containing bindings source code.
+        Analog to :py:meth:`generate_computation` but containing bindings source code,
+        The dictionary contains a tree of directories with leaves beeing filename: source code
+        pairs, relative to the build directory.
 
         Raises
         ------

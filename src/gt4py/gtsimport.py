@@ -105,7 +105,9 @@ class GtsFinder:
             for extension in GTS_EXTENSIONS:
                 yield search_path.absolute() / add_extension(filepath, extension)
 
-    def find_spec(self, fullname, path=None, target=None) -> Optional[ModuleSpec]:
+    def find_spec(
+        self, fullname, path=None, target=None
+    ) -> Optional[importlib.machinery.ModuleSpec]:
         """Create a module spec for the first matching source file path."""
         if fullname in sys.modules:
             return None
@@ -149,11 +151,15 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
     load that instead.
     """
 
-    def __init__(self, fullname, path, generate_at):
+    def __init__(self, fullname: str, path: pathlib.Path, generate_at: pathlib.Path):
         self.module_file = generate_at / (path.stem.split(".")[0] + ".py")
-        super().__init__(fullname, path)
+        super().__init__(fullname, str(path.absolute()))
 
-    def get_filename(self, fullname) -> str:
+    @property
+    def plpath(self):
+        return pathlib.Path(self.path)
+
+    def get_filename(self, fullname: str) -> str:
         """
         Generate a py module if an up to date one doesn't exist yet.
 
@@ -175,14 +181,14 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
         if not self.module_file.exists():
             self.module_file.touch()
 
-        if self.path_stats(self.path) != self.path_stats(self.module_file):
+        if self.path_stats(self.path) != self.path_stats(str(self.module_file.absolute())):
             self.module_file.write_text(self.get_source_code(fullname))
         return str(self.module_file)
 
-    def get_source_code(self, fullname) -> str:
-        return self.path.read_text().replace(GTS_COMMENT, GTS_IMPORT)
+    def get_source_code(self, fullname: str) -> str:
+        return self.plpath.read_text().replace(GTS_COMMENT, GTS_IMPORT)
 
-    def create_module(self, spec) -> ModuleType:
+    def create_module(self, spec: importlib.machinery.ModuleSpec) -> types.ModuleType:
         module = types.ModuleType(name=spec.name)
         return module
 
