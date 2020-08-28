@@ -452,13 +452,13 @@ class SpecializingGPUDaceOptimizer(GPUDaceOptimizer):
 
 
 if __name__ == "__main__":
-    niter = 10
+    niter = 1000
     domain = (128, 128, 80)
     data_layout = (2, 1, 0)
-    alignment = 32
-    block_size = (64, 2, 1)
-    function = "vertical_advection"
-    # function = "horizontal_diffusion"
+    alignment = 1
+    block_size = (128, 2, 1)
+    # function = "vertical_advection"
+    function = "horizontal_diffusion"
     backend = "adhoc_gpu"
     # backend = "adhoc_cpu"
 

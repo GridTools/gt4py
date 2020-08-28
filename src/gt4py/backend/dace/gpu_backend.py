@@ -27,7 +27,7 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
         for state in sdfg.nodes():
             for node in state.nodes():
                 if isinstance(node, StencilLibraryNode):
-                    node.loop_order = "JIK"
+                    node.loop_order = "JKI"
 
         from gt4py.backend.dace.sdfg.transforms import PruneTransientOutputs
 
