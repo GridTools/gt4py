@@ -438,7 +438,11 @@ if __name__ == "__main__":
     domain = (3, 3, 10)
 
     data_layout = (1, 2, 0)
+    block_size = (64, 2, 1)
+    block_size_str = ",".join(map(str, block_size))
+
     function = "vertical_advection"
+    # function = "horizontal_diffusion"
     dtype = np.float32
     backend = "adhoc"
     import sys
@@ -473,6 +477,7 @@ if __name__ == "__main__":
 
     print(f"start {backend}")
     backend_opts = dict(rebuild=True, save_intermediate=True)
+    backend_opts['gpu_block_size'] = block_size_str
     exec_infos = globals()[f"run_{function}"](
         niter=niter, domain=domain, backend=backend, dtype=dtype, backend_opts=backend_opts,
     )
