@@ -57,9 +57,9 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
             subgraph = SubgraphView(
                 graph, [node for node in graph.nodes() if graph.out_degree(node) > 0]
             )
-            fusion = SubgraphFusion()
+            fusion = SubgraphFusion(subgraph)
             fusion.transient_allocation = dace.dtypes.StorageType.Register
-            fusion.apply(sdfg, subgraph)
+            fusion.apply(sdfg)
             for name, array in sdfg.arrays.items():
                 if array.transient:
                     if array.storage == dace.dtypes.StorageType.GPU_Global:
