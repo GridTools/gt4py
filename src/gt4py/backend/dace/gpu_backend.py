@@ -46,7 +46,7 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
             if array.transient:
                 array.lifetime = dace.dtypes.AllocationLifetime.Persistent
         dace.Config.set("compiler", "cuda", "default_block_size", value="64,2,1")
-        from daceperiments.transforms import OnTheFlyMapFusion
+        from gt4py.backend.dace.sdfg.transforms import OnTheFlyMapFusion
 
         sdfg.apply_transformations_repeated(OnTheFlyMapFusion, validate=False)
 
@@ -77,9 +77,9 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
             subgraph = SubgraphView(
                 graph, [node for node in graph.nodes() if graph.out_degree(node) > 0]
             )
-            fusion = SubgraphFusion()
+            fusion = SubgraphFusion(subgraph)
             fusion.transient_allocation = dace.dtypes.StorageType.Register
-            fusion.apply(sdfg, subgraph)
+            fusion.apply(sdfg)
             for name, array in sdfg.arrays.items():
                 if array.transient:
                     if array.storage == dace.dtypes.StorageType.GPU_Global:

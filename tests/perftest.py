@@ -26,13 +26,6 @@ def run_horizontal_diffusion(niter, domain, backend, dtype, backend_opts={}):
                 flx_field[0, 0, 0] - flx_field[-1, 0, 0] + fly_field[0, 0, 0] - fly_field[0, -1, 0]
             )
 
-    reference_module = gtscript.stencil(
-        backend="numpy", definition=horizontal_diffusion, enforce_dtype=dtype
-    )
-    test_module = gtscript.stencil(
-        backend=backend, definition=horizontal_diffusion, enforce_dtype=dtype, **backend_opts,
-    )
-
     validate_shapes = {
         k: tuple(domain[i] + 2 * origins[k][i] for i in range(3)) for k in origins.keys()
     }
@@ -57,10 +50,25 @@ def run_horizontal_diffusion(niter, domain, backend, dtype, backend_opts={}):
     }
     arg_fields_test = {k: v for k, v in arg_fields_test.items() if not k.endswith("_reference")}
 
-    for k in arg_fields_reference.keys():
-        arg_fields_reference[k].host_to_device()
-        arg_fields_test[k].host_to_device()
+    specialize_symbols = dict()
+    for k in arg_fields_test.keys():
+        if hasattr(arg_fields_reference[k], "host_to_device"):
+            arg_fields_reference[k].host_to_device()
+            arg_fields_test[k].host_to_device()
+        for var, stride in zip("IJK", arg_fields_test[k].strides):
+            specialize_symbols[f"_{k}_{var}_stride"] = stride // arg_fields_test[k].itemsize
+
+    reference_module = gtscript.stencil(
+        backend="numpy", definition=horizontal_diffusion, enforce_dtype=dtype
+    )
+    backend_opts["specialize_sdfg_vars"] = specialize_symbols
+    test_module = gtscript.stencil(
+        backend=backend, definition=horizontal_diffusion, enforce_dtype=dtype, **backend_opts,
+    )
+
     reference_module.run(**arg_fields_reference, _domain_=domain, _origin_=origins, exec_info=None)
+    for k, val in arg_fields_test.items():
+        print(k, val.strides)
     test_module.run(**arg_fields_test, _domain_=domain, _origin_=origins, exec_info=None)
     for k in arg_fields_reference.keys():
         arg_fields_reference[k].device_to_host(force=True)
@@ -417,8 +425,7 @@ from gt4py.backend.dace.gpu_backend import GPUDaceOptimizer
 from gt4py.backend.dace.cpu_backend import X86DaceOptimizer
 
 
-class SpecializingGPUDaceOptimizer(GPUDaceOptimizer):
-    # class SpecializingCPUDaceOptimizer(X86DaceOptimizer):
+class SpecializingCPUDaceOptimizer(X86DaceOptimizer):
     def __init__(self, domain):
         self.domain = domain
 
@@ -428,18 +435,34 @@ class SpecializingGPUDaceOptimizer(GPUDaceOptimizer):
         res: dace.SDFG = super().transform_optimize(sdfg)
 
         res.specialize({var: d for var, d in zip("IJK", self.domain)})
-        # dace.Config.set("compiler", "cuda", "default_block_size", value="128, 1, 1")
+        return res
+
+
+class SpecializingGPUDaceOptimizer(GPUDaceOptimizer):
+    def __init__(self, domain):
+        self.domain = domain
+
+    def transform_optimize(self, sdfg):
+        import dace
+
+        res: dace.SDFG = super().transform_optimize(sdfg)
+
+        res.specialize({var: d for var, d in zip("IJK", self.domain)})
         return res
 
 
 if __name__ == "__main__":
     niter = 10
-    # domain = (128, 128, 80)
-    domain = (3, 3, 10)
-    data_layout = (2, 1, 0)
-    function = "horizontal_diffusion"
+    domain = (128, 128, 80)
+    data_layout = (0, 2, 1)
+    alignment = 32
+    function = "vertical_advection"
+    # function = "horizontal_diffusion"
+    backend = "adhoc_gpu"
+    # backend = "adhoc_cpu"
+
     dtype = np.float32
-    backend = "adhoc"
+
     import sys
 
     if len(sys.argv) > 1:
@@ -448,27 +471,33 @@ if __name__ == "__main__":
         path = None
     from gt4py.backend.dace.cpu_backend import X86DaceOptimizer
 
-    # optimizer = X86DaceOptimizer()
-    # optimizer = SpecializingCPUDaceOptimizer(domain)
-    optimizer = SpecializingGPUDaceOptimizer(domain)
     from gt4py.backend import register as register_backend
-    from gt4py.backend.dace.base_backend import DaceBackend
     from gt4py.backend.dace.cpu_backend import CPUDaceBackend
     from gt4py.backend.dace.gpu_backend import GPUDaceBackend
 
     @register_backend
-    # class AdHocBackend(CPUDaceBackend):
-    class AdHocBackend(GPUDaceBackend):
-        name = "adhoc"
+    class CPUAdHocBackend(CPUDaceBackend):
+        name = "adhoc_cpu"
         storage_info = {
-            "alignment": 1,  # will not affect temporaries currently
-            # "device": "cpu",  # change me
+            "alignment": alignment,  # will not affect temporaries currently
+            "device": "cpu",  # change me
+            "layout_map": lambda m: data_layout,
+            "is_compatible_layout": lambda m: True,
+            "is_compatible_type": lambda m: True,
+        }
+        DEFAULT_OPTIMIZER = SpecializingCPUDaceOptimizer(domain)
+
+    @register_backend
+    class GPUAdHocBackend(GPUDaceBackend):
+        name = "adhoc_gpu"
+        storage_info = {
+            "alignment": alignment,  # will not affect temporaries currently
             "device": "gpu",  # change me
             "layout_map": lambda m: data_layout,
             "is_compatible_layout": lambda m: True,
             "is_compatible_type": lambda m: True,
         }
-        DEFAULT_OPTIMIZER = optimizer
+        DEFAULT_OPTIMIZER = SpecializingGPUDaceOptimizer(domain)
 
     print(f"start {backend}")
     backend_opts = dict(rebuild=True, save_intermediate=True)
