@@ -122,7 +122,7 @@ def test_gen_silent(clirunner, simple_stencil, tmp_path):
 
 def test_gen_missing_arg(clirunner):
     """
-    Test when no input path argument is passed to gen.
+    Test for error if no input path argument is passed to gen.
     """
     result = clirunner.invoke(cli.gtpyc, ["gen"])
 

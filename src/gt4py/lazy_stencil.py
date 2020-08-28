@@ -1,5 +1,5 @@
 """
-Stencil Object that allows for non-instantaneous building.
+Stencil Object that allows for deferred building.
 """
 from typing import TYPE_CHECKING, Any, Dict
 

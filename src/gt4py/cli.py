@@ -57,7 +57,7 @@ class BackendChoice(click.Choice):
 
 
 class BackendOption(click.ParamType):
-    name = "otpion"
+    name = "option"
 
     converter_map = {bool: click.BOOL, int: click.INT, float: click.FLOAT, str: click.STRING}
 
@@ -159,7 +159,7 @@ def report_stencil_names(stencils: List[LazyStencil], reporter: Reporter) -> Non
 @click.group()
 def gtpyc():
     """
-    GT4Py (GritTools for Python) stencil generator & compiler.
+    GT4Py (GridTools for Python) stencil generator & compiler.
 
     This utility is currently only partially implemented.
     """

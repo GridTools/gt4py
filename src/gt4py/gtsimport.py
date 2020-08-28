@@ -105,8 +105,8 @@ class GtsFinder:
             for extension in GTS_EXTENSIONS:
                 yield search_path.absolute() / add_extension(filepath, extension)
 
-    def find_spec(self, fullname, path=None, target=None):
-        """Create a spec for the first matching source file path."""
+    def find_spec(self, fullname, path=None, target=None) -> Optional[ModuleSpec]:
+        """Create a module spec for the first matching source file path."""
         if fullname in sys.modules:
             return None
 
@@ -153,7 +153,7 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
         self.module_file = generate_at / (path.stem.split(".")[0] + ".py")
         super().__init__(fullname, path)
 
-    def get_filename(self, fullname):
+    def get_filename(self, fullname) -> str:
         """
         Generate a py module if an up to date one doesn't exist yet.
 
@@ -179,10 +179,10 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
             self.module_file.write_text(self.get_source_code(fullname))
         return str(self.module_file)
 
-    def get_source_code(self, fullname):
+    def get_source_code(self, fullname) -> str:
         return self.path.read_text().replace(GTS_COMMENT, GTS_IMPORT)
 
-    def create_module(self, spec):
+    def create_module(self, spec) -> ModuleType:
         module = types.ModuleType(name=spec.name)
         return module
 
@@ -192,7 +192,7 @@ def install(
     search_path: Optional[List[Union[str, pathlib.Path]]] = None,
     generate_path: Optional[Union[str, pathlib.Path]] = None,
     in_source: bool = False,
-):
+) -> GtsFinder:
     """
     Install GTScript import extensions.
 
