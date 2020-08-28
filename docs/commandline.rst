@@ -43,6 +43,8 @@ something like the following example.
 
    # [GT] using-dsl: gtscript
 
+   from numpy import float64
+
    from .constants import PI
 
 
@@ -69,7 +71,10 @@ Then
 
    $ gtpyc gen my_stencils.gt.py --backend=gtx86 --output-path=./my-stencils-out
 
-Will generate stencil code for each stencil and will write the following files:
+Will generate the C++ stencil code files using the "gtx86" backend for each
+stencil in the global namespace of ``gstencils.gt.py`` (also ones imported from
+other modules) and output them inside ``my-stencils-out/``. The code files for
+each stencil are put in a subfolder named after the stencil:
 
 .. code-block:: bash
 
@@ -81,3 +86,18 @@ Will generate stencil code for each stencil and will write the following files:
    └── stencil_b/
        ├── computation.cpp
        └── computation.hpp
+
+The line 
+
+.. code-block:: python
+   :caption: my_stencils.gt.py
+
+   # [GT] using-dsl: gtscript
+
+is equivalent to writing
+
+.. code-block:: python
+
+   from gt4py.gtscript import *
+
+in a python module. It makes all symbols from the `gt4py.gtscript` module available.
