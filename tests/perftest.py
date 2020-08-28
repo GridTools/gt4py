@@ -274,6 +274,7 @@ def run_vertical_advection(
     )
     backend_opts["specialize_sdfg_vars"] = specialize_symbols
     test_module = gtscript.stencil(
+
         backend=backend,
         definition=vertical_advection_dycore,
         externals={"BET_M": 0.5, "BET_P": 0.5},

@@ -43,13 +43,14 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
         from gt4py.backend.dace.sdfg.transforms import PrefetchingKCachesTransform
 
         sdfg.apply_transformations_repeated(MapCollapse, validate=False)
+        sdfg.apply_transformations_repeated(OnTheFlyMapFusion, validate=False)
+
         sdfg.apply_strict_transformations(validate=False)
 
         for name, array in sdfg.arrays.items():
             if array.transient:
                 array.lifetime = dace.dtypes.AllocationLifetime.Persistent
 
-        sdfg.apply_transformations_repeated(OnTheFlyMapFusion, validate=False)
 
 
         for state in sdfg.nodes():
@@ -85,6 +86,8 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
                                 if inner_name == name:
                                     inner_array.storage = array.storage
                                     inner_array.strides = array.strides
+
+        dace.sdfg.utils.consolidate_edges(sdfg)
 
         return sdfg
 

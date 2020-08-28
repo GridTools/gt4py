@@ -873,6 +873,9 @@ class PrefetchingKCachesTransform(dace.transformation.pattern_matching.Transform
         default=dace.dtypes.StorageType.Default,
         desc="the StorageType of local buffers",
     )
+    arrays = dace.properties.Property(
+        dtype=list, default=None, allow_none=True, desc="The arrays to apply the trafo on.",
+    )
 
     @staticmethod
     def expressions():
@@ -915,11 +918,15 @@ class PrefetchingKCachesTransform(dace.transformation.pattern_matching.Transform
                 for node in remove_nodes:
                     graph.remove_node(node)
 
+        if self.arrays is None:
+            array_list = list(names.keys())
+        else:
+            array_list = self.arrays
         apply_count = nsdfg_node.sdfg.apply_transformations(
             PrefetchFieldTransform,
             options={
                 "storage_type": self.storage_type,
-                "arrays": list(names.keys()),
+                "arrays": list(n for n in names.keys() if n in array_list),
                 "store": list(k for k, v in names.items() if v),
             },
             validate=False,
