@@ -55,12 +55,11 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
         for state in sdfg.nodes():
             for node in state.nodes():
                 if isinstance(node, dace.nodes.NestedSDFG):
-                    dace.SDFGState
                     prefetching_subgraph = {
-                        PrefetchingKCachesTransform._nsdfg_node: node,
+                        PrefetchingKCachesTransform._nsdfg_node: state.node_id(node),
                     }
                     prefetching_transform = PrefetchingKCachesTransform(
-                        sdfg.sdfg_id, state.sta, prefetching_subgraph, 0
+                        sdfg.sdfg_id, sdfg.node_id(state), prefetching_subgraph, 0
                     )
                     prefetching_transform.storage_type = dace.dtypes.StorageType.Register
                     prefetching_transform.apply(sdfg)

@@ -437,7 +437,7 @@ if __name__ == "__main__":
     # domain = (128, 128, 80)
     domain = (3, 3, 10)
     data_layout = (2, 1, 0)
-    function = "vertical_advection"
+    function = "horizontal_diffusion"
     dtype = np.float32
     backend = "adhoc"
     import sys
