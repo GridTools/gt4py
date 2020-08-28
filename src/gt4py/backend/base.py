@@ -211,7 +211,7 @@ class CLIBackendMixin:
     @abc.abstractmethod
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
         """
-        Generate language bindings source code.
+        Generate bindings source code from ``language_name`` to the target language of the backend.
 
         Returns
         -------

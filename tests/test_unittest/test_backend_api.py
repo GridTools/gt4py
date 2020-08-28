@@ -30,7 +30,7 @@ def init_1(input_field: Field[float]):  # type: ignore
 
 def test_generate_computation(backend, tmp_path):
     """
-    Test the :py:meth:`gt4py.backend.CLIBackendMixin.generate_computation` method.
+    Test if the :py:meth:`gt4py.backend.CLIBackendMixin.generate_computation` generates code.
     """
     # note: if a backend is added that doesn't use CliBackendMixin it will
     # have to be special cased in the backend fixture

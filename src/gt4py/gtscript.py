@@ -295,7 +295,7 @@ def lazy_stencil(
     Returns
     -------
         :class:`gridtools.build.LazyStencil`
-            Wrapper arouund an instance of the dynamically-generated subclass of :class:`gt4py.StencilObject`.
+            Wrapper around an instance of the dynamically-generated subclass of :class:`gt4py.StencilObject`.
             Defers the generation step until the last moment and allows syntax checking independently.
             Also gives access to a more fine grained generate / build process.
     """
