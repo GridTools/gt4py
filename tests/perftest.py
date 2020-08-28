@@ -454,8 +454,9 @@ class SpecializingGPUDaceOptimizer(GPUDaceOptimizer):
 if __name__ == "__main__":
     niter = 10
     domain = (128, 128, 80)
-    data_layout = (0, 2, 1)
+    data_layout = (2, 1, 0)
     alignment = 32
+    block_size = (64, 2, 1)
     function = "vertical_advection"
     # function = "horizontal_diffusion"
     backend = "adhoc_gpu"
@@ -500,7 +501,9 @@ if __name__ == "__main__":
         DEFAULT_OPTIMIZER = SpecializingGPUDaceOptimizer(domain)
 
     print(f"start {backend}")
+    block_size_str = ",".join(map(str, block_size))
     backend_opts = dict(rebuild=True, save_intermediate=True)
+    backend_opts["gpu_block_size"] = block_size_str
     exec_infos = globals()[f"run_{function}"](
         niter=niter, domain=domain, backend=backend, dtype=dtype, backend_opts=backend_opts,
     )

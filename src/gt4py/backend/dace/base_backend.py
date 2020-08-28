@@ -240,6 +240,7 @@ class DaceBackend(gt_backend.BaseBackend):
         "validate": {"versioning": True},
         "enforce_dtype": {"versioning": True},
         "specialize_sdfg_vars": {"versioning": True},
+        "gpu_block_size": {"versioning": True},
     }
     storage_info = {
         "alignment": 1,
@@ -334,6 +335,8 @@ class DaceBackend(gt_backend.BaseBackend):
             sdfg.validate()
 
         specialize_dict = options.backend_opts.get("specialize_sdfg_vars", {})
+        block_size_str = options.backend_opts.get("gpu_block_size", "64,2,1")
+        dace.Config.set("compiler", "cuda", "default_block_size", value=block_size_str)
         sdfg: dace.SDFG
         sdfg.specialize(specialize_dict)
         for sd in sdfg.all_sdfgs_recursive():
