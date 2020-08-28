@@ -51,11 +51,19 @@ class X86DaceOptimizer(DaceOptimizer):
         for state in sdfg.nodes():
             for node in state.nodes():
                 if isinstance(node, dace.nodes.NestedSDFG):
-                    node.sdfg.apply_transformations(
-                        PrefetchingKCachesTransform,
-                        options={"storage_type": dace.dtypes.StorageType.CPU_Heap},
-                        validate=False,
+                    kcache_subgraph = {
+                        PrefetchingKCachesTransform._nsdfg_node: state.node_id(node)
+                    }
+                    trafo = PrefetchingKCachesTransform(
+                        sdfg.sdfg_id, sdfg.node_id(state), kcache_subgraph, 0
                     )
+                    trafo.storage_type = dace.dtypes.StorageType.CPU_Heap
+                    trafo.apply(sdfg)
+                    # node.sdfg.apply_transformations(
+                    #     PrefetchingKCachesTransform,
+                    #     options={"storage_type": dace.dtypes.StorageType.CPU_Heap},
+                    #     validate=False,
+                    # )
 
         # from dace.transformation.subgraph.subgraph_fusion import SubgraphFusion
         # from dace.sdfg.graph import SubgraphView
