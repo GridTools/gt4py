@@ -3,6 +3,7 @@ import functools
 import importlib
 import pathlib
 import sys
+from types import ModuleType
 from typing import Any, Callable, Dict, Generator, KeysView, Optional, Tuple, Type, Union
 
 import click
@@ -99,7 +100,7 @@ class BackendOption(click.ParamType):
         else:
             return type_spec(value)
 
-    def _try_split(self, value):
+    def _try_split(self, value: str) -> Tuple[str, str]:
         """Be helpful in case of formatting error."""
         try:
             name, value = value.split("=")
@@ -161,7 +162,7 @@ class GTScriptBuilder:
         self.output_path = pathlib.Path(output_path)
         self.backend_cls = backend
 
-    def import_input_module(self, input_path: pathlib.Path):
+    def import_input_module(self, input_path: pathlib.Path) -> ModuleType:
         input_module = None
         with gtscript_imports.allow_import_gtscript(search_path=[input_path.parent]):
             self.reporter.echo(f"reading input file {input_path}")
@@ -208,7 +209,7 @@ class GTScriptBuilder:
 
 
 @click.group()
-def gtpyc():
+def gtpyc() -> None:
     """
     GT4Py (GridTools for Python) stencil generator & compiler.
 
@@ -217,11 +218,10 @@ def gtpyc():
 
 
 @gtpyc.command()
-def list_backends():
+def list_backends() -> None:
     """List available backends."""
     reporter = Reporter(silent=False)
     reporter.echo(f"\n{BackendChoice.backend_table()}\n")
-    return 0
 
 
 @gtpyc.command()
@@ -252,11 +252,14 @@ def list_backends():
 @click.argument(
     "input_path", required=True, type=click.Path(file_okay=True, dir_okay=True, exists=True)
 )
-def gen(backend, output_path, options, input_path, silent):
+def gen(
+    backend: Type[CLIBackendMixin],
+    output_path: str,
+    options: Dict[str, Any],
+    input_path: str,
+    silent: bool,
+) -> None:
     """Generate stencils from gtscript modules or packages."""
     GTScriptBuilder(
-        input_path=input_path,
-        output_path=output_path,
-        backend=backend or backend.from_name,
-        silent=silent,
+        input_path=input_path, output_path=output_path, backend=backend, silent=silent,
     ).generate_stencils(build_options=dict(options))
