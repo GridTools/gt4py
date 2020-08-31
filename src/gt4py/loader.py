@@ -21,13 +21,26 @@ a high-level stencil function definition using a specific code generating backen
 """
 
 import types
+from typing import TYPE_CHECKING, Any, Dict, Type
 
 from gt4py import backend as gt_backend
 from gt4py import frontend as gt_frontend
 from gt4py.stencil_builder import StencilBuilder
+from gt4py.type_hints import StencilFunc
 
 
-def load_stencil(frontend_name, backend_name, definition_func, externals, build_options):
+if TYPE_CHECKING:
+    from gt4py.definitions import BuildOptions
+    from gt4py.stencil_object import StencilObject
+
+
+def load_stencil(
+    frontend_name: str,
+    backend_name: str,
+    definition_func: StencilFunc,
+    externals: Dict[str, Any],
+    build_options: "BuildOptions",
+) -> Type["StencilObject"]:
     """Generate a new class object implementing the provided definition.
     """
 
@@ -47,7 +60,12 @@ def load_stencil(frontend_name, backend_name, definition_func, externals, build_
     return builder.build()
 
 
-def gtscript_loader(definition_func, backend, build_options, externals):
+def gtscript_loader(
+    definition_func: StencilFunc,
+    backend: str,
+    build_options: "BuildOptions",
+    externals: Dict[str, Any],
+) -> "StencilObject":
     if not isinstance(definition_func, types.FunctionType):
         raise ValueError("Invalid stencil definition object ({obj})".format(obj=definition_func))
 
