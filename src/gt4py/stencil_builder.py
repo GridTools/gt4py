@@ -126,6 +126,8 @@ class StencilBuilder:
 
     def with_changed_options(self: "StencilBuilder", **kwargs: Dict[str, Any]) -> "StencilBuilder":
         old_options = self.options.as_dict()
+        # BuildOptions constructor expects ``impl_opts`` keyword
+        # but BuildOptions.as_dict outputs ``_impl_opts`` key
         old_options["impl_opts"] = old_options.pop("_impl_opts")
         return self.with_options(**{**old_options, **kwargs})
 
@@ -156,6 +158,9 @@ class StencilBuilder:
 
     @classmethod
     def name_to_options_args(cls, name: Optional[str]) -> Dict[str, str]:
+        """
+        Distinguish between qualified and unqualified name, extract module option from the former.
+        """
         if not name:
             return {}
         components = name.rsplit(".")
@@ -167,6 +172,10 @@ class StencilBuilder:
     @classmethod
     def nest_impl_options(cls, options_dict: Dict[str, Any]) -> Dict[str, Any]:
         impl_opts = options_dict.setdefault("impl_opts", {})
+        # The following is not a dict comprehension because:
+        # The backend-specific options (starting with ``_``) are nested under
+        # options_dict["impl_opts"] *and at the same time removed* from
+        # options_dict itself.
         for impl_key in (k for k in options_dict.keys() if k.startswith("_")):
             impl_opts[impl_key] = options_dict.pop(impl_key)
         return options_dict

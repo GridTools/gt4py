@@ -7,12 +7,15 @@ from gt4py import gtsimport
 
 @pytest.fixture(scope="function")
 def reset_importsys():
-    print("storing data")
+    # This is only shown if a test fails. In that case it can be helpful just to check
+    # it is not caused by caching in the import system or similar.
+    print("storing import system configuration")
     stored_sys_path = sys.path.copy()
     stored_metapath = sys.meta_path.copy()
     stored_modules = sys.modules.copy()
     yield
-    print("resetting data")
+    # Also only visible in case of failure.
+    print("resetting import system configuration")
     sys.path = stored_sys_path
     sys.meta_path = stored_metapath
     sys.modules = stored_modules
