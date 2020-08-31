@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import textwrap
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -29,6 +29,7 @@ from .python_generator import PythonSourceGenerator
 
 if TYPE_CHECKING:
     from gt4py.stencil_builder import StencilBuilder
+    from gt4py.storage.storage import Storage
 
 
 class NumPySourceGenerator(PythonSourceGenerator):
@@ -70,7 +71,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
-    def _make_regional_computation(self, iteration_order, interval_definition, body_sources):
+    def _make_regional_computation(
+        self, iteration_order, interval_definition, body_sources
+    ) -> List[str]:
         source_lines = []
         loop_bounds = [None, None]
 
@@ -108,13 +111,13 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
     def make_temporary_field(
         self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent
-    ):
+    ) -> List[str]:
         source_lines = super().make_temporary_field(name, dtype, extent)
         source_lines.extend(self._make_field_origin(name, extent.to_boundary().lower_indices))
 
         return source_lines
 
-    def make_stage_source(self, iteration_order: gt_ir.IterationOrder, regions: list):
+    def make_stage_source(self, iteration_order: gt_ir.IterationOrder, regions: list) -> List[str]:
         source_lines = []
 
         # Computations body is split in different vertical regions
@@ -129,7 +132,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return source_lines
 
     # ---- Visitor handlers ----
-    def visit_FieldRef(self, node: gt_ir.FieldRef):
+    def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
         assert node.name in self.block_info.accessors
 
         is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
@@ -186,7 +189,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return source
 
-    def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
+    def visit_StencilImplementation(self, node: gt_ir.StencilImplementation) -> None:
         self.sources.empty_line()
 
         # Accessors for IO fields
@@ -203,7 +206,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         super().visit_StencilImplementation(node)
 
-    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr):
+    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr) -> str:
 
         if node.op is gt_ir.UnaryOperator.NOT:
             source = "np.logical_not({expr})".format(expr=self.visit(node.arg))
@@ -215,7 +218,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return source
 
-    def visit_BinOpExpr(self, node: gt_ir.BinOpExpr):
+    def visit_BinOpExpr(self, node: gt_ir.BinOpExpr) -> str:
         if node.op is gt_ir.BinaryOperator.AND:
             source = "np.logical_and({lhs}, {rhs})".format(
                 lhs=self.visit(node.lhs), rhs=self.visit(node.rhs)
@@ -235,7 +238,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return source
 
-    def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr):
+    def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr) -> str:
         then_fmt = "({})" if isinstance(node.then_expr, gt_ir.CompositeExpr) else "{}"
         else_fmt = "({})" if isinstance(node.else_expr, gt_ir.CompositeExpr) else "{}"
 
@@ -249,7 +252,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return source
 
-    def _visit_branch_stmt(self, stmt):
+    def _visit_branch_stmt(self, stmt: gt_ir.Statement) -> List[str]:
         sources = []
         if isinstance(stmt, gt_ir.Assign):
             condition = "__condition_1"
@@ -287,7 +290,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 sources.append(stmt_sources)
         return sources
 
-    def visit_If(self, node: gt_ir.If):
+    def visit_If(self, node: gt_ir.If) -> List[str]:
         sources = []
         self.conditions_depth += 1
         sources.append(
@@ -326,7 +329,7 @@ class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
             interval_k_end_name="interval_k_end",
         )
 
-    def generate_module_members(self):
+    def generate_module_members(self) -> str:
         source = """
 def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
     return np.choose(
@@ -347,7 +350,7 @@ def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
 """
         return source
 
-    def generate_implementation(self):
+    def generate_implementation(self) -> str:
         block = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
         self.source_generator(self.builder.implementation_ir, block)
         if self.builder.options.backend_opts.get("ignore_np_errstate", True):
@@ -358,17 +361,17 @@ def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
         return source
 
 
-def numpy_layout(mask):
+def numpy_layout(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     ctr = iter(range(sum(mask)))
     layout = [next(ctr) if m else None for m in mask]
     return tuple(layout)
 
 
-def numpy_is_compatible_layout(field):
+def numpy_is_compatible_layout(field: Union["Storage", np.ndarray]) -> bool:
     return sum(field.shape) > 0
 
 
-def numpy_is_compatible_type(field):
+def numpy_is_compatible_type(field: Any) -> bool:
     return isinstance(field, np.ndarray)
 
 
