@@ -62,12 +62,12 @@ class LazyStencil:
         if not self.builder.definition_ir:
             raise RuntimeError("Frontend did not raise a syntax error but did not generate IR.")
 
-    def __call__(self, *args, **kwargs) -> None:
+    def __call__(self, *args: Any, **kwargs: Any) -> None:
         """
         Execute the stencil, building the stencil if necessary.
         """
         self.implementation(*args, **kwargs)
 
-    def run(self, *args, **kwargs) -> None:
+    def run(self, *args: Any, **kwargs: Any) -> None:
         """Pass through to the implementation.run."""
         self.implementation.run(*args, **kwargs)
