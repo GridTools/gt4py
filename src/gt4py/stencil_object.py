@@ -118,7 +118,7 @@ class StencilObject(abc.ABC):
 
     def _get_max_domain(self, field_args, origin):
         """Return the maximum domain size possible
-        
+
         Parameters
         ----------
             field_args: `dict`
