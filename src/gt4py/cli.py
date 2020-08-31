@@ -9,7 +9,7 @@ import click
 import tabulate
 
 import gt4py
-from gt4py import gtsimport
+from gt4py import gtscript_imports
 from gt4py.backend.base import CLIBackendMixin
 from gt4py.lazy_stencil import LazyStencil
 
@@ -163,7 +163,7 @@ class GTScriptBuilder:
 
     def import_input_module(self, input_path: pathlib.Path):
         input_module = None
-        with gtsimport.allow_import_gtscript(search_path=[input_path.parent]):
+        with gtscript_imports.allow_import_gtscript(search_path=[input_path.parent]):
             self.reporter.echo(f"reading input file {input_path}")
             input_module = importlib.import_module(input_path.stem.split(".")[0])
             self.reporter.echo(f"input file loaded as module {input_module}")

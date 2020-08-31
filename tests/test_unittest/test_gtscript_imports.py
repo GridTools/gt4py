@@ -2,7 +2,7 @@ import sys
 
 import pytest
 
-from gt4py import gtsimport
+from gt4py import gtscript_imports
 
 
 @pytest.fixture(scope="function")
@@ -21,7 +21,7 @@ def reset_importsys():
     sys.modules = stored_modules
 
 
-@pytest.fixture(params=gtsimport.GTS_EXTENSIONS)
+@pytest.fixture(params=gtscript_imports.GTS_EXTENSIONS)
 def extension(request):
     yield request.param
 
@@ -216,7 +216,7 @@ def make_package(tmp_path, extension, reset_importsys):
 def test_single_file_import(make_single_file, reset_importsys):
     """Test using basic import statement for a gtscript module."""
     single_file = make_single_file("sfile_imp")
-    gtsimport.install(search_path=[single_file.parent])
+    gtscript_imports.install(search_path=[single_file.parent])
     assert str(single_file.parent) in sys.path
 
     import sfile_imp
@@ -227,7 +227,7 @@ def test_single_file_import(make_single_file, reset_importsys):
 def test_single_file_nosearchpath(make_single_file):
     """Test import statement without giving a search path."""
     single_file = make_single_file("sfile_nsp")
-    gtsimport.install()
+    gtscript_imports.install()
     sys.path.append(single_file.parent)
 
     import sfile_nsp
@@ -239,7 +239,7 @@ def test_single_file_builddir(tmp_path, make_single_file):
     """Test importer with build folder."""
     single_file = make_single_file("sfile_bf")
     gen_dir = tmp_path / "generate"
-    gtsimport.install(search_path=[single_file.parent], generate_path=gen_dir)
+    gtscript_imports.install(search_path=[single_file.parent], generate_path=gen_dir)
 
     import sfile_bf
 
@@ -250,7 +250,7 @@ def test_single_file_builddir(tmp_path, make_single_file):
 def test_single_file_insource(make_single_file):
     """Test importer with in-source generation."""
     single_file = make_single_file("sfile_is")
-    gtsimport.install(search_path=[single_file.parent], in_source=True)
+    gtscript_imports.install(search_path=[single_file.parent], in_source=True)
 
     import sfile_is
 
@@ -263,7 +263,7 @@ def test_single_file_import_module(make_single_file):
     from importlib import import_module
 
     single_file = make_single_file("sfile_im")
-    gtsimport.install(search_path=[single_file.parent])
+    gtscript_imports.install(search_path=[single_file.parent])
     print(single_file.stem)
     print(single_file.suffixes)
     sfile_im = import_module(single_file.stem.split(".")[0])
@@ -273,7 +273,7 @@ def test_single_file_import_module(make_single_file):
 def test_single_file_load(make_single_file):
     """Test the finder's load_module method."""
     single_file = make_single_file("sfile_load")
-    finder = gtsimport.install(search_path=[single_file.parent])
+    finder = gtscript_imports.install(search_path=[single_file.parent])
     sf_module = finder.load_module("sfile_load")
     assert sf_module.SENTINEL == 5
 
@@ -281,7 +281,7 @@ def test_single_file_load(make_single_file):
 def test_twofile_import(make_two_files):
     """Test importing from the same folder."""
     file_one, file_two = make_two_files("simple")
-    gtsimport.install(search_path=[file_one.parent])
+    gtscript_imports.install(search_path=[file_one.parent])
 
     import simple_one
 
@@ -296,7 +296,7 @@ def test_twofile_import(make_two_files):
 def test_pkg_import(make_package):
     """Test importing from package in same folder."""
     main_file = make_package("pkg_simple")
-    gtsimport.install(search_path=[main_file.parent])
+    gtscript_imports.install(search_path=[main_file.parent])
 
     import pkg_simple
 
