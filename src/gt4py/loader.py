@@ -41,7 +41,8 @@ def load_stencil(
     externals: Dict[str, Any],
     build_options: "BuildOptions",
 ) -> Type["StencilObject"]:
-    """Generate a new class object implementing the provided definition.
+    """
+    Generate a new class object implementing the provided definition.
     """
 
     # Load components

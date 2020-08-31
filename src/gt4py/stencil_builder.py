@@ -52,9 +52,9 @@ class StencilBuilder:
         self.options = options or BuildOptions(  # type: ignore
             **self.default_options_dict(definition_func)
         )
-        self.backend: "BackendType" = backend(self) if backend else gt4py.backend.from_name(
-            "debug"
-        )(self)
+        self.backend: "BackendType" = (
+            backend(self) if backend else gt4py.backend.from_name("debug")(self)
+        )
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
         self.caching = gt4py.caching.strategy_factory("jit", self)
         self._build_data: Dict[str, Any] = {}
