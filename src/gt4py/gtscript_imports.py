@@ -25,7 +25,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from types import ModuleType
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple, Union
 
 
 GTS_EXTENSIONS = [".gt.py"]
@@ -36,12 +36,12 @@ GTS_IMPORT = (
 )
 
 
-def _add_extension(path: pathlib.Path, extension: str):
+def _add_extension(path: pathlib.Path, extension: str) -> pathlib.Path:
     """Add an extension to the filename of a path."""
     return path.parent / (path.name + extension)
 
 
-class GtsFinder:
+class GtsFinder(importlib.abc.MetaPathFinder):
     """
     Implements the :class:`importlib.abc.PathFinder` protocol.
 
@@ -76,11 +76,13 @@ class GtsFinder:
 
         self.search_path = search_path
 
-    def get_generate_path(self, src_file_path: pathlib.Path):
+    def get_generate_path(self, src_file_path: pathlib.Path) -> pathlib.Path:
         """Find the out-of-source or in-source generate directory."""
         return self.generate_path or src_file_path.parent
 
-    def iter_search_candidates(self, fullname, path):
+    def iter_search_candidates(
+        self, fullname: str, path: Optional[List[pathlib.Path]]
+    ) -> Generator[pathlib.Path, None, None]:
         """Iterate possible source file paths."""
         search_paths = [p for p in self.search_path or sys.path]
         search_paths.extend(path or [])
@@ -91,7 +93,7 @@ class GtsFinder:
                 yield search_path.absolute() / _add_extension(filepath, extension)
 
     def find_spec(
-        self, fullname, path=None, target=None
+        self, fullname: str, path=None, target=None
     ) -> Optional[importlib.machinery.ModuleSpec]:
         """Create a module spec for the first matching source file path."""
         if fullname in sys.modules:
@@ -112,16 +114,16 @@ class GtsFinder:
 
         return None
 
-    def install(self):
+    def install(self) -> None:
         sys.meta_path.append(self)
         if self.search_path:
             sys.path.extend([str(p) for p in self.search_path])
 
-    def load_module(self, fullname, path=None, target=None):
+    def load_module(self, fullname: str, path=None, target=None) -> ModuleType:
         if fullname in sys.modules:
             return sys.modules[fullname]
         spec = self.find_spec(fullname, path, target)
-        if not spec:
+        if not spec or not isinstance(spec.loader, GtsLoader):
             raise ImportError("could not find gtscript module %s", fullname)
         module = spec.loader.create_module(spec)
         spec.loader.exec_module(module)
@@ -141,8 +143,8 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
         super().__init__(fullname, str(path.absolute()))
 
     @property
-    def plpath(self):
-        return pathlib.Path(self.path)
+    def plpath(self) -> pathlib.Path:
+        return pathlib.Path(str(self.path))
 
     def get_filename(self, fullname: str) -> str:
         """
