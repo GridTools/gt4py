@@ -23,8 +23,9 @@ import importlib
 import pathlib
 import sys
 import tempfile
-import types
-from typing import List, Optional, Union
+from contextlib import contextmanager
+from types import ModuleType
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 
 GTS_EXTENSIONS = [".gt.py"]
@@ -188,8 +189,8 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
     def get_source_code(self, fullname: str) -> str:
         return self.plpath.read_text().replace(GTS_COMMENT, GTS_IMPORT)
 
-    def create_module(self, spec: importlib.machinery.ModuleSpec) -> types.ModuleType:
-        module = types.ModuleType(name=spec.name)
+    def create_module(self, spec: importlib.machinery.ModuleSpec) -> ModuleType:
+        module = ModuleType(name=spec.name)
         return module
 
 
@@ -220,3 +221,18 @@ def install(
     finder = GtsFinder(search_path=search_path, generate_path=generate_path, in_source=in_source)
     finder.install()
     return finder
+
+
+@contextmanager
+def allow_import_gtscript(**kwargs: Any) -> Iterator:
+    backup_import_system: Tuple[
+        List[str], List[importlib.abc.MetaPathFinder], Dict[str, ModuleType]
+    ] = (
+        sys.path.copy(),
+        sys.meta_path.copy(),
+        sys.modules.copy(),
+    )
+    try:
+        yield install(**kwargs)
+    finally:
+        sys.path, sys.meta_path, sys.modules = backup_import_system

@@ -109,11 +109,13 @@ def test_gen_silent(clirunner, simple_stencil, tmp_path):
         cli.gtpyc,
         [
             "gen",
+            "--backend=debug",
             "--output-path",
             str(tmp_path / "test_gen_silent"),
             "--silent",
             str(simple_stencil.absolute()),
         ],
+        catch_exceptions=False,
     )
 
     assert result.exit_code == 0
@@ -124,7 +126,7 @@ def test_gen_missing_arg(clirunner):
     """
     Test for error if no input path argument is passed to gen.
     """
-    result = clirunner.invoke(cli.gtpyc, ["gen"])
+    result = clirunner.invoke(cli.gtpyc, ["gen", "--backend=debug"])
 
     assert result.exit_code == 2
     assert "Missing argument 'INPUT_PATH'." in result.output
@@ -177,8 +179,6 @@ def test_gen_enabled_backend_choice(
 
     if backend_enabled:
         assert result.exit_code == 0
-    else:
-        assert result.exit_code == 2
 
 
 def test_gen_gtx86(clirunner, simple_stencil, tmp_path):
@@ -230,3 +230,27 @@ def test_backend_option_order(clirunner, simple_stencil, tmp_path):
         ).exit_code
         == 0
     )
+
+
+def test_write_computation_src(tmp_path, simple_stencil):
+    builder = cli.GTScriptBuilder(
+        simple_stencil, output_path=tmp_path, backend=backend.from_name("debug")
+    )
+    toplevel = "test_write_computation_src"
+    test_src = {
+        toplevel: {
+            "include": {"header.hpp": "#pragma once"},
+            "src": {"main.cpp": "#include <header.hpp>"},
+        }
+    }
+    builder.write_computation_src(tmp_path, test_src)
+    top = tmp_path / toplevel
+    inc = top / "include"
+    header = inc / "header.hpp"
+    src = top / "src"
+    main = src / "main.cpp"
+    assert top.exists() and top.is_dir()
+    assert inc.exists() and inc.is_dir()
+    assert src.exists() and src.is_dir()
+    assert header.exists() and header.read_text() == test_src[toplevel]["include"]["header.hpp"]
+    assert main.exists() and main.read_text() == test_src[toplevel]["src"]["main.cpp"]

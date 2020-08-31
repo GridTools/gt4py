@@ -153,7 +153,7 @@ class Backend(abc.ABC):
         return []
 
 
-class CLIBackendMixin:
+class CLIBackendMixin(Backend):
     @abc.abstractmethod
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         """

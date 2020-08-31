@@ -8,8 +8,10 @@ from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
 
 if TYPE_CHECKING:
     from gt4py.backend.base import Backend as BackendType
+    from gt4py.backend.base import CLIBackendMixin
     from gt4py.frontend.base import Frontend as FrontendType
     from gt4py.ir import StencilDefinition, StencilImplementation
+    from gt4py.stencil_object import StencilObject
 
 
 class StencilBuilder:
@@ -58,12 +60,21 @@ class StencilBuilder:
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}
 
-    def build(self):
+    def build(self) -> Type["StencilObject"]:
+        """Generate, compile and/or load everything necessary to provide a usable stencil class."""
         # load or generate
         stencil_class = None if self.options.rebuild else self.backend.load()
         if stencil_class is None:
             stencil_class = self.backend.generate()
         return stencil_class
+
+    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
+        """Generate the stencil source code, fail if backend does not support CLI."""
+        return self.cli_backend.generate_computation()
+
+    def generate_bindings(self, targe_language: str) -> Dict[str, Union[str, Dict]]:
+        """Generate ``target_language`` bindings source, fail if backend does not support CLI."""
+        return self.cli_backend.generate_bindings(targe_language)
 
     def with_caching(
         self: "StencilBuilder", caching_strategy_name: str, *args: Any, **kwargs: Any
@@ -263,3 +274,11 @@ class StencilBuilder:
     @property
     def is_build_data_empty(self) -> bool:
         return not bool(self._build_data)
+
+    @property
+    def cli_backend(self) -> "CLIBackendMixin":
+        from gt4py.backend.base import CLIBackendMixin
+
+        if not isinstance(self.backend, CLIBackendMixin):
+            raise RuntimeError("backend of StencilBuilder instance is not CLI enabled.")
+        return self.backend

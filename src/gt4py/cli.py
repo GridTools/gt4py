@@ -3,14 +3,14 @@ import functools
 import importlib
 import pathlib
 import sys
-from typing import Any, Callable, Dict, KeysView, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, Generator, KeysView, Optional, Tuple, Type, Union
 
 import click
 import tabulate
 
 import gt4py
 from gt4py import gtsimport
-from gt4py.backend.base import Backend
+from gt4py.backend.base import CLIBackendMixin
 from gt4py.lazy_stencil import LazyStencil
 
 
@@ -34,24 +34,25 @@ class BackendChoice(click.Choice):
 
     def convert(
         self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context],
-    ) -> Type[Backend]:
+    ) -> Type[CLIBackendMixin]:
         """Convert a CLI option argument to a backend."""
         name = super().convert(value, param, ctx)
-        if not self.is_enabled(name):
+        backend_cls = self.enabled_backend_cls_from_name(name)
+        if not backend_cls:
             self.fail("Backend is not CLI-enabled.")
-        return gt4py.backend.from_name(name)
+        return backend_cls
 
     @staticmethod
     def get_backend_names() -> KeysView:
         return gt4py.backend.REGISTRY.keys()
 
     @staticmethod
-    def is_enabled(backend_name: str) -> bool:
+    def enabled_backend_cls_from_name(backend_name: str) -> Optional[Type[CLIBackendMixin]]:
         """Check if a given backend is enabled for CLI."""
         backend_cls = gt4py.backend.from_name(backend_name)
-        if hasattr(backend_cls, "generate_computation"):
-            return True
-        return False
+        if not issubclass(backend_cls, CLIBackendMixin):
+            return None
+        return backend_cls
 
     @classmethod
     def backend_table(cls) -> str:
@@ -60,13 +61,14 @@ class BackendChoice(click.Choice):
         names = cls.get_backend_names()
         backends = [gt4py.backend.from_name(name) for name in names]
         comp_langs = [
-            backend.languages["computation"] if backend.languages else "?" for backend in backends
-        ]
-        binding_langs = [
-            ", ".join(backend.languages["bindings"]) if backend.languages else "?"
+            backend.languages["computation"] if backend and backend.languages else "?"
             for backend in backends
         ]
-        enabled = [cls.is_enabled(name) and "Yes" or "No" for name in names] + ["No"]
+        binding_langs = [
+            ", ".join(backend.languages["bindings"]) if backend and backend.languages else "?"
+            for backend in backends
+        ]
+        enabled = [backend is not None and "Yes" or "No" for backend in backends]
         data = zip(names, comp_langs, binding_langs, enabled)
         return tabulate.tabulate(data, headers=headers)
 
@@ -145,48 +147,64 @@ def get_param_by_name(ctx: click.Context, name: str) -> click.Parameter:
     return by_name[name]
 
 
-def write_computation_src(
-    root_path: pathlib.Path, computation_src: Dict[str, Union[str, Dict]], reporter: Reporter
-) -> None:
-    for path_name, content in computation_src.items():
-        if isinstance(content, Dict):
-            root_path.joinpath(path_name).mkdir(exist_ok=True)
-            write_computation_src(root_path / path_name, content, reporter)
-        else:
-            file_path = root_path / path_name
-            reporter.echo(f"Writing source file: {file_path}")
-            file_path.write_text(content)
+class GTScriptBuilder:
+    def __init__(
+        self,
+        input_path: Union[str, pathlib.Path],
+        *,
+        output_path: Union[str, pathlib.Path],
+        backend: Type[CLIBackendMixin],
+        silent: bool = False,
+    ):
+        self.reporter = Reporter(silent)
+        self.input_module = self.import_input_module(pathlib.Path(input_path))
+        self.output_path = pathlib.Path(output_path)
+        self.backend_cls = backend
 
+    def import_input_module(self, input_path: pathlib.Path):
+        input_module = None
+        with gtsimport.allow_import_gtscript(search_path=[input_path.parent]):
+            self.reporter.echo(f"reading input file {input_path}")
+            input_module = importlib.import_module(input_path.stem.split(".")[0])
+            self.reporter.echo(f"input file loaded as module {input_module}")
+        return input_module
 
-def generate_stencils(
-    stencils: List[LazyStencil],
-    reporter: Reporter,
-    *,
-    output_path: pathlib.Path,
-    backend: Optional[Backend] = None,
-    build_options: Optional[Dict[str, Any]] = None,
-) -> None:
-    for proto_stencil in stencils:
-        reporter.echo(f"Building stencil {proto_stencil.builder.options.name}")
-        builder = proto_stencil.builder
-        if backend:
-            builder.with_backend(backend.name)
-        if build_options:
-            builder.with_changed_options(impl_opts=build_options)
-        builder.with_caching("nocaching", output_path=output_path)
-        # technically this could be called with an unenabled backend,
-        # however the CLI will fail before and never do it.
-        # Putting a runtime check here just to satisfy mypy seems overkill.
-        computation_src = builder.backend.generate_computation()  # type: ignore
-        write_computation_src(builder.caching.root_path, computation_src, reporter)
+    def iterate_stencils(self) -> Generator[LazyStencil, None, None]:
+        return (
+            v
+            for k, v in self.input_module.__dict__.items()
+            if k.startswith != "_" and isinstance(v, LazyStencil)
+        )
 
+    def write_computation_src(
+        self, root_path: pathlib.Path, computation_src: Dict[str, Union[str, Dict]]
+    ) -> None:
+        for path_name, content in computation_src.items():
+            if isinstance(content, Dict):
+                root_path.joinpath(path_name).mkdir(exist_ok=True)
+                self.write_computation_src(root_path / path_name, content)
+            else:
+                file_path = root_path / path_name
+                self.reporter.echo(f"Writing source file: {file_path}")
+                file_path.write_text(content)
 
-def report_stencil_names(stencils: List[LazyStencil], reporter: Reporter) -> None:
-    stencils_msg = "No stencils found."
-    if stencils:
-        stencil_names = ", ".join('"' + st.builder.options.name + '"' for st in stencils)
-        stencils_msg = f"Found {len(stencils)} stencils: {stencil_names}."
-    reporter.echo(stencils_msg)
+    def generate_stencils(self, build_options: Optional[Dict[str, Any]] = None,) -> None:
+        for proto_stencil in self.iterate_stencils():
+            self.reporter.echo(f"Building stencil {proto_stencil.builder.options.name}")
+            builder = proto_stencil.builder.with_backend(self.backend_cls.name)
+            if build_options:
+                builder.with_changed_options(impl_opts=build_options)
+            builder.with_caching("nocaching", output_path=self.output_path)
+            computation_src = builder.generate_computation()
+            self.write_computation_src(builder.caching.root_path, computation_src)
+
+    def report_stencil_names(self) -> None:
+        stencils = list(self.iterate_stencils())
+        stencils_msg = "No stencils found."
+        if stencils:
+            stencil_names = ", ".join('"' + st.builder.options.name + '"' for st in stencils)
+            stencils_msg = f"Found {len(stencils)} stencils: {stencil_names}."
+        self.reporter.echo(stencils_msg)
 
 
 @click.group()
@@ -211,6 +229,7 @@ def list_backends():
     "--backend",
     "-b",
     type=BackendChoice(BackendChoice.get_backend_names()),
+    required=True,
     help="Choose a backend",
     is_eager=True,
 )
@@ -235,20 +254,9 @@ def list_backends():
 )
 def gen(backend, output_path, options, input_path, silent):
     """Generate stencils from gtscript modules or packages."""
-    reporter = Reporter(silent=silent)
-    input_path = pathlib.Path(input_path)
-    output_path = pathlib.Path(output_path)
-    gtsimport.install(search_path=[input_path.parent])
-    reporter.echo(f"reading input file {input_path}")
-    input_module = importlib.import_module(input_path.stem.split(".")[0])
-    reporter.echo(f"input file loaded as module {input_module}")
-    build_options = dict(options)
-    stencils = [
-        v
-        for k, v in input_module.__dict__.items()
-        if k.startswith != "_" and isinstance(v, LazyStencil)
-    ]
-    report_stencil_names(stencils, reporter)
-    generate_stencils(
-        stencils, reporter, backend=backend, build_options=build_options, output_path=output_path
-    )
+    GTScriptBuilder(
+        input_path=input_path,
+        output_path=output_path,
+        backend=backend or backend.from_name,
+        silent=silent,
+    ).generate_stencils(build_options=dict(options))
