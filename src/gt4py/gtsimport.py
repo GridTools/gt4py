@@ -9,7 +9,7 @@ Usage Example
     from gt4py import gtsimport
 
     # simple usage
-    gtsimport.install()  # for allowing .gts and .pygt everywhere in sys.path
+    gtsimport.install()  # for allowing .gt.py everywhere in sys.path
 
     # advanced usage
     gtsimport.install(
@@ -36,23 +36,7 @@ GTS_IMPORT = (
 )
 
 
-def is_subpath(path: pathlib.Path, test_subpath: pathlib.Path):
-    """
-    True if `test_subpath` is a subpath of path.
-
-    Does not take care of any path resolution / expansion.
-    """
-    if path == test_subpath:
-        return True
-    parent = test_subpath.parent
-    while parent.parent != parent:
-        if parent == path:
-            return True
-        parent = parent.parent
-    return False
-
-
-def add_extension(path: pathlib.Path, extension: str):
+def _add_extension(path: pathlib.Path, extension: str):
     """Add an extension to the filename of a path."""
     return path.parent / (path.name + extension)
 
@@ -66,21 +50,21 @@ class GtsFinder:
 
     Parameters
     ----------
-    search_path : `List[Pathlike]`, optional
+    search_path :
         Search path for `gtscript` sources, defaults to `sys.path`
 
-    generate_path : `Pathlike`, optional
+    generate_path :
         Path to generate py modules in. use a temp dir by default
 
-    in_source : `bool`, optional
+    in_source :
         If True, py modules are built next to the gtscript files
         (generate_path is ignored).
     """
 
     def __init__(
         self,
-        search_path: Union[List[Union[str, pathlib.Path]], None] = None,
-        generate_path: Union[str, pathlib.Path, None] = None,
+        search_path: Optional[List[Union[str, pathlib.Path]]] = None,
+        generate_path: Optional[Union[str, pathlib.Path]] = None,
         in_source: bool = False,
     ):
         if in_source:
@@ -92,7 +76,7 @@ class GtsFinder:
 
         self.search_path = search_path
 
-    def get_generate_path(self, src_file_path):
+    def get_generate_path(self, src_file_path: pathlib.Path):
         """Find the out-of-source or in-source generate directory."""
         return self.generate_path or src_file_path.parent
 
@@ -104,7 +88,7 @@ class GtsFinder:
         for search_path in search_paths:
             search_path = pathlib.Path(search_path)
             for extension in GTS_EXTENSIONS:
-                yield search_path.absolute() / add_extension(filepath, extension)
+                yield search_path.absolute() / _add_extension(filepath, extension)
 
     def find_spec(
         self, fullname, path=None, target=None
@@ -203,20 +187,7 @@ def install(
     """
     Install GTScript import extensions.
 
-    Parameters
-    ----------
-    search_path : `List[Pathlike]`
-        A list of paths where gtscript files are expected to be found.
-        Also added to the search path for python files.
-
-    generate_path : `Pathlike`, optional
-        Path to a directory where python modules generated from `gtscript` files
-        will be created. Can be used to cache the process between runs.
-        If none is given, a temporary directory is used.
-
-    in_source: `bool`
-        If true, `generate_path` will be ignored and python modules will be
-        generated alongside the corresponding `gtscript` sources.
+    Parameters are passed through to the constructor of :py:class:`GtsFinder`.
     """
     finder = GtsFinder(search_path=search_path, generate_path=generate_path, in_source=in_source)
     finder.install()
@@ -225,6 +196,23 @@ def install(
 
 @contextmanager
 def allow_import_gtscript(**kwargs: Any) -> Iterator:
+    """
+    Create a context within which GTScript extensions can be imported.
+
+    Example
+    -------
+    .. code-block: python
+
+        mystencil = None
+        with allow_import_gtscript(search_path=[pathlib.Path("my/gtscript/extensions/")]):
+            import some_stencil  # works
+            mystencil = some_stencil.some_stencil
+
+        ## use mystencil
+
+        import some_other_stencil  # in the same directory as some_stencil.gt.py
+        ## import error
+    """
     backup_import_system: Tuple[
         List[str], List[importlib.abc.MetaPathFinder], Dict[str, ModuleType]
     ] = (
