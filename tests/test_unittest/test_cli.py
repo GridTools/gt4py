@@ -166,7 +166,7 @@ def test_gen_enabled_backend_choice(
     clirunner, simple_stencil, backend_name, backend_enabled, tmp_path
 ):
     """
-    Test an enabled backend.
+    Test if cli runs successfully or fails depending on a backend being enabled.
     """
     result = clirunner.invoke(
         cli.gtpyc,
