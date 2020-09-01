@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import textwrap
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -312,8 +313,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
 
 class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
-    def __init__(self, builder: "StencilBuilder"):
-        super().__init__(builder)
+    def __init__(self):
+        super().__init__()
         self.source_generator = NumPySourceGenerator(
             indent_size=self.TEMPLATE_INDENT_SIZE,
             origin_marker="__O",
@@ -347,10 +348,14 @@ def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
         return source
 
     def generate_implementation(self):
-        sources = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
-        self.source_generator(self.implementation_ir, sources)
-
-        return sources.text
+        block = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
+        self.source_generator(self.builder.implementation_ir, block)
+        if self.builder.options.backend_opts.get("ignore_np_errstate", True):
+            source = "with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):\n"
+            source += textwrap.indent(block.text, " " * self.TEMPLATE_INDENT_SIZE)
+        else:
+            source = block.text
+        return source
 
 
 def numpy_layout(mask):
@@ -369,10 +374,17 @@ def numpy_is_compatible_type(field):
 
 @gt_backend.register
 class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):
-    """Pure Python backend using numpy for faster computations than the debug backend."""
+    """Pure Python backend using NumPy for faster computations than the debug backend.
+
+    Other Parameters
+    ----------------
+    Backend options include:
+    - ignore_np_errstate: `bool`
+        If False, does not ignore NumPy floating-point errors. (`True` by default.)
+    """
 
     name = "numpy"
-    options = {}
+    options = {"ignore_np_errstate": {"versioning": True}}
     storage_info = {
         "alignment": 1,
         "device": "cpu",

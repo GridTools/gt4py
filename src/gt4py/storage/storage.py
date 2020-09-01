@@ -70,10 +70,12 @@ def zeros(backend, default_origin, shape, dtype, mask=None, *, managed_memory=Fa
 def from_array(
     data, backend, default_origin, shape=None, dtype=None, mask=None, *, managed_memory=False
 ):
+    is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
+    xp = cp if is_cupy_array else np
     if shape is None:
-        shape = np.asarray(data).shape
+        shape = xp.asarray(data).shape
     if dtype is None:
-        dtype = np.asarray(data).dtype
+        dtype = xp.asarray(data).dtype
     storage = empty(
         shape=shape,
         dtype=dtype,
@@ -82,7 +84,7 @@ def from_array(
         mask=mask,
         managed_memory=managed_memory,
     )
-    if cp is not None and isinstance(data, cp.ndarray):
+    if is_cupy_array:
         if isinstance(storage, GPUStorage) or isinstance(storage, ExplicitlySyncedGPUStorage):
             tmp = storage_utils.gpu_view(storage)
             tmp[...] = data
@@ -112,7 +114,7 @@ class Storage(np.ndarray):
     __array_subok__ = True
 
     def __new__(cls, shape, dtype, backend, default_origin, mask=None):
-        """"
+        """ "
 
         Parameters
         ----------
@@ -295,7 +297,7 @@ class GPUStorage(Storage):
     def __setitem__(self, key, value):
         if hasattr(value, "__cuda_array_interface__"):
             gpu_view = storage_utils.gpu_view(self)
-            gpu_view[key] = cp.asarray(value)
+            gpu_view[key] = cp.asarray(value.data)
             cp.cuda.Device(0).synchronize()
             return value
         else:

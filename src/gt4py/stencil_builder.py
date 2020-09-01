@@ -1,5 +1,5 @@
 import pathlib
-from typing import TYPE_CHECKING, Any, Dict, Optional, Type, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
 import gt4py
 from gt4py.definitions import BuildOptions, StencilID
@@ -9,10 +9,7 @@ from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
 
 if TYPE_CHECKING:
     from gt4py.backend.base import Backend as BackendType
-    from gt4py.frontend.concepts import Frontend as FrontendType
-
-
-SelfType = TypeVar("SelfType", bound="StencilBuilder")
+    from gt4py.frontend.base import Frontend as FrontendType
 
 
 class StencilBuilder:
@@ -53,18 +50,17 @@ class StencilBuilder:
         self.options = options or BuildOptions(  # type: ignore
             name=definition_func.__name__, module=definition_func.__module__
         )
-        print(options)
-        self.backend: "BackendType" = backend(self) if backend else gt4py.backend.from_name(
-            "debug"
-        )(self)
+        self.backend: "BackendType" = (
+            backend(self) if backend else gt4py.backend.from_name("debug")(self)
+        )
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
         self.caching = gt4py.caching.strategy_factory("jit", self)
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}
 
     def with_caching(
-        self: SelfType, caching_strategy_name: str, *args: Any, **kwargs: Any
-    ) -> SelfType:
+        self: "StencilBuilder", caching_strategy_name: str, *args: Any, **kwargs: Any
+    ) -> "StencilBuilder":
         """
         Fluidly set the caching strategy from the name.
 
@@ -87,7 +83,9 @@ class StencilBuilder:
         self.caching = gt4py.caching.strategy_factory(caching_strategy_name, self, *args, **kwargs)
         return self
 
-    def with_options(self: SelfType, *, name: str, module: str, **kwargs: Any) -> SelfType:
+    def with_options(
+        self: "StencilBuilder", *, name: str, module: str, **kwargs: Any
+    ) -> "StencilBuilder":
         """
         Fluidly set the build options.
 
@@ -108,7 +106,7 @@ class StencilBuilder:
         self.options = BuildOptions(name=name, module=module, **kwargs)  # type: ignore
         return self
 
-    def with_backend(self: SelfType, backend_name: str) -> SelfType:
+    def with_backend(self: "StencilBuilder", backend_name: str) -> "StencilBuilder":
         """
         Fluidly set the backend type from backend name.
 
@@ -140,7 +138,7 @@ class StencilBuilder:
             "externals", self._externals.copy()
         )
 
-    def with_externals(self: SelfType, externals: Dict[str, Any]) -> SelfType:
+    def with_externals(self: "StencilBuilder", externals: Dict[str, Any]) -> "StencilBuilder":
         """
         Fluidly set externals for this build.
 
@@ -154,7 +152,7 @@ class StencilBuilder:
     def backend_data(self) -> Dict[str, Any]:
         return self._build_data.get("backend_data", {}).copy()
 
-    def with_backend_data(self: SelfType, data: Dict[str, Any]) -> SelfType:
+    def with_backend_data(self: "StencilBuilder", data: Dict[str, Any]) -> "StencilBuilder":
         self._build_data["backend_data"] = {**self.backend_data, **data}
         return self
 
@@ -168,7 +166,7 @@ class StencilBuilder:
             "root_pkg_name", gt4py.config.code_settings["root_package_name"]
         )
 
-    def with_root_pkg_name(self: SelfType, name: str) -> SelfType:
+    def with_root_pkg_name(self: "StencilBuilder", name: str) -> "StencilBuilder":
         self._build_data["root_pkg_name"] = name
         return self
 

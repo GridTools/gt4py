@@ -28,8 +28,7 @@ from gt4py.stencil_builder import StencilBuilder
 
 
 def load_stencil(frontend_name, backend_name, definition_func, externals, build_options):
-    """Generate a new class object implementing the provided definition.
-    """
+    """Generate a new class object implementing the provided definition."""
 
     # Load components
     backend_cls = gt_backend.from_name(backend_name)
