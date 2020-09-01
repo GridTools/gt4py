@@ -74,7 +74,7 @@ def test_usage_numpy_caching():
     # regenerating should create a different stencil class
     stencil_cls3 = builder.with_externals({"a": 2.0}).backend.load()
     assert stencil_cls3 is None
-    builder.backend.build()
+    builder.build()
     stencil_cls3 = builder.backend.load()
     assert stencil_cls._gt_id_ != stencil_cls3._gt_id_
 
