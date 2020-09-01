@@ -197,7 +197,7 @@ def install(
 
 
 @contextmanager
-def allow_import_gtscript(**kwargs: Any) -> Iterator:
+def installed(**kwargs: Any) -> Iterator:
     """
     Create a context within which GTScript extensions can be imported.
 
@@ -206,7 +206,7 @@ def allow_import_gtscript(**kwargs: Any) -> Iterator:
     .. code-block: python
 
         mystencil = None
-        with allow_import_gtscript(search_path=[pathlib.Path("my/gtscript/extensions/")]):
+        with allow_import_gtscript(search_path=["my/gtscript/extensions/"]):
             import some_stencil  # works
             mystencil = some_stencil.some_stencil
 
