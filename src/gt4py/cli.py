@@ -63,7 +63,7 @@ class BackendChoice(click.Choice):
         """Build a string with a table of backend compatibilities."""
         headers = ["computation", "bindings", "CLI-enabled"]
         names = cls.get_backend_names()
-        backends = [gt4py.backend.from_name(name) for name in names]
+        backends = [cls.enabled_backend_cls_from_name(name) for name in names]
         comp_langs = [
             backend.languages["computation"] if backend and backend.languages else "?"
             for backend in backends

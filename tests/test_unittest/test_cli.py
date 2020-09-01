@@ -6,6 +6,7 @@ import pytest
 from click.testing import CliRunner
 
 from gt4py import backend, cli
+from gt4py.backend.base import CLIBackendMixin
 
 
 @pytest.fixture
@@ -14,8 +15,8 @@ def clirunner():
     yield CliRunner()
 
 
-@pytest.fixture(params=backend.REGISTRY.keys())
-def backend_name(request):
+@pytest.fixture(params=list(backend.REGISTRY.keys()) + ["nocli"])
+def backend_name(request, nocli_backend):
     """Parametrize by backend name."""
     yield request.param
 
@@ -58,7 +59,7 @@ class NonCliBackend(backend.Backend):
 
 
 @pytest.fixture
-def nocli_backend():
+def nocli_backend(scope="module"):
     """Temporarily register the nocli backend."""
     backend.register(NonCliBackend)
     yield
@@ -77,6 +78,7 @@ BACKEND_ROW_PATTERN_BY_NAME = {
     "dawn:naive": r"^\s*dawn:naive\s*c\+\+\s*python\s*No",
     "dawn:cxxopt": r"^\s*dawn:cxxopt\s*c\+\+\s*python\s*No",
     "dawn:cuda": r"^\s*dawn:cuda\s*cuda\s*python\s*No",
+    "nocli": r"^\s*nocli\s*\?\s*\?\s*No",
 }
 
 
@@ -88,7 +90,7 @@ def list_backends_line_pattern(backend_name):
 
 @pytest.fixture
 def backend_enabled(backend_name):
-    yield not backend_name.startswith("dawn")
+    yield issubclass(backend.from_name(backend_name), CLIBackendMixin)
 
 
 def test_list_backends(clirunner, list_backends_line_pattern):
@@ -98,7 +100,9 @@ def test_list_backends(clirunner, list_backends_line_pattern):
     result = clirunner.invoke(cli.gtpyc, ["list-backends"], catch_exceptions=False)
 
     assert result.exit_code == 0
-    assert re.findall(list_backends_line_pattern, result.output, re.MULTILINE)
+    assert re.findall(list_backends_line_pattern, result.output, re.MULTILINE), print(
+        result.output
+    )
 
 
 def test_gen_silent(clirunner, simple_stencil, tmp_path):
