@@ -152,6 +152,25 @@ def get_param_by_name(ctx: click.Context, name: str) -> click.Parameter:
 
 
 class GTScriptBuilder:
+    """
+    Generate stencil source code from a GTScript module.
+
+    Parameters
+    ----------
+    input_path :
+        path (string or Pathlike) to the GTScript module.
+
+    output_path :
+        path (string or Pathlike) to where the generated source files should be written.
+
+    backend :
+        class of the backend that should be used.
+
+    silent :
+        silence all reporting to stdout if True
+
+    """
+
     def __init__(
         self,
         input_path: Union[str, pathlib.Path],
