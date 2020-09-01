@@ -607,7 +607,7 @@ class TestParallelComputations:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Horizontal race condition detected in parallel computation",
+            match="Horizontal race condition detected in stencil",
         ):
 
             def func_err(in_field: gtscript.Field[np.float_]):
@@ -630,7 +630,7 @@ class TestParallelComputations:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Vertical race condition detected in parallel computation",
+            match="Vertical race condition detected in stencil",
         ):
 
             def func_err(in_field: gtscript.Field[np.float_]):
