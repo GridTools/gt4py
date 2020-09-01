@@ -383,7 +383,7 @@ class NoCachingStrategy(CachingStrategy):
     @property
     def stencil_id(self) -> StencilID:
         """Get a fingerprint-less stencil id."""
-        # ignore type because mypy does not get attrib classes
+        # ignore type because mypy does not understand attrib classes
         return StencilID(  # type: ignore
             qualified_name=self.builder.options.qualified_name, version=""
         )
