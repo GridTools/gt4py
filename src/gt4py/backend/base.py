@@ -216,9 +216,9 @@ class CLIBackendMixin(Backend):
 
         Returns
         -------
-        Analog to :py:meth:`generate_computation` but containing bindings source code,
-        The dictionary contains a tree of directories with leaves being a mapping from filename to source code
-        pairs, relative to the build directory.
+        Analog to :py:meth:`generate_computation` but containing bindings source code, The
+        dictionary contains a tree of directories with leaves being a mapping from filename to
+        source code pairs, relative to the build directory.
 
         Raises
         ------
