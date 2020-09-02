@@ -6,17 +6,21 @@ Usage Example
 
 ::
 
-    from gt4py import gtsimport
+    from gt4py import gtscript_imports
 
     # simple usage
-    gtsimport.install()  # for allowing .gt.py everywhere in sys.path
+    gtscript_imports.enable()  # for allowing .gt.py everywhere in sys.path
 
     # advanced usage
-    gtsimport.install(
+    gtscript_imports.enable(
         search_path=[<path1>, <path2>, ...],  # for allowing only in search_path
         generate_path=<mybuildpath>,  # for generating python modules in a specific dir
         in_source=False,  # set True to generate python modules next to gtscfipt files
     )
+
+    # scoped usage
+    with gtscript_imports.enabled():
+        import ...
 
 """
 import importlib
@@ -180,7 +184,7 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
         return module
 
 
-def install(
+def enable(
     *,
     search_path: Optional[List[Union[str, pathlib.Path]]] = None,
     generate_path: Optional[Union[str, pathlib.Path]] = None,
@@ -197,7 +201,7 @@ def install(
 
 
 @contextmanager
-def installed(**kwargs: Any) -> Iterator:
+def enabled(**kwargs: Any) -> Iterator:
     """
     Create a context within which GTScript extensions can be imported.
 
@@ -206,7 +210,7 @@ def installed(**kwargs: Any) -> Iterator:
     .. code-block: python
 
         mystencil = None
-        with allow_import_gtscript(search_path=["my/gtscript/extensions/"]):
+        with gtscript_imports.enabled(search_path=["my/gtscript/extensions/"]):
             import some_stencil  # works
             mystencil = some_stencil.some_stencil
 
@@ -223,6 +227,6 @@ def installed(**kwargs: Any) -> Iterator:
         sys.modules.copy(),
     )
     try:
-        yield install(**kwargs)
+        yield enable(**kwargs)
     finally:
         sys.path, sys.meta_path, sys.modules = backup_import_system
