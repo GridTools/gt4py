@@ -3,13 +3,15 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
 import gt4py
 from gt4py.definitions import BuildOptions, StencilID
-from gt4py.ir import StencilDefinition, StencilImplementation
 from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
 
 
 if TYPE_CHECKING:
     from gt4py.backend.base import Backend as BackendType
+    from gt4py.backend.base import CLIBackendMixin
     from gt4py.frontend.base import Frontend as FrontendType
+    from gt4py.ir import StencilDefinition, StencilImplementation
+    from gt4py.stencil_object import StencilObject
 
 
 class StencilBuilder:
@@ -48,7 +50,7 @@ class StencilBuilder:
         self._definition = definition_func
         # type ignore explanation: Attribclass generated init not recognized by mypy
         self.options = options or BuildOptions(  # type: ignore
-            name=definition_func.__name__, module=definition_func.__module__
+            **self.default_options_dict(definition_func)
         )
         self.backend: "BackendType" = (
             backend(self) if backend else gt4py.backend.from_name("debug")(self)
@@ -57,6 +59,22 @@ class StencilBuilder:
         self.caching = gt4py.caching.strategy_factory("jit", self)
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}
+
+    def build(self) -> Type["StencilObject"]:
+        """Generate, compile and/or load everything necessary to provide a usable stencil class."""
+        # load or generate
+        stencil_class = None if self.options.rebuild else self.backend.load()
+        if stencil_class is None:
+            stencil_class = self.backend.generate()
+        return stencil_class
+
+    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
+        """Generate the stencil source code, fail if backend does not support CLI."""
+        return self.cli_backend.generate_computation()
+
+    def generate_bindings(self, targe_language: str) -> Dict[str, Union[str, Dict]]:
+        """Generate ``target_language`` bindings source, fail if backend does not support CLI."""
+        return self.cli_backend.generate_bindings(targe_language)
 
     def with_caching(
         self: "StencilBuilder", caching_strategy_name: str, *args: Any, **kwargs: Any
@@ -106,6 +124,13 @@ class StencilBuilder:
         self.options = BuildOptions(name=name, module=module, **kwargs)  # type: ignore
         return self
 
+    def with_changed_options(self: "StencilBuilder", **kwargs: Dict[str, Any]) -> "StencilBuilder":
+        old_options = self.options.as_dict()
+        # BuildOptions constructor expects ``impl_opts`` keyword
+        # but BuildOptions.as_dict outputs ``_impl_opts`` key
+        old_options["impl_opts"] = old_options.pop("_impl_opts")
+        return self.with_options(**{**old_options, **kwargs})
+
     def with_backend(self: "StencilBuilder", backend_name: str) -> "StencilBuilder":
         """
         Fluidly set the backend type from backend name.
@@ -124,6 +149,36 @@ class StencilBuilder:
         self._build_data = {}
         self.backend = gt4py.backend.from_name(backend_name)(self)
         return self
+
+    @classmethod
+    def default_options_dict(
+        cls, definition_func: Union[StencilFunc, AnnotatedStencilFunc]
+    ) -> Dict[str, Any]:
+        return {"name": definition_func.__name__, "module": definition_func.__module__}
+
+    @classmethod
+    def name_to_options_args(cls, name: Optional[str]) -> Dict[str, str]:
+        """
+        Distinguish between qualified and unqualified name, extract module option from the former.
+        """
+        if not name:
+            return {}
+        components = name.rsplit(".")
+        data = {"name": name}
+        if len(components) > 1:
+            data = {"module": components[0], "name": components[1]}
+        return data
+
+    @classmethod
+    def nest_impl_options(cls, options_dict: Dict[str, Any]) -> Dict[str, Any]:
+        impl_opts = options_dict.setdefault("impl_opts", {})
+        # The following is not a dict comprehension because:
+        # The backend-specific options (starting with ``_``) are nested under
+        # options_dict["impl_opts"] *and at the same time removed* from
+        # options_dict itself.
+        for impl_key in (k for k in options_dict.keys() if k.startswith("_")):
+            impl_opts[impl_key] = options_dict.pop(impl_key)
+        return options_dict
 
     @property
     def definition(self) -> AnnotatedStencilFunc:
@@ -183,13 +238,13 @@ class StencilBuilder:
         return self.caching.backend_root_path.joinpath(*self.options.qualified_name.split("."))
 
     @property
-    def definition_ir(self) -> StencilDefinition:
+    def definition_ir(self) -> "StencilDefinition":
         return self._build_data.get("ir") or self._build_data.setdefault(
             "ir", self.frontend.generate(self.definition, self.externals, self.options)
         )
 
     @property
-    def implementation_ir(self) -> StencilImplementation:
+    def implementation_ir(self) -> "StencilImplementation":
         return self._build_data.get("iir") or self._build_data.setdefault(
             "iir", gt4py.analysis.transform(self.definition_ir, self.options)
         )
@@ -228,3 +283,11 @@ class StencilBuilder:
     @property
     def is_build_data_empty(self) -> bool:
         return not bool(self._build_data)
+
+    @property
+    def cli_backend(self) -> "CLIBackendMixin":
+        from gt4py.backend.base import CLIBackendMixin
+
+        if not isinstance(self.backend, CLIBackendMixin):
+            raise RuntimeError("backend of StencilBuilder instance is not CLI enabled.")
+        return self.backend

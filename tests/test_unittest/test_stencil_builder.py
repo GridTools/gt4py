@@ -63,9 +63,8 @@ def test_usage_numpy_caching():
         )
     )
 
-    # second load should use caching
-    builder.backend.generate()
-    stencil_cls = builder.backend.load()
+    # second build should use caching
+    stencil_cls = builder.build()
     stencil_cls2 = builder.backend.load()
     assert stencil_cls
     assert isinstance(stencil_cls(), StencilObject)
@@ -75,7 +74,7 @@ def test_usage_numpy_caching():
     # regenerating should create a different stencil class
     stencil_cls3 = builder.with_externals({"a": 2.0}).backend.load()
     assert stencil_cls3 is None
-    builder.backend.generate()
+    builder.build()
     stencil_cls3 = builder.backend.load()
     assert stencil_cls._gt_id_ != stencil_cls3._gt_id_
 
@@ -89,10 +88,10 @@ def test_usage_numpy_nocaching(tmp_path):
         .with_options(name="simple_stencil", module="")
     )
 
-    computation_src = builder.backend.generate_computation()
+    computation_src = builder.generate_computation()
     assert "simple_stencil.py" in computation_src
 
-    builder.backend.generate()
+    builder.build()
     assert tmp_path.joinpath("simple_stencil", "simple_stencil.py").exists(), list(
         tmp_path.iterdir()
     )
