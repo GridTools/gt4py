@@ -606,7 +606,8 @@ class TestParallelComputations:
         externals = {}
 
         with pytest.warns(
-            Warning, match="Horizontal race condition detected in stencil",
+            Warning,
+            match="Horizontal race condition detected in stencil",
         ):
 
             @gtscript.stencil(backend="debug")
