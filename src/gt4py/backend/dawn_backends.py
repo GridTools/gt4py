@@ -295,12 +295,12 @@ class SIRConverter(gt_ir.IRNodeVisitor):
 
 
 _DAWN_BASE_OPTIONS = {
-    "add_profile_info": {"versioning": True},
-    "clean": {"versioning": False},
-    "debug_mode": {"versioning": True},
-    "dump_sir": {"versioning": False},
-    "verbose": {"versioning": False},
-    "no_opt": {"versioning": False},
+    "add_profile_info": {"versioning": True, "type": bool},
+    "clean": {"versioning": False, "type": bool},
+    "debug_mode": {"versioning": True, "type": bool},
+    "dump_sir": {"versioning": False, "type": bool},
+    "verbose": {"versioning": False, "type": bool},
+    "no_opt": {"versioning": False, "type": bool},
 }
 
 
@@ -313,9 +313,9 @@ for name in dir(dawn4py.CodeGenOptions) + dir(dawn4py.OptimizerOptions):
         or name.startswith("serialize")
         or name.startswith("deserialize")
     ):
-        _DAWN_TOOLCHAIN_OPTIONS[name] = {"versioning": False}
+        _DAWN_TOOLCHAIN_OPTIONS[name] = {"versioning": False, "type": bool}
     elif not name.startswith("_") and name != "backend":
-        _DAWN_TOOLCHAIN_OPTIONS[name] = {"versioning": True}
+        _DAWN_TOOLCHAIN_OPTIONS[name] = {"versioning": True, "type": bool}
 
 
 _DAWN_BACKEND_OPTIONS = {**_DAWN_BASE_OPTIONS, **_DAWN_TOOLCHAIN_OPTIONS}
