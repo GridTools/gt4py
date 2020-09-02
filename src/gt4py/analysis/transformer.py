@@ -32,6 +32,7 @@ from .passes import (
     InitInfoPass,
     MergeBlocksPass,
     NormalizeBlocksPass,
+    ParallelRaceConditionChecker,
 )
 
 
@@ -122,6 +123,9 @@ class IRTransformer:
         # prune some stages that don't have effect
         cleanup_pass = CleanUpPass()
         cleanup_pass.apply(self.transform_data)
+
+        # Run verifications on the implementation IR
+        ParallelRaceConditionChecker.apply(self.transform_data.implementation_ir)
 
         if options.build_info is not None:
             options.build_info["def_ir"] = self.transform_data.definition_ir

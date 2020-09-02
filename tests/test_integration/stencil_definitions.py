@@ -236,10 +236,3 @@ def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3D
             a4_3 = a4_1
         else:
             diff_23 = a4_2 - a4_3
-
-
-@register
-def write_after_read(field: Field3D):
-    with computation(PARALLEL), interval(...):
-        tmp = field
-        field = tmp[-1, 0, 0]

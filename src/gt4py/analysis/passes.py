@@ -18,7 +18,10 @@
 """
 
 import itertools
+import warnings
 from typing import Optional, Set, Tuple, Union
+
+import networkx as nx
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
@@ -1051,3 +1054,33 @@ class CleanUpPass(TransformPass):
         prune_emtpy_nodes(transform_data.implementation_ir)
 
         return transform_data
+
+
+class ParallelRaceConditionChecker(gt_ir.IRNodeVisitor):
+    @classmethod
+    def apply(cls, root_node):
+        return cls()(root_node)
+
+    def __init__(self):
+        self.iteration_order = None
+
+    def __call__(self, node):
+        assert isinstance(node, gt_ir.StencilImplementation)
+        self.stencil_name = node.name
+        self.visit(node)
+
+    def _check(self, iteration_order: gt_ir.IterationOrder, graph: nx.DiGraph):
+        error_message = f"race condition detected in stencil: {self.stencil_name}"
+        for cycle in nx.simple_cycles(graph):
+            full_cycle = cycle + [cycle[0]]
+            for source, target in zip(full_cycle[:-1], full_cycle[1:]):
+                offsets = graph.get_edge_data(source, target).get("offsets", [])
+                if any([offset["I"] != 0 or offset["J"] != 0 for offset in offsets]):
+                    warnings.warn(f"Horizontal {error_message}.\n\tCycle: {', '.join(full_cycle)}")
+                elif iteration_order == gt_ir.IterationOrder.PARALLEL and any(
+                    [offset["K"] != 0 for offset in offsets]
+                ):
+                    warnings.warn(f"Vertical {error_message}.\n\tCycle: {', '.join(full_cycle)}")
+
+    def visit_MultiStage(self, node: gt_ir.MultiStage):
+        self._check(node.iteration_order, gt_ir.utils.create_field_dependency_graph(node))
