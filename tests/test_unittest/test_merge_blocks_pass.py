@@ -1,4 +1,4 @@
-from typing import Dict, Iterator, List
+from typing import Dict, Iterator, List, Optional
 
 import pytest
 
@@ -31,6 +31,11 @@ from gt4py.ir.nodes import (
 
 
 DEBUG_LOC = Location
+
+
+@pytest.fixture(params=["extended", "offset"])
+def case(request):
+    yield request.param
 
 
 @pytest.fixture()
@@ -153,19 +158,99 @@ def computations_extended(
 
 
 @pytest.fixture()
-def definition_extended(
+def computations_offset(
+    no_offset: Dict[str, int], offset_by_one: Dict[str, int]
+) -> Iterator[List[ComputationBlock]]:
+    """
+    Build stencil definition body for write after read with extended compute domain.
+
+    equivalent to
+    .. code-block: python
+
+        with computation(PARALLEL), interval(...):
+            tmp = inout
+            out = tmp[-1, 0, 0]
+            inout = in
+    """
+    yield [
+        ComputationBlock(
+            interval=AxisInterval(
+                start=AxisBound(level=LevelMarker.START), end=AxisBound(level=LevelMarker.END)
+            ),
+            iteration_order=IterationOrder.PARALLEL,
+            body=BlockStmt(
+                stmts=[
+                    Assign(
+                        target=FieldRef(
+                            name="out",
+                            offset=no_offset,
+                            loc=DEBUG_LOC(scope="war_offset", line=0, column=0),
+                        ),
+                        value=FieldRef(
+                            name="inout",
+                            offset=offset_by_one,
+                            loc=DEBUG_LOC(scope="war_offset", line=0, column=2),
+                        ),
+                        loc=DEBUG_LOC(scope="war_offset", line=0, column=1),
+                    ),
+                    Assign(
+                        target=FieldRef(
+                            name="inout",
+                            offset=no_offset,
+                            loc=DEBUG_LOC(scope="war_offset", line=1, column=0),
+                        ),
+                        value=FieldRef(
+                            name="in",
+                            offset=offset_by_one,
+                            loc=DEBUG_LOC(scope="war_offset", line=1, column=2),
+                        ),
+                        loc=DEBUG_LOC(scope="war_offset", line=1, column=1),
+                    ),
+                ]
+            ),
+        )
+    ]
+
+
+@pytest.fixture()
+def computations(
+    case: str,
+    computations_extended: List[ComputationBlock],
+    computations_offset: List[ComputationBlock],
+) -> Iterator[Optional[List[ComputationBlock]]]:
+    definition = None
+    if case == "extended":
+        definition = computations_extended
+    elif case == "offset":
+        definition = computations_offset
+    yield definition
+
+
+@pytest.fixture()
+def expected_nblocks(case: str) -> Iterator[Optional[int]]:
+    nblocks = None
+    if case == "extended":
+        nblocks = 3
+    elif case == "offset":
+        nblocks = 2
+    yield nblocks
+
+
+@pytest.fixture()
+def definition(
+    case: str,
     domain: Domain,
     api_signature: List[ArgumentInfo],
     api_fields: List[FieldDecl],
-    computations_extended: List[ComputationBlock],
+    computations: List[ComputationBlock],
 ) -> StencilDefinition:
     yield StencilDefinition(
-        name="war_extended",
+        name=case,
         domain=domain,
         api_signature=api_signature,
         api_fields=api_fields,
         parameters=[],
-        computations=computations_extended,
+        computations=computations,
         docstring="",
     )
 
@@ -187,16 +272,15 @@ def init_implementation_from_definition(definition: StencilDefinition) -> Stenci
     )
 
 
-@pytest.fixture(params=["extended"])
+@pytest.fixture()
 def transform_data(
-    request,
-    definition_extended: StencilDefinition,
+    case: str,
+    definition: StencilDefinition,
 ) -> TransformData:
-    definition = definition_extended if request.param == "extended" else None
     yield TransformData(
         definition_ir=definition,
         implementation_ir=init_implementation_from_definition(definition),
-        options=BuildOptions(name="war_extended", module=__name__),
+        options=BuildOptions(name=case, module=__name__),
     )
 
 
@@ -220,8 +304,10 @@ def transform_data_after_compute_extents_pass(
     yield compute_extents_pass.apply(transform_data_after_normalize_blocks_pass)
 
 
-def test_merge_write_after_read(transform_data_after_compute_extents_pass: TransformData):
+def test_merge_write_after_read(
+    transform_data_after_compute_extents_pass: TransformData, expected_nblocks
+):
     merge_blocks_pass = MergeBlocksPass()
     data = merge_blocks_pass.apply(transform_data_after_compute_extents_pass)
 
-    assert len(data.blocks) == 3
+    assert len(data.blocks) == expected_nblocks
