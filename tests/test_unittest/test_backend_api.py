@@ -29,9 +29,7 @@ def init_1(input_field: Field[float]):  # type: ignore
 
 
 def test_generate_computation(backend, tmp_path):
-    """
-    Test if the :py:meth:`gt4py.backend.CLIBackendMixin.generate_computation` generates code.
-    """
+    """Test if the :py:meth:`gt4py.backend.CLIBackendMixin.generate_computation` generates code."""
     # note: if a backend is added that doesn't use CliBackendMixin it will
     # have to be special cased in the backend fixture
     builder = StencilBuilder(init_1, backend=backend).with_caching(
@@ -54,9 +52,7 @@ def test_generate_computation(backend, tmp_path):
 
 
 def test_generate_bindings(backend, tmp_path):
-    """
-    Test :py:meth:`gt4py.backend.CLIBackendMixin.generate_bindings.
-    """
+    """Test :py:meth:`gt4py.backend.CLIBackendMixin.generate_bindings."""
     builder = StencilBuilder(init_1, backend=backend).with_caching(
         "nocaching", output_path=tmp_path / __name__ / "generate_bindings"
     )
