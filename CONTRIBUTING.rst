@@ -27,13 +27,7 @@ In general, Python modules should be structured in the following order:
 2. License header (``LICENSE_HEADER.txt``) and module-level comments
 3. Module-level docstring
 4. ``__all__ = [...]`` statement, if present
-5. Imports (alphabetically ordered within each block)
-
-   a. Block of imports from the standard library
-   b. Block of imports from general third party libraries (e.g. numpy,
-      xarray)
-   c. Block of imports from specific submodules of the project
-
+5. Imports (sorting and grouping automated by pre-commit hook)
 6. Private module variables, functions and classes (names start with
    underscore)
 7. Public module variables, functions and classes
@@ -52,6 +46,9 @@ General coding advices:
    sets efficiently
 -  Block comments SHOULD reference the code following them and SHOULD be
    indented to the same level
+
+Also checkout ``REVIEW_CHECKLIST`` to see what code reviewers will look for
+beyond these tipps and beyond what is automatically checked for.
 
 Tools
 ~~~~~
