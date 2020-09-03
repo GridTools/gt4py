@@ -99,6 +99,7 @@ repos:
           tests/test_unittest/test_call_interface.py |
           tests/test_unittest/test_gtscript_frontend.py |
           tests/test_unittest/test_storage.py |
+          tests/test_unittest/test_merge_blocks_pass.py |
           )$
 
 -   repo: https://github.com/pre-commit/pre-commit-hooks
