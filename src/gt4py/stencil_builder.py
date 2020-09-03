@@ -158,9 +158,7 @@ class StencilBuilder:
 
     @classmethod
     def name_to_options_args(cls, name: Optional[str]) -> Dict[str, str]:
-        """
-        Distinguish between qualified and unqualified name, extract module option from the former.
-        """
+        """Check for qualified name, extract also module option in that case."""
         if not name:
             return {}
         components = name.rsplit(".")

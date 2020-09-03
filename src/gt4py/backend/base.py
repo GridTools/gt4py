@@ -132,7 +132,6 @@ class Backend(abc.ABC):
 
         Returns
         -------
-
         type:
             The generated stencil class after loading through python's import API
 
@@ -144,7 +143,7 @@ class Backend(abc.ABC):
 
     @property
     def extra_cache_info(self) -> Dict[str, Any]:
-        """Hook for storing additional data in cache info file."""
+        """Provide additional data to be stored in cache info file (sublass hook)."""
         return {}
 
     @property
@@ -159,10 +158,8 @@ class CLIBackendMixin(Backend):
         """
         Generate the computation source code in a way agnostic of the way it is going to be used.
 
-
         Returns
         -------
-
         Dict[str, str | Dict] of source file names / directories -> contents:
             If a key's value is a string it is interpreted as a file name and the value as the
             source code of that file
@@ -172,13 +169,11 @@ class CLIBackendMixin(Backend):
 
         Raises
         ------
-
         NotImplementedError
             If the backend does not support usage outside of JIT compilation / generation.
 
         Example
         -------
-
         .. code-block:: python
 
             def mystencil(...):
@@ -475,7 +470,6 @@ class BaseModuleGenerator(abc.ABC):
         **kwargs: Any,
     ) -> str:
         """Generate source code for a Python module containing a StencilObject."""
-
         if builder:
             self._builder = builder
         self.args_data = args_data
@@ -544,7 +538,7 @@ class BaseModuleGenerator(abc.ABC):
     @property
     def builder(self) -> "StencilBuilder":
         """
-        Buider reference
+        Expose the builder reference.
 
         Raises a runtime error if the builder reference is not initialized.
         This is necessary because other parts of the public API depend on it before it is

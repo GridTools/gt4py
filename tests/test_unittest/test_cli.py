@@ -94,9 +94,7 @@ def backend_enabled(backend_name):
 
 
 def test_list_backends(clirunner, list_backends_line_pattern):
-    """
-    Test the list-backend subcommand of gtpyc.
-    """
+    """Test the list-backend subcommand of gtpyc."""
     result = clirunner.invoke(cli.gtpyc, ["list-backends"], catch_exceptions=False)
 
     assert result.exit_code == 0
@@ -106,9 +104,7 @@ def test_list_backends(clirunner, list_backends_line_pattern):
 
 
 def test_gen_silent(clirunner, simple_stencil, tmp_path):
-    """
-    Test the --silent flag.
-    """
+    """Test the --silent flag."""
     result = clirunner.invoke(
         cli.gtpyc,
         [
@@ -127,9 +123,7 @@ def test_gen_silent(clirunner, simple_stencil, tmp_path):
 
 
 def test_gen_missing_arg(clirunner):
-    """
-    Test for error if no input path argument is passed to gen.
-    """
+    """Test for error if no input path argument is passed to gen."""
     result = clirunner.invoke(cli.gtpyc, ["gen", "--backend=debug"])
 
     assert result.exit_code == 2
@@ -137,16 +131,12 @@ def test_gen_missing_arg(clirunner):
 
 
 def test_backend_choice(backend_name):
-    """
-    Test the :py:cls:`gt4py.cli.BackendChoice` class interface.
-    """
+    """Test the :py:cls:`gt4py.cli.BackendChoice` class interface."""
     assert backend_name in cli.BackendChoice.get_backend_names()
 
 
 def test_gen_unenabled_backend_choice(clirunner, nocli_backend, simple_stencil, tmp_path):
-    """
-    Test the --backend option when an unenabled backend name is passed.
-    """
+    """Test the --backend option when an unenabled backend name is passed."""
     result = clirunner.invoke(
         cli.gtpyc,
         [
@@ -165,9 +155,7 @@ def test_gen_unenabled_backend_choice(clirunner, nocli_backend, simple_stencil, 
 def test_gen_enabled_backend_choice(
     clirunner, simple_stencil, backend_name, backend_enabled, tmp_path
 ):
-    """
-    Test if cli runs successfully or fails depending on a backend being enabled.
-    """
+    """Test if cli runs successfully or fails depending on a backend being enabled."""
     result = clirunner.invoke(
         cli.gtpyc,
         [

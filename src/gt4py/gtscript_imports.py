@@ -163,8 +163,8 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
         fullname : `str`
             Dotted name corresponding to the gtscript module.
 
-        Returns:
-
+        Returns
+        -------
             The file path of the generated py module as a string
         """
         if not self.module_file.parent.exists():
