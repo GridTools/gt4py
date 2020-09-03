@@ -87,10 +87,10 @@ class StencilBuilder:
         caching_strategy_name:
             Name of the caching strategy to be passed to the factory.
 
-        *args:
+        args:
             Passed through to the caching strategy factory
 
-        **kwargs:
+        kwargs:
             Passed through to the caching strategy factory
 
         Notes

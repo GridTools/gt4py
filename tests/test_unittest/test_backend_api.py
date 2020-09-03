@@ -52,7 +52,7 @@ def test_generate_computation(backend, tmp_path):
 
 
 def test_generate_bindings(backend, tmp_path):
-    """Test :py:meth:`gt4py.backend.CLIBackendMixin.generate_bindings."""
+    """Test :py:meth:`gt4py.backend.CLIBackendMixin.generate_bindings`."""
     builder = StencilBuilder(init_1, backend=backend).with_caching(
         "nocaching", output_path=tmp_path / __name__ / "generate_bindings"
     )

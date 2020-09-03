@@ -131,7 +131,7 @@ def test_gen_missing_arg(clirunner):
 
 
 def test_backend_choice(backend_name):
-    """Test the :py:cls:`gt4py.cli.BackendChoice` class interface."""
+    """Test the :py:class:`gt4py.cli.BackendChoice` class interface."""
     assert backend_name in cli.BackendChoice.get_backend_names()
 
 
