@@ -73,8 +73,10 @@ class GTScriptValueError(GTScriptDefinitionError):
             if loc is None:
                 message = "Invalid value for '{name}' symbol ".format(name=name)
             else:
-                message = "Invalid value for '{name}' in '{scope}' (line: {line}, col: {col})".format(
-                    name=name, scope=loc.scope, line=loc.line, col=loc.column
+                message = (
+                    "Invalid value for '{name}' in '{scope}' (line: {line}, col: {col})".format(
+                        name=name, scope=loc.scope, line=loc.line, col=loc.column
+                    )
                 )
         super().__init__(name, value, message, loc=loc)
 
@@ -189,13 +191,14 @@ class CallInliner(ast.NodeTransformer):
     """
 
     @classmethod
-    def apply(cls, func_node: ast.FunctionDef, context: dict):
-        inliner = cls(context)
+    def apply(cls, func_node: ast.FunctionDef, context: dict, annotation: dict):
+        inliner = cls(context, annotation)
         inliner(func_node)
         return inliner.all_skip_names
 
-    def __init__(self, context: dict):
+    def __init__(self, context: dict, annotation: dict):
         self.context = context
+        self.annotation = annotation
         self.current_block = None
         self.all_skip_names = set(gtscript.builtins | {"gt4py", "gtscript"})
 
@@ -257,7 +260,10 @@ class CallInliner(ast.NodeTransformer):
         # Recursively inline any possible nested subroutine call
         call_info = self.context[call_name]._gtscript_
         call_ast = copy.deepcopy(call_info["ast"])
-        CallInliner.apply(call_ast, call_info["local_context"])
+        CallInliner.apply(call_ast, call_info["local_context"], self.annotation)
+
+        # Add splitters to parent annotation
+        self.annotation["splitters"] |= call_info["splitters"]
 
         # Extract call arguments
         call_signature = call_info["api_signature"]
@@ -315,7 +321,10 @@ class CallInliner(ast.NodeTransformer):
         template_fmt = "{name}__" + call_id_suffix
 
         gt_meta.map_symbol_names(
-            call_ast, name_mapping, template_fmt=template_fmt, skip_names=self.all_skip_names
+            call_ast,
+            name_mapping,
+            template_fmt=template_fmt,
+            skip_names=set(self.all_skip_names | call_info["splitters"]),
         )
 
         # Replace returns by assignments in subroutine
@@ -1498,7 +1507,9 @@ class GTScriptParser(ast.NodeVisitor):
         ValueInliner.apply(main_func_node, context=local_context)
 
         # Inline function calls
-        CallInliner.apply(main_func_node, context=local_context)
+        CallInliner.apply(
+            main_func_node, context=local_context, annotation=self.definition._gtscript_
+        )
 
         # Evaluate and inline compile-time conditionals
         CompiledIfInliner.apply(main_func_node, context=local_context)

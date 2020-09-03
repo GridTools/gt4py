@@ -81,6 +81,17 @@ def sinus(field_in):
     return sin(field_in)
 
 
+@gtscript.function
+def region_func():
+    from __splitters__ import i0
+
+    field = 0.0
+    with parallel(region[i0, :]):
+        field = 1.0
+
+    return field
+
+
 class TestInlinedExternals:
     def test_all_legal_combinations(self, id_version):
         module = f"TestInlinedExternals_test_module_{id_version}"
@@ -602,7 +613,7 @@ class TestNativeFunctions:
 
 class TestRegions:
     def test_on_interval_only(self):
-        module = f"TestRegion_on_interval_only_{id_version}"
+        module = f"TestRegions_on_interval_only_{id_version}"
         externals = {}
 
         def stencil(in_f: gtscript.Field[np.float_]):
@@ -617,7 +628,7 @@ class TestRegions:
         assert def_ir.computations[0].parallel_interval is not None
 
     def test_single_on_interval_only(self):
-        module = f"TestRegion_single_on_interval_only_{id_version}"
+        module = f"TestRegions_single_on_interval_only_{id_version}"
         externals = {}
 
         def stencil(in_f: gtscript.Field[np.float_]):
@@ -631,8 +642,21 @@ class TestRegions:
         assert len(def_ir.computations) == 1
         assert def_ir.computations[0].parallel_interval is not None
 
+    def test_inside_function(self):
+        module = f"TestRegions_inside_function_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_f = region_func()
+
+        stencil_id, def_ir = compile_definition(stencil, "stencil", module, externals=externals)
+
+        # assert len(def_ir.computations) == 1
+        # assert def_ir.computations[0].parallel_interval is not None
+
     def test_with_default(self):
-        module = f"TestRegion_with_default_{id_version}"
+        module = f"TestRegions_with_default_{id_version}"
         externals = {}
 
         def stencil(in_f: gtscript.Field[np.float_]):
@@ -651,7 +675,7 @@ class TestRegions:
         assert def_ir.computations[2].parallel_interval is not None
 
     def test_multiple_with_default(self):
-        module = f"TestRegion_multiple_with_default_{id_version}"
+        module = f"TestRegions_multiple_with_default_{id_version}"
         externals = {}
 
         def stencil(in_f: gtscript.Field[np.float_]):
@@ -672,7 +696,7 @@ class TestRegions:
         assert def_ir.computations[2].parallel_interval is not None
 
     def test_error_undefined(self):
-        module = f"TestRegion_error_undefined_{id_version}"
+        module = f"TestRegions_error_undefined_{id_version}"
         externals = {}
 
         def stencil(in_f: gtscript.Field[np.float_]):
@@ -687,7 +711,7 @@ class TestRegions:
             compile_definition(stencil, "stencil", module, externals=externals)
 
     def test_error_nested(self):
-        module = f"TestRegion_error_nested_{id_version}"
+        module = f"TestRegions_error_nested_{id_version}"
         externals = {}
 
         def stencil(in_f: gtscript.Field[np.float_]):
