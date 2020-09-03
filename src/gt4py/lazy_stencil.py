@@ -14,7 +14,7 @@ class LazyStencil:
     """
     A stencil object which defers compilation until it is needed.
 
-    Usually obtained using the :func:`gt4py.gtscript.lazy_stencil` decorator, not directly
+    Usually obtained using the :py:func:`gt4py.gtscript.lazy_stencil` decorator, not directly
     instanciated.
     This is done by keeping a reference to a :py:class:`gt4py.stencil_builder.StencilBuilder`
     instance.
