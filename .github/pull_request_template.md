@@ -8,7 +8,7 @@ Before submitting this PR, please make sure:
 
 - [ ] You have run the code checks, tests and documentation build successfully
 - [ ] All fixes and all new functionality are tested and documentation is up to date
-- [ ] You looked at the [review checklist](https://github.com/GridTools/gt4py/blob/master/LICENSE.txt)
+- [ ] You looked at the [review checklist](https://github.com/GridTools/gt4py/blob/master/REVIEW_CHECKLIST.txt)
 
 Additionally, if this PR contains code authored by new contributors:
 
