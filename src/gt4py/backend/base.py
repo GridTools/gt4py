@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 REGISTRY = gt_utils.Registry()
 
 
-def from_name(name: str) -> Type:
+def from_name(name: str) -> Type["Backend"]:
     return REGISTRY.get(name, None)
 
 
@@ -66,7 +66,7 @@ class Backend(abc.ABC):
     #:  + info:
     #:    - versioning: is versioning on?
     #:    - description [optional]
-    #:
+    #:    - type
     options: ClassVar[Dict[str, Any]]
 
     #: Backend-specific storage parametrization:
@@ -153,7 +153,7 @@ class Backend(abc.ABC):
         return []
 
 
-class CLIBackendMixin:
+class CLIBackendMixin(Backend):
     @abc.abstractmethod
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         """
@@ -168,6 +168,7 @@ class CLIBackendMixin:
             source code of that file
             If a key's value is a Dict, it is interpreted as a directory name and it's
             value as a nested file hierarchy to which the same rules are applied recursively.
+            The root path is relative to the build directory.
 
         Raises
         ------
@@ -207,6 +208,31 @@ class CLIBackendMixin:
 
         """
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
+        """
+        Generate bindings source code from ``language_name`` to the target language of the backend.
+
+        Returns
+        -------
+        Analog to :py:meth:`generate_computation` but containing bindings source code, The
+        dictionary contains a tree of directories with leaves being a mapping from filename to
+        source code pairs, relative to the build directory.
+
+        Raises
+        ------
+        RuntimeError
+            If the backend does not support the bindings language
+
+        """
+        languages = getattr(self, "languages") or {"bindings": {}}
+        name = getattr(self, "name") or ""
+        if language_name not in languages["bindings"]:
+            raise NotImplementedError(
+                f"Backend {name} does not implement bindings for {language_name}"
+            )
+        return {}
 
 
 class BaseBackend(Backend):
@@ -326,6 +352,10 @@ class PurePythonBackendCLIMixin(CLIBackendMixin):
         file_name = self.builder.module_path.name
         source = self.make_module_source(implementation_ir=self.builder.implementation_ir)
         return {str(file_name): source}
+
+    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
+        """Pure python backends typically will not support bindings."""
+        return super().generate_bindings(language_name)
 
 
 class BasePyExtBackend(BaseBackend):
