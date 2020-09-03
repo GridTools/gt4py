@@ -1,0 +1,227 @@
+from typing import Dict, Iterator, List
+
+import pytest
+
+from gt4py.analysis import TransformData
+from gt4py.analysis.passes import (
+    ComputeExtentsPass,
+    InitInfoPass,
+    MergeBlocksPass,
+    NormalizeBlocksPass,
+)
+from gt4py.definitions import BuildOptions
+from gt4py.ir.nodes import (
+    ArgumentInfo,
+    Assign,
+    Axis,
+    AxisBound,
+    AxisInterval,
+    BlockStmt,
+    ComputationBlock,
+    DataType,
+    Domain,
+    FieldDecl,
+    FieldRef,
+    IterationOrder,
+    LevelMarker,
+    Location,
+    StencilDefinition,
+    StencilImplementation,
+)
+
+
+DEBUG_LOC = Location
+
+
+@pytest.fixture()
+def length() -> Iterator[int]:
+    yield 10
+
+
+@pytest.fixture()
+def axis_names() -> Iterator[List[str]]:
+    yield ["I", "J", "K"]
+
+
+@pytest.fixture()
+def axes(axis_names: List[str]) -> Iterator[List[Axis]]:
+    yield [Axis(name=idx) for idx in axis_names]
+
+
+@pytest.fixture()
+def domain(axes: List[Axis]) -> Iterator[Domain]:
+    yield Domain(parallel_axes=axes[:2], sequential_axis=axes[2])
+
+
+@pytest.fixture()
+def param_names() -> Iterator[List[str]]:
+    yield ["in", "out", "inout"]
+
+
+@pytest.fixture()
+def api_signature(param_names: List[str]) -> Iterator[List[ArgumentInfo]]:
+    yield [ArgumentInfo(name=n, is_keyword=False) for n in param_names]
+
+
+@pytest.fixture()
+def api_fields(param_names: List[str], axis_names: List[str]) -> Iterator[List[FieldDecl]]:
+    yield (
+        [
+            FieldDecl(name=n, data_type=DataType.AUTO, axes=axis_names, is_api=True)
+            for n in param_names
+        ]
+        + [FieldDecl(name="tmp", data_type=DataType.AUTO, axes=axis_names, is_api=False)]
+    )
+
+
+@pytest.fixture()
+def no_offset(axis_names: List[str]) -> Iterator[Dict[str, int]]:
+    yield {idx: 0 for idx in axis_names}
+
+
+@pytest.fixture()
+def offset_by_one(axis_names: List[str]) -> Iterator[Dict[str, int]]:
+    yield {idx: -1 if idx == "I" else 0 for idx in axis_names}
+
+
+@pytest.fixture()
+def computations_extended(
+    no_offset: Dict[str, int], offset_by_one: Dict[str, int]
+) -> Iterator[List[ComputationBlock]]:
+    """
+    Build stencil definition body for write after read with extended compute domain.
+
+    equivalent to
+    .. code-block: python
+
+        with computation(PARALLEL), interval(...):
+            tmp = inout
+            out = tmp[-1, 0, 0]
+            inout = in
+    """
+    yield [
+        ComputationBlock(
+            interval=AxisInterval(
+                start=AxisBound(level=LevelMarker.START), end=AxisBound(level=LevelMarker.END)
+            ),
+            iteration_order=IterationOrder.PARALLEL,
+            body=BlockStmt(
+                stmts=[
+                    Assign(
+                        target=FieldRef(
+                            name="tmp",
+                            offset=no_offset,
+                            loc=DEBUG_LOC(scope="war_extended_compute", line=0, column=0),
+                        ),
+                        value=FieldRef(
+                            name="inout",
+                            offset=no_offset,
+                            loc=DEBUG_LOC(scope="war_extended_compute", line=0, column=2),
+                        ),
+                        loc=DEBUG_LOC(scope="war_extended_compute", line=0, column=1),
+                    ),
+                    Assign(
+                        target=FieldRef(
+                            name="out",
+                            offset=no_offset,
+                            loc=DEBUG_LOC(scope="war_extended_compute", line=1, column=0),
+                        ),
+                        value=FieldRef(
+                            name="tmp",
+                            offset=offset_by_one,
+                            loc=DEBUG_LOC(scope="war_extended_compute", line=1, column=2),
+                        ),
+                        loc=DEBUG_LOC(scope="war_extended_compute", line=1, column=1),
+                    ),
+                    Assign(
+                        target=FieldRef(
+                            name="inout",
+                            offset=no_offset,
+                            loc=DEBUG_LOC(scope="war_extended_compute", line=2, column=0),
+                        ),
+                        value=FieldRef(
+                            name="in",
+                            offset=no_offset,
+                            loc=DEBUG_LOC(scope="war_extended_compute", line=2, column=2),
+                        ),
+                        loc=DEBUG_LOC(scope="war_extended_compute", line=2, column=1),
+                    ),
+                ]
+            ),
+        )
+    ]
+
+
+@pytest.fixture()
+def definition_extended(
+    domain: Domain,
+    api_signature: List[ArgumentInfo],
+    api_fields: List[FieldDecl],
+    computations_extended: List[ComputationBlock],
+) -> StencilDefinition:
+    yield StencilDefinition(
+        name="war_extended",
+        domain=domain,
+        api_signature=api_signature,
+        api_fields=api_fields,
+        parameters=[],
+        computations=computations_extended,
+        docstring="",
+    )
+
+
+def init_implementation_from_definition(definition: StencilDefinition) -> StencilImplementation:
+    return StencilImplementation(
+        name=definition.name,
+        api_signature=[],
+        domain=definition.domain,
+        fields={},
+        parameters={},
+        multi_stages=[],
+        fields_extents={},
+        unreferenced=[],
+        axis_splitters_var=None,
+        externals=definition.externals,
+        sources=definition.sources,
+        docstring=definition.docstring,
+    )
+
+
+@pytest.fixture(params=["extended"])
+def transform_data(
+    request,
+    definition_extended: StencilDefinition,
+) -> TransformData:
+    definition = definition_extended if request.param == "extended" else None
+    yield TransformData(
+        definition_ir=definition,
+        implementation_ir=init_implementation_from_definition(definition),
+        options=BuildOptions(name="war_extended", module=__name__),
+    )
+
+
+@pytest.fixture()
+def transform_data_after_init_pass(transform_data: TransformData):
+    init_pass = InitInfoPass()
+    yield init_pass.apply(transform_data)
+
+
+@pytest.fixture()
+def transform_data_after_normalize_blocks_pass(transform_data_after_init_pass: TransformData):
+    normalize_blocks_pass = NormalizeBlocksPass()
+    yield normalize_blocks_pass.apply(transform_data_after_init_pass)
+
+
+@pytest.fixture()
+def transform_data_after_compute_extents_pass(
+    transform_data_after_normalize_blocks_pass: TransformData,
+):
+    compute_extents_pass = ComputeExtentsPass()
+    yield compute_extents_pass.apply(transform_data_after_normalize_blocks_pass)
+
+
+def test_merge_write_after_read(transform_data_after_compute_extents_pass: TransformData):
+    merge_blocks_pass = MergeBlocksPass()
+    data = merge_blocks_pass.apply(transform_data_after_compute_extents_pass)
+
+    assert len(data.blocks) == 3

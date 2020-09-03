@@ -38,13 +38,9 @@ from gt4py.definitions import Extent
 class IRSpecificationError(gt_definitions.GTSpecificationError):
     def __init__(self, message=None, *, loc=None):
         if message is None:
-            if loc is None:
-                message = "Invalid specification"
-            else:
-                message = (
-                    f"Invalid specification in '{loc.scope}' (line: {loc.line}, col: {loc.col})"
-                )
-        super().__init__(message, loc=loc)
+            message = "Invalid specification"
+        message = f"{message} in '{loc.scope}' (line: {loc.line}, col: {loc.column})"
+        super().__init__(message)
 
 
 class IntervalSpecificationError(IRSpecificationError):
