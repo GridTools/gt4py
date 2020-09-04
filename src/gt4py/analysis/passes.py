@@ -458,42 +458,6 @@ class MergeBlocksPass(TransformPass):
     def defaults(self):
         return self._DEFAULT_OPTIONS
 
-    # def apply(self, transform_data: TransformData):
-    #    # Greedy strategy to merge multi-stages
-    #    merged_blocks = [transform_data.blocks[0]]
-    #    for candidate in transform_data.blocks[1:]:
-    #        merged = merged_blocks[-1]
-    #        if self._are_compatible_multi_stages(
-    #            merged, candidate, transform_data.has_sequential_axis
-    #        ):
-    #            merged.id = transform_data.id_generator.new
-    #            self._merge_domain_blocks(merged, candidate)
-    #        else:
-    #            merged_blocks.append(candidate)
-
-    #    # Greedy strategy to merge stages
-    #    # assert transform_data.has_sequential_axis
-    #    for block in merged_blocks:
-    #        merged_ijs = [block.ij_blocks[0]]
-    #        for ij_candidate in block.ij_blocks[1:]:
-    #            merged = merged_ijs[-1]
-    #            if self._are_compatible_stages(
-    #                merged,
-    #                ij_candidate,
-    #                transform_data.min_k_interval_sizes,
-    #                block.iteration_order,
-    #            ):
-    #                merged.id = transform_data.id_generator.new
-    #                self._merge_ij_blocks(merged, ij_candidate, transform_data)
-    #            else:
-    #                merged_ijs.append(ij_candidate)
-
-    #        block.ij_blocks = merged_ijs
-
-    #    transform_data.blocks = merged_blocks
-
-    #    return transform_data
-
     def _greedy_merging(
         self,
         items: Sequence[T],
@@ -691,19 +655,6 @@ class MergeBlocksPass(TransformPass):
         # Check that there are not data dependencies between stages
         if self._stages_have_data_dependencies(candidate, target, min_k_interval_sizes):
             return False
-        # for input, extent in candidate.inputs.items():
-        #    if input in target.outputs:
-        #        read_interval = (
-        #            next(iter(candidate.intervals)).as_tuple(min_k_interval_sizes) + extent[-2]
-        #        )
-        #        for merged_interval_block in target.interval_blocks:
-        #            merged_interval = merged_interval_block.interval
-        #            if merged_interval.as_tuple(
-        #                min_k_interval_sizes
-        #            ) != read_interval and merged_interval.overlaps(
-        #                read_interval, min_k_interval_sizes
-        #            ):
-        #                return False
         return True
 
     def _merge_domain_blocks(self, target, candidate):
