@@ -283,7 +283,7 @@ def computations(
 def expected_nblocks(case: str) -> Iterator[Optional[int]]:
     nblocks = None
     if case == "extended":
-        nblocks = 3
+        nblocks = 2
     elif case == "offset":
         nblocks = 2
     elif case == "allowed_offset":

@@ -18,7 +18,7 @@
 """
 
 import itertools
-from typing import Optional, Set, Tuple, Union
+from typing import Iterator, Optional, Sequence, Set, Tuple, Union
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
@@ -521,6 +521,18 @@ class MergeBlocksPass(TransformPass):
         current_writes = {name for name in current.outputs}
         return previous_reads.intersection(current_writes)
 
+    def _iter_ij_block_extents(self, multi_stage: DomainBlockInfo) -> Iterator[Extent]:
+        return (ij_block.compute_extent for ij_block in multi_stage.ij_blocks)
+
+    def _accumulate_extents(self, extents: Sequence[Extent]) -> Extent:
+        full_extent = Extent.zeros()
+        for extent in extents:
+            full_extent |= extent
+        return full_extent
+
+    def _has_extended_domain(self, multi_stage: DomainBlockInfo) -> bool:
+        return self._accumulate_extents(self._iter_ij_block_extents(multi_stage)) != Extent.zeros()
+
     def _have_disallowed_read_after_write_multistages(
         self, current: DomainBlockInfo, previous: DomainBlockInfo
     ) -> bool:
@@ -544,7 +556,14 @@ class MergeBlocksPass(TransformPass):
         write_after_read_fields = self._write_after_read_fields(current=current, previous=previous)
         current_has_offset = self._has_reads_with_offset(current, write_after_read_fields)
         previous_has_offset = self._has_reads_with_offset(previous, write_after_read_fields)
-        return write_after_read_fields and (current_has_offset or previous_has_offset)
+        current_has_extended_domain = self._has_extended_domain(current)
+        previous_has_extended_domain = self._has_extended_domain(previous)
+        return write_after_read_fields and (
+            current_has_offset
+            or previous_has_offset
+            or current_has_extended_domain
+            or previous_has_extended_domain
+        )
 
     def _are_compatible_stages(
         self,
