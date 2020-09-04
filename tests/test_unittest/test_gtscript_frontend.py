@@ -42,7 +42,7 @@ def compile_definition(
     rebuild=False,
     **kwargs,
 ):
-    gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
+    _, original_annotations = gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
     build_options = gt_definitions.BuildOptions(
         name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=None
     )
@@ -54,6 +54,8 @@ def compile_definition(
     definition_ir = gt_frontend.GTScriptParser(
         definition_func, externals=externals or {}, options=build_options
     ).run()
+
+    setattr(definition_func, "__annotations__", original_annotations)
 
     return stencil_id, definition_ir
 
