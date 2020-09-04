@@ -493,18 +493,58 @@ class MergeBlocksPass(TransformPass):
 
     def _are_compatible_multi_stages(
         self, target: DomainBlockInfo, candidate: DomainBlockInfo, has_sequential_axis: bool
-    ):
+    ) -> bool:
         result = False
         if candidate.iteration_order == target.iteration_order:
             if candidate.iteration_order == gt_ir.IterationOrder.PARALLEL and has_sequential_axis:
-                inputs_with_k_deps = set(
-                    name for name, extent in candidate.inputs.items() if extent[-1] != (0, 0)
+                result = not self._have_disallowed_read_after_write_multistages(
+                    current=candidate, previous=target
+                ) and not self._have_disallowed_write_after_read_multistages(
+                    current=candidate, previous=target
                 )
-                result = target.outputs.isdisjoint(inputs_with_k_deps)
             else:
                 result = True
 
         return result
+
+    def _read_after_write_fields(
+        self, current: DomainBlockInfo, previous: DomainBlockInfo
+    ) -> Set[str]:
+        previous_writes = {name for name in previous.outputs}
+        current_reads = {name for name in current.inputs}
+        return previous_writes.intersection(current_reads)
+
+    def _write_after_read_fields(
+        self, current: DomainBlockInfo, previous: DomainBlockInfo
+    ) -> Set[str]:
+        previous_reads = {name for name in previous.inputs}
+        current_writes = {name for name in current.outputs}
+        return previous_reads.intersection(current_writes)
+
+    def _have_disallowed_read_after_write_multistages(
+        self, current: DomainBlockInfo, previous: DomainBlockInfo
+    ) -> bool:
+        read_after_write_fields = self._read_after_write_fields(current=current, previous=previous)
+        return any(
+            extent[-1] != (0, 0)
+            for name, extent in current.inputs.items()
+            if name in read_after_write_fields
+        )
+
+    def _has_reads_with_offset(selfs, multi_stage: DomainBlockInfo, field_names: Set[str]) -> bool:
+        return any(
+            extent != Extent.zeros()
+            for name, extent in multi_stage.inputs.items()
+            if name in field_names
+        )
+
+    def _have_disallowed_write_after_read_multistages(
+        self, current: DomainBlockInfo, previous: DomainBlockInfo
+    ) -> bool:
+        write_after_read_fields = self._write_after_read_fields(current=current, previous=previous)
+        current_has_offset = self._has_reads_with_offset(current, write_after_read_fields)
+        previous_has_offset = self._has_reads_with_offset(previous, write_after_read_fields)
+        return write_after_read_fields and (current_has_offset or previous_has_offset)
 
     def _are_compatible_stages(
         self,

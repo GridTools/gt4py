@@ -30,10 +30,7 @@ from gt4py.ir.nodes import (
 )
 
 
-DEBUG_LOC = Location
-
-
-@pytest.fixture(params=["extended", "offset"])
+@pytest.fixture(params=["extended", "offset", "allowed_offset"])
 def case(request):
     yield request.param
 
@@ -116,40 +113,40 @@ def computations_extended(
                         target=FieldRef(
                             name="tmp",
                             offset=no_offset,
-                            loc=DEBUG_LOC(scope="war_extended_compute", line=0, column=0),
+                            loc=Location(scope="war_extended_compute", line=0, column=0),
                         ),
                         value=FieldRef(
                             name="inout",
                             offset=no_offset,
-                            loc=DEBUG_LOC(scope="war_extended_compute", line=0, column=2),
+                            loc=Location(scope="war_extended_compute", line=0, column=2),
                         ),
-                        loc=DEBUG_LOC(scope="war_extended_compute", line=0, column=1),
+                        loc=Location(scope="war_extended_compute", line=0, column=1),
                     ),
                     Assign(
                         target=FieldRef(
                             name="out",
                             offset=no_offset,
-                            loc=DEBUG_LOC(scope="war_extended_compute", line=1, column=0),
+                            loc=Location(scope="war_extended_compute", line=1, column=0),
                         ),
                         value=FieldRef(
                             name="tmp",
                             offset=offset_by_one,
-                            loc=DEBUG_LOC(scope="war_extended_compute", line=1, column=2),
+                            loc=Location(scope="war_extended_compute", line=1, column=2),
                         ),
-                        loc=DEBUG_LOC(scope="war_extended_compute", line=1, column=1),
+                        loc=Location(scope="war_extended_compute", line=1, column=1),
                     ),
                     Assign(
                         target=FieldRef(
                             name="inout",
                             offset=no_offset,
-                            loc=DEBUG_LOC(scope="war_extended_compute", line=2, column=0),
+                            loc=Location(scope="war_extended_compute", line=2, column=0),
                         ),
                         value=FieldRef(
                             name="in",
                             offset=no_offset,
-                            loc=DEBUG_LOC(scope="war_extended_compute", line=2, column=2),
+                            loc=Location(scope="war_extended_compute", line=2, column=2),
                         ),
-                        loc=DEBUG_LOC(scope="war_extended_compute", line=2, column=1),
+                        loc=Location(scope="war_extended_compute", line=2, column=1),
                     ),
                 ]
             ),
@@ -162,14 +159,13 @@ def computations_offset(
     no_offset: Dict[str, int], offset_by_one: Dict[str, int]
 ) -> Iterator[List[ComputationBlock]]:
     """
-    Build stencil definition body for write after read with extended compute domain.
+    Build stencil definition body for write after read with read offset.
 
     equivalent to
     .. code-block: python
 
         with computation(PARALLEL), interval(...):
-            tmp = inout
-            out = tmp[-1, 0, 0]
+            out = inout[-1, 0, 0]
             inout = in
     """
     yield [
@@ -184,27 +180,81 @@ def computations_offset(
                         target=FieldRef(
                             name="out",
                             offset=no_offset,
-                            loc=DEBUG_LOC(scope="war_offset", line=0, column=0),
+                            loc=Location(scope="war_offset", line=0, column=0),
                         ),
                         value=FieldRef(
                             name="inout",
                             offset=offset_by_one,
-                            loc=DEBUG_LOC(scope="war_offset", line=0, column=2),
+                            loc=Location(scope="war_offset", line=0, column=2),
                         ),
-                        loc=DEBUG_LOC(scope="war_offset", line=0, column=1),
+                        loc=Location(scope="war_offset", line=0, column=1),
                     ),
                     Assign(
                         target=FieldRef(
                             name="inout",
                             offset=no_offset,
-                            loc=DEBUG_LOC(scope="war_offset", line=1, column=0),
+                            loc=Location(scope="war_offset", line=1, column=0),
                         ),
                         value=FieldRef(
                             name="in",
                             offset=offset_by_one,
-                            loc=DEBUG_LOC(scope="war_offset", line=1, column=2),
+                            loc=Location(scope="war_offset", line=1, column=2),
                         ),
-                        loc=DEBUG_LOC(scope="war_offset", line=1, column=1),
+                        loc=Location(scope="war_offset", line=1, column=1),
+                    ),
+                ]
+            ),
+        )
+    ]
+
+
+@pytest.fixture()
+def computations_allowed_offset(
+    no_offset: Dict[str, int], offset_by_one: Dict[str, int]
+) -> Iterator[List[ComputationBlock]]:
+    """
+    Build stencil definition body writing to x after reading y with offset.
+
+    equivalent to
+    .. code-block: python
+
+        with computation(PARALLEL), interval(...):
+            out = in[-1, 0, 0]
+            inout = in
+    """
+    yield [
+        ComputationBlock(
+            interval=AxisInterval(
+                start=AxisBound(level=LevelMarker.START), end=AxisBound(level=LevelMarker.END)
+            ),
+            iteration_order=IterationOrder.PARALLEL,
+            body=BlockStmt(
+                stmts=[
+                    Assign(
+                        target=FieldRef(
+                            name="out",
+                            offset=no_offset,
+                            loc=Location(scope="allowed_offset", line=0, column=0),
+                        ),
+                        value=FieldRef(
+                            name="in",
+                            offset=offset_by_one,
+                            loc=Location(scope="allowed_offset", line=0, column=2),
+                        ),
+                        loc=Location(scope="allowed_offset", line=0, column=1),
+                    ),
+                    Assign(
+                        target=FieldRef(
+                            name="inout",
+                            offset=no_offset,
+                            loc=Location(scope="allowed_offset", line=1, column=0),
+                        ),
+                        value=FieldRef(
+                            name="in",
+                            offset=no_offset,
+                            loc=Location(scope="allowed_offset", line=1, column=2),
+                        ),
+                        loc=Location(scope="allowed_offset", line=1, column=1),
                     ),
                 ]
             ),
@@ -217,13 +267,16 @@ def computations(
     case: str,
     computations_extended: List[ComputationBlock],
     computations_offset: List[ComputationBlock],
+    computations_allowed_offset: List[ComputationBlock],
 ) -> Iterator[Optional[List[ComputationBlock]]]:
-    definition = None
+    comps = None
     if case == "extended":
-        definition = computations_extended
+        comps = computations_extended
     elif case == "offset":
-        definition = computations_offset
-    yield definition
+        comps = computations_offset
+    elif case == "allowed_offset":
+        comps = computations_allowed_offset
+    yield comps
 
 
 @pytest.fixture()
@@ -233,6 +286,8 @@ def expected_nblocks(case: str) -> Iterator[Optional[int]]:
         nblocks = 3
     elif case == "offset":
         nblocks = 2
+    elif case == "allowed_offset":
+        nblocks = 1
     yield nblocks
 
 
