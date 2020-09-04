@@ -8,8 +8,8 @@ review comprehensively.
 
 Large PRs
 ---------
-- Consider giving partial feedback. The following are in order of magnitude
-  changes they will request, so rather than going down the list for one file,
+- Consider giving partial feedback. The following items are ordered according to the magnitude
+  of changes they will involve, so rather than going down the list for one file,
   prefer making a full pass for each section.
 
 Do not allow untested "functionality" or "fixes"
@@ -22,7 +22,7 @@ Do not allow untested "functionality" or "fixes"
 
 Check for obvious omissions
 ---------------------------
-- Any comment mentioning that something is incomplete or could be improved etc
+- Any comment mentioning that something is incomplete or could be improved
   should be addressed before merging or split out into an issue.
 
 Check for code quality
@@ -30,8 +30,8 @@ Check for code quality
 
 - Are there any coupling issues?
 
- + Are any interfaces circumvented (calling underlying methods instead of
-   interface methods etc)?
+ + Are any interfaces circumvented (e.g. calling underlying methods instead of
+   interface methods)?
 
  + Does any part of the code require knowledge of the inner workings of another
    part?
@@ -48,14 +48,14 @@ Check for code quality
    possible)
 
  + Could complexity be reduced by using a different algorithm? Think DFS <->
-   BFS, recursion <-> iteration, etc
+   BFS, recursion <-> iteration, etc.
 
 
 - Are there loops that could be replaced by simple comprehensions or too
   complex comprehensions?
 
 - Consider the overall design: could it be improved significantly? Might it
-  block future improvements ins some way?
+  block future improvements in some way?
 
 Check for compliance
 --------------------
