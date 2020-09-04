@@ -645,7 +645,7 @@ class MergeBlocksPass(TransformPass):
     ) -> bool:
         if interval_a == interval_b:
             return False
-        elif interval_a.overlaps(interval_b, min_k_interval_sizes, iteration_order):
+        elif interval_a.overlaps(interval_b, min_k_interval_sizes):
             return True
         return False
 
