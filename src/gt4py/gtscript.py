@@ -87,38 +87,20 @@ _VALID_DATA_TYPES = (bool, np.bool, int, np.int32, np.int64, float, np.float32, 
 def _set_arg_dtypes(definition, dtypes):
     assert isinstance(definition, types.FunctionType)
     annotations = getattr(definition, "__annotations__", {})
-    placeholders = {}
+    original_annotations = {**annotations}
     for arg, value in annotations.items():
         if isinstance(value, _FieldDescriptor) and isinstance(value.dtype, str):
             if value.dtype in dtypes:
                 annotations[arg] = _FieldDescriptor(dtypes[value.dtype], value.axes)
-                placeholders[arg] = value.dtype
             else:
                 raise ValueError(f"Missing '{value.dtype}' dtype definition for arg '{arg}'")
         elif isinstance(value, str):
             if value in dtypes:
                 annotations[arg] = dtypes[value]
-                placeholders[arg] = value
             else:
                 raise ValueError(f"Missing '{value}' dtype definition for arg '{arg}'")
 
-    return definition, placeholders
-
-
-def _reset_arg_dtypes(definition, placeholders):
-    assert isinstance(definition, types.FunctionType)
-    annotations = getattr(definition, "__annotations__", {})
-    for arg, value in annotations.items():
-        if arg in placeholders:
-            if isinstance(value, _FieldDescriptor):
-                try:
-                    annotations[arg] = _FieldDescriptor(placeholders[arg], value.axes)
-                except KeyError:
-                    annotations[arg] = _FieldDescriptor(placeholders[arg].type, value.axes)
-            else:
-                annotations[arg] = placeholders[arg]
-
-    return definition
+    return definition, original_annotations
 
 
 def function(func):
@@ -242,14 +224,14 @@ def stencil(
             elif callable(definition_func):  # General callable
                 definition_func = definition_func.__call__
 
-        _, placeholders = _set_arg_dtypes(definition_func, dtypes or {})
+        _, original_annotations = _set_arg_dtypes(definition_func, dtypes or {})
         out = gt_loader.gtscript_loader(
             definition_func,
             backend=backend,
             build_options=build_options,
             externals=externals or {},
         )
-        _reset_arg_dtypes(definition_func, placeholders)
+        setattr(definition_func, "__annotations__", original_annotations)
         return out
 
     if definition is None:
