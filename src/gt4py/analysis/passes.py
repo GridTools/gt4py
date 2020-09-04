@@ -18,7 +18,7 @@
 """
 
 import itertools
-from typing import Iterator, Optional, Sequence, Set, Tuple, Union
+from typing import Callable, Iterator, Optional, Sequence, Set, Tuple, TypeVar, Union
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
@@ -33,6 +33,9 @@ from gt4py.analysis import (
     TransformPass,
 )
 from gt4py.definitions import Extent
+
+
+T = TypeVar("T")
 
 
 class IRSpecificationError(gt_definitions.GTSpecificationError):
@@ -455,40 +458,108 @@ class MergeBlocksPass(TransformPass):
     def defaults(self):
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData):
-        # Greedy strategy to merge multi-stages
-        merged_blocks = [transform_data.blocks[0]]
-        for candidate in transform_data.blocks[1:]:
-            merged = merged_blocks[-1]
-            if self._are_compatible_multi_stages(
-                merged, candidate, transform_data.has_sequential_axis
-            ):
-                merged.id = transform_data.id_generator.new
-                self._merge_domain_blocks(merged, candidate)
+    # def apply(self, transform_data: TransformData):
+    #    # Greedy strategy to merge multi-stages
+    #    merged_blocks = [transform_data.blocks[0]]
+    #    for candidate in transform_data.blocks[1:]:
+    #        merged = merged_blocks[-1]
+    #        if self._are_compatible_multi_stages(
+    #            merged, candidate, transform_data.has_sequential_axis
+    #        ):
+    #            merged.id = transform_data.id_generator.new
+    #            self._merge_domain_blocks(merged, candidate)
+    #        else:
+    #            merged_blocks.append(candidate)
+
+    #    # Greedy strategy to merge stages
+    #    # assert transform_data.has_sequential_axis
+    #    for block in merged_blocks:
+    #        merged_ijs = [block.ij_blocks[0]]
+    #        for ij_candidate in block.ij_blocks[1:]:
+    #            merged = merged_ijs[-1]
+    #            if self._are_compatible_stages(
+    #                merged,
+    #                ij_candidate,
+    #                transform_data.min_k_interval_sizes,
+    #                block.iteration_order,
+    #            ):
+    #                merged.id = transform_data.id_generator.new
+    #                self._merge_ij_blocks(merged, ij_candidate, transform_data)
+    #            else:
+    #                merged_ijs.append(ij_candidate)
+
+    #        block.ij_blocks = merged_ijs
+
+    #    transform_data.blocks = merged_blocks
+
+    #    return transform_data
+
+    def _greedy_merging(
+        self,
+        items: Sequence[T],
+        can_merge: Callable[[T, T], bool],
+        do_merge: Callable[[T, T], None],
+    ) -> Sequence[T]:
+        merged_items = [items[0]]
+        for item in items[1:]:
+            last_merged = merged_items[-1]
+            if can_merge(last_merged, item):
+                do_merge(last_merged, item)
             else:
-                merged_blocks.append(candidate)
+                merged_items.append(item)
+        return merged_items
 
-        # Greedy strategy to merge stages
-        # assert transform_data.has_sequential_axis
+    def _can_merge_multi_stages_callback(
+        self, transform_data: TransformData
+    ) -> Callable[[DomainBlockInfo, DomainBlockInfo], bool]:
+        def can_merge(last_merged: DomainBlockInfo, candidate: DomainBlockInfo) -> bool:
+            return self._are_compatible_multi_stages(
+                last_merged, candidate, transform_data.has_sequential_axis
+            )
+
+        return can_merge
+
+    def _do_merge_multi_stages_callback(
+        self, transform_data: TransformData
+    ) -> Callable[[DomainBlockInfo, DomainBlockInfo], None]:
+        def do_merge(last_merged: DomainBlockInfo, candidate: DomainBlockInfo) -> None:
+            last_merged.id = transform_data.id_generator.new
+            self._merge_domain_blocks(last_merged, candidate)
+
+        return do_merge
+
+    def _can_merge_stages_callback(
+        self, transform_data: TransformData, block: DomainBlockInfo
+    ) -> Callable[[IJBlockInfo, IJBlockInfo], bool]:
+        def can_merge(last_merged: IJBlockInfo, candidate: IJBlockInfo) -> bool:
+            return self._are_compatible_stages(
+                last_merged, candidate, transform_data.min_k_interval_sizes, block.iteration_order
+            )
+
+        return can_merge
+
+    def _do_merge_stages_callback(
+        self, transform_data: TransformData
+    ) -> Callable[[IJBlockInfo, IJBlockInfo], None]:
+        def do_merge(last_merged: IJBlockInfo, candidate: IJBlockInfo) -> None:
+            last_merged.id = transform_data.id_generator.new
+            self._merge_ij_blocks(last_merged, candidate, transform_data)
+
+        return do_merge
+
+    def apply(self, transform_data: TransformData) -> TransformData:
+        merged_blocks = self._greedy_merging(
+            items=transform_data.blocks,
+            can_merge=self._can_merge_multi_stages_callback(transform_data),
+            do_merge=self._do_merge_multi_stages_callback(transform_data),
+        )
         for block in merged_blocks:
-            merged_ijs = [block.ij_blocks[0]]
-            for ij_candidate in block.ij_blocks[1:]:
-                merged = merged_ijs[-1]
-                if self._are_compatible_stages(
-                    merged,
-                    ij_candidate,
-                    transform_data.min_k_interval_sizes,
-                    block.iteration_order,
-                ):
-                    merged.id = transform_data.id_generator.new
-                    self._merge_ij_blocks(merged, ij_candidate, transform_data)
-                else:
-                    merged_ijs.append(ij_candidate)
-
-            block.ij_blocks = merged_ijs
-
+            block.ij_blocks = self._greedy_merging(
+                items=block.ij_blocks,
+                can_merge=self._can_merge_stages_callback(transform_data, block),
+                do_merge=self._do_merge_stages_callback(transform_data),
+            )
         transform_data.blocks = merged_blocks
-
         return transform_data
 
     def _are_compatible_multi_stages(
@@ -510,15 +581,15 @@ class MergeBlocksPass(TransformPass):
     def _read_after_write_fields(
         self, current: DomainBlockInfo, previous: DomainBlockInfo
     ) -> Set[str]:
-        previous_writes = {name for name in previous.outputs}
-        current_reads = {name for name in current.inputs}
+        previous_writes = set(previous.outputs)
+        current_reads = set(current.inputs)
         return previous_writes.intersection(current_reads)
 
     def _write_after_read_fields(
         self, current: DomainBlockInfo, previous: DomainBlockInfo
     ) -> Set[str]:
-        previous_reads = {name for name in previous.inputs}
-        current_writes = {name for name in current.outputs}
+        previous_reads = set(previous.inputs)
+        current_writes = set(current.outputs)
         return previous_reads.intersection(current_writes)
 
     def _iter_ij_block_extents(self, multi_stage: DomainBlockInfo) -> Iterator[Extent]:
@@ -543,7 +614,7 @@ class MergeBlocksPass(TransformPass):
             if name in read_after_write_fields
         )
 
-    def _has_reads_with_offset(selfs, multi_stage: DomainBlockInfo, field_names: Set[str]) -> bool:
+    def _has_reads_with_offset(self, multi_stage: DomainBlockInfo, field_names: Set[str]) -> bool:
         return any(
             extent != Extent.zeros()
             for name, extent in multi_stage.inputs.items()
@@ -565,6 +636,37 @@ class MergeBlocksPass(TransformPass):
             or previous_has_extended_domain
         )
 
+    def _intervals_overlap_or_imply_reorder(
+        self,
+        interval_a: IntervalInfo,
+        interval_b: IntervalInfo,
+        min_k_interval_sizes: int,
+        iteration_order: gt_ir.IterationOrder,
+    ) -> bool:
+        if interval_a == interval_b:
+            return False
+        elif interval_a.overlaps(interval_b, min_k_interval_sizes, iteration_order):
+            return True
+        return False
+
+    def _stages_have_data_dependencies(
+        self, current: IJBlockInfo, previous: IJBlockInfo, min_k_interval_sizes: int
+    ) -> bool:
+        extents = (extent for name, extent in current.inputs.items() if name in previous.outputs)
+        for extent in extents:
+            read_interval = (
+                next(iter(current.intervals)).as_tuple(min_k_interval_sizes) + extent[-2]
+            )
+            for merged_interval_block in previous.interval_blocks:
+                merged_interval = merged_interval_block.interval
+                if merged_interval.as_tuple(
+                    min_k_interval_sizes
+                ) != read_interval and merged_interval.overlaps(
+                    read_interval, min_k_interval_sizes
+                ):
+                    return True
+        return False
+
     def _are_compatible_stages(
         self,
         target: IJBlockInfo,
@@ -576,36 +678,33 @@ class MergeBlocksPass(TransformPass):
         if not (target.compute_extent == candidate.compute_extent):
             return False
 
-        result = True
         # Check that there is not overlap between stage intervals and that
         # merging stages will not imply a reordering of the execution order
-        for interval in target.intervals:
-            for candidate_interval in candidate.intervals:
-                if (
-                    interval != candidate_interval
-                    and interval.overlaps(candidate_interval, min_k_interval_sizes)
-                ) or interval.precedes(candidate_interval, min_k_interval_sizes, iteration_order):
-                    result = False
+        for interval, candidate_interval in itertools.product(
+            target.intervals, candidate.intervals
+        ):
+            if self._intervals_overlap_or_imply_reorder(
+                interval, candidate_interval, min_k_interval_sizes, iteration_order
+            ):
+                return False
 
         # Check that there are not data dependencies between stages
-        if result:
-            for input, extent in candidate.inputs.items():
-                if result:
-                    if input in target.outputs:
-                        read_interval = (
-                            next(iter(candidate.intervals)).as_tuple(min_k_interval_sizes)
-                            + extent[-2]
-                        )
-                        for merged_interval_block in target.interval_blocks:
-                            merged_interval = merged_interval_block.interval
-                            if merged_interval.as_tuple(
-                                min_k_interval_sizes
-                            ) != read_interval and merged_interval.overlaps(
-                                read_interval, min_k_interval_sizes
-                            ):
-                                result = False
-                                break
-        return result
+        if self._stages_have_data_dependencies(candidate, target, min_k_interval_sizes):
+            return False
+        # for input, extent in candidate.inputs.items():
+        #    if input in target.outputs:
+        #        read_interval = (
+        #            next(iter(candidate.intervals)).as_tuple(min_k_interval_sizes) + extent[-2]
+        #        )
+        #        for merged_interval_block in target.interval_blocks:
+        #            merged_interval = merged_interval_block.interval
+        #            if merged_interval.as_tuple(
+        #                min_k_interval_sizes
+        #            ) != read_interval and merged_interval.overlaps(
+        #                read_interval, min_k_interval_sizes
+        #            ):
+        #                return False
+        return True
 
     def _merge_domain_blocks(self, target, candidate):
         target.ij_blocks.extend(candidate.ij_blocks)
