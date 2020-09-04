@@ -443,6 +443,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         arg_fields = []
         tmp_fields = []
         storage_ids = []
+        used_axes = set()
         max_ndim = 0
         for name, field_decl in node.fields.items():
             if name not in node.unreferenced:
@@ -450,8 +451,9 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 field_attributes = {
                     "name": field_decl.name,
                     "dtype": self._make_cpp_type(field_decl.data_type),
-                    "axes": "".join(field_decl.axes),
+                    "axes": "".join(field_decl.axes).lower(),
                 }
+                used_axes.add(field_attributes["axes"])
                 if field_decl.is_api:
                     if field_decl.layout_id not in storage_ids:
                         storage_ids.append(field_decl.layout_id)
@@ -489,6 +491,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             stage_functors=stage_functors,
             stencil_unique_name=self.class_name,
             tmp_fields=tmp_fields,
+            used_axes=used_axes,
         )
 
         sources: Dict[str, Dict[str, str]] = {"computation": {}, "bindings": {}}
