@@ -405,44 +405,58 @@ class NormalizeBlocksPass(TransformPass):
     def defaults(self):
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData):
+    def _block_from_statement(
+        self,
+        transform_data: TransformData,
+        block: DomainBlockInfo,
+        interval_block: IntervalBlockInfo,
+        stmt_info: StatementInfo,
+    ) -> DomainBlockInfo:
+        interval = interval_block.interval
         zero_extent = Extent.zeros(transform_data.ndims)
-        blocks = []
-        for block in transform_data.blocks:
-            if block.iteration_order == gt_ir.IterationOrder.PARALLEL:
-                # Put every statement in a single stage
-                for ij_block in block.ij_blocks:
-                    for interval_block in ij_block.interval_blocks:
-                        for stmt_info in interval_block.stmts:
-                            interval = interval_block.interval
-                            new_interval_block = IntervalBlockInfo(
-                                transform_data.id_generator.new,
-                                interval,
-                                [stmt_info],
-                                stmt_info.inputs,
-                                stmt_info.outputs,
-                            )
-                            new_ij_block = IJBlockInfo(
-                                transform_data.id_generator.new,
-                                {interval},
-                                [new_interval_block],
-                                {**new_interval_block.inputs},
-                                set(new_interval_block.outputs),
-                                compute_extent=zero_extent,
-                            )
-                            new_block = DomainBlockInfo(
-                                transform_data.id_generator.new,
-                                block.iteration_order,
-                                set(new_ij_block.intervals),
-                                [new_ij_block],
-                                {**new_ij_block.inputs},
-                                set(new_ij_block.outputs),
-                            )
-                            blocks.append(new_block)
-            else:
-                blocks.append(block)
+        new_interval_block = IntervalBlockInfo(
+            transform_data.id_generator.new,
+            interval,
+            [stmt_info],
+            stmt_info.inputs,
+            stmt_info.outputs,
+        )
+        new_ij_block = IJBlockInfo(
+            transform_data.id_generator.new,
+            {interval},
+            [new_interval_block],
+            {**new_interval_block.inputs},
+            set(new_interval_block.outputs),
+            compute_extent=zero_extent,
+        )
+        return DomainBlockInfo(
+            transform_data.id_generator.new,
+            block.iteration_order,
+            set(new_ij_block.intervals),
+            [new_ij_block],
+            {**new_ij_block.inputs},
+            set(new_ij_block.outputs),
+        )
 
-        transform_data.blocks = blocks
+    def _iter_ij_blocks(self, transform_data):
+        for block in transform_data.blocks:
+            for ij_block in block.ij_blocks:
+                yield block, ij_block
+
+    def _iter_interval_blocks(self, transform_data):
+        for block, ij_block in self._iter_ij_blocks(transform_data):
+            for interval_block in ij_block.interval_blocks:
+                yield block, interval_block
+
+    def _iter_statement_args(self, transform_data):
+        for block, interval_block in self._iter_interval_blocks(transform_data):
+            for statement in interval_block.stmts:
+                yield transform_data, block, interval_block, statement
+
+    def apply(self, transform_data: TransformData):
+        transform_data.blocks = [
+            self._block_from_statement(*args) for args in self._iter_statement_args(transform_data)
+        ]
 
         return transform_data
 
