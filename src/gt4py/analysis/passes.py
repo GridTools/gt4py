@@ -531,14 +531,11 @@ class MergeBlocksPass(TransformPass):
     ) -> bool:
         result = False
         if candidate.iteration_order == target.iteration_order:
-            if candidate.iteration_order == gt_ir.IterationOrder.PARALLEL and has_sequential_axis:
-                result = not self._have_disallowed_read_after_write_multistages(
-                    current=candidate, previous=target
-                ) and not self._have_disallowed_write_after_read_multistages(
-                    current=candidate, previous=target
-                )
-            else:
-                result = True
+            result = not self._have_disallowed_read_after_write_multistages(
+                current=candidate, previous=target, has_sequential_axis=has_sequential_axis
+            ) and not self._have_disallowed_write_after_read_multistages(
+                current=candidate, previous=target
+            )
 
         return result
 
@@ -569,8 +566,10 @@ class MergeBlocksPass(TransformPass):
         return self._accumulate_extents(self._iter_ij_block_extents(multi_stage)) != Extent.zeros()
 
     def _have_disallowed_read_after_write_multistages(
-        self, current: DomainBlockInfo, previous: DomainBlockInfo
+        self, current: DomainBlockInfo, previous: DomainBlockInfo, has_sequential_axis: bool
     ) -> bool:
+        if not (current.iteration_order == gt_ir.IterationOrder.PARALLEL and has_sequential_axis):
+            return False
         read_after_write_fields = self._read_after_write_fields(current=current, previous=previous)
         return any(
             extent[-1] != (0, 0)
