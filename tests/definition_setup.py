@@ -96,7 +96,9 @@ def make_definition(
                     start=AxisBound(level=LevelMarker.START), end=AxisBound(level=LevelMarker.END)
                 ),
                 iteration_order=iteration_order,
-                body=BlockStmt(stmts=[make_assign(*assign) for assign in body]),
+                body=BlockStmt(
+                    stmts=[make_assign(*assign, loc_line=i) for i, assign in enumerate(body)]
+                ),
             )
         ],
         docstring="",

@@ -36,4 +36,5 @@ def test_write_after_read_ij_offset(
         body=[("out", "in", ij_offset), ("inout", "in", (0, 0, 0))],
         iteration_order=iteration_order,
     )
+    transform_data = normalize_blocks_pass(transform_data)
     assert len(transform_data.blocks) == 2
