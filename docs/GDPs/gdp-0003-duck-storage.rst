@@ -15,19 +15,19 @@ Abstract
 
 We propose to replace the current storage implementation by a new `storage` class hierarchy
 which does not inherit from NumPy `ndarray`. Instead we propose to support the also established
-`__array_interface__` and `__cuda_array_interface__` interfaces. These new storage classes shall
-also introduce the possibility to be constructed from externally allocated memory buffers and
-provide more control over the underlying memory.
+:code:`__array_interface__` and :code:`__cuda_array_interface__` interfaces. These new storage
+classes shall also introduce the possibility to be constructed from externally allocated memory
+buffers and provide more control over the underlying memory.
 
 Further, we propose the :code:`__gt_data_interface__` attribute which can be added to any object to
-provide the necessary information about how it can be used as a field in gt4py stencils. We also
-propose to accept the `__array_interface__` and `__cuda_array_interface__` interfaces if these
-provide all necessary information.
+provide the necessary information about how it can be used as a field in gt4py stencils or when
+creating and interacting with storages. We also propose to accept the :code:`__array_interface__`
+and :code:`__cuda_array_interface__` interfaces if these provide all necessary information.
 
 Lastly, these storages shall focus on providing a mechanism that allows users to write code with
 only minimal dependence on the backend while achieving optimal performance. Since this goal is
-funcamentally difficult to achieve under some operations that we previously targeted such as
-`universal functions`, we propose to remove these functionality.
+fundamentally difficult to achieve under some operations that we previously targeted such as
+`universal functions`, we propose to remove these functionalities.
 
 Motivation and Scope
 --------------------
@@ -41,11 +41,15 @@ which are hard to find and fix.
 The current implementation of GT4Py storages as :code:`ndarray` subclasses was needed to use
 storages transparently with third-party frameworks relying on NumPy :code:`ndarray` implementation
 details. Nowadays, however, most of the Python scientific ecosystem supports the more generic
-interface specified in the :emphasis:`NumPy Enhancement Proposal`
-`NEP18 <https://numpy.org/neps/nep-0018-array-function-protocol.html>`_, which allows the seamless
-integration of NumPy code with custom implementations of the NumPy API by means of
-`duck typing <https://en.wikipedia.org/wiki/Duck_typing>`_. Thus, reimplementing GT4Py storages
-using the interface introduced in the NEP18 allows GT4Py to retain full control over the internal
+interface known as the
+`Array Interface <https://numpy.org/doc/stable/reference/arrays.interface.html>`_, which can be
+implemented by types to provide information about their use as a n-dimensional array. It is an
+approach based on `duck typing <https://en.wikipedia.org/wiki/Duck_typing>`_ to allow integration
+of generic buffers that are not instances of a particular type in libraries. A similar interface for
+GPU buffer is defined as the
+`CUDA Array Interface <https://numba.pydata.org/numba-doc/latest/cuda/cuda_array_interface.html>`_,
+also with good and still increasing adaption in the ecosystem. Therefore, reimplementing
+GT4Py storages based on these interfaces allows GT4Py to retain full control over the internal
 behavior of complex operations, while keeping interoperability with third-party scientific
 frameworks.
 
@@ -55,14 +59,14 @@ To use this feature, some additional information about the provided buffers need
 both the :code:`__init__` method of the storages.
 
 With the adaption of our storages to the generic array interfaces, we will also add support
-for third-party objects implementing said interfaces that can then be passed to the stencils
-directly. While these interfaces provide all information needed to understand a buffer as an
-n-dimensional array, this may not be enough for all use cases of GT4Py. For example, objects may
-hold buffers in both the main memory and on a GPU. In this case, updating the respective other after
-changes to one is a concern. Also, with coming developments to gt4py, the need to provide additional
-semantic information with the buffers will arise. For example, the dimensions will evolve away from
-only the :code:`"I"`, :code:`"J"` and :code:`"K"` axes which arise from indexing 3-dimensional
-fields on cartesian grids.
+for third-party types implementing said interfaces that can then be passed to the stencils directly.
+While these interfaces provide all information needed to understand a buffer as an n-dimensional
+array, this may not be enough for all use cases of GT4Py. For example, objects may hold buffers in
+both the main memory and on a GPU. In this case, updating the respective other after changes to one
+is a concern. Also, with coming developments to gt4py, the need to provide additional semantic
+information with the buffers will arise. For example, the dimensions will evolve away from only the
+:code:`"I"`, :code:`"J"` and :code:`"K"` axes which arise from indexing 3-dimensional fields on
+cartesian grids.
 
 To resolve these limitations of the array interfaces we propose to define another property, the
 :code:`__gt_data_interface__`, which can be implemented by third-party objects. It shall summarize
@@ -99,9 +103,9 @@ Functionality
 
 We chose to use internally NumPy and CuPy `ndarrays` to store CPU and GPU buffers, respectively,
 since they are standard and reliable components of the Python ecosystem. We rely on those libraries
-to implement part of the functionality, like `__setitem__` and `__getitem__`, by forwarding the
-calls to the appropriate NumPy/CuPy function call. As a consequence, support for `dtypes` and other
-functionality is restricted to the common denominator of CuPy and NumPy.
+to implement part of the functionality, like :code:`__setitem__` and :code:`__getitem__`, by
+forwarding the calls to the appropriate NumPy/CuPy function call. As a consequence, support for
+`dtypes` and other functionality is restricted to the common denominator of CuPy and NumPy.
 
 .. note:: In this document, references to NumPy and CuPy objects or functions use the standard
     shorted prefiex for these libraries, that is :code:`np.` for NumPy and :code:`cp.` for CuPy.
@@ -218,8 +222,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
 
     The common keyword-only arguments can also be overridden. Please see below for their description.
 
-    Note that :code:`shape` is not a parameter and can not be overridden, implying that also the
-    :code:`axes` can not be overridden.
+    Note that :code:`shape` is not a parameter and can not be overridden.
 
 :code:`zeros(shape: Sequence[int], dtype: dtype_like = np.float64, **kwargs) -> Storage`
     Allocate a storage with values initialized to 0.
@@ -251,8 +254,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
     The common keyword-only arguments can also be overridden. Please see below for their
     description.
 
-    Note that :code:`shape` is not a parameter and can not be overridden, implying that also the
-    :code:`axes` can not be overridden.
+    Note that :code:`shape` is not a parameter and can not be overridden.
 
 
 :code:`ones(shape: Sequence[int], dtype: dtype_like = np.float64, **kwargs) -> Storage`
@@ -285,8 +287,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
     The common keyword-only arguments can also be overridden. Please see below for their
     description.
 
-    Note that :code:`shape` is not a parameter and can not be overridden, implying that also the
-    :code:`axes` can not be overridden.
+    Note that :code:`shape` is not a parameter and can not be overridden.
 
 
 :code:`full(shape: Sequence[int], fill_value: Number, dtype=np.float64, **kwargs) -> Storage`
@@ -321,8 +322,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
 
     The common keyword-only arguments can also be overridden. Please see below for their description.
 
-    Note that :code:`shape` is not a parameter and can not be overridden, implying that also the
-    :code:`axes` can not be overridden.
+    Note that :code:`shape` is not a parameter and can not be overridden.
 
 :code:`as_storage(data: array_like = None, device_data: array_like = None, *, sync_state: Storage.SyncState = None, **kwargs) -> Storage`
     Wrap an existing buffer in a GT4Py storage instance, without copying the buffer's contents.
@@ -371,16 +371,8 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
     :code:`empty()`). If :code:`data` or :code:`device_data` is provided, the consistency of the
     parameters with the buffers is validated.
 
-
-The definitions of the common parameters accepted by all the previous functions are the following:
-
-:code:`dtype: dtype_like`
-    The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
-    :code:`np.float64`.
-
-:code:`shape: Sequence[int]`
-    Sequence of length :code:`ndim` (:code:`ndim` = number of dimensions) with the
-    shape of the storage.
+Optional Keyword-Only Parameters
+================================
 
 Additionally, these **optional** keyword-only parameters are accepted:
 
@@ -415,16 +407,17 @@ Additionally, these **optional** keyword-only parameters are accepted:
 :code:`layout: Optional[Sequence[int]]`
     A permutation of integers in :code:`[0 .. ndim-1]`. It indicates the order of strides in
     decreasing order. I.e. "0" indicates that the stride in that dimension is the largest, while the
-    entry `0` in the layout sequence correspondes to the deminesion with the smallest stride, which
+    largest entry in the layout sequence corresponds to the dimension with the smallest stride, which
     typically is contiguous in memory.
 
     Default values as indicated by the :code:`defaults` parameter may depend on the dimensions. E.g.
     if :code:`defaults` is any of the compiled GridTools backends, the default value is defined
     according to the semantic meaning of each dimension. For example for the :code:`"gtx86"`
-    backend, the unit stride is always in the K dimension, independently of which index corresponds
-    to the K dimension. On the other hand, we assume that if a storage is created from an existing
-    FORTRAN array, the first index has the smallest stride, irrespective of its corresponding axis.
-    I.e. the layout of a 3d storage is always :code:`(2, 1, 0)` for both IJK and KJI storages.
+    backend, the smallest stride is always in the K dimension, independently of which index
+    corresponds to the K dimension. On the other hand, we assume that if a storage is created from
+    an existing FORTRAN array, the first index has the smallest stride, irrespective of its
+    corresponding axis. I.e. the layout of a 3d storage is always :code:`(2, 1, 0)` for both IJK and
+    KJI storages.
 
     .. list-table:: Default :code:`layout` parameter when given :code:`defaults` and :code:`dims`
        :header-rows: 1
@@ -454,9 +447,8 @@ Additionally, these **optional** keyword-only parameters are accepted:
 
 :code:`managed: Optional[str]`
     :code:`None`, :code:`"gt4py"` or :code:`"cuda"`. It only has effect if :code:`device="gpu"` and
-    it specifies whether the synchronization between the host and device buffers is handled manually
-    by the user (:code:`None`), GT4Py (:code:`"gt4py"`) or CUDA (:code:`"cuda"`). It defaults to
-    :code:`"gt4py"`
+    it specifies whether the synchronization between the host and device buffers is not done
+    (:code:`None`), GT4Py (:code:`"gt4py"`) or CUDA (:code:`"cuda"`). It defaults to :code:`"gt4py"`
 
 The values of parameters which are not explicitly defined by the user will be inferred from the
 first alternative source where the parameter is defined in the following search order:
@@ -480,10 +472,8 @@ NumPy Functions
 ===============
 
 :code:`np.transpose`
-    permutation of the axes. In addition to the parameters of :code:`np.transpose`, when applied to
-    :code:`ndarray`'s, :code:`axes` can be the usual strings to represent the :code:`axes` attribute
-    of the resulting storage. See also the :code:`reinterpret` method below.
-
+    Return a view of the buffers with the strides permuted in the order indicated by
+    :code:`axes`.
 
 Attributes and Properties
 =========================
@@ -591,7 +581,7 @@ Methods
     :code:`GTNoSuchBufferError` if this instance does not contain a host buffer.
 
 :code:`transpose(self: Storage, *axes: Optional[Sequence[int]]) -> Storage`
-    Return a view of the underlying host buffer with the strides permuted in the order indicated by
+    Return a view of the underlying buffers with the strides permuted in the order indicated by
     :code:`axes`.
 
 The following methods are used to ensure that one-sided modifications to the host or device
@@ -625,33 +615,37 @@ user code can be agnostic of the backend and the synchronization mode.
 
 :code:`synchronize(self: Storage) -> None`,
     Triggers a copy between host and device buffers if the host or device, respectively are
-    marked as modified. The buffers are marked as in sync after the operation.
+    marked as modified. After the call the buffers are flagged as
+    synchronized.
 
-Mixing Devices
-==============
+Choosing the Device
+===================
 
 For the synchronized memory classes (be it by CUDA or by GT4Py), the the device where data is
-written in setitem is chosen depending on
+written in :code:`__setitem__` is chosen depending on
 
 :code:`CudaManagedGPUStorage`
-    The device is chosen to be GPU if and only if the input value is compatible with
-    :code:`cp.asarray`.
+    The device is chosen to be GPU if and only if the value is GPU-enabled. A value is considered
+    GPU enabled, if exactly one of the following apply:
+
+    1. It implements the :code:`__gt_data_interface__` and information for a :code:`"gpu"` buffer is
+       provided. In this case, the :code:`"acquire"` method is called before reading.
+    2. It is compatible with :code:`cp.asarray`, which includes values implementing the
+       :code:`__cuda_array_interface__`
 
 :code:`SoftwareManagedGPUStorage`
-    Here, the array is considered a GPU array if it is compatible with :code:`cp.asarray`. If a
-    storage is modified on CPU, it is considered a CPU array here. The device to write the data is
-    chosen as GPU unless both input and output are not GPU arrays (including if both are
-    :code:`SoftwareManagedGPUStorage` but are modified on CPU).
-
-For pure CPU storages, all inputs and outputs need to be compatible with `np.asarray`, for GPU
-storages with `cp.asarray`, otherwise an exception is raised.
+    The device is chosen to be GPU if and only if the value is considered as on GPU. If the value
+    is itself a :code:`SoftwareManagedGPUStorage`, it is considered as on GPU, if the buffers are
+    either in sync or the GPU buffer is modified. If however, the value is not a
+    :code:`SoftwareManagedGPUStorage`, the same logic applies as for the
+    :code:`CudaManagedGPUStorage`
 
 .. _storage_types:
 
 Storage Types
 ^^^^^^^^^^^^^
 
-GT4Py Storages objects type should be subclasses of the main :code:`Storage` clas. Depending on
+GT4Py Storages objects type should be subclasses of the main :code:`Storage` class. Depending on
 the choice of the :code:`device` and :code:`managed` values (see Section :ref:`constructors`), the
 type is one of :code:`CPUStorage`, :code:`GT4PySyncedGPUStorage`, :code:`CUDASyncedGPUStorage`
 or :code:`GPUStorage`.
