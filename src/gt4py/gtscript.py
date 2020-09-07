@@ -89,6 +89,7 @@ _VALID_DATA_TYPES = (bool, np.bool, int, np.int32, np.int64, float, np.float32, 
 def _set_arg_dtypes(definition, dtypes):
     assert isinstance(definition, types.FunctionType)
     annotations = getattr(definition, "__annotations__", {})
+    original_annotations = {**annotations}
     for arg, value in annotations.items():
         if isinstance(value, _FieldDescriptor) and isinstance(value.dtype, str):
             if value.dtype in dtypes:
@@ -101,7 +102,7 @@ def _set_arg_dtypes(definition, dtypes):
             else:
                 raise ValueError(f"Missing '{value}' dtype definition for arg '{arg}'")
 
-    return definition
+    return definition, original_annotations
 
 
 def function(func):
@@ -225,13 +226,15 @@ def stencil(
             elif callable(definition_func):  # General callable
                 definition_func = definition_func.__call__
 
-        _set_arg_dtypes(definition_func, dtypes or {})
-        return gt_loader.gtscript_loader(
+        _, original_annotations = _set_arg_dtypes(definition_func, dtypes or {})
+        out = gt_loader.gtscript_loader(
             definition_func,
             backend=backend,
             build_options=build_options,
             externals=externals or {},
         )
+        setattr(definition_func, "__annotations__", original_annotations)
+        return out
 
     if definition is None:
         return _decorator

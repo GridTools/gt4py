@@ -42,7 +42,7 @@ def compile_definition(
     rebuild=False,
     **kwargs,
 ):
-    gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
+    _, original_annotations = gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
     build_options = gt_definitions.BuildOptions(
         name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=None
     )
@@ -54,6 +54,8 @@ def compile_definition(
     definition_ir = gt_frontend.GTScriptParser(
         definition_func, externals=externals or {}, options=build_options
     ).run()
+
+    setattr(definition_func, "__annotations__", original_annotations)
 
     return stencil_id, definition_ir
 
@@ -598,3 +600,95 @@ class TestNativeFunctions:
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field = asin(in_field) + 1 if 1 < in_field else sin(in_field)
+
+
+class TestAnnotations:
+    @staticmethod
+    def sumdiff_defs(
+        in_a: gtscript.Field["dtype_in"],
+        in_b: gtscript.Field["dtype_in"],
+        out_c: gtscript.Field["dtype_out"],
+        out_d: gtscript.Field[float],
+        *,
+        wa: "dtype_scalar",
+        wb: int,
+    ):
+        with computation(PARALLEL), interval(...):
+            out_c = wa * in_a + wb * in_b
+            out_d = wa * in_a - wb * in_b
+
+    @pytest.mark.parametrize("dtype_in", [int, np.float32, np.float64])
+    @pytest.mark.parametrize("dtype_out", [int, np.float32, np.float64])
+    @pytest.mark.parametrize("dtype_scalar", [int, np.float32, np.float64])
+    def test_set_arg_dtypes(self, dtype_in, dtype_out, dtype_scalar):
+        definition = self.sumdiff_defs
+        dtypes = {"dtype_in": dtype_in, "dtype_out": dtype_out, "dtype_scalar": dtype_scalar}
+
+        definition, original_annotations = gtscript._set_arg_dtypes(definition, dtypes)
+
+        assert "in_a" in original_annotations
+        assert isinstance(original_annotations["in_a"], gtscript._FieldDescriptor)
+        assert original_annotations["in_a"].dtype == "dtype_in"
+        assert "in_b" in original_annotations
+        assert isinstance(original_annotations["in_b"], gtscript._FieldDescriptor)
+        assert original_annotations["in_b"].dtype == "dtype_in"
+        assert "out_c" in original_annotations
+        assert isinstance(original_annotations["out_c"], gtscript._FieldDescriptor)
+        assert original_annotations["out_c"].dtype == "dtype_out"
+        assert "out_d" in original_annotations
+        assert isinstance(original_annotations["out_d"], gtscript._FieldDescriptor)
+        assert original_annotations["out_d"].dtype == float
+        assert "wa" in original_annotations
+        assert original_annotations["wa"] == "dtype_scalar"
+        assert "wb" in original_annotations
+        assert original_annotations["wb"] == int
+        assert len(original_annotations) == 6
+
+        annotations = getattr(definition, "__annotations__", {})
+        assert "in_a" in annotations
+        assert isinstance(annotations["in_a"], gtscript._FieldDescriptor)
+        assert annotations["in_a"].dtype == dtype_in
+        assert "in_b" in annotations
+        assert isinstance(annotations["in_b"], gtscript._FieldDescriptor)
+        assert annotations["in_b"].dtype == dtype_in
+        assert "out_c" in annotations
+        assert isinstance(annotations["out_c"], gtscript._FieldDescriptor)
+        assert annotations["out_c"].dtype == dtype_out
+        assert "out_d" in annotations
+        assert isinstance(annotations["out_d"], gtscript._FieldDescriptor)
+        assert annotations["out_d"].dtype == float
+        assert "wa" in annotations
+        assert annotations["wa"] == dtype_scalar
+        assert "wb" in annotations
+        assert annotations["wb"] == int
+        assert len(annotations) == 6
+
+        setattr(definition, "__annotations__", original_annotations)
+
+    @pytest.mark.parametrize("dtype_in", [int, np.float32, np.float64])
+    @pytest.mark.parametrize("dtype_out", [int, np.float32, np.float64])
+    @pytest.mark.parametrize("dtype_scalar", [int, np.float32, np.float64])
+    def test_compilation(self, dtype_in, dtype_out, dtype_scalar):
+        definition = self.sumdiff_defs
+        dtypes = {"dtype_in": dtype_in, "dtype_out": dtype_out, "dtype_scalar": dtype_scalar}
+
+        sumdiff = gtscript.stencil("debug", definition, dtypes=dtypes)
+
+        annotations = getattr(definition, "__annotations__", {})
+        assert "in_a" in annotations
+        assert isinstance(annotations["in_a"], gtscript._FieldDescriptor)
+        assert annotations["in_a"].dtype == "dtype_in"
+        assert "in_b" in annotations
+        assert isinstance(annotations["in_b"], gtscript._FieldDescriptor)
+        assert annotations["in_b"].dtype == "dtype_in"
+        assert "out_c" in annotations
+        assert isinstance(annotations["out_c"], gtscript._FieldDescriptor)
+        assert annotations["out_c"].dtype == "dtype_out"
+        assert "out_d" in annotations
+        assert isinstance(annotations["out_d"], gtscript._FieldDescriptor)
+        assert annotations["out_d"].dtype == float
+        assert "wa" in annotations
+        assert annotations["wa"] == "dtype_scalar"
+        assert "wb" in annotations
+        assert annotations["wb"] == int
+        assert len(annotations) == 6
