@@ -834,6 +834,16 @@ class StencilImplementation(IIRNode):
     docstring = attribute(of=str)
 
     @property
+    def has_effect(self):
+        """
+        Determine whether the stencil modifies any of its arguments.
+
+        Note that the only guarantee of this function is that the stencil has no effect if it returns ``false``. It
+        might however return true in cases where the optimization passes were not able to deduce this.
+        """
+        return self.multi_stages and len(self.arg_fields) != len(self.unreferenced)
+
+    @property
     def arg_fields(self):
         result = [f.name for f in self.fields.values() if f.is_api]
         return result
