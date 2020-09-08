@@ -548,7 +548,7 @@ class MergeBlocksPass(TransformPass):
             result = not self._have_disallowed_read_after_write_multistages(
                 current=candidate, previous=target, has_sequential_axis=has_sequential_axis
             ) and not self._have_disallowed_write_after_read_multistages(
-                current=candidate, previous=target
+                current=candidate, previous=target, has_sequential_axis=has_sequential_axis
             )
 
         return result
@@ -579,10 +579,15 @@ class MergeBlocksPass(TransformPass):
     def _has_extended_domain(self, multi_stage: DomainBlockInfo) -> bool:
         return self._accumulate_extents(self._iter_ij_block_extents(multi_stage)) != Extent.zeros()
 
+    def _k_offset_extends_domain(
+        self, multi_stage: DomainBlockInfo, has_sequential_axis: bool
+    ) -> bool:
+        return multi_stage.iteration_order == gt_ir.IterationOrder.PARALLEL and has_sequential_axis
+
     def _have_disallowed_read_after_write_multistages(
         self, current: DomainBlockInfo, previous: DomainBlockInfo, has_sequential_axis: bool
     ) -> bool:
-        if not (current.iteration_order == gt_ir.IterationOrder.PARALLEL and has_sequential_axis):
+        if not self._k_offset_extends_domain(current, has_sequential_axis):
             return False
         read_after_write_fields = self._read_after_write_fields(current=current, previous=previous)
         return any(
@@ -591,19 +596,30 @@ class MergeBlocksPass(TransformPass):
             if name in read_after_write_fields
         )
 
-    def _has_reads_with_offset(self, multi_stage: DomainBlockInfo, field_names: Set[str]) -> bool:
+    def _has_reads_with_offset(
+        self, multi_stage: DomainBlockInfo, field_names: Set[str], has_sequential_axis: bool
+    ) -> bool:
+        checked_axes = (
+            slice(None)
+            if self._k_offset_extends_domain(multi_stage, has_sequential_axis)
+            else slice(None, -1)
+        )
         return any(
-            extent != Extent.zeros()
+            extent[checked_axes] != Extent.zeros()[checked_axes]
             for name, extent in multi_stage.inputs.items()
             if name in field_names
         )
 
     def _have_disallowed_write_after_read_multistages(
-        self, current: DomainBlockInfo, previous: DomainBlockInfo
+        self, current: DomainBlockInfo, previous: DomainBlockInfo, has_sequential_axis: bool
     ) -> bool:
         write_after_read_fields = self._write_after_read_fields(current=current, previous=previous)
-        current_has_offset = self._has_reads_with_offset(current, write_after_read_fields)
-        previous_has_offset = self._has_reads_with_offset(previous, write_after_read_fields)
+        current_has_offset = self._has_reads_with_offset(
+            current, write_after_read_fields, has_sequential_axis
+        )
+        previous_has_offset = self._has_reads_with_offset(
+            previous, write_after_read_fields, has_sequential_axis
+        )
         current_has_extended_domain = self._has_extended_domain(current)
         previous_has_extended_domain = self._has_extended_domain(previous)
         return write_after_read_fields and (
