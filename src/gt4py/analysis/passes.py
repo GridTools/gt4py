@@ -19,6 +19,7 @@
 
 import itertools
 from typing import Optional, Set, Tuple, Union
+import warnings
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
@@ -795,6 +796,16 @@ class BuildIIRPass(TransformPass):
                 self.iir.parameters[name] = decl
             else:
                 self.iir.fields[name] = decl
+
+        # Emit warning if no api symbol (field or parameter) is used
+        if all(
+            not (symbol.in_use and symbol.is_api) for name, symbol in self.data.symbols.items()
+        ):
+            loc = self.data.definition_ir.loc
+            warnings.warn(
+                f"Stencil without effective computation specified at line {loc.line} (column {loc.column}).",
+                RuntimeWarning,
+            )
 
         # Create multistages
         for block in self.data.blocks:

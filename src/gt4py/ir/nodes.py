@@ -737,6 +737,7 @@ class StencilDefinition(Node):
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
     docstring = attribute(of=str)
+    loc = attribute(of=Location, optional=True)
 
 
 # ---- Implementation IR (IIR) ----

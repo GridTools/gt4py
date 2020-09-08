@@ -1406,6 +1406,7 @@ class GTScriptParser(ast.NodeVisitor):
             computations=computations,
             externals=self.resolved_externals,
             docstring=inspect.getdoc(self.definition) or "",
+            loc=gt_ir.Location.from_ast_node(self.ast_root.body[0]),
         )
 
         return self.definition_ir

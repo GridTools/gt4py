@@ -124,3 +124,35 @@ def test_ignore_np_errstate():
 
     with pytest.warns(RuntimeWarning, match="divide by zero encountered"):
         setup_and_run(backend="numpy", ignore_np_errstate=False)
+
+
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
+def test_stencil_without_effect(backend):
+    from gt4py.frontend.gtscript_frontend import GTScriptSymbolError
+
+    def definition1(field_in: gtscript.Field[np.float_]):
+        with computation(PARALLEL), interval(...):
+            tmp = 0.0
+
+    def definition2(f_in: gtscript.Field[np.float_]):
+        from __gtscript__ import __INLINE
+        from __externals__ import flag
+
+        with computation(PARALLEL), interval(...):
+            if __INLINED(flag):
+                B = f_in
+
+    stencil1 = gtscript.stencil(backend, definition1)
+    stencil2 = gtscript.stencil(backend, definition2, externals={"flag": True})
+
+    field_in = gt_storage.ones(
+        dtype=np.float_, backend=backend, shape=(23, 23, 23), default_origin=(0, 0, 0)
+    )
+
+    # test with explicit domain specified
+    stencil1(field_in, domain=(3, 3, 3))
+    stencil2(field_in, domain=(3, 3, 3))
+
+    # test without domain specified
+    with pytest.raises(ValueError):
+        stencil1(field_in)
