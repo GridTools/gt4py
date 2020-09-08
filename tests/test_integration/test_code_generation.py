@@ -128,8 +128,6 @@ def test_ignore_np_errstate():
 
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_stencil_without_effect(backend):
-    from gt4py.frontend.gtscript_frontend import GTScriptSymbolError
-
     def definition1(field_in: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             tmp = 0.0
