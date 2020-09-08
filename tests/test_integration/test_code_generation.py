@@ -135,15 +135,15 @@ def test_stencil_without_effect(backend):
             tmp = 0.0
 
     def definition2(f_in: gtscript.Field[np.float_]):
-        from __gtscript__ import __INLINE
         from __externals__ import flag
+        from __gtscript__ import __INLINE
 
         with computation(PARALLEL), interval(...):
             if __INLINED(flag):
                 B = f_in
 
     stencil1 = gtscript.stencil(backend, definition1)
-    stencil2 = gtscript.stencil(backend, definition2, externals={"flag": True})
+    stencil2 = gtscript.stencil(backend, definition2, externals={"flag": False})
 
     field_in = gt_storage.ones(
         dtype=np.float_, backend=backend, shape=(23, 23, 23), default_origin=(0, 0, 0)

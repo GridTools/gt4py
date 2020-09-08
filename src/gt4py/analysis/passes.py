@@ -18,8 +18,8 @@
 """
 
 import itertools
-from typing import Optional, Set, Tuple, Union
 import warnings
+from typing import Optional, Set, Tuple, Union
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
