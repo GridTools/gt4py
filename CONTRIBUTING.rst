@@ -54,11 +54,8 @@ beyond these tipps and beyond what is automatically checked for.
 Tools
 ~~~~~
 
--  Follow NumPy format for docstrings with sphinx-Napoleon. Very useful
-   guidelines can be found in `LSST
-   <https://developer.lsst.io/python/numpydoc.html>`__ docstrings conventions
-
--  Git commit hooks with `pre-commit <https://pre-commit.com/>`__
-   - runs formatting and compliance checks for you
-   - will be run on all files at every pull request and must pass before it can
-     be merged
+- To get the same compliance checks that will be run on GitHub at every commit,
+  make sure the ``pre-commit`` python package is installed and then run ``$
+  pre-commit install`` from the repo directory. If your development environment
+  does not contain a Python 3.6 interpreter, run ``pre-commit install-hooks``
+  using a separate Python 3.6 environment.

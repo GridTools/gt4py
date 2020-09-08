@@ -70,7 +70,11 @@ Check for compliance
 
 Check for docstrings
 --------------------
-In general we consider that a well named simple function with type annotations does not require a docstring.
+In general we consider that a well named simple function with type annotations
+does not require a docstring.  When a long-form docstring is appropriate,
+use `NumPy format <https://developer.lsst.io/python/numpydoc.html>`__. Prefer
+python type annotations over describing parameter / return types in the
+docstring.
 
 - Consider new public classes / functions: they should have a docstring if
  + Their purpose is not obvious from the name (also consider renaming)
@@ -78,6 +82,9 @@ In general we consider that a well named simple function with type annotations d
  + Someone might want to use them interactively (from a shell or notebook)
 
 - Check existing docstrings: do they need to be expanded or updated?
+
+- Check long-form docstrings: do they use the NumPy format?
+ + Do they duplicate type annotations?
 
 Check for legacy compliance
 ---------------------------
