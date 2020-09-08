@@ -339,7 +339,6 @@ class InitInfoPass(TransformPass):
                 )
 
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
-            assert node.computations  # non-empty definition
             for computation, interval in zip(node.computations, self.computation_intervals):
                 self.current_block_info = DomainBlockInfo(
                     self.data.id_generator.new, computation.iteration_order, {interval}, []
@@ -458,6 +457,9 @@ class MergeBlocksPass(TransformPass):
         return self._DEFAULT_OPTIONS
 
     def apply(self, transform_data: TransformData):
+        if not transform_data.blocks:  # do not apply pass if empty stencil
+            return
+
         # Greedy strategy to merge multi-stages
         merged_blocks = [transform_data.blocks[0]]
         for candidate in transform_data.blocks[1:]:
