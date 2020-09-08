@@ -15,7 +15,8 @@ Code style
 ~~~~~~~~~~
 
 `Black <https://github.com/ambv/black>`__ code formatter should be
-always used.
+always used. This is done automatically for you after you set up
+`pre-commit` (see below in "Tools" section).
 
 Additionally, general code style should comply with standard style
 guidelines for Python programming such as
@@ -56,15 +57,11 @@ General coding advices:
 Tools
 ~~~~~
 
--  Use `Black: the uncoompromising Python code
-   formatter <https://github.com/ambv/black>`__ with not more than 120
-   characters per source line and 79 for docstrings
-
 -  Follow NumPy format for docstrings with sphinx-Napoleon. Very useful
-   guidelines can be found in
-   `LSST <https://developer.lsst.io/python/numpydoc.html>`__ docstrings
-   conventions
+   guidelines can be found in `LSST
+   <https://developer.lsst.io/python/numpydoc.html>`__ docstrings conventions
 
 -  Git commit hooks with `pre-commit <https://pre-commit.com/>`__
    - runs formatting and compliance checks for you
-   - will be run on all files at every pull request
+   - will be run on all files at every pull request and must pass before it can
+     be merged
