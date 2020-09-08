@@ -841,7 +841,9 @@ class StencilImplementation(IIRNode):
         Note that the only guarantee of this function is that the stencil has no effect if it returns ``false``. It
         might however return true in cases where the optimization passes were not able to deduce this.
         """
-        return self.multi_stages and len(self.arg_fields) != len(self.unreferenced)
+        return self.multi_stages and not all(
+            arg_field in self.unreferenced for arg_field in self.arg_fields
+        )
 
     @property
     def arg_fields(self):
