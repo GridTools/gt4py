@@ -94,3 +94,11 @@ Check for sphinx docs
 ---------------------
 - Anything user relevant that changes or is added should be reflected in the
   sphinx docs.
+
+Legal Checks
+------------
+- All the authors must be covered by a valid contributor assignment agreement,
+  signed by the employer if needed, provided to ETH Zurich. If unsure, ask a
+  collegue.
+- The names of all the new contributors must be added to an updated version of
+  the AUTHORS.rst file included in the PR.
