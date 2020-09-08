@@ -132,7 +132,8 @@ def test_merge_read_after_write_k_parallel_seq(
 def test_merge_read_after_write_k_parallel_noseq(merge_blocks_pass: PassType) -> None:
     transform_data = make_transform_data(
         name="read_after_write_forbidden",
-        domain=Domain(parallel_axes=[Axis(name=idx) for idx in ["I", "J", "K"]]),
+        # type ignore is due to attribclass
+        domain=Domain(parallel_axes=[Axis(name=idx) for idx in ["I", "J", "K"]]),  # type: ignore
         fields=["out", "in"],
         body=[("tmp", "in", (0, 0, 0)), ("out", "tmp", (0, 0, -1))],
         iteration_order=IterationOrder.PARALLEL,
