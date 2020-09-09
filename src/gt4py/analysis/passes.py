@@ -18,7 +18,19 @@
 """
 
 import itertools
-from typing import Callable, Iterator, Optional, Sequence, Set, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
@@ -398,6 +410,64 @@ class NormalizeBlocksPass(TransformPass):
 
     _DEFAULT_OPTIONS = {}
 
+    class SplitBlocksVisitor:
+        def __init__(self):
+            self._split_blocks = []
+
+        def visit(self, transform_data: TransformData) -> List[DomainBlockInfo]:
+            for block in transform_data.blocks:
+                context = {
+                    "zero_extent": Extent.zeros(transform_data.ndims),
+                    "id_generator": transform_data.id_generator,
+                }
+                self.visit_DomainBlockInfo(block, context)
+
+            return self._split_blocks
+
+        def visit_DomainBlockInfo(self, block: DomainBlockInfo, context: Dict[str, Any]) -> None:
+            context["iteration_order"] = block.iteration_order
+            for ij_block in block.ij_blocks:
+                self.visit_IJBlockInfo(ij_block, context)
+
+        def visit_IJBlockInfo(self, ij_block: IJBlockInfo, context: Dict[str, Any]) -> None:
+            for interval_block in ij_block.interval_blocks:
+                self.visit_IntervalBlockInfo(interval_block, context)
+
+        def visit_IntervalBlockInfo(
+            self, interval_block: IntervalBlockInfo, context: Dict[str, Any]
+        ) -> None:
+            context["interval"] = interval_block.interval
+            for statement in interval_block.stmts:
+                self.visit_StatemenInfo(statement, context)
+
+        def visit_StatemenInfo(
+            self, statement: StatementInfo, context: Dict[str, Any]
+        ) -> DomainBlockInfo:
+            new_interval_block = IntervalBlockInfo(
+                context["id_generator"].new,
+                context["interval"],
+                [statement],
+                statement.inputs,
+                statement.outputs,
+            )
+            new_ij_block = IJBlockInfo(
+                context["id_generator"].new,
+                {context["interval"]},
+                [new_interval_block],
+                {**new_interval_block.inputs},
+                set(new_interval_block.outputs),
+                compute_extent=context["zero_extent"],
+            )
+            new_block = DomainBlockInfo(
+                context["id_generator"].new,
+                context["iteration_order"],
+                set(new_ij_block.intervals),
+                [new_ij_block],
+                {**new_ij_block.inputs},
+                set(new_ij_block.outputs),
+            )
+            self._split_blocks.append(new_block)
+
     def __init__(self):
         pass
 
@@ -405,58 +475,8 @@ class NormalizeBlocksPass(TransformPass):
     def defaults(self):
         return self._DEFAULT_OPTIONS
 
-    def _block_from_statement(
-        self,
-        transform_data: TransformData,
-        block: DomainBlockInfo,
-        interval_block: IntervalBlockInfo,
-        stmt_info: StatementInfo,
-    ) -> DomainBlockInfo:
-        interval = interval_block.interval
-        zero_extent = Extent.zeros(transform_data.ndims)
-        new_interval_block = IntervalBlockInfo(
-            transform_data.id_generator.new,
-            interval,
-            [stmt_info],
-            stmt_info.inputs,
-            stmt_info.outputs,
-        )
-        new_ij_block = IJBlockInfo(
-            transform_data.id_generator.new,
-            {interval},
-            [new_interval_block],
-            {**new_interval_block.inputs},
-            set(new_interval_block.outputs),
-            compute_extent=zero_extent,
-        )
-        return DomainBlockInfo(
-            transform_data.id_generator.new,
-            block.iteration_order,
-            set(new_ij_block.intervals),
-            [new_ij_block],
-            {**new_ij_block.inputs},
-            set(new_ij_block.outputs),
-        )
-
-    def _iter_ij_blocks(self, transform_data):
-        for block in transform_data.blocks:
-            for ij_block in block.ij_blocks:
-                yield block, ij_block
-
-    def _iter_interval_blocks(self, transform_data):
-        for block, ij_block in self._iter_ij_blocks(transform_data):
-            for interval_block in ij_block.interval_blocks:
-                yield block, interval_block
-
-    def _iter_statement_args(self, transform_data):
-        for block, interval_block in self._iter_interval_blocks(transform_data):
-            for statement in interval_block.stmts:
-                yield transform_data, block, interval_block, statement
-
     def apply(self, transform_data: TransformData):
-        transform_data.blocks = [
-            self._block_from_statement(*args) for args in self._iter_statement_args(transform_data)
-        ]
+        transform_data.blocks = self.SplitBlocksVisitor().visit(transform_data)
 
         return transform_data
 
