@@ -799,16 +799,6 @@ class BuildIIRPass(TransformPass):
             else:
                 self.iir.fields[name] = decl
 
-        # Emit warning if no api symbol (field or parameter) is used
-        if all(
-            not (symbol.in_use and symbol.is_api) for name, symbol in self.data.symbols.items()
-        ):
-            loc = self.data.definition_ir.loc
-            warnings.warn(
-                f"Stencil without effective computation specified at line {loc.line} (column {loc.column}).",
-                RuntimeWarning,
-            )
-
         # Create multistages
         for block in self.data.blocks:
             groups = [
@@ -1016,7 +1006,21 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
         return transform_data
 
 
-class CleanUpPass(TransformPass):
+class HousekeepingPass(TransformPass):
+    class WarnIfNoEffect(gt_ir.IRNodeVisitor):
+        def __call__(self, stencil_name: str, node: gt_ir.StencilImplementation) -> None:
+            assert isinstance(node, gt_ir.StencilImplementation)
+            self.stencil_name = stencil_name
+            self.visit(node)
+
+        def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
+            # Emit warning if stencil has no effect, i.e. does not read or write to any api fields
+            if not node.has_effect:
+                warnings.warn(
+                    f"Stencil `{self.stencil_name}` has no effect.",
+                    RuntimeWarning,
+                )
+
     class PruneEmptyNodes(gt_ir.IRNodeMapper):
         def __call__(self, node: gt_ir.StencilImplementation) -> None:
             assert isinstance(node, gt_ir.StencilImplementation)
@@ -1059,5 +1063,7 @@ class CleanUpPass(TransformPass):
 
         prune_emtpy_nodes = self.PruneEmptyNodes()
         prune_emtpy_nodes(transform_data.implementation_ir)
+
+        self.WarnIfNoEffect()(transform_data.definition_ir.name, transform_data.implementation_ir)
 
         return transform_data
