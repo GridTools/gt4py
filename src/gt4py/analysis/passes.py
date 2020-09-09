@@ -486,6 +486,14 @@ class MultiStageMergingWrapper:
         self._multi_stage = multi_stage
         self._parent = TransformData
 
+    @classmethod
+    def can_merge(
+        cls, target: DomainBlockInfo, candidate: DomainBlockInfo, parent: TransformData
+    ) -> bool:
+        target = cls(target, parent)
+        candidate = cls(target, parent)
+        return target.can_merge_with(candidate)
+
     def can_merge_with(self, candidate: "MultiStageMergingWrapper") -> bool:
         if self.parent != candidate.parent:
             return False
@@ -574,6 +582,101 @@ class MultiStageMergingWrapper:
         return self._parent
 
 
+class StageMergingWrapper:
+    def __init__(self, stage: IJBlockInfo, parent: TransformData, parent_block: DomainBlockInfo):
+        self._stage = stage
+        self._parent = parent
+        self._parent_block = parent_block
+
+    @classmethod
+    def can_merge(
+        cls,
+        target: IJBlockInfo,
+        candidate: IJBlockInfo,
+        parent: TransformData,
+        parent_block: DomainBlockInfo,
+    ) -> bool:
+        target = cls(target, transform_data, block)
+        candidate = cls(candidate, transform_data, block)
+        return target.can_merge_with(candidate)
+
+    def can_merge_with(self, candidate: "StageMergingWrapper") -> bool:
+        if not self.parent_block == candidate.parent_block:
+            return False
+
+        # Check that the two stages have the same compute extent
+        if not (self.compute_extent == candidate.compute_extent):
+            return False
+
+        # Check that there is not overlap between stage intervals and that
+        # merging stages will not imply a reordering of the execution order
+        if self.has_incompatible_intervals_with(candidate):
+            return False
+
+        # Check that there are not data dependencies between stages
+        if self.has_data_dependencies_with(candidate):
+            return False
+        return True
+
+    def has_incompatible_intervals_with(self, candidate: "StageMergingWrapper") -> bool:
+        for interval, candidate_interval in itertools.product(self.intervals, candidate.intervals):
+            if self.intervals_overlap_or_imply_reorder(interval, candidate_interval):
+                return False
+
+    def has_data_dependencies_with(self, candidate: "StageMergingWrapper") -> bool:
+        extents = (extent for name, extent in candidate.inputs.items() if name in self.outputs)
+        for extent in extents:
+            read_interval = (
+                next(iter(self.intervals)).as_tuple(self.min_k_interval_sizes) + extent[-2]
+            )
+            for merged_interval_block in self.interval_blocks:
+                merged_interval = merged_interval_block.interval
+                if merged_interval.as_tuple(
+                    self.min_k_interval_sizes
+                ) != read_interval and merged_interval.overlaps(
+                    read_interval, self.min_k_interval_sizes
+                ):
+                    return True
+        return False
+
+    def intervals_overlap_or_imply_reorder(
+        self,
+        interval_a: IntervalInfo,
+        interval_b: IntervalInfo,
+    ) -> bool:
+        return interval_a != interval_b and interval_a.overlaps(
+            interval_b, self.min_k_interval_sizes
+        )
+
+    @property
+    def parent_block(self) -> TransformData:
+        return self._parent_block
+
+    @property
+    def compute_extent(self) -> Extent:
+        return self._stage.compute_extent
+
+    @property
+    def intervals(self) -> List[IntervalInfo]:
+        return self._stage.intervals
+
+    @property
+    def interval_blocks(self) -> List[IntervalBlockInfo]:
+        return self._stage.interval_blocks
+
+    @property
+    def inputs(self) -> Dict[str, Extent]:
+        return self._stage.inputs
+
+    @property
+    def outputs(self) -> Dict[str, Extent]:
+        return self._stage.outputs
+
+    @property
+    def min_k_interval_sizes(self) -> int:
+        return self._parent.min_k_interval_sizes
+
+
 class MergeBlocksPass(TransformPass):
 
     _DEFAULT_OPTIONS = {}
@@ -603,10 +706,8 @@ class MergeBlocksPass(TransformPass):
     def _can_merge_multi_stages_callback(
         self, transform_data: TransformData
     ) -> Callable[[DomainBlockInfo, DomainBlockInfo], bool]:
-        def can_merge(last_merged: DomainBlockInfo, candidate: DomainBlockInfo) -> bool:
-            last_merged = MultiStageMergingWrapper(last_merged, transform_data)
-            candidate = MultiStageMergingWrapper(candidate, transform_data)
-            return last_merged.can_merge_with(candidate)
+        def can_merge(target: DomainBlockInfo, candidate: DomainBlockInfo) -> bool:
+            return MultiStageMergingWrapper.can_merge(target, candidate, transform_data)
 
         return can_merge
 
@@ -622,10 +723,8 @@ class MergeBlocksPass(TransformPass):
     def _can_merge_stages_callback(
         self, transform_data: TransformData, block: DomainBlockInfo
     ) -> Callable[[IJBlockInfo, IJBlockInfo], bool]:
-        def can_merge(last_merged: IJBlockInfo, candidate: IJBlockInfo) -> bool:
-            return self._are_compatible_stages(
-                last_merged, candidate, transform_data.min_k_interval_sizes, block.iteration_order
-            )
+        def can_merge(target: IJBlockInfo, candidate: IJBlockInfo) -> bool:
+            return StageMergingWrapper.can_merge(target, candidate, transform_data, block)
 
         return can_merge
 
@@ -652,65 +751,6 @@ class MergeBlocksPass(TransformPass):
             )
         transform_data.blocks = merged_blocks
         return transform_data
-
-        return result
-
-    def _intervals_overlap_or_imply_reorder(
-        self,
-        interval_a: IntervalInfo,
-        interval_b: IntervalInfo,
-        min_k_interval_sizes: int,
-        iteration_order: gt_ir.IterationOrder,
-    ) -> bool:
-        if interval_a == interval_b:
-            return False
-        elif interval_a.overlaps(interval_b, min_k_interval_sizes):
-            return True
-        return False
-
-    def _stages_have_data_dependencies(
-        self, current: IJBlockInfo, previous: IJBlockInfo, min_k_interval_sizes: int
-    ) -> bool:
-        extents = (extent for name, extent in current.inputs.items() if name in previous.outputs)
-        for extent in extents:
-            read_interval = (
-                next(iter(current.intervals)).as_tuple(min_k_interval_sizes) + extent[-2]
-            )
-            for merged_interval_block in previous.interval_blocks:
-                merged_interval = merged_interval_block.interval
-                if merged_interval.as_tuple(
-                    min_k_interval_sizes
-                ) != read_interval and merged_interval.overlaps(
-                    read_interval, min_k_interval_sizes
-                ):
-                    return True
-        return False
-
-    def _are_compatible_stages(
-        self,
-        target: IJBlockInfo,
-        candidate: IJBlockInfo,
-        min_k_interval_sizes: list,
-        iteration_order: gt_ir.IterationOrder,
-    ):
-        # Check that the two stages have the same compute extent
-        if not (target.compute_extent == candidate.compute_extent):
-            return False
-
-        # Check that there is not overlap between stage intervals and that
-        # merging stages will not imply a reordering of the execution order
-        for interval, candidate_interval in itertools.product(
-            target.intervals, candidate.intervals
-        ):
-            if self._intervals_overlap_or_imply_reorder(
-                interval, candidate_interval, min_k_interval_sizes, iteration_order
-            ):
-                return False
-
-        # Check that there are not data dependencies between stages
-        if self._stages_have_data_dependencies(candidate, target, min_k_interval_sizes):
-            return False
-        return True
 
     def _merge_domain_blocks(self, target, candidate):
         target.ij_blocks.extend(candidate.ij_blocks)
