@@ -491,7 +491,7 @@ class MultiStageMergingWrapper:
         cls, target: DomainBlockInfo, candidate: DomainBlockInfo, parent: TransformData
     ) -> bool:
         target = cls(target, parent)
-        candidate = cls(target, parent)
+        candidate = cls(candidate, parent)
         return target.can_merge_with(candidate)
 
     def can_merge_with(self, candidate: "MultiStageMergingWrapper") -> bool:
@@ -596,8 +596,8 @@ class StageMergingWrapper:
         parent: TransformData,
         parent_block: DomainBlockInfo,
     ) -> bool:
-        target = cls(target, transform_data, block)
-        candidate = cls(candidate, transform_data, block)
+        target = cls(target, parent, parent_block)
+        candidate = cls(candidate, parent, parent_block)
         return target.can_merge_with(candidate)
 
     def can_merge_with(self, candidate: "StageMergingWrapper") -> bool:
