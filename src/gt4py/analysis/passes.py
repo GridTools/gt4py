@@ -453,6 +453,7 @@ class NormalizeBlocksPass(TransformPass):
                 for interval_block in ij_block.interval_blocks:
                     for stmt_info in interval_block.stmts:
                         interval = interval_block.interval
+                        parallel_interval = interval_block.parallel_interval
                         new_interval_block = IntervalBlockInfo(
                             transform_data.id_generator.new,
                             interval,
