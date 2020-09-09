@@ -55,7 +55,9 @@ def get_gt_pyext_build_opts(
         cuda_arch = gt_config.build_settings["cuda_arch"] or compute_capability
         if not cuda_arch:
             raise RuntimeError("CUDA architecture could not be determined")
-        elif compute_capability and int(compute_capability) < int(cuda_arch.replace("sm_", "")):
+        elif cuda_arch.startswith("sm_"):
+            cuda_arch = cuda_arch.replace("sm_", "")
+        if compute_capability and int(compute_capability) < int(cuda_arch):
             raise RuntimeError(
                 f"CUDA architecture {cuda_arch} exceeds compute capability {compute_capability}"
             )
