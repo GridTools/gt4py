@@ -481,6 +481,99 @@ class NormalizeBlocksPass(TransformPass):
         return transform_data
 
 
+class MultiStageMergingWrapper:
+    def __init__(self, multi_stage: DomainBlockInfo, parent: TransformData):
+        self._multi_stage = multi_stage
+        self._parent = TransformData
+
+    def can_merge_with(self, candidate: "MultiStageMergingWrapper") -> bool:
+        if self.parent != candidate.parent:
+            return False
+        if candidate.iteration_order != self.iteration_order:
+            return False
+        if candidate.has_disallowed_read_after_write_in(self):
+            return False
+        if candidate.has_disallowed_write_after_read_in(self):
+            return False
+        return True
+
+    def has_disallowed_read_after_write_in(self, target: "MultiStageMergingWrapper") -> bool:
+        if not self.k_offset_extends_domain:
+            return False
+        return any(extent[-1] != (0, 0) for extent in self.read_after_write_extents_in(target))
+
+    def has_disallowed_write_after_read_in(self, target: "MultiStageMergingWrapper") -> bool:
+        write_after_read_fields = self.write_after_read_fields_in(target)
+        return write_after_read_fields and (
+            self.has_reads_with_offset(restrict_to=write_after_read_fields)
+            or target.has_reads_with_offset(restrict_to=write_after_read_fields)
+            or self.has_extended_domain
+            or target.has_extended_domain
+        )
+
+    def has_reads_with_offset(self, *, restrict_to: Optional[Set[str]]) -> bool:
+        checked_axes = slice(None) if self.k_offset_extends_domain else slice(None, -1)
+        fields = restrict_to.intersection(self.inputs) if restrict_to else set(self.inputs)
+        return any(
+            self.inputs[name][checked_axes] != Extent.zeros()[checked_axes] for name in fields
+        )
+
+    def read_after_write_fields_in(self, target: "MultiStageMergingWrapper") -> Set[str]:
+        previous_writes = set(target.outputs)
+        current_reads = set(self.inputs)
+        return previous_writes.intersection(current_reads)
+
+    def write_after_read_fields_in(self, target: "MultiStageMergingWrapper") -> Set[str]:
+        previous_reads = set(target.inputs)
+        current_writes = set(self.outputs)
+        return previous_reads.intersection(current_writes)
+
+    def read_after_write_extents_in(self, target: "MultiStageMergingWrapper") -> Set[Extent]:
+        return {self.inputs[name] for name in self.read_after_write_fields_in(target)}
+
+    @staticmethod
+    def accumulate_extents(extents: Sequence[Extent]) -> Extent:
+        full_extent = Extent.zeros()
+        for extent in extents:
+            full_extent |= extent
+        return full_extent
+
+    @property
+    def extents(self) -> Iterator[Extent]:
+        return (ij_block.compute_extent for ij_block in self._multi_stage.ij_blocks)
+
+    @property
+    def full_extent(self) -> Extent:
+        return self.accumulate_extents(self.extents)
+
+    @property
+    def has_extended_domain(self) -> bool:
+        return self.full_extent != Extent.zeros()
+
+    @property
+    def k_offset_extends_domain(self) -> bool:
+        return (
+            self.iteration_order == gt_ir.IterationOrder.PARALLEL
+            and self._parent.has_sequential_axis
+        )
+
+    @property
+    def iteration_order(self) -> gt_ir.IterationOrder:
+        return self._multi_stage.iteration_order
+
+    @property
+    def inputs(self) -> Dict[str, Extent]:
+        return self._multi_stage.inputs
+
+    @property
+    def outputs(self) -> Dict[str, Extent]:
+        return self._multi_stage.outputs
+
+    @property
+    def parent(self) -> TransformData:
+        return self._parent
+
+
 class MergeBlocksPass(TransformPass):
 
     _DEFAULT_OPTIONS = {}
@@ -511,9 +604,9 @@ class MergeBlocksPass(TransformPass):
         self, transform_data: TransformData
     ) -> Callable[[DomainBlockInfo, DomainBlockInfo], bool]:
         def can_merge(last_merged: DomainBlockInfo, candidate: DomainBlockInfo) -> bool:
-            return self._are_compatible_multi_stages(
-                last_merged, candidate, transform_data.has_sequential_axis
-            )
+            last_merged = MultiStageMergingWrapper(last_merged, transform_data)
+            candidate = MultiStageMergingWrapper(candidate, transform_data)
+            return last_merged.can_merge_with(candidate)
 
         return can_merge
 
@@ -560,94 +653,7 @@ class MergeBlocksPass(TransformPass):
         transform_data.blocks = merged_blocks
         return transform_data
 
-    def _are_compatible_multi_stages(
-        self, target: DomainBlockInfo, candidate: DomainBlockInfo, has_sequential_axis: bool
-    ) -> bool:
-        result = False
-        if candidate.iteration_order == target.iteration_order:
-            result = not self._have_disallowed_read_after_write_multistages(
-                current=candidate, previous=target, has_sequential_axis=has_sequential_axis
-            ) and not self._have_disallowed_write_after_read_multistages(
-                current=candidate, previous=target, has_sequential_axis=has_sequential_axis
-            )
-
         return result
-
-    def _read_after_write_fields(
-        self, current: DomainBlockInfo, previous: DomainBlockInfo
-    ) -> Set[str]:
-        previous_writes = set(previous.outputs)
-        current_reads = set(current.inputs)
-        return previous_writes.intersection(current_reads)
-
-    def _write_after_read_fields(
-        self, current: DomainBlockInfo, previous: DomainBlockInfo
-    ) -> Set[str]:
-        previous_reads = set(previous.inputs)
-        current_writes = set(current.outputs)
-        return previous_reads.intersection(current_writes)
-
-    def _iter_ij_block_extents(self, multi_stage: DomainBlockInfo) -> Iterator[Extent]:
-        return (ij_block.compute_extent for ij_block in multi_stage.ij_blocks)
-
-    def _accumulate_extents(self, extents: Sequence[Extent]) -> Extent:
-        full_extent = Extent.zeros()
-        for extent in extents:
-            full_extent |= extent
-        return full_extent
-
-    def _has_extended_domain(self, multi_stage: DomainBlockInfo) -> bool:
-        return self._accumulate_extents(self._iter_ij_block_extents(multi_stage)) != Extent.zeros()
-
-    def _k_offset_extends_domain(
-        self, multi_stage: DomainBlockInfo, has_sequential_axis: bool
-    ) -> bool:
-        return multi_stage.iteration_order == gt_ir.IterationOrder.PARALLEL and has_sequential_axis
-
-    def _have_disallowed_read_after_write_multistages(
-        self, current: DomainBlockInfo, previous: DomainBlockInfo, has_sequential_axis: bool
-    ) -> bool:
-        if not self._k_offset_extends_domain(current, has_sequential_axis):
-            return False
-        read_after_write_fields = self._read_after_write_fields(current=current, previous=previous)
-        return any(
-            extent[-1] != (0, 0)
-            for name, extent in current.inputs.items()
-            if name in read_after_write_fields
-        )
-
-    def _has_reads_with_offset(
-        self, multi_stage: DomainBlockInfo, field_names: Set[str], has_sequential_axis: bool
-    ) -> bool:
-        checked_axes = (
-            slice(None)
-            if self._k_offset_extends_domain(multi_stage, has_sequential_axis)
-            else slice(None, -1)
-        )
-        return any(
-            extent[checked_axes] != Extent.zeros()[checked_axes]
-            for name, extent in multi_stage.inputs.items()
-            if name in field_names
-        )
-
-    def _have_disallowed_write_after_read_multistages(
-        self, current: DomainBlockInfo, previous: DomainBlockInfo, has_sequential_axis: bool
-    ) -> bool:
-        write_after_read_fields = self._write_after_read_fields(current=current, previous=previous)
-        current_has_offset = self._has_reads_with_offset(
-            current, write_after_read_fields, has_sequential_axis
-        )
-        previous_has_offset = self._has_reads_with_offset(
-            previous, write_after_read_fields, has_sequential_axis
-        )
-        current_has_extended_domain = self._has_extended_domain(current)
-        previous_has_extended_domain = self._has_extended_domain(previous)
-        return write_after_read_fields and (
-            current_has_offset
-            or previous_has_offset
-            or current_has_extended_domain
-            or previous_has_extended_domain
-        )
 
     def _intervals_overlap_or_imply_reorder(
         self,
