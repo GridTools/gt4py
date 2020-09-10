@@ -761,12 +761,6 @@ class MergeBlocksPass(TransformPass):
     def defaults(self):
         return self._DEFAULT_OPTIONS
 
-    @staticmethod
-    def _unwrap(
-        wrappers: Sequence[MergeableType],
-    ) -> Union[List[DomainBlockInfo], List[IJBlockInfo]]:
-        return [wrapper.wrapped for wrapper in wrappers]
-
     def apply(self, transform_data: TransformData) -> TransformData:
         merged_blocks = greedy_merging_with_wrapper(
             transform_data.blocks, MultiStageMergingWrapper, parent=transform_data
