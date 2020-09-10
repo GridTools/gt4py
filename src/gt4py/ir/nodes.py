@@ -737,6 +737,7 @@ class StencilDefinition(Node):
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
     docstring = attribute(of=str)
+    loc = attribute(of=Location, optional=True)
 
 
 # ---- Implementation IR (IIR) ----
@@ -831,6 +832,18 @@ class StencilImplementation(IIRNode):
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
     docstring = attribute(of=str)
+
+    @property
+    def has_effect(self):
+        """
+        Determine whether the stencil modifies any of its arguments.
+
+        Note that the only guarantee of this function is that the stencil has no effect if it returns ``false``. It
+        might however return true in cases where the optimization passes were not able to deduce this.
+        """
+        return self.multi_stages and not all(
+            arg_field in self.unreferenced for arg_field in self.arg_fields
+        )
 
     @property
     def arg_fields(self):
