@@ -655,7 +655,7 @@ pyext_module = gt_utils.make_module_from_file(
         # only generate implementation if any multi_stages are present. e.g. if no statement in the
         # stencil has any effect on the API fields, this may not be the case since they could be
         # pruned.
-        if self.builder.implementation_ir.multi_stages:
+        if self.builder.implementation_ir.has_effect:
             source = """
 # Load or generate a GTComputation object for the current domain size
 pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
