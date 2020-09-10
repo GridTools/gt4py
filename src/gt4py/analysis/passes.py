@@ -28,6 +28,7 @@ from typing import (
     Sequence,
     Set,
     Tuple,
+    Type,
     TypeVar,
     Union,
 )
@@ -47,7 +48,8 @@ from gt4py.analysis import (
 from gt4py.definitions import Extent
 
 
-T = TypeVar("T")
+MergeableType = TypeVar("MergeableType")
+WrappedType = TypeVar("WrappedType")
 
 
 class IRSpecificationError(gt_definitions.GTSpecificationError):
@@ -482,17 +484,17 @@ class NormalizeBlocksPass(TransformPass):
 
 
 class MultiStageMergingWrapper:
+    """Wrapper for :class:`DomainBlockInfo` containing the logic required to merge or not merge."""
+
     def __init__(self, multi_stage: DomainBlockInfo, parent: TransformData):
         self._multi_stage = multi_stage
-        self._parent = TransformData
+        self._parent = parent
 
     @classmethod
-    def can_merge(
-        cls, target: DomainBlockInfo, candidate: DomainBlockInfo, parent: TransformData
-    ) -> bool:
-        target = cls(target, parent)
-        candidate = cls(candidate, parent)
-        return target.can_merge_with(candidate)
+    def wrap_items(
+        cls, items: Sequence[DomainBlockInfo], *, parent: TransformData
+    ) -> List["MultiStageMergingWrapper"]:
+        return [cls(block, parent) for block in items]
 
     def can_merge_with(self, candidate: "MultiStageMergingWrapper") -> bool:
         if self.parent != candidate.parent:
@@ -504,6 +506,17 @@ class MultiStageMergingWrapper:
         if candidate.has_disallowed_write_after_read_in(self):
             return False
         return True
+
+    def merge_with(self, candidate: "MultiStageMergingWrapper") -> None:
+        self._multi_stage.id = self._parent.id_generator.new
+        self._multi_stage.ij_blocks.extend(candidate.ij_blocks)
+        self._multi_stage.intervals |= candidate.intervals
+        self._multi_stage.outputs |= candidate.outputs
+        for name, extent in candidate.inputs.items():
+            if name in self.inputs:
+                self._multi_stage.inputs[name] |= extent
+            else:
+                self._multi_stage.inputs[name] = extent
 
     def has_disallowed_read_after_write_in(self, target: "MultiStageMergingWrapper") -> bool:
         if not self.k_offset_extends_domain:
@@ -548,7 +561,7 @@ class MultiStageMergingWrapper:
 
     @property
     def extents(self) -> Iterator[Extent]:
-        return (ij_block.compute_extent for ij_block in self._multi_stage.ij_blocks)
+        return (ij_block.compute_extent for ij_block in self.ij_blocks)
 
     @property
     def full_extent(self) -> Extent:
@@ -574,6 +587,14 @@ class MultiStageMergingWrapper:
         return self._multi_stage.inputs
 
     @property
+    def intervals(self) -> List[IntervalInfo]:
+        return self._multi_stage.intervals
+
+    @property
+    def ij_blocks(self) -> List[IJBlockInfo]:
+        return self._multi_stage.ij_blocks
+
+    @property
     def outputs(self) -> Dict[str, Extent]:
         return self._multi_stage.outputs
 
@@ -581,24 +602,24 @@ class MultiStageMergingWrapper:
     def parent(self) -> TransformData:
         return self._parent
 
+    @property
+    def wrapped(self) -> DomainBlockInfo:
+        return self._multi_stage
+
 
 class StageMergingWrapper:
+    """Wrapper for :class:`IJBlockInfo` containing the logic required to merge or not merge."""
+
     def __init__(self, stage: IJBlockInfo, parent: TransformData, parent_block: DomainBlockInfo):
         self._stage = stage
         self._parent = parent
         self._parent_block = parent_block
 
     @classmethod
-    def can_merge(
-        cls,
-        target: IJBlockInfo,
-        candidate: IJBlockInfo,
-        parent: TransformData,
-        parent_block: DomainBlockInfo,
-    ) -> bool:
-        target = cls(target, parent, parent_block)
-        candidate = cls(candidate, parent, parent_block)
-        return target.can_merge_with(candidate)
+    def wrap_items(
+        cls, items: Sequence[IJBlockInfo], *, parent: TransformData, parent_block: DomainBlockInfo
+    ) -> List["StageMergingWrapper"]:
+        return [cls(ij_block, parent, parent_block) for ij_block in items]
 
     def can_merge_with(self, candidate: "StageMergingWrapper") -> bool:
         if not self.parent_block == candidate.parent_block:
@@ -617,6 +638,33 @@ class StageMergingWrapper:
         if self.has_data_dependencies_with(candidate):
             return False
         return True
+
+    def merge_with(self, candidate: IJBlockInfo):
+        intervals = {int_block.interval: int_block for int_block in self.interval_blocks}
+        for candidate_int_block in candidate.interval_blocks:
+            if candidate_int_block.interval in intervals:
+                merged_int_block = intervals[candidate_int_block.interval]
+                merged_int_block.id = self.parent.id_generator.new
+                merged_int_block.stmts.extend(candidate_int_block.stmts)
+
+                for name, extent in candidate_int_block.inputs.items():
+                    if name in merged_int_block.inputs:
+                        merged_int_block.inputs[name] |= extent
+                    else:
+                        merged_int_block.inputs[name] = extent
+
+                merged_int_block.outputs |= candidate_int_block.outputs
+
+            else:
+                target.interval_blocks.append(candidate_int_block)
+
+        self._stage.intervals |= candidate.intervals
+        self._stage.outputs |= candidate.outputs
+        for name, extent in candidate.inputs.items():
+            if name in self.inputs:
+                self._stage.inputs[name] |= extent
+            else:
+                self._stage.inputs[name] = extent
 
     def has_incompatible_intervals_with(self, candidate: "StageMergingWrapper") -> bool:
         for interval, candidate_interval in itertools.product(self.intervals, candidate.intervals):
@@ -676,6 +724,31 @@ class StageMergingWrapper:
     def min_k_interval_sizes(self) -> int:
         return self._parent.min_k_interval_sizes
 
+    @property
+    def parent(self) -> TransformData:
+        return self._parent
+
+    @property
+    def wrapped(self) -> IJBlockInfo:
+        return self._stage
+
+
+def greedy_merging(items: Sequence[MergeableType]) -> List[MergeableType]:
+    merged_items = [items[0]]
+    for candidate in items[1:]:
+        target = merged_items[-1]
+        if target.can_merge_with(candidate):
+            target.merge_with(candidate)
+        else:
+            merged_items.append(candidate)
+    return merged_items
+
+
+def greedy_merging_with_wrapper(
+    items: Sequence[WrappedType], wrapper_cls: Type[MergeableType], **kwargs: Any
+) -> List[WrappedType]:
+    return [w.wrapped for w in greedy_merging(wrapper_cls.wrap_items(items, **kwargs))]
+
 
 class MergeBlocksPass(TransformPass):
 
@@ -688,109 +761,22 @@ class MergeBlocksPass(TransformPass):
     def defaults(self):
         return self._DEFAULT_OPTIONS
 
-    def _greedy_merging(
-        self,
-        items: Sequence[T],
-        can_merge: Callable[[T, T], bool],
-        do_merge: Callable[[T, T], None],
-    ) -> Sequence[T]:
-        merged_items = [items[0]]
-        for item in items[1:]:
-            last_merged = merged_items[-1]
-            if can_merge(last_merged, item):
-                do_merge(last_merged, item)
-            else:
-                merged_items.append(item)
-        return merged_items
-
-    def _can_merge_multi_stages_callback(
-        self, transform_data: TransformData
-    ) -> Callable[[DomainBlockInfo, DomainBlockInfo], bool]:
-        def can_merge(target: DomainBlockInfo, candidate: DomainBlockInfo) -> bool:
-            return MultiStageMergingWrapper.can_merge(target, candidate, transform_data)
-
-        return can_merge
-
-    def _do_merge_multi_stages_callback(
-        self, transform_data: TransformData
-    ) -> Callable[[DomainBlockInfo, DomainBlockInfo], None]:
-        def do_merge(last_merged: DomainBlockInfo, candidate: DomainBlockInfo) -> None:
-            last_merged.id = transform_data.id_generator.new
-            self._merge_domain_blocks(last_merged, candidate)
-
-        return do_merge
-
-    def _can_merge_stages_callback(
-        self, transform_data: TransformData, block: DomainBlockInfo
-    ) -> Callable[[IJBlockInfo, IJBlockInfo], bool]:
-        def can_merge(target: IJBlockInfo, candidate: IJBlockInfo) -> bool:
-            return StageMergingWrapper.can_merge(target, candidate, transform_data, block)
-
-        return can_merge
-
-    def _do_merge_stages_callback(
-        self, transform_data: TransformData
-    ) -> Callable[[IJBlockInfo, IJBlockInfo], None]:
-        def do_merge(last_merged: IJBlockInfo, candidate: IJBlockInfo) -> None:
-            last_merged.id = transform_data.id_generator.new
-            self._merge_ij_blocks(last_merged, candidate, transform_data)
-
-        return do_merge
+    @staticmethod
+    def _unwrap(
+        wrappers: Sequence[MergeableType],
+    ) -> Union[List[DomainBlockInfo], List[IJBlockInfo]]:
+        return [wrapper.wrapped for wrapper in wrappers]
 
     def apply(self, transform_data: TransformData) -> TransformData:
-        merged_blocks = self._greedy_merging(
-            items=transform_data.blocks,
-            can_merge=self._can_merge_multi_stages_callback(transform_data),
-            do_merge=self._do_merge_multi_stages_callback(transform_data),
+        merged_blocks = greedy_merging_with_wrapper(
+            transform_data.blocks, MultiStageMergingWrapper, parent=transform_data
         )
         for block in merged_blocks:
-            block.ij_blocks = self._greedy_merging(
-                items=block.ij_blocks,
-                can_merge=self._can_merge_stages_callback(transform_data, block),
-                do_merge=self._do_merge_stages_callback(transform_data),
+            block.ij_blocks = greedy_merging_with_wrapper(
+                block.ij_blocks, StageMergingWrapper, parent=transform_data, parent_block=block
             )
         transform_data.blocks = merged_blocks
         return transform_data
-
-    def _merge_domain_blocks(self, target, candidate):
-        target.ij_blocks.extend(candidate.ij_blocks)
-        target.intervals |= candidate.intervals
-        target.outputs |= candidate.outputs
-        for name, extent in candidate.inputs.items():
-            if name in target.inputs:
-                target.inputs[name] |= extent
-            else:
-                target.inputs[name] = extent
-
-    def _merge_ij_blocks(self, target, candidate, transform_data):
-        target_intervals = {
-            target_int_block.interval: target_int_block
-            for target_int_block in target.interval_blocks
-        }
-        for candidate_int_block in candidate.interval_blocks:
-            if candidate_int_block.interval in target_intervals:
-                merged_int_block = target_intervals[candidate_int_block.interval]
-                merged_int_block.id = transform_data.id_generator.new
-                merged_int_block.stmts.extend(candidate_int_block.stmts)
-
-                for name, extent in candidate_int_block.inputs.items():
-                    if name in merged_int_block.inputs:
-                        merged_int_block.inputs[name] |= extent
-                    else:
-                        merged_int_block.inputs[name] = extent
-
-                merged_int_block.outputs |= candidate_int_block.outputs
-
-            else:
-                target.interval_blocks.append(candidate_int_block)
-
-        target.intervals |= candidate.intervals
-        target.outputs |= candidate.outputs
-        for name, extent in candidate.inputs.items():
-            if name in target.inputs:
-                target.inputs[name] |= extent
-            else:
-                target.inputs[name] = extent
 
 
 class ComputeExtentsPass(TransformPass):
