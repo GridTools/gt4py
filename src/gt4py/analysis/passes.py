@@ -1012,6 +1012,7 @@ class ReduceTemporaryStoragesPass(TransformPass):
             self.iir = None
             self.iteration_order = None
             self.reduced_fields = dict()
+            self.parallel_fields = set()
 
         def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
             assert isinstance(node, gt_ir.StencilImplementation)
@@ -1049,12 +1050,19 @@ class ReduceTemporaryStoragesPass(TransformPass):
             if (
                 self.iteration_order != gt_ir.IterationOrder.PARALLEL
                 and field_name in self.iir.temporary_fields
+                and field_name not in self.parallel_fields
                 and field_name not in self.reduced_fields
             ):
                 extent = iir.fields_extents[field_name]
                 ndims = extent.ndims - 1
                 if extent.lower_indices[ndims] == 0 and extent.upper_indices[ndims] == 0:
                     self.reduced_fields[field_name] = list()
+            elif (
+                self.iteration_order == gt_ir.IterationOrder.PARALLEL
+                and field_name in self.reduced_fields
+            ):
+                del self.reduced_fields[field_name]
+                self.parallel_fields.add(field_name)
 
             if field_name in self.reduced_fields:
                 self.reduced_fields[field_name].append(node)
@@ -1077,10 +1085,7 @@ class HousekeepingPass(TransformPass):
         def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
             # Emit warning if stencil has no effect, i.e. does not read or write to any api fields
             if not node.has_effect:
-                warnings.warn(
-                    f"Stencil `{self.stencil_name}` has no effect.",
-                    RuntimeWarning,
-                )
+                warnings.warn(f"Stencil `{self.stencil_name}` has no effect.", RuntimeWarning)
 
     class PruneEmptyNodes(gt_ir.IRNodeMapper):
         def __call__(self, node: gt_ir.StencilImplementation) -> None:
