@@ -748,6 +748,8 @@ class StageMergingWrapper:
 
 
 def greedy_merging(items: Sequence[MergeableType]) -> List[MergeableType]:
+    if len(items) < 2:
+        return items
     merged_items = [items[0]]
     for candidate in items[1:]:
         target = merged_items[-1]
