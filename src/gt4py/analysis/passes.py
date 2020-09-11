@@ -639,23 +639,7 @@ class StageMergingWrapper:
         return True
 
     def merge_with(self, candidate: IJBlockInfo):
-        intervals = {int_block.interval: int_block for int_block in self.interval_blocks}
-        for candidate_int_block in candidate.interval_blocks:
-            if candidate_int_block.interval in intervals:
-                merged_int_block = intervals[candidate_int_block.interval]
-                merged_int_block.id = self.parent.id_generator.new
-                merged_int_block.stmts.extend(candidate_int_block.stmts)
-
-                for name, extent in candidate_int_block.inputs.items():
-                    if name in merged_int_block.inputs:
-                        merged_int_block.inputs[name] |= extent
-                    else:
-                        merged_int_block.inputs[name] = extent
-
-                merged_int_block.outputs |= candidate_int_block.outputs
-
-            else:
-                self.interval_blocks.append(candidate_int_block)
+        self._merge_interval_blocks_with(candidate)
 
         self._stage.intervals |= candidate.intervals
         self._stage.outputs |= candidate.outputs
@@ -664,6 +648,32 @@ class StageMergingWrapper:
                 self._stage.inputs[name] |= extent
             else:
                 self._stage.inputs[name] = extent
+
+    def _merge_interval_blocks_with(self, candidate: IJBlockInfo) -> None:
+        i_to_ib_map = self.interval_to_iblock_mapping
+        for candidate_iblock in candidate.interval_blocks:
+            if candidate_iblock.interval in i_to_ib_map:
+                self._merge_interval_block(
+                    i_to_ib_map[candidate_iblock.interval], candidate_iblock
+                )
+            else:
+                self._stage.interval_blocks.append(candidate_iblock)
+
+    def _merge_interval_block(self, target_iblock, candidate_iblock: IntervalBlockInfo) -> None:
+        target_iblock.id = self.parent.id_generator.new
+        target_iblock.stmts.extend(candidate_iblock.stmts)
+        self._merge_inputs(target_iblock.inputs, candidate_iblock.inputs)
+        target_iblock.outputs |= candidate_iblock.outputs
+
+    @staticmethod
+    def _merge_inputs(
+        target_inputs: Dict[str, Extent], candidate_inputs: Dict[str, Extent]
+    ) -> None:
+        for name, extent in candidate_inputs.items():
+            if name in target_inputs:
+                target_inputs[name] |= extent
+            else:
+                target_inputs[name] = extent
 
     def has_incompatible_intervals_with(self, candidate: "StageMergingWrapper") -> bool:
         for interval, candidate_interval in itertools.product(self.intervals, candidate.intervals):
@@ -710,6 +720,10 @@ class StageMergingWrapper:
     @property
     def interval_blocks(self) -> List[IntervalBlockInfo]:
         return self._stage.interval_blocks
+
+    @property
+    def interval_to_iblock_mapping(self) -> Dict[IntervalInfo, IntervalBlockInfo]:
+        return {iblock.interval: iblock for iblock in self.interval_blocks}
 
     @property
     def inputs(self) -> Dict[str, Extent]:
