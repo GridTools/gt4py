@@ -97,7 +97,10 @@ def make_definition(
                 ),
                 iteration_order=iteration_order,
                 body=BlockStmt(
-                    stmts=[make_assign(*assign, loc_line=i) for i, assign in enumerate(body)]
+                    stmts=[
+                        make_assign(*assign, loc_scope=name, loc_line=i)
+                        for i, assign in enumerate(body)
+                    ]
                 ),
             )
         ],

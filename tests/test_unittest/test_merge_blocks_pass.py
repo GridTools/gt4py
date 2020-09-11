@@ -1,7 +1,15 @@
-from typing import Tuple
+from collections import namedtuple
+from typing import List, Tuple
 
 import pytest
 
+from gt4py.analysis import (
+    DomainBlockInfo,
+    IJBlockInfo,
+    IntervalBlockInfo,
+    StatementInfo,
+    TransformData,
+)
 from gt4py.ir.nodes import Axis, Domain, IterationOrder
 
 from ..analysis_setup import PassType
@@ -156,3 +164,159 @@ def test_merge_read_after_write_k_sequential(
     transform_data = merge_blocks_pass(transform_data)
     # allowed to be merged, because order is not PARALLEL
     assert len(transform_data.blocks) == 1
+
+
+SPTYPE = namedtuple("sptype", ("multi_stage", "stage", "interval_block", "statements"))
+
+
+class _StatementPositionVisitor:
+    """Collect position info for each statement in a TransformData instance."""
+
+    def __init__(self):
+        self.statements = {}
+        self.cursor = [-1, -1, -1, -1]
+
+    def visit(self, transform_data: TransformData) -> List[SPTYPE]:
+        """
+        Returns:
+
+            counting is from zero
+            * multi_stage: in which multi stage is the statement?
+            * stage: in which stage is the statement?
+            * interval_block: in which interval block is the statement?
+            * statements: position relative to other statements in the interval block?
+        """
+        for block in transform_data.blocks:
+            self.cursor[0] += 1
+            self.visit_DomainBlockInfo(block)
+        return self.statements
+
+    def visit_DomainBlockInfo(self, block: DomainBlockInfo) -> None:
+        for ij_block in block.ij_blocks:
+            self.cursor[1] += 1
+            self.visit_IJBlockInfo(ij_block)
+        self.cursor[1] = -1
+
+    def visit_IJBlockInfo(self, ij_block: IJBlockInfo) -> None:
+        for interval_block in ij_block.interval_blocks:
+            self.cursor[2] += 1
+            self.visit_IntervalBlockInfo(interval_block)
+        self.cursor[2] = -1
+
+    def visit_IntervalBlockInfo(self, interval_block: IntervalBlockInfo) -> None:
+        for statement in interval_block.stmts:
+            self.cursor[3] += 1
+            self.visit_StatemenInfo(statement)
+        self.cursor[3] = -1
+
+    def visit_StatemenInfo(self, statement: StatementInfo) -> None:
+        self.statements[statement.stmt.loc.line] = SPTYPE(*self.cursor)
+
+
+def test_split_reorderable(merge_blocks_pass: PassType, ijk_domain: Domain) -> None:
+    """
+    Statements separated by a write after read occurrence are split in separate multi stages.
+
+    Example:
+
+    .. code-block: python
+
+        with computation(FORWARD):
+            with interval(...):
+                tmp = a[0, 0, -1]  # stmt (0)
+                ##
+                tmp2 = b[1, 0, 0]  # stmt (1)
+                b = in             # stmt (2)
+                ##
+                a = tmp            # stmt (3)
+
+        # last statement can be merged with first statement
+        # only if reordered first
+    """
+    statements = [
+        ("tmp", "a", (0, 0, -1)),
+        ("tmp2", "b", (1, 0, 0)),
+        ("b", "in", (0, 0, 0)),
+        ("a", "tmp", (0, 0, 0)),
+    ]
+    stmt_to_line = [0, 1, 2, 3]
+    line_to_statement = [0, 1, 2, 3]
+    transform_data = make_transform_data(
+        name="reorderable",
+        domain=ijk_domain,
+        fields=["a", "b", "in"],
+        body=[statements[i] for i in line_to_statement],  # convert from stmt # to lineno
+        iteration_order=IterationOrder.FORWARD,
+    )
+    transform_data = merge_blocks_pass(transform_data)
+    # second and third statements are split
+    # first is merged with second
+    # third is merged with fourth
+    statement_pos = _StatementPositionVisitor().visit(transform_data)
+    statement_pos = [statement_pos[i] for i in stmt_to_line]  # convert from lineno to stmt #
+    print(statement_pos)
+    assert len(transform_data.blocks) == 2
+    # first multi stage contains stmts 0 and 1 in order
+    assert statement_pos[0].multi_stage == 0
+    assert statement_pos[1].multi_stage == 0
+    assert statement_pos[0].statements == 0
+    assert statement_pos[1].statements == 1
+    # second multi stage contains stmts 2 and 3 in order
+    assert statement_pos[2].multi_stage == 1
+    assert statement_pos[3].multi_stage == 1
+    assert statement_pos[2].statements == 0
+    assert statement_pos[3].statements == 1
+
+
+def test_split_preordered(merge_blocks_pass: PassType, ijk_domain: Domain) -> None:
+    """
+    Statements preordered to be on the same side of the write after read occurence can be merged.
+
+    Example:
+
+    .. code-block: python
+
+        with computation(FORWARD):
+            with interval(...):
+                tmp = a[0, 0, -1]  # stmt (0)
+                a = tmp            # stmt (3)
+                ##
+                tmp2 = b[1, 0, 0]  # stmt (1)
+                b = in             # stmt (2)
+
+        # In contrast with the "split_reorderable" case,
+        # statements 1 and 2 can be merged
+    """
+    statements = [
+        ("tmp", "a", (0, 0, -1)),
+        ("tmp2", "b", (1, 0, 0)),
+        ("b", "in", (0, 0, 0)),
+        ("a", "tmp", (0, 0, 0)),
+    ]
+    stmt_to_line = [0, 2, 3, 1]
+    line_to_statement = [0, 3, 1, 2]
+    transform_data = make_transform_data(
+        name="preordered",
+        domain=ijk_domain,
+        fields=["a", "b", "in"],
+        body=[statements[i] for i in line_to_statement],  # convert from stmt # to lineno
+        iteration_order=IterationOrder.FORWARD,
+    )
+    transform_data = merge_blocks_pass(transform_data)
+    # third and fourth statements are split
+    # first is merged with second and third
+    # fourth stands alone
+    statement_pos = _StatementPositionVisitor().visit(transform_data)
+    statement_pos = [statement_pos[i] for i in stmt_to_line]  # convert from lineno to stmt #
+    print(statement_pos)
+    assert len(transform_data.blocks) == 2
+    # first multi stage contains stmt 0, 3 and 1 in order
+    assert statement_pos[0].multi_stage == 0
+    assert statement_pos[3].multi_stage == 0
+    assert statement_pos[1].multi_stage == 0
+    assert statement_pos[0].statements == 0
+    assert statement_pos[3].statements == 1
+    assert statement_pos[1].statements == 2
+    # second multi stage contain]s statement 2
+    assert statement_pos[2].multi_stage == 1
+    assert statement_pos[2].statements == 0

@@ -655,7 +655,7 @@ class StageMergingWrapper:
                 merged_int_block.outputs |= candidate_int_block.outputs
 
             else:
-                target.interval_blocks.append(candidate_int_block)
+                self.interval_blocks.append(candidate_int_block)
 
         self._stage.intervals |= candidate.intervals
         self._stage.outputs |= candidate.outputs
