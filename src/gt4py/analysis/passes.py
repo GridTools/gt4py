@@ -1011,11 +1011,21 @@ class ReduceTemporaryStoragesPass(TransformPass):
         def __init__(self):
             self.iir = None
             self.iteration_order = None
-            self.reduced_fields = set()
+            self.reduced_fields = dict()
 
         def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
             assert isinstance(node, gt_ir.StencilImplementation)
-            return self.visit(node)
+            result = self.visit(node)
+            self._reduce_fields()
+            return result
+
+        def _reduce_fields(self):
+            for field_name in self.reduced_fields:
+                field_decl = self.iir.fields[field_name]
+                field_decl.axes.pop()
+                for node in self.reduced_fields[field_name]:
+                    new_offset = {axis: node.offset[axis] for axis in field_decl.axes}
+                    node.offset = new_offset
 
         def visit_StencilImplementation(
             self, path: tuple, node_name: str, node: gt_ir.StencilImplementation
@@ -1044,14 +1054,10 @@ class ReduceTemporaryStoragesPass(TransformPass):
                 extent = iir.fields_extents[field_name]
                 ndims = extent.ndims - 1
                 if extent.lower_indices[ndims] == 0 and extent.upper_indices[ndims] == 0:
-                    # iir.fields_extents[field_name] = Extent(extent[0], extent[1])
-                    iir.fields[field_name].axes.pop()
-                    self.reduced_fields.add(field_name)
+                    self.reduced_fields[field_name] = list()
 
             if field_name in self.reduced_fields:
-                field_decl = iir.fields[field_name]
-                new_offset = {axis: node.offset[axis] for axis in field_decl.axes}
-                node.offset = new_offset
+                self.reduced_fields[field_name].append(node)
 
             return True, node
 
