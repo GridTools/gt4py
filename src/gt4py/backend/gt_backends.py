@@ -383,16 +383,50 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
         return (start_splitter, start_offset), (end_splitter, end_offset)
 
+    def _parallel_interval_condition(self, parallel_interval):
+        def make_condition(axis_bound, axis_name, oper):
+            # This code assumes the template uses the name 'eval' for the Evaluation object
+            index = "eval.{}()".format(axis_name.lower())
+            offset = axis_bound.offset
+
+            if isinstance(axis_bound.level, gt_ir.LevelMarker):
+                return ""
+
+            if isinstance(axis_bound.level, gt_ir.VarRef):
+                level = f"eval({axis_bound.level.name}())"
+            elif isinstance(axis_bound.level, int):
+                level = axis_bound.level
+            else:
+                raise ValueError("Unsupported type")
+
+            return f"{index} {oper} {level}{offset:+d}"
+
+        definition = []
+        for interval, axis in zip(parallel_interval, self.impl_node.domain.parallel_axes):
+            condition = make_condition(interval.start, axis.name, ">=")
+            if condition:
+                definition.append(condition)
+            condition = make_condition(interval.end, axis.name, "<")
+            if condition:
+                definition.append(condition)
+
+        return " && ".join(definition)
+
     def visit_ApplyBlock(
         self, node: gt_ir.ApplyBlock
-    ) -> Tuple[Tuple[Tuple[int, int], Tuple[int, int]], str]:
+    ) -> Tuple[Tuple[Tuple[int, int], Tuple[int, int]], str, str]:
         interval_definition = self.visit(node.interval)
 
         self.declared_symbols = set()
         self.apply_block_symbols = {**self.stage_symbols, **node.local_symbols}
         body_sources = self.visit(node.body)
 
-        return interval_definition, body_sources
+        if node.parallel_interval:
+            condition = self._parallel_interval_condition(node.parallel_interval)
+        else:
+            condition = ""
+
+        return interval_definition, condition, body_sources
 
     def visit_Stage(self, node: gt_ir.Stage) -> Dict[str, Any]:
         # Initialize symbols for the generation of references in this stage
@@ -412,11 +446,12 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         # Create regions and computations
         regions = []
         for apply_block in node.apply_blocks:
-            interval_definition, body_sources = self.visit(apply_block)
+            interval_definition, condition, body_sources = self.visit(apply_block)
             regions.append(
                 {
                     "interval_start": interval_definition[0],
                     "interval_end": interval_definition[1],
+                    "entry_conditional": condition,
                     "body": body_sources,
                 }
             )
@@ -465,11 +500,19 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             if name not in node.unreferenced
         ]
 
+        splitters = [ref.name for ref in self.impl_node.splitters]
+
         stage_functors = {}
+        requires_positional = False
         for multi_stage in node.multi_stages:
             for group in multi_stage.groups:
                 for stage in group.stages:
                     stage_functors[stage.name] = self.visit(stage)
+                    if any(
+                        region["entry_conditional"]
+                        for region in stage_functors[stage.name]["regions"]
+                    ):
+                        requires_positional = True
 
         multi_stages = []
         for multi_stage in node.multi_stages:
@@ -485,6 +528,8 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             module_name=self.module_name,
             multi_stages=multi_stages,
             parameters=parameters,
+            splitters=splitters,
+            requires_positional=requires_positional,
             stage_functors=stage_functors,
             stencil_unique_name=self.class_name,
             tmp_fields=tmp_fields,
@@ -523,9 +568,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         # Generate the Python binary extension (checking if GridTools sources are installed)
         if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
-
-        if len(implementation_ir.splitters) > 0:
-            raise NotImplementedError("Splitters are not yet supported in the GridTools backends")
 
         pyext_module_name: Optional[str]
         pyext_file_path: Optional[str]

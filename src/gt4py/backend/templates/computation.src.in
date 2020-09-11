@@ -22,8 +22,10 @@
     - halo_sizes: [int]
     - k_axis: { "n_intervals": int, "offset_limit": int}
     - max_ndim: int
+    - requires_positional: bool
     - multi_stages: [{ "exec": str, "steps": [[str]]]
     - parameters: [{ "name": str, "dtype": str }]
+    - splitters: [str]
     - stage_functors: {
         name:str : {
             "args": [
@@ -37,6 +39,7 @@
                 {
                     "interval_start": (level:int, offset:int),
                     "interval_end": (level:int, offset:int),
+                    "entry_condition": str
                     "body": str
                 }
             ]
@@ -72,8 +75,8 @@ using backend_t = gt::backend::{{ gt_backend }};
 static constexpr gt::uint_t level_offset_limit = {{ k_axis.offset_limit }};
 
 using axis_t =
-    gridtools::axis<{{ k_axis.n_intervals }}, /* NIntervals */
-                    gt::axis_config::offset_limit<level_offset_limit>>;
+    gt::axis<{{ k_axis.n_intervals }}, /* NIntervals */
+             gt::axis_config::offset_limit<level_offset_limit>>;
 
 // These halo sizes are used to determine the sizes of the temporaries
 static constexpr gt::uint_t halo_size_i = {{ halo_sizes[0] }};
@@ -96,7 +99,7 @@ using data_store_t =
 using p_{{ field.name }} = gt::arg<{{ loop.index0 }}, data_store_t<{{ field.dtype }}, {{ field.layout_id }}>>;
 {%- endfor %}
 {% for param in parameters %}
-using p_{{ param.name }} = gt::arg<{{ loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
+using p_{{ param.name }} = gt::arg<{{ loop.index0 }}, gt::global_parameter<backend_t, {{ param.dtype }}>>;
 {%- endfor %}
 
 // Computation
@@ -116,8 +119,11 @@ struct {{ name }}_func {
     using {{ arg.name }} = gt::{{ arg.access_type }}_accessor<{{ loop.index0 }}
                 {%- if arg.extent is not none %}, gt::extent<{{ arg.extent|join(", ")}}>{% endif -%}>;
     {%- endfor %}
+    {%- for splitter in splitters %}
+    using {{ splitter }} = gt::in_accessor<{{ stage.args | length + loop.index0 }}>;
+    {%- endfor %}
 
-    using param_list = gt::make_param_list<{{ stage.args|map(attribute='name')|join(", ")}} >;
+    using param_list = gt::make_param_list<{{ stage.args|map(attribute='name')|join(", ")}}{%- if splitters | length > 0 %}, {{ splitters|join(", ")}}{%- endif %}>;
 
     {% for region in stage.regions %}
     template <typename Evaluation>
@@ -130,8 +136,15 @@ struct {{ name }}_func {
                                                gt::level<{{ region.interval_end|join(", ") }}, level_offset_limit>>)
     {
 {%- filter indent(width=8) %}
+{%- if region.entry_conditional|length > 0 %}
+if ({{ region.entry_conditional }}) {
+{%- filter indent(width=4) %}
 {{ region.body }}
-
+{%- endfilter %}
+}
+{%- else %}
+{{ region.body }}
+{%- endif %}
 {%- endfilter %}
     }
     {%- endfor %}
@@ -194,7 +207,7 @@ data_store_t<T, Id> make_data_store(const BufferInfo& bi,
 {% if parameters -%}
 // Global parameters
 {% for param in parameters -%}
-gt::global_parameter<{{ param.dtype }}> {{ param.name }}_param = gt::make_global_parameter<backend_t>({{ param.dtype }}{});
+auto {{ param.name }}_param = gt::make_global_parameter<backend_t>({{ param.dtype }}{});
 {%- endfor %}
 {%- endif %}
 
@@ -239,7 +252,11 @@ void run(const std::array<gt::uint_t, 3>& domain,
 {%- endfor %}
 
     // Run computation and wait for the synchronization of the output stores
+{%- if requires_positional %}
+    computation_t gt_computation = gt::make_positional_computation<backend_t>(
+{%- else %}
     computation_t gt_computation = gt::make_computation<backend_t>(
+{%- endif %}
         make_grid(domain),
 
 {%- set multi_comma = joiner(",") %}
@@ -260,7 +277,7 @@ void run(const std::array<gt::uint_t, 3>& domain,
             {%- filter indent(width=extra_indent) %}
             {{- stage_comma() }}
             gt::make_stage<{{ stage }}_func>(
-                p_{{ stage_functors[stage].args|map(attribute="name")|join("(), p_")}}()
+                p_{{ stage_functors[stage].args|map(attribute="name")|join("(), p_")}}(){%- if splitters | length > 0 %}, p_{{ splitters|join("(), p_")}}(){%- endif %}
             )
             {%- endfilter %}
         {%- endfor %}
