@@ -1047,25 +1047,21 @@ class ReduceTemporaryStoragesPass(TransformPass):
             iir = self.iir
             field_name = node.name
 
-            if (
-                self.iteration_order != gt_ir.IterationOrder.PARALLEL
-                and field_name in self.iir.temporary_fields
-                and field_name not in self.parallel_fields
-                and field_name not in self.reduced_fields
-            ):
-                extent = iir.fields_extents[field_name]
-                ndims = extent.ndims - 1
-                if extent.lower_indices[ndims] == 0 and extent.upper_indices[ndims] == 0:
-                    self.reduced_fields[field_name] = list()
-            elif (
-                self.iteration_order == gt_ir.IterationOrder.PARALLEL
-                and field_name in self.reduced_fields
-            ):
-                del self.reduced_fields[field_name]
-                self.parallel_fields.add(field_name)
+            if field_name in self.iir.temporary_fields:
+                if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
+                    self.parallel_fields.add(field_name)
+                    if field_name in self.reduced_fields:
+                        del self.reduced_fields[field_name]
 
-            if field_name in self.reduced_fields:
-                self.reduced_fields[field_name].append(node)
+                elif field_name not in self.parallel_fields:
+                    if field_name not in self.reduced_fields:
+                        extent = iir.fields_extents[field_name]
+                        ndims = extent.ndims - 1
+                        if extent.lower_indices[ndims] == 0 and extent.upper_indices[ndims] == 0:
+                            self.reduced_fields[field_name] = list()
+
+                if field_name in self.reduced_fields:
+                    self.reduced_fields[field_name].append(node)
 
             return True, node
 
