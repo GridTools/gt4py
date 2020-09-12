@@ -27,23 +27,22 @@ from gt4py.definitions import Extent, StencilID
 
 
 REGISTRY = gt_utils.Registry()
-EXTERNALS_REGISTRY = gt_utils.Registry()
+PROPERTY_REGISTRY = gt_utils.Registry()
 
 
-def register(externals):
-    if callable(externals):
-        func = externals  # wacky hacky!
-        EXTERNALS_REGISTRY.setdefault(func.__name__, {})
+def register(definition=None, *, externals=None, splitters=None):
+    properties = {}
+    if externals:
+        properties["externals"] = externals
+    if splitters:
+        properties["splitters"] = splitters
+
+    def _decorator(func):
+        PROPERTY_REGISTRY.setdefault(func.__name__, properties)
         REGISTRY.register(func.__name__, func)
         return func
-    else:
 
-        def register_inner(arg_inner):
-            EXTERNALS_REGISTRY.register(arg_inner.__name__, externals)
-            REGISTRY.register(arg_inner.__name__, arg_inner)
-            return arg_inner
-
-        return register_inner
+    return _decorator
 
 
 Field0D = gtscript.Field[np.float_, ()]
@@ -236,3 +235,14 @@ def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3D
             a4_3 = a4_1
         else:
             diff_23 = a4_2 - a4_3
+
+
+@register(splitters={"jstart": 1, "jend": 3})
+def parallel_regions(in_storage: Field3D, out_storage: Field3D):
+    from __splitters__ import jend, jstart
+
+    with computation(PARALLEL):
+        with interval(0, 1), parallel(region[:, jstart:jend]):
+            out_storage = in_storage[-1, 0, 0]
+        with interval(1, None):
+            out_storage = in_storage[1, 0, 0]

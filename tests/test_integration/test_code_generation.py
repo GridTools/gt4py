@@ -25,7 +25,7 @@ from gt4py import gtscript
 from gt4py import storage as gt_storage
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
-from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
+from .stencil_definitions import PROPERTY_REGISTRY as property_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
 
@@ -34,7 +34,8 @@ from .stencil_definitions import REGISTRY as stencil_definitions
 )
 def test_generation_cpu(name, backend):
     stencil_definition = stencil_definitions[name]
-    externals = externals_registry[name]
+    properties = property_registry[name]
+    externals, splitters = (properties.get(prop, {}) for prop in ("externals", "splitters"))
     stencil = gtscript.stencil(backend, stencil_definition, externals=externals, rebuild=True)
     args = {}
     for k, v in stencil_definition.__annotations__.items():
@@ -48,7 +49,7 @@ def test_generation_cpu(name, backend):
             )
         else:
             args[k] = v(1.5)
-    stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3))
+    stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3), splitters=splitters)
 
 
 @pytest.mark.requires_gpu
@@ -57,7 +58,8 @@ def test_generation_cpu(name, backend):
 )
 def test_generation_gpu(name, backend):
     stencil_definition = stencil_definitions[name]
-    externals = externals_registry[name]
+    properties = property_registry[name]
+    externals, splitters = (properties.get(prop, {}) for prop in ("externals", "splitters"))
     stencil = gtscript.stencil(backend, stencil_definition, externals=externals)
     args = {}
     for k, v in stencil_definition.__annotations__.items():
@@ -71,7 +73,7 @@ def test_generation_gpu(name, backend):
             )
         else:
             args[k] = v(1.5)
-    stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3))
+    stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3), splitters=splitters)
 
 
 def test_temporary_field_declared_in_if_raises():

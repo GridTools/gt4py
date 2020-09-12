@@ -18,7 +18,7 @@ import gt4py.definitions as gt_definitions
 import gt4py.gtscript as gtscript
 
 from ..definitions import id_version
-from .stencil_definitions import EXTERNALS_REGISTRY
+from .stencil_definitions import PROPERTY_REGISTRY
 from .stencil_definitions import REGISTRY as stencil_registry
 
 
@@ -35,7 +35,9 @@ def generate_test_module(name, backend, *, id_version, rebuild=True):
     options = gt_definitions.BuildOptions(
         name=stencil_name, module=module_name, rebuild=rebuild, backend_opts=backend_opts
     )
-    decorator = gtscript.stencil(backend=backend.name, externals=EXTERNALS_REGISTRY[stencil_name])
+    decorator = gtscript.stencil(
+        backend=backend.name, externals=PROPERTY_REGISTRY[stencil_name]["externals"]
+    )
     stencil_definition = stencil_registry[name]
 
     return decorator(stencil_definition)
