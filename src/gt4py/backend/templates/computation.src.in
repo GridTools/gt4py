@@ -39,7 +39,7 @@
                 {
                     "interval_start": (level:int, offset:int),
                     "interval_end": (level:int, offset:int),
-                    "entry_condition": str
+                    "entry_conditional": str,
                     "body": str
                 }
             ]
