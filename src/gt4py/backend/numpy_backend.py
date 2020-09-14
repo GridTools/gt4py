@@ -98,6 +98,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 )
             source_lines.extend(" " * self.indent_size + line for line in body_sources)
         else:
+            self.range_args.clear()
             source_lines.append(
                 "{interval_k_start_name} = {lb}".format(
                     interval_k_start_name=self.interval_k_start_name, lb=loop_bounds[0]
