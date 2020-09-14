@@ -1012,6 +1012,7 @@ class ReduceTemporaryStoragesPass(TransformPass):
             self.iir = None
             self.iteration_order = None
             self.multi_stage = ""
+            self.full_fields = set()
             self.reduced_fields = dict()
 
         def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
@@ -1050,7 +1051,12 @@ class ReduceTemporaryStoragesPass(TransformPass):
             field_name = node.name
 
             if field_name in self.iir.temporary_fields:
-                if self.iteration_order != gt_ir.IterationOrder.PARALLEL:
+                if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
+                    self.full_fields.add(field_name)
+                    if field_name in self.reduced_fields:
+                        del self.reduced_fields[field_name]
+
+                elif field_name not in self.full_fields:
                     if field_name not in self.reduced_fields:
                         extent = iir.fields_extents[field_name]
                         ndims = extent.ndims - 1
