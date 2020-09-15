@@ -9,7 +9,7 @@ from dace.codegen.compiler import CompiledSDFG, ReloadableDLL
 
 import gt4py.analysis as gt_analysis
 from gt4py import backend as gt_backend
-from gt4py.ir import DataType
+from gt4py.ir import DataType, IterationOrder
 from gt4py.utils import text as gt_text
 
 from .sdfg.builder import SDFGBuilder
@@ -241,6 +241,7 @@ class DaceBackend(gt_backend.BaseBackend):
         "enforce_dtype": {"versioning": True},
         "specialize_sdfg_vars": {"versioning": True},
         "gpu_block_size": {"versioning": True},
+        "computation_layout": {"versioning": True},
     }
     storage_info = {
         "alignment": 1,
@@ -267,6 +268,9 @@ class DaceBackend(gt_backend.BaseBackend):
         sdfg = SDFGBuilder.apply(implementation_ir)
         from gt4py.backend.dace.sdfg.library.nodes import StencilLibraryNode
 
+        comp_layout_parallel = options.backend_opts.get("computation_layout", "JKI")
+        comp_layout_vertical = comp_layout_parallel.replace('K', '') + 'K'
+
         for name, array in sdfg.arrays.items():
             import dace.data
 
@@ -282,6 +286,11 @@ class DaceBackend(gt_backend.BaseBackend):
                 for state in sdfg.nodes():
                     for node in state.nodes():
                         if isinstance(node, StencilLibraryNode):
+                            if node.iteration_order == IterationOrder.PARALLEL:
+                                node.loop_order = comp_layout_parallel
+                            else:
+                                node.loop_order = comp_layout_vertical
+
                             for interval in node.intervals:
                                 if name in interval.sdfg.arrays:
                                     interval.sdfg.arrays[name].strides = strides
