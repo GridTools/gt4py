@@ -78,7 +78,10 @@ def run_horizontal_diffusion(backend, id_version, domain):
 
     validate_field_names = ["out_field"]
     origins = {"in_field": (2, 2, 0), "out_field": (0, 0, 0), "coeff": (0, 0, 0)}
-    shapes = {k: tuple(domain[i] + 2 * origins[k][i] for i in range(3)) for k in origins.keys()}
+    shapes = {
+        name: tuple(domain[i] + 2 * origin[i] for i in range(3))
+        for name, origin in origins.items()
+    }
     name = "horizontal_diffusion"
 
     arg_fields = get_reference(name, backend, domain, origins, shapes)
@@ -94,7 +97,6 @@ def run_horizontal_diffusion(backend, id_version, domain):
             arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
-        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
         _domain_=domain,
         _origin_=origins,
         exec_info=None,
@@ -127,7 +129,10 @@ def run_tridiagonal_solver(backend, id_version, domain):
         "rhs": (0, 0, 0),
         "out": (0, 0, 0),
     }
-    shapes = {k: tuple(domain[i] + 2 * origins[k][i] for i in range(3)) for k in origins.keys()}
+    shapes = {
+        name: tuple(domain[i] + 2 * origin[i] for i in range(3))
+        for name, origin in origins.items()
+    }
     name = "tridiagonal_solver"
 
     arg_fields = get_reference(name, backend, domain, origins, shapes)
@@ -143,7 +148,6 @@ def run_tridiagonal_solver(backend, id_version, domain):
             arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
-        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
         _domain_=domain,
         _origin_=origins,
         exec_info=None,
@@ -198,7 +202,6 @@ def run_vertical_advection_dycore(backend, id_version, domain):
             arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
-        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
         _domain_=domain,
         _origin_=origins,
         # _origin_={
@@ -228,7 +231,10 @@ def run_large_k_interval(backend, id_version, domain):
 
     validate_field_names = ["out_field"]
     origins = {"in_field": (0, 0, 0), "out_field": (0, 0, 0)}
-    shapes = {k: tuple(domain[i] + 2 * origins[k][i] for i in range(3)) for k in origins.keys()}
+    shapes = {
+        name: tuple(domain[i] + 2 * origin[i] for i in range(3))
+        for name, origin in origins.items()
+    }
     name = "large_k_interval"
 
     arg_fields = get_reference(name, backend, domain, origins, shapes)
@@ -244,7 +250,6 @@ def run_large_k_interval(backend, id_version, domain):
             arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
-        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
         _domain_=domain,
         _origin_=origins,
         exec_info=None,
