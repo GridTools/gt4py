@@ -228,7 +228,7 @@ def run_vertical_advection_dycore(backend, id_version, domain):
     )
 )
 def run_large_k_interval(backend, id_version, domain):
-
+    """Test stencils with large static and potentially zero-length intervals."""
     validate_field_names = ["out_field"]
     origins = {"in_field": (0, 0, 0), "out_field": (0, 0, 0)}
     shapes = {
