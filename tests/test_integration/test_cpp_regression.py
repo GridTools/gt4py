@@ -215,6 +215,49 @@ def run_vertical_advection_dycore(backend, id_version, domain):
         )
 
 
+@register
+@hyp.given(
+    domain=hyp_st.tuples(
+        *(
+            [hyp_st.integers(min_value=1, max_value=32)] * 2
+            + [hyp_st.integers(min_value=16, max_value=32)]
+        )
+    )
+)
+def run_large_k_interval(backend, id_version, domain):
+
+    validate_field_names = ["out_field"]
+    origins = {"in_field": (0, 0, 0), "out_field": (0, 0, 0)}
+    shapes = {k: tuple(domain[i] + 2 * origins[k][i] for i in range(3)) for k in origins.keys()}
+    name = "large_k_interval"
+
+    arg_fields = get_reference(name, backend, domain, origins, shapes)
+    validate_fields = {
+        name + "_reference": arg_fields.pop(name + "_reference") for name in validate_field_names
+    }
+
+    testmodule = generate_test_module(
+        "large_k_interval", backend, id_version=id_version, rebuild=False
+    )
+    for k in arg_fields:
+        if hasattr(arg_fields[k], "host_to_device"):
+            arg_fields[k].host_to_device()
+    testmodule.run(
+        **arg_fields,
+        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
+        _domain_=domain,
+        _origin_=origins,
+        exec_info=None,
+    )
+
+    for k in validate_field_names:
+        if hasattr(arg_fields[k], "synchronize"):
+            arg_fields[k].device_to_host(force=True)
+        np.testing.assert_allclose(
+            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
+        )
+
+
 @pytest.mark.parametrize(
     ["backend", "function"], itertools.product(INTERNAL_CPU_BACKENDS, REGISTRY)
 )
