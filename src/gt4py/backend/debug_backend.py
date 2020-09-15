@@ -66,8 +66,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
         par_axis_names = [axis.name for axis in self.impl_node.domain.parallel_axes]
         conditions = []
         for interval, axis_name in zip(parallel_definition, par_axis_names):
-            symbols = (">=", "<")
-            for axis_bound, symbol in zip((interval.start, interval.end), symbols):
+            for axis_bound, symbol in zip((interval.start, interval.end), (">=", "<")):
                 if isinstance(axis_bound.level, gt_ir.VarRef):
                     conditions.append(
                         f"{axis_name} {symbol} {axis_bound.level.name}{axis_bound.offset:+d}"
