@@ -443,17 +443,23 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         arg_fields = []
         tmp_fields = []
         storage_ids = []
-        used_axes = set()
+        used_axes = dict()
+        all_axes = [axis.lower() for axis in gt_definitions.CartesianSpace.names]
+
         max_ndim = 0
         for name, field_decl in node.fields.items():
             if name not in node.unreferenced:
                 max_ndim = max(max_ndim, len(field_decl.axes))
+                axes = "".join(field_decl.axes).lower()
+                selector = ["1" if axis in axes else "0" for axis in all_axes]
+                used_axes[axes] = dict(name=axes.lower(), selector=", ".join(selector))
+
                 field_attributes = {
                     "name": field_decl.name,
                     "dtype": self._make_cpp_type(field_decl.data_type),
-                    "axes": "".join(field_decl.axes).lower(),
+                    "axes": axes,
                 }
-                used_axes.add(field_attributes["axes"])
+
                 if field_decl.is_api:
                     if field_decl.layout_id not in storage_ids:
                         storage_ids.append(field_decl.layout_id)
@@ -491,7 +497,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             stage_functors=stage_functors,
             stencil_unique_name=self.class_name,
             tmp_fields=tmp_fields,
-            used_axes=used_axes,
+            used_axes=used_axes.values(),
         )
 
         sources: Dict[str, Dict[str, str]] = {"computation": {}, "bindings": {}}
@@ -538,8 +544,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         # Generate and return the Python wrapper class
         return self.make_module(
-            pyext_module_name=pyext_module_name,
-            pyext_file_path=pyext_file_path,
+            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
         )
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
