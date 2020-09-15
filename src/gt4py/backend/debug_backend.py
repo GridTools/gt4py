@@ -76,7 +76,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
                         f"{axis_name} {symbol} {axis_bound.level}{axis_bound.offset:+d}"
                     )
 
-        return ["if " + " and ".join(conditions) + ":"]
+        return [f"if {' and '.join(conditions)}:"]
 
     def make_temporary_field(
         self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent
