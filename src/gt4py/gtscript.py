@@ -567,8 +567,6 @@ class _Region:
     def __getitem__(self, *intervals):
         iaxis, jaxis = intervals[0]
         return ((iaxis.start, iaxis.stop), (jaxis.start, jaxis.stop))
-        self.iaxis = (iaxis.start, iaxis.stop)
-        self.jaxis = (jaxis.start, jaxis.stop)
 
 
 # Horizontal regions
