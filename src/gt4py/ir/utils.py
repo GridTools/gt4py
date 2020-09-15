@@ -69,10 +69,7 @@ def make_field_ref(name: str, offset=(0, 0, 0), *, axes_names=None):
     return FieldRef(name=name, offset=offset)
 
 
-def make_axis_interval(bounds: tuple, *, offset_limit: int = 2):
-    assert isinstance(bounds[0], (VarRef, UnaryOpExpr, BinOpExpr)) or (
-        isinstance(bounds[0], int) and abs(bounds[0]) <= offset_limit
-    )
+def make_axis_interval(bounds: tuple):
     if isinstance(bounds[0], (VarRef, BinOpExpr)):
         # assuming: "var_name[index] + offset"
         if isinstance(bounds[0], VarRef):
