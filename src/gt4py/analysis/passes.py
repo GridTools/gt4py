@@ -1011,9 +1011,9 @@ class ReduceTemporaryStoragesPass(TransformPass):
         def __init__(self):
             self.iir = None
             self.iteration_order = None
-            self.multi_stage = ""
             self.full_fields = set()
             self.reduced_fields = dict()
+            self.fields_extents = dict()
 
         def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
             assert isinstance(node, gt_ir.StencilImplementation)
@@ -1023,33 +1023,36 @@ class ReduceTemporaryStoragesPass(TransformPass):
 
         def _reduce_fields(self):
             for field_name in self.reduced_fields:
-                if len(self.reduced_fields[field_name]["multi_stages"]) == 1:
-                    field_decl = self.iir.fields[field_name]
-                    field_decl.axes.pop()
-                    for node in self.reduced_fields[field_name]["nodes"]:
-                        new_offset = {axis: node.offset[axis] for axis in field_decl.axes}
-                        node.offset = new_offset
+                field_decl = self.iir.fields[field_name]
+                field_decl.axes.pop()
+                for node in self.reduced_fields[field_name]:
+                    new_offset = {axis: node.offset[axis] for axis in field_decl.axes}
+                    node.offset = new_offset
 
         def visit_StencilImplementation(
             self, path: tuple, node_name: str, node: gt_ir.StencilImplementation
         ) -> gt_ir.StencilImplementation:
             self.iir = node
+            self.fields_extents = node.fields_extents.copy()
             return self.generic_visit(path, node_name, node)
 
         def visit_MultiStage(
             self, path: tuple, node_name: str, node: gt_ir.MultiStage
         ) -> Tuple[bool, Optional[gt_ir.MultiStage]]:
             self.iteration_order = node.iteration_order
-            self.multi_stage = node.name
             self.generic_visit(path, node_name, node)
+            return True, node
+
+        def visit_FieldAccessor(
+            self, path: tuple, node_name: str, node: gt_ir.FieldAccessor
+        ) -> Tuple[bool, Optional[gt_ir.FieldAccessor]]:
+            self.fields_extents[node.symbol] |= node.extent
             return True, node
 
         def visit_FieldRef(
             self, path: tuple, node_name: str, node: gt_ir.FieldRef
         ) -> Tuple[bool, gt_ir.FieldRef]:
-            iir = self.iir
             field_name = node.name
-
             if field_name in self.iir.temporary_fields:
                 if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
                     self.full_fields.add(field_name)
@@ -1057,17 +1060,18 @@ class ReduceTemporaryStoragesPass(TransformPass):
                         del self.reduced_fields[field_name]
 
                 elif field_name not in self.full_fields:
-                    if field_name not in self.reduced_fields:
-                        extent = iir.fields_extents[field_name]
-                        ndims = extent.ndims - 1
-                        if extent.lower_indices[ndims] == 0 and extent.upper_indices[ndims] == 0:
-                            self.reduced_fields[field_name] = dict(
-                                multi_stages=set(), nodes=list()
-                            )
+                    extent = self.fields_extents[field_name]
+                    ndims = extent.ndims - 1
+                    if extent.lower_indices[ndims] == 0 and extent.upper_indices[ndims] == 0:
+                        if field_name not in self.reduced_fields:
+                            self.reduced_fields[field_name] = list()
+                    else:
+                        self.full_fields.add(field_name)
+                        if field_name in self.reduced_fields:
+                            del self.reduced_fields[field_name]
 
                 if field_name in self.reduced_fields:
-                    self.reduced_fields[field_name]["multi_stages"].add(self.multi_stage)
-                    self.reduced_fields[field_name]["nodes"].append(node)
+                    self.reduced_fields[field_name].append(node)
 
             return True, node
 
