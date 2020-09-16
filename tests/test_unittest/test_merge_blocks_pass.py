@@ -254,7 +254,6 @@ def test_split_reorderable(merge_blocks_pass: PassType, ijk_domain: Domain) -> N
     # third is merged with fourth
     statement_pos = _StatementPositionVisitor().visit(transform_data)
     statement_pos = [statement_pos[i] for i in stmt_to_line]  # convert from lineno to stmt #
-    print(statement_pos)
     assert len(transform_data.blocks) == 2
     # first multi stage contains stmts 0 and 1 in order
     assert statement_pos[0].multi_stage == 0
@@ -308,7 +307,6 @@ def test_split_preordered(merge_blocks_pass: PassType, ijk_domain: Domain) -> No
     # fourth stands alone
     statement_pos = _StatementPositionVisitor().visit(transform_data)
     statement_pos = [statement_pos[i] for i in stmt_to_line]  # convert from lineno to stmt #
-    print(statement_pos)
     assert len(transform_data.blocks) == 2
     # first multi stage contains stmt 0, 3 and 1 in order
     assert statement_pos[0].multi_stage == 0
