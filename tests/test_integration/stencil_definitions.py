@@ -32,17 +32,16 @@ PROPERTY_REGISTRY = gt_utils.Registry()
 
 def register(definition=None, *, externals=None, splitters=None):
     properties = {}
-    if externals:
-        properties["externals"] = externals
-    if splitters:
-        properties["splitters"] = splitters
+    properties["externals"] = externals or {}
+    properties["splitters"] = splitters or {}
 
     def _decorator(func):
         PROPERTY_REGISTRY.setdefault(func.__name__, properties)
         REGISTRY.register(func.__name__, func)
         return func
 
-    return _decorator
+    assert callable(definition) or definition is None
+    return _decorator(definition) if definition else _decorator
 
 
 Field0D = gtscript.Field[np.float_, ()]
