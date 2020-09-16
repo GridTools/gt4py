@@ -763,6 +763,10 @@ class StageMergingWrapper:
         return self._stage.intervals
 
     @property
+    def parallel_interval(self) -> List[IntervalInfo]:
+        return self._stage.parallel_interval
+
+    @property
     def interval_blocks(self) -> List[IntervalBlockInfo]:
         return self._stage.interval_blocks
 
