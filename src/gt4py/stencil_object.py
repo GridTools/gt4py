@@ -2,6 +2,7 @@ import abc
 import sys
 import time
 import warnings
+from typing import Dict
 
 import numpy as np
 
@@ -101,6 +102,11 @@ class StencilObject(abc.ABC):
     @property
     @abc.abstractmethod
     def constants(self) -> dict:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def splitters(self) -> Dict[str, int]:
         pass
 
     @property
