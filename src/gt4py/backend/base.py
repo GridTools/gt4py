@@ -653,6 +653,8 @@ pyext_module = gt_utils.make_module_from_file(
                 args.append(arg.name)
                 if arg.name in api_fields:
                     args.append("list(_origin_['{}'])".format(arg.name))
+        for arg in self.builder.implementation_ir.splitters:
+            args.append(arg.name)
 
         # only generate implementation if any multi_stages are present. e.g. if no statement in the
         # stencil has any effect on the API fields, this may not be the case since they could be
