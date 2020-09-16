@@ -90,6 +90,7 @@ def make_definition(
         api_signature=api_signature,
         api_fields=api_fields,
         parameters=[],
+        splitters={},
         computations=[
             ComputationBlock(
                 interval=AxisInterval(
