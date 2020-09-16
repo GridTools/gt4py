@@ -909,7 +909,9 @@ class IRMaker(ast.NodeVisitor):
                     if self.in_if:
                         raise GTScriptSymbolError(
                             name=t.id,
-                            message="Temporary field {name} implicitly defined within run-time if-else region.",
+                            message="Temporary field {name} implicitly defined within run-time if-else region.".format(
+                                name=t.id
+                            ),
                         )
                     field_decl = gt_ir.FieldDecl(
                         name=t.id,
