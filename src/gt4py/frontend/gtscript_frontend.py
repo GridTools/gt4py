@@ -1062,7 +1062,7 @@ class IRMaker(ast.NodeVisitor):
 
             return unrolled_blocks
 
-        return recurse_unroll(node, 0, node.items)
+        return recurse_unroll(node, 0, node.items) if len(node.body) > 0 else []
 
     def visit_With(self, node: ast.With):
         loc = gt_ir.Location.from_ast_node(node)
