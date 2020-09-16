@@ -23,11 +23,13 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
 
     def transform_library(self, sdfg):
         from gt4py.backend.dace.sdfg.library.nodes import StencilLibraryNode
-
+        
+        '''
         for state in sdfg.nodes():
             for node in state.nodes():
                 if isinstance(node, StencilLibraryNode):
                     node.loop_order = "JKI"
+        '''
 
         from gt4py.backend.dace.sdfg.transforms import PruneTransientOutputs
 
@@ -52,7 +54,7 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
                 array.lifetime = dace.dtypes.AllocationLifetime.Persistent
 
 
-
+        
         for state in sdfg.nodes():
             for node in state.nodes():
                 if isinstance(node, dace.nodes.NestedSDFG):
@@ -64,7 +66,7 @@ class GPUDaceOptimizer(CudaDaceOptimizer):
                     )
                     trafo.storage_type = dace.dtypes.StorageType.Register
                     trafo.apply(sdfg)
-
+        
         from dace.transformation.subgraph.subgraph_fusion import SubgraphFusion
         from dace.sdfg.graph import SubgraphView
 

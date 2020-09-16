@@ -456,8 +456,9 @@ if __name__ == "__main__":
     niter = 1000
     domain = (128, 128, 80)
     data_layout = (2, 1, 0)
+    computation_layout = "JKI"
     alignment = 1
-    block_size = (128, 2, 1)
+    block_size = (64, 2, 1)
     # function = "vertical_advection"
     function = "horizontal_diffusion"
     backend = "adhoc_gpu"
@@ -505,6 +506,7 @@ if __name__ == "__main__":
     block_size_str = ",".join(map(str, block_size))
     backend_opts = dict(rebuild=True, save_intermediate=True)
     backend_opts["gpu_block_size"] = block_size_str
+    backend_opts["computation_layout"] = computation_layout
     exec_infos = globals()[f"run_{function}"](
         niter=niter, domain=domain, backend=backend, dtype=dtype, backend_opts=backend_opts,
     )
