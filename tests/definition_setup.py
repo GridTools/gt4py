@@ -90,7 +90,7 @@ def make_definition(
         api_signature=api_signature,
         api_fields=api_fields,
         parameters=[],
-        splitters={},
+        splitters=[],
         computations=[
             ComputationBlock(
                 interval=AxisInterval(
@@ -116,6 +116,7 @@ def init_implementation_from_definition(definition: StencilDefinition) -> Stenci
         domain=definition.domain,
         fields={},
         parameters={},
+        splitters=[],
         multi_stages=[],
         fields_extents={},
         unreferenced=[],
