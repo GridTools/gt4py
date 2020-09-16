@@ -219,6 +219,17 @@ def horizontal_diffusion(in_field: Field3D, out_field: Field3D, coeff: Field3D):
 
 
 @register
+def large_k_interval(in_field: Field3D, out_field: Field3D):
+    with computation(PARALLEL):
+        with interval(0, 6):
+            out_field = in_field
+        with interval(6, -10):  # this stage will only run if field has more than 16 elements
+            out_field = in_field + 1
+        with interval(-10, None):
+            out_field = in_field
+
+
+@register
 def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
     with computation(PARALLEL), interval(...):
         mask = in_field >= 0

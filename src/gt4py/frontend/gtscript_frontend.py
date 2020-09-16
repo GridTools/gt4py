@@ -1000,7 +1000,9 @@ class IRMaker(ast.NodeVisitor):
                     if self.in_if:
                         raise GTScriptSymbolError(
                             name=t.id,
-                            message="Temporary field {name} implicitly defined within run-time if-else region.",
+                            message="Temporary field {name} implicitly defined within run-time if-else region.".format(
+                                name=t.id
+                            ),
                         )
                     field_decl = gt_ir.FieldDecl(
                         name=t.id,
@@ -1542,6 +1544,7 @@ class GTScriptParser(ast.NodeVisitor):
             externals=self.resolved_externals,
             splitters=self._create_splitter_decls(computations),
             docstring=inspect.getdoc(self.definition) or "",
+            loc=gt_ir.Location.from_ast_node(self.ast_root.body[0]),
         )
 
         return self.definition_ir
