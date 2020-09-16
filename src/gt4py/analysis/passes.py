@@ -669,7 +669,7 @@ class StageMergingWrapper:
 
         # Check that the two stages have the same compute extent
         if not (self.compute_extent == candidate.compute_extent) or not (
-            target.parallel_interval == candidate.parallel_interval
+            self.parallel_interval == candidate.parallel_interval
         ):
             return False
 
