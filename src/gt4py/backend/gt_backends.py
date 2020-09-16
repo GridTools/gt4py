@@ -386,7 +386,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
     def _parallel_interval_condition(self, parallel_interval):
         def make_condition(axis_bound, axis_name, oper):
             # This code assumes the template uses the name 'eval' for the Evaluation object
-            index = "eval.{}()".format(axis_name.lower())
+            index = f"eval.{axis_name.lower()}()"
             offset = axis_bound.offset
 
             if isinstance(axis_bound.level, gt_ir.LevelMarker):
