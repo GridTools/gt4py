@@ -11,8 +11,9 @@ from .base_backend import (
 
 
 class CPUDacePyModuleGenerator(DacePyModuleGenerator):
-    def generate_field_ptr_str(self, arg):
-        return f"{arg}.ctypes.data"
+    @property
+    def array_interface_name(self):
+        return "__array_interface__"
 
 
 class X86DaceOptimizer(DaceOptimizer):

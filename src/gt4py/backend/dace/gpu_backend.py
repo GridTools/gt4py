@@ -13,8 +13,9 @@ from .base_backend import (
 
 
 class GPUDacePyModuleGenerator(DacePyModuleGenerator):
-    def generate_field_ptr_str(self, arg):
-        return f"{arg}.data.data.ptr"
+    @property
+    def array_interface_name(self):
+        return "__cuda_array_interface__"
 
 
 class GPUDaceOptimizer(CudaDaceOptimizer):

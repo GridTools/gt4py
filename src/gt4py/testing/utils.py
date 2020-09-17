@@ -99,8 +99,9 @@ def build_dace_adhoc(
     backend_name += "_".join(str(int(h)) for h in halo) + "_"
     backend_name += "_".join(str(int(d)) for d in domain) + "_"
     backend_name += "_".join(str(int(s)) for s in specialize_strides) + "_"
-    backend_name += "_".join(type(p).__name__ for p in passes) + "_"
-    backend_name += "_".join(f"{k}_{v}" for k, v in params)
+    backend_name += "_".join(type(p).__name__ for p in passes)
+    if len(params) > 0:
+        backend_name += "_" + "_".join(f"{k}_{v}" for k, v in params)
 
     from gt4py.backend.dace.cpu_backend import CPUDaceBackend
     from gt4py.backend.dace.gpu_backend import GPUDaceBackend

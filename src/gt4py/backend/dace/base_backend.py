@@ -60,51 +60,47 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
         for field_name in self.implementation_ir.arg_fields:
             if field_name not in self.implementation_ir.unreferenced:
                 field_slices.append(
-                    """{name} = {name}[{slice}] if {name} is not None else None""".format(
+                    """{name}_interface = {name}.{interface}
+itemsize = np.dtype({name}_interface['descr'][0][1]).itemsize
+if {name}_interface['strides'] is None:
+    _{name}_K_stride = 1
+    _{name}_J_stride = {name}_interface['shape'][2]
+    _{name}_I_stride = {name}_interface['shape'][1] * _{name}_J_stride
+else:
+    _{name}_I_stride, _{name}_J_stride, _{name}_K_stride = [np.int32(st//itemsize) for st in {name}_interface['strides']]
+assert not {name}_interface['data'][1] # assert not readonly
+{name}_ptr = int({name}_interface['data'][0] + sum([(o-e)*st for o, e, st in zip(_origin_['{name}'], {extent}, [_{name}_I_stride*itemsize, _{name}_J_stride*itemsize, _{name}_K_stride*itemsize])]))""".format(
                         name=field_name,
-                        slice=",".join(
-                            f'_origin_["{field_name}"][{i}] - {-self.implementation_ir.fields_extents[field_name][i][0]}:_origin_["{field_name}"][{i}] - {-self.implementation_ir.fields_extents[field_name][i][0]}+_domain_[{i}] + {self.implementation_ir.fields_extents[field_name].frame_size[i]}'
-                            if self.implementation_ir.fields[field_name].axes[i]
-                            != self.implementation_ir.domain.sequential_axis.name
-                            else f'_origin_["{field_name}"][{i}]:_origin_["{field_name}"][{i}]+_domain_[{i}]'
-                            # else ":"
-                            for i in range(len(self.implementation_ir.fields[field_name].axes))
+                        interface=self.array_interface_name,
+                        extent=tuple(
+                            -self.implementation_ir.fields_extents[field_name][i][0]
+                            for i in range(3)
                         ),
-                        shape=tuple(
-                            s
-                            if self.implementation_ir.fields[field_name].axes[i]
-                            != self.implementation_ir.domain.sequential_axis.name
-                            else dace.symbol("K")
-                            for i, s in enumerate(
-                                self.implementation_ir.sdfg.arrays[field_name].shape
-                            )
-                        ),
-                        strides=self.implementation_ir.sdfg.arrays[field_name].strides,
                     )
                 )
-        total_field_sizes = []
+        # total_field_sizes = []
         symbol_ctype_strs = dict(I="ctypes.c_int(I)", J="ctypes.c_int(J)", K="ctypes.c_int(K)")
         for field_name in self.implementation_ir.arg_fields:
             if field_name not in self.implementation_ir.unreferenced:
-                total_field_sizes.append(
-                    f"_{field_name}_I_stride, _{field_name}_J_stride, _{field_name}_K_stride = tuple(np.int32(s/{field_name}.itemsize) for s in {field_name}.strides)"
-                )
+                # total_field_sizes.append(
+                #     f"_{field_name}_I_stride, _{field_name}_J_stride, _{field_name}_K_stride = tuple(np.int32(s/{field_name}.itemsize) for s in {field_name}.strides)"
+                # )
                 symbol_ctype_strs[
                     f"_{field_name}_I_stride"
-                ] = f"ctypes.c_int(np.int32(_{field_name}_I_stride))"
+                ] = f"ctypes.c_int(_{field_name}_I_stdride)"
                 symbol_ctype_strs[
                     f"_{field_name}_J_stride"
-                ] = f"ctypes.c_int(np.int32(_{field_name}_J_stride))"
+                ] = f"ctypes.c_int(_{field_name}_J_stride)"
                 symbol_ctype_strs[
                     f"_{field_name}_K_stride"
-                ] = f"ctypes.c_int(np.int32(_{field_name}_K_stride))"
+                ] = f"ctypes.c_int(_{field_name}_K_stride)"
 
-        total_field_sizes = "\n".join(total_field_sizes)
+        # total_field_sizes = "\n".join(total_field_sizes)
         run_args_names = sorted(args)
         run_args_strs = []
         for name, datadescr in self.implementation_ir.sdfg.arglist().items():
             if name in self.implementation_ir.arg_fields:
-                run_args_strs.append(f"ctypes.c_void_p({self.generate_field_ptr_str(name)})")
+                run_args_strs.append(f"ctypes.c_void_p({name}_ptr)")
             else:
                 run_args_strs.append(
                     "ctypes.{ctype_name}(np.{numpy_type}({par_name}))".format(
@@ -117,8 +113,8 @@ dace_lib = load_dace_program("{self.options.dace_ext_lib}")
         if self.implementation_ir.multi_stages:
             source = (
                 "\nI=np.int32(_domain_[0])\nJ=np.int32(_domain_[1])\nK=np.int32(_domain_[2])\n"
-                + total_field_sizes
-                + "\n"
+                # + total_field_sizes
+                # + "\n"
                 + "\n".join(field_slices)
                 + """
 dace_lib['__dace_init_{program_name}']({run_args})
@@ -269,7 +265,7 @@ class DaceBackend(gt_backend.BaseBackend):
         from gt4py.backend.dace.sdfg.library.nodes import StencilLibraryNode
 
         comp_layout_parallel = options.backend_opts.get("computation_layout", "JKI")
-        comp_layout_vertical = comp_layout_parallel.replace('K', '') + 'K'
+        comp_layout_vertical = comp_layout_parallel.replace("K", "") + "K"
 
         for name, array in sdfg.arrays.items():
             import dace.data
