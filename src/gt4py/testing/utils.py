@@ -138,6 +138,23 @@ class PrefetchingKCaches(DaceOptimizer):
         return sdfg
 
 
+class SpecializeIJK(DaceOptimizer):
+    def __init__(self, domain, strides):
+        self.domain = domain
+        self.strides = strides
+
+    def transform_optimize(self, sdfg):
+        specialize_symbols = dict()
+        specialize_symbols["I"] = self.domain[0]
+        specialize_symbols["J"] = self.domain[1]
+        specialize_symbols["K"] = self.domain[2]
+        for name in sdfg.arrays:
+            for var, stride in zip("IJK", self.strides):
+                specialize_symbols[f"_{name}_{var}_stride"] = stride
+        sdfg.specialize(specialize_symbols)
+        return sdfg
+
+
 def build_dace_adhoc(
     definition,
     domain,
@@ -168,9 +185,17 @@ def build_dace_adhoc(
     base_backend = CPUDaceBackend if device == "cpu" else GPUDaceBackend
     base_optimizer = CPUDaceOptimizer if device == "cpu" else CudaDaceOptimizer
 
+    backend_opts = {}
+    if device == "gpu" and "gpu_block_size" in params:
+        backend_opts["gpu_block_size"] = params["gpu_block_size"]
+    if "specialize_sdfg_vars" in params:
+        backend_opts["specialize_sdfg_vars"] = params["specialize_sdfg_vars"]
+    backend_opts["computation_layout"] = loop_order
+    backend_opts["enforce_dtype"] = dtype
+
     class CompositeOptimizer(base_optimizer):
         def __init__(self, passes):
-            self._passes = passes
+            self._passes = [SpecializeIJK(domain, specialize_strides)] + passes
 
         def transform_to_device(self, sdfg):
             sdfg = super().transform_to_device(sdfg)
@@ -203,5 +228,9 @@ def build_dace_adhoc(
 
     constants = constants or {}
     return gt4py.gtscript.stencil(
-        definition=definition, backend=backend_name, dtypes={"dtype": dtype}, externals=constants
+        definition=definition,
+        backend=backend_name,
+        dtypes={"dtype": dtype},
+        externals=constants,
+        **backend_opts,
     )
