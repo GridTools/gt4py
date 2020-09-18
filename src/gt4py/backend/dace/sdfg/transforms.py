@@ -892,6 +892,8 @@ class PrefetchingKCachesTransform(dace.transformation.pattern_matching.Transform
         )
         names = dict()
         for name, array in dict(nsdfg_node.sdfg.arrays).items():
+            if self.arrays is None or name not in self.arrays:
+                continue
             store = False
             outer_edges = [e for e in graph.out_edges(nsdfg_node) if e.data.data == name]
             for edge in outer_edges:

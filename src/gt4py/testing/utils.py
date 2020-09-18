@@ -84,6 +84,14 @@ class ApplyOTFOptimizer(DaceOptimizer):
         return sdfg
 
 
+class DeduplicateAccesses(DaceOptimizer):
+    def transform_optimize(self, sdfg):
+        from dace.transformation.dataflow.dedup_access import DeduplicateAccess
+
+        sdfg.apply_transformations_repeated(DeduplicateAccess, validate=False)
+        return sdfg
+
+
 class SubgraphFusion(DaceOptimizer):
     def __init__(self, storage_type: dace.dtypes.StorageType = dace.dtypes.StorageType.Register):
         self.storage_type = storage_type
@@ -135,6 +143,14 @@ class PrefetchingKCaches(DaceOptimizer):
                     trafo.arrays = self.arrays
                     trafo.storage_type = self.storage_type
                     trafo.apply(sdfg)
+        return sdfg
+
+
+class PruneTransientOutputs(DaceOptimizer):
+    def transform_library(self, sdfg):
+        from gt4py.backend.dace.sdfg.transforms import PruneTransientOutputs
+
+        sdfg.apply_transformations_repeated(PruneTransientOutputs, validate=False)
         return sdfg
 
 
@@ -232,5 +248,6 @@ def build_dace_adhoc(
         backend=backend_name,
         dtypes={"dtype": dtype},
         externals=constants,
+        save_intermediate=True,
         **backend_opts,
     )
