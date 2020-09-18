@@ -20,6 +20,8 @@ import numpy as np
 import types
 import inspect
 
+import dace.codegen.instrumentation
+
 
 def copy_func(f, name=None):
     return types.FunctionType(
@@ -82,6 +84,60 @@ class ApplyOTFOptimizer(DaceOptimizer):
         return sdfg
 
 
+class SubgraphFusion(DaceOptimizer):
+    def __init__(self, storage_type: dace.dtypes.StorageType = dace.dtypes.StorageType.Register):
+        self.storage_type = storage_type
+
+    def transform_optimize(self, sdfg):
+        from dace.transformation.subgraph.subgraph_fusion import SubgraphFusion
+        from dace.sdfg.graph import SubgraphView
+
+        for graph in sdfg.nodes():
+            subgraph = SubgraphView(
+                graph, [node for node in graph.nodes() if graph.out_degree(node) > 0]
+            )
+            fusion = SubgraphFusion(subgraph)
+            fusion.transient_allocation = self.storage_type
+            fusion.apply(sdfg)
+            for name, array in sdfg.arrays.items():
+                if array.transient:
+                    if array.storage == dace.dtypes.StorageType.GPU_Global:
+                        array.lifetime = dace.dtypes.AllocationLifetime.Persistent
+
+                    for node in graph.nodes():
+                        if isinstance(node, dace.nodes.NestedSDFG):
+                            for inner_name, inner_array in node.sdfg.arrays.items():
+                                if inner_name == name:
+                                    inner_array.storage = array.storage
+                                    inner_array.strides = array.strides
+
+        dace.sdfg.utils.consolidate_edges(sdfg)
+        return sdfg
+
+
+class PrefetchingKCaches(DaceOptimizer):
+    def __init__(self, arrays=None, storage_type=dace.dtypes.StorageType.Register):
+        self.storage_type = storage_type
+        self.arrays = arrays
+
+    def transform_optimize(self, sdfg):
+        from gt4py.backend.dace.sdfg.transforms import PrefetchingKCachesTransform
+
+        for state in sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.NestedSDFG):
+                    kcache_subgraph = {
+                        PrefetchingKCachesTransform._nsdfg_node: state.node_id(node)
+                    }
+                    trafo = PrefetchingKCachesTransform(
+                        sdfg.sdfg_id, sdfg.node_id(state), kcache_subgraph, 0
+                    )
+                    trafo.arrays = self.arrays
+                    trafo.storage_type = self.storage_type
+                    trafo.apply(sdfg)
+        return sdfg
+
+
 def build_dace_adhoc(
     definition,
     domain,
@@ -93,6 +149,7 @@ def build_dace_adhoc(
     layout,
     loop_order,
     device,
+    constants=None,
     **params,
 ) -> gt4py.stencil_object.StencilObject:
     backend_name = f"dace_adhoc_{device}_{dtype}_{loop_order}_{alignment}_"
@@ -101,19 +158,23 @@ def build_dace_adhoc(
     backend_name += "_".join(str(int(s)) for s in specialize_strides) + "_"
     backend_name += "_".join(type(p).__name__ for p in passes)
     if len(params) > 0:
-        backend_name += "_" + "_".join(f"{k}_{v}" for k, v in params)
+        backend_name += "_" + "_".join(f"{k}_{v}" for k, v in params.items())
 
     from gt4py.backend.dace.cpu_backend import CPUDaceBackend
     from gt4py.backend.dace.gpu_backend import GPUDaceBackend
-    from gt4py.backend.dace.base_backend import CudaDaceOptimizer, DaceOptimizer
+    from gt4py.backend.dace.base_backend import CudaDaceOptimizer, CPUDaceOptimizer
     from gt4py.backend.concepts import register as register_backend
 
     base_backend = CPUDaceBackend if device == "cpu" else GPUDaceBackend
-    base_optimizer = DaceOptimizer if device == "cpu" else CudaDaceOptimizer
+    base_optimizer = CPUDaceOptimizer if device == "cpu" else CudaDaceOptimizer
 
     class CompositeOptimizer(base_optimizer):
         def __init__(self, passes):
             self._passes = passes
+
+        def transform_to_device(self, sdfg):
+            sdfg = super().transform_to_device(sdfg)
+            return sdfg
 
         def transform_library(self, sdfg):
             for xform in self._passes:
@@ -121,6 +182,9 @@ def build_dace_adhoc(
             return sdfg
 
         def transform_optimize(self, sdfg):
+            from dace.transformation.dataflow import MapCollapse
+
+            sdfg.apply_transformations_repeated(MapCollapse, validate=False)
             for xform in self._passes:
                 sdfg = xform.transform_optimize(sdfg)
             return sdfg
@@ -137,6 +201,7 @@ def build_dace_adhoc(
         }
         DEFAULT_OPTIMIZER = CompositeOptimizer(passes)
 
+    constants = constants or {}
     return gt4py.gtscript.stencil(
-        definition=definition, backend=backend_name, dtypes={"dtype": dtype}
+        definition=definition, backend=backend_name, dtypes={"dtype": dtype}, externals=constants
     )

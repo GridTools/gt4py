@@ -6,6 +6,7 @@ import numpy as np
 import dace
 from dace.codegen.codegen import generate_code
 from dace.codegen.compiler import CompiledSDFG, ReloadableDLL
+import dace.codegen.instrumentation
 
 import gt4py.analysis as gt_analysis
 from gt4py import backend as gt_backend
@@ -37,6 +38,7 @@ class DacePyModuleGenerator(gt_backend.BaseModuleGenerator):
         source = f"""
 import functools
 import ctypes
+import os
 
 from gt4py.backend.dace.util import load_dace_program
 
@@ -123,11 +125,15 @@ if exec_info is not None:
 dace_lib['__program_{program_name}']({run_args})
 if exec_info is not None:
     exec_info['pyext_program_end_time'] = time.perf_counter()
+    path = os.path.join('{build_path}', 'perf')
+    files = [f for f in os.listdir(path) if f.startswith('report-')]
+    exec_info['instrumentation_report'] = os.path.join(path,sorted(files, reverse=True)[0])
 dace_lib['__dace_exit_{program_name}']({run_args})
 """.format(
                     program_name=self.implementation_ir.sdfg.name,
                     run_args=", ".join(run_args_strs),
                     total_field_sizes=",".join(v for k, v in sorted(symbol_ctype_strs.items())),
+                    build_path=os.path.abspath(self.options.dace_build_path),
                 )
             )
 
@@ -156,6 +162,15 @@ class DaceOptimizer:
         return sdfg
 
     def transform_optimize(self, sdfg):
+        return sdfg
+
+
+class CPUDaceOptimizer(DaceOptimizer):
+    description = "no optimization on CPU"
+
+    def transform_to_device(self, sdfg):
+        for state in sdfg.nodes():
+            state.instrument = dace.InstrumentationType.Timer
         return sdfg
 
 
@@ -190,6 +205,8 @@ class CudaDaceOptimizer(DaceOptimizer):
             for node in state.nodes():
                 if isinstance(node, dace.nodes.NestedSDFG):
                     consolidate_edges(node.sdfg)
+        for state in sdfg.nodes():
+            state.instrument = dace.InstrumentationType.GPU_Events
         return sdfg
 
 
@@ -248,7 +265,7 @@ class DaceBackend(gt_backend.BaseBackend):
     }
 
     GENERATOR_CLASS = DacePyModuleGenerator
-    DEFAULT_OPTIMIZER = DaceOptimizer()
+    DEFAULT_OPTIMIZER = CPUDaceOptimizer()
 
     @classmethod
     def get_dace_module_path(cls, stencil_id):
@@ -351,6 +368,7 @@ class DaceBackend(gt_backend.BaseBackend):
 
         implementation_ir.sdfg = copy.deepcopy(sdfg)
 
+        sdfg.build_folder = os.path.abspath(dace_build_path)
         program_folder = dace.codegen.compiler.generate_program_folder(
             sdfg=sdfg, code_objects=generate_code(sdfg), out_path=dace_build_path
         )

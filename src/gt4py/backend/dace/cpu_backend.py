@@ -2,7 +2,7 @@ from gt4py import backend as gt_backend
 
 from .base_backend import (
     DaceBackend,
-    DaceOptimizer,
+    CPUDaceOptimizer,
     DacePyModuleGenerator,
     dace_layout,
     dace_is_compatible_layout,
@@ -16,7 +16,7 @@ class CPUDacePyModuleGenerator(DacePyModuleGenerator):
         return "__array_interface__"
 
 
-class X86DaceOptimizer(DaceOptimizer):
+class X86DaceOptimizer(CPUDaceOptimizer):
 
     description = "GT x86 style transformations "
 

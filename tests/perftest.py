@@ -274,7 +274,6 @@ def run_vertical_advection(
     )
     backend_opts["specialize_sdfg_vars"] = specialize_symbols
     test_module = gtscript.stencil(
-
         backend=backend,
         definition=vertical_advection_dycore,
         externals={"BET_M": 0.5, "BET_P": 0.5},
@@ -453,16 +452,16 @@ class SpecializingGPUDaceOptimizer(GPUDaceOptimizer):
 
 
 if __name__ == "__main__":
-    niter = 1000
+    niter = 10
     domain = (128, 128, 80)
     data_layout = (2, 1, 0)
     computation_layout = "JKI"
     alignment = 1
     block_size = (64, 2, 1)
-    # function = "vertical_advection"
-    function = "horizontal_diffusion"
-    backend = "adhoc_gpu"
-    # backend = "adhoc_cpu"
+    function = "vertical_advection"
+    # function = "horizontal_diffusion"
+    # backend = "adhoc_gpu"
+    backend = "adhoc_cpu"
 
     dtype = np.float32
 
