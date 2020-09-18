@@ -17,22 +17,18 @@ build py38:
     - docker pull $BUILD_IMAGE || echo "has not been built yet"
     - docker build --network=host --cache-from $BUILD_IMAGE --build-arg BUILDKIT_INLINE_CACHE=1 --build-arg PYVERSION=$PYVERSION --build-arg CI_PROJECT_DIR=$CI_PROJECT_DIR -t $BUILD_IMAGE .
     - docker push $BUILD_IMAGE
-
-build py37:
-  extends: build py38
   only:
     - master
     - staging
     - trying
+
+build py37:
+  extends: build py38
   variables:
     PYVERSION: 3.7.0
 
 build py36:
   extends: build py38
-  only:
-    - master
-    - staging
-    - trying
   variables:
     PYVERSION: 3.6.0
 
