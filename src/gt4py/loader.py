@@ -41,10 +41,7 @@ def load_stencil(
     externals: Dict[str, Any],
     build_options: "BuildOptions",
 ) -> Type["StencilObject"]:
-    """
-    Generate a new class object implementing the provided definition.
-    """
-
+    """Generate a new class object implementing the provided definition."""
     # Load components
     backend_cls = gt_backend.from_name(backend_name)
     if backend_cls is None:
