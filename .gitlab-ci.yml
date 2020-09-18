@@ -30,7 +30,7 @@ build py37:
 build py36:
   extends: build py38
   variables:
-    PYVERSION: 3.6.0
+    PYVERSION: 3.6.2
 
 test py38:
   extends: .daint
@@ -65,7 +65,7 @@ test py36:
   needs: ["build py36"]
   variables:
     PYVERSION_PREFIX: py36
-    PYVERSION: 3.6.0
+    PYVERSION: 3.6.2
 
 notify_github_success:
   stage: cleanup
