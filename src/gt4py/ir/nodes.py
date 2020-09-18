@@ -739,7 +739,7 @@ class StencilDefinition(Node):
     api_signature = attribute(of=ListOf[ArgumentInfo])
     api_fields = attribute(of=ListOf[FieldDecl])
     parameters = attribute(of=ListOf[VarDecl])
-    splitters = attribute(of=ListOf[VarDecl])
+    splitters = attribute(of=ListOf[ListOf[VarDecl]])
     computations = attribute(of=ListOf[ComputationBlock])
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
@@ -833,7 +833,7 @@ class StencilImplementation(IIRNode):
     domain = attribute(of=Domain)
     fields = attribute(of=DictOf[str, FieldDecl])  # All fields, including temporaries
     parameters = attribute(of=DictOf[str, VarDecl])
-    splitters = attribute(of=ListOf[VarDecl])
+    splitters = attribute(of=ListOf[ListOf[VarDecl]])
     multi_stages = attribute(of=ListOf[MultiStage])
     fields_extents = attribute(of=DictOf[str, Extent])
     unreferenced = attribute(of=ListOf[str], factory=list)

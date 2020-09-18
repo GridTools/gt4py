@@ -514,7 +514,11 @@ class BaseModuleGenerator(abc.ABC):
                 ndims=len(parallel_axes) + (1 if sequential_axis else 0),
             )
         )
-        splitters = [splitter.name for splitter in definition_ir.splitters]
+
+        splitters = [
+            splitter.name
+            for splitter in gt_utils.flatten_iter(self.builder.implementation_ir.splitters)
+        ]
 
         module_source = self.template.render(
             imports=self.generate_imports(),
@@ -653,7 +657,7 @@ pyext_module = gt_utils.make_module_from_file(
                 args.append(arg.name)
                 if arg.name in api_fields:
                     args.append("list(_origin_['{}'])".format(arg.name))
-        for arg in self.builder.implementation_ir.splitters:
+        for arg in gt_utils.flatten_iter(self.builder.implementation_ir.splitters):
             args.append(arg.name)
 
         # only generate implementation if any multi_stages are present. e.g. if no statement in the

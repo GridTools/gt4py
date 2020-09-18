@@ -789,6 +789,19 @@ class TestRegions:
         assert def_ir.computations[1].parallel_interval is not None
         assert def_ir.computations[2].parallel_interval is not None
 
+    def test_error_multiple_axes(self):
+        module = f"TestRegions_error_multiple_axes_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            from __splitters__ import i0
+
+            with computation(PARALLEL), interval(...), parallel(region[i0:, :i0]):
+                in_f = 1.0
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="more than one axis"):
+            compile_definition(stencil, "stencil", module, externals=externals)
+
     def test_error_undefined(self):
         module = f"TestRegions_error_undefined_{id_version}"
         externals = {}

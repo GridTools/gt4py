@@ -132,26 +132,13 @@ class NumPySourceGenerator(PythonSourceGenerator):
             region_lines = self._make_regional_computation(iteration_order, bounds, body)
 
             if parallel_interval:
-                conditions = []
-                for d, interval in enumerate(parallel_interval):
-                    for axis_bound, extent, regular_bound, op in zip(
-                        (interval.start, interval.end),
-                        (lower_extent, upper_extent),
-                        ("0", f"{self.domain_arg_name}[{d}]"),
-                        (">=", "<="),
-                    ):
-                        if isinstance(axis_bound.level, gt_ir.VarRef):
-                            conditions.append(
-                                f"{axis_bound.level.name}{axis_bound.offset:+d} {op} {regular_bound}{extent[d]:+d}"
-                            )
-                        elif isinstance(axis_bound.level, int):
-                            conditions.append(
-                                f"{axis_bound.level}{axis_bound.offset:+d} {op} {regular_bound}{extent[d]:+d}"
-                            )
-                source_lines.append(f"if {' and '.join(conditions)}:")
-                source_lines.extend([(" " * self.indent_size) + line for line in region_lines])
-            else:
-                source_lines.extend(region_lines)
+                for axis_index, splitters in enumerate(self.impl_node.splitters):
+                    for splitter in [splitter.name for splitter in splitters]:
+                        source_lines.append(
+                            f"stmt_{splitter} = max({lower_extent[axis_index]}, min({self.domain_arg_name}[{axis_index}]{upper_extent[axis_index]:+d}, {splitter}))"
+                        )
+
+            source_lines.extend(region_lines)
 
         return source_lines
 
@@ -182,7 +169,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     (f"{lower_extent[d]}", f"{self.domain_arg_name}[{d}]{upper_extent[d]:+d}"),
                 ):
                     if isinstance(axis_bound.level, gt_ir.VarRef):
-                        this_bound = f"{axis_bound.level.name}{axis_bound.offset:+d}{node.offset[axis_name]:+d}"
+                        this_bound = f"stmt_{axis_bound.level.name}{axis_bound.offset:+d}{node.offset[axis_name]:+d}"
                     elif isinstance(axis_bound.level, int):
                         this_bound = f"{axis_bound.level}{node.offset[axis_name]:+d}"
                     else:

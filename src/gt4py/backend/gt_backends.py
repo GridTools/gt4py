@@ -500,7 +500,9 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             if name not in node.unreferenced
         ]
 
-        splitters = [ref.name for ref in self.impl_node.splitters]
+        splitters = tuple(
+            splitter.name for splitter in gt_utils.flatten_iter(self.impl_node.splitters)
+        )
 
         stage_functors = {}
         requires_positional = False

@@ -36,6 +36,7 @@ from typing import (
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
+from gt4py import utils as gt_utils
 from gt4py.analysis import (
     DomainBlockInfo,
     IJBlockInfo,
@@ -132,7 +133,9 @@ class InitInfoPass(TransformPass):
 
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
             # Add API symbols first
-            for decl in itertools.chain(node.api_fields, node.parameters, node.splitters):
+            for decl in itertools.chain(
+                node.api_fields, node.parameters, gt_utils.flatten_iter(node.splitters)
+            ):
                 self._add_symbol(decl)
 
             # Build the information tables
