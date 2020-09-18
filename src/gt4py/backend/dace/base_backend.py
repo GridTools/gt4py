@@ -39,12 +39,27 @@ class DacePyModuleGenerator(gt_backend.BaseModuleGenerator):
 import functools
 import ctypes
 import os
+import weakref
 
 from gt4py.backend.dace.util import load_dace_program
 
 dace_lib = load_dace_program("{self.options.dace_ext_lib}")
 """
         return source
+
+    def generate_class_members(self):
+        sources = gt_text.TextBlock(
+            indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE
+        )
+        dummy_args = ", ".join("None" for _ in self.implementation_ir.sdfg.arglist())
+        source = f"""
+def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    dace_lib["__dace_init_{self.implementation_ir.sdfg.name}"]({dummy_args})
+    weakref.finalize(self, dace_lib["__dace_exit_{self.implementation_ir.sdfg.name}"], {dummy_args})
+"""
+        sources.extend(source.splitlines())
+        return sources.text
 
     def generate_implementation(self):
         sources = gt_text.TextBlock(
@@ -119,7 +134,6 @@ assert not {name}_interface['data'][1] # assert not readonly
                 # + "\n"
                 + "\n".join(field_slices)
                 + """
-dace_lib['__dace_init_{program_name}']({run_args})
 if exec_info is not None:
     exec_info['pyext_program_start_time'] = time.perf_counter()
 dace_lib['__program_{program_name}']({run_args})
@@ -128,7 +142,6 @@ if exec_info is not None:
     path = os.path.join('{build_path}', 'perf')
     files = [f for f in os.listdir(path) if f.startswith('report-')]
     exec_info['instrumentation_report'] = os.path.join(path,sorted(files, reverse=True)[0])
-dace_lib['__dace_exit_{program_name}']({run_args})
 """.format(
                     program_name=self.implementation_ir.sdfg.name,
                     run_args=", ".join(run_args_strs),
