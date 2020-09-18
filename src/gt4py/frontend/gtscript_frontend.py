@@ -1386,16 +1386,16 @@ class GTScriptParser(ast.NodeVisitor):
 
     @staticmethod
     def _create_splitter_decls(computations):
-        splitters = [[] for axis_name in gt_ir.Domain.LatLonGrid().parallel_axes]
+        splitters = [set() for axis_name in gt_ir.Domain.LatLonGrid().parallel_axes]
 
         for comp in filter(lambda comp: comp.parallel_interval is not None, computations):
             for axis_index, interval in enumerate(comp.parallel_interval):
                 for axis_bound in (interval.start, interval.end):
                     if isinstance(axis_bound.level, gt_ir.VarRef):
-                        splitters[axis_index].append(axis_bound.level.name)
+                        splitters[axis_index].add(axis_bound.level.name)
 
         for splitters_a, splitters_b in itertools.combinations(splitters, 2):
-            if not set(splitters_a).isdisjoint(set(splitters_b)):
+            if not splitters_a.isdisjoint(splitters_b):
                 raise GTScriptSyntaxError("A splitter should not be used for more than one axis")
 
         return [
