@@ -21,13 +21,10 @@ you!
 Contributing code
 -----------------
 
-We use a fork and pull request workflow for code contributions. If that does
-not sound familiar to you, do not worry! A simple search for ``github fork pull
-request workflow`` will yield many explanations and tutorials.
-
-Pull requests need to pass some automated checks as well as a review before
-they can be merged. If you set up your development environment as recommended
-for developers in the README_, it is easy to run the automated checks
+We use a [fork and pull request](https://www.atlassian.com/git/tutorials/comparing-workflows/forking-workflow) workflow for code contributions.
+Pull requests need to pass all the automated checks as well as a review before
+they can be merged. You should set up your development environment as
+recommended for developers in the README_, and run the automated checks
 locally before creating your pull request.
 
 The review will look at difficult to automate things, for example the first

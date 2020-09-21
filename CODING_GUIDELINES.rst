@@ -1,5 +1,5 @@
 ==================
-Codeing Guidelines
+Coding Guidelines
 ==================
 
 Code design
@@ -31,7 +31,7 @@ Before accepting changes we assess the design according to the following guideli
 
 Docstrings
 ----------
-In general we consider that a well named simple function with type annotations
+In general we consider that a well-named simple function with type annotations
 does not require a docstring.  When a long-form docstring is appropriate,
 use `NumPy format <https://developer.lsst.io/python/numpydoc.html>`__. Prefer
 python type annotations over describing parameter / return types in the
@@ -39,7 +39,7 @@ docstring.
 
 - Consider new public classes / functions: they should have a docstring if
  + Their purpose is not obvious from the name (also consider renaming)
- + Their Body is complex
+ + Their body is complex
  + Someone might want to use them interactively (from a shell or notebook)
 
 - Check existing docstrings: do they need to be expanded or updated?
@@ -66,14 +66,14 @@ A selection of **general** recommendations from PEP8:
 
 - use iterators and generators to iterate over large data sets
 
-- Block comments should refer to the code following them and should be indented
+- block comments should refer to the code following them and should be indented
   to the same level
 
 Module structure
 ++++++++++++++++
 Python modules should be structured in the following order:
 
-1. Shebang line, #! /usr/bin/env python (only for executable scripts)
+1. Shebang line, ``#! /usr/bin/env python`` (only for executable scripts)
 
 2. License header (``LICENSE_HEADER.txt``) and module-level comments
 
