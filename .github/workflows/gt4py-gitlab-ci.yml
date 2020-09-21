@@ -11,7 +11,7 @@ jobs:
     - name: mirror-repository
       run: |
           mkdir ~/.ssh
-          echo "${MIRROR_SSH_KEY}" > ~/.ssh/id_ed
+          echo "${GIT_SSH_PRIVATE_KEY}" > ~/.ssh/id_ed
           chmod 600 ~/.ssh/id_ed
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
           git remote add mirror "${REMOTE}"
