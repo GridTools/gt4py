@@ -180,59 +180,39 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         index = []
         for d, axis_name in enumerate([axis.name for axis in self.impl_node.domain.parallel_axes]):
-            comp_bounds = []
+            bounds = []
             origin = f"{node.name}{self.origin_marker}[{d}]"
+            axis_extent = (lower_extent[d], upper_extent[d])
             regular_bounds = (
-                origin + f" {lower_extent[d]:+d}",
-                origin + f" + {self.domain_arg_name}[{d}]{upper_extent[d]:+d}",
+                f"{origin}{axis_extent[d]:+d}",
+                f"{origin} + {self.domain_arg_name}[{d}]{axis_extent[d]:+d}",
             )
             if self.block_info.parallel_interval:
                 axis_interval = self.block_info.parallel_interval[d]
-                for axis_bound, regular_bound in zip(
-                    (axis_interval.start, axis_interval.end),
-                    regular_bounds,
+
+                # Loop over endpoints of the axis
+                for axis_bound, regular_bound, ext in zip(
+                    (axis_interval.start, axis_interval.end), regular_bounds, axis_extent
                 ):
                     if isinstance(axis_bound.level, gt_ir.VarRef):
-                        comp_bounds.append(
-                            origin + f" + {axis_bound.level.name}{axis_bound.offset:+d}"
+                        bounds.append(
+                            origin + f" + {axis_bound.level.name}{axis_bound.offset:+d}{ext:+d}"
                         )
                     elif isinstance(axis_bound.level, int):
-                        comp_bounds.append(origin + f" {axis_bound.level:+d}")
+                        bounds.append(origin + f" {axis_bound.level:+d}{ext:+d}")
                     else:
-                        comp_bounds.append(regular_bound)
+                        bounds.append(regular_bound)
+
+                # Add correction
+                bounds = [
+                    f"min({regular_bounds[1]}, max({bound}, {regular_bounds[0]}))"
+                    for bound in bounds
+                ]
+
             else:
-                comp_bounds = regular_bounds
+                bounds = regular_bounds
 
-            slice_bounds = []
-            for comp_bound, regular_bound in zip(comp_bounds, regular_bounds):
-                if comp_bound != regular_bound:
-                    slice_bounds.append(
-                        f"min({regular_bounds[1]}, max({comp_bound}, {regular_bounds[0]}))"
-                    )
-                else:
-                    slice_bounds.append(regular_bound)
-
-            index.append(" : ".join(slice_bounds))
-            #         this_bound = f"max({splitter_bound}, "
-            #         {node.offset[axis_name]:+d}
-            #     if
-            #     else:
-            #         this_bound = regular_bound
-
-            #     if this_bound != regular_bound:
-
-            #         bounds.append(f"{node.name}{self.origin_marker}[{d}] + {this_bound}")
-
-            #     index.append(" : ".join(bounds))
-            # else:
-            #     start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
-            #     size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
-            #     size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
-
-            #     lower_index = f"{node.name}{self.origin_marker}[{d}]{start_expr}"
-            #     upper_index = f"{node.name}{self.origin_marker}[{d}] + {size_expr}"
-
-            #     index.append(f"{lower_index}: {upper_index}")
+            index.append(" : ".join(bounds))
 
         k_ax = self.domain.sequential_axis.name
         k_offset = node.offset.get(k_ax, 0)
