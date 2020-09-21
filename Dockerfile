@@ -1,4 +1,6 @@
 FROM nvidia/cuda:10.1-devel
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
