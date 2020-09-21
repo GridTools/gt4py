@@ -40,9 +40,7 @@ class CachingStrategy(abc.ABC):
     @property
     @abc.abstractmethod
     def root_path(self) -> pathlib.Path:
-        """
-        Calculate and if necessary create the root file path for stencil generation operations.
-        """
+        """Calculate and if necessary create the root path for stencil generation operations."""
         raise NotImplementedError
 
     @property
@@ -58,9 +56,7 @@ class CachingStrategy(abc.ABC):
     @property
     @abc.abstractmethod
     def cache_info_path(self) -> Optional[pathlib.Path]:
-        """
-        Calculate the file path where caching info for the current process should be stored.
-        """
+        """Calculate the file path where caching info for the current process should be stored."""
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -105,9 +101,7 @@ class CachingStrategy(abc.ABC):
     @property
     @abc.abstractmethod
     def stencil_id(self) -> StencilID:
-        """
-        Calculate the stencil ID used for naming and cache consistency checks.
-        """
+        """Calculate the stencil ID used for naming and cache consistency checks."""
         pass
 
     @property
@@ -158,9 +152,7 @@ class CachingStrategy(abc.ABC):
 
     @property
     def class_name(self) -> str:
-        """
-        Calculate the name for the stencil class, default is to read from build options.
-        """
+        """Calculate the name for the stencil class, default is to read from build options."""
         return self.builder.options.name
 
 

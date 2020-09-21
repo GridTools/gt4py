@@ -1,6 +1,4 @@
-"""
-Stencil Object that allows for deferred building.
-"""
+"""Stencil Object that allows for deferred building."""
 from typing import TYPE_CHECKING, Any, Dict
 
 from cached_property import cached_property
@@ -16,7 +14,7 @@ class LazyStencil:
     """
     A stencil object which defers compilation until it is needed.
 
-    Usually obtained using the :func:`gt4py.gtscript.lazy_stencil` decorator, not directly
+    Usually obtained using the :py:func:`gt4py.gtscript.lazy_stencil` decorator, not directly
     instanciated.
     This is done by keeping a reference to a :py:class:`gt4py.stencil_builder.StencilBuilder`
     instance.
@@ -31,7 +29,7 @@ class LazyStencil:
     @cached_property
     def implementation(self) -> "StencilObject":
         """
-        The compiled backend-specific python callable which executes the stencil.
+        Expose the compiled backend-specific python callable which executes the stencil.
 
         Compilation happens at first access, the result is cached and should consecutively be
         accessible without overhead (not rigorously tested / benchmarked).
@@ -41,11 +39,7 @@ class LazyStencil:
 
     @property
     def backend(self) -> "Backend":
-        """
-        The backend to be used for compilation.
-
-        Does not trigger a build.
-        """
+        """Do not trigger a build."""
         return self.builder.backend
 
     @property
@@ -63,9 +57,7 @@ class LazyStencil:
             raise RuntimeError("Frontend did not raise a syntax error but did not generate IR.")
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
-        """
-        Execute the stencil, building the stencil if necessary.
-        """
+        """Execute the stencil, building the stencil if necessary."""
         self.implementation(*args, **kwargs)
 
     def run(self, *args: Any, **kwargs: Any) -> None:

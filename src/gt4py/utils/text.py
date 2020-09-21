@@ -14,10 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""
-Text and templating utilities.
-
-"""
+"""Text and templating utilities."""
 
 import collections.abc
 import contextlib
@@ -38,8 +35,7 @@ def format_source(source: str, line_length: int) -> str:
 
 
 def get_line_number(text, re_query, re_flags=0):
-    """Returns (0-based) line number of the match or None."""
-
+    """Return (0-based) line number of the match or None."""
     prog = re.compile(re_query, re_flags)
     lines = text.splitlines()
     for n, line in enumerate(lines):
