@@ -178,8 +178,10 @@ class _StatementPositionVisitor:
 
     def visit(self, transform_data: TransformData) -> List[SPTYPE]:
         """
-        Returns:
+        Collect statement coordinates.
 
+        Returns
+        -------
             counting is from zero
             * multi_stage: in which multi stage is the statement?
             * stage: in which stage is the statement?
@@ -217,8 +219,8 @@ def test_split_reorderable(merge_blocks_pass: PassType, ijk_domain: Domain) -> N
     """
     Statements separated by a write after read occurrence are split in separate multi stages.
 
-    Example:
-
+    Examples
+    --------
     .. code-block: python
 
         with computation(FORWARD):
@@ -271,8 +273,8 @@ def test_split_preordered(merge_blocks_pass: PassType, ijk_domain: Domain) -> No
     """
     Statements preordered to be on the same side of the write after read occurence can be merged.
 
-    Example:
-
+    Examples
+    --------
     .. code-block: python
 
         with computation(FORWARD):
