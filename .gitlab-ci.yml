@@ -6,12 +6,17 @@ stages:
   - test
   - cleanup
 
+variables:
+  PY38: 3.8.5
+  PY37: 3.7.9
+  PY36: 3.6.12
+
 build py38:
   extends: .dind
   stage: image
   variables:
     BUILD_IMAGE: $CI_REGISTRY_IMAGE/gt4py-ci/image:$PYVERSION
-    PYVERSION: 3.8.3
+    PYVERSION: $PY38
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker pull $BUILD_IMAGE || echo "has not been built yet"
@@ -25,12 +30,12 @@ build py38:
 build py37:
   extends: build py38
   variables:
-    PYVERSION: 3.7.0
+    PYVERSION: $PY37
 
 build py36:
   extends: build py38
   variables:
-    PYVERSION: 3.6.2
+    PYVERSION: $PY36
 
 test py38:
   extends: .daint
@@ -51,21 +56,21 @@ test py38:
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 120
     PYVERSION_PREFIX: py38
-    PYVERSION: 3.8.3
+    PYVERSION: $PY38
 
 test py37:
   extends: test py38
   needs: ["build py37"]
   variables:
     PYVERSION_PREFIX: py37
-    PYVERSION: 3.7.0
+    PYVERSION: $PY37
 
 test py36:
   extends: test py38
   needs: ["build py36"]
   variables:
     PYVERSION_PREFIX: py36
-    PYVERSION: 3.6.2
+    PYVERSION: $PY36
 
 notify_github_success:
   stage: cleanup
