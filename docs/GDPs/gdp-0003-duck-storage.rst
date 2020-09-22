@@ -133,12 +133,16 @@ meaning is the same as in the NumPy :code:`__array_interface__` and the
 
 In Addition, the following optional keys can be contained:
 
-+ :code:`"dims": Optional[Sequence[str]]]` Specifies the semantic dimensions to which the
-  respective dimensions of the object correspond. Currently meaningful are :code:`"I"`,
-  :code:`"J"`, :code:`"K"`.
 + :code:`"acquire": Optional[Callable[[], Any]]` Is called on all objects that are passed to a
   stencil, before running computations. It can be used to trigger a copy to the respective device.
   If the key is not in the dictionary or if the value is :code:`None`, no action is taken.
++ :code:`"dims": Optional[Sequence[str]]]` Specifies the semantic dimensions to which the
+  respective dimensions of the object correspond. Currently meaningful are :code:`"I"`,
+  :code:`"J"`, :code:`"K"`.
++ :code:`"halo": Optional[Sequence[Tuple[int, int]]]` A tuple of length ndim with entries which are
+  2-tuples of ints. Specifies the start and end boundary sizes on the respective dimension.
+  At stencil call time, this property is used to infer the compute domain.
+  :code:`"J"`, :code:`"K"`.
 + :code:`"release": Optional[Callable[[], Any]]` Is called on all objects that are passed to a
   stencil after all computations have completed. If the key is not in the dictionary or if the value
   is :code:`None`, no action is taken. We do not have the intention to use it in our own storage
@@ -213,7 +217,7 @@ closely resemble their NumPy counterparts (meaning of the common parameters is e
 
     Parameters:
         + :code:`data: Storage`
-          Not explicitly overridden parameters are chosen as the value used in this
+          Not explicitly overridden parameters are chosen as the value used in this.
           :code:`Storage`
 
         + :code:`dtype: dtype_like`
@@ -379,7 +383,8 @@ Additionally, these **optional** keyword-only parameters are accepted:
 :code:`aligned_index: Sequence[int]`
     The index of the grid point to which the memory is aligned. Note that this only partly takes the
     role of the former :code:`default_origin` parameter, since it does not imply anything about the
-    origin or domain when passed to a stencil.
+    origin or domain when passed to a stencil. It defaults to the lower indices of the
+    :code:`halo` parameter.
 
 :code:`alignment_size: Optional[int]`
     The buffers are allocated such that :code:`mod(aligned_addr, alignment_size) == 0`, where
@@ -403,6 +408,13 @@ Additionally, these **optional** keyword-only parameters are accepted:
     determine the default layout for the storage. Currently supported will be :code:`"I"`,
     :code:`"J"`, :code:`"K"` and additional dimensions as string representations of integers,
     starting at :code:`"0"`.
+
+:code:`halo: Optional[Sequence[Union[int, Tuple[int, int]]]`
+    Sequence of length :code:`ndim` where each entry is either an :code:`int` or a 2-tuple
+    of :code:`int` s. A sequence of integer numbers represent a symmetric halo with the specific
+    size per dimension, while a sequence of 2-tuple specifies the start and end boundary sizes on
+    the respective dimension, which can be used to denote asymmetric halos. It defaults to no halo,
+    i.e. :code:`(0, 0, 0)`. (See also Section :ref:`domain_and_halo`)
 
 :code:`layout: Optional[Sequence[int]]`
     A permutation of integers in :code:`[0 .. ndim-1]`. It indicates the order of strides in
@@ -507,8 +519,20 @@ Attributes and Properties
     If the instance contains a device memory buffer, the :code:`data` attribute of the underlying
     :code:`cp.ndarray` instance backing the device memory buffer, :code:`None` otherwise.
 
+:code:`domain_view: Storage`
+    A view of the buffer with the halo removed. In the returned view instance, the index
+    :code:`[0, 0, 0]` corresponds to the first point in the domain.
+
 :code:`dtype: np.dtype`
-   The NumPy :code:`dtype` of the storage.
+    The NumPy :code:`dtype` of the storage.
+
+:code:`halo: Tuple[Tuple[int, int], ...]`
+    A tuple of length ndim with entries which are 2-tuples of ints. Specifies the start and end
+    boundary sizes on the respective dimension. This property can be modified at run-time and
+    therefore has a corresponding setter, where values of the type
+    :code:`Tuple[Union[int,Tuple[int, int]], ...]` are accepted with the same meaning as for the
+    halo parameter of the storage creation functions. Not however, that this will not readjust the
+    gridpoint which is aligned, since this would require re-allocation.
 
 :code:`nbytes: int`,
     Size of the buffer in bytes (excluding padding).
@@ -626,19 +650,20 @@ written in :code:`__setitem__` is chosen depending on
 
 :code:`CudaManagedGPUStorage`
     The device is chosen to be GPU if and only if the value is GPU-enabled. A value is considered
-    GPU enabled, if exactly one of the following apply:
+    GPU enabled, if:
 
     1. It implements the :code:`__gt_data_interface__` and information for a :code:`"gpu"` buffer is
        provided. In this case, the :code:`"acquire"` method is called before reading.
-    2. It is compatible with :code:`cp.asarray`, which includes values implementing the
-       :code:`__cuda_array_interface__`
+    2. It does not implement the data interface but it is compatible with :code:`cp.asarray`, which
+       includes values implementing the :code:`__cuda_array_interface__`.
 
 :code:`SoftwareManagedGPUStorage`
     The device is chosen to be GPU if and only if the value is considered as on GPU. If the value
     is itself a :code:`SoftwareManagedGPUStorage`, it is considered as on GPU, if the buffers are
     either in sync or the GPU buffer is modified. If however, the value is not a
     :code:`SoftwareManagedGPUStorage`, the same logic applies as for the
-    :code:`CudaManagedGPUStorage`
+    :code:`CudaManagedGPUStorage`. Note that :code:`xarray` :code:`DataArray` will be treated based
+    on the data interface and not the underlying storage.
 
 .. _storage_types:
 
