@@ -14,9 +14,17 @@ include:
   PYVERSION: 3.8.5
 
 stages:
+  - notifystart
   - image
   - test
   - cleanup
+
+notify_github_pending:
+  stage: notifystart
+  only: ["master", "staging", "trying"]
+  tags: ["kubernetes"]
+  image: makocchi/alpine-git-curl-jq
+  script: ./ci/set_github_status.sh pending
 
 build py38:
   extends: .dind
