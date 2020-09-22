@@ -11,7 +11,6 @@ function submit() {
         --header "authorization: Bearer ${GITHUB_TOKEN}" \
         --data "{ \"state\": \"${commit_status}\", \"target_url\": \"${CI_PIPELINE_URL}\", \"description\": \"All Gitlab pipelines\", \"context\": \"ci/gitlab/full-pipeline\" }" | \
         jq 'error(.message) // .'
-    exit $?
 }
 
 commit_status=${1}
