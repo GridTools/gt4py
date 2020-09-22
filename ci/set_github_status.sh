@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -x
 
 function submit() {
     local commit_status=${1}
