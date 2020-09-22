@@ -81,7 +81,7 @@ notify_github_success:
   when: on_success
   only: ["master", "staging", "trying"]
   tags: ["kubernetes"]
-  image: stabbles/git-curl
+  image: makocchi/alpine-git-curl-jq
   script: ./ci/set_github_status.sh success
 
 notify_github_failure:
@@ -89,5 +89,5 @@ notify_github_failure:
   when: on_failure
   only: ["master", "staging", "trying"]
   tags: ["kubernetes"]
-  image: stabbles/git-curl
+  image: makocchi/alpine-git-curl-jq
   script: ./ci/set_github_status.sh failure

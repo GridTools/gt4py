@@ -8,7 +8,9 @@ function submit() {
         --url "https://api.github.com/repos/gridtools/gt4py/statuses/${commit_sha}" \
         --header 'Content-Type: application/json' \
         --header "authorization: Bearer ${GITHUB_TOKEN}" \
-        --data "{ \"state\": \"${commit_status}\", \"target_url\": \"${CI_PIPELINE_URL}\", \"description\": \"All Gitlab pipelines\", \"context\": \"ci/gitlab/full-pipeline\" }"
+        --data "{ \"state\": \"${commit_status}\", \"target_url\": \"${CI_PIPELINE_URL}\", \"description\": \"All Gitlab pipelines\", \"context\": \"ci/gitlab/full-pipeline\" }" | \
+        jq -e 'error(.message) // .'
+    exit $?
 }
 
 commit_status=${1}
