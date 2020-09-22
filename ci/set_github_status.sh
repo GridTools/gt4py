@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 function submit() {
     local commit_status=${1}
