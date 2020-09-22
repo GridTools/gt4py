@@ -20,8 +20,10 @@ commit_status=${1}
 submit "${commit_status}" "$CI_COMMIT_SHA"
 
 # For Bors: get the latest commit before the merge to set the status.
+echo $CI_COMMIT_REF_NAME
 if [[ $CI_COMMIT_REF_NAME =~ ^(trying|staging)$ ]]; then
     parent_sha=`git rev-parse --verify -q "$CI_COMMIT_SHA"^2`
+    echo "git rev-parse --verify -q $CI_COMMIT_SHA^2 -> $?"
     if [[ $? -eq 0 ]]; then
         submit "${commit_status}" "${parent_sha}"
     fi
