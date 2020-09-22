@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 function submit() {
     local commit_status=${1}
@@ -9,7 +10,7 @@ function submit() {
         --header 'Content-Type: application/json' \
         --header "authorization: Bearer ${GITHUB_TOKEN}" \
         --data "{ \"state\": \"${commit_status}\", \"target_url\": \"${CI_PIPELINE_URL}\", \"description\": \"All Gitlab pipelines\", \"context\": \"ci/gitlab/full-pipeline\" }" | \
-        jq -e 'error(.message) // .'
+        jq 'error(.message) // .'
     exit $?
 }
 
@@ -26,5 +27,5 @@ if [[ $CI_COMMIT_REF_NAME =~ ^(trying|staging)$ ]]; then
     fi
 fi
 
-exit 0
+exit $?
 
