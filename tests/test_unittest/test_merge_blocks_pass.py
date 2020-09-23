@@ -13,7 +13,7 @@ from gt4py.analysis import (
 from gt4py.ir.nodes import Axis, Domain, IterationOrder
 
 from ..analysis_setup import PassType
-from ..definition_setup import make_transform_data
+from ..definition_setup import make_transform_data, make_transform_data_multiple
 
 
 def test_merge_write_after_read_ij_extended(
@@ -104,6 +104,23 @@ def test_merge_write_after_read_k_parallel(
     transform_data = merge_blocks_pass(transform_data)
     # not allowed to be merged: order is PARALLEL -> race condition even on k-offsets
     assert len(transform_data.blocks) == 2
+
+
+def test_no_merge_read_with_offset_after_write(
+    merge_blocks_pass: PassType, ijk_domain: Domain
+) -> None:
+    transform_data = make_transform_data_multiple(
+        name="no_merge_k_offset",
+        domain=ijk_domain,
+        fields=["out", "in", "tmp"],
+        info=[
+            ([("tmp", "in", (0, 0, 1))], IterationOrder.FORWARD, (1, -1)),
+            ([("out", "tmp", (0, 0, -1))], IterationOrder.FORWARD, (1, -2)),
+        ],
+    )
+    transform_data = merge_blocks_pass(transform_data)
+    # not allowed to be merged into the same stage: first block should have 2 IJ blocks
+    assert len(transform_data.blocks[0].ij_blocks) == 2
 
 
 def test_merge_write_after_read_k_extended_sequential(

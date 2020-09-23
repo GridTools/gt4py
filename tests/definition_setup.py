@@ -72,11 +72,17 @@ def make_assign(
     )
 
 
-def make_definition(
-    name: str, fields: List[str], domain: Domain, body: BodyType, iteration_order: IterationOrder
+def make_definition_multiple(
+    name: str,
+    fields: List[str],
+    domain: Domain,
+    info: List[Tuple[BodyType, IterationOrder, Tuple[int, int]]],
 ) -> StencilDefinition:
     api_signature = [ArgumentInfo(name=n, is_keyword=False) for n in fields]
-    tmp_fields = {i[0] for i in body}.union({i[1] for i in body}).difference(fields)
+    bodies = []
+    for definition in info:
+        bodies.extend(definition[0])
+    tmp_fields = {i[0] for i in bodies}.union({i[1] for i in bodies}).difference(fields)
     api_fields = [
         FieldDecl(name=n, data_type=DataType.AUTO, axes=domain.axes_names, is_api=True)
         for n in fields
@@ -84,27 +90,43 @@ def make_definition(
         FieldDecl(name=n, data_type=DataType.AUTO, axes=domain.axes_names, is_api=False)
         for n in tmp_fields
     ]
+    comp_blocks = [
+        ComputationBlock(
+            interval=AxisInterval(
+                start=AxisBound(level=LevelMarker.START, offset=interval[0]),
+                end=AxisBound(level=LevelMarker.END, offset=interval[1]),
+            ),
+            iteration_order=iteration_order,
+            body=BlockStmt(
+                stmts=[
+                    make_assign(*assign, loc_scope=name, loc_line=i)
+                    for i, assign in enumerate(body)
+                ]
+            ),
+        )
+        for body, iteration_order, interval in info
+    ]
     return StencilDefinition(
         name=name,
         domain=domain,
         api_signature=api_signature,
         api_fields=api_fields,
         parameters=[],
-        computations=[
-            ComputationBlock(
-                interval=AxisInterval(
-                    start=AxisBound(level=LevelMarker.START), end=AxisBound(level=LevelMarker.END)
-                ),
-                iteration_order=iteration_order,
-                body=BlockStmt(
-                    stmts=[
-                        make_assign(*assign, loc_scope=name, loc_line=i)
-                        for i, assign in enumerate(body)
-                    ]
-                ),
-            )
-        ],
+        computations=comp_blocks,
         docstring="",
+    )
+
+
+def make_definition(
+    name: str, fields: List[str], domain: Domain, body: BodyType, iteration_order: IterationOrder
+) -> StencilDefinition:
+    return make_definition_multiple(
+        name,
+        fields,
+        domain,
+        [
+            (body, iteration_order, (0, 0)),
+        ],
     )
 
 
@@ -134,6 +156,21 @@ def make_transform_data(
     iteration_order: IterationOrder,
 ) -> TransformData:
     definition = make_definition(name, fields, domain, body, iteration_order)
+    return TransformData(
+        definition_ir=definition,
+        implementation_ir=init_implementation_from_definition(definition),
+        options=BuildOptions(name=name, module=__name__),
+    )
+
+
+def make_transform_data_multiple(
+    *,
+    name: str,
+    domain: Domain,
+    fields: List[str],
+    info: List[Tuple[BodyType, IterationOrder, Tuple[int, int]]],
+) -> TransformData:
+    definition = make_definition_multiple(name, fields, domain, info)
     return TransformData(
         definition_ir=definition,
         implementation_ir=init_implementation_from_definition(definition),
