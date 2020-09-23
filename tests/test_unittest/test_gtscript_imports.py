@@ -58,7 +58,7 @@ def make_single_file(tmp_path, extension, reset_importsys):
 @pytest.fixture
 def make_two_files(tmp_path, extension, reset_importsys):
     """
-    Factory for two gtscript modules next to each other.
+    Provide a factory for two gtscript modules next to each other.
 
     The name prefix given must be unique per test function.
     the two modules can be imported as <prefix>_one and <prefix>_two.
@@ -124,7 +124,7 @@ def make_two_files(tmp_path, extension, reset_importsys):
 @pytest.fixture
 def make_package(tmp_path, extension, reset_importsys):
     """
-    Factory for a gtscript file and package.
+    Provide a gactory for a gtscript file and package.
 
     test-function unique prefix required.
 

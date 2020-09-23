@@ -122,14 +122,13 @@ storing a reference to the piece of source code which originated the node.
         # start is included
         # end is excluded
 
-    ComputationBlock(interval: AxisInterval, order: IterationOrder, body: BlockStmt)
+    ComputationBlock(interval: AxisInterval, iteration_order: IterationOrder, body: BlockStmt)
 
     ArgumentInfo(name: str, is_keyword: bool, [default: Any])
 
     StencilDefinition(name: str,
                       domain: Domain,
                       api_signature: List[ArgumentInfo],
-                      domain: Domain,
                       api_fields: List[FieldDecl],
                       parameters: List[VarDecl],
                       computations: List[ComputationBlock],
@@ -736,7 +735,7 @@ class StencilDefinition(Node):
     computations = attribute(of=ListOf[ComputationBlock])
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
-    docstring = attribute(of=str)
+    docstring = attribute(of=str, default="")
     loc = attribute(of=Location, optional=True)
 
 
