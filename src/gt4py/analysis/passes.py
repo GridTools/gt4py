@@ -865,7 +865,9 @@ class ComputeExtentsPass(TransformPass):
                 ij_block.compute_extent = Extent.zeros()
                 for name in ij_block.outputs:
                     ij_block.compute_extent |= access_extents[name]
-                for int_block in ij_block.interval_blocks:
+                for int_block in filter(
+                    lambda block: block.parallel_interval is not None, ij_block.interval_blocks
+                ):
                     for name, extent in int_block.inputs.items():
                         extent = Extent(
                             list(extent[:seq_axis]) + [(0, 0)]
