@@ -130,34 +130,6 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         for bounds, parallel_interval, body in regions:
             region_lines = self._make_regional_computation(iteration_order, bounds, body)
-
-            # if parallel_interval:
-            #     extent = self.block_info.extent
-
-            #     lower_extent = list(extent.lower_indices)
-            #     upper_extent = list(extent.upper_indices)
-
-            #     entry_conditions = []
-            #     for d, axis_interval in enumerate(parallel_interval):
-            #         endpoints = {"start": None, "end": None}
-            #         for endpt in endpoints:
-            #             axis_bound = getattr(axis_interval, endpt)
-            #             if isinstance(axis_bound.level, gt_ir.VarRef):
-            #                 endpoints[endpt] = f"{axis_bound.level.name}{axis_bound.offset:+d}"
-            #             elif isinstance(axis_bound.level, int):
-            #                 endpoints[endpt] = f"{axis_bound.level}"
-            #         if endpoints["start"]:
-            #             entry_conditions.append(
-            #                 f"{endpoints['start']} < {self.domain_arg_name}[{d}]{upper_extent[d]:+d}"
-            #             )
-            #         if endpoints["end"]:
-            #             entry_conditions.append(f"{endpoints['end']} >= {lower_extent[d]:+d}")
-
-            #     source_lines.append(
-            #         "if " + " and ".join(f"({cond})" for cond in entry_conditions) + ":"
-            #     )
-            #     source_lines.extend([(" " * self.indent_size) + line for line in region_lines])
-            # else:
             source_lines.extend(region_lines)
 
         return source_lines
@@ -184,8 +156,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
             origin = f"{node.name}{self.origin_marker}[{d}]"
             axis_extent = (lower_extent[d], upper_extent[d])
             regular_bounds = (
-                f"{origin}{axis_extent[d]:+d}",
-                f"{origin} + {self.domain_arg_name}[{d}]{axis_extent[d]:+d}",
+                f"{origin}{axis_extent[0]:+d}",
+                f"{origin} + {self.domain_arg_name}[{d}]{axis_extent[1]:+d}",
             )
             if self.block_info.parallel_interval:
                 axis_interval = self.block_info.parallel_interval[d]
