@@ -183,6 +183,24 @@ def test_merge_read_after_write_k_sequential(
     assert len(transform_data.blocks) == 1
 
 
+def test_no_merge_with_overlapping_intervals(
+    merge_blocks_pass: PassType, ijk_domain: Domain
+) -> None:
+    transform_data = make_transform_data_multiple(
+        name="overlapping_intervals_forbidden",
+        domain=ijk_domain,
+        fields=["out1", "out2", "in1", "in2"],
+        info=[
+            ([("out1", "in1", (0, 0, 0))], IterationOrder.PARALLEL, (0, 0)),
+            ([("out2", "in2", (0, 0, 0))], IterationOrder.PARALLEL, (1, -1)),
+        ],
+    )
+    transform_data = merge_blocks_pass(transform_data)
+    # not allowed to be merged into the same stage: overlapping intervals
+    assert len(transform_data.blocks) == 1
+    assert len(transform_data.blocks[0].ij_blocks) == 2
+
+
 SPTYPE = namedtuple("sptype", ("multi_stage", "stage", "interval_block", "statements"))
 
 
