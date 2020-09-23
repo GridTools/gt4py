@@ -396,7 +396,6 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
     def visit_Stage(self, node: gt_ir.Stage) -> Dict[str, Any]:
         # Initialize symbols for the generation of references in this stage
-        # self.stage_symbols = dict(node.local_symbols)
         self.stage_symbols = {}
         args = []
         for accessor in node.accessors:

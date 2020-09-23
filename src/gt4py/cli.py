@@ -23,7 +23,6 @@ class BackendChoice(click.Choice):
 
     Example
     -------
-
     .. code-block: bash
 
         $ cmd --backend="debug"

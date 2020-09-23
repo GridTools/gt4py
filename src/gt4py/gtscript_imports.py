@@ -47,7 +47,7 @@ def _add_extension(path: pathlib.Path, extension: str) -> pathlib.Path:
 
 class GtsFinder(importlib.abc.MetaPathFinder):
     """
-    Implements the :class:`importlib.abc.PathFinder` protocol.
+    Implements the :py:class:`importlib.abc.PathFinder` protocol.
 
     This finder is responsible for finding GTScript files within a set of
     search paths.
@@ -136,7 +136,7 @@ class GtsFinder(importlib.abc.MetaPathFinder):
 
 class GtsLoader(importlib.machinery.SourceFileLoader):
     """
-    Extend :class:`importlib.machinery.SourceFileLoader` for GTScript files.
+    Extend :py:class:`importlib.machinery.SourceFileLoader` for GTScript files.
 
     Generate a python module for a GTScript file and use the super class to
     load that instead.
@@ -163,8 +163,8 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
         fullname : `str`
             Dotted name corresponding to the gtscript module.
 
-        Returns:
-
+        Returns
+        -------
             The file path of the generated py module as a string
         """
         if not self.module_file.parent.exists():
