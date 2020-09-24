@@ -120,6 +120,8 @@ def test_no_merge_read_with_offset_after_write(
     )
     transform_data = merge_blocks_pass(transform_data)
     # not allowed to be merged into the same stage: first block should have 2 IJ blocks
+    assert "in" in transform_data.blocks[0].ij_blocks[0].inputs
+    assert "tmp" in transform_data.blocks[0].ij_blocks[1].inputs
     assert len(transform_data.blocks[0].ij_blocks) == 2
 
 
