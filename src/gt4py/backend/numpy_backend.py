@@ -273,13 +273,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
             )
 
             sources.append(
-                "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
+                "{target} = np.where({condition}, {then_expr}, {else_expr})".format(
                     condition=condition,
                     target=target,
+                    else_expr=target if not isinstance(stmt.target, gt_ir.VarRef) else "np.nan",
                     then_expr=value,
-                    else_expr=target,
-                    dtype=data_type.dtype.name,
-                    np=self.numpy_prefix,
                 )
             )
         else:
