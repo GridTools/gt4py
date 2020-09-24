@@ -1,3 +1,4 @@
+import itertools
 from functools import partial
 from typing import Iterator, List, Tuple
 
@@ -79,9 +80,7 @@ def make_definition_multiple(
     info: List[Tuple[BodyType, IterationOrder, Tuple[int, int]]],
 ) -> StencilDefinition:
     api_signature = [ArgumentInfo(name=n, is_keyword=False) for n in fields]
-    bodies = []
-    for definition in info:
-        bodies.extend(definition[0])
+    bodies = tuple(itertools.chain.from_iterable([definition[0] for definition in info]))
     tmp_fields = {i[0] for i in bodies}.union({i[1] for i in bodies}).difference(fields)
     api_fields = [
         FieldDecl(name=n, data_type=DataType.AUTO, axes=domain.axes_names, is_api=True)
