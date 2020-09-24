@@ -679,7 +679,8 @@ class StageMergingWrapper:
     def has_incompatible_intervals_with(self, candidate: "StageMergingWrapper") -> bool:
         for interval, candidate_interval in itertools.product(self.intervals, candidate.intervals):
             if self.intervals_overlap_or_imply_reorder(interval, candidate_interval):
-                return False
+                return True
+        return False
 
     def has_data_dependencies_with(self, candidate: "StageMergingWrapper") -> bool:
         extents = (extent for name, extent in candidate.inputs.items() if name in self.outputs)
