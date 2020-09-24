@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Iterator, List, Tuple
+from typing import Iterator, List, Tuple, Set, Union
 
 import pytest
 
@@ -15,6 +15,7 @@ from gt4py.ir.nodes import (
     ComputationBlock,
     DataType,
     Domain,
+    Expr,
     FieldDecl,
     FieldRef,
     IterationOrder,
@@ -22,6 +23,7 @@ from gt4py.ir.nodes import (
     Location,
     StencilDefinition,
     StencilImplementation,
+    Statement,
 )
 
 
@@ -53,6 +55,8 @@ def make_offset(offset: Tuple[int, int, int]):
     return {"I": offset[0], "J": offset[1], "K": offset[2]}
 
 
+# TODO: clean up unused setup functions
+
 def make_assign(
     target: str,
     value: str,
@@ -70,6 +74,197 @@ def make_assign(
         ),
         loc=make_loc(line=loc_line, column=1),
     )
+
+
+class TObject:
+    def __init__(self, loc: Location):
+        self.loc = loc
+        self.children = []
+
+    @property
+    def width(self) -> int:
+        return sum(child.width for child in self.children) + 1 if self.children else 1
+
+    @property
+    def height(self) -> int:
+        return sum(child.height for child in self.children) + 1 if self.children else 1
+
+    def register_child(self, child: "TObject") -> None:
+        child.loc = Location(
+            line=self.loc.line + self.height,
+            column=self.loc.column + self.width,
+            scope=self.child_scope
+        )
+        self.children.append(child)
+
+    @property
+    def field_names(self) -> Set[str]:
+        return set.union(*(child.field_names for child in self.children))
+
+    @property
+    def child_scope(self) -> str:
+        return self.loc.scope
+
+
+class TDefinition(TObject):
+    def __init__(self, *, name: str, domain: Domain, fields: List[str]):
+        super().__init__(Location(line=0, column=0, scope=name))
+        self.name = name
+        self.domain = domain
+        self.fields = fields
+        self.parameters = []
+        self.docstring = ""
+
+    def add_blocks(self, *blocks: List[ComputationBlock]) -> "TDefinition":
+        for block in blocks:
+            self.register_child(block)
+        return self
+
+    @property
+    def width(self) -> int:
+        return 0
+
+    @property
+    def height(self) -> int:
+        return super().height - 1
+
+    @property
+    def api_signature(self) -> List[ArgumentInfo]:
+        return [ArgumentInfo(name=n, is_keyword=False) for n in self.fields]
+
+    @property
+    def api_fields(self) -> List[FieldDecl]:
+        tmp_field_names = self.field_names.difference(self.fields)
+        tmp_fields = [
+            FieldDecl(name=n, data_type=DataType.AUTO, axes=self.domain.axes_names, is_api=False)
+            for n in tmp_field_names
+        ]
+        return tmp_fields + [
+            FieldDecl(name=n, data_type=DataType.AUTO, axes=self.domain.axes_names, is_api=True)
+            for n in self.fields
+        ]
+
+    def build(self) -> StencilDefinition:
+        return StencilDefinition(
+            name=self.name,
+            domain=self.domain,
+            api_signature=self.api_signature,
+            api_fields = self.api_fields,
+            parameters=self.parameters,
+            computations=[block.build() for block in self.children],
+            docstring=self.docstring,
+        )
+
+    def build_transform(self):
+        definition = self.build()
+        return TransformData(
+            definition_ir=definition,
+            implementation_ir=init_implementation_from_definition(definition),
+            options=BuildOptions(name=self.name, module=__name__),
+        )
+
+
+class TComputationBlock(TObject):
+    def __init__(self, *, order: IterationOrder, start: int, end: int, scope: str = "<unnamed>"):
+        super().__init__(Location(line=0, column=0, scope=""))
+        self.order = order
+        self.start = start
+        self.end = end
+        self.scope = scope
+
+    def add_statements(self, *stmts: List[Statement]) -> "TComputationBlock":
+        for stmt in stmts:
+            self.register_child(stmt)
+        return self
+
+    @property
+    def width(self) -> int:
+        return 0
+
+    def build(self) -> ComputationBlock:
+        return ComputationBlock(
+            interval=AxisInterval(
+                start=AxisBound(level=LevelMarker.START, offset=self.start),
+                end=AxisBound(level=LevelMarker.END, offset=self.end),
+            ),
+            iteration_order=self.order,
+            body=BlockStmt(
+                stmts=[stmt.build() for stmt in self.children],
+            )
+        )
+
+    @property
+    def child_scope(self) -> str:
+        return f"{self.loc.scope}:{self.scope}"
+
+
+class TAssign(TObject):
+    def __init__(self, target: str, value: Union[str, Expr], offset: Tuple[int, int, int]):
+        super().__init__(Location(line=0, column=0))
+        self._target = target
+        self._value = value
+        self.offset = offset
+
+    @property
+    def height(self):
+        return 1
+
+    @property
+    def width(self):
+        return self.target.width + 3 + self.value.width
+
+    @property
+    def value(self):
+        value = self._value
+        if isinstance(self._value, str):
+            value = TFieldRef(name=self._value, offset=self.offset)
+        value.loc = Location(
+            line=self.loc.line, column=self.loc.column + self.target.width + 3, scope=self.loc.scope
+            )
+        return value
+
+    @property
+    def field_names(self) -> Set[str]:
+        return set.union(self.target.field_names, self.value.field_names)
+
+    @property
+    def target(self):
+        return TFieldRef(name=self._target, loc=Location(
+            line=self.loc.line, column=self.loc.column, scope=self.loc.scope
+        ))
+
+    def build(self) -> Assign:
+        return Assign(
+            target=self.target.build(),
+            value=self.value.build(),
+            loc=Location(line=self.loc.line, column=self.loc.column + self.target.width + 1, scope=self.loc.scope)
+        )
+
+
+class TFieldRef(TObject):
+    def __init__(self, *, name: str, offset: Tuple[int, int, int] = (0, 0, 0), loc: Location = None):
+        super().__init__(loc or Location(line=0, column=0))
+        self.name = name
+        self.offset = make_offset(offset)
+
+    def build(self):
+        return FieldRef(
+            name=self.name,
+            offset=self.offset,
+            loc=self.loc,
+        )
+
+    @property
+    def height(self) -> int:
+        return 1
+
+    @property
+    def width(self) -> int:
+        return len(self.name)
+
+    @property
+    def field_names(self) -> Set[str]:
+        return {self.name}
 
 
 def make_definition_multiple(

@@ -13,7 +13,7 @@ from gt4py.analysis import (
 from gt4py.ir.nodes import Axis, Domain, IterationOrder
 
 from ..analysis_setup import PassType
-from ..definition_setup import make_transform_data, make_transform_data_multiple
+from ..definition_setup import make_transform_data, make_transform_data_multiple, TDefinition, TComputationBlock, TAssign
 
 
 def test_merge_write_after_read_ij_extended(
@@ -22,13 +22,15 @@ def test_merge_write_after_read_ij_extended(
     ij_offset: Tuple[int, int, int],
     ijk_domain: Domain,
 ) -> None:
-    transform_data = make_transform_data(
-        name="ij_extended",
-        domain=ijk_domain,
-        fields=["out", "in", "inout"],
-        body=[("tmp", "inout", (0, 0, 0)), ("out", "tmp", ij_offset), ("inout", "in", (0, 0, 0))],
-        iteration_order=iteration_order,
-    )
+    # TODO: check if locations line up
+    transform_data = TDefinition(
+        name="ij_extended", domain=ijk_domain, fields=["out", "in", "inout"]).add_blocks(
+            TComputationBlock(order=iteration_order, start=0, end=0).add_statements(
+                TAssign("tmp", "inout", (0, 0, 0)),
+                TAssign("out", "tmp", ij_offset),
+                TAssign("inout", "in", (0, 0, 0))
+            )
+        ).build_transform()
     transform_data = merge_blocks_pass(transform_data)
     # not allowed to be merged: race condition independent of iteration order
     # write after read with extended compute domain
@@ -186,15 +188,18 @@ def test_merge_read_after_write_k_sequential(
 def test_no_merge_with_overlapping_intervals(
     merge_blocks_pass: PassType, ijk_domain: Domain
 ) -> None:
-    transform_data = make_transform_data_multiple(
+    transform_data = TDefinition(
         name="overlapping_intervals_forbidden",
         domain=ijk_domain,
         fields=["out1", "out2", "in1", "in2"],
-        info=[
-            ([("out1", "in1", (0, 0, 0))], IterationOrder.PARALLEL, (0, 0)),
-            ([("out2", "in2", (0, 0, 0))], IterationOrder.PARALLEL, (1, -1)),
-        ],
-    )
+    ).add_blocks(
+        TComputationBlock(order=IterationOrder.PARALLEL, start=0, end=0).add_statements(
+            TAssign("out1", "in1", (0, 0, 0))
+        ),
+        TComputationBlock(order=IterationOrder.PARALLEL, start=1, end=-1).add_statements(
+            TAssign("out2", "in2", (0, 0, 0))
+        )
+    ).build_transform()
     transform_data = merge_blocks_pass(transform_data)
     # not allowed to be merged into the same stage: overlapping intervals
     assert len(transform_data.blocks) == 1
