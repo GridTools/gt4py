@@ -683,20 +683,19 @@ class StageMergingWrapper:
         return False
 
     def has_data_dependencies_with(self, candidate: "StageMergingWrapper") -> bool:
-        if self.parent_block.iteration_order == gt_ir.IterationOrder.PARALLEL:
-            extents = (extent for name, extent in candidate.inputs.items() if name in self.outputs)
-            for extent in extents:
-                read_interval = (
-                    next(iter(self.intervals)).as_tuple(self.min_k_interval_sizes) + extent[-1]
-                )
-                for merged_interval_block in self.interval_blocks:
-                    merged_interval = merged_interval_block.interval
-                    if merged_interval.as_tuple(
-                        self.min_k_interval_sizes
-                    ) != read_interval and merged_interval.overlaps(
-                        read_interval, self.min_k_interval_sizes
-                    ):
-                        return True
+        extents = (extent for name, extent in candidate.inputs.items() if name in self.outputs)
+        for extent in extents:
+            read_interval = (
+                next(iter(self.intervals)).as_tuple(self.min_k_interval_sizes) + extent[-1]
+            )
+            for merged_interval_block in self.interval_blocks:
+                merged_interval = merged_interval_block.interval
+                if merged_interval.as_tuple(
+                    self.min_k_interval_sizes
+                ) != read_interval and merged_interval.overlaps(
+                    read_interval, self.min_k_interval_sizes
+                ):
+                    return True
         return False
 
     def intervals_overlap_or_imply_reorder(
