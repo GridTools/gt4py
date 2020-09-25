@@ -892,7 +892,7 @@ class PrefetchingKCachesTransform(dace.transformation.pattern_matching.Transform
         )
         names = dict()
         for name, array in dict(nsdfg_node.sdfg.arrays).items():
-            if self.arrays is None or name not in self.arrays:
+            if self.arrays is not None and name not in self.arrays:
                 continue
             store = False
             outer_edges = [e for e in graph.out_edges(nsdfg_node) if e.data.data == name]
@@ -985,9 +985,6 @@ class PrefetchFieldTransform(LoopPeeling):
             if isinstance(edge.src, dace.nodes.CodeNode) and edge.data.data == name:
                 out_subsets.add(copy.deepcopy(edge.data.subset))
 
-        indices = set(subs.ranges[var_idx][0] for subs in in_subsets | out_subsets)
-        length = max(indices) - min(indices) + 3
-
         outer_in_subsets = set()
         outer_out_subsets = set()
 
@@ -1000,6 +997,7 @@ class PrefetchFieldTransform(LoopPeeling):
         indices = set(subs.ranges[var_idx][0] for subs in in_subsets | out_subsets)
         length = max(indices) - min(indices) + 3
 
+        outer_in_subset = None
         if len(outer_in_subsets) > 0:
             from dace import subsets
 
@@ -1011,6 +1009,7 @@ class PrefetchFieldTransform(LoopPeeling):
                     for subset in in_subsets:
                         subset.ranges[i] = outer_in_subset.ranges[i]
 
+        outer_out_subset = None
         if len(outer_out_subsets) > 0:
             from dace import subsets
 
@@ -1022,72 +1021,182 @@ class PrefetchFieldTransform(LoopPeeling):
                     for subset in out_subsets:
                         subset.ranges[i] = outer_out_subset.ranges[i]
 
-        return length, in_subsets, out_subsets
+        if len(out_subsets) == 1:
+            subset = next(iter(out_subsets))
+            assert subset.ranges[var_idx][0] == subset.ranges[var_idx][1]
+            write_idx = subset.ranges[var_idx][0]
+        else:
+            assert len(out_subsets) == 0
+            write_idx = None
 
-    def add_prefetch_all(self, state, name, itervar, var_idx, in_subsets, value, length):
-        if not in_subsets:
+        if outer_in_subset is not None and outer_out_subset is not None:
+            unified_subset = dace.subsets.union(outer_in_subset, outer_out_subset)
+        else:
+            unified_subset = outer_in_subset or outer_out_subset
+
+        min_idx = unified_subset[var_idx][0]
+        max_idx = unified_subset[var_idx][1]
+
+        return dict(
+            length=length,
+            unified_subset=unified_subset,
+            in_subsets=in_subsets,
+            out_subsets=out_subsets,
+            min_idx=min_idx,
+            max_idx=max_idx,
+            write_idx=write_idx,
+        )
+
+    @classmethod
+    def specialize_subset(cls, subset, var_idx, itervar_sym, itervar_value):
+        subset = copy.deepcopy(subset)
+        ranges = list(subset.ranges[var_idx])
+        for idx, sym_expr in enumerate(ranges):
+            ranges[idx] = sym_expr.subs(itervar_sym, itervar_value)
+        subset.ranges[var_idx] = tuple(ranges)
+        return subset
+
+    def add_prefetch_all(
+        self, state, name, itervar, itervar_value, var_idx, subset_info, stride, offset
+    ):
+        if not subset_info["in_subsets"]:
             return
+
+        import dace.subsets
+
         itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
         read_acc = state.add_read(name)
         write_acc = state.add_write(f"_loc_buf_{name}")
 
-        for subset in in_subsets:
-            subset = copy.deepcopy(subset)
-            other_subset = copy.deepcopy(subset)
-            ranges = list(subset.ranges[var_idx])
-            other_ranges = list(subset.ranges[var_idx])
-            for i, sym in enumerate(ranges):
-                ranges[i] = ranges[i].subs(itervar_sym, value)
-                other_ranges[i] = ranges[i].subs(itervar_sym, value)
-            other_ranges[0] = other_ranges[0] % length
-            other_ranges[1] = other_ranges[1] % length
-            subset.ranges[var_idx] = tuple(ranges)
-            other_subset.ranges[var_idx] = tuple(other_ranges)
-            state.add_edge(
-                read_acc,
-                None,
-                write_acc,
-                None,
-                dace.Memlet.simple(
-                    name, subset_str=str(subset), other_subset_str=str(other_subset)
-                ),
-            )
+        outer_subset = self.specialize_subset(
+            subset_info["unified_subset"], var_idx, itervar_sym, itervar_value
+        )
 
-    def add_store_all(self, state, name, itervar, var_idx, out_subsets, value, length):
+        local_subset = copy.deepcopy(subset_info["unified_subset"])
+        ranges = list(local_subset.ranges[var_idx])
+        min_idx = ranges[0]
+        ranges[0] = 1
+        ranges[1] += 1 - min_idx
+        local_subset.ranges[var_idx] = tuple(ranges)
+
+        state.add_edge(
+            read_acc,
+            None,
+            write_acc,
+            None,
+            dace.Memlet.simple(
+                name, subset_str=str(outer_subset), other_subset_str=str(local_subset)
+            ),
+        )
+
+    def add_store_all(
+        self,
+        state,
+        name,
+        itervar,
+        itervar_value,
+        var_idx,
+        in_subsets,
+        out_subsets,
+        length,
+        stride,
+        offset,
+    ):
         if not out_subsets:
             return
+
+        import dace
+        import dace.subsets
+
         itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
         write_acc = state.add_write(name)
         read_acc = state.add_read(f"_loc_buf_{name}")
 
-        for subset in out_subsets:
-            subset = copy.deepcopy(subset)
-            other_subset = copy.deepcopy(subset)
-            ranges = list(subset.ranges[var_idx])
-            other_ranges = list(subset.ranges[var_idx])
-            for i, sym in enumerate(ranges):
-                ranges[i] = ranges[i].subs(itervar_sym, value)
-                other_ranges[i] = ranges[i].subs(itervar_sym, value)
-            other_ranges[0] = other_ranges[0] % length
-            other_ranges[1] = other_ranges[1] % length
-            subset.ranges[var_idx] = tuple(ranges)
-            other_subset.ranges[var_idx] = tuple(other_ranges)
-            state.add_edge(
-                read_acc,
-                None,
-                write_acc,
-                None,
-                dace.Memlet.simple(
-                    f"_loc_buf_{name}", other_subset_str=str(subset), subset_str=str(other_subset)
-                ),
-            )
+        subsets = in_subsets | out_subsets
+        res_subset = next(iter(subsets))
+        for subset in subsets:
+            res_subset = dace.subsets.union(res_subset, subset)
+        bounds = res_subset.ranges[var_idx][:2]
+        min_idx = min(bounds)
+
+        subset = copy.deepcopy(next(iter(out_subsets)))
+        write_idx = subset.ranges[var_idx][0]
+
+        ranges = list(subset.ranges[var_idx])
+        for idx, sym_expr in enumerate(ranges):
+            ranges[idx] = sym_expr.subs(itervar_sym, itervar_value)
+        subset.ranges[var_idx] = tuple(ranges)
+
+        other_subset = copy.deepcopy(res_subset)
+        other_ranges = (
+            write_idx - min_idx + 1 + offset,
+            write_idx - min_idx + 1 + offset,
+            1,
+        )
+        other_subset.ranges[var_idx] = other_ranges
+
+        state.add_edge(
+            read_acc,
+            None,
+            write_acc,
+            None,
+            dace.Memlet.simple(
+                f"_loc_buf_{name}", other_subset_str=str(subset), subset_str=str(other_subset)
+            ),
+        )
+
+    def add_shift_local(
+        self,
+        state: dace.SDFGState,
+        name,
+        itervar,
+        itervar_value,
+        var_idx,
+        subset_info,
+        stride,
+        offset,
+    ):
+        sdfg: dace.SDFG = state.parent
+        read_access = state.add_read(f"_loc_buf_{name}")
+        tmp_access = state.add_access(f"_tmp_loc_buf_{name}")
+        write_access = state.add_read(f"_loc_buf_{name}")
+        sdfg.add_datadesc(f"_tmp_loc_buf_{name}", sdfg.arrays[f"_loc_buf_{name}"])
+        state.add_edge(
+            read_access,
+            None,
+            tmp_access,
+            None,
+            memlet=dace.Memlet.simple(
+                f"_loc_buf_{name}",
+                subset_str=",".join(f"0:{s}" for s in sdfg.arrays[f"_loc_buf_{name}"].shape),
+            ),
+        )
+
+        in_subset = subset_info["unified_subset"]
+        if stride > 0:
+            in_subset.ranges[var_idx] = (1, subset_info["length"] - 1, 1)
+        else:
+            in_subset.ranges[var_idx] = (0, subset_info["length"] - 2, 1)
+        other_subset = copy.deepcopy(in_subset)
+        other_subset.offset(stride, True, {var_idx})
+        state.add_edge(
+            tmp_access,
+            None,
+            write_access,
+            None,
+            memlet=dace.Memlet.simple(
+                f"_tmp_loc_buf_{name}",
+                subset_str=str(in_subset),
+                other_subset_str=str(other_subset),
+            ),
+        )
 
     def localize_tasklet_input(
-        self, state, name, itervar, var_idx, in_subsets, value, length, stride
+        self, state, name, itervar, itervar_value, var_idx, subset_info, stride, offset
     ):
-        if not in_subsets:
+        if not subset_info["in_subsets"]:
             return
-
+        itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
         nodes = []
         for node in state.nodes():
             if (
@@ -1105,130 +1214,165 @@ class PrefetchFieldTransform(LoopPeeling):
         node.data = f"_loc_buf_{name}"
 
         # change write from tasklet
+        min_idx = None
         for node in [
             n for n in state.nodes() if isinstance(n, (dace.nodes.CodeNode, dace.nodes.EntryNode))
         ]:
             for edge in [e for e in state.in_edges(node) if e.data.data == name]:
-                edge.data.data = f"_loc_buf_{name}"
-                subset = copy.deepcopy(edge.data.subset)
-                ranges = list(subset.ranges[var_idx])
-                ranges[0] = ranges[0] % length
-                ranges[1] = ranges[1] % length
-                subset.ranges[var_idx] = tuple(ranges)
-                edge.data.subset = subset
-
-    def localize_tasklet_output(
-        self, state, name, itervar, var_idx, out_subsets, value, length, stride
-    ):
-        if not out_subsets:
-            return
-
-        nodes = []
-        for node in state.nodes():
-            if (
-                isinstance(node, dace.nodes.AccessNode)
-                and node.access == dace.AccessType.WriteOnly
-                and node.data == name
-                and all(
-                    isinstance(edge.src, (dace.nodes.CodeNode, dace.nodes.ExitNode))
-                    for edge in state.in_edges(node)
-                )
-            ):
-                nodes.append(node)
-        assert len(nodes) == 1
-        node = nodes[0]
-        node.data = f"_loc_buf_{name}"
-
-        # change write from tasklet
+                if min_idx is None or min_idx > edge.data.subset.ranges[var_idx][0]:
+                    min_idx = edge.data.subset.ranges[var_idx][0]
         for node in [
             n for n in state.nodes() if isinstance(n, (dace.nodes.CodeNode, dace.nodes.ExitNode))
         ]:
             for edge in [e for e in state.out_edges(node) if e.data.data == name]:
+                if min_idx is None or min_idx > edge.data.subset.ranges[var_idx][0]:
+                    min_idx = edge.data.subset.ranges[var_idx][0]
+
+        for node in [
+            n for n in state.nodes() if isinstance(n, (dace.nodes.CodeNode, dace.nodes.EntryNode))
+        ]:
+            for edge in [e for e in state.in_edges(node) if e.data.data == name]:
+
                 edge.data.data = f"_loc_buf_{name}"
-                subset = copy.deepcopy(edge.data.subset)
-                ranges = list(subset.ranges[var_idx])
-                ranges[0] = ranges[0] % length
-                ranges[1] = ranges[1] % length
-                subset.ranges[var_idx] = tuple(ranges)
-                edge.data.subset = subset
+                ranges = list(edge.data.subset.ranges[var_idx])
+                ranges[0] += offset - min_idx
+                ranges[1] += offset - min_idx
+                edge.data.subset.ranges[var_idx] = tuple(ranges)
+
+    def localize_tasklet_memlets(
+        self, state, name, itervar, itervar_value, var_idx, subset_info, stride, offset
+    ):
+        itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
+
+        min_idx = None
+        for node in [
+            n for n in state.nodes() if isinstance(n, (dace.nodes.CodeNode, dace.nodes.EntryNode))
+        ]:
+            for edge in [e for e in state.in_edges(node) if e.data.data == name]:
+                if min_idx is None or min_idx > edge.data.subset.ranges[var_idx][0]:
+                    min_idx = edge.data.subset.ranges[var_idx][0]
+        for node in [
+            n for n in state.nodes() if isinstance(n, (dace.nodes.CodeNode, dace.nodes.ExitNode))
+        ]:
+            for edge in [e for e in state.out_edges(node) if e.data.data == name]:
+                if min_idx is None or min_idx > edge.data.subset.ranges[var_idx][0]:
+                    min_idx = edge.data.subset.ranges[var_idx][0]
+
+        # node.data = f"_loc_buf_{name}"
+
+        # change write from tasklet
+
+        edges = []
+        for node in state.nodes():
+            if isinstance(node, (dace.nodes.CodeNode, dace.nodes.ExitNode)):
+                edges.extend([e for e in state.out_edges(node) if e.data.data == name])
+            if isinstance(node, (dace.nodes.CodeNode, dace.nodes.EntryNode)):
+                edges.extend([e for e in state.in_edges(node) if e.data.data == name])
+        for edge in edges:
+            edge.data.data = f"_loc_buf_{name}"
+            if isinstance(edge.src, dace.nodes.AccessNode):
+                edge.src.data = f"_loc_buf_{name}"
+            if isinstance(edge.dst, dace.nodes.AccessNode):
+                edge.dst.data = f"_loc_buf_{name}"
+            ranges = list(edge.data.subset.ranges[var_idx])
+            ranges[0] += offset - min_idx
+            ranges[1] += offset - min_idx
+            edge.data.subset.ranges[var_idx] = tuple(ranges)
 
     def add_prefetch(
-        self, state, name, itervar, var_idx, in_subsets, out_offsets, value, length, stride
+        self, state, name, itervar, itervar_value, var_idx, subset_info, stride, offset
     ):
-        value = dace.symbolic.pystr_to_symbolic(value)
-        if not in_subsets:
+        if not subset_info["in_subsets"]:
             return
-        in_indices = [subset.ranges[var_idx][0] for subset in in_subsets]
-        if out_offsets:
-            out_idx = next(iter(out_offsets)).ranges[var_idx][0]
-            if (stride > 0 and max(in_indices) < out_idx) or (
-                stride < 0 and min(in_indices) > out_idx
+        if subset_info["write_idx"]:
+            in_indices = [subset.ranges[var_idx][0] for subset in subset_info["in_subsets"]]
+            if (stride > 0 and max(in_indices) < subset_info["write_idx"]) or (
+                stride < 0 and min(in_indices) > subset_info["write_idx"]
             ):
                 return
+        import dace
 
         itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
+        itervar_value = dace.symbolic.pystr_to_symbolic(itervar_value)
+
         write_acc = state.add_write(f"_loc_buf_{name}")
         read_acc = state.add_read(name)
 
-        # read next index == newest_index + stride
-        newest_subset = next(iter(in_subsets))
-        for subset in in_subsets:
+        newest_subset = next(iter(subset_info["in_subsets"]))
+        for subset in subset_info["in_subsets"]:
             if (stride > 0 and subset.ranges[var_idx][0] > newest_subset.ranges[var_idx][0]) or (
                 stride < 0 and subset.ranges[var_idx][0] < newest_subset.ranges[var_idx][0]
             ):
                 newest_subset = subset
-        from dace.subsets import union as subset_union
 
-        for subset in in_subsets:
+        import dace.subsets
+
+        for subset in subset_info["in_subsets"]:
             if subset.ranges[var_idx][0] == newest_subset.ranges[var_idx][0]:
-                newest_subset = subset_union(newest_subset, subset)
+                newest_subset = dace.subsets.union(newest_subset, subset)
 
-        subset = copy.deepcopy(newest_subset)
-        other_subset = copy.deepcopy(newest_subset)
-        ranges = list(subset[var_idx])
-        other_ranges = list(other_subset[var_idx])
-        ranges[0] = ranges[0].subs(itervar_sym, value + stride)
-        ranges[1] = ranges[1].subs(itervar_sym, value + stride)
-        other_ranges[0] = other_ranges[0].subs(itervar_sym, value + stride) % length
-        other_ranges[1] = other_ranges[1].subs(itervar_sym, value + stride) % length
-        subset[var_idx] = tuple(ranges)
-        other_subset[var_idx] = tuple(other_ranges)
-        state.add_edge(
-            read_acc,
-            None,
-            write_acc,
-            None,
-            dace.Memlet.simple(name, subset_str=str(subset), other_subset_str=str(other_subset)),
+        outer_subset = self.specialize_subset(
+            newest_subset, var_idx, itervar_sym, itervar_value + stride
         )
+        if stride > 0:
+            load_idx = subset_info["max_idx"] - subset_info["min_idx"] + 2 + offset
+        else:
+            load_idx = offset
 
-    def add_store(self, state, name, itervar, var_idx, out_subsets, value, length, stride):
-        value = dace.symbolic.pystr_to_symbolic(value)
-        if not out_subsets:
-            return
+        local_subset = copy.deepcopy(newest_subset)
+        local_ranges = list(local_subset.ranges[var_idx])
+        local_ranges[0] = load_idx
+        local_ranges[1] = load_idx
+        local_subset.ranges[var_idx] = tuple(local_ranges)
+        # local_subset = self.specialize_subset(local_subset, var_idx, itervar_sym, itervar_value)
 
-        itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
-        write_acc = state.add_write(name)
-        read_acc = state.add_read(f"_loc_buf_{name}")
-
-        # write to previous index == current index - stride
-        assert len(out_subsets) == 1
-        subset = copy.deepcopy(next(iter(out_subsets)))
-        other_subset = copy.deepcopy(next(iter(out_subsets)))
-        ranges = list(subset.ranges[var_idx])
-        other_ranges = list(other_subset.ranges[var_idx])
-        ranges[0] = ranges[0].subs(itervar_sym, value - stride)
-        ranges[1] = ranges[1].subs(itervar_sym, value - stride)
-        other_ranges[0] = other_ranges[0].subs(itervar_sym, value - stride) % length
-        other_ranges[1] = other_ranges[1].subs(itervar_sym, value - stride) % length
-        subset.ranges[var_idx] = tuple(ranges)
-        other_subset.ranges[var_idx] = tuple(other_ranges)
         state.add_edge(
             read_acc,
             None,
             write_acc,
             None,
             dace.Memlet.simple(
-                f"_loc_buf_{name}", subset_str=str(other_subset), other_subset_str=str(subset)
+                name, subset_str=str(outer_subset), other_subset_str=str(local_subset)
+            ),
+        )
+
+    def add_store(self, state, name, itervar, itervar_value, var_idx, subset_info, stride, offset):
+        if not subset_info["out_subsets"]:
+            return
+        import dace
+
+        itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
+        itervar_value = dace.symbolic.pystr_to_symbolic(itervar_value)
+
+        write_acc = state.add_write(name)
+        read_acc = state.add_read(f"_loc_buf_{name}")
+
+        assert len(subset_info["out_subsets"]) == 1
+        subset = copy.deepcopy(next(iter(subset_info["out_subsets"])))
+        outer_subset = self.specialize_subset(subset, var_idx, itervar_sym, itervar_value - stride)
+
+        load_idx = subset_info["write_idx"] - subset_info["min_idx"] - stride + 1 + offset
+
+        # else:
+        #     load_idx = offset
+        # store_idx = (subset_info["max_idx"] if stride > 0 else subset_info["min_idx"]) + offset
+
+        local_subset = copy.deepcopy(subset)
+        local_ranges = list(local_subset.ranges[var_idx])
+        local_ranges[0] = load_idx
+        local_ranges[1] = load_idx
+        local_subset.ranges[var_idx] = tuple(local_ranges)
+        # local_subset = self.specialize_subset(local_subset, var_idx, itervar_sym, 0)
+
+        state.add_edge(
+            read_acc,
+            None,
+            write_acc,
+            None,
+            dace.Memlet.simple(
+                f"_loc_buf_{name}",
+                subset_str=str(local_subset),
+                other_subset_str=str(outer_subset),
             ),
         )
 
@@ -1280,6 +1424,15 @@ class PrefetchFieldTransform(LoopPeeling):
             assert apply_count == 1
 
         elif niter >= 2:
+
+            if self.arrays is not None:
+                arrays = {name: sdfg.arrays[name] for name in self.arrays}
+            else:
+                arrays = dict(sdfg.arrays.items())
+
+            subset_infos = {}
+            for name in arrays.keys():
+                subset_infos[name] = self.collect_subset_info(loop_state, name, var_idx=2)
             ## peel both ends, add prefetching
             # peel first iteration
             apply_count = sdfg.apply_transformations(
@@ -1310,18 +1463,13 @@ class PrefetchFieldTransform(LoopPeeling):
             sdfg.add_edge(store_state, after_state, dace.InterstateEdge())
             sdfg.remove_edge(sdfg.edges_between(peeled_last, after_state)[0])
 
+            shift_state = sdfg.add_state_before(loop_state, sdfg.label + "_shift_state")
             # self.rename_arrays(sdfg)
             # add prefetching to peeled_first and loop_state, add prefetch-only state
-            if self.arrays is not None:
-                arrays = {name: sdfg.arrays[name] for name in self.arrays}
-            else:
-                arrays = dict(sdfg.arrays.items())
             for name, array in arrays.items():
-                length, in_subsets, out_subsets = self.collect_subset_info(
-                    loop_state, name, var_idx=2
-                )
+                subset_info = subset_infos[name]
                 shape = list(array.shape)
-                shape[2] = length
+                shape[2] = subset_info["length"]
                 sdfg.add_array(
                     name=f"_loc_buf_{name}",
                     shape=shape,
@@ -1331,38 +1479,48 @@ class PrefetchFieldTransform(LoopPeeling):
                     lifetime=dace.dtypes.AllocationLifetime.SDFG,
                 )
 
-                self.add_prefetch_all(prefetch_state, name, itervar, 2, in_subsets, rng[0], length)
+                self.add_prefetch_all(
+                    prefetch_state, name, itervar, rng[0], 2, subset_info, rng[2], 1
+                )
 
                 if name in self.store:
-                    self.add_store_all(store_state, name, itervar, 2, out_subsets, rng[1], length)
-                self.localize_tasklet_input(
-                    peeled_first, name, itervar, 2, in_subsets, rng[0], length, rng[2]
+                    self.add_store_all(
+                        store_state,
+                        name,
+                        itervar,
+                        rng[1],
+                        2,
+                        subset_info["in_subsets"],
+                        subset_info["out_subsets"],
+                        subset_info["length"],
+                        rng[2],
+                        rng[2],
+                    )
+                self.localize_tasklet_memlets(
+                    peeled_first, name, itervar, 0, 2, subset_info, rng[2], 1
                 )
-                self.localize_tasklet_input(
-                    loop_state, name, itervar, 2, in_subsets, "k", length, rng[2]
+                self.localize_tasklet_memlets(
+                    loop_state, name, itervar, itervar, 2, subset_info, rng[2], 1
                 )
-                self.localize_tasklet_input(
-                    peeled_last, name, itervar, 2, in_subsets, rng[1], length, rng[2]
+                self.localize_tasklet_memlets(
+                    peeled_last, name, itervar, rng[1], 2, subset_info, rng[2], 1 + rng[2]
                 )
-                self.localize_tasklet_output(
-                    peeled_first, name, itervar, 2, out_subsets, rng[0], length, rng[2]
-                )
-                self.localize_tasklet_output(
-                    loop_state, name, itervar, 2, out_subsets, "k", length, rng[2]
-                )
-                self.localize_tasklet_output(
-                    peeled_last, name, itervar, 2, out_subsets, rng[1], length, rng[2]
-                )
-                self.add_prefetch(
-                    loop_state, name, itervar, 2, in_subsets, out_subsets, "k", length, rng[2]
-                )
-                self.add_prefetch(
-                    peeled_first, name, itervar, 2, in_subsets, out_subsets, rng[0], length, rng[2]
-                )
+                # self.localize_tasklet_output(
+                #     peeled_first, name, itervar, 0, 2, subset_info, rng[2], 1
+                # )
+                # self.localize_tasklet_output(
+                #     loop_state, name, itervar, itervar, 2, subset_info, rng[2], 1
+                # )
+                # self.localize_tasklet_output(
+                #     peeled_last, name, itervar, rng[1], 2, subset_info, rng[2], 1 + rng[2]
+                # )
+                self.add_prefetch(loop_state, name, itervar, itervar, 2, subset_info, rng[2], 0)
+                self.add_prefetch(peeled_first, name, itervar, rng[0], 2, subset_info, rng[2], 0)
+                self.add_shift_local(shift_state, name, itervar, rng[0], 2, subset_info, rng[2], 0)
                 if name in self.store:
-                    self.add_store(loop_state, name, itervar, 2, out_subsets, "k", length, rng[2])
+                    self.add_store(loop_state, name, itervar, itervar, 2, subset_info, rng[2], 0)
                     self.add_store(
-                        peeled_last, name, itervar, 2, out_subsets, rng[1], length, rng[2]
+                        peeled_last, name, itervar, rng[1], 2, subset_info, rng[2], rng[2]
                     )
 
         if niter < 3:
