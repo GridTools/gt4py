@@ -866,7 +866,7 @@ class ComputeExtentsPass(TransformPass):
                 for name in ij_block.outputs:
                     ij_block.compute_extent |= access_extents[name]
                 for int_block in filter(
-                    lambda block: block.parallel_interval is not None, ij_block.interval_blocks
+                    lambda block: block.parallel_interval is None, ij_block.interval_blocks
                 ):
                     for name, extent in int_block.inputs.items():
                         extent = Extent(
