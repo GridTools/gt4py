@@ -13,7 +13,7 @@ from gt4py.analysis import (
 from gt4py.ir.nodes import Axis, Domain, IterationOrder
 
 from ..analysis_setup import PassType
-from ..definition_setup import make_transform_data
+from ..definition_setup import make_transform_data, make_transform_data_multiple
 
 
 def test_merge_write_after_read_ij_extended(
@@ -106,6 +106,25 @@ def test_merge_write_after_read_k_parallel(
     assert len(transform_data.blocks) == 2
 
 
+def test_no_merge_read_with_offset_after_write(
+    merge_blocks_pass: PassType, ijk_domain: Domain
+) -> None:
+    transform_data = make_transform_data_multiple(
+        name="no_merge_k_offset",
+        domain=ijk_domain,
+        fields=["out", "in", "tmp"],
+        info=[
+            ([("tmp", "in", (0, 0, 1))], IterationOrder.FORWARD, (1, -1)),
+            ([("out", "tmp", (0, 0, -1))], IterationOrder.FORWARD, (1, -2)),
+        ],
+    )
+    transform_data = merge_blocks_pass(transform_data)
+    # not allowed to be merged into the same stage: first block should have 2 IJ blocks
+    assert len(transform_data.blocks[0].ij_blocks) == 2
+    assert "in" in transform_data.blocks[0].ij_blocks[0].inputs
+    assert "tmp" in transform_data.blocks[0].ij_blocks[1].inputs
+
+
 def test_merge_write_after_read_k_extended_sequential(
     merge_blocks_pass: PassType, non_parallel_iteration_order: IterationOrder, ijk_domain: Domain
 ) -> None:
@@ -164,6 +183,28 @@ def test_merge_read_after_write_k_sequential(
     transform_data = merge_blocks_pass(transform_data)
     # allowed to be merged, because order is not PARALLEL
     assert len(transform_data.blocks) == 1
+
+
+def test_no_merge_with_overlapping_intervals(
+    merge_blocks_pass: PassType, ijk_domain: Domain
+) -> None:
+    transform_data = make_transform_data_multiple(
+        name="overlapping_intervals_forbidden",
+        domain=ijk_domain,
+        fields=["out1", "out2", "in1", "in2"],
+        info=[
+            ([("out1", "in1", (0, 0, 0))], IterationOrder.PARALLEL, (0, 0)),
+            ([("out2", "in2", (0, 0, 0))], IterationOrder.PARALLEL, (1, -1)),
+        ],
+    )
+    transform_data = merge_blocks_pass(transform_data)
+    # not allowed to be merged into the same stage: overlapping intervals
+    assert len(transform_data.blocks) == 1
+    assert len(transform_data.blocks[0].ij_blocks) == 2
+    block = transform_data.blocks[0].ij_blocks[0]
+    assert "in1" in block.inputs and "out1" in block.outputs
+    block = transform_data.blocks[0].ij_blocks[1]
+    assert "in2" in block.inputs and "out2" in block.outputs
 
 
 SPTYPE = namedtuple("sptype", ("multi_stage", "stage", "interval_block", "statements"))
