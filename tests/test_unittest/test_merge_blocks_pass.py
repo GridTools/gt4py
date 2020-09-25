@@ -136,6 +136,8 @@ def test_no_merge_read_with_offset_after_write(
     transform_data = merge_blocks_pass(transform_data)
     # not allowed to be merged into the same stage: first block should have 2 IJ blocks
     assert len(transform_data.blocks[0].ij_blocks) == 2
+    assert "in" in transform_data.blocks[0].ij_blocks[0].inputs
+    assert "tmp" in transform_data.blocks[0].ij_blocks[1].inputs
 
 
 def test_merge_write_after_read_k_extended_sequential(
@@ -242,6 +244,10 @@ def test_no_merge_with_overlapping_intervals(
     # not allowed to be merged into the same stage: overlapping intervals
     assert len(transform_data.blocks) == 1
     assert len(transform_data.blocks[0].ij_blocks) == 2
+    block = transform_data.blocks[0].ij_blocks[0]
+    assert "in1" in block.inputs and "out1" in block.outputs
+    block = transform_data.blocks[0].ij_blocks[1]
+    assert "in2" in block.inputs and "out2" in block.outputs
 
 
 SPTYPE = namedtuple("sptype", ("multi_stage", "stage", "interval_block", "statements"))
