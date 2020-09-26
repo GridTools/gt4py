@@ -942,7 +942,7 @@ class IRMaker(ast.NodeVisitor):
     def visit_AugAssign(self, node: ast.AugAssign):
         """Implement left <op>= right in terms of left = left <op> right."""
         binary_operation = ast.BinOp(left=node.target, op=node.op, right=node.value)
-        assignment = ast.Assign(targets=[node.target], value=node.target)
+        assignment = ast.Assign(targets=[node.target], value=binary_operation)
         ast.copy_location(binary_operation, node)
         ast.copy_location(assignment, node)
         return self.visit_Assign(assignment)
