@@ -1206,6 +1206,7 @@ class ReduceTemporaryStoragesPass(TransformPass):
     class StorageReducer(gt_ir.IRNodeMapper):
         def __init__(self):
             self.iir = None
+            self.interval = None
             self.iteration_order = None
             self.full_fields = set()
             self.reduced_fields = dict()
@@ -1221,7 +1222,7 @@ class ReduceTemporaryStoragesPass(TransformPass):
             for field_name in self.reduced_fields:
                 field_decl = self.iir.fields[field_name]
                 field_decl.axes.pop()
-                for node in self.reduced_fields[field_name]:
+                for node in self.reduced_fields[field_name]["nodes"]:
                     new_offset = {axis: node.offset[axis] for axis in field_decl.axes}
                     node.offset = new_offset
 
@@ -1239,6 +1240,13 @@ class ReduceTemporaryStoragesPass(TransformPass):
             self.generic_visit(path, node_name, node)
             return True, node
 
+        def visit_ApplyBlock(
+            self, path: tuple, node_name: str, node: gt_ir.ApplyBlock
+        ) -> Tuple[bool, gt_ir.ApplyBlock]:
+            self.interval = node.interval
+            self.generic_visit(path, node_name, node)
+            return True, node
+
         def visit_FieldAccessor(
             self, path: tuple, node_name: str, node: gt_ir.FieldAccessor
         ) -> Tuple[bool, Optional[gt_ir.FieldAccessor]]:
@@ -1249,25 +1257,31 @@ class ReduceTemporaryStoragesPass(TransformPass):
             self, path: tuple, node_name: str, node: gt_ir.FieldRef
         ) -> Tuple[bool, gt_ir.FieldRef]:
             field_name = node.name
+            is_full_field = False
             if field_name in self.iir.temporary_fields:
                 if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
-                    self.full_fields.add(field_name)
-                    if field_name in self.reduced_fields:
-                        del self.reduced_fields[field_name]
+                    is_full_field = True
 
                 elif field_name not in self.full_fields:
                     extent = self.fields_extents[field_name]
                     ndims = extent.ndims - 1
                     if extent.lower_indices[ndims] == 0 and extent.upper_indices[ndims] == 0:
                         if field_name not in self.reduced_fields:
-                            self.reduced_fields[field_name] = list()
+                            self.reduced_fields[field_name] = dict(
+                                interval=self.interval,
+                                nodes=list(),
+                            )
+                        elif self.interval != self.reduced_fields[field_name]["interval"]:
+                            is_full_field = True
                     else:
-                        self.full_fields.add(field_name)
-                        if field_name in self.reduced_fields:
-                            del self.reduced_fields[field_name]
+                        is_full_field = True
 
                 if field_name in self.reduced_fields:
-                    self.reduced_fields[field_name].append(node)
+                    if is_full_field:
+                        self.full_fields.add(field_name)
+                        del self.reduced_fields[field_name]
+                    else:
+                        self.reduced_fields[field_name]["nodes"].append(node)
 
             return True, node
 
