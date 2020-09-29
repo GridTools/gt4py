@@ -146,7 +146,7 @@ class StencilExpander:
             ################################### MAP ###################################
             ndrange = {iter_var: f"0:_{limit_var}_loc"}
             map_entry, map_exit = state.add_map(
-                self.library_node.label + f"_{variable}_map", ndrange=ndrange
+                self.library_node.label + f"_{limit_var}_map", ndrange=ndrange
             )
 
             inputs = {
@@ -170,7 +170,7 @@ class StencilExpander:
                 self._input_extents[i],
                 map_entry,
                 map_exit,
-                variable,
+                limit_var,
             )
 
             from dace.transformation.interstate import InlineSDFG
@@ -216,7 +216,7 @@ class StencilExpander:
                 for var_idx, var in enumerate("IJK"):
                     lower_extent, upper_extent = extent[var_idx]
 
-                    if var == variable:
+                    if var == limit_var:
                         subset_strs.append(
                             f"{var.lower()}:{var.lower()}+{(-lower_extent+upper_extent)+1}"
                         )
@@ -249,7 +249,7 @@ class StencilExpander:
                 sdfg.add_array(
                     input,
                     shape=tuple(
-                        f if var in self.not_yet_mapped_variables or var == variable else m
+                        f if var in self.not_yet_mapped_variables or var == limit_var else m
                         for var, m, f in zip("IJK", mapped_shape, full_shape)
                     ),
                     dtype=inner_sdfg.arrays[input].dtype,
@@ -269,8 +269,7 @@ class StencilExpander:
                 for var_idx, var in enumerate("IJK"):
                     lower_extent, upper_extent = extent[var_idx]
 
-                    if var == variable:
-                        assert var == "K"
+                    if var == limit_var:
                         subset_strs.append(
                             f"{var.lower()}:{var.lower()}+{(-lower_extent+upper_extent)+1}"
                         )
@@ -302,7 +301,9 @@ class StencilExpander:
                         sdfg.add_array(
                             output,
                             shape=tuple(
-                                f if var in self.not_yet_mapped_variables or var == variable else m
+                                f
+                                if var in self.not_yet_mapped_variables or var == limit_var
+                                else m
                                 for var, m, f in zip("IJK", mapped_shape, full_shape)
                             )
                             if isinstance(inner_sdfg.arrays[output], dace_data.Array)
@@ -541,16 +542,16 @@ class StencilExpander:
 
         for variable in reversed(self.library_node.loop_order):
             if (
-                variable == "K"
+                variable in ["k", "K"]
                 and self.library_node.iteration_order is not gt_ir.IterationOrder.PARALLEL
-            ):
-                self._loop(variable=variable)
+            ) or variable.islower():
+                self._loop(variable=variable.upper())
             else:
-                self._map(variable=variable)
-            if variable == "K":
+                self._map(variable=variable.upper())
+            if variable in ["k", "K"]:
                 self._make_state_machine()
 
-            self.not_yet_mapped_variables.add(variable)
+            self.not_yet_mapped_variables.add(variable.upper())
 
         assert len(self._inner_sdfgs) == 1
         assert len(self._k_ranges) == 1

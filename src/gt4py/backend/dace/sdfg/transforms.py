@@ -887,9 +887,24 @@ class PrefetchingKCachesTransform(dace.transformation.pattern_matching.Transform
 
     def apply(self, sdfg):
         graph: dace.sdfg.SDFGState = sdfg.nodes()[self.state_id]
-        nsdfg_node: library.StencilLibraryNode = graph.node(
-            self.subgraph[PrefetchingKCachesTransform._nsdfg_node]
-        )
+        nsdfg = graph.node(self.subgraph[PrefetchingKCachesTransform._nsdfg_node])
+        apply_count = 0
+        for state in nsdfg.sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.NestedSDFG):
+                    kcache_subgraph = {
+                        PrefetchingKCachesTransform._nsdfg_node: state.node_id(node)
+                    }
+                    trafo = PrefetchingKCachesTransform(
+                        nsdfg.sdfg.sdfg_id, nsdfg.sdfg.node_id(state), kcache_subgraph, 0
+                    )
+                    trafo.storage_type = dace.dtypes.StorageType.CPU_Heap
+                    trafo.apply(nsdfg.sdfg)
+                    apply_count += 1
+
+        if apply_count > 0:
+            return
+        nsdfg_node = nsdfg
         names = dict()
         for name, array in dict(nsdfg_node.sdfg.arrays).items():
             if self.arrays is not None and name not in self.arrays:
@@ -1090,19 +1105,9 @@ class PrefetchFieldTransform(LoopPeeling):
         )
 
     def add_store_all(
-        self,
-        state,
-        name,
-        itervar,
-        itervar_value,
-        var_idx,
-        in_subsets,
-        out_subsets,
-        length,
-        stride,
-        offset,
+        self, state, name, itervar, itervar_value, var_idx, subset_info, stride, offset,
     ):
-        if not out_subsets:
+        if not subset_info["out_subsets"]:
             return
 
         import dace
@@ -1112,25 +1117,15 @@ class PrefetchFieldTransform(LoopPeeling):
         write_acc = state.add_write(name)
         read_acc = state.add_read(f"_loc_buf_{name}")
 
-        subsets = in_subsets | out_subsets
-        res_subset = next(iter(subsets))
-        for subset in subsets:
-            res_subset = dace.subsets.union(res_subset, subset)
-        bounds = res_subset.ranges[var_idx][:2]
-        min_idx = min(bounds)
+        out_subset = copy.deepcopy(next(iter(subset_info["out_subsets"])))
+        write_idx = out_subset.ranges[var_idx][0]
 
-        subset = copy.deepcopy(next(iter(out_subsets)))
-        write_idx = subset.ranges[var_idx][0]
+        subset = self.specialize_subset(out_subset, var_idx, itervar_sym, itervar_value)
 
-        ranges = list(subset.ranges[var_idx])
-        for idx, sym_expr in enumerate(ranges):
-            ranges[idx] = sym_expr.subs(itervar_sym, itervar_value)
-        subset.ranges[var_idx] = tuple(ranges)
-
-        other_subset = copy.deepcopy(res_subset)
+        other_subset = copy.deepcopy(out_subset)
         other_ranges = (
-            write_idx - min_idx + 1 + offset,
-            write_idx - min_idx + 1 + offset,
+            write_idx - subset_info["min_idx"] + 1 + offset,
+            write_idx - subset_info["min_idx"] + 1 + offset,
             1,
         )
         other_subset.ranges[var_idx] = other_ranges
@@ -1191,54 +1186,6 @@ class PrefetchFieldTransform(LoopPeeling):
             ),
         )
 
-    def localize_tasklet_input(
-        self, state, name, itervar, itervar_value, var_idx, subset_info, stride, offset
-    ):
-        if not subset_info["in_subsets"]:
-            return
-        itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
-        nodes = []
-        for node in state.nodes():
-            if (
-                isinstance(node, dace.nodes.AccessNode)
-                and node.access == dace.AccessType.ReadOnly
-                and node.data == name
-                and all(
-                    isinstance(edge.dst, (dace.nodes.CodeNode, dace.nodes.EntryNode))
-                    for edge in state.out_edges(node)
-                )
-            ):
-                nodes.append(node)
-        assert len(nodes) == 1
-        node = nodes[0]
-        node.data = f"_loc_buf_{name}"
-
-        # change write from tasklet
-        min_idx = None
-        for node in [
-            n for n in state.nodes() if isinstance(n, (dace.nodes.CodeNode, dace.nodes.EntryNode))
-        ]:
-            for edge in [e for e in state.in_edges(node) if e.data.data == name]:
-                if min_idx is None or min_idx > edge.data.subset.ranges[var_idx][0]:
-                    min_idx = edge.data.subset.ranges[var_idx][0]
-        for node in [
-            n for n in state.nodes() if isinstance(n, (dace.nodes.CodeNode, dace.nodes.ExitNode))
-        ]:
-            for edge in [e for e in state.out_edges(node) if e.data.data == name]:
-                if min_idx is None or min_idx > edge.data.subset.ranges[var_idx][0]:
-                    min_idx = edge.data.subset.ranges[var_idx][0]
-
-        for node in [
-            n for n in state.nodes() if isinstance(n, (dace.nodes.CodeNode, dace.nodes.EntryNode))
-        ]:
-            for edge in [e for e in state.in_edges(node) if e.data.data == name]:
-
-                edge.data.data = f"_loc_buf_{name}"
-                ranges = list(edge.data.subset.ranges[var_idx])
-                ranges[0] += offset - min_idx
-                ranges[1] += offset - min_idx
-                edge.data.subset.ranges[var_idx] = tuple(ranges)
-
     def localize_tasklet_memlets(
         self, state, name, itervar, itervar_value, var_idx, subset_info, stride, offset
     ):
@@ -1297,43 +1244,56 @@ class PrefetchFieldTransform(LoopPeeling):
 
         write_acc = state.add_write(f"_loc_buf_{name}")
         read_acc = state.add_read(name)
+        #
+        # newest_subset = next(iter(subset_info["in_subsets"]))
+        # for subset in subset_info["in_subsets"]:
+        #     if (stride > 0 and subset.ranges[var_idx][0] > newest_subset.ranges[var_idx][0]) or (
+        #         stride < 0 and subset.ranges[var_idx][0] < newest_subset.ranges[var_idx][0]
+        #     ):
+        #         newest_subset = subset
 
-        newest_subset = next(iter(subset_info["in_subsets"]))
-        for subset in subset_info["in_subsets"]:
-            if (stride > 0 and subset.ranges[var_idx][0] > newest_subset.ranges[var_idx][0]) or (
-                stride < 0 and subset.ranges[var_idx][0] < newest_subset.ranges[var_idx][0]
-            ):
-                newest_subset = subset
-
-        import dace.subsets
-
-        for subset in subset_info["in_subsets"]:
-            if subset.ranges[var_idx][0] == newest_subset.ranges[var_idx][0]:
-                newest_subset = dace.subsets.union(newest_subset, subset)
-
-        outer_subset = self.specialize_subset(
-            newest_subset, var_idx, itervar_sym, itervar_value + stride
-        )
+        # import dace.subsets
+        #
+        # for subset in subset_info["in_subsets"]:
+        #     if subset.ranges[var_idx][0] == newest_subset.ranges[var_idx][0]:
+        #         newest_subset = dace.subsets.union(newest_subset, subset)
         if stride > 0:
             load_idx = subset_info["max_idx"] - subset_info["min_idx"] + 2 + offset
         else:
             load_idx = offset
+        ranges = list(subset_info["unified_subset"].ranges[var_idx])
+        ranges[0] = load_idx
+        ranges[1] = load_idx
+        subset = copy.deepcopy(subset_info["unified_subset"])
+        subset.ranges[var_idx] = tuple(ranges)
 
-        local_subset = copy.deepcopy(newest_subset)
-        local_ranges = list(local_subset.ranges[var_idx])
-        local_ranges[0] = load_idx
-        local_ranges[1] = load_idx
-        local_subset.ranges[var_idx] = tuple(local_ranges)
-        # local_subset = self.specialize_subset(local_subset, var_idx, itervar_sym, itervar_value)
+        ranges = list(subset_info["unified_subset"].ranges[var_idx])
+        ranges[0] = subset_info["max_idx"]
+        ranges[1] = subset_info["max_idx"]
+        newest_subset = copy.deepcopy(subset_info["unified_subset"])
+        newest_subset.ranges[var_idx] = tuple(ranges)
+
+        outer_subset = self.specialize_subset(
+            newest_subset, var_idx, itervar_sym, itervar_value + stride
+        )
+        # if stride > 0:
+        #     load_idx = subset_info["max_idx"] - subset_info["min_idx"] + 2 + offset
+        # else:
+        #     load_idx = offset
+
+        # local_subset = copy.deepcopy(newest_subset)
+        # local_ranges = list(local_subset.ranges[var_idx])
+        # local_ranges[0] = load_idx
+        # local_ranges[1] = load_idx
+        # local_subset.ranges[var_idx] = tuple(local_ranges)
+        # # local_subset = self.specialize_subset(local_subset, var_idx, itervar_sym, itervar_value)
 
         state.add_edge(
             read_acc,
             None,
             write_acc,
             None,
-            dace.Memlet.simple(
-                name, subset_str=str(outer_subset), other_subset_str=str(local_subset)
-            ),
+            dace.Memlet.simple(name, subset_str=str(outer_subset), other_subset_str=str(subset)),
         )
 
     def add_store(self, state, name, itervar, itervar_value, var_idx, subset_info, stride, offset):
@@ -1387,7 +1347,8 @@ class PrefetchFieldTransform(LoopPeeling):
         guard_inedges = sdfg.in_edges(guard)
         condition_edge = sdfg.edges_between(guard, begin)[0]
         not_condition_edge = sdfg.edges_between(guard, after_state)[0]
-        itervar = list(guard_inedges[0].data.assignments.keys())[0]
+
+        itervar = next(iter(sdfg.in_edges(guard)[0].data.assignments))
         itervar_sym = dace.symbolic.pystr_to_symbolic(itervar)
         condition = condition_edge.data.condition_sympy()
         rng = self._loop_range(itervar, guard_inedges, condition)
@@ -1409,6 +1370,8 @@ class PrefetchFieldTransform(LoopPeeling):
         )
         assert len(loop_states) == 1
         loop_state = loop_states[0]
+
+        var_idx = ["i", "j", "k"].index(str(itervar))
 
         try:
             niter = int(abs(rng[1] - rng[0]) / abs(rng[2])) + 1
@@ -1432,7 +1395,7 @@ class PrefetchFieldTransform(LoopPeeling):
 
             subset_infos = {}
             for name in arrays.keys():
-                subset_infos[name] = self.collect_subset_info(loop_state, name, var_idx=2)
+                subset_infos[name] = self.collect_subset_info(loop_state, name, var_idx=var_idx)
             ## peel both ends, add prefetching
             # peel first iteration
             apply_count = sdfg.apply_transformations(
@@ -1469,7 +1432,7 @@ class PrefetchFieldTransform(LoopPeeling):
             for name, array in arrays.items():
                 subset_info = subset_infos[name]
                 shape = list(array.shape)
-                shape[2] = subset_info["length"]
+                shape[var_idx] = subset_info["length"]
                 sdfg.add_array(
                     name=f"_loc_buf_{name}",
                     shape=shape,
@@ -1480,47 +1443,37 @@ class PrefetchFieldTransform(LoopPeeling):
                 )
 
                 self.add_prefetch_all(
-                    prefetch_state, name, itervar, rng[0], 2, subset_info, rng[2], 1
+                    prefetch_state, name, itervar, rng[0], var_idx, subset_info, rng[2], 1
                 )
 
                 if name in self.store:
                     self.add_store_all(
-                        store_state,
-                        name,
-                        itervar,
-                        rng[1],
-                        2,
-                        subset_info["in_subsets"],
-                        subset_info["out_subsets"],
-                        subset_info["length"],
-                        rng[2],
-                        rng[2],
+                        store_state, name, itervar, rng[1], var_idx, subset_info, rng[2], rng[2],
                     )
                 self.localize_tasklet_memlets(
-                    peeled_first, name, itervar, 0, 2, subset_info, rng[2], 1
+                    peeled_first, name, itervar, 0, var_idx, subset_info, rng[2], 1
                 )
                 self.localize_tasklet_memlets(
-                    loop_state, name, itervar, itervar, 2, subset_info, rng[2], 1
+                    loop_state, name, itervar, itervar, var_idx, subset_info, rng[2], 1
                 )
                 self.localize_tasklet_memlets(
-                    peeled_last, name, itervar, rng[1], 2, subset_info, rng[2], 1 + rng[2]
+                    peeled_last, name, itervar, rng[1], var_idx, subset_info, rng[2], 1 + rng[2]
                 )
-                # self.localize_tasklet_output(
-                #     peeled_first, name, itervar, 0, 2, subset_info, rng[2], 1
-                # )
-                # self.localize_tasklet_output(
-                #     loop_state, name, itervar, itervar, 2, subset_info, rng[2], 1
-                # )
-                # self.localize_tasklet_output(
-                #     peeled_last, name, itervar, rng[1], 2, subset_info, rng[2], 1 + rng[2]
-                # )
-                self.add_prefetch(loop_state, name, itervar, itervar, 2, subset_info, rng[2], 0)
-                self.add_prefetch(peeled_first, name, itervar, rng[0], 2, subset_info, rng[2], 0)
-                self.add_shift_local(shift_state, name, itervar, rng[0], 2, subset_info, rng[2], 0)
+                self.add_prefetch(
+                    loop_state, name, itervar, itervar, var_idx, subset_info, rng[2], 0
+                )
+                self.add_prefetch(
+                    peeled_first, name, itervar, rng[0], var_idx, subset_info, rng[2], 0
+                )
+                self.add_shift_local(
+                    shift_state, name, itervar, rng[0], var_idx, subset_info, rng[2], 0
+                )
                 if name in self.store:
-                    self.add_store(loop_state, name, itervar, itervar, 2, subset_info, rng[2], 0)
                     self.add_store(
-                        peeled_last, name, itervar, rng[1], 2, subset_info, rng[2], rng[2]
+                        loop_state, name, itervar, itervar, var_idx, subset_info, rng[2], 0
+                    )
+                    self.add_store(
+                        peeled_last, name, itervar, rng[1], var_idx, subset_info, rng[2], rng[2]
                     )
 
         if niter < 3:

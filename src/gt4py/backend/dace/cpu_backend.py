@@ -27,10 +27,6 @@ class X86DaceOptimizer(CPUDaceOptimizer):
 
         sdfg.apply_transformations_repeated(PruneTransientOutputs, validate=False)
 
-        for state in sdfg.nodes():
-            for node in state.nodes():
-                if isinstance(node, StencilLibraryNode):
-                    node.loop_order = "IJK"
         return sdfg
 
     def transform_optimize(self, sdfg):
@@ -39,9 +35,11 @@ class X86DaceOptimizer(CPUDaceOptimizer):
         from dace.transformation.dataflow import MapCollapse
 
         sdfg.apply_transformations_repeated(MapCollapse, validate=False)
+
         from gt4py.backend.dace.sdfg.transforms import OnTheFlyMapFusion
 
         sdfg.apply_transformations_repeated(OnTheFlyMapFusion, validate=False)
+
         sdfg.apply_strict_transformations(validate=False)
         for name, array in sdfg.arrays.items():
             if array.transient:
@@ -60,11 +58,6 @@ class X86DaceOptimizer(CPUDaceOptimizer):
                     )
                     trafo.storage_type = dace.dtypes.StorageType.CPU_Heap
                     trafo.apply(sdfg)
-                    # node.sdfg.apply_transformations(
-                    #     PrefetchingKCachesTransform,
-                    #     options={"storage_type": dace.dtypes.StorageType.CPU_Heap},
-                    #     validate=False,
-                    # )
 
         # from dace.transformation.subgraph.subgraph_fusion import SubgraphFusion
         # from dace.sdfg.graph import SubgraphView

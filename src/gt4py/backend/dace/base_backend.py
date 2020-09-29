@@ -295,8 +295,8 @@ class DaceBackend(gt_backend.BaseBackend):
         from gt4py.backend.dace.sdfg.library.nodes import StencilLibraryNode
 
         comp_layout_parallel = options.backend_opts.get("computation_layout", "JKI")
-        comp_layout_vertical = comp_layout_parallel.replace("K", "") + "K"
-
+        # comp_layout_vertical = comp_layout_parallel.replace("K", "") + "K"
+        comp_layout_vertical = comp_layout_parallel
         for name, array in sdfg.arrays.items():
             import dace.data
 
