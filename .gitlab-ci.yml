@@ -14,9 +14,17 @@ include:
   PYVERSION: 3.8.5
 
 stages:
+  - notifystart
   - image
   - test
   - cleanup
+
+notify_github_pending:
+  stage: notifystart
+  only: ["master", "staging", "trying"]
+  tags: ["kubernetes"]
+  image: $CI_REGISTRY_IMAGE/bgcj
+  script: ./ci/set_github_status.sh pending
 
 build py38:
   extends: .dind
@@ -81,7 +89,7 @@ notify_github_success:
   when: on_success
   only: ["master", "staging", "trying"]
   tags: ["kubernetes"]
-  image: stabbles/git-curl
+  image: $CI_REGISTRY_IMAGE/bgcj
   script: ./ci/set_github_status.sh success
 
 notify_github_failure:
@@ -89,5 +97,5 @@ notify_github_failure:
   when: on_failure
   only: ["master", "staging", "trying"]
   tags: ["kubernetes"]
-  image: stabbles/git-curl
+  image: $CI_REGISTRY_IMAGE/bgcj
   script: ./ci/set_github_status.sh failure
