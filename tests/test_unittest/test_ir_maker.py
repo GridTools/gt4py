@@ -11,4 +11,4 @@ def test_AugAssign():
     _, result = ir_maker.visit_AugAssign(aug_assign)
 
     assert isinstance(result.value, BinOpExpr)
-    assert isinstance(result.value.op, BinaryOperator.ADD)
+    assert result.value.op == BinaryOperator.ADD
