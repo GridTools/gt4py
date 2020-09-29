@@ -65,6 +65,4 @@ def test_reduce_temporary_storages_pass():
     builder = StencilBuilder(double_smul_forward)
     iir = builder.implementation_ir
     assert iir.temporary_fields == ["tmp_f"]
-
-    field_decl = iir.fields["tmp_f"]
     assert iir.fields["tmp_f"].axes == ["I", "J"]
