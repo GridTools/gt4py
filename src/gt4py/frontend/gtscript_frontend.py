@@ -855,7 +855,7 @@ class IRMaker(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call):
         native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 
-        args = [self.visit(arg) for arg in node.args]
+        args = [gt_ir.utils.make_expr(self.visit(arg)) for arg in node.args]
         if len(args) != native_fcn.arity:
             raise GTScriptSyntaxError(
                 "Invalid native function call", loc=gt_ir.Location.from_ast_node(node)
