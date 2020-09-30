@@ -271,15 +271,16 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 if target in self.block_info.symbols
                 else stmt.target.data_type
             )
+            is_possible_else = not isinstance(stmt.target, gt_ir.VarRef) or (
+                stmt.target.name in self.var_refs_defined
+            )
 
             sources.append(
-                "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
+                "{target} = np.where({condition}, {then_expr}, {else_expr})".format(
                     condition=condition,
                     target=target,
                     then_expr=value,
-                    else_expr=target,
-                    dtype=data_type.dtype.name,
-                    np=self.numpy_prefix,
+                    else_expr=target if is_possible_else else "np.nan",
                 )
             )
         else:

@@ -247,3 +247,32 @@ def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3D
             a4_3 = a4_1
         else:
             diff_23 = a4_2 - a4_3
+
+
+@register
+def local_var_inside_conditional(in_storage: Field3D, out_storage: Field3D):
+    with computation(PARALLEL), interval(...):
+        if in_storage[0, 0, 0] > 0:
+            local_var = 1
+            out_storage[0, 0, 0] = local_var
+
+
+@register
+def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3D):
+    with computation(PARALLEL), interval(...):
+        mid_storage = 2
+        if in_storage[0, 0, 0] > 0:
+            local_var = 4
+            mid_storage = 3
+            out_storage[0, 0, 0] = local_var + mid_storage
+
+
+@register(splitters={"jstart": 1, "jend": 3})
+def parallel_regions(in_storage: Field3D, out_storage: Field3D):
+    from __splitters__ import jend, jstart
+
+    with computation(PARALLEL):
+        with interval(0, 1), parallel(region[:, jstart:jend]):
+            out_storage = in_storage[-1, 0, 0]
+        with interval(1, None):
+            out_storage = in_storage[1, 0, 0]
