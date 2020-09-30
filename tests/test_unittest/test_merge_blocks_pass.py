@@ -12,12 +12,12 @@ from gt4py.analysis import (
 )
 from gt4py.ir.nodes import Axis, Domain, IterationOrder
 
-from ..analysis_setup import PassType
+from ..analysis_setup import AnalysisPass
 from ..definition_setup import TAssign, TComputationBlock, TDefinition
 
 
 def test_merge_write_after_read_ij_extended(
-    merge_blocks_pass: PassType,
+    merge_blocks_pass: AnalysisPass,
     iteration_order: IterationOrder,
     ij_offset: Tuple[int, int, int],
     ijk_domain: Domain,
@@ -42,7 +42,7 @@ def test_merge_write_after_read_ij_extended(
 
 
 def test_merge_write_after_read_ij_offset(
-    merge_blocks_pass: PassType,
+    merge_blocks_pass: AnalysisPass,
     iteration_order: IterationOrder,
     ij_offset: Tuple[int, int, int],
     ijk_domain: Domain,
@@ -65,7 +65,7 @@ def test_merge_write_after_read_ij_offset(
 
 
 def test_merge_read_after_read_ij_offset(
-    merge_blocks_pass: PassType,
+    merge_blocks_pass: AnalysisPass,
     iteration_order: IterationOrder,
     ij_offset: Tuple[int, int, int],
     ijk_domain: Domain,
@@ -85,7 +85,9 @@ def test_merge_read_after_read_ij_offset(
 
 
 def test_merge_write_after_read_k(
-    merge_blocks_pass: PassType, non_parallel_iteration_order: IterationOrder, ijk_domain: Domain
+    merge_blocks_pass: AnalysisPass,
+    non_parallel_iteration_order: IterationOrder,
+    ijk_domain: Domain,
 ) -> None:
     transform_data = (
         TDefinition(name="k_offset_nonparallel", domain=ijk_domain, fields=["out", "inout", "in"])
@@ -102,7 +104,7 @@ def test_merge_write_after_read_k(
 
 
 def test_merge_write_after_read_k_parallel(
-    merge_blocks_pass: PassType, ijk_domain: Domain
+    merge_blocks_pass: AnalysisPass, ijk_domain: Domain
 ) -> None:
     transform_data = (
         TDefinition(name="k_offset_parallel", domain=ijk_domain, fields=["out", "inout", "in"])
@@ -119,7 +121,7 @@ def test_merge_write_after_read_k_parallel(
 
 
 def test_no_merge_read_with_offset_after_write(
-    merge_blocks_pass: PassType, ijk_domain: Domain
+    merge_blocks_pass: AnalysisPass, ijk_domain: Domain
 ) -> None:
     transform_data = (
         TDefinition(name="no_merge_k_offset", domain=ijk_domain, fields=["out", "in", "tmp"])
@@ -141,7 +143,9 @@ def test_no_merge_read_with_offset_after_write(
 
 
 def test_merge_write_after_read_k_extended_sequential(
-    merge_blocks_pass: PassType, non_parallel_iteration_order: IterationOrder, ijk_domain: Domain
+    merge_blocks_pass: AnalysisPass,
+    non_parallel_iteration_order: IterationOrder,
+    ijk_domain: Domain,
 ) -> None:
     transform_data = (
         TDefinition(name="k_extended", domain=ijk_domain, fields=["out", "in", "inout"])
@@ -160,7 +164,7 @@ def test_merge_write_after_read_k_extended_sequential(
 
 
 def test_merge_read_after_write_k_parallel_seq(
-    merge_blocks_pass: PassType, ijk_domain: Domain
+    merge_blocks_pass: AnalysisPass, ijk_domain: Domain
 ) -> None:
     transform_data = (
         TDefinition(
@@ -180,7 +184,7 @@ def test_merge_read_after_write_k_parallel_seq(
 
 
 @pytest.mark.skip(reason="ComputeExtentsPass fails if no sequential axis")
-def test_merge_read_after_write_k_parallel_noseq(merge_blocks_pass: PassType) -> None:
+def test_merge_read_after_write_k_parallel_noseq(merge_blocks_pass: AnalysisPass) -> None:
     transform_data = (
         TDefinition(
             name="read_after_write_forbidden_noseq",
@@ -204,7 +208,9 @@ def test_merge_read_after_write_k_parallel_noseq(merge_blocks_pass: PassType) ->
 
 
 def test_merge_read_after_write_k_sequential(
-    merge_blocks_pass: PassType, ijk_domain: Domain, non_parallel_iteration_order: IterationOrder
+    merge_blocks_pass: AnalysisPass,
+    ijk_domain: Domain,
+    non_parallel_iteration_order: IterationOrder,
 ) -> None:
     transform_data = (
         TDefinition(name="read_after_write_forbidden_seq", domain=ijk_domain, fields=["out", "in"])
@@ -222,7 +228,7 @@ def test_merge_read_after_write_k_sequential(
 
 
 def test_no_merge_with_overlapping_intervals(
-    merge_blocks_pass: PassType, ijk_domain: Domain
+    merge_blocks_pass: AnalysisPass, ijk_domain: Domain
 ) -> None:
     transform_data = (
         TDefinition(
@@ -299,7 +305,7 @@ class _StatementPositionVisitor:
         self.statements[statement.stmt.loc.line] = SPTYPE(*self.cursor)
 
 
-def test_split_reorderable(merge_blocks_pass: PassType, ijk_domain: Domain) -> None:
+def test_split_reorderable(merge_blocks_pass: AnalysisPass, ijk_domain: Domain) -> None:
     """
     Statements separated by a write after read occurrence are split in separate multi stages.
 
@@ -355,7 +361,7 @@ def test_split_reorderable(merge_blocks_pass: PassType, ijk_domain: Domain) -> N
     assert statement_pos[3].statements == 1
 
 
-def test_split_preordered(merge_blocks_pass: PassType, ijk_domain: Domain) -> None:
+def test_split_preordered(merge_blocks_pass: AnalysisPass, ijk_domain: Domain) -> None:
     """
     Statements preordered to be on the same side of the write after read occurence can be merged.
 

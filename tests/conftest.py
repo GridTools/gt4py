@@ -26,7 +26,7 @@ import pytest
 from gt4py import config as gt_config
 
 from .analysis_setup import (
-    PassType,
+    AnalysisPass,
     compute_extents_pass,
     init_pass,
     merge_blocks_pass,
