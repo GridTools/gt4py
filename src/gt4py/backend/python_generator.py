@@ -199,7 +199,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         rhs = self.visit(node.value)
 
         if isinstance(node.target, gt_ir.VarRef):
-            self.var_refs_used.add(node.target.name)
+            self.var_refs_defined.add(node.target.name)
 
         source = "{lhs} = {rhs}".format(lhs=lhs, rhs=rhs)
 
