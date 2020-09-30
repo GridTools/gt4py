@@ -465,6 +465,68 @@ class CompiledIfInliner(ast.NodeTransformer):
 #
 
 
+class TemporaryFieldCollector(ast.NodeVisitor):
+    def __init__(
+        self,
+        fields: dict,
+        parameters: dict,
+        local_symbols: dict,
+    ):
+        fields = fields or {}
+        parameters = parameters or {}
+        assert all(isinstance(name, str) for name in parameters.keys())
+        local_symbols = local_symbols or {}
+        assert all(isinstance(name, str) for name in local_symbols.keys()) and all(
+            isinstance(value, (type, np.dtype)) for value in local_symbols.values()
+        )
+
+        self.fields = fields
+        self.parameters = parameters
+        self.local_symbols = local_symbols
+        self.new_fields = {}
+
+    # Helpers functions
+    def _is_field(self, name: str):
+        return name in self.fields
+
+    def _is_parameter(self, name: str):
+        return name in self.parameters
+
+    def _is_local_symbol(self, name: str):
+        return name in self.local_symbols
+
+    def _is_known(self, name: str):
+        return self._is_field(name) or self._is_parameter(name) or self._is_local_symbol(name)
+
+    def visit_If(self, node: ast.If) -> list:
+        """Collects all the temporary fields used in an if-condition."""
+        result = []
+
+        for stmt in node.body:
+            result.extend(gt_utils.listify(self.visit(stmt)))
+        if node.orelse:
+            for stmt in node.orelse:
+                result.extend(gt_utils.listify(self.visit(stmt)))
+        return result
+
+    def visit_Assign(self, node: ast.Assign) -> list:
+        """Collects all the temporary (unknown) fields in an assignment."""
+        result = []
+        # Create declarations for temporary fields
+        for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
+            if isinstance(t, ast.Name):
+                if not self._is_known(t.id):
+                    field_decl = gt_ir.FieldDecl(
+                        name=t.id,
+                        data_type=gt_ir.DataType.AUTO,
+                        axes=[ax.name for ax in gt_ir.Domain.LatLonGrid().axes],
+                        is_api=False,
+                    )
+                    result.append(field_decl)
+                    self.fields[field_decl.name] = field_decl
+        return result
+
+
 @enum.unique
 class ParsingContext(enum.Enum):
     CONTROL_FLOW = 1
@@ -830,7 +892,16 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
-    def visit_If(self, node: ast.If) -> gt_ir.If:
+    def visit_If(self, node: ast.If) -> list:
+
+        result = []
+        # collect all the temporaries used inside the if-statement
+        collector = TemporaryFieldCollector(self.fields, self.parameters, self.local_symbols)
+        temporaries = collector.visit(node)
+        for field_decl in temporaries:
+            self.fields[field_decl.name] = field_decl
+            result.append(field_decl)
+
         self.in_if = True
         main_stmts = []
         for stmt in node.body:
@@ -843,10 +914,12 @@ class IRMaker(ast.NodeVisitor):
                 else_stmts.extend(gt_utils.listify(self.visit(stmt)))
             assert all(isinstance(item, gt_ir.Statement) for item in else_stmts)
 
-        result = gt_ir.If(
-            condition=gt_ir.utils.make_expr(self.visit(node.test)),
-            main_body=gt_ir.BlockStmt(stmts=main_stmts),
-            else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
+        result.append(
+            gt_ir.If(
+                condition=gt_ir.utils.make_expr(self.visit(node.test)),
+                main_body=gt_ir.BlockStmt(stmts=main_stmts),
+                else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
+            )
         )
         self.in_if = False
 
