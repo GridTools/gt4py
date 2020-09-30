@@ -79,8 +79,8 @@ class TestAugAssign(gt_testing.StencilTestSuite):
             field_b /= 2.0
 
     def validation(field_a, field_b, domain=None, origin=None):
-        field_a = (field_a + 1.0) * 2.0
-        field_b = (field_b - 1.0) / 2.0
+        field_a[...] = (field_a[...] + 1.0) * 2.0
+        field_b[...] = (field_b[...] - 1.0) / 2.0
 
 
 # ---- Scale stencil ----

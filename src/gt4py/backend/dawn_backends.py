@@ -224,12 +224,6 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         stmt = sir_utils.make_assignment_stmt(left, right, "=")
         return stmt
 
-    def visit_AugAssign(self, node: gt_ir.AugAssign) -> SIR.AssignmentExpr:
-        # ignore types due to attribclass problem
-        bin_op = gt_ir.BinOpExpr(lhs=node.target, op=node.op, rhs=node.value)  # type: ignore
-        assign = gt_ir.Assign(target=node.target, value=bin_op)  # type: ignore
-        return self.visit(assign)
-
     def visit_If(self, node: gt_ir.If, **kwargs: Any) -> SIR.IfStmt:
         cond = sir_utils.make_expr_stmt(self.visit(node.condition))
         then_part = self.visit(node.main_body)
