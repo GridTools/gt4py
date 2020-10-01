@@ -117,6 +117,37 @@ class TDefinition(TObject):
         return self
 
     @property
+    def width(self) -> int:
+        return 0
+
+    @property
+    def height(self) -> int:
+        return super().height - 1
+
+    @property
+    def api_signature(self) -> List[ArgumentInfo]:
+        return [ArgumentInfo(name=n, is_keyword=False) for n in self.fields]
+
+    @property
+    def api_fields(self) -> List[FieldDecl]:
+        tmp_field_names = self.field_names.difference(self.fields)
+        tmp_fields = [
+            FieldDecl(name=n, data_type=DataType.AUTO, axes=self.domain.axes_names, is_api=False)
+            for n in tmp_field_names
+        ]
+        return tmp_fields + [
+            FieldDecl(name=n, data_type=DataType.AUTO, axes=self.domain.axes_names, is_api=True)
+            for n in self.fields
+        ]
+
+    def build(self) -> StencilDefinition:
+        return StencilDefinition(
+            name=self.name,
+            domain=self.domain,
+            api_signature=self.api_signature,
+            api_fields=self.api_fields,
+            parameters=self.parameters,
+            computations=[block.build() for block in self.children],
             docstring=self.docstring,
             loc=self.loc,
         )
