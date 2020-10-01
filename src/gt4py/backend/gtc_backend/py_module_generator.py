@@ -5,4 +5,4 @@ class GTCPyModuleGenerator(BaseModuleGenerator):
     """Generate a python stencil module loadable by gt4py."""
 
     def generate_implementation(self) -> str:
-        return ""
+        return "pass"
