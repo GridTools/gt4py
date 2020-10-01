@@ -110,7 +110,9 @@ def function(func):
 
     from gt4py.frontend import gtscript_frontend as gt_frontend
 
-    gt_frontend.GTScriptParser.annotate_definition(func)
+    # Mark as a gtscript function by adding the _gtscript_ attribute
+    func._gtscript_ = None
+
     return func
 
 

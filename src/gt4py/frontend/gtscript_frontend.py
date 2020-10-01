@@ -1220,6 +1220,12 @@ class GTScriptParser(ast.NodeVisitor):
         resolved_imports = {**imported}
         resolved_values_list = list(nonlocals.items())
 
+        # Annotate gtscript functions that are called
+        for name, value in resolved_values_list:
+            if hasattr(value, "_gtscript_") and value._gtscript_ is None:
+                # was marked as a function
+                value = GTScriptParser.annotate_definition(value)
+
         # Collect all imported and inlined values recursively through all the external symbols
         while resolved_imports or resolved_values_list:
             new_imports = {}
