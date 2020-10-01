@@ -1,6 +1,6 @@
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Type, Union
 
-from gt4py.backend.base import CLIBackendMixin, register
+from gt4py.backend.base import BaseBackend, CLIBackendMixin, register
 from gt4py.backend.debug_backend import (
     debug_is_compatible_layout,
     debug_is_compatible_type,
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 @register
-class GTCPythonBackend(CLIBackendMixin):
+class GTCPythonBackend(BaseBackend, CLIBackendMixin):
     """Pure python backend using gtc."""
 
     name = "gtc:py"
@@ -35,11 +35,15 @@ class GTCPythonBackend(CLIBackendMixin):
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         filename = self.builder.module_path.name
-        source = GTCPyModuleGenerator(self.builder)(MOCK_ARG_INFO)
+        source = self.make_module_source()
         return {filename: source}
 
-    def generate(self) -> Type["StencilObject"]:
-        pass
+    def make_module_source(
+        self, *, args_data: Optional[Dict[str, Any]] = None, **kwargs: Any
+    ) -> str:
+        return GTCPyModuleGenerator(self.builder)(MOCK_ARG_INFO)
 
-    def load(self) -> Type["StencilObject"]:
-        pass
+    def generate(self) -> Type["StencilObject"]:
+        self.builder.module_path.parent.mkdir(parents=True, exist_ok=True)
+        self.builder.module_path.write_text(self.make_module_source())
+        return self._load()
