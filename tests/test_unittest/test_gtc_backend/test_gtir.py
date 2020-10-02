@@ -13,6 +13,9 @@ from gt4py.backend.gtc_backend.gtir import (
     VerticalLoop,
 )
 
+from devtools import debug
+
+from gt4py.backend.gtc_backend.python_naive_codegen import PythonNaiveCodegen
 
 @pytest.fixture
 def copy_assign():
@@ -57,3 +60,7 @@ def copy_computation(copy_stencil):
 
 def test_copy(copy_computation):
     assert copy_computation
+
+def test_naive_python_copy(copy_computation):
+    print(PythonNaiveCodegen.apply(copy_computation))
+    assert False
