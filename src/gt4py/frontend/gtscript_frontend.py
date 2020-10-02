@@ -1131,15 +1131,14 @@ class GTScriptParser(ast.NodeVisitor):
         canonical_ast = gt_meta.ast_dump(definition)
 
         # Recursively annotate gtscript functions called
-        # Nonlocals
+        # nonlocals
         for name, symbol in nonlocal_symbols.items():
             if hasattr(symbol, "_gtscript_"):
-                # was marked as a function
                 cls.annotate_definition(symbol, externals=nonlocal_symbols)
-        # From externals
+
+        # externals
         for name in imported_symbols.keys():
             if name in externals and hasattr(externals[name], "_gtscript_"):
-                # was marked as a function
                 cls.annotate_definition(externals[name], externals=nonlocal_symbols)
 
         definition._gtscript_ = dict(
