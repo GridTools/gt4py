@@ -43,12 +43,33 @@ class Domain(LocNode):
     pass
 
 
+class CartesianOffset(Node):
+    i: int
+    j: int
+    k: int
+
+    @classmethod
+    def zero(cls):
+        return cls(i=0, j=0, k=0)
+
+
 class FieldAccess(Expr):
     name: Str  # via symbol table
+    offset: CartesianOffset
+
+    @classmethod
+    def centered(cls, *, name, loc=None):
+        return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
 
 class AssignStmt(Stmt):
     left: FieldAccess  # there are no local variables in gtir, only fields
+    right: Expr
+
+
+class BinaryOp(Expr):
+    op: common.BinaryOperator
+    left: Expr
     right: Expr
 
 

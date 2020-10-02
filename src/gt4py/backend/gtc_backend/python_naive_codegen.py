@@ -1,58 +1,51 @@
 from eve import codegen
 from mako import template as mako_tpl
 
-class PythonNaiveCodegen(codegen.TemplatedGenerator):
-    # DATA_TYPE_TO_STR: ClassVar[Mapping[common.LocationType, str]] = MappingProxyType(
-    #     {
-    #         common.DataType.BOOLEAN: "bool",
-    #         common.DataType.INT32: "int",
-    #         common.DataType.UINT32: "unsigned_int",
-    #         common.DataType.FLOAT32: "float",
-    #         common.DataType.FLOAT64: "double",
-    #     }
-    # )
-    # BUILTIN_LITERAL_TO_STR: ClassVar[Mapping[common.BuiltInLiteral, str]] = MappingProxyType(
-    #     {
-    #         common.BuiltInLiteral.MAX_VALUE: "std::numeric_limits<TODO>::max()",
-    #         common.BuiltInLiteral.MIN_VALUE: "std::numeric_limits<TODO>::min()",
-    #         common.BuiltInLiteral.ZERO: "0",
-    #         common.BuiltInLiteral.ONE: "1",
-    #     }
-    # )
 
-    Computation_template = mako_tpl.Template("def ${ name }(${ ', '.join(params) })")
+class PythonNaiveCodegen(codegen.TemplatedGenerator):
+
+    Computation_template = mako_tpl.Template(
+        "def ${ name }(${ ', '.join(params) }):\n"
+        "% for stencil in stencils:\n"
+        "    ${ stencil | trim }\n\n"
+        "% endfor"
+    )
 
     FieldDecl_template = "{name}"
 
-    SidCompositeEntry_template = "{name}"
-
-    SidComposite_template = mako_tpl.Template(
-        """
-        auto ${ _this_node.field_name } = tu::make<gridtools::sid::composite::keys<${ ','.join([t.tag_name for t in _this_node.entries]) }>::values>(
-        ${ ','.join(entries)});
-        """
+    Stencil_template = mako_tpl.Template(
+        "    % for vloop in vertical_loops:\n" "    ${ vloop | trim }\n" "    % endfor"
     )
 
+    VerticalLoop_template = mako_tpl.Template(
+        "    with computation(${ loop_order }):\n"
+        "    % for interval in vertical_intervals:\n"
+        "        ${ interval | trim }\n"
+        "    % endfor"
+    )
 
-    # def visit_KernelCall(self, node: KernelCall, **kwargs):
-    #     kernel: Kernel = kwargs["symbol_tbl_kernel"][node.name]
-    #     connectivities = [self.generic_visit(conn, **kwargs) for conn in kernel.connectivities]
-    #     primary_connectivity: Connectivity = kernel.symbol_tbl[kernel.primary_connectivity]
-    #     sids = [self.generic_visit(s, **kwargs) for s in kernel.sids if len(s.entries) > 0]
+    VerticalInterval_template = mako_tpl.Template(
+        "        with interval(${ start }, ${ end }):\n"
+        "        % for hloop in horizontal_loops:\n"
+        "            ${ hloop | trim }\n"
+        "        % endfor"
+    )
 
-    #     # TODO I don't like that I render here and that I somehow have the same pattern for the parameters
-    #     args = [c.name for c in kernel.connectivities]
-    #     args += [
-    #         "gridtools::sid::get_origin({0}), gridtools::sid::get_strides({0})".format(s.field_name)
-    #         for s in kernel.sids
-    #         if len(s.entries) > 0
-    #     ]
-    #     # connectivity_args = [c.name for c in kernel.connectivities]
-    #     return self.generic_visit(
-    #         node,
-    #         connectivities=connectivities,
-    #         sids=sids,
-    #         primary_connectivity=primary_connectivity,
-    #         args=args,
-    #         **kwargs,
-    #     )
+    AxisBound_template = mako_tpl.Template(
+        "<%! from gt4py.backend.gtc_backend.common import LevelMarker %>\\\n"
+        "% if _this_node.level == LevelMarker.START:\n"
+        "${ offset }\\\n"
+        "% elif _this_node.level == LevelMarker.END:\n"
+        "${ _this_node.offset and -_this_node.offset or None }\\\n"
+        "% endif"
+    )
+
+    HorizontalLoop_template = "{stmt}"
+
+    AssignStmt_template = "{left} = {right}"
+
+    FieldAccess_template = "{name}[{offset}]"
+
+    CartesianOffset_template = "{i}, {j}, {k}"
+
+    BinaryOp_template = "{left} {op} {right}"
