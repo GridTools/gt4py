@@ -123,6 +123,75 @@ class SubgraphFusion(DaceOptimizer):
         return sdfg
 
 
+class TileMap(DaceOptimizer):
+    def __init__(self, dimension, tile_size, divides_evenly=False):
+        self.dimension = dimension.lower()
+        self.tile_size = tile_size
+        self.divides_evenly = divides_evenly
+
+    def transform_optimize(self, sdfg: dace.SDFG):
+
+        from dace.transformation.dataflow import (
+            MapCollapse,
+            MapExpansion,
+            MapTiling,
+            MapInterchange,
+        )
+
+        sdfg.apply_transformations_repeated(MapExpansion, validate=False)
+        for state in sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.MapEntry) and self.dimension in node.map.params:
+                    candidate = {MapTiling._map_entry: state.node_id(node)}
+                    trafo = MapTiling(sdfg.sdfg_id, sdfg.node_id(state), candidate, 0)
+                    trafo.tile_sizes = (self.tile_size,)
+                    trafo.divides_evenly = self.divides_evenly
+                    trafo.apply(sdfg)
+        # bubble sort the maps :D
+        applied = True
+        while applied:
+            applied = False
+            for state in sdfg.nodes():
+                for node in state.nodes():
+                    if isinstance(node, dace.nodes.MapEntry) and self.dimension in node.map.params:
+                        for other_node in (edge.dst for edge in state.out_edges(node)):
+                            if isinstance(other_node, dace.nodes.MapEntry):
+                                candidate = {
+                                    MapInterchange._outer_map_entry: state.node_id(node),
+                                    MapInterchange._inner_map_entry: state.node_id(other_node),
+                                }
+                                trafo = MapInterchange(
+                                    sdfg.sdfg_id, sdfg.node_id(state), candidate, 0
+                                )
+                                trafo.apply(sdfg)
+                                from dace.sdfg.propagation import propagate_memlets_sdfg
+
+                                applied = True
+                                break
+        sdfg.apply_transformations_repeated(MapCollapse, validate=False)
+
+        return sdfg
+
+
+class MapToFor(DaceOptimizer):
+    def __init__(self, dimension):
+        self.dimension = dimension.lower()
+
+    def transform_optimize(self, sdfg):
+        from dace.transformation.dataflow import MapExpansion, MapCollapse, MapToForLoop
+
+        sdfg.apply_transformations_repeated(MapExpansion, validate=False)
+        for state in sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.MapEntry) and self.dimension in node.map.params:
+                    candidate = {MapToForLoop._map_entry: state.node_id(node)}
+                    trafo = MapToForLoop(sdfg.sdfg_id, sdfg.node_id(state), candidate, 0)
+                    trafo.apply(sdfg)
+        sdfg.apply_transformations_repeated(MapCollapse, validate=False)
+
+        return sdfg
+
+
 class PrefetchingKCaches(DaceOptimizer):
     def __init__(self, arrays=None, storage_type=dace.dtypes.StorageType.Register):
         self.storage_type = storage_type

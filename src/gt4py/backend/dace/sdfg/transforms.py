@@ -936,7 +936,7 @@ class PrefetchingKCachesTransform(dace.transformation.pattern_matching.Transform
                     graph.remove_node(node)
 
         if self.arrays is None:
-            array_list = list(names.keys())
+            array_list = list(name for name in names.keys() if not name.startswith("__tmp"))
         else:
             array_list = self.arrays
         apply_count = nsdfg_node.sdfg.apply_transformations(
@@ -997,19 +997,40 @@ class PrefetchFieldTransform(LoopPeeling):
         for edge in state.edges():
             if isinstance(edge.dst, dace.nodes.CodeNode) and edge.data.data == name:
                 in_subsets.add(copy.deepcopy(edge.data.subset))
+            if (
+                isinstance(edge.dst, dace.nodes.AccessNode)
+                and edge.dst.access == dace.dtypes.AccessType.ReadWrite
+                and edge.data.data == name
+            ):
+                in_subsets.add(copy.deepcopy(edge.data.subset))
             if isinstance(edge.src, dace.nodes.CodeNode) and edge.data.data == name:
+                out_subsets.add(copy.deepcopy(edge.data.subset))
+            if (
+                isinstance(edge.src, dace.nodes.AccessNode)
+                and edge.src.access == dace.dtypes.AccessType.ReadWrite
+                and edge.data.data == name
+            ):
                 out_subsets.add(copy.deepcopy(edge.data.subset))
 
         outer_in_subsets = set()
         outer_out_subsets = set()
 
         for edge in state.edges():
-            if isinstance(edge.src, dace.nodes.AccessNode) and edge.data.data == name:
+            if (
+                isinstance(edge.src, dace.nodes.AccessNode)
+                and edge.src.access == dace.dtypes.AccessType.ReadOnly
+                and edge.data.data == name
+            ):
                 outer_in_subsets.add(copy.deepcopy(edge.data.subset))
-            if isinstance(edge.dst, dace.nodes.AccessNode) and edge.data.data == name:
+            if (
+                isinstance(edge.dst, dace.nodes.AccessNode)
+                and edge.dst.access == dace.dtypes.AccessType.WriteOnly
+                and edge.data.data == name
+            ):
                 outer_out_subsets.add(copy.deepcopy(edge.data.subset))
 
         indices = set(subs.ranges[var_idx][0] for subs in in_subsets | out_subsets)
+        indices |= set(subs.ranges[var_idx][1] for subs in in_subsets | out_subsets)
         length = max(indices) - min(indices) + 3
 
         outer_in_subset = None
@@ -1193,7 +1214,13 @@ class PrefetchFieldTransform(LoopPeeling):
 
         min_idx = None
         for node in [
-            n for n in state.nodes() if isinstance(n, (dace.nodes.CodeNode, dace.nodes.EntryNode))
+            n
+            for n in state.nodes()
+            if isinstance(n, (dace.nodes.CodeNode, dace.nodes.EntryNode))
+            or (
+                isinstance(n, dace.nodes.AccessNode)
+                and n.access == dace.dtypes.AccessType.ReadWrite
+            )
         ]:
             for edge in [e for e in state.in_edges(node) if e.data.data == name]:
                 if min_idx is None or min_idx > edge.data.subset.ranges[var_idx][0]:
@@ -1209,17 +1236,33 @@ class PrefetchFieldTransform(LoopPeeling):
 
         # change write from tasklet
 
-        edges = []
-        for node in state.nodes():
-            if isinstance(node, (dace.nodes.CodeNode, dace.nodes.ExitNode)):
-                edges.extend([e for e in state.out_edges(node) if e.data.data == name])
-            if isinstance(node, (dace.nodes.CodeNode, dace.nodes.EntryNode)):
-                edges.extend([e for e in state.in_edges(node) if e.data.data == name])
-        for edge in edges:
+        # edges = []
+        # for node in state.nodes():
+        #     # if isinstance(
+        #     #     node, (dace.nodes.CodeNode, dace.nodes.ExitNode, dace.nodes.EntryNode)
+        #     # ) or (
+        #     #     isinstance(node, dace.nodes.AccessNode)
+        #     #     and node.access != dace.dtypes.AccessType.ReadWrite
+        #     # ):
+        #     #     edges.extend([e for e in state.out_edges(node) if e.data.data == name])
+        #     #     edges.extend([e for e in state.in_edges(node) if e.data.data == name])
+        #     # # if isinstance(node, (dace.nodes.CodeNode, dace.nodes.EntryNode)) or (
+        #     # #     isinstance(node, dace.nodes.AccessNode)
+        #     # #     and node.access == dace.dtypes.AccessType.ReadOnly
+        #     # # ):
+        #     # #     edges.extend([e for e in state.in_edges(node) if e.data.data == name])
+        # edges = set(edges)
+        for edge in (e for e in state.edges() if e.data.data == name):
             edge.data.data = f"_loc_buf_{name}"
-            if isinstance(edge.src, dace.nodes.AccessNode):
+            if (
+                isinstance(edge.src, dace.nodes.AccessNode)
+                and edge.src.access == dace.AccessType.ReadOnly
+            ):
                 edge.src.data = f"_loc_buf_{name}"
-            if isinstance(edge.dst, dace.nodes.AccessNode):
+            if (
+                isinstance(edge.dst, dace.nodes.AccessNode)
+                and edge.dst.access == dace.AccessType.WriteOnly
+            ):
                 edge.dst.data = f"_loc_buf_{name}"
             ranges = list(edge.data.subset.ranges[var_idx])
             ranges[0] += offset - min_idx
@@ -1391,7 +1434,11 @@ class PrefetchFieldTransform(LoopPeeling):
             if self.arrays is not None:
                 arrays = {name: sdfg.arrays[name] for name in self.arrays}
             else:
-                arrays = dict(sdfg.arrays.items())
+                arrays = {
+                    name: array
+                    for name, array in sdfg.arrays.items()
+                    if not name.startswith("__tmp")
+                }
 
             subset_infos = {}
             for name in arrays.keys():

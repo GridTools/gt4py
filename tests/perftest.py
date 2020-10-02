@@ -455,7 +455,7 @@ if __name__ == "__main__":
     niter = 10
     domain = (128, 128, 80)
     data_layout = (2, 1, 0)
-    computation_layout = "KjI"
+    computation_layout = "KIJ"
     alignment = 1
     block_size = (64, 2, 1)
     # function = "vertical_advection"
