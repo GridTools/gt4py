@@ -563,6 +563,9 @@ class IRMaker(ast.NodeVisitor):
             key += start.offset
             return key
 
+        if len(compute_blocks) < 1:
+            return True
+
         # validate invariant
         assert all(
             comp_block.iteration_order == compute_blocks[0].iteration_order
