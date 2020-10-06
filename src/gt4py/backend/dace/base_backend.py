@@ -42,9 +42,7 @@ import ctypes
 import os
 import weakref
 
-from gt4py.backend.dace.util import load_dace_program
-
-dace_lib = load_dace_program("{dace_ext_lib}")
+dace_lib = ctypes.CDLL("{dace_ext_lib}")
 """
         return source
 
