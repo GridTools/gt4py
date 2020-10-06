@@ -423,7 +423,7 @@ class SDFGBuilder:
                     dst_conn=memlet_info.local_name,
                 )
             if len(node.mapped_input_memlet_infos) == 0:
-                state.add_edge(map_entry, None, tasklet, None, dace.EmptyMemlet())
+                state.add_edge(map_entry, None, tasklet, None, dace.Memlet())
 
             out_field_accessors = dict()
             for memlet_info in node.mapped_output_memlet_infos.values():
@@ -438,7 +438,7 @@ class SDFGBuilder:
                     src_conn=memlet_info.local_name,
                 )
             if len(node.mapped_output_memlet_infos) == 0:
-                state.add_edge(tasklet, None, map_exit, None, dace.EmptyMemlet())
+                state.add_edge(tasklet, None, map_exit, None, dace.Memlet())
 
             return state
 

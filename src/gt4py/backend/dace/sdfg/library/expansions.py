@@ -113,12 +113,12 @@ class StencilExpander:
                     ),
                     propagate=False,
                 )
-        dace.propagate_memlets_sdfg(sdfg)
 
         if len(input_names) == 0:
             state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
         if len(output_names) == 0:
             state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
+        dace.propagate_memlets_sdfg(sdfg)
 
     def _map(self, variable):
         limit_var = variable.upper()
@@ -394,10 +394,7 @@ class StencilExpander:
             ]
             for name in output_fields:
                 loc_min_k, loc_max_k = interval
-                k_extent_wrt_global = (
-                    int(loc_min_k - glob_min_k),
-                    int(loc_max_k - glob_max_k),
-                )
+                k_extent_wrt_global = (int(loc_min_k - glob_min_k), int(loc_max_k - glob_max_k))
                 extent_wrt_global = gt_ir.nodes.Extent((0, 0), (0, 0), k_extent_wrt_global)
                 if name not in in_out_extents:
                     in_out_extents[name] = extent_wrt_global

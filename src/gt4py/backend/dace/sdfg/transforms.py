@@ -157,9 +157,9 @@ def global_ij_tiling(sdfg, tile_size=(8, 8)):
             )
 
     if len(input_arrays) == 0:
-        state.add_edge(map_entry, None, nsdfg_node, None, dace.EmptyMemlet())
+        state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
     if len(output_arrays) == 0:
-        state.add_edge(nsdfg_node, None, map_exit, None, dace.EmptyMemlet())
+        state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
 
     # dace.dtypes.StorageType.register("CPU_Threadprivate_Persistent")
     import sympy
@@ -874,7 +874,7 @@ class PrefetchingKCachesTransform(dace.transformation.pattern_matching.Transform
         desc="the StorageType of local buffers",
     )
     arrays = dace.properties.Property(
-        dtype=list, default=None, allow_none=True, desc="The arrays to apply the trafo on.",
+        dtype=list, default=None, allow_none=True, desc="The arrays to apply the trafo on."
     )
 
     @staticmethod
@@ -961,7 +961,7 @@ class PrefetchFieldTransform(LoopPeeling):
     )
 
     arrays = dace.properties.Property(
-        dtype=list, default=None, allow_none=True, desc="List of  names of the array to prefetch",
+        dtype=list, default=None, allow_none=True, desc="List of  names of the array to prefetch"
     )
 
     store = dace.properties.Property(
@@ -1126,7 +1126,7 @@ class PrefetchFieldTransform(LoopPeeling):
         )
 
     def add_store_all(
-        self, state, name, itervar, itervar_value, var_idx, subset_info, stride, offset,
+        self, state, name, itervar, itervar_value, var_idx, subset_info, stride, offset
     ):
         if not subset_info["out_subsets"]:
             return
@@ -1495,7 +1495,7 @@ class PrefetchFieldTransform(LoopPeeling):
 
                 if name in self.store:
                     self.add_store_all(
-                        store_state, name, itervar, rng[1], var_idx, subset_info, rng[2], rng[2],
+                        store_state, name, itervar, rng[1], var_idx, subset_info, rng[2], rng[2]
                     )
                 self.localize_tasklet_memlets(
                     peeled_first, name, itervar, 0, var_idx, subset_info, rng[2], 1
