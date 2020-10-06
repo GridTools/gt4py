@@ -35,7 +35,7 @@ class Stmt(LocNode):
 
 
 class Literal(Expr):
-    value: Str
+    value: Str  # TODO when coming from python AST we know more than just the string representation, I suppose
     dtype: common.DataType
 
 
@@ -94,8 +94,6 @@ class VerticalInterval(LocNode):
 
 
 class VerticalLoop(LocNode):
-    # each statement inside a `with location_type` is interpreted as a
-    # full horizontal loop (see parallel model of SIR)
     vertical_intervals: List[VerticalInterval]
     loop_order: common.LoopOrder
 
