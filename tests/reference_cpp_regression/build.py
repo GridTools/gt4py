@@ -20,7 +20,6 @@ import os
 import gt4py
 import gt4py.utils as gt_utils
 
-
 GT4PY_INSTALLATION_PATH = os.path.dirname(inspect.getabsfile(gt4py))
 
 EXTERNAL_SRC_PATH = os.path.join(GT4PY_INSTALLATION_PATH, "_external_src")
@@ -37,6 +36,9 @@ def compile_reference():
         current_dir,
         verbose=False,
         clean=False,
-        extra_include_dirs=[EXTERNAL_SRC_PATH],
+        extra_include_dirs=[
+            EXTERNAL_SRC_PATH,
+            os.path.join(EXTERNAL_SRC_PATH, "gridtools", "include"),
+        ],
     )
     return gt_utils.make_module_from_file(*reference_names)

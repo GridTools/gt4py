@@ -35,6 +35,7 @@ class DacePyModuleGenerator(gt_backend.BaseModuleGenerator):
         super().__init__(backend_class, options)
 
     def generate_imports(self):
+        dace_ext_lib = self.options.dace_ext_lib.replace("\\", "\\\\")
         source = f"""
 import functools
 import ctypes
@@ -43,7 +44,7 @@ import weakref
 
 from gt4py.backend.dace.util import load_dace_program
 
-dace_lib = load_dace_program("{self.options.dace_ext_lib}")
+dace_lib = load_dace_program("{dace_ext_lib}")
 """
         return source
 
@@ -146,7 +147,7 @@ if exec_info is not None:
                     program_name=self.implementation_ir.sdfg.name,
                     run_args=", ".join(run_args_strs),
                     total_field_sizes=",".join(v for k, v in sorted(symbol_ctype_strs.items())),
-                    build_path=os.path.abspath(self.options.dace_build_path),
+                    build_path=os.path.abspath(self.options.dace_build_path).replace("\\", "\\\\"),
                 )
             )
 
@@ -294,9 +295,7 @@ class DaceBackend(gt_backend.BaseBackend):
         sdfg = SDFGBuilder.apply(implementation_ir)
         from gt4py.backend.dace.sdfg.library.nodes import StencilLibraryNode
 
-        comp_layout_parallel = options.backend_opts.get("computation_layout", "JKI")
-        # comp_layout_vertical = comp_layout_parallel.replace("K", "") + "K"
-        comp_layout_vertical = comp_layout_parallel
+        comp_layout = options.backend_opts.get("computation_layout", "JKI")
         for name, array in sdfg.arrays.items():
             import dace.data
 
@@ -312,10 +311,7 @@ class DaceBackend(gt_backend.BaseBackend):
                 for state in sdfg.nodes():
                     for node in state.nodes():
                         if isinstance(node, StencilLibraryNode):
-                            if node.iteration_order == IterationOrder.PARALLEL:
-                                node.loop_order = comp_layout_parallel
-                            else:
-                                node.loop_order = comp_layout_vertical
+                            node.loop_order = comp_layout
 
                             for interval in node.intervals:
                                 if name in interval.sdfg.arrays:
