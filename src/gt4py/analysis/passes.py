@@ -941,7 +941,7 @@ class DataTypePass(TransformPass):
                     data_type = float_type
                 else:
                     raise NotImplementedError(
-                        "Types of different size are used as arguments to a NativeFuncCall."
+                        "Incompatible data types encountered in NativeFuncCall."
                     )
 
             if node.func in (
