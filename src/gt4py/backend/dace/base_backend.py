@@ -292,6 +292,8 @@ class DaceBackend(gt_backend.BaseBackend):
 
     @classmethod
     def generate_dace(cls, stencil_id, implementation_ir, options):
+        import dace
+
         sdfg = SDFGBuilder.apply(implementation_ir)
         from gt4py.backend.dace.sdfg.library.nodes import StencilLibraryNode
 
@@ -334,7 +336,7 @@ class DaceBackend(gt_backend.BaseBackend):
         sdfg.apply_transformations_repeated(InMergeArrays)
         from dace.transformation.interstate import StateFusion
 
-        sdfg.apply_transformations_repeated([StateFusion], strict=False, validate=False)
+        sdfg.apply_transformations_repeated([StateFusion], strict=True, validate=False)
 
         if save:
             sdfg.save(dace_build_path + os.path.sep + "01_fused_states.sdfg")
@@ -367,6 +369,7 @@ class DaceBackend(gt_backend.BaseBackend):
 
         specialize_dict = options.backend_opts.get("specialize_sdfg_vars", {})
         block_size_str = options.backend_opts.get("gpu_block_size", "64,2,1")
+
         dace.Config.set("compiler", "cuda", "default_block_size", value=block_size_str)
         sdfg: dace.SDFG
         sdfg.specialize(specialize_dict)

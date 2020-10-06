@@ -30,59 +30,59 @@ class X86DaceOptimizer(CPUDaceOptimizer):
         return sdfg
 
     def transform_optimize(self, sdfg):
-        import dace
-
-        from dace.transformation.dataflow import MapCollapse
-
-        sdfg.apply_transformations_repeated(MapCollapse, validate=False)
-
-        from gt4py.backend.dace.sdfg.transforms import OnTheFlyMapFusion
-
-        sdfg.apply_transformations_repeated(OnTheFlyMapFusion, validate=False)
-
-        sdfg.apply_strict_transformations(validate=False)
-        for name, array in sdfg.arrays.items():
-            if array.transient:
-                array.lifetime = dace.dtypes.AllocationLifetime.Persistent
-
-        from gt4py.backend.dace.sdfg.transforms import PrefetchingKCachesTransform
-
-        for state in sdfg.nodes():
-            for node in state.nodes():
-                if isinstance(node, dace.nodes.NestedSDFG):
-                    kcache_subgraph = {
-                        PrefetchingKCachesTransform._nsdfg_node: state.node_id(node)
-                    }
-                    trafo = PrefetchingKCachesTransform(
-                        sdfg.sdfg_id, sdfg.node_id(state), kcache_subgraph, 0
-                    )
-                    trafo.storage_type = dace.dtypes.StorageType.CPU_Heap
-                    trafo.apply(sdfg)
-
-        # from dace.transformation.subgraph.subgraph_fusion import SubgraphFusion
-        # from dace.sdfg.graph import SubgraphView
+        # import dace
         #
-        # for graph in sdfg.nodes():
-        #     subgraph = SubgraphView(
-        #         graph, [node for node in graph.nodes() if graph.out_degree(node) > 0]
-        #     )
-        #     fusion = SubgraphFusion()
-        #     fusion.transient_allocation = dace.dtypes.StorageType.CPU_Heap
-        #     fusion.apply(sdfg, subgraph)
+        # from dace.transformation.dataflow import MapCollapse
         #
-        #     for name, array in sdfg.arrays.items():
-        #         if array.transient:
-        #             if array.storage == dace.dtypes.StorageType.CPU_Heap:
-        #                 array.lifetime = dace.dtypes.AllocationLifetime.Scope
-        #             else:
-        #                 array.storage = dace.dtypes.StorageType.CPU_Heap
-        #                 array.lifetime = dace.dtypes.AllocationLifetime.Persistent
+        # sdfg.apply_transformations_repeated(MapCollapse, validate=False)
         #
-        #             for node in graph.nodes():
-        #                 if isinstance(node, dace.nodes.NestedSDFG):
-        #                     for inner_name, inner_array in node.sdfg.arrays.items():
-        #                         if inner_name == name:
-        #                             inner_array.storage = array.storage
+        # from gt4py.backend.dace.sdfg.transforms import OnTheFlyMapFusion
+        #
+        # sdfg.apply_transformations_repeated(OnTheFlyMapFusion, validate=False)
+        #
+        # sdfg.apply_strict_transformations(validate=False)
+        # for name, array in sdfg.arrays.items():
+        #     if array.transient:
+        #         array.lifetime = dace.dtypes.AllocationLifetime.Persistent
+        #
+        # from gt4py.backend.dace.sdfg.transforms import PrefetchingKCachesTransform
+        #
+        # for state in sdfg.nodes():
+        #     for node in state.nodes():
+        #         if isinstance(node, dace.nodes.NestedSDFG):
+        #             kcache_subgraph = {
+        #                 PrefetchingKCachesTransform._nsdfg_node: state.node_id(node)
+        #             }
+        #             trafo = PrefetchingKCachesTransform(
+        #                 sdfg.sdfg_id, sdfg.node_id(state), kcache_subgraph, 0
+        #             )
+        #             trafo.storage_type = dace.dtypes.StorageType.CPU_Heap
+        #             trafo.apply(sdfg)
+        #
+        # # from dace.transformation.subgraph.subgraph_fusion import SubgraphFusion
+        # # from dace.sdfg.graph import SubgraphView
+        # #
+        # # for graph in sdfg.nodes():
+        # #     subgraph = SubgraphView(
+        # #         graph, [node for node in graph.nodes() if graph.out_degree(node) > 0]
+        # #     )
+        # #     fusion = SubgraphFusion()
+        # #     fusion.transient_allocation = dace.dtypes.StorageType.CPU_Heap
+        # #     fusion.apply(sdfg, subgraph)
+        # #
+        # #     for name, array in sdfg.arrays.items():
+        # #         if array.transient:
+        # #             if array.storage == dace.dtypes.StorageType.CPU_Heap:
+        # #                 array.lifetime = dace.dtypes.AllocationLifetime.Scope
+        # #             else:
+        # #                 array.storage = dace.dtypes.StorageType.CPU_Heap
+        # #                 array.lifetime = dace.dtypes.AllocationLifetime.Persistent
+        # #
+        # #             for node in graph.nodes():
+        # #                 if isinstance(node, dace.nodes.NestedSDFG):
+        # #                     for inner_name, inner_array in node.sdfg.arrays.items():
+        # #                         if inner_name == name:
+        # #                             inner_array.storage = array.storage
 
         return sdfg
 
