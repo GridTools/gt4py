@@ -115,7 +115,9 @@ class ApplyMethod:
                 None,
                 tasklet,
                 name,
-                dace.memlet.Memlet.simple(acc.outer_name, subset_str=subset_str, num_accesses=1),
+                dace.memlet.Memlet.simple(
+                    acc.outer_name, subset_str=subset_str, num_accesses=1, dynamic=acc.dynamic
+                ),
             )
         for name, acc in write_accesses.items():
             offset_tuple = (acc.offset.get("I", 0), acc.offset.get("J", 0), acc.offset.get("K", 0))
@@ -128,7 +130,9 @@ class ApplyMethod:
                 name,
                 write_accessors[acc.outer_name],
                 None,
-                dace.memlet.Memlet.simple(acc.outer_name, subset_str=subset_str, num_accesses=1),
+                dace.memlet.Memlet.simple(
+                    acc.outer_name, subset_str=subset_str, num_accesses=1, dynamic=acc.dynamic
+                ),
             )
         for k, sym in symbols.items():
             sdfg.add_symbol(k, sym.dtype)

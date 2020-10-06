@@ -1,4 +1,5 @@
 import itertools
+import copy
 
 import numpy as np
 import dace
@@ -112,15 +113,23 @@ class SDFGBuilder:
         def _visit_branches(self, condition, if_branch, else_branch, **kwargs):
 
             accesses_condition, accesses_dynamic_condition = self.visit(condition, **kwargs)
+            # accesses_condition -= accesses_dynamic_condition
 
             accesses_then, accesses_dynamic_then = self.visit(if_branch, **kwargs)
+            # accesses_then -= accesses_dynamic_then
 
             accesses_else, accesses_dynamic_else = self.visit(else_branch, **kwargs)
+            # accesses_else -= accesses_dynamic_else
 
             # accesses are those accessed in any of the branches
-            accesses = accesses_condition | accesses_then | accesses_else
+            # accesses = accesses_condition | accesses_then | accesses_else
+
+            total_accesses = accesses_condition | accesses_then | accesses_else
+            accesses = accesses_condition | (accesses_then & accesses_else)
+            accesses_dynamic = total_accesses - accesses
+
             # dynamic accesses are those accessed dynamically in any of the branches...
-            accesses_dynamic = (
+            accesses_dynamic |= (
                 accesses_dynamic_condition | accesses_dynamic_then | accesses_dynamic_else
             )
             # ...but not non-dynamically in the condition
@@ -247,7 +256,6 @@ class SDFGBuilder:
                         #     "{}:{}+{:+d}".format(self.k_range[0], self.k_range[1], v)
                         # )
                 subset_str = ", ".join(subset_list) if subset_list else "0"
-
                 memlet_dict[key] = MappedMemletInfo(
                     outer_name=node.name,
                     local_name=key,
@@ -499,9 +507,9 @@ class SDFGBuilder:
                     subset = dace.memlet.subsets.union(
                         input_memlet.subset, input_memlets[input_memlet.data].subset
                     )
-                    input_memlets[input_memlet.data] = dace.memlet.Memlet.simple(
-                        input_memlets[input_memlet.data], subset_str=str(subset)
-                    )
+                    newmemlet = copy.deepcopy(input_memlet)
+                    newmemlet.subset = subset
+                    input_memlets[input_memlet.data] = newmemlet
                 else:
                     input_memlets[input_memlet.data] = input_memlet
 
@@ -520,9 +528,9 @@ class SDFGBuilder:
                     subset = dace.memlet.subsets.union(
                         output_memlet.subset, output_memlets[output_memlet.data].subset
                     )
-                    output_memlets[output_memlet.data] = dace.memlet.Memlet.simple(
-                        output_memlets[output_memlet.data], subset_str=str(subset)
-                    )
+                    newmemlet = copy.deepcopy(output_memlet)
+                    newmemlet.subset = subset
+                    output_memlets[output_memlet.data] = newmemlet
                 else:
                     output_memlets[output_memlet.data] = output_memlet
             for output_memlet in output_memlets.values():
