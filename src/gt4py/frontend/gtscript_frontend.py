@@ -21,6 +21,7 @@ import inspect
 import itertools
 import numbers
 import types
+from typing import List
 
 import numpy as np
 
@@ -555,7 +556,7 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
-    def _are_blocks_sorted(self, compute_blocks):
+    def _are_blocks_sorted(self, compute_blocks: List[gt_ir.ComputationBlock]):
         def sort_blocks_key(comp_block):
             start = comp_block.interval.start
             assert isinstance(start.level, gt_ir.LevelMarker)
@@ -647,7 +648,7 @@ class IRMaker(ast.NodeVisitor):
 
         return interval
 
-    def _visit_computation_node(self, node: ast.With) -> list:
+    def _visit_computation_node(self, node: ast.With) -> List[gt_ir.ComputationBlock]:
         loc = gt_ir.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
             f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
@@ -1003,7 +1004,7 @@ class IRMaker(ast.NodeVisitor):
 
                 compute_blocks.append(self._visit_computation_node(with_node))
 
-            # Ensure block specification order
+            # Validate block specification order
             #  the nested computation blocks must be specified in their order of execution. The order of execution is
             #  such that the lowest (highest) interval is processed first if the iteration order is forward (backward).
             if not self._are_blocks_sorted(compute_blocks):
