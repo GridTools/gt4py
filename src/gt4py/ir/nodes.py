@@ -395,6 +395,13 @@ class FieldRef(Ref):
     loc = attribute(of=Location, optional=True)
 
 
+@attribclass
+class Cast(Expr):
+    dtype = attribute(of=DataType)
+    expr = attribute(of=Expr)
+    loc = attribute(of=Location, optional=True)
+
+
 @enum.unique
 class NativeFunction(enum.Enum):
     ABS = 1

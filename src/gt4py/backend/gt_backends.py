@@ -311,6 +311,11 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
         return source
 
+    def visit_Cast(self, node: gt_ir.Cast) -> str:
+        expr = self.visit(node.expr)
+        dtype = self.DATA_TYPE_TO_CPP[node.dtype]
+        return f"static_cast<{dtype}>({expr})"
+
     def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall) -> str:
         call = self.NATIVE_FUNC_TO_CPP[node.func]
         if self.gt_backend_t != "cuda":

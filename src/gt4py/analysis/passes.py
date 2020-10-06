@@ -35,6 +35,7 @@ from typing import (
 )
 
 from gt4py import definitions as gt_definitions
+from gt4py import gtscript
 from gt4py import ir as gt_ir
 from gt4py.analysis import (
     DomainBlockInfo,
@@ -51,6 +52,10 @@ from gt4py.definitions import Extent
 
 MergeableType = TypeVar("MergeableType")
 WrappedType = TypeVar("WrappedType")
+
+
+INT_TYPES = (gt_ir.DataType.INT8, gt_ir.DataType.INT32, gt_ir.DataType.INT64)
+FLOAT_TYPES = (gt_ir.DataType.FLOAT32, gt_ir.DataType.FLOAT64)
 
 
 class IRSpecificationError(gt_definitions.GTSpecificationError):
@@ -909,14 +914,33 @@ class DataTypePass(TransformPass):
         def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall, **kwargs):
             self.generic_visit(node.args, **kwargs)
 
-            data_type = set(
+            dtypes_list = [arg.data_type for arg in node.args]
+            dtypes_set = set(
                 arg.data_type for arg in node.args if arg.data_type != gt_ir.DataType.DEFAULT
             )
-            if len(data_type) > 1:
-                raise DataTypeSpecificationError(
-                    "Builtin function call with mixed data types", loc=node.loc
-                )
-            data_type = data_type.pop() if len(data_type) else gt_ir.DataType.DEFAULT
+
+            # If doing a NativeFuncCall between floats and ints, add a gt_ir.Cast node
+            if len(dtypes_set) == 1:
+                data_type = dtypes_set.pop() if len(dtypes_set) else gt_ir.DataType.DEFAULT
+            else:
+                arg_is_float = [dtype in FLOAT_TYPES for dtype in dtypes_list]
+                arg_is_int = [dtype in INT_TYPES for dtype in dtypes_list]
+
+                if sum(arg_is_float) > 0 and sum(arg_is_int) > 0:
+                    # get the first float type in arg list
+                    float_type = next(
+                        (dtype for is_float, dtype in zip(arg_is_float, dtypes_list) if is_float),
+                    )
+                    # cast all int args to this float type
+                    for index, arg in enumerate(node.args):
+                        if arg_is_int[index]:
+                            node.args[index] = gt_ir.Cast(dtype=float_type, expr=arg, loc=node.loc)
+
+                    data_type = float_type
+                else:
+                    raise NotImplementedError(
+                        "Types of different size are used as arguments to a NativeFuncCall."
+                    )
 
             if node.func in (
                 gt_ir.NativeFunction.MIN,

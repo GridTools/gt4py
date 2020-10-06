@@ -64,7 +64,7 @@ def afunc(b):
 @register
 def native_functions(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
-        field_a = min(afunc(field_b), field_b)
+        field_a = max(min(afunc(field_b), field_b), 1)
 
 
 @register
