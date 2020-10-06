@@ -38,10 +38,12 @@ class GTCPythonBackend(BaseBackend, CLIBackendMixin):
         source = self.make_module_source()
         return {filename: source}
 
-    def make_module_source(
-        self, *, args_data: Optional[Dict[str, Any]] = None, **kwargs: Any
-    ) -> str:
-        return GTCPyModuleGenerator(self.builder)(MOCK_ARG_INFO)
+    # def make_module_source(
+    #     self, *, args_data: Optional[Dict[str, Any]] = None, **kwargs: Any
+    # ) -> str:
+    #     return GTCPyModuleGenerator(self.builder)(MOCK_ARG_INFO)
+
+    MODULE_GENERATOR_CLASS = GTCPyModuleGenerator
 
     def generate(self) -> Type["StencilObject"]:
         self.builder.module_path.parent.mkdir(parents=True, exist_ok=True)

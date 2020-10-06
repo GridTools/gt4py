@@ -51,20 +51,24 @@ class BinaryOperator(StrEnum):
 class DataType(IntEnum):
     """Data type identifier."""
 
-    # IDs from dawn
-    INVALID = 0
-    AUTO = 1
-    BOOLEAN = 2
-    INT32 = 3
-    FLOAT32 = 4
-    FLOAT64 = 5
-    UINT32 = 6
+    # IDs from gt4py
+    INVALID = -1
+    AUTO = 0
+    DEFAULT = 1
+    BOOL = 10
+    INT8 = 11
+    INT16 = 12
+    INT32 = 14
+    INT64 = 18
+    FLOAT32 = 104
+    FLOAT64 = 108
 
 
 @enum.unique
 class LoopOrder(IntEnum):
     """Loop order identifier."""
 
+    PARALLEL = 0
     FORWARD = 1
     BACKWARD = 2
 

@@ -36,7 +36,7 @@ class Stmt(LocNode):
 
 class Literal(Expr):
     value: Str
-    vtype: common.DataType
+    dtype: common.DataType
 
 
 class Domain(LocNode):
