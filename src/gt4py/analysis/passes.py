@@ -920,7 +920,9 @@ class DataTypePass(TransformPass):
             )
 
             # If doing a NativeFuncCall between floats and ints, add a gt_ir.Cast node
-            if len(dtypes_set) == 1:
+            if len(dtypes_set) == 0:
+                data_type = gt_ir.DataType.DEFAULT
+            elif len(dtypes_set) == 1:
                 data_type = dtypes_set.pop() if len(dtypes_set) else gt_ir.DataType.DEFAULT
             else:
                 arg_is_float = [dtype in FLOAT_TYPES for dtype in dtypes_list]
