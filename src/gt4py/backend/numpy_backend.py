@@ -284,6 +284,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     else_expr=target if is_possible_else else "np.nan",
                 )
             )
+
+            if isinstance(stmt.target, gt_ir.VarRef):
+                self.var_refs_defined.add(stmt.target.name)
         else:
             stmt_sources = self.visit(stmt)
             if isinstance(stmt_sources, list):
@@ -291,8 +294,6 @@ class NumPySourceGenerator(PythonSourceGenerator):
             else:
                 sources.append(stmt_sources)
 
-        if isinstance(stmt.target, gt_ir.VarRef):
-            self.var_refs_defined.add(stmt.target.name)
         return sources
 
     def visit_If(self, node: gt_ir.If) -> List[str]:
