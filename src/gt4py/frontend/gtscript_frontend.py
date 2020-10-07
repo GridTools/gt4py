@@ -1009,7 +1009,7 @@ class IRMaker(ast.NodeVisitor):
             #  such that the lowest (highest) interval is processed first if the iteration order is forward (backward).
             if not self._are_blocks_sorted(compute_blocks):
                 raise GTScriptSyntaxError(
-                    "Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
+                    f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
                 )
 
             return compute_blocks
