@@ -12,16 +12,16 @@ from gt4py.analysis.passes import (
 )
 
 
-PassType = Callable[[TransformData], TransformData]
+AnalysisPass = Callable[[TransformData], TransformData]
 
 
 @pytest.fixture()
-def init_pass() -> Iterator[PassType]:
+def init_pass() -> Iterator[AnalysisPass]:
     yield InitInfoPass().apply
 
 
 @pytest.fixture()
-def normalize_blocks_pass(init_pass: PassType) -> Iterator[PassType]:
+def normalize_blocks_pass(init_pass: AnalysisPass) -> Iterator[AnalysisPass]:
     def inner(data: TransformData):
         return NormalizeBlocksPass().apply(init_pass(deepcopy(data)))
 
@@ -29,7 +29,7 @@ def normalize_blocks_pass(init_pass: PassType) -> Iterator[PassType]:
 
 
 @pytest.fixture()
-def compute_extents_pass(normalize_blocks_pass: PassType) -> Iterator[PassType]:
+def compute_extents_pass(normalize_blocks_pass: AnalysisPass) -> Iterator[AnalysisPass]:
     def inner(data: TransformData):
         return ComputeExtentsPass().apply(normalize_blocks_pass(deepcopy(data)))
 
@@ -37,7 +37,7 @@ def compute_extents_pass(normalize_blocks_pass: PassType) -> Iterator[PassType]:
 
 
 @pytest.fixture()
-def merge_blocks_pass(compute_extents_pass: PassType) -> Iterator[PassType]:
+def merge_blocks_pass(compute_extents_pass: AnalysisPass) -> Iterator[AnalysisPass]:
     def inner(data: TransformData):
         return MergeBlocksPass().apply(compute_extents_pass(deepcopy(data)))
 
