@@ -60,6 +60,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         self.interval_k_start_name = interval_k_start_name
         self.interval_k_end_name = interval_k_end_name
         self.conditions_depth = 0
+        self.var_refs_defined = set()
 
     def _make_field_origin(self, name: str, origin=None):
         if origin is None:
@@ -289,6 +290,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 sources.extend(stmt_sources)
             else:
                 sources.append(stmt_sources)
+
+        if isinstance(stmt.target, gt_ir.VarRef):
+                self.var_refs_defined.add(stmt.target.name)
         return sources
 
     def visit_If(self, node: gt_ir.If) -> List[str]:

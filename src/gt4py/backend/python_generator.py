@@ -77,8 +77,6 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         self.io_field_names = None
         self.param_names = None
 
-        self.var_refs_defined = set()
-
     def __call__(self, impl_node: gt_ir.Node, sources: gt_text.TextBlock):
         assert isinstance(impl_node, gt_ir.StencilImplementation)
         assert impl_node.domain.sequential_axis.name == gt_definitions.CartesianSpace.Axis.K.name
@@ -197,9 +195,6 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     def visit_Assign(self, node: gt_ir.Assign):
         lhs = self.visit(node.target)
         rhs = self.visit(node.value)
-
-        if isinstance(node.target, gt_ir.VarRef):
-            self.var_refs_defined.add(node.target.name)
 
         source = "{lhs} = {rhs}".format(lhs=lhs, rhs=rhs)
 
