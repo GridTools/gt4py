@@ -919,7 +919,6 @@ class DataTypePass(TransformPass):
                 arg.data_type for arg in node.args if arg.data_type != gt_ir.DataType.DEFAULT
             )
 
-            # If doing a NativeFuncCall between floats and ints, add a gt_ir.Cast node
             if len(dtypes_set) == 0:
                 data_type = gt_ir.DataType.DEFAULT
             elif len(dtypes_set) == 1:
