@@ -928,7 +928,7 @@ class IRMaker(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call):
         native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 
-        args = [self.visit(arg) for arg in node.args]
+        args = [gt_ir.utils.make_expr(self.visit(arg)) for arg in node.args]
         if len(args) != native_fcn.arity:
             raise GTScriptSyntaxError(
                 "Invalid native function call", loc=gt_ir.Location.from_ast_node(node)
@@ -1015,7 +1015,7 @@ class IRMaker(ast.NodeVisitor):
     def visit_AugAssign(self, node: ast.AugAssign):
         """Implement left <op>= right in terms of left = left <op> right."""
         binary_operation = ast.BinOp(left=node.target, op=node.op, right=node.value)
-        assignment = ast.Assign(targets=[node.target], value=node.target)
+        assignment = ast.Assign(targets=[node.target], value=binary_operation)
         ast.copy_location(binary_operation, node)
         ast.copy_location(assignment, node)
         return self.visit_Assign(assignment)
