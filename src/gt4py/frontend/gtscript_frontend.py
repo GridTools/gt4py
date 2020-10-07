@@ -466,7 +466,7 @@ class RegionExtractor(ast.NodeVisitor):
 
     def visit_Subscript(self, node: ast.Subscript):
         # Some variance in Python 3.9+ vs older ASDL language nodes
-        slice_tuple = node.slice if isinstance(node.slice, tuple) else node.slice.dims
+        slice_tuple = node.slice if isinstance(node.slice, tuple) else tuple(node.slice.value.elts)
 
         parallel_interval = []
         for axis_slice in slice_tuple:
@@ -485,7 +485,7 @@ class RegionExtractor(ast.NodeVisitor):
                     level, offset = self.visit(axis_slice.upper)
                 upper = gt_ir.AxisBound(level=level, offset=offset)
             else:
-                level, offset = self.visit(axis_slice.value)
+                level, offset = self.visit(axis_slice)
                 lower = gt_ir.AxisBound(level=level, offset=offset)
                 upper = gt_ir.AxisBound(level=level, offset=offset + 1)
 
