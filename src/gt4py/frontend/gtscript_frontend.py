@@ -492,7 +492,7 @@ class RegionExtractor(ast.NodeVisitor):
                     level, offset = self.visit(axis_slice.upper)
                 upper = gt_ir.AxisBound(level=level, offset=offset)
             else:
-                level, offset = self.visit(axis_slice)
+                level, offset = self.visit(axis_slice.value)
                 lower = gt_ir.AxisBound(level=level, offset=offset)
                 upper = gt_ir.AxisBound(level=level, offset=offset + 1)
 
