@@ -915,9 +915,7 @@ class DataTypePass(TransformPass):
             self.generic_visit(node.args, **kwargs)
 
             dtypes_list = [arg.data_type for arg in node.args]
-            dtypes_set = set(
-                arg.data_type for arg in node.args if arg.data_type != gt_ir.DataType.DEFAULT
-            )
+            dtypes_set = set(dtypes_list) - {gt_ir.DataType.DEFAULT}
 
             if len(dtypes_set) == 0:
                 data_type = gt_ir.DataType.DEFAULT
