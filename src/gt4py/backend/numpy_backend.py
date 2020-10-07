@@ -292,7 +292,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 sources.append(stmt_sources)
 
         if isinstance(stmt.target, gt_ir.VarRef):
-                self.var_refs_defined.add(stmt.target.name)
+            self.var_refs_defined.add(stmt.target.name)
         return sources
 
     def visit_If(self, node: gt_ir.If) -> List[str]:
