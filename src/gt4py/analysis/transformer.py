@@ -117,8 +117,8 @@ class IRTransformer:
         data_type_pass = DataTypePass()
         data_type_pass.apply(self.transform_data)
 
-        demote_local_temporaries_to_variables_pass = DemoteLocalTemporariesToVariablesPass()
-        demote_local_temporaries_to_variables_pass.apply(self.transform_data)
+        # demote_local_temporaries_to_variables_pass = DemoteLocalTemporariesToVariablesPass()
+        # demote_local_temporaries_to_variables_pass.apply(self.transform_data)
 
         cleanup_pass = CleanUpPass()
         cleanup_pass.apply(self.transform_data)

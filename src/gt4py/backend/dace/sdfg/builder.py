@@ -241,7 +241,10 @@ class SDFGBuilder:
                 itervar = dict(I="i", J="j", K="k")
                 itervar_idx = dict(I=0, J=1, K=2)
                 origin = tuple(abs(v) for v in self.field_extents[node.name].lower_indices)
-                for k, v in node.offset.items():
+                offset = dict(node.offset)
+                for k in "IJK":
+                    offset.setdefault(k, 0)
+                for k, v in offset.items():
                     if k != "K":
                         subset_list.append(
                             f"{origin[itervar_idx[k]] + self.ranges[itervar_idx[k]][0]}{v:+d}:{k}{origin[itervar_idx[k]] + self.ranges[itervar_idx[k]][1]:+d}{v:+d}"
@@ -260,7 +263,7 @@ class SDFGBuilder:
                     outer_name=node.name,
                     local_name=key,
                     subset_str=subset_str,
-                    offset=node.offset,
+                    offset=offset,
                     dynamic=key in self.apply_block.dynamic_accesses,
                 )
 
