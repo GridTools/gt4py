@@ -302,7 +302,11 @@ def lazy_stencil(
             Defers the generation step until the last moment and allows syntax checking independently.
             Also gives access to a more fine grained generate / build process.
     """
+    from gt4py import backend as backend_module
     from gt4py import frontend
+
+    if isinstance(backend, str):
+        backend = backend_module.from_name(backend)
 
     def _decorator(func):
         _set_arg_dtypes(func, dtypes or {})
