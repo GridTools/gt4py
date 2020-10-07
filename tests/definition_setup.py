@@ -22,6 +22,7 @@ from gt4py.ir.nodes import (
     Location,
     StencilDefinition,
     StencilImplementation,
+    VarDecl,
 )
 
 
@@ -141,6 +142,10 @@ class TDefinition(TObject):
             for n in self.fields
         ]
 
+    @property
+    def splitters(self) -> List[VarDecl]:
+        return []
+
     def build(self) -> StencilDefinition:
         return StencilDefinition(
             name=self.name,
@@ -150,6 +155,7 @@ class TDefinition(TObject):
             parameters=self.parameters,
             computations=[block.build() for block in self.children],
             docstring=self.docstring,
+            splitters=self.splitters,
             loc=self.loc,
         )
 
