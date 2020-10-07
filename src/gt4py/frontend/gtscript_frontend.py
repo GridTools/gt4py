@@ -465,8 +465,15 @@ class RegionExtractor(ast.NodeVisitor):
         return (level, offset)
 
     def visit_Subscript(self, node: ast.Subscript):
-        # Some variance in Python 3.9+ vs older ASDL language nodes
-        slice_tuple = node.slice if isinstance(node.slice, tuple) else tuple(node.slice.value.elts)
+        # There is some variability with different versions of Python in what node.slice holds
+        if isinstance(node.slice, ast.ExtSlice):
+            slice_tuple = node.slice.dims
+        elif isinstance(node.slice, ast.Index):
+            slice_tuple = node.slice.value.elts
+        elif isinstance(node.slice, ast.Slice):
+            raise NotImplementedError("Subscript must contain a tuple of slices.")
+        else:
+            raise SyntaxError("Unhandled case. Please report this as a bug.")
 
         parallel_interval = []
         for axis_slice in slice_tuple:
