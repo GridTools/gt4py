@@ -265,14 +265,3 @@ def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3
             local_var = 4
             mid_storage = 3
             out_storage[0, 0, 0] = local_var + mid_storage
-
-
-@register(splitters={"jstart": 1, "jend": 3})
-def parallel_regions(in_storage: Field3D, out_storage: Field3D):
-    from __splitters__ import jend, jstart
-
-    with computation(PARALLEL):
-        with interval(0, 1), parallel(region[:, jstart:jend]):
-            out_storage = in_storage[-1, 0, 0]
-        with interval(1, None):
-            out_storage = in_storage[1, 0, 0]
