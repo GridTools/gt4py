@@ -467,13 +467,18 @@ class RegionExtractor(ast.NodeVisitor):
     def visit_Subscript(self, node: ast.Subscript):
         # There is some variability with different versions of Python in what node.slice holds
         if isinstance(node.slice, ast.ExtSlice):
-            slice_tuple = node.slice.dims
+            slices = node.slice.dims
         elif isinstance(node.slice, ast.Index):
-            slice_tuple = node.slice.value.elts
+            slices = node.slice.value.elts
         elif isinstance(node.slice, ast.Slice):
             raise NotImplementedError("Subscript must contain a tuple of slices.")
         else:
             raise SyntaxError("Unhandled case. Please report this as a bug.")
+
+        slice_tuple = tuple(
+            axis_slice.value if isinstance(axis_slice, ast.Index) else axis_slice
+            for axis_slice in slices
+        )
 
         parallel_interval = []
         for axis_slice in slice_tuple:
@@ -492,7 +497,7 @@ class RegionExtractor(ast.NodeVisitor):
                     level, offset = self.visit(axis_slice.upper)
                 upper = gt_ir.AxisBound(level=level, offset=offset)
             else:
-                level, offset = self.visit(axis_slice.value)
+                level, offset = self.visit(axis_slice)
                 lower = gt_ir.AxisBound(level=level, offset=offset)
                 upper = gt_ir.AxisBound(level=level, offset=offset + 1)
 
