@@ -502,7 +502,7 @@ class TestNestedWithSyntax:
                 with interval(...):
                     in_field = out_field
 
-    def test_nested_with_reordering(self):
+    def test_nested_with_ordering(self):
         def definition_fw(
             in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
         ):
@@ -528,15 +528,16 @@ class TestNestedWithSyntax:
         definitions = {"fw": definition_fw, "bw": definition_bw}
 
         for name, definition in definitions.items():
-            with pytest.raises(gt_frontend.GTScriptSyntaxError) as excinfo:
+            with pytest.raises(
+                gt_frontend.GTScriptSyntaxError,
+                match=r"(.*?)Intervals must be specified in order of execution(.*)",
+            ):
                 # generate DIR
                 _, definition_ir = compile_definition(
                     definition,
                     f"test_nested_with_reordering_{name}",
                     f"TestImports_test_module_{id_version}",
                 )
-
-                assert "Intervals must be specified in order of execution." in str(excinfo.value)
 
 
 class TestNativeFunctions:
