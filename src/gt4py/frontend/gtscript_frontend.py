@@ -143,7 +143,7 @@ class AssertionChecker(ast.NodeTransformer):
                 )
         else:
             raise GTScriptSyntaxError(
-                "Evaluation of compile-time 'IF' condition failed at the preprocessing step"
+                "Evaluation of compile-time assertion condition failed at the preprocessing step"
             )
 
         return None
