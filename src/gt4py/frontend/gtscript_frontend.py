@@ -1062,26 +1062,6 @@ class IRMaker(ast.NodeVisitor):
 
         return blocks
 
-    # def visit_If(self, node: ast.If):
-    #     # Compile-time evaluation of "if" conditions
-    #     node = self.generic_visit(node)
-    #     if (
-    #         isinstance(node.test, ast.Call)
-    #         and isinstance(node.test.func, ast.Name)
-    #         and node.test.func.id == "__INLINED"
-    #         and len(node.test.args) == 1
-    #     ):
-    #         eval_node = node.test.args[0]
-    #
-    #         if condition_value is not NOTHING:
-    #             node = node.body if condition_value else node.orelse
-    #         else:
-    #             raise GTScriptSyntaxError(
-    #                 "Evaluation of compile-time 'IF' condition failed at the preprocessing step"
-    #             )
-
-    #     return node if node else None
-
 
 class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
     def __call__(self, node: ast.FunctionDef):
