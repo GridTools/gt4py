@@ -60,7 +60,6 @@ class NumPySourceGenerator(PythonSourceGenerator):
         self.interval_k_start_name = interval_k_start_name
         self.interval_k_end_name = interval_k_end_name
         self.conditions_depth = 0
-        self.var_refs_defined = set()
 
     def _make_field_origin(self, name: str, origin=None):
         if origin is None:
