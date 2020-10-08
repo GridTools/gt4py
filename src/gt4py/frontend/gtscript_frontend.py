@@ -114,7 +114,6 @@ class GTScriptDataTypeError(GTScriptSyntaxError):
         self.data_type = data_type
 
 
-# AssertionChecker.apply(main_func_node, context=local_context)
 class AssertionChecker(ast.NodeTransformer):
     """Check assertions and remove from the AST for further parsing."""
 
