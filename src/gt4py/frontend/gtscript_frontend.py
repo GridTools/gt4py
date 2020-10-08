@@ -20,6 +20,7 @@ import enum
 import inspect
 import itertools
 import numbers
+import textwrap
 import types
 
 import numpy as np
@@ -80,14 +81,6 @@ class GTScriptValueError(GTScriptDefinitionError):
         super().__init__(name, value, message, loc=loc)
 
 
-class GTScriptAssertionError(gt_definitions.GTSpecificationError):
-    def __init__(self, message=None, *, loc=None):
-        if not message:
-            message = "Assertion failed"
-        super().__init__(message)
-        self.loc = loc
-
-
 # class GTScriptConstValueError(GTScriptValueError):
 #     def __init__(self, name, value, message=None, *, loc=None):
 #         if message is None:
@@ -114,17 +107,27 @@ class GTScriptDataTypeError(GTScriptSyntaxError):
         self.data_type = data_type
 
 
-# AssertionChecker.apply(main_func_node, context=local_context)
+class GTScriptAssertionError(gt_definitions.GTSpecificationError):
+    def __init__(self, source, *, loc=None):
+        if loc:
+            message = f"Assertion failed at line {loc.line}, col {loc.column}\n{source}"
+        else:
+            message = f"Assertion failed\n{source}"
+        super().__init__(message)
+        self.loc = loc
+
+
 class AssertionChecker(ast.NodeTransformer):
     """Check assertions and remove from the AST for further parsing."""
 
     @classmethod
-    def apply(cls, func_node: ast.FunctionDef, context: dict):
-        inliner = cls(context)
+    def apply(cls, func_node: ast.FunctionDef, context: dict, source: str) -> None:
+        inliner = cls(context, source)
         inliner(func_node)
 
-    def __init__(self, context):
+    def __init__(self, context, source):
         self.context = context
+        self.source_lines = textwrap.dedent(source).split("\n")
 
     def __call__(self, func_node: ast.FunctionDef):
         self.visit(func_node)
@@ -135,12 +138,10 @@ class AssertionChecker(ast.NodeTransformer):
         eval_node = assert_node.test.args[0]
 
         condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
-        msg = assert_node.msg.s if assert_node.msg else None
         if condition_value is not NOTHING:
             if not condition_value:
-                raise GTScriptAssertionError(
-                    message=msg, loc=gt_ir.Location.from_ast_node(assert_node)
-                )
+                loc = gt_ir.Location.from_ast_node(assert_node)
+                raise GTScriptAssertionError(self.source_lines[loc.line - 1], loc=loc)
         else:
             raise GTScriptSyntaxError(
                 "Evaluation of compile-time assertion condition failed at the preprocessing step"
@@ -1417,7 +1418,7 @@ class GTScriptParser(ast.NodeVisitor):
             self.external_context,
             exhaustive=False,
         )
-        AssertionChecker.apply(main_func_node, context=local_context)
+        AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
 
         ValueInliner.apply(main_func_node, context=local_context)
 
