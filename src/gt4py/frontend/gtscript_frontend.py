@@ -121,13 +121,13 @@ class AssertionChecker(ast.NodeTransformer):
     """Check assertions and remove from the AST for further parsing."""
 
     @classmethod
-    def apply(cls, func_node: ast.FunctionDef, context: dict, source: str) -> None:
-        inliner = cls(context, source)
-        inliner(func_node)
+    def apply(cls, func_node: ast.FunctionDef, context: dict, source: str):
+        checker = cls(context, source)
+        checker(func_node)
 
     def __init__(self, context, source):
         self.context = context
-        self.source_lines = textwrap.dedent(source).split("\n")
+        self.source = source
 
     def __call__(self, func_node: ast.FunctionDef):
         self.visit(func_node)
@@ -140,8 +140,9 @@ class AssertionChecker(ast.NodeTransformer):
         condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
         if condition_value is not NOTHING:
             if not condition_value:
+                source_lines = textwrap.dedent(self.source).split("\n")
                 loc = gt_ir.Location.from_ast_node(assert_node)
-                raise GTScriptAssertionError(self.source_lines[loc.line - 1], loc=loc)
+                raise GTScriptAssertionError(source_lines[loc.line - 1], loc=loc)
         else:
             raise GTScriptSyntaxError(
                 "Evaluation of compile-time assertion condition failed at the preprocessing step"
