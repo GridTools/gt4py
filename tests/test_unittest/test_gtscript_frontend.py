@@ -288,6 +288,38 @@ class TestExternalsWithSubroutines:
         )
 
 
+class TestCompileTimeAssertions:
+    def test_assert(self, id_version):
+        def definition_nomsg(inout_field: gtscript.Field[float]):
+            from __externals__ import EXTERNAL
+
+            with computation(PARALLEL), interval(...):
+                assert __INLINED(EXTERNAL < 1)
+                inout_field = inout_field[0, 0, 0] + EXTERNAL
+
+        module = f"TestCompileTimeAssertions_test_module_{id_version}"
+        compile_definition(
+            definition_nomsg, "test_assert_nomsg", module, externals={"EXTERNAL": 0}
+        )
+
+        with pytest.raises(gt_frontend.GTScriptAssertionError, match="Assertion failed"):
+            compile_definition(
+                definition_nomsg, "test_assert_nomsg", module, externals={"EXTERNAL": 1}
+            )
+
+        def definition_msg(inout_field: gtscript.Field[float]):
+            from __externals__ import EXTERNAL
+
+            with computation(PARALLEL), interval(...):
+                assert __INLINED(EXTERNAL < 1), "An error occurred"
+                inout_field = inout_field[0, 0, 0] + EXTERNAL
+
+        with pytest.raises(gt_frontend.GTScriptAssertionError, match="An error occurred"):
+            compile_definition(
+                definition_msg, "test_assert_msg", module, externals={"EXTERNAL": 1}
+            )
+
+
 class TestImports:
     def test_all_legal_combinations(self, id_version):
         def definition_func(inout_field: gtscript.Field[float]):

@@ -80,6 +80,14 @@ class GTScriptValueError(GTScriptDefinitionError):
         super().__init__(name, value, message, loc=loc)
 
 
+class GTScriptAssertionError(gt_definitions.GTSpecificationError):
+    def __init__(self, message=None, *, loc=None):
+        if not message:
+            message = "Assertion failed"
+        super().__init__(message)
+        self.loc = loc
+
+
 # class GTScriptConstValueError(GTScriptValueError):
 #     def __init__(self, name, value, message=None, *, loc=None):
 #         if message is None:
@@ -104,6 +112,41 @@ class GTScriptDataTypeError(GTScriptSyntaxError):
         super().__init__(message, loc=loc)
         self.name = name
         self.data_type = data_type
+
+
+# AssertionChecker.apply(main_func_node, context=local_context)
+class AssertionChecker(ast.NodeTransformer):
+    """Check assertions and remove from the AST for further parsing."""
+
+    @classmethod
+    def apply(cls, func_node: ast.FunctionDef, context: dict):
+        inliner = cls(context)
+        inliner(func_node)
+
+    def __init__(self, context):
+        self.context = context
+
+    def __call__(self, func_node: ast.FunctionDef):
+        self.visit(func_node)
+
+    def visit_Assert(self, assert_node: ast.Assert) -> None:
+        if assert_node.test.func.id != "__INLINED":
+            raise GTScriptSyntaxError("Run-time assertions are not supported")
+        eval_node = assert_node.test.args[0]
+
+        condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
+        msg = assert_node.msg.s if assert_node.msg else None
+        if condition_value is not NOTHING:
+            if not condition_value:
+                raise GTScriptAssertionError(
+                    message=msg, loc=gt_ir.Location.from_ast_node(assert_node)
+                )
+        else:
+            raise GTScriptSyntaxError(
+                "Evaluation of compile-time 'IF' condition failed at the preprocessing step"
+            )
+
+        return None
 
 
 class ValueInliner(ast.NodeTransformer):
@@ -1019,6 +1062,26 @@ class IRMaker(ast.NodeVisitor):
 
         return blocks
 
+    # def visit_If(self, node: ast.If):
+    #     # Compile-time evaluation of "if" conditions
+    #     node = self.generic_visit(node)
+    #     if (
+    #         isinstance(node.test, ast.Call)
+    #         and isinstance(node.test.func, ast.Name)
+    #         and node.test.func.id == "__INLINED"
+    #         and len(node.test.args) == 1
+    #     ):
+    #         eval_node = node.test.args[0]
+    #
+    #         if condition_value is not NOTHING:
+    #             node = node.body if condition_value else node.orelse
+    #         else:
+    #             raise GTScriptSyntaxError(
+    #                 "Evaluation of compile-time 'IF' condition failed at the preprocessing step"
+    #             )
+
+    #     return node if node else None
+
 
 class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
     def __call__(self, node: ast.FunctionDef):
@@ -1374,6 +1437,8 @@ class GTScriptParser(ast.NodeVisitor):
             self.external_context,
             exhaustive=False,
         )
+        AssertionChecker.apply(main_func_node, context=local_context)
+
         ValueInliner.apply(main_func_node, context=local_context)
 
         # Inline function calls
