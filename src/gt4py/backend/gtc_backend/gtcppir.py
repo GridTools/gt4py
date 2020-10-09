@@ -50,14 +50,6 @@ class GTGrid(Node):
     pass
 
 
-class GTMultiStage(Node):
-    pass
-
-
-class GTStage(Node):
-    pass
-
-
 class GTInterval(Node):
     pass
 
@@ -80,7 +72,7 @@ class GTExtent(Node):
 
     @classmethod
     def zero(cls):
-        return cls(i=(0,0), j=(0,0), k=(0,0))
+        return cls(i=(0, 0), j=(0, 0), k=(0, 0))
 
 
 class GTAccessor(Node):
@@ -100,6 +92,26 @@ class GTFunctor(Node):
     param_list: GTParamList
 
 
+# A ParamArg is an argument that maps to a parameter of something with the same name.
+# Because all things are called exactly once there is a one-to-one mapping.
+class ParamArg(Node):
+    name: Str
+
+
+class GTStage(Node):
+    functor: str  # symbol ref
+    args: List[
+        ParamArg
+    ]  # symbol ref to GTComputation params
+    pass
+
+
+class GTMultiStage(Node):
+    loop_order: common.LoopOrder
+    stages: List[GTStage]  # TODO at least one
+    pass
+
+
 class AccessorRef(Expr):
     name: Str  # symbol ref to param list
     offset: Offset
@@ -110,16 +122,30 @@ class AssignStmt(Stmt):
     right: Expr
 
 
-# class GTComputation(Node):
-#     name: Str
+# A GridTools computation object
+class GTComputation(Node):
+    name: Str
+    parameters: List[ParamArg]  # ?
+    multistages: List[GTMultiStage]  # TODO at least one
+
+
 #     parameters: List[UField]
 #     temporaries: List[Temporary]
 #     kernels: List[Kernel]
 #     ctrlflow_ast: List[KernelCall]
 
 
-# class Computation(Node):
-#     name: Str
+class CtrlFlowStmt(Node):
+    pass
+
+
+class Computation(Node):
+    name: Str
+    parameters: List[ParamArg]
+    functors: List[GTFunctor]
+    ctrl_flow_ast: List[GTComputation]
+
+
 #     parameters: List[UField]
 #     temporaries: List[Temporary]
 #     kernels: List[Kernel]
