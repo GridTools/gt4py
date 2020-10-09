@@ -54,10 +54,6 @@ MergeableType = TypeVar("MergeableType")
 WrappedType = TypeVar("WrappedType")
 
 
-INT_TYPES = (gt_ir.DataType.INT8, gt_ir.DataType.INT32, gt_ir.DataType.INT64)
-FLOAT_TYPES = (gt_ir.DataType.FLOAT32, gt_ir.DataType.FLOAT64)
-
-
 class IRSpecificationError(gt_definitions.GTSpecificationError):
     def __init__(self, message=None, *, loc=None):
         if message is None:
@@ -836,6 +832,9 @@ class ComputeExtentsPass(TransformPass):
 
 
 class DataTypePass(TransformPass):
+    INT_TYPES = (gt_ir.DataType.INT8, gt_ir.DataType.INT32, gt_ir.DataType.INT64)
+    FLOAT_TYPES = (gt_ir.DataType.FLOAT32, gt_ir.DataType.FLOAT64)
+
     class CollectDataTypes(gt_ir.IRNodeVisitor):
         def __call__(self, node):
             assert isinstance(node, gt_ir.StencilImplementation)
@@ -922,24 +921,12 @@ class DataTypePass(TransformPass):
             elif len(dtypes_set) == 1:
                 data_type = dtypes_set.pop()
             else:
-                arg_is_float = [dtype in FLOAT_TYPES for dtype in dtypes_list]
-                arg_is_int = [dtype in INT_TYPES for dtype in dtypes_list]
-
-                if sum(arg_is_float) > 0 and sum(arg_is_int) > 0:
-                    # get the first float type in arg list
-                    float_type = next(
-                        (dtype for is_float, dtype in zip(arg_is_float, dtypes_list) if is_float),
-                    )
-                    # cast all int args to this float type
-                    for index, arg in enumerate(node.args):
-                        if arg_is_int[index]:
-                            node.args[index] = gt_ir.Cast(dtype=float_type, expr=arg, loc=node.loc)
-
-                    data_type = float_type
-                else:
-                    raise NotImplementedError(
-                        "Incompatible data types encountered in NativeFuncCall."
-                    )
+                # get the "max" float type in the set
+                data_type = gt_ir.DataType.merge(*dtypes_set)
+                # cast all other args to this type
+                for index, arg in enumerate(node.args):
+                    if arg.data_type != data_type:
+                        node.args[index] = gt_ir.Cast(dtype=data_type, expr=arg, loc=node.loc)
 
             if node.func in (
                 gt_ir.NativeFunction.MIN,
