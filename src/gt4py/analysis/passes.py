@@ -67,7 +67,7 @@ class IntervalSpecificationError(IRSpecificationError):
             if loc is None:
                 message = f"Invalid interval specification '{interval}' "
             else:
-                message = f"Invalid interval specification '{interval}' in '{loc.scope}' (line: {loc.line}, col: {loc.col})"
+                message = f"Invalid interval specification '{interval}' in '{loc.scope}' (line: {loc.line}, col: {loc.column})"
         super().__init__(message, loc=loc)
 
 
@@ -77,7 +77,7 @@ class DataTypeSpecificationError(IRSpecificationError):
             if loc is None:
                 message = f"Invalid data type specification '{data_type}'"
             else:
-                message = f"Invalid data type specification '{data_type}' in '{loc.scope}' (line: {loc.line}, col: {loc.col})"
+                message = f"Invalid data type specification '{data_type}' in '{loc.scope}' (line: {loc.line}, col: {loc.column})"
         super().__init__(message, loc=loc)
 
 
