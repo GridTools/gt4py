@@ -94,7 +94,9 @@ storing a reference to the piece of source code which originated the node.
 
     NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
-    Expr        = Literal | Ref | NativeFuncCall | CompositeExpr | InvalidBranch
+    Cast(dtype: DataType, expr: Expr)
+
+    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch
 
     CompositeExpr   = UnaryOpExpr(op: UnaryOperator, arg: Expr)
                     | BinOpExpr(op: BinaryOperator, lhs: Expr, rhs: Expr)
