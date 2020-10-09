@@ -18,21 +18,22 @@ def demo_copy(in_field: gtscript.Field[dtype], out_field: gtscript.Field[dtype])
         out_field = in_field
 
 
-N = 30
-shape = [N] * 3
-origin = (0, 0, 0)
+if __name__ == "__main__":
+    N = 30
+    shape = [N] * 3
+    origin = (0, 0, 0)
 
-in_data = np.ones(shape)
-out_data = np.zeros(shape)
+    in_data = np.ones(shape)
+    out_data = np.zeros(shape)
 
-in_storage = gt_storage.from_array(in_data, backend, default_origin=origin, dtype=dtype)
-out_storage = gt_storage.from_array(
-    out_data,
-    backend,
-    default_origin=origin,
-    dtype=dtype,
-)
+    in_storage = gt_storage.from_array(in_data, backend, default_origin=origin, dtype=dtype)
+    out_storage = gt_storage.from_array(
+        out_data,
+        backend,
+        default_origin=origin,
+        dtype=dtype,
+    )
 
-demo_copy(in_storage, out_storage)
+    demo_copy(in_storage, out_storage)
 
-print(out_storage[1, 1, 1])
+    print(out_storage[1, 1, 1])

@@ -14,10 +14,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Optional
+import enum
+from typing import Dict, List, Optional, Tuple
 
 from devtools import debug  # noqa: F401
-from eve import Node, SourceLocation, Str
+from eve import IntEnum, Node, SourceLocation, Str
 
 from . import common
 
@@ -51,6 +52,9 @@ class CartesianOffset(Node):
     @classmethod
     def zero(cls):
         return cls(i=0, j=0, k=0)
+
+    def to_tuple(self):
+        return (self.i, self.j, self.k)
 
 
 class FieldAccess(Expr):
@@ -102,7 +106,76 @@ class Stencil(LocNode):
     vertical_loops: List[VerticalLoop]
 
 
+@enum.unique
+class AccessKind(IntEnum):
+    READ_ONLY = 0
+    READ_WRITE = 1
+
+
+class FieldBoundary(Node):
+    i: Tuple[int, int]
+    j: Tuple[int, int]
+    k: Tuple[int, int]
+
+    def to_tuple(self):
+        return (self.i, self.j, self.k)
+
+    def set_at(self, index, value):
+        if index == 0:
+            self.i = value
+        elif index == 1:
+            self.j = value
+        elif index == 2:
+            self.k = value
+        else:
+            raise IndexError()
+
+    def update_from_offset(self, offset: CartesianOffset):
+        for i, (bound_n, offset_n) in enumerate(zip(self.to_tuple(), offset.to_tuple())):
+            bound_n = list(bound_n)
+            sign = -1 if offset_n < 0 else 1
+            start_or_end = 0 if offset_n < 0 else 1
+            bound_n[start_or_end] = max(sign * offset_n, bound_n[start_or_end])
+            self.set_at(i, tuple(bound_n))
+
+
+class FieldMetadata(Node):
+    name: str
+    access: AccessKind
+    boundary: FieldBoundary
+    dtype: Optional[common.DataType]
+
+
+class FieldsMetadata(Node):
+    metas: Dict[str, FieldMetadata] = {}
+
+
 class Computation(LocNode):
     name: Str
     params: List[FieldDecl]
     stencils: List[Stencil]
+    fields_metadata: FieldsMetadata = FieldsMetadata()
+
+    @property
+    def signature(self) -> str:
+        return ", ".join(p.name for p in self.params) + ", _domain_"
+
+    @property
+    def parameter_info(self) -> Dict:
+        return {}
+
+    @property
+    def field_names(self) -> List:
+        return [p.name for p in self.params]
+
+    @property
+    def param_names(self) -> List:
+        return []
+
+    @property
+    def domain_info(self) -> Domain:
+        return "computation.get_domain()"
+
+    @property
+    def constants(self) -> Dict:
+        return {}
