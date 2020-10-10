@@ -141,48 +141,50 @@ class NumPySourceGenerator(PythonSourceGenerator):
         is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
         extent = self.block_info.extent
 
-        lower_extent = list(extent.lower_indices)
-        upper_extent = list(extent.upper_indices)
-
-        for d, ax in enumerate(self.domain.axes_names):
-            idx = node.offset.get(ax, 0)
-            if idx:
-                lower_extent[d] += idx
-                upper_extent[d] += idx
-
         index = []
         for d, axis_name in enumerate([axis.name for axis in self.impl_node.domain.parallel_axes]):
-            bounds = []
+
+            lower_extent = extent.lower_indices[d]
+            upper_extent = extent.upper_indices[d]
+            offset = node.offset.get(axis_name, 0)
+            extent_and_offset = (lower_extent + offset, upper_extent + offset)
+
             origin = f"{node.name}{self.origin_marker}[{d}]"
-            axis_extent = (lower_extent[d], upper_extent[d])
-            regular_bounds = (
-                f"{origin}{axis_extent[0]:+d}",
-                f"{origin} + {self.domain_arg_name}[{d}]{axis_extent[1]:+d}",
-            )
+            regular_bounds = [
+                f"{extent_and_offset[0]}",
+                f"{self.domain_arg_name}[{d}]"
+                + (f"{extent_and_offset[1]:+d}" if extent_and_offset[1] != 0 else ""),
+            ]
+
+            bounds = []
             if self.block_info.parallel_interval:
                 axis_interval = self.block_info.parallel_interval[d]
 
                 # Loop over endpoints of the axis
-                for axis_bound, regular_bound, ext in zip(
-                    (axis_interval.start, axis_interval.end), regular_bounds, axis_extent
+                for axis_bound, regular_bound in zip(
+                    (axis_interval.start, axis_interval.end), regular_bounds
                 ):
                     if isinstance(axis_bound.level, gt_ir.VarRef):
+                        total_offset = axis_bound.offset + offset
+
                         bounds.append(
-                            origin + f" + {axis_bound.level.name}{axis_bound.offset:+d}{ext:+d}"
+                            f"{axis_bound.level.name}"
+                            + (f"{total_offset:+d}" if total_offset != 0 else "")
                         )
                     elif isinstance(axis_bound.level, int):
-                        bounds.append(origin + f" {axis_bound.level:+d}{ext:+d}")
+                        total_offset = axis_bound.level + offset
+                        bounds.append(f"{total_offset}")
                     else:
                         bounds.append(regular_bound)
 
                 # Add correction
                 bounds = [
-                    f"min({regular_bounds[1]}, max({bound}, {regular_bounds[0]}))"
+                    f"{origin} + min({regular_bounds[1]}, max({bound}, {regular_bounds[0]}))"
                     for bound in bounds
                 ]
 
             else:
-                bounds = regular_bounds
+                bounds = [f"{origin} + {rb}" for rb in regular_bounds]
 
             index.append(" : ".join(bounds))
 
