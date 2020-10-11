@@ -587,14 +587,15 @@ class IRMaker(ast.NodeVisitor):
         return compute_blocks == compute_blocks_sorted
 
     def _visit_iteration_order_node(self, node: ast.withitem, loc: gt_ir.Location):
+        syntax_error = GTScriptSyntaxError(
+            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
+            loc=loc,
+        )
         comp_node = node.context_expr
         if len(comp_node.args) + len(comp_node.keywords) != 1 or any(
             keyword.arg not in ["order"] for keyword in comp_node.keywords
         ):
-            raise GTScriptSyntaxError(
-                f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
-                loc=loc,
-            )
+            raise syntax_error
 
         if comp_node.args:
             iteration_order_node = comp_node.args[0]
