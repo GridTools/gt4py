@@ -556,23 +556,46 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
-    @staticmethod
-    def _sort_blocks_key(comp_block):
-        start = comp_block.interval.start
-        assert isinstance(start.level, gt_ir.LevelMarker)
-        key = 0 if start.level == gt_ir.LevelMarker.START else 100000
-        key += start.offset
-        return key
+    def _are_blocks_sorted(self, compute_blocks: List[gt_ir.ComputationBlock]):
+        def sort_blocks_key(comp_block):
+            start = comp_block.interval.start
+            assert isinstance(start.level, gt_ir.LevelMarker)
+            key = 0 if start.level == gt_ir.LevelMarker.START else 100000
+            key += start.offset
+            return key
+
+        if len(compute_blocks) < 1:
+            return True
+
+        # validate invariant
+        assert all(
+            comp_block.iteration_order == compute_blocks[0].iteration_order
+            for comp_block in compute_blocks
+        )
+
+        # extract iteration order
+        iteration_order = compute_blocks[0].iteration_order
+
+        # sort blocks
+        compute_blocks_sorted = sorted(
+            compute_blocks,
+            key=sort_blocks_key,
+            reverse=iteration_order == gt_ir.IterationOrder.BACKWARD,
+        )
+
+        # if sorting didn't change anything it was already sorted
+        return compute_blocks == compute_blocks_sorted
 
     def _visit_iteration_order_node(self, node: ast.withitem, loc: gt_ir.Location):
+        syntax_error = GTScriptSyntaxError(
+            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
+            loc=loc,
+        )
         comp_node = node.context_expr
         if len(comp_node.args) + len(comp_node.keywords) != 1 or any(
             keyword.arg not in ["order"] for keyword in comp_node.keywords
         ):
-            raise GTScriptSyntaxError(
-                f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
-                loc=loc,
-            )
+            raise syntax_error
 
         if comp_node.args:
             iteration_order_node = comp_node.args[0]
@@ -626,7 +649,7 @@ class IRMaker(ast.NodeVisitor):
 
         return interval
 
-    def _visit_computation_node(self, node: ast.With) -> list:
+    def _visit_computation_node(self, node: ast.With) -> List[gt_ir.ComputationBlock]:
         loc = gt_ir.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
             f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
@@ -982,21 +1005,13 @@ class IRMaker(ast.NodeVisitor):
 
                 compute_blocks.append(self._visit_computation_node(with_node))
 
-            # Reorder blocks
-            #  the nested computation blocks need not to be specified in their order of execution, but the backends
-            #  expect them to the given in that order so sort them. The order of execution is such that the lowest
-            #  (highest) interval is processed first if the iteration order is forward (backward).
-            if len(compute_blocks) > 1:
-                # Validate invariant
-                assert all(
-                    comp_block.iteration_order == compute_blocks[0].iteration_order
-                    for comp_block in compute_blocks
+            # Validate block specification order
+            #  the nested computation blocks must be specified in their order of execution. The order of execution is
+            #  such that the lowest (highest) interval is processed first if the iteration order is forward (backward).
+            if not self._are_blocks_sorted(compute_blocks):
+                raise GTScriptSyntaxError(
+                    f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
                 )
-
-                # Vertical regions with variable references are not supported yet
-                compute_blocks.sort(key=self._sort_blocks_key)
-                if compute_blocks[0].iteration_order == gt_ir.IterationOrder.BACKWARD:
-                    compute_blocks.reverse()
 
             return compute_blocks
         elif self.parsing_context == ParsingContext.CONTROL_FLOW and not any(
