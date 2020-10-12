@@ -62,7 +62,7 @@ def afunc(b):
 @register
 def native_functions(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
-        field_a = min(afunc(field_b), field_b)
+        field_a = max(min(afunc(field_b), field_b), 1)
 
 
 @register
@@ -105,10 +105,10 @@ def tridiagonal_solver(inf: Field3D, diag: Field3D, sup: Field3D, rhs: Field3D, 
             sup = sup / (diag - sup[0, 0, -1] * inf)
             rhs = (rhs - inf * rhs[0, 0, -1]) / (diag - sup[0, 0, -1] * inf)
     with computation(BACKWARD):
-        with interval(0, -1):
-            out = rhs - sup * out[0, 0, 1]
         with interval(-1, None):
             out = rhs
+        with interval(0, -1):
+            out = rhs - sup * out[0, 0, 1]
 
 
 @register(externals={"BET_M": 0.5, "BET_P": 0.5})

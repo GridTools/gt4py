@@ -104,9 +104,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         # Create K for-loop: computation body is split in different vertical regions
         source_lines = gt_text.TextBlock(indent_size=self.indent_size)
-        regions = sorted(regions)
-        if iteration_order == gt_ir.IterationOrder.BACKWARD:
-            regions = reversed(regions)
+        assert sorted(regions, reverse=iteration_order == gt_ir.IterationOrder.BACKWARD) == regions
 
         for bounds, parallel_interval, body_sources in regions:
             source_lines.extend(self._make_regional_computation(iteration_order, bounds))

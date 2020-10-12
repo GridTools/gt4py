@@ -513,7 +513,7 @@ class TestNestedWithSyntax:
                 with interval(...):
                     in_field = out_field
 
-    def test_nested_with_reordering(self):
+    def test_nested_with_ordering(self):
         def definition_fw(
             in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
         ):
@@ -531,30 +531,24 @@ class TestNestedWithSyntax:
             from gt4py.__gtscript__ import FORWARD, computation, interval
 
             with computation(BACKWARD):
-                with interval(1, 2):
-                    in_field = out_field + 1
                 with interval(0, 1):
                     in_field = out_field + 2
+                with interval(1, 2):
+                    in_field = out_field + 1
 
-        definitions = [
-            # name, expected axis bounds, definition
-            ("fw", [(0, 1), (1, 2)], definition_fw),
-            ("bw", [(1, 2), (0, 1)], definition_bw),
-        ]
+        definitions = {"fw": definition_fw, "bw": definition_bw}
 
-        for name, axis_bounds, definition in definitions:
-            # generate DIR
-            _, definition_ir = compile_definition(
-                definition,
-                f"test_nested_with_reordering_{name}",
-                f"TestImports_test_module_{id_version}",
-            )
-
-            # test for correct ordering
-            for i, axis_bound in enumerate(axis_bounds):
-                interval = definition_ir.computations[i].interval
-                assert interval.start.offset == axis_bound[0]
-                assert interval.end.offset == axis_bound[1]
+        for name, definition in definitions.items():
+            with pytest.raises(
+                gt_frontend.GTScriptSyntaxError,
+                match=r"(.*?)Intervals must be specified in order of execution(.*)",
+            ):
+                # generate DIR
+                _, definition_ir = compile_definition(
+                    definition,
+                    f"test_nested_with_reordering_{name}",
+                    f"TestImports_test_module_{id_version}",
+                )
 
 
 class TestNativeFunctions:

@@ -124,9 +124,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         upper_extent = self.block_info.extent.upper_indices
 
         # Computations body is split in different vertical regions
-        regions = sorted(regions)
-        if iteration_order == gt_ir.IterationOrder.BACKWARD:
-            regions = reversed(regions)
+        assert sorted(regions, reverse=iteration_order == gt_ir.IterationOrder.BACKWARD) == regions
 
         for bounds, parallel_interval, body in regions:
             region_lines = self._make_regional_computation(iteration_order, bounds, body)
