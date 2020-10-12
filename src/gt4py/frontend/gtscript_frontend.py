@@ -1135,22 +1135,6 @@ class IRMaker(ast.NodeVisitor):
                 f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
             )
 
-        # Reorder blocks
-        #  the nested computation blocks need not to be specified in their order of execution, but the backends
-        #  expect them to the given in that order so sort them. The order of execution is such that the lowest
-        #  (highest) interval is processed first if the iteration order is forward (backward).
-        if len(compute_blocks) > 1:
-            # Validate invariant
-            assert all(
-                comp_block.iteration_order == compute_blocks[0].iteration_order
-                for comp_block in compute_blocks
-            )
-
-            # Vertical regions with variable references are not supported yet
-            compute_blocks.sort(key=self._sort_blocks_key)
-            if compute_blocks[0].iteration_order == gt_ir.IterationOrder.BACKWARD:
-                compute_blocks.reverse()
-
         return compute_blocks
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> list:
