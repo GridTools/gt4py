@@ -160,7 +160,3 @@ class Computation(LocNode):
     @property
     def param_names(self) -> List:
         return [p.name for p in self.params]
-
-    @property
-    def constants(self) -> Dict:
-        return {}
