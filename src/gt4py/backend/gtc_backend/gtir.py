@@ -36,7 +36,8 @@ class Stmt(LocNode):
 
 
 class Literal(Expr):
-    value: Str  # TODO when coming from python AST we know more than just the string representation, I suppose
+    # TODO when coming from python AST we know more than just the string representation, I suppose
+    value: Str
     dtype: common.DataType
 
 
@@ -157,24 +158,8 @@ class Computation(LocNode):
     fields_metadata: FieldsMetadata = FieldsMetadata()
 
     @property
-    def signature(self) -> str:
-        return ", ".join(p.name for p in self.params) + ", _domain_"
-
-    @property
-    def parameter_info(self) -> Dict:
-        return {}
-
-    @property
-    def field_names(self) -> List:
-        return [p.name for p in self.params]
-
-    @property
     def param_names(self) -> List:
-        return []
-
-    @property
-    def domain_info(self) -> Domain:
-        return "computation.get_domain()"
+        return [p.name for p in self.params]
 
     @property
     def constants(self) -> Dict:

@@ -1,12 +1,11 @@
 import numpy as np
 
-import gt4py
-import gt4py.gtscript as gtscript
-import gt4py.storage as gt_storage
+from gt4py import gtscript
+from gt4py import storage as gt_storage
+from gt4py.gtscript import PARALLEL, computation, interval
 
 
 backend = "gtc:py"  # "debug", "numpy", "gtx86", "gtcuda"
-# backend = "debug"  # "debug", "numpy", "gtx86", "gtcuda"
 dtype = np.float64
 
 
@@ -14,8 +13,7 @@ dtype = np.float64
 @gtscript.lazy_stencil(backend=backend, rebuild=True)
 def demo_copy(in_field: gtscript.Field[dtype], out_field: gtscript.Field[dtype]):
     with computation(PARALLEL), interval(...):
-        out_field = in_field
-        out_field = in_field
+        out_field = in_field  # noqa: F841 [assigned but not used]
 
 
 if __name__ == "__main__":

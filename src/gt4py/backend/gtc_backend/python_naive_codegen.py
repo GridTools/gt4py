@@ -7,20 +7,17 @@ class PythonNaiveCodegen(codegen.TemplatedGenerator):
 
     Computation_template = jinja2.Template(
         """
-{{ '\\n'.join(params) }}
+def default_domain(*args):
+    lengths = zip(*(i.shape for i in args))
+    return tuple(max(*length) for length in lengths)
 
-def get_domain():
-    from collections import namedtuple
-    domain_info = namedtuple("DomainInfo", ("parallel_axes", "sequential_axis", "ndims"))
-    return domain_info(parallel_axes=("I", "J"), sequential_axis=("K"), ndims=(3))
 
-def run({{', '.join(_this_node.field_names)}}, _domain_=get_domain()):\
+def run({{', '.join(_this_node.param_names)}}, _domain_=None):
+    if _domain_ is None:
+        _domain_ = default_domain({{', '.join(_this_node.param_names)}})\
 {{ '\\n'.join(stencils) | indent(4)}}
 """
     )
-
-    # TODO might not be the right solutions as FieldDecl might be used in different context
-    # FieldDecl_template = "{name}_at = _Accessor({name}, _origin_['{name}'])"
 
     Stencil_template = jinja2.Template("""{{'\\n'.join(vertical_loops)}}""")
 
@@ -31,18 +28,9 @@ ${ '\\n'.join(vertical_intervals) }"""
 
     VerticalInterval_template = jinja2.Template(
         """
-for K in range(0, _domain_[2]):
+for K in range(0, _domain_[2]):\
     {{'\\n'.join(horizontal_loops)|indent(4)}}"""
     )
-
-    # AxisBound_template = mako_tpl.Template(
-    #     "<%! from gt4py.backend.gtc_backend.common import LevelMarker %>\\\n"
-    #     "% if _this_node.level == LevelMarker.START:\n"
-    #     "${ offset }\\\n"
-    #     "% elif _this_node.level == LevelMarker.END:\n"
-    #     "${ _this_node.offset and -_this_node.offset or None }\\\n"
-    #     "% endif"
-    # )
 
     HorizontalLoop_template = jinja2.Template(
         """

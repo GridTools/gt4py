@@ -1,15 +1,15 @@
+from typing import Iterator
+
 import pytest
 
 from gt4py.backend.gtc_backend.common import DataType
 from gt4py.backend.gtc_backend.gtir import AccessKind, FieldBoundary, FieldMetadata, FieldsMetadata
-from gt4py.backend.gtc_backend.stencil_object_snippet_generator import (
-    StencilObjectSnippetGenerator,
-)
+from gt4py.backend.gtc_backend.stencil_object_snippet_generators import FieldInfoGenerator
 
 
 @pytest.fixture
-def generator() -> StencilObjectSnippetGenerator:
-    yield StencilObjectSnippetGenerator()
+def generator() -> Iterator[FieldInfoGenerator]:
+    yield FieldInfoGenerator()
 
 
 def test_field_boundary(generator) -> None:

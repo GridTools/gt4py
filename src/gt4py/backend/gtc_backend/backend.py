@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
 from gt4py.backend.base import BaseBackend, CLIBackendMixin, register
 from gt4py.backend.debug_backend import (
@@ -10,7 +10,6 @@ from gt4py.backend.debug_backend import (
 from .defir_to_gtir import DefIRToGTIR
 from .fields_metadata_pass import FieldsMetadataPass
 from .gtir import Computation
-from .mock_arg_info import MOCK_ARG_INFO
 from .py_module_generator import GTCPyModuleGenerator
 from .python_naive_codegen import PythonNaiveCodegen
 
@@ -24,6 +23,7 @@ class GTCPythonBackend(BaseBackend, CLIBackendMixin):
     """Pure python backend using gtc."""
 
     name = "gtc:py"
+    # Intentionally does not define a MODULE_GENERATOR_CLASS
     options: ClassVar[Dict[str, Any]] = {}
     storage_info = {
         "alignment": 1,
@@ -33,9 +33,6 @@ class GTCPythonBackend(BaseBackend, CLIBackendMixin):
         "is_compatible_type": debug_is_compatible_type,
     }
     languages = {"computation": "python", "bindings": ["python"]}
-
-    # disabled to circumvent implementation IR
-    # MODULE_GENERATOR_CLASS = GTCPyModuleGenerator
 
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
         if language_name == "python":
@@ -47,22 +44,16 @@ class GTCPythonBackend(BaseBackend, CLIBackendMixin):
         source = PythonNaiveCodegen().apply(self.gtc_ir)
         return {filename: source}
 
-    # not used currently
-    # def make_module_source(
-    #    self, *, args_data: Optional[Dict[str, Any]] = None, **kwargs: Any
-    # ) -> str:
-    #    return GTCPyModuleGenerator(self.builder)(MOCK_ARG_INFO)
-
     def generate(self) -> Type["StencilObject"]:
         self.builder.module_path.parent.mkdir(parents=True, exist_ok=True)
         computation_filename, computation_source = list(self.generate_computation().items())[0]
         self.builder.module_path.parent.joinpath(computation_filename).write_text(
-            computation_source
+            cast(str, computation_source)
         )
         bindings_filename, bindings_source = list(
             self.generate_bindings(language_name="python").items()
         )[0]
-        self.builder.module_path.write_text(bindings_source)
+        self.builder.module_path.write_text(cast(str, bindings_source))
         return self._load()
 
     @property

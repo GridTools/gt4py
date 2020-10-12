@@ -2,7 +2,6 @@ from eve.visitors import NodeModifier
 
 from .gtir import (
     AccessKind,
-    CartesianOffset,
     Computation,
     FieldAccess,
     FieldBoundary,

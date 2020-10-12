@@ -1,10 +1,16 @@
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 from gt4py.backend import BaseModuleGenerator
 from gt4py.utils.text import TextBlock, format_source
 
-from .defir_to_gtir import DefIRToGTIR
-from .stencil_object_snippet_generator import StencilObjectSnippetGenerator
+from .stencil_object_snippet_generators import (
+    ACCESSOR_CLASS_SRC,
+    ComputationCallGenerator,
+    DomainInfoGenerator,
+    FieldInfoGenerator,
+    ParameterInfoGenerator,
+    RunBodyGenerator,
+)
 
 
 if TYPE_CHECKING:
@@ -16,8 +22,10 @@ class GTCPyModuleGenerator(BaseModuleGenerator):
 
     def generate_implementation(self) -> str:
         source = TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
-        source.append(f"computation.run({self.builder.backend.gtc_ir.signature})")
-        return source
+        source.append(RunBodyGenerator().apply(self.backend.gtc_ir))
+        source.empty_line(steps=2)
+        source.append(ComputationCallGenerator.apply(self.backend.gtc_ir))
+        return source.text
 
     def generate_imports(self) -> str:
         imports = super().generate_imports().split("\n")
@@ -30,6 +38,15 @@ class GTCPyModuleGenerator(BaseModuleGenerator):
         )
         return "\n".join(imports)
 
+    def generate_domain_info(self) -> str:
+        return DomainInfoGenerator().apply(self.backend.gtc_ir)
+
+    def generate_field_info(self) -> str:
+        return FieldInfoGenerator().apply(self.backend.gtc_ir)
+
+    def generate_parameter_info(self) -> str:
+        return ParameterInfoGenerator().apply(self.backend.gtc_ir)
+
     def _get_options(self) -> Dict[str, Any]:
         return {
             key: value
@@ -37,12 +54,10 @@ class GTCPyModuleGenerator(BaseModuleGenerator):
             if key not in ["build_info"]
         }
 
-    def __call__(self, builder: Optional["StencilBuilder"] = None) -> str:
+    # following type ignore is due to intentionally incompatible method signature
+    def __call__(self, builder: Optional["StencilBuilder"] = None) -> str:  # type: ignore
         if builder:
             self._builder = builder
-
-        gtc_ir = self.builder.backend.gtc_ir
-        gen = StencilObjectSnippetGenerator()
 
         return format_source(
             self.template.render(
@@ -51,19 +66,28 @@ class GTCPyModuleGenerator(BaseModuleGenerator):
                 class_name=self.builder.class_name,
                 class_members=self.generate_class_members(),
                 docstring=self.builder.definition_ir.docstring,
-                gt_backend=self.builder.backend.name,
+                gt_backend=self.backend.name,
                 gt_source=repr(str(self.generate_implementation())),
-                gt_domain_info=gtc_ir.domain_info,
-                gt_field_info=gen.apply(gtc_ir.fields_metadata),
-                gt_parameter_info=repr(gtc_ir.parameter_info),
-                gt_constants=repr(gtc_ir.constants),
+                gt_domain_info=self.generate_domain_info(),
+                gt_field_info=self.generate_field_info(),
+                gt_parameter_info=self.generate_parameter_info(),
+                gt_constants=repr({}),
                 gt_options=self._get_options(),
                 stencil_signature=self.generate_signature(),
-                field_names=gtc_ir.field_names,
-                param_names=gtc_ir.param_names,
+                field_names=self.backend.gtc_ir.param_names,
+                param_names=[],
                 pre_run=self.generate_pre_run(),
                 post_run=self.generate_post_run(),
                 implementation=self.generate_implementation(),
             ),
             line_length=self.SOURCE_LINE_LENGTH,
         )
+
+    def generate_module_members(self) -> str:
+        return ACCESSOR_CLASS_SRC
+
+    @property
+    def backend(self):
+        from .backend import GTCPythonBackend
+
+        return cast(GTCPythonBackend, self.builder.backend)
