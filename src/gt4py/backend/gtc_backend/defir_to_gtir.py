@@ -27,6 +27,9 @@ def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:
     return gtir.CartesianOffset(i=i, j=j, k=k)
 
 
+# TODO(Rico Häuselmann): write unit tests
+
+
 class DefIRToGTIR(IRNodeVisitor):
     @classmethod
     def apply(cls, root, **kwargs):

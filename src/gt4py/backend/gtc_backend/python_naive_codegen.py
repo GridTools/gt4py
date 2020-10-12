@@ -28,7 +28,7 @@ ${ '\\n'.join(vertical_intervals) }"""
 
     VerticalInterval_template = jinja2.Template(
         """
-for K in range(0, _domain_[2]):\
+for K in range({{start}}, {{end}}):\
     {{'\\n'.join(horizontal_loops)|indent(4)}}"""
     )
 
@@ -48,3 +48,13 @@ for I in range(_domain_[0]):
     BinaryOp_template = "{left} {op} {right}"
 
     Literal_template = "{value}"
+
+    AxisBound_template = jinja2.Template(
+        """\
+{% if _this_node.level.name == 'END' %}\
+_domain_[2]{{' - ' + offset if _this_node.offset > 0 else ''}}\
+{% else %}\
+{{offset}}\
+{% endif %}\
+"""
+    )

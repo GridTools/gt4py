@@ -20,6 +20,9 @@ class _Accessor:
 """
 
 
+# TODO(Rico Häuselmann): Write unit tests for these
+
+
 class FieldInfoGenerator(TemplatedGenerator):
 
     Computation_template = "{fields_metadata}"
