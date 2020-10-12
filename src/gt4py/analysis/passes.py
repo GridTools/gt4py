@@ -831,9 +831,6 @@ class ComputeExtentsPass(TransformPass):
 
 
 class DataTypePass(TransformPass):
-    INT_TYPES = (gt_ir.DataType.INT8, gt_ir.DataType.INT32, gt_ir.DataType.INT64)
-    FLOAT_TYPES = (gt_ir.DataType.FLOAT32, gt_ir.DataType.FLOAT64)
-
     class CollectDataTypes(gt_ir.IRNodeVisitor):
         def __call__(self, node):
             assert isinstance(node, gt_ir.StencilImplementation)
