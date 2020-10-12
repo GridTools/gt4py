@@ -324,7 +324,7 @@ class CallInliner(ast.NodeTransformer):
             call_ast,
             name_mapping,
             template_fmt=template_fmt,
-            skip_names=set(self.all_skip_names | call_info["splitters"]),
+            skip_names=set(self.all_skip_names | self.annotation["splitters"]),
         )
 
         # Replace returns by assignments in subroutine
