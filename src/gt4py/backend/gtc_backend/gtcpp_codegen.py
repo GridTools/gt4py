@@ -2,7 +2,7 @@ from eve import codegen
 
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
-from gt4py.backend.gtc_backend.common import LoopOrder
+from gt4py.backend.gtc_backend.common import DataType, LoopOrder
 
 from gt4py.backend.gtc_backend.gtcppir import (
     GTAccessor,
@@ -10,6 +10,7 @@ from gt4py.backend.gtc_backend.gtcppir import (
     GTComputation,
     GTFunctor,
     GTMultiStage,
+    IJCache,
 )
 
 
@@ -22,7 +23,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     GTParamList = as_mako(
         """${ '\\n'.join(accessors) }
 
-    using param_list = gridtools::stencil::make_param_list<${ ','.join(a.name for a in _this_node.accessors)}>;
+    using param_list = make_param_list<${ ','.join(a.name for a in _this_node.accessors)}>;
     """
     )
 
@@ -50,15 +51,27 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     Offset = as_fmt("{i}, {j}, {k}")
 
-    BinaryOp = as_fmt("{left} {op} {right}")
+    BinaryOp = as_fmt("({left} {op} {right})")
 
-    Literal = as_fmt("{value}")  # TODO cast
+    TernaryOp = as_fmt("({cond} ? {true_expr} : {false_expr})")
+
+    Literal = as_mako("${vtype}{${value}}")  # TODO cast
+
+    def visit_DataType(self, dtype: DataType, **kwargs):
+        if dtype == DataType.FLOAT64:
+            return "double"
+
+    VarDecl = as_fmt("{vtype} {name} = {init};")
+
+    VarAccess = as_fmt("{name}")
 
     ParamArg = as_fmt("{name}")
 
-    GTStage = as_mako("stage(${functor}(), ${','.join(args)})")
+    GTStage = as_mako(".stage(${functor}(), ${','.join(args)})")
 
-    GTMultiStage = as_mako("gridtools::stencil::execute_${ loop_order }().${'.'.join(stages)}")
+    IJCache = as_fmt(".ij_cached({name})")
+
+    GTMultiStage = as_mako("execute_${ loop_order }()${''.join(caches)}${''.join(stages)}")
 
     def visit_LoopOrder(self, looporder: LoopOrder, **kwargs):  # TODO what's the pattern?
         if looporder == LoopOrder.PARALLEL:
@@ -68,21 +81,26 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         if looporder == LoopOrder.BACKWARD:
             return "backward"
 
+    Temporary = as_fmt("GT_DECLARE_TMP({vtype}, {name});")
+
     GTComputation = as_mako(
         """{
-            auto grid = gridtools::stencil::make_grid(domain[0], domain[1], domain[2]);
+            auto grid = make_grid(domain[0], domain[1], domain[2]);
 
             auto ${ name } = [](${ ','.join('auto ' + p for p in parameters) }) {
-            return gridtools::stencil::multi_pass(${ ','.join(multistages) });
+
+            ${ '\\n'.join(temporaries) }
+            return multi_pass(${ ','.join(multistages) });
             };
 
-            st::run(${name}, gridtools::stencil::cpu_ifirst /* TODO */, grid, ${','.join(parameters)});
+            st::run(${name}, cpu_ifirst /* TODO */, grid, ${','.join(parameters)});
         }
         """
     )
 
     Computation = as_mako(
         """namespace ${ name }_impl_{
+            using namespace gridtools::stencil;
            ${'\\n'.join(functors)}
 
         auto ${name}(Domain domain) {

@@ -34,7 +34,7 @@ class VarDecl(Stmt):
 
 
 class Literal(Expr):
-    value: Union[common.BuiltInLiteral, Str]
+    value: Union[common.BuiltInLiteral, Str]  # TODO replace string by typed value?
     vtype: common.DataType
 
 
@@ -49,3 +49,9 @@ class BinaryOp(Expr):
     op: common.BinaryOperator
     left: Expr
     right: Expr
+
+
+class TernaryOp(Expr):
+    cond: Expr
+    true_expr: Expr
+    false_expr: Expr

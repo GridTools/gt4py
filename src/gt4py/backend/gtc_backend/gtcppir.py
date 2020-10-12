@@ -42,8 +42,9 @@ class VerticalDimension(Node):
 #     dimensions: List[Union[common.LocationType, NeighborChain, VerticalDimension]]  # Set?
 
 
-# class Temporary(UField):
-#     pass
+class Temporary(Node):
+    name: Str
+    vtype: common.DataType
 
 
 class GTGrid(Node):
@@ -100,16 +101,17 @@ class ParamArg(Node):
 
 class GTStage(Node):
     functor: str  # symbol ref
-    args: List[
-        ParamArg
-    ]  # symbol ref to GTComputation params
-    pass
+    args: List[ParamArg]  # symbol ref to GTComputation params
+
+
+class IJCache(Node):
+    name: Str  # symbol ref to GTComputation params or temporaries
 
 
 class GTMultiStage(Node):
     loop_order: common.LoopOrder
     stages: List[GTStage]  # TODO at least one
-    pass
+    caches: Optional[List[Union[IJCache]]]
 
 
 class AccessorRef(Expr):
@@ -126,6 +128,7 @@ class AssignStmt(Stmt):
 class GTComputation(Node):
     name: Str
     parameters: List[ParamArg]  # ?
+    temporaries: List[Temporary]
     multistages: List[GTMultiStage]  # TODO at least one
 
 

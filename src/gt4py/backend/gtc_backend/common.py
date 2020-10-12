@@ -45,6 +45,10 @@ class BinaryOperator(StrEnum):
     SUB = "-"
     MUL = "*"
     DIV = "/"
+    GT = ">"
+    LT = "<"
+    GEQ = ">="
+    LEQ = "<="
 
 
 @enum.unique
