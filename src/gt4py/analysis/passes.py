@@ -918,7 +918,7 @@ class DataTypePass(TransformPass):
             elif len(dtypes_set) == 1:
                 data_type = dtypes_set.pop()
             else:
-                # get the "max" float type in the set
+                # get the "largest" data type in the set
                 data_type = gt_ir.DataType.merge(*dtypes_set)
                 # cast all other args to this type
                 for index, arg in enumerate(node.args):
