@@ -57,6 +57,9 @@ class CartesianOffset(Node):
     def to_tuple(self):
         return (self.i, self.j, self.k)
 
+    def to_dict(self):
+        return {"i": self.i, "j": self.j, "k": self.k}
+
 
 class FieldAccess(Expr):
     name: Str  # via symbol table
@@ -137,30 +140,30 @@ class FieldBoundary(Node):
     def to_tuple(self):
         return (self.i, self.j, self.k)
 
-    def set_at(self, index, value):
-        if index == 0:
-            self.i = value
-        elif index == 1:
-            self.j = value
-        elif index == 2:
-            self.k = value
-        else:
-            raise IndexError()
+
+class FieldBoundaryAccumulator:
+    def __init__(self):
+        self.bounds = {
+            "i": {"lower": 0, "upper": 0},
+            "j": {"lower": 0, "upper": 0},
+            "k": {"lower": 0, "upper": 0},
+        }
 
     def update_from_offset(self, offset: CartesianOffset):
-        for i, (bound_n, offset_n) in enumerate(zip(self.to_tuple(), offset.to_tuple())):
-            bound_n = list(bound_n)
-            sign = -1 if offset_n < 0 else 1
-            start_or_end = 0 if offset_n < 0 else 1
-            bound_n[start_or_end] = max(sign * offset_n, bound_n[start_or_end])
-            self.set_at(i, tuple(bound_n))
+        for idx, values in self.bounds.items():
+            offset_at_idx = offset.to_dict()[idx]
+            sign, end = (-1, "lower") if offset_at_idx < 0 else (1, "upper")
+            values[end] = max(sign * offset_at_idx, values[end])
+
+    def to_boundary(self):
+        return FieldBoundary(**{k: (v["lower"], v["upper"]) for k, v in self.bounds.items()})
 
 
 class FieldMetadata(Node):
     name: str
     access: AccessKind
     boundary: FieldBoundary
-    dtype: Optional[common.DataType]
+    dtype: common.DataType
 
 
 class FieldsMetadata(Node):

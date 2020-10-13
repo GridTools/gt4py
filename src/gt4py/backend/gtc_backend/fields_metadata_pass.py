@@ -1,10 +1,12 @@
-from eve.visitors import NodeModifier
+from typing import Any, Dict
+
+from eve.visitors import NodeTranslator
 
 from .gtir import (
     AccessKind,
     Computation,
     FieldAccess,
-    FieldBoundary,
+    FieldBoundaryAccumulator,
     FieldDecl,
     FieldMetadata,
     FieldsMetadata,
@@ -14,36 +16,41 @@ from .gtir import (
 # TODO(Rico Häuselmann) write unit tests
 
 
-class FieldsMetadataPass(NodeModifier):
-    def __init__(self):
-        self.fields_metadata: FieldsMetadata = None
+class FieldsMetadataPass(NodeTranslator):
+    def __init__(self, *, memo: Dict = None, **kwargs: Any) -> None:
+        super().__init__(memo=memo, **kwargs)
+        self.metas = {}
 
     def visit_Computation(self, node: Computation) -> Computation:
-        self.fields_metadata = node.fields_metadata
-        return self.generic_visit(node)
+        new_node = self.generic_visit(node)
+        for meta in self.metas.values():
+            meta["boundary"] = meta["boundary"].to_boundary()
+        new_node.fields_metadata = FieldsMetadata(
+            metas={name: FieldMetadata(**meta) for name, meta in self.metas.items()}
+        )
+        return new_node
 
     def visit_FieldAccess(self, node: FieldAccess) -> FieldAccess:
-        metadata = self.fields_metadata.metas.setdefault(
+        metadata = self.metas.setdefault(
             node.name,
-            FieldMetadata(
-                name=node.name,
-                access=AccessKind.READ_WRITE,
-                boundary=FieldBoundary(i=(0, 0), j=(0, 0), k=(0, 0)),
-                dtype=None,
-            ),
+            {
+                "name": node.name,
+                "access": AccessKind.READ_WRITE,
+                "boundary": FieldBoundaryAccumulator(),
+            },
         )
-        metadata.boundary.update_from_offset(node.offset)
+        metadata["boundary"].update_from_offset(node.offset)
         return self.generic_visit(node)
 
     def visit_FieldDecl(self, node: FieldDecl) -> FieldDecl:
-        metadata = self.fields_metadata.metas.setdefault(
+        metadata = self.metas.setdefault(
             node.name,
-            FieldMetadata(
-                name=node.name,
-                access=AccessKind.READ_WRITE,
-                boundary=FieldBoundary(i=(0, 0), j=(0, 0), k=(0, 0)),
-                dtype=node.dtype,
-            ),
+            {
+                "name": node.name,
+                "access": AccessKind.READ_WRITE,
+                "boundary": FieldBoundaryAccumulator(),
+                "dtype": node.dtype,
+            },
         )
-        metadata.dtype = node.dtype
+        metadata["dtype"] = node.dtype
         return self.generic_visit(node)
