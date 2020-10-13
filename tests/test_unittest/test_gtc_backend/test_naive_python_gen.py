@@ -16,6 +16,11 @@ from gt4py.backend.gtc_backend.gtir import (
 from gt4py.backend.gtc_backend.python_naive_codegen import PythonNaiveCodegen
 
 
+def ast_parse(arg):
+    print(arg)
+    return ast.parse(arg)
+
+
 GTIROP_TO_ASTOP = {
     BinaryOperator.ADD: ast.Add,
     BinaryOperator.SUB: ast.Sub,
@@ -50,7 +55,7 @@ def field_access(request):
 
 
 def test_field_access(naive_codegen, field_access):
-    source_tree = ast.parse(naive_codegen.apply(field_access))
+    source_tree = ast_parse(naive_codegen.apply(field_access))
     toplevel = source_tree.body[0]
     assert isinstance(toplevel, ast.Expr)
     assert isinstance(toplevel.value, ast.Subscript)
@@ -58,7 +63,7 @@ def test_field_access(naive_codegen, field_access):
 
 def test_assign(naive_codegen):
     assign = AssignStmt(left=FieldAccess.centered(name="a"), right=FieldAccess.centered(name="b"))
-    source_tree = ast.parse(naive_codegen.apply(assign))
+    source_tree = ast_parse(naive_codegen.apply(assign))
     assert isinstance(source_tree.body[0], ast.Assign)
 
 
@@ -68,7 +73,7 @@ def test_binary_op(naive_codegen, binary_operator):
         left=FieldAccess.centered(name="a"),
         right=FieldAccess.centered(name="b"),
     )
-    source_tree = ast.parse(naive_codegen.apply(bin_op))
+    source_tree = ast_parse(naive_codegen.apply(bin_op))
     toplevel = source_tree.body[0]
     assert isinstance(source_tree.body[0], ast.Expr)
     assert isinstance(toplevel.value, ast.BinOp)
@@ -79,7 +84,7 @@ def test_horizontal_loop(naive_codegen):
     horizontal_loop = HorizontalLoop(
         stmt=AssignStmt(left=FieldAccess.centered(name="a"), right=FieldAccess.centered(name="b"))
     )
-    source_tree = ast.parse(naive_codegen.apply(horizontal_loop))
+    source_tree = ast_parse(naive_codegen.apply(horizontal_loop))
     for_i = source_tree.body[0]
     assert isinstance(for_i, ast.For)
     assert for_i.target.id == "I"
@@ -106,7 +111,7 @@ def test_vertical_interval(naive_codegen):
             ),
         ],
     )
-    source_tree = ast.parse(naive_codegen.apply(vertical_interval))
+    source_tree = ast_parse(naive_codegen.apply(vertical_interval))
     for_k = source_tree.body[0]
     assert isinstance(for_k, ast.For)
     assert for_k.target.id == "K"
@@ -150,7 +155,7 @@ def test_vertical_loop(naive_codegen, loop_order):
             ),
         ],
     )
-    source_tree = ast.parse(naive_codegen.apply(vertical_loop))
+    source_tree = ast_parse(naive_codegen.apply(vertical_loop))
 
     for_k = source_tree.body[0]
     assert isinstance(for_k, ast.For)

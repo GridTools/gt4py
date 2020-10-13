@@ -1,6 +1,4 @@
-import jinja2
-from eve.codegen import TemplatedGenerator
-from mako import template as mako_tpl
+from eve.codegen import FormatTemplate, JinjaTemplate, MakoTemplate, TemplatedGenerator
 
 
 ACCESSOR_CLASS_SRC = """
@@ -25,40 +23,42 @@ class _Accessor:
 
 class FieldInfoGenerator(TemplatedGenerator):
 
-    Computation_template = "{fields_metadata}"
+    Computation = FormatTemplate("{fields_metadata}")
 
-    FieldsMetadata_template = mako_tpl.Template("{${', '.join(metas.values())}}")
+    FieldsMetadata = MakoTemplate("{${', '.join(metas.values())}}")
 
-    FieldMetadata_template = mako_tpl.Template(
+    FieldMetadata = MakoTemplate(
         "'${name}': FieldInfo(access=AccessKind.${_this_node.access.name}, "
         "boundary=${boundary}, "
         "dtype=dtype('${_this_node.dtype.name.lower()}'))"
     )
 
-    FieldBoundary_template = mako_tpl.Template(
+    FieldBoundary = MakoTemplate(
         "Boundary((${', '.join(i)}), (${', '.join(j)}), (${', '.join(k)}))"
     )
 
 
 class ParameterInfoGenerator(TemplatedGenerator):
 
-    Computation_template = "{{}}"
+    Computation = FormatTemplate("{{}}")
 
 
 class ComputationCallGenerator(TemplatedGenerator):
 
-    Computation_template = mako_tpl.Template("computation.run(${', '.join(params)}, _domain_)")
+    Computation = MakoTemplate("computation.run(${', '.join(params)}, _domain_)")
 
-    FieldDecl_template = "{name}"
+    FieldDecl = FormatTemplate("{name}")
 
 
 class RunBodyGenerator(TemplatedGenerator):
 
-    Computation_template = jinja2.Template("{{ '\\n'.join(params) }}")
+    Computation = JinjaTemplate("{{ '\\n'.join(params) }}")
 
-    FieldDecl_template = "{name}_at = _Accessor({name}, _origin_['{name}'])"
+    FieldDecl = FormatTemplate("{name}_at = _Accessor({name}, _origin_['{name}'])")
 
 
 class DomainInfoGenerator(TemplatedGenerator):
 
-    Computation_template = "DomainInfo(parallel_axes=('I', 'J'), sequential_axis='K', ndims=3)"
+    Computation = FormatTemplate(
+        "DomainInfo(parallel_axes=('I', 'J'), sequential_axis='K', ndims=3)"
+    )
