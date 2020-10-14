@@ -47,8 +47,8 @@ BinaryOperator enumeration (:class:`BinaryOperator`)
 
 NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
-    [`ABS`, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`, `SQRT`, `EXP`, `LOG`,
-    `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
+    [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
+    `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
 AccessIntent enumeration (:class:`AccessIntent`)
     Access permissions
@@ -92,9 +92,11 @@ storing a reference to the piece of source code which originated the node.
     Ref         = VarRef(name: str, [index: int])
                 | FieldRef(name: str, offset: Dict[str, int])
 
-    NativeFuncCall(func: NativeFunction, args: List[Expr])
+    NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
-    Expr        = Literal | Ref | NativeFuncCall | CompositeExpr | InvalidBranch
+    Cast(dtype: DataType, expr: Expr)
+
+    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch
 
     CompositeExpr   = UnaryOpExpr(op: UnaryOperator, arg: Expr)
                     | BinOpExpr(op: BinaryOperator, lhs: Expr, rhs: Expr)
@@ -122,14 +124,13 @@ storing a reference to the piece of source code which originated the node.
         # start is included
         # end is excluded
 
-    ComputationBlock(interval: AxisInterval, order: IterationOrder, body: BlockStmt)
+    ComputationBlock(interval: AxisInterval, iteration_order: IterationOrder, body: BlockStmt)
 
     ArgumentInfo(name: str, is_keyword: bool, [default: Any])
 
     StencilDefinition(name: str,
                       domain: Domain,
                       api_signature: List[ArgumentInfo],
-                      domain: Domain,
                       api_fields: List[FieldDecl],
                       parameters: List[VarDecl],
                       computations: List[ComputationBlock],
@@ -173,22 +174,20 @@ import collections
 import copy
 import enum
 import operator
+from typing import List
 
 import numpy as np
 
-from gt4py.definitions import Extent, Index, CartesianSpace
 from gt4py import utils as gt_utils
-from gt4py.utils.attrib import (
-    attribute,
-    attribkwclass as attribclass,
-    attributes_of,
-    Any as Any,
-    Dict as DictOf,
-    List as ListOf,
-    Tuple as TupleOf,
-    Union as UnionOf,
-    Optional as OptionalOf,
-)
+from gt4py.definitions import CartesianSpace, Extent, Index
+from gt4py.utils.attrib import Any as Any
+from gt4py.utils.attrib import Dict as DictOf
+from gt4py.utils.attrib import List as ListOf
+from gt4py.utils.attrib import Optional as OptionalOf
+from gt4py.utils.attrib import Tuple as TupleOf
+from gt4py.utils.attrib import Union as UnionOf
+from gt4py.utils.attrib import attribkwclass as attribclass
+from gt4py.utils.attrib import attribute, attributes_of
 
 
 # ---- Foundations ----
@@ -398,34 +397,71 @@ class FieldRef(Ref):
     loc = attribute(of=Location, optional=True)
 
 
+@attribclass
+class Cast(Expr):
+    dtype = attribute(of=DataType)
+    expr = attribute(of=Expr)
+    loc = attribute(of=Location, optional=True)
+
+
 @enum.unique
 class NativeFunction(enum.Enum):
     ABS = 1
-    MOD = 2
+    MIN = 2
+    MAX = 3
+    MOD = 4
 
-    SIN = 11
-    COS = 12
-    TAN = 13
-    ARCSIN = 14
-    ARCCOS = 15
-    ARCTAN = 16
+    SIN = 5
+    COS = 6
+    TAN = 7
+    ARCSIN = 8
+    ARCCOS = 9
+    ARCTAN = 10
 
-    SQRT = 21
-    EXP = 22
-    LOG = 23
+    SQRT = 11
+    EXP = 12
+    LOG = 13
 
-    ISFINITE = 101
-    ISINF = 102
-    ISNAN = 103
-    FLOOR = 111
-    CEIL = 112
-    TRUNC = 113
+    ISFINITE = 14
+    ISINF = 15
+    ISNAN = 16
+    FLOOR = 17
+    CEIL = 18
+    TRUNC = 19
+
+    @property
+    def arity(self):
+        return type(self).IR_OP_TO_NUM_ARGS[self]
+
+
+NativeFunction.IR_OP_TO_NUM_ARGS = {
+    NativeFunction.ABS: 1,
+    NativeFunction.MIN: 2,
+    NativeFunction.MAX: 2,
+    NativeFunction.MOD: 2,
+    NativeFunction.SIN: 1,
+    NativeFunction.COS: 1,
+    NativeFunction.TAN: 1,
+    NativeFunction.ARCSIN: 1,
+    NativeFunction.ARCCOS: 1,
+    NativeFunction.ARCTAN: 1,
+    NativeFunction.SQRT: 1,
+    NativeFunction.EXP: 1,
+    NativeFunction.LOG: 1,
+    NativeFunction.ISFINITE: 1,
+    NativeFunction.ISINF: 1,
+    NativeFunction.ISNAN: 1,
+    NativeFunction.FLOOR: 1,
+    NativeFunction.CEIL: 1,
+    NativeFunction.TRUNC: 1,
+}
 
 
 @attribclass
 class NativeFuncCall(Expr):
     func = attribute(of=NativeFunction)
     args = attribute(of=ListOf[Expr])
+    data_type = attribute(of=DataType)
     loc = attribute(of=Location, optional=True)
 
 
@@ -602,14 +638,6 @@ class Assign(Statement):
 
 
 @attribclass
-class AugAssign(Statement):
-    target = attribute(of=Ref)
-    value = attribute(of=Expr)
-    op = attribute(of=BinaryOperator)
-    loc = attribute(of=Location, optional=True)
-
-
-@attribclass
 class If(Statement):
     condition = attribute(of=Expr)
     main_body = attribute(of=BlockStmt)
@@ -657,6 +685,8 @@ class AxisBound(Node):
     level = attribute(of=UnionOf[LevelMarker, VarRef])
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
+    name: str
+    index: List
 
 
 @attribclass
@@ -664,15 +694,6 @@ class AxisInterval(Node):
     start = attribute(of=AxisBound)
     end = attribute(of=AxisBound)
     loc = attribute(of=Location, optional=True)
-
-    @classmethod
-    def full_interval(cls):
-        interval = cls(
-            start=AxisBound(level=LevelMarker.START, offset=0),
-            end=AxisBound(level=LevelMarker.END, offset=0),
-        )
-
-        return interval
 
     @classmethod
     def full_interval(cls, order=IterationOrder.PARALLEL):
@@ -715,7 +736,8 @@ class StencilDefinition(Node):
     computations = attribute(of=ListOf[ComputationBlock])
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
-    docstring = attribute(of=str)
+    docstring = attribute(of=str, default="")
+    loc = attribute(of=Location, optional=True)
 
 
 # ---- Implementation IR (IIR) ----
@@ -810,6 +832,18 @@ class StencilImplementation(IIRNode):
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
     docstring = attribute(of=str)
+
+    @property
+    def has_effect(self):
+        """
+        Determine whether the stencil modifies any of its arguments.
+
+        Note that the only guarantee of this function is that the stencil has no effect if it returns ``false``. It
+        might however return true in cases where the optimization passes were not able to deduce this.
+        """
+        return self.multi_stages and not all(
+            arg_field in self.unreferenced for arg_field in self.arg_fields
+        )
 
     @property
     def arg_fields(self):
@@ -932,12 +966,15 @@ class IRNodeMapper:
         else:
             return True, node
 
+        del_items = []
         for key, old_value in items:
             keep_item, new_value = self._visit((*path, node_name), key, old_value)
             if not keep_item:
-                delattr_op(node, key)
+                del_items.append(key)
             elif new_value != old_value:
                 setattr_op(node, key, new_value)
+        for key in reversed(del_items):  # reversed, so that keys remain valid in sequences
+            delattr_op(node, key)
 
         return True, node
 

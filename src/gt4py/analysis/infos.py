@@ -19,19 +19,16 @@
 
 import abc
 
-from gt4py.definitions import CartesianSpace, Extent, NumericTuple, BuildOptions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
-from gt4py.utils.attrib import (
-    attribclass,
-    attribute,
-    Any,
-    Optional,
-    Dict as DictOf,
-    List as ListOf,
-    Set as SetOf,
-    Tuple as TupleOf,
-)
+from gt4py.definitions import BuildOptions, CartesianSpace, Extent, NumericTuple
+from gt4py.utils.attrib import Any
+from gt4py.utils.attrib import Dict as DictOf
+from gt4py.utils.attrib import List as ListOf
+from gt4py.utils.attrib import Optional
+from gt4py.utils.attrib import Set as SetOf
+from gt4py.utils.attrib import Tuple as TupleOf
+from gt4py.utils.attrib import attribclass, attribute
 
 
 @attribclass
@@ -254,8 +251,7 @@ class TransformData:
 
 
 class TransformPass(abc.ABC):
-    """Abstract base class defining the interface of an analysis pass.
-    """
+    """Abstract base class defining the interface of an analysis pass."""
 
     @property
     def defaults(self):

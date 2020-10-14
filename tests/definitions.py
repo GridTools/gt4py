@@ -14,11 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import pytest
 import datetime
+
+import pytest
 
 import gt4py.backend as gt_backend
 import gt4py.utils as gt_utils
+
 
 ALL_BACKENDS = list(gt_backend.REGISTRY.keys())
 CPU_BACKENDS = [

@@ -14,11 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import gt4py.utils as gt_utils
 import collections
-import numpy as np
-import types
 import inspect
+import types
+
+import numpy as np
+
+import gt4py.utils as gt_utils
 
 
 def copy_func(f, name=None):
@@ -40,7 +42,7 @@ def standardize_dtype_dict(dtypes):
     """Standardizes the dtype dict as it can be specified for the stencil test suites.
     In the input dictionary, a selection of possible dtypes or just a single dtype can be specified for a set of fields
     or a single field. This function makes sure that all keys are tuples (by wrapping single field names and single
-    dtypes as 1-tuples) """
+    dtypes as 1-tuples)"""
     assert isinstance(dtypes, collections.abc.Mapping)
     assert all(
         (isinstance(k, str) or gt_utils.is_iterable_of(k, str)) for k in dtypes.keys()

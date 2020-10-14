@@ -17,13 +17,14 @@
 import numpy as np
 
 import gt4py as gt
-from gt4py import gtscript
-from gt4py import ir as gt_ir
 from gt4py import analysis as gt_analysis
 from gt4py import backend as gt_backend
+from gt4py import gtscript
+from gt4py import ir as gt_ir
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
 from gt4py.definitions import Extent, StencilID
+
 
 REGISTRY = gt_utils.Registry()
 EXTERNALS_REGISTRY = gt_utils.Registry()
@@ -53,6 +54,17 @@ Field3D = gtscript.Field[np.float_]
 def copy_stencil(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
         field_b = field_a[0, 0, 0]
+
+
+@gtscript.function
+def afunc(b):
+    return sqrt(b[0, 1, 0])
+
+
+@register
+def native_functions(field_a: Field3D, field_b: Field3D):
+    with computation(PARALLEL), interval(...):
+        field_a = max(min(afunc(field_b), field_b), 1)
 
 
 @register
@@ -95,10 +107,10 @@ def tridiagonal_solver(inf: Field3D, diag: Field3D, sup: Field3D, rhs: Field3D, 
             sup = sup / (diag - sup[0, 0, -1] * inf)
             rhs = (rhs - inf * rhs[0, 0, -1]) / (diag - sup[0, 0, -1] * inf)
     with computation(BACKWARD):
-        with interval(0, -1):
-            out = rhs - sup * out[0, 0, 1]
         with interval(-1, None):
             out = rhs
+        with interval(0, -1):
+            out = rhs - sup * out[0, 0, 1]
 
 
 @register(externals={"BET_M": 0.5, "BET_P": 0.5})
@@ -206,3 +218,32 @@ def horizontal_diffusion(in_field: Field3D, out_field: Field3D, coeff: Field3D):
         out_field = in_field[0, 0, 0] - coeff[0, 0, 0] * (
             flx_field[0, 0, 0] - flx_field[-1, 0, 0] + fly_field[0, 0, 0] - fly_field[0, -1, 0]
         )
+
+
+@register
+def large_k_interval(in_field: Field3D, out_field: Field3D):
+    with computation(PARALLEL):
+        with interval(0, 6):
+            out_field = in_field
+        with interval(6, -10):  # this stage will only run if field has more than 16 elements
+            out_field = in_field + 1
+        with interval(-10, None):
+            out_field = in_field
+
+
+@register
+def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
+    with computation(PARALLEL), interval(...):
+        mask = in_field >= 0
+
+
+@register
+def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3D, qmin: float):
+    with computation(PARALLEL), interval(...):
+        diff_23 = 0.0
+        if extm and extm[0, 0, -1]:
+            a4_2 = a4_1
+        elif extm and extm[0, 0, 1]:
+            a4_3 = a4_1
+        else:
+            diff_23 = a4_2 - a4_3

@@ -17,15 +17,15 @@
 import contextlib
 import copy
 import distutils
+import distutils.sysconfig
 import io
 import os
 import shutil
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
+import pybind11
 import setuptools
 from setuptools.command.build_ext import build_ext
-import distutils.sysconfig
-import pybind11
 
 from gt4py import config as gt_config
 
@@ -55,7 +55,9 @@ def get_gt_pyext_build_opts(
         cuda_arch = gt_config.build_settings["cuda_arch"] or compute_capability
         if not cuda_arch:
             raise RuntimeError("CUDA architecture could not be determined")
-        elif compute_capability and int(compute_capability) < int(cuda_arch):
+        if cuda_arch.startswith("sm_"):
+            cuda_arch = cuda_arch.replace("sm_", "")
+        if compute_capability and int(compute_capability) < int(cuda_arch):
             raise RuntimeError(
                 f"CUDA architecture {cuda_arch} exceeds compute capability {compute_capability}"
             )
@@ -117,12 +119,17 @@ def get_gt_pyext_build_opts(
 
     if uses_openmp:
         cpp_flags = gt_config.build_settings["openmp_cppflags"]
-        if cpp_flags:
-            build_opts["extra_compile_args"].append(cpp_flags)
+        if uses_cuda:
+            cuda_flags = []
+            for cpp_flag in cpp_flags:
+                cuda_flags.extend(["--compiler-options", cpp_flag])
+            build_opts["extra_compile_args"]["nvcc"].extend(cuda_flags)
+        elif cpp_flags:
+            build_opts["extra_compile_args"].extend(cpp_flags)
 
         ld_flags = gt_config.build_settings["openmp_ldflags"]
         if ld_flags:
-            build_opts["extra_link_args"].append(ld_flags)
+            build_opts["extra_link_args"].extend(ld_flags)
 
     return build_opts
 
@@ -130,7 +137,11 @@ def get_gt_pyext_build_opts(
 # The following tells mypy to accept unpacking kwargs
 @overload
 def build_pybind_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str,
+    name: str,
+    sources: list,
+    build_path: str,
+    target_path: str,
+    **kwargs: str,
 ) -> Tuple[str, str]:
     pass
 
@@ -219,7 +230,11 @@ def build_pybind_ext(
 # The following tells mypy to accept unpacking kwargs
 @overload
 def build_pybind_cuda_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str,
+    name: str,
+    sources: list,
+    build_path: str,
+    target_path: str,
+    **kwargs: str,
 ) -> Tuple[str, str]:
     pass
 

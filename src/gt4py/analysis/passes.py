@@ -17,49 +17,68 @@
 """Definitions and utilities used by all the analysis pipeline components.
 """
 
-import functools
 import itertools
+import warnings
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 from gt4py import definitions as gt_definitions
-from gt4py.definitions import Extent
 from gt4py import ir as gt_ir
 from gt4py.analysis import (
-    SymbolInfo,
+    DomainBlockInfo,
+    IJBlockInfo,
+    IntervalBlockInfo,
     IntervalInfo,
     StatementInfo,
-    IntervalBlockInfo,
-    IJBlockInfo,
-    DomainBlockInfo,
+    SymbolInfo,
     TransformData,
     TransformPass,
 )
-from gt4py.utils import UniqueIdGenerator
+from gt4py.definitions import Extent
+
+
+MergeableType = TypeVar("MergeableType")
+WrappedType = TypeVar("WrappedType")
 
 
 class IRSpecificationError(gt_definitions.GTSpecificationError):
     def __init__(self, message=None, *, loc=None):
         if message is None:
-            if loc is None:
-                message = "Invalid specification"
-            else:
-                message = "Invalid specification in '{scope}' (line: {line}, col: {col})".format(
-                    scope=loc.scope, line=loc.line, col=loc.column
-                )
+            message = "Invalid specification"
+        message = f"{message} in '{loc.scope}' (line: {loc.line}, col: {loc.column})"
         super().__init__(message)
-        self.loc = loc
 
 
 class IntervalSpecificationError(IRSpecificationError):
     def __init__(self, interval, message=None, *, loc=None):
         if message is None:
             if loc is None:
-                message = "Invalid interval specification '{interval}' ".format(interval=interval)
+                message = f"Invalid interval specification '{interval}' "
             else:
-                message = "Invalid interval specification '{interval}' in '{scope}' (line: {line}, col: {col})".format(
-                    interval=interval, scope=loc.scope, line=loc.line, col=loc.column
-                )
+                message = f"Invalid interval specification '{interval}' in '{loc.scope}' (line: {loc.line}, col: {loc.column})"
         super().__init__(message, loc=loc)
-        self.interval = interval
+
+
+class DataTypeSpecificationError(IRSpecificationError):
+    def __init__(self, data_type, message=None, *, loc=None):
+        if message is None:
+            if loc is None:
+                message = f"Invalid data type specification '{data_type}'"
+            else:
+                message = f"Invalid data type specification '{data_type}' in '{loc.scope}' (line: {loc.line}, col: {loc.column})"
+        super().__init__(message, loc=loc)
 
 
 class InitInfoPass(TransformPass):
@@ -255,6 +274,9 @@ class InitInfoPass(TransformPass):
 
             return result
 
+        def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
+            return [extent for arg in node.args for extent in self.visit(arg)]
+
         def visit_If(self, node: gt_ir.If):
             inputs = {}
             outputs = set()
@@ -309,7 +331,8 @@ class InitInfoPass(TransformPass):
                 if not group_outputs.isdisjoint(stmt_inputs_with_ij_offset):
                     assert interval_block.stmts
                     assert interval_block.outputs
-                    # If some output field is read with an offset it likely implies different compute extent
+                    # If some output field is read with an offset it likely implies different
+                    # compute extent
                     self.current_block_info.ij_blocks.append(
                         self._make_ij_block(interval, interval_block)
                     )
@@ -329,7 +352,6 @@ class InitInfoPass(TransformPass):
                 )
 
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
-            assert node.computations  # non-empty definition
             for computation, interval in zip(node.computations, self.computation_intervals):
                 self.current_block_info = DomainBlockInfo(
                     self.data.id_generator.new, computation.iteration_order, {interval}, []
@@ -390,6 +412,64 @@ class NormalizeBlocksPass(TransformPass):
 
     _DEFAULT_OPTIONS = {}
 
+    class SplitBlocksVisitor:
+        def __init__(self):
+            self._split_blocks = []
+
+        def visit(self, transform_data: TransformData) -> List[DomainBlockInfo]:
+            for block in transform_data.blocks:
+                context = {
+                    "zero_extent": Extent.zeros(transform_data.ndims),
+                    "id_generator": transform_data.id_generator,
+                }
+                self.visit_DomainBlockInfo(block, context)
+
+            return self._split_blocks
+
+        def visit_DomainBlockInfo(self, block: DomainBlockInfo, context: Dict[str, Any]) -> None:
+            context["iteration_order"] = block.iteration_order
+            for ij_block in block.ij_blocks:
+                self.visit_IJBlockInfo(ij_block, context)
+
+        def visit_IJBlockInfo(self, ij_block: IJBlockInfo, context: Dict[str, Any]) -> None:
+            for interval_block in ij_block.interval_blocks:
+                self.visit_IntervalBlockInfo(interval_block, context)
+
+        def visit_IntervalBlockInfo(
+            self, interval_block: IntervalBlockInfo, context: Dict[str, Any]
+        ) -> None:
+            context["interval"] = interval_block.interval
+            for statement in interval_block.stmts:
+                self.visit_StatemenInfo(statement, context)
+
+        def visit_StatemenInfo(
+            self, statement: StatementInfo, context: Dict[str, Any]
+        ) -> DomainBlockInfo:
+            new_interval_block = IntervalBlockInfo(
+                context["id_generator"].new,
+                context["interval"],
+                [statement],
+                statement.inputs,
+                statement.outputs,
+            )
+            new_ij_block = IJBlockInfo(
+                context["id_generator"].new,
+                {context["interval"]},
+                [new_interval_block],
+                {**new_interval_block.inputs},
+                set(new_interval_block.outputs),
+                compute_extent=context["zero_extent"],
+            )
+            new_block = DomainBlockInfo(
+                context["id_generator"].new,
+                context["iteration_order"],
+                set(new_ij_block.intervals),
+                [new_ij_block],
+                {**new_ij_block.inputs},
+                set(new_ij_block.outputs),
+            )
+            self._split_blocks.append(new_block)
+
     def __init__(self):
         pass
 
@@ -398,45 +478,293 @@ class NormalizeBlocksPass(TransformPass):
         return self._DEFAULT_OPTIONS
 
     def apply(self, transform_data: TransformData):
-        zero_extent = Extent.zeros(transform_data.ndims)
-        blocks = []
-        for block in transform_data.blocks:
-            if block.iteration_order == gt_ir.IterationOrder.PARALLEL:
-                # Put every statement in a single stage
-                for ij_block in block.ij_blocks:
-                    for interval_block in ij_block.interval_blocks:
-                        for stmt_info in interval_block.stmts:
-                            interval = interval_block.interval
-                            new_interval_block = IntervalBlockInfo(
-                                transform_data.id_generator.new,
-                                interval,
-                                [stmt_info],
-                                stmt_info.inputs,
-                                stmt_info.outputs,
-                            )
-                            new_ij_block = IJBlockInfo(
-                                transform_data.id_generator.new,
-                                {interval},
-                                [new_interval_block],
-                                {**new_interval_block.inputs},
-                                set(new_interval_block.outputs),
-                                compute_extent=zero_extent,
-                            )
-                            new_block = DomainBlockInfo(
-                                transform_data.id_generator.new,
-                                block.iteration_order,
-                                set(new_ij_block.intervals),
-                                [new_ij_block],
-                                {**new_ij_block.inputs},
-                                set(new_ij_block.outputs),
-                            )
-                            blocks.append(new_block)
-            else:
-                blocks.append(block)
-
-        transform_data.blocks = blocks
+        transform_data.blocks = self.SplitBlocksVisitor().visit(transform_data)
 
         return transform_data
+
+
+class MultiStageMergingWrapper:
+    """Wrapper for :class:`DomainBlockInfo` containing the logic required to merge or not merge."""
+
+    def __init__(self, multi_stage: DomainBlockInfo, parent: TransformData):
+        self._multi_stage = multi_stage
+        self._parent = parent
+
+    @classmethod
+    def wrap_items(
+        cls, items: Sequence[DomainBlockInfo], *, parent: TransformData
+    ) -> List["MultiStageMergingWrapper"]:
+        return [cls(block, parent) for block in items]
+
+    def can_merge_with(self, candidate: "MultiStageMergingWrapper") -> bool:
+        if self.parent != candidate.parent:
+            return False
+        if candidate.iteration_order != self.iteration_order:
+            return False
+        if candidate.has_disallowed_read_after_write_in(self):
+            return False
+        if candidate.has_disallowed_write_after_read_in(self):
+            return False
+        return True
+
+    def merge_with(self, candidate: "MultiStageMergingWrapper") -> None:
+        self._multi_stage.id = self._parent.id_generator.new
+        self._multi_stage.ij_blocks.extend(candidate.ij_blocks)
+        self._multi_stage.intervals |= candidate.intervals
+        self._multi_stage.outputs |= candidate.outputs
+        for name, extent in candidate.inputs.items():
+            if name in self.inputs:
+                self._multi_stage.inputs[name] |= extent
+            else:
+                self._multi_stage.inputs[name] = extent
+
+    def has_disallowed_read_after_write_in(self, target: "MultiStageMergingWrapper") -> bool:
+        if not self.k_offset_extends_domain:
+            return False
+        return any(extent[-1] != (0, 0) for extent in self.read_after_write_extents_in(target))
+
+    def has_disallowed_write_after_read_in(self, target: "MultiStageMergingWrapper") -> bool:
+        write_after_read_fields = self.write_after_read_fields_in(target)
+        return write_after_read_fields and (
+            self.has_reads_with_offset(restrict_to=write_after_read_fields)
+            or target.has_reads_with_offset(restrict_to=write_after_read_fields)
+            or self.has_extended_domain
+            or target.has_extended_domain
+        )
+
+    def has_reads_with_offset(self, *, restrict_to: Optional[Set[str]]) -> bool:
+        checked_axes = slice(None) if self.k_offset_extends_domain else slice(None, -1)
+        fields = restrict_to.intersection(self.inputs) if restrict_to else set(self.inputs)
+        return any(
+            self.inputs[name][checked_axes] != Extent.zeros()[checked_axes] for name in fields
+        )
+
+    def read_after_write_fields_in(self, target: "MultiStageMergingWrapper") -> Set[str]:
+        previous_writes = set(target.outputs)
+        current_reads = set(self.inputs)
+        return previous_writes.intersection(current_reads)
+
+    def write_after_read_fields_in(self, target: "MultiStageMergingWrapper") -> Set[str]:
+        previous_reads = set(target.inputs)
+        current_writes = set(self.outputs)
+        return previous_reads.intersection(current_writes)
+
+    def read_after_write_extents_in(self, target: "MultiStageMergingWrapper") -> Set[Extent]:
+        return {self.inputs[name] for name in self.read_after_write_fields_in(target)}
+
+    @staticmethod
+    def accumulate_extents(extents: Sequence[Extent]) -> Extent:
+        full_extent = Extent.zeros()
+        for extent in extents:
+            full_extent |= extent
+        return full_extent
+
+    @property
+    def extents(self) -> Iterator[Extent]:
+        return (ij_block.compute_extent for ij_block in self.ij_blocks)
+
+    @property
+    def full_extent(self) -> Extent:
+        return self.accumulate_extents(self.extents)
+
+    @property
+    def has_extended_domain(self) -> bool:
+        return self.full_extent != Extent.zeros()
+
+    @property
+    def k_offset_extends_domain(self) -> bool:
+        return (
+            self.iteration_order == gt_ir.IterationOrder.PARALLEL
+            and self._parent.has_sequential_axis
+        )
+
+    @property
+    def iteration_order(self) -> gt_ir.IterationOrder:
+        return self._multi_stage.iteration_order
+
+    @property
+    def inputs(self) -> Dict[str, Extent]:
+        return self._multi_stage.inputs
+
+    @property
+    def intervals(self) -> List[IntervalInfo]:
+        return self._multi_stage.intervals
+
+    @property
+    def ij_blocks(self) -> List[IJBlockInfo]:
+        return self._multi_stage.ij_blocks
+
+    @property
+    def outputs(self) -> Dict[str, Extent]:
+        return self._multi_stage.outputs
+
+    @property
+    def parent(self) -> TransformData:
+        return self._parent
+
+    @property
+    def wrapped(self) -> DomainBlockInfo:
+        return self._multi_stage
+
+
+class StageMergingWrapper:
+    """Wrapper for :class:`IJBlockInfo` containing the logic required to merge or not merge."""
+
+    def __init__(self, stage: IJBlockInfo, parent: TransformData, parent_block: DomainBlockInfo):
+        self._stage = stage
+        self._parent = parent
+        self._parent_block = parent_block
+
+    @classmethod
+    def wrap_items(
+        cls, items: Sequence[IJBlockInfo], *, parent: TransformData, parent_block: DomainBlockInfo
+    ) -> List["StageMergingWrapper"]:
+        return [cls(ij_block, parent, parent_block) for ij_block in items]
+
+    def can_merge_with(self, candidate: "StageMergingWrapper") -> bool:
+        if not self.parent_block == candidate.parent_block:
+            return False
+
+        # Check that the two stages have the same compute extent
+        if not (self.compute_extent == candidate.compute_extent):
+            return False
+
+        # Check that there is not overlap between stage intervals and that
+        # merging stages will not imply a reordering of the execution order
+        if self.has_incompatible_intervals_with(candidate):
+            return False
+
+        # Check that there are not data dependencies between stages
+        if self.has_data_dependencies_with(candidate):
+            return False
+        return True
+
+    def merge_with(self, candidate: IJBlockInfo):
+        self._merge_interval_blocks_with(candidate)
+
+        self._stage.intervals |= candidate.intervals
+        self._stage.outputs |= candidate.outputs
+        for name, extent in candidate.inputs.items():
+            if name in self.inputs:
+                self._stage.inputs[name] |= extent
+            else:
+                self._stage.inputs[name] = extent
+
+    def _merge_interval_blocks_with(self, candidate: IJBlockInfo) -> None:
+        i_to_ib_map = self.interval_to_iblock_mapping
+        for candidate_iblock in candidate.interval_blocks:
+            if candidate_iblock.interval in i_to_ib_map:
+                self._merge_interval_block(
+                    i_to_ib_map[candidate_iblock.interval], candidate_iblock
+                )
+            else:
+                self._stage.interval_blocks.append(candidate_iblock)
+
+    def _merge_interval_block(self, target_iblock, candidate_iblock: IntervalBlockInfo) -> None:
+        target_iblock.id = self.parent.id_generator.new
+        target_iblock.stmts.extend(candidate_iblock.stmts)
+        self._merge_inputs(target_iblock.inputs, candidate_iblock.inputs)
+        target_iblock.outputs |= candidate_iblock.outputs
+
+    @staticmethod
+    def _merge_inputs(
+        target_inputs: Dict[str, Extent], candidate_inputs: Dict[str, Extent]
+    ) -> None:
+        for name, extent in candidate_inputs.items():
+            if name in target_inputs:
+                target_inputs[name] |= extent
+            else:
+                target_inputs[name] = extent
+
+    def has_incompatible_intervals_with(self, candidate: "StageMergingWrapper") -> bool:
+        for interval, candidate_interval in itertools.product(self.intervals, candidate.intervals):
+            if self.intervals_overlap_or_imply_reorder(interval, candidate_interval):
+                return True
+        return False
+
+    def has_data_dependencies_with(self, candidate: "StageMergingWrapper") -> bool:
+        extents = (extent for name, extent in candidate.inputs.items() if name in self.outputs)
+        for extent in extents:
+            read_interval = (
+                next(iter(self.intervals)).as_tuple(self.min_k_interval_sizes) + extent[-1]
+            )
+            for merged_interval_block in self.interval_blocks:
+                merged_interval = merged_interval_block.interval
+                if merged_interval.as_tuple(
+                    self.min_k_interval_sizes
+                ) != read_interval and merged_interval.overlaps(
+                    read_interval, self.min_k_interval_sizes
+                ):
+                    return True
+        return False
+
+    def intervals_overlap_or_imply_reorder(
+        self,
+        interval_a: IntervalInfo,
+        interval_b: IntervalInfo,
+    ) -> bool:
+        return interval_a != interval_b and interval_a.overlaps(
+            interval_b, self.min_k_interval_sizes
+        )
+
+    @property
+    def parent_block(self) -> TransformData:
+        return self._parent_block
+
+    @property
+    def compute_extent(self) -> Extent:
+        return self._stage.compute_extent
+
+    @property
+    def intervals(self) -> List[IntervalInfo]:
+        return self._stage.intervals
+
+    @property
+    def interval_blocks(self) -> List[IntervalBlockInfo]:
+        return self._stage.interval_blocks
+
+    @property
+    def interval_to_iblock_mapping(self) -> Dict[IntervalInfo, IntervalBlockInfo]:
+        return {iblock.interval: iblock for iblock in self.interval_blocks}
+
+    @property
+    def inputs(self) -> Dict[str, Extent]:
+        return self._stage.inputs
+
+    @property
+    def outputs(self) -> Dict[str, Extent]:
+        return self._stage.outputs
+
+    @property
+    def min_k_interval_sizes(self) -> int:
+        return self._parent.min_k_interval_sizes
+
+    @property
+    def parent(self) -> TransformData:
+        return self._parent
+
+    @property
+    def wrapped(self) -> IJBlockInfo:
+        return self._stage
+
+
+def greedy_merging(items: Sequence[MergeableType]) -> List[MergeableType]:
+    if len(items) < 2:
+        return items
+    merged_items = [items[0]]
+    for candidate in items[1:]:
+        target = merged_items[-1]
+        if target.can_merge_with(candidate):
+            target.merge_with(candidate)
+        else:
+            merged_items.append(candidate)
+    return merged_items
+
+
+def greedy_merging_with_wrapper(
+    items: Sequence[WrappedType], wrapper_cls: Type[MergeableType], **kwargs: Any
+) -> List[WrappedType]:
+    return [w.wrapped for w in greedy_merging(wrapper_cls.wrap_items(items, **kwargs))]
 
 
 class MergeBlocksPass(TransformPass):
@@ -450,138 +778,16 @@ class MergeBlocksPass(TransformPass):
     def defaults(self):
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData):
-        # Greedy strategy to merge multi-stages
-        merged_blocks = [transform_data.blocks[0]]
-        for candidate in transform_data.blocks[1:]:
-            merged = merged_blocks[-1]
-            if self._are_compatible_multi_stages(
-                merged, candidate, transform_data.has_sequential_axis
-            ):
-                merged.id = transform_data.id_generator.new
-                self._merge_domain_blocks(merged, candidate)
-            else:
-                merged_blocks.append(candidate)
-
-        # Greedy strategy to merge stages
-        # assert transform_data.has_sequential_axis
+    def apply(self, transform_data: TransformData) -> TransformData:
+        merged_blocks = greedy_merging_with_wrapper(
+            transform_data.blocks, MultiStageMergingWrapper, parent=transform_data
+        )
         for block in merged_blocks:
-            merged_ijs = [block.ij_blocks[0]]
-            for ij_candidate in block.ij_blocks[1:]:
-                merged = merged_ijs[-1]
-                if self._are_compatible_stages(
-                    merged,
-                    ij_candidate,
-                    transform_data.min_k_interval_sizes,
-                    block.iteration_order,
-                ):
-                    merged.id = transform_data.id_generator.new
-                    self._merge_ij_blocks(merged, ij_candidate, transform_data)
-                else:
-                    merged_ijs.append(ij_candidate)
-
-            block.ij_blocks = merged_ijs
-
+            block.ij_blocks = greedy_merging_with_wrapper(
+                block.ij_blocks, StageMergingWrapper, parent=transform_data, parent_block=block
+            )
         transform_data.blocks = merged_blocks
-
         return transform_data
-
-    def _are_compatible_multi_stages(
-        self, target: DomainBlockInfo, candidate: DomainBlockInfo, has_sequential_axis: bool
-    ):
-        result = False
-        if candidate.iteration_order == target.iteration_order:
-            if candidate.iteration_order == gt_ir.IterationOrder.PARALLEL and has_sequential_axis:
-                inputs_with_k_deps = set(
-                    name for name, extent in candidate.inputs.items() if extent[-1] != (0, 0)
-                )
-                result = target.outputs.isdisjoint(inputs_with_k_deps)
-            else:
-                result = True
-
-        return result
-
-    def _are_compatible_stages(
-        self,
-        target: IJBlockInfo,
-        candidate: IJBlockInfo,
-        min_k_interval_sizes: list,
-        iteration_order: gt_ir.IterationOrder,
-    ):
-        # Check that the two stages have the same compute extent
-        if not (target.compute_extent == candidate.compute_extent):
-            return False
-
-        result = True
-        # Check that there is not overlap between stage intervals and that
-        # merging stages will not imply a reordering of the execution order
-        for interval in target.intervals:
-            for candidate_interval in candidate.intervals:
-                if (
-                    interval != candidate_interval
-                    and interval.overlaps(candidate_interval, min_k_interval_sizes)
-                ) or interval.precedes(candidate_interval, min_k_interval_sizes, iteration_order):
-                    result = False
-
-        # Check that there are not data dependencies between stages
-        if result:
-            for input, extent in candidate.inputs.items():
-                if result:
-                    if input in target.outputs:
-                        read_interval = (
-                            next(iter(candidate.intervals)).as_tuple(min_k_interval_sizes)
-                            + extent[-2]
-                        )
-                        for merged_interval_block in target.interval_blocks:
-                            merged_interval = merged_interval_block.interval
-                            if merged_interval.as_tuple(
-                                min_k_interval_sizes
-                            ) != read_interval and merged_interval.overlaps(
-                                read_interval, min_k_interval_sizes
-                            ):
-                                result = False
-                                break
-        return result
-
-    def _merge_domain_blocks(self, target, candidate):
-        target.ij_blocks.extend(candidate.ij_blocks)
-        target.intervals |= candidate.intervals
-        target.outputs |= candidate.outputs
-        for name, extent in candidate.inputs.items():
-            if name in target.inputs:
-                target.inputs[name] |= extent
-            else:
-                target.inputs[name] = extent
-
-    def _merge_ij_blocks(self, target, candidate, transform_data):
-        target_intervals = {
-            target_int_block.interval: target_int_block
-            for target_int_block in target.interval_blocks
-        }
-        for candidate_int_block in candidate.interval_blocks:
-            if candidate_int_block.interval in target_intervals:
-                merged_int_block = target_intervals[candidate_int_block.interval]
-                merged_int_block.id = transform_data.id_generator.new
-                merged_int_block.stmts.extend(candidate_int_block.stmts)
-
-                for name, extent in candidate_int_block.inputs.items():
-                    if name in merged_int_block.inputs:
-                        merged_int_block.inputs[name] |= extent
-                    else:
-                        merged_int_block.inputs[name] = extent
-
-                merged_int_block.outputs |= candidate_int_block.outputs
-
-            else:
-                target.interval_blocks.append(candidate_int_block)
-
-        target.intervals |= candidate.intervals
-        target.outputs |= candidate.outputs
-        for name, extent in candidate.inputs.items():
-            if name in target.inputs:
-                target.inputs[name] |= extent
-            else:
-                target.inputs[name] = extent
 
 
 class ComputeExtentsPass(TransformPass):
@@ -699,6 +905,47 @@ class DataTypePass(TransformPass):
             node.data_type = gt_ir.DataType.merge(
                 node.then_expr.data_type, node.else_expr.data_type
             )
+
+        def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall, **kwargs):
+            self.generic_visit(node.args, **kwargs)
+
+            dtypes_set = set(
+                arg.data_type for arg in node.args if arg.data_type != gt_ir.DataType.DEFAULT
+            )
+
+            if len(dtypes_set) == 0:
+                data_type = gt_ir.DataType.DEFAULT
+            elif len(dtypes_set) == 1:
+                data_type = dtypes_set.pop()
+            else:
+                # get the "largest" data type in the set
+                data_type = gt_ir.DataType.merge(*dtypes_set)
+                # cast all other args to this type
+                for index, arg in enumerate(node.args):
+                    if arg.data_type != data_type:
+                        node.args[index] = gt_ir.Cast(dtype=data_type, expr=arg, loc=node.loc)
+
+            if node.func in (
+                gt_ir.NativeFunction.MIN,
+                gt_ir.NativeFunction.MAX,
+                gt_ir.NativeFunction.ABS,
+                gt_ir.NativeFunction.MOD,
+            ):
+                node.data_type = data_type
+            elif node.func in (
+                gt_ir.NativeFunction.ISFINITE,
+                gt_ir.NativeFunction.ISINF,
+                gt_ir.NativeFunction.ISNAN,
+            ):
+                node.data_type = gt_ir.DataType.BOOL
+            elif node.func in (
+                gt_ir.NativeFunction.CEIL,
+                gt_ir.NativeFunction.FLOOR,
+                gt_ir.NativeFunction.TRUNC,
+            ):
+                node.data_type = gt_ir.DataType.INT64
+            else:
+                node.data_type = gt_ir.DataType.DEFAULT
 
     def apply(self, transform_data: TransformData):
         collect_data_type = self.CollectDataTypes()
@@ -865,3 +1112,162 @@ class BuildIIRPass(TransformPass):
         result = gt_ir.AxisInterval(start=axis_bounds[0], end=axis_bounds[1])
 
         return result
+
+
+class DemoteLocalTemporariesToVariablesPass(TransformPass):
+    class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
+        def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
+            assert isinstance(node, gt_ir.StencilImplementation)
+            self.demotables = set(node.temporary_fields)
+            self.seen_symbols: Set[str] = set()
+            self.stage_symbols: Optional[Set[str]] = None
+            self.visit(node)
+            return self.demotables
+
+        def visit_Stage(self, node: gt_ir.Stage) -> None:
+            self.stage_symbols = set()
+
+            self.generic_visit(node)
+
+            for s in self.stage_symbols:
+                if s in self.seen_symbols:
+                    self.demotables.discard(s)
+                self.seen_symbols.add(s)
+            self.stage_symbols = None
+
+        def visit_FieldRef(self, node: gt_ir.FieldRef) -> None:
+            if any(v != 0 for v in node.offset.values()):
+                self.demotables.discard(node.name)
+            assert self.stage_symbols is not None
+            self.stage_symbols.add(node.name)
+
+    class DemoteSymbols(gt_ir.IRNodeMapper):
+        def __init__(self, demotables):
+            self.demotables = demotables
+            self.local_symbols = None
+
+        def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
+            assert isinstance(node, gt_ir.StencilImplementation)
+            self.fields = node.fields
+            node = self.visit(node)
+            return node
+
+        def visit_FieldAccessor(
+            self, path: tuple, node_name: str, node: gt_ir.FieldAccessor
+        ) -> Tuple[bool, Optional[gt_ir.FieldAccessor]]:
+            if node.symbol in self.demotables:
+                return False, None
+            else:
+                return True, node
+
+        def visit_StencilImplementation(
+            self, path: tuple, node_name: str, node: gt_ir.StencilImplementation
+        ) -> gt_ir.StencilImplementation:
+            self.iir = node
+            res = self.generic_visit(path, node_name, node)
+            for f in self.demotables:
+                assert f in node.temporary_fields, "Tried to demote api field to variable."
+                node.fields.pop(f)
+                node.fields_extents.pop(f)
+            return res
+
+        def visit_ApplyBlock(
+            self, path: tuple, node_name: str, node: gt_ir.ApplyBlock
+        ) -> Tuple[bool, gt_ir.ApplyBlock]:
+            self.local_symbols = {}
+
+            self.generic_visit(path, node_name, node)
+
+            node.local_symbols.update(self.local_symbols)
+            self.local_symbols = None
+            return True, node
+
+        def visit_FieldRef(
+            self, path: tuple, node_name: str, node: gt_ir.FieldRef
+        ) -> Tuple[bool, Union[gt_ir.FieldRef, gt_ir.VarRef]]:
+            if node.name in self.demotables:
+                if node.name not in self.local_symbols:
+                    field_decl = self.fields[node.name]
+                    self.local_symbols[node.name] = gt_ir.VarDecl(
+                        name=node.name,
+                        data_type=field_decl.data_type,
+                        length=1,
+                        is_api=False,
+                        loc=field_decl.loc,
+                    )
+                return True, gt_ir.VarRef(name=node.name, index=0, loc=node.loc)
+
+            else:
+                return True, node
+
+    def apply(self, transform_data: TransformData) -> TransformData:
+        collect_demotable_symbols = self.CollectDemotableSymbols()
+        demotables = collect_demotable_symbols(transform_data.implementation_ir)
+
+        demote_symbols = self.DemoteSymbols(demotables)
+        transform_data.implementation_ir = demote_symbols(transform_data.implementation_ir)
+
+        return transform_data
+
+
+class HousekeepingPass(TransformPass):
+    class WarnIfNoEffect(gt_ir.IRNodeVisitor):
+        def __call__(self, stencil_name: str, node: gt_ir.StencilImplementation) -> None:
+            assert isinstance(node, gt_ir.StencilImplementation)
+            self.stencil_name = stencil_name
+            self.visit(node)
+
+        def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
+            # Emit warning if stencil has no effect, i.e. does not read or write to any api fields
+            if not node.has_effect:
+                warnings.warn(
+                    f"Stencil `{self.stencil_name}` has no effect.",
+                    RuntimeWarning,
+                )
+
+    class PruneEmptyNodes(gt_ir.IRNodeMapper):
+        def __call__(self, node: gt_ir.StencilImplementation) -> None:
+            assert isinstance(node, gt_ir.StencilImplementation)
+            self.visit(node)
+
+        def visit_Stage(
+            self, path: tuple, node_name: str, node: gt_ir.Stage
+        ) -> Tuple[bool, Optional[gt_ir.Stage]]:
+            self.generic_visit(path, node_name, node)
+
+            if any(
+                isinstance(a, gt_ir.FieldAccessor) and (a.intent is gt_ir.AccessIntent.READ_WRITE)
+                for a in node.accessors
+            ):
+                return True, node
+            else:
+                return False, None
+
+        def visit_StageGroup(
+            self, path: tuple, node_name: str, node: gt_ir.StageGroup
+        ) -> Tuple[bool, Optional[gt_ir.StageGroup]]:
+            self.generic_visit(path, node_name, node)
+
+            if node.stages:
+                return True, node
+            else:
+                return False, None
+
+        def visit_MultiStage(
+            self, path: tuple, node_name: str, node: gt_ir.MultiStage
+        ) -> Tuple[bool, Optional[gt_ir.MultiStage]]:
+            self.generic_visit(path, node_name, node)
+
+            if node.groups:
+                return True, node
+            else:
+                return False, None
+
+    def apply(self, transform_data: TransformData) -> TransformData:
+
+        prune_emtpy_nodes = self.PruneEmptyNodes()
+        prune_emtpy_nodes(transform_data.implementation_ir)
+
+        self.WarnIfNoEffect()(transform_data.definition_ir.name, transform_data.implementation_ir)
+
+        return transform_data

@@ -21,6 +21,7 @@ import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
+
 try:
     import cupy as cp
 except ImportError:
@@ -29,8 +30,8 @@ except ImportError:
 # import gt4py.storage as gt_storage
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_store
-import gt4py.utils as gt_utils
 import gt4py.storage.utils as gt_storage_utils
+import gt4py.utils as gt_utils
 
 
 # ---- Hypothesis strategies ----
@@ -534,8 +535,8 @@ def test_slices_gpu():
     # assert (sliced == array[::2, ::2, ::2]).all()
     stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
 
+    import copy  # isort:skip
     import cupy as cp
-    import copy
 
     default_origin = (1, 1, 1)
     shape = (10, 10, 10)
@@ -571,8 +572,8 @@ def test_slices_gpu():
     # assert (sliced == array[::2, ::2, ::2]).all()
     stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
 
+    import copy  # isort:skip
     import cupy as cp
-    import copy
 
     default_origin = (1, 1, 1)
     shape = (10, 10, 10)
@@ -880,3 +881,28 @@ def test_managed_memory():
     assert cpu_view[0, 0, 0] == 123
     cpu_view[1, 1, 1] = 321
     assert gpu_arr[1, 1, 1] == 321
+
+
+@pytest.mark.requires_gpu
+def test_sum_gpu():
+    i1 = 3
+    i2 = 4
+    jslice = slice(3, 4, None)
+    shape = (5, 5, 5)
+    q1 = gt_store.from_array(
+        cp.zeros(shape),
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+    )
+
+    q2 = gt_store.from_array(
+        cp.ones(shape),
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+    )
+
+    q1[i1 : i2 + 1, jslice, 0] = cp.sum(q2[i1 : i2 + 1, jslice, :], axis=2)

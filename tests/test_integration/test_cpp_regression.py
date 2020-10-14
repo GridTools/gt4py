@@ -14,21 +14,22 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
-import pytest
-import numpy as np
 import itertools
+import os
 
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
+import numpy as np
+import pytest
 
-import gt4py.storage as gt_store
 import gt4py.backend as gt_backend
+import gt4py.storage as gt_store
 
-from .utils import id_version  # import fixture used by pytest
-from .utils import generate_test_module
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS, id_version
 from ..reference_cpp_regression import reference_module
+from .utils import id_version  # import fixture used by pytest
+from .utils import generate_test_module
+
 
 INTERNAL_CPU_BACKENDS = list(set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
 INTERNAL_GPU_BACKENDS = list(set(GPU_BACKENDS) & set(INTERNAL_BACKENDS))
@@ -77,7 +78,10 @@ def run_horizontal_diffusion(backend, id_version, domain):
 
     validate_field_names = ["out_field"]
     origins = {"in_field": (2, 2, 0), "out_field": (0, 0, 0), "coeff": (0, 0, 0)}
-    shapes = {k: tuple(domain[i] + 2 * origins[k][i] for i in range(3)) for k in origins.keys()}
+    shapes = {
+        name: tuple(domain[i] + 2 * origin[i] for i in range(3))
+        for name, origin in origins.items()
+    }
     name = "horizontal_diffusion"
 
     arg_fields = get_reference(name, backend, domain, origins, shapes)
@@ -93,7 +97,6 @@ def run_horizontal_diffusion(backend, id_version, domain):
             arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
-        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
         _domain_=domain,
         _origin_=origins,
         exec_info=None,
@@ -126,7 +129,10 @@ def run_tridiagonal_solver(backend, id_version, domain):
         "rhs": (0, 0, 0),
         "out": (0, 0, 0),
     }
-    shapes = {k: tuple(domain[i] + 2 * origins[k][i] for i in range(3)) for k in origins.keys()}
+    shapes = {
+        name: tuple(domain[i] + 2 * origin[i] for i in range(3))
+        for name, origin in origins.items()
+    }
     name = "tridiagonal_solver"
 
     arg_fields = get_reference(name, backend, domain, origins, shapes)
@@ -142,7 +148,6 @@ def run_tridiagonal_solver(backend, id_version, domain):
             arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
-        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
         _domain_=domain,
         _origin_=origins,
         exec_info=None,
@@ -197,12 +202,56 @@ def run_vertical_advection_dycore(backend, id_version, domain):
             arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
-        # **{k: v.view(np.ndarray) for k, v in arg_fields.items()},
         _domain_=domain,
         _origin_=origins,
         # _origin_={
         #    k: [oo[0] if isinstance(oo, tuple) else oo for oo in o] for k, o in origins.items()
         # },
+        exec_info=None,
+    )
+
+    for k in validate_field_names:
+        if hasattr(arg_fields[k], "synchronize"):
+            arg_fields[k].device_to_host(force=True)
+        np.testing.assert_allclose(
+            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
+        )
+
+
+@register
+@hyp.given(
+    domain=hyp_st.tuples(
+        *(
+            [hyp_st.integers(min_value=1, max_value=32)] * 2
+            + [hyp_st.integers(min_value=16, max_value=32)]
+        )
+    )
+)
+def run_large_k_interval(backend, id_version, domain):
+    """Test stencils with large static and potentially zero-length intervals."""
+    validate_field_names = ["out_field"]
+    origins = {"in_field": (0, 0, 0), "out_field": (0, 0, 0)}
+    shapes = {
+        name: tuple(domain[i] + 2 * origin[i] for i in range(3))
+        for name, origin in origins.items()
+    }
+    name = "large_k_interval"
+
+    arg_fields = get_reference(name, backend, domain, origins, shapes)
+    validate_fields = {
+        name + "_reference": arg_fields.pop(name + "_reference") for name in validate_field_names
+    }
+
+    testmodule = generate_test_module(
+        "large_k_interval", backend, id_version=id_version, rebuild=False
+    )
+    for k in arg_fields:
+        if hasattr(arg_fields[k], "host_to_device"):
+            arg_fields[k].host_to_device()
+    testmodule.run(
+        **arg_fields,
+        _domain_=domain,
+        _origin_=origins,
         exec_info=None,
     )
 

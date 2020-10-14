@@ -112,7 +112,9 @@ class {{ class_name }}(StencilObject):
     def options(self) -> dict:
         return type(self)._gt_options_
 
-    def __call__(self, {{ stencil_signature }}, domain=None, origin=None, exec_info=None):
+    def __call__(
+        self, {{ stencil_signature }}, domain=None, origin=None, validate_args=True, exec_info=None
+    ):
         if exec_info is not None:
             exec_info["call_start_time"] = time.perf_counter()
         field_args=dict(
@@ -132,7 +134,8 @@ class {{ class_name }}(StencilObject):
             parameter_args=parameter_args,
             domain=domain,
             origin=origin,
-            exec_info=exec_info
+            validate_args=validate_args,
+            exec_info=exec_info,
         )
 
 {%- filter indent(width=8) %}
@@ -148,7 +151,7 @@ class {{ class_name }}(StencilObject):
             exec_info["origin"] = _origin_
             exec_info["run_start_time"] = time.perf_counter()
 {%- filter indent(width=8) %}
-{{- implementation }}
+{{ implementation }}
 {%- endfilter %}
         if exec_info is not None:
             exec_info["run_end_time"] = time.perf_counter()

@@ -21,6 +21,7 @@ import gt4py
 import gt4py.utils as gt_utils
 from gt4py.backend import pyext_builder
 
+
 GT4PY_INSTALLATION_PATH = os.path.dirname(inspect.getabsfile(gt4py))
 
 EXTERNAL_SRC_PATH = os.path.join(GT4PY_INSTALLATION_PATH, "_external_src")
@@ -31,6 +32,8 @@ def compile_reference():
     build_opts = pyext_builder.get_gt_pyext_build_opts()
     build_opts["include_dirs"].append(EXTERNAL_SRC_PATH)
 
+    build_opts.setdefault("extra_compile_args", [])
+    build_opts["extra_compile_args"].append("-Wno-sign-compare")
     reference_names = pyext_builder.build_pybind_ext(
         "reference_cpp_regression",
         [os.path.join(current_dir, "reference.cpp")],

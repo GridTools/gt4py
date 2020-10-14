@@ -25,8 +25,7 @@ from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BAC
 
 # ---- Identity stencil ----
 class TestIdentity(gt_testing.StencilTestSuite):
-    """Identity stencil.
-    """
+    """Identity stencil."""
 
     dtypes = {("field_a",): (np.float64, np.float32)}
     domain_range = [(1, 25), (1, 25), (1, 25)]
@@ -43,8 +42,7 @@ class TestIdentity(gt_testing.StencilTestSuite):
 
 # ---- Copy stencil ----
 class TestCopy(gt_testing.StencilTestSuite):
-    """Copy stencil.
-    """
+    """Copy stencil."""
 
     dtypes = (np.float_,)
     domain_range = [(1, 25), (1, 25), (1, 25)]
@@ -62,10 +60,32 @@ class TestCopy(gt_testing.StencilTestSuite):
         field_b[...] = field_a
 
 
+class TestAugAssign(gt_testing.StencilTestSuite):
+    """Increment by one stencil."""
+
+    dtypes = (np.float_,)
+    domain_range = [(1, 25), (1, 25), (1, 25)]
+    backends = CPU_BACKENDS
+    symbols = dict(
+        field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        field_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+    )
+
+    def definition(field_a, field_b):
+        with computation(PARALLEL), interval(...):
+            field_a += 1.0
+            field_a *= 2.0
+            field_b -= 1.0
+            field_b /= 2.0
+
+    def validation(field_a, field_b, domain=None, origin=None):
+        field_a[...] = (field_a[...] + 1.0) * 2.0
+        field_b[...] = (field_b[...] - 1.0) / 2.0
+
+
 # ---- Scale stencil ----
 class TestGlobalScale(gt_testing.StencilTestSuite):
-    """Scale stencil using a global global_name.
-    """
+    """Scale stencil using a global global_name."""
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
@@ -87,8 +107,7 @@ class TestGlobalScale(gt_testing.StencilTestSuite):
 
 # ---- Parametric scale stencil -----
 class TestParametricScale(gt_testing.StencilTestSuite):
-    """Scale stencil using a parameter.
-    """
+    """Scale stencil using a parameter."""
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
@@ -100,7 +119,7 @@ class TestParametricScale(gt_testing.StencilTestSuite):
 
     def definition(field_a, *, scale):
         with computation(PARALLEL), interval(...):
-            field_a = scale * field_a[0, 0, 0]
+            field_a = scale * field_a
 
     def validation(field_a, *, scale, domain, origin, **kwargs):
         field_a[...] = scale * field_a
@@ -108,8 +127,7 @@ class TestParametricScale(gt_testing.StencilTestSuite):
 
 # --- Parametric-mix stencil ----
 class TestParametricMix(gt_testing.StencilTestSuite):
-    """Linear combination of input fields using several parameters.
-    """
+    """Linear combination of input fields using several parameters."""
 
     dtypes = {
         ("USE_ALPHA",): np.int_,
@@ -177,8 +195,7 @@ class TestHeatEquation_FTCS_3D(gt_testing.StencilTestSuite):
 
 
 class TestHorizontalDiffusion(gt_testing.StencilTestSuite):
-    """Diffusion in a horizontal 2D plane .
-    """
+    """Diffusion in a horizontal 2D plane ."""
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
@@ -241,8 +258,7 @@ def fwd_diff_op_y(field):
 
 
 class TestHorizontalDiffusionSubroutines(gt_testing.StencilTestSuite):
-    """Diffusion in a horizontal 2D plane .
-    """
+    """Diffusion in a horizontal 2D plane ."""
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
@@ -276,8 +292,7 @@ class TestHorizontalDiffusionSubroutines(gt_testing.StencilTestSuite):
 
 
 class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
-    """Diffusion in a horizontal 2D plane .
-    """
+    """Diffusion in a horizontal 2D plane ."""
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
@@ -291,7 +306,7 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
     )
 
     def definition(u, diffusion, *, weight):
-        from __externals__ import fwd_diff, BRANCH
+        from __externals__ import BRANCH, fwd_diff
 
         with computation(PARALLEL), interval(...):
             laplacian = lap_op(u=u)
@@ -328,8 +343,7 @@ def fwd_diff_op_xy_varargin(field1, field2=None):
 
 
 class TestHorizontalDiffusionSubroutines3(gt_testing.StencilTestSuite):
-    """Diffusion in a horizontal 2D plane .
-    """
+    """Diffusion in a horizontal 2D plane ."""
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
@@ -352,7 +366,7 @@ class TestHorizontalDiffusionSubroutines3(gt_testing.StencilTestSuite):
         diffusion : 3D float field, output
         weight : diffusion coefficient
         """
-        from __externals__ import fwd_diff, BRANCH
+        from __externals__ import BRANCH, fwd_diff
 
         with computation(PARALLEL), interval(...):
             laplacian = lap_op(u=u)
@@ -378,8 +392,7 @@ class TestHorizontalDiffusionSubroutines3(gt_testing.StencilTestSuite):
 
 
 class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
-    """Tests runtime ifs.
-    """
+    """Tests runtime ifs."""
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
@@ -402,8 +415,7 @@ class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
 
 
 class TestRuntimeIfNested(gt_testing.StencilTestSuite):
-    """Tests nested runtime ifs
-    """
+    """Tests nested runtime ifs"""
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]

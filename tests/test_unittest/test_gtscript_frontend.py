@@ -20,10 +20,10 @@ import types
 import numpy as np
 import pytest
 
-from gt4py import gtscript
 from gt4py import definitions as gt_definitions
-from gt4py.frontend import gtscript_frontend as gt_frontend
+from gt4py import gtscript
 from gt4py import utils as gt_utils
+from gt4py.frontend import gtscript_frontend as gt_frontend
 
 from ..definitions import id_version
 
@@ -42,7 +42,7 @@ def compile_definition(
     rebuild=False,
     **kwargs,
 ):
-    gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
+    _, original_annotations = gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
     build_options = gt_definitions.BuildOptions(
         name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=None
     )
@@ -51,11 +51,13 @@ def compile_definition(
     stencil_id = frontend.get_stencil_id(
         build_options.qualified_name, definition_func, externals, options_id
     )
-    gt_frontend.GTScriptParser(
+    definition_ir = gt_frontend.GTScriptParser(
         definition_func, externals=externals or {}, options=build_options
     ).run()
 
-    return stencil_id
+    setattr(definition_func, "__annotations__", original_annotations)
+
+    return stencil_id, definition_ir
 
 
 # ---- Tests-----
@@ -76,13 +78,18 @@ def identity(field_in):
     return field_in
 
 
+@gtscript.function
+def sinus(field_in):
+    return sin(field_in)
+
+
 class TestInlinedExternals:
     def test_all_legal_combinations(self, id_version):
         module = f"TestInlinedExternals_test_module_{id_version}"
         externals = {}
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = (
@@ -105,7 +112,7 @@ class TestInlinedExternals:
         externals = {}
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + MISSING_CONSTANT
@@ -114,7 +121,7 @@ class TestInlinedExternals:
             compile_definition(definition_func, "test_missing_symbol", module, externals=externals)
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + GLOBAL_NESTED_CONSTANTS.missing
@@ -134,7 +141,7 @@ class TestInlinedExternals:
         WRONG_VALUE_CONSTANT = value_type()
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
@@ -156,13 +163,13 @@ class TestImportedExternals:
         )
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
             from gt4py.__externals__ import (
                 BOOL_CONSTANT,
                 CONSTANT,
                 NESTED_CONSTANTS,
                 VERY_NESTED_CONSTANTS,
             )
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = (
@@ -185,8 +192,8 @@ class TestImportedExternals:
         externals = dict(CONSTANT=-2.0, NESTED_CONSTANTS=types.SimpleNamespace(A=-100, B=-200))
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
             from gt4py.__externals__ import MISSING_CONSTANT
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + MISSING_CONSTANT
@@ -195,8 +202,8 @@ class TestImportedExternals:
             compile_definition(definition_func, "test_missing_symbol", module, externals=externals)
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
             from gt4py.__externals__ import NESTED_CONSTANTS
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + NESTED_CONSTANTS.missing
@@ -211,8 +218,8 @@ class TestImportedExternals:
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, id_version, value_type):
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL
             from gt4py.__externals__ import WRONG_VALUE_CONSTANT
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
@@ -255,8 +262,8 @@ class TestExternalsWithSubroutines:
             dx: float,
             dy: float,
         ):
-            from gt4py.__gtscript__ import computation, interval, PARALLEL, FORWARD, BACKWARD
             from gt4py.__externals__ import stage_laplacian, stage_laplacian_x, stage_laplacian_y
+            from gt4py.__gtscript__ import BACKWARD, FORWARD, PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 lap = stage_laplacian(dx=dx, dy=dy, phi=in_phi) + GLOBAL_CONSTANT
@@ -284,10 +291,10 @@ class TestExternalsWithSubroutines:
 class TestImports:
     def test_all_legal_combinations(self, id_version):
         def definition_func(inout_field: gtscript.Field[float]):
-            from __gtscript__ import computation, interval, PARALLEL, FORWARD, BACKWARD
             from __externals__ import EXTERNAL
-            from gt4py.__gtscript__ import computation, interval, PARALLEL, FORWARD, BACKWARD
+            from __gtscript__ import BACKWARD, FORWARD, PARALLEL, computation, interval
             from gt4py.__externals__ import EXTERNAL
+            from gt4py.__gtscript__ import BACKWARD, FORWARD, PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + EXTERNAL
@@ -476,3 +483,206 @@ class TestAssignmentSyntax:
                 with computation(PARALLEL), interval(...):
                     tmp[0, 0, 0] = 2 * in_field
                     out_field = tmp
+
+    def test_augmented(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += 2.0
+                in_field -= 0.5
+                in_field /= 0.5
+                in_field *= 4.0
+
+
+class TestNestedWithSyntax:
+    def test_nested_with(self):
+        @gtscript.stencil(backend="debug")
+        def definition(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL):
+                with interval(...):
+                    in_field = out_field
+
+    def test_nested_with_ordering(self):
+        def definition_fw(
+            in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
+        ):
+            from gt4py.__gtscript__ import FORWARD, computation, interval
+
+            with computation(FORWARD):
+                with interval(1, 2):
+                    in_field = out_field + 1
+                with interval(0, 1):
+                    in_field = out_field + 2
+
+        def definition_bw(
+            in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
+        ):
+            from gt4py.__gtscript__ import FORWARD, computation, interval
+
+            with computation(BACKWARD):
+                with interval(0, 1):
+                    in_field = out_field + 2
+                with interval(1, 2):
+                    in_field = out_field + 1
+
+        definitions = {"fw": definition_fw, "bw": definition_bw}
+
+        for name, definition in definitions.items():
+            with pytest.raises(
+                gt_frontend.GTScriptSyntaxError,
+                match=r"(.*?)Intervals must be specified in order of execution(.*)",
+            ):
+                # generate DIR
+                _, definition_ir = compile_definition(
+                    definition,
+                    f"test_nested_with_reordering_{name}",
+                    f"TestImports_test_module_{id_version}",
+                )
+
+
+class TestNativeFunctions:
+    def test_simple_call(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sin(in_field)
+
+    def test_offset_arg(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sin(in_field[1, 0, 0])
+
+    def test_nested_calls(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sin(abs(in_field))
+
+    def test_nested_external_call(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sin(add_external_const(in_field))
+
+    def test_multi_nested_calls(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += min(abs(sin(add_external_const(in_field))), -0.5)
+
+    def test_native_in_function(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field += sinus(in_field)
+
+    def test_native_function_unary(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field = not isfinite(in_field)
+
+    def test_native_function_binary(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field = asin(in_field) + 1
+
+    def test_native_function_ternary(self):
+        @gtscript.stencil(backend="debug")
+        def func(in_field: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_field = asin(in_field) + 1 if 1 < in_field else sin(in_field)
+
+
+class TestAnnotations:
+    @staticmethod
+    def sumdiff_defs(
+        in_a: gtscript.Field["dtype_in"],
+        in_b: gtscript.Field["dtype_in"],
+        out_c: gtscript.Field["dtype_out"],
+        out_d: gtscript.Field[float],
+        *,
+        wa: "dtype_scalar",
+        wb: int,
+    ):
+        with computation(PARALLEL), interval(...):
+            out_c = wa * in_a + wb * in_b
+            out_d = wa * in_a - wb * in_b
+
+    @pytest.mark.parametrize("dtype_in", [int, np.float32, np.float64])
+    @pytest.mark.parametrize("dtype_out", [int, np.float32, np.float64])
+    @pytest.mark.parametrize("dtype_scalar", [int, np.float32, np.float64])
+    def test_set_arg_dtypes(self, dtype_in, dtype_out, dtype_scalar):
+        definition = self.sumdiff_defs
+        dtypes = {"dtype_in": dtype_in, "dtype_out": dtype_out, "dtype_scalar": dtype_scalar}
+
+        definition, original_annotations = gtscript._set_arg_dtypes(definition, dtypes)
+
+        assert "in_a" in original_annotations
+        assert isinstance(original_annotations["in_a"], gtscript._FieldDescriptor)
+        assert original_annotations["in_a"].dtype == "dtype_in"
+        assert "in_b" in original_annotations
+        assert isinstance(original_annotations["in_b"], gtscript._FieldDescriptor)
+        assert original_annotations["in_b"].dtype == "dtype_in"
+        assert "out_c" in original_annotations
+        assert isinstance(original_annotations["out_c"], gtscript._FieldDescriptor)
+        assert original_annotations["out_c"].dtype == "dtype_out"
+        assert "out_d" in original_annotations
+        assert isinstance(original_annotations["out_d"], gtscript._FieldDescriptor)
+        assert original_annotations["out_d"].dtype == float
+        assert "wa" in original_annotations
+        assert original_annotations["wa"] == "dtype_scalar"
+        assert "wb" in original_annotations
+        assert original_annotations["wb"] == int
+        assert len(original_annotations) == 6
+
+        annotations = getattr(definition, "__annotations__", {})
+        assert "in_a" in annotations
+        assert isinstance(annotations["in_a"], gtscript._FieldDescriptor)
+        assert annotations["in_a"].dtype == dtype_in
+        assert "in_b" in annotations
+        assert isinstance(annotations["in_b"], gtscript._FieldDescriptor)
+        assert annotations["in_b"].dtype == dtype_in
+        assert "out_c" in annotations
+        assert isinstance(annotations["out_c"], gtscript._FieldDescriptor)
+        assert annotations["out_c"].dtype == dtype_out
+        assert "out_d" in annotations
+        assert isinstance(annotations["out_d"], gtscript._FieldDescriptor)
+        assert annotations["out_d"].dtype == float
+        assert "wa" in annotations
+        assert annotations["wa"] == dtype_scalar
+        assert "wb" in annotations
+        assert annotations["wb"] == int
+        assert len(annotations) == 6
+
+        setattr(definition, "__annotations__", original_annotations)
+
+    @pytest.mark.parametrize("dtype_in", [int, np.float32, np.float64])
+    @pytest.mark.parametrize("dtype_out", [int, np.float32, np.float64])
+    @pytest.mark.parametrize("dtype_scalar", [int, np.float32, np.float64])
+    def test_compilation(self, dtype_in, dtype_out, dtype_scalar):
+        definition = self.sumdiff_defs
+        dtypes = {"dtype_in": dtype_in, "dtype_out": dtype_out, "dtype_scalar": dtype_scalar}
+
+        sumdiff = gtscript.stencil("debug", definition, dtypes=dtypes)
+
+        annotations = getattr(definition, "__annotations__", {})
+        assert "in_a" in annotations
+        assert isinstance(annotations["in_a"], gtscript._FieldDescriptor)
+        assert annotations["in_a"].dtype == "dtype_in"
+        assert "in_b" in annotations
+        assert isinstance(annotations["in_b"], gtscript._FieldDescriptor)
+        assert annotations["in_b"].dtype == "dtype_in"
+        assert "out_c" in annotations
+        assert isinstance(annotations["out_c"], gtscript._FieldDescriptor)
+        assert annotations["out_c"].dtype == "dtype_out"
+        assert "out_d" in annotations
+        assert isinstance(annotations["out_d"], gtscript._FieldDescriptor)
+        assert annotations["out_d"].dtype == float
+        assert "wa" in annotations
+        assert annotations["wa"] == "dtype_scalar"
+        assert "wb" in annotations
+        assert annotations["wb"] == int
+        assert len(annotations) == 6

@@ -28,9 +28,33 @@ import numpy as np
 
 from gt4py import definitions as gt_definitions
 from gt4py import utils as gt_utils
+from gt4py.lazy_stencil import LazyStencil
+from gt4py.stencil_builder import StencilBuilder
 
 
 # GTScript builtins
+MATH_BUILTINS = {
+    "abs",
+    "min",
+    "max",
+    "mod",
+    "sin",
+    "cos",
+    "tan",
+    "asin",
+    "acos",
+    "atan",
+    "sqrt",
+    "exp",
+    "log",
+    "isfinite",
+    "isinf",
+    "isnan",
+    "floor",
+    "ceil",
+    "trunc",
+}
+
 builtins = {
     "I",
     "J",
@@ -50,9 +74,10 @@ builtins = {
     "__gtscript__",
     "__externals__",
     "__INLINED",
+    *MATH_BUILTINS,
 }
 
-__all__ = list(builtins) + ["function", "stencil"]
+__all__ = list(builtins) + ["function", "stencil", "lazy_stencil"]
 
 __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
@@ -64,6 +89,7 @@ _VALID_DATA_TYPES = (bool, np.bool, int, np.int32, np.int64, float, np.float32, 
 def _set_arg_dtypes(definition, dtypes):
     assert isinstance(definition, types.FunctionType)
     annotations = getattr(definition, "__annotations__", {})
+    original_annotations = {**annotations}
     for arg, value in annotations.items():
         if isinstance(value, _FieldDescriptor) and isinstance(value.dtype, str):
             if value.dtype in dtypes:
@@ -76,7 +102,7 @@ def _set_arg_dtypes(definition, dtypes):
             else:
                 raise ValueError(f"Missing '{value}' dtype definition for arg '{arg}'")
 
-    return definition
+    return definition, original_annotations
 
 
 def function(func):
@@ -200,18 +226,107 @@ def stencil(
             elif callable(definition_func):  # General callable
                 definition_func = definition_func.__call__
 
-        _set_arg_dtypes(definition_func, dtypes or {})
-        return gt_loader.gtscript_loader(
+        _, original_annotations = _set_arg_dtypes(definition_func, dtypes or {})
+        out = gt_loader.gtscript_loader(
             definition_func,
             backend=backend,
             build_options=build_options,
             externals=externals or {},
         )
+        setattr(definition_func, "__annotations__", original_annotations)
+        return out
 
     if definition is None:
         return _decorator
     else:
         return _decorator(definition)
+
+
+def lazy_stencil(
+    backend=None,
+    definition=None,
+    *,
+    build_info=None,
+    dtypes=None,
+    externals=None,
+    name=None,
+    rebuild=False,
+    eager=False,
+    check_syntax=True,
+    **kwargs,
+):
+    """
+    Create a stencil object with deferred building and optional up-front syntax checking.
+
+    Parameters
+    ----------
+        backend : `str`
+            Name of the implementation backend.
+
+        definition : `None` when used as a decorator, otherwise a `function` or a `:class:`gt4py.StencilObject`
+            Function object defining the stencil.
+
+        build_info : `dict`, optional
+            Dictionary used to store information about the stencil generation.
+            (`None` by default).
+
+        dtypes: `dict`[`str`, dtype_definition], optional
+            Specify dtypes for string keys in the argument annotations.
+
+        externals: `dict`, optional
+            Specify values for otherwise unbound symbols.
+
+        name : `str`, optional
+            The fully qualified name of the generated :class:`StencilObject`.
+            If `None`, it will be set to the qualified name of the definition function.
+            (`None` by default).
+
+        rebuild : `bool`, optional
+            Force rebuild of the :class:`gt4py.StencilObject` even if it is
+            found in the cache. (`False` by default).
+
+        eager : `bool`, optional
+            If true do not defer stencil building and instead return the fully built raw implementation object.
+
+        check_syntax: `bool`, default=True, optional
+            If true, build and cache the IR build stage already, which checks stencil definition syntax.
+
+        **kwargs: `dict`, optional
+            Extra backend-specific options. Check the specific backend
+            documentation for further information.
+
+    Returns
+    -------
+        :class:`gridtools.build.LazyStencil`
+            Wrapper around an instance of the dynamically-generated subclass of :class:`gt4py.StencilObject`.
+            Defers the generation step until the last moment and allows syntax checking independently.
+            Also gives access to a more fine grained generate / build process.
+    """
+    from gt4py import frontend
+
+    def _decorator(func):
+        _set_arg_dtypes(func, dtypes or {})
+        options = gt_definitions.BuildOptions(
+            **{
+                **StencilBuilder.default_options_dict(func),
+                **StencilBuilder.name_to_options_args(name),
+                "rebuild": rebuild,
+                "build_info": build_info,
+                **StencilBuilder.nest_impl_options(kwargs),
+            }
+        )
+        stencil = LazyStencil(
+            StencilBuilder(func, backend=backend, options=options).with_externals(externals or {})
+        )
+        if eager:
+            stencil = stencil.implementation
+        elif check_syntax:
+            stencil.check_syntax()
+        return stencil
+
+    if definition is None:
+        return _decorator
+    return _decorator(definition)
 
 
 # GTScript builtins: domain axes
@@ -342,4 +457,100 @@ def interval(start, end):
 
 def __INLINED(compile_if_expression):
     """Evaluate condition at compile time and inline statements from selected branch."""
+    pass
+
+
+# GTScript builtins: math functions
+def abs(x):
+    """Return the absolute value of the argument"""
+    pass
+
+
+def min(x, y):
+    """Return the smallest of two or more arguments."""
+    pass
+
+
+def max(x, y):
+    """Return the largest of two or more arguments."""
+    pass
+
+
+def mod(x, y):
+    """returns the first argument modulo the second one"""
+    pass
+
+
+def sin(x):
+    """Return the sine of x radians"""
+    pass
+
+
+def cos(x):
+    """Return the cosine of x radians."""
+    pass
+
+
+def tan(x):
+    """Return the tangent of x radians."""
+    pass
+
+
+def asin(x):
+    """return the arc sine of x, in radians."""
+    pass
+
+
+def acos(x):
+    """Return the arc cosine of x, in radians."""
+    pass
+
+
+def atan(x):
+    """Return the arc tangent of x, in radians."""
+    pass
+
+
+def sqrt(x):
+    """Return the square root of x."""
+    pass
+
+
+def exp(x):
+    """Return e raised to the power x, where e is the base of natural logarithms."""
+    pass
+
+
+def log(x):
+    """Return the natural logarithm of x (to base e)."""
+    pass
+
+
+def isfinite(x):
+    """Return True if x is neither an infinity nor a NaN, and False otherwise. (Note that 0.0 is considered finite.)"""
+    pass
+
+
+def isinf(x):
+    """Return True if x is a positive or negative infinity, and False otherwise."""
+    pass
+
+
+def isnan(x):
+    """Return True if x is a NaN (not a number), and False otherwise."""
+    pass
+
+
+def floor(x):
+    """Return the floor of x, the largest integer less than or equal to x."""
+    pass
+
+
+def ceil(x):
+    """Return the ceiling of x, the smallest integer greater than or equal to x."""
+    pass
+
+
+def trunc(x):
+    """Return the Real value x truncated to an Integral (usually an integer)"""
     pass

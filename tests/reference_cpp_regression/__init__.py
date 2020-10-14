@@ -16,4 +16,5 @@
 
 from .build import compile_reference
 
+
 reference_module = compile_reference()

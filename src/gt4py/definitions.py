@@ -21,16 +21,11 @@ import numbers
 import operator
 
 from gt4py import utils as gt_utils
-from gt4py.utils.attrib import (
-    attribute,
-    attribclass,
-    attribkwclass,
-    AttributeClassLike,
-    Any,
-    Dict as DictOf,
-    List as ListOf,
-    Tuple as TupleOf,
-)
+from gt4py.utils.attrib import Any, AttributeClassLike
+from gt4py.utils.attrib import Dict as DictOf
+from gt4py.utils.attrib import List as ListOf
+from gt4py.utils.attrib import Tuple as TupleOf
+from gt4py.utils.attrib import attribclass, attribkwclass, attribute
 
 
 class CartesianSpace:
@@ -139,43 +134,35 @@ class NumericTuple(tuple):
         return self._apply(self._broadcast(other), operator.floordiv)
 
     def __and__(self, other):
-        """Element-wise intersection operation.
-        """
+        """Element-wise intersection operation."""
         return self._apply(other, min)
 
     def __or__(self, other):
-        """Element-wise union operation.
-        """
+        """Element-wise union operation."""
         return self._apply(other, max)
 
     def __lt__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.lt)
 
     def __le__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.le)
 
     def __eq__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.eq)
 
     def __ne__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return not self._compare(self._broadcast(other), operator.eq)
 
     def __gt__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.gt)
 
     def __ge__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.ge)
 
     def __repr__(self):
@@ -333,43 +320,35 @@ class FrameTuple(tuple):
         return self._apply(self._broadcast(other), lambda a, b: a - b)
 
     def __and__(self, other):
-        """Element-wise intersection operation.
-        """
+        """Element-wise intersection operation."""
         return self._apply(other, min, min)
 
     def __or__(self, other):
-        """Element-wise union operation.
-        """
+        """Element-wise union operation."""
         return self._apply(other, max, max)
 
     def __lt__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.lt)
 
     def __le__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.le)
 
     def __eq__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.eq)
 
     def __ne__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return not self._compare(self._broadcast(other), operator.eq)
 
     def __gt__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.gt)
 
     def __ge__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.ge)
 
     def __repr__(self):
@@ -526,13 +505,11 @@ class Extent(FrameTuple):
         return cls([(i, i) for i in offset])
 
     def __and__(self, other):
-        """Intersection operation.
-        """
+        """Intersection operation."""
         return self._apply(other, max, min)
 
     def __or__(self, other):
-        """Union operation.
-        """
+        """Union operation."""
         return self._apply(other, min, max)
 
     def __lt__(self, other):
@@ -647,8 +624,10 @@ class DomainInfo(
 
 class FieldInfo(collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "dtype"])):
     def __repr__(self):
-        result = "FieldInfo(access=AccessKind.{access}, boundary={boundary}, dtype={dtype})".format(
-            access=self.access.name, boundary=repr(self.boundary), dtype=repr(self.dtype)
+        result = (
+            "FieldInfo(access=AccessKind.{access}, boundary={boundary}, dtype={dtype})".format(
+                access=self.access.name, boundary=repr(self.boundary), dtype=repr(self.dtype)
+            )
         )
         return result
 
