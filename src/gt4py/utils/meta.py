@@ -302,14 +302,14 @@ class ASTEvaluator(ASTPass):
     def visit_Tuple(self, node: ast.Tuple):
         return tuple(self.visit(elem) for elem in node.elts)
 
-    def visit_UnaryOp(self, node):
+    def visit_UnaryOp(self, node: ast.UnaryOp):
         val = self.visit(node.operand)
         return self.AST_OP_TO_OP[type(node.op)](val)
 
-    def visit_BinOp(self, node):
+    def visit_BinOp(self, node: ast.BinOp):
         return self.AST_OP_TO_OP[type(node.op)](self.visit(node.left), self.visit(node.right))
 
-    def visit_BoolOp(self, node):
+    def visit_BoolOp(self, node: ast.BoolOp):
         # Use short-circuited evaluation of logical expressions
         condition = True if isinstance(node.op, ast.And) else False
         for value in node.values:
@@ -318,7 +318,10 @@ class ASTEvaluator(ASTPass):
 
         return condition
 
-    def visit_Compare(self, node):
+    def visit_Attribute(self, node: ast.Attribute):
+        return self.context[f"{node.value.id}.{node.attr}"]
+
+    def visit_Compare(self, node: ast.Compare):
         values = [self.visit(node.left)] + [self.visit(cmp) for cmp in node.comparators]
         comparisons = [
             self.AST_OP_TO_OP[type(op)](values[i], values[i + 1]) for i, op in enumerate(node.ops)
