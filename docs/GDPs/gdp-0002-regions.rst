@@ -14,10 +14,11 @@ Abstract
 --------
 
 GT4Py treats the vertical domain specially so that top and bottom boundary conditions can easily be applied.
-It also has a limited ability to compute on sub-regions of the horizontal iteration space using the ``domain`` and ``origin`` keyword arguments to stencil calls, which offset and limit the stencil's computational domain relative to fields' origins.
-However, this feature requires that separate stencils are written for boundaries, limiting the possibilities for backend optimization.
+It also has a limited ability to compute on sub-regions of the horizontal iteration space using the ``domain`` and ``origin`` keyword arguments to stencil calls.
+Using these offsets and limits the stencil's iteration relative to fields' origins.
+This feature however requires that separate stencils are written for boundaries, limiting the possibilities for backend optimization and adding complexity to the application.
 
-Here we propose a mechanism to push such regional computation around boundaries into the stencil and in the process add an feature capable of expressing stencil computation on global boundaries of domain-decomposed iterations spaces.
+Here we propose a feature to push such regional computation around boundaries into the stencil and in the process add an feature capable of expressing stencil computation on global boundaries of domain-decomposed iterations spaces.
 This additionally has the benefit of locating stencil-specific boundary calculation adjacent to the main stencil code, resulting in a friendlier interface and fewer opportunities for errors.
 
 Motivation and Scope
@@ -26,8 +27,8 @@ Motivation and Scope
 Numerical models, especially finite difference methods, commonly have specialized computation near boundaries to facilitate boundary conditions or other grid-specific requirements.
 We are developing a weather model on a cubed-sphere multi-block structured grid, and have many stencils that require such specific treatment on and near the structured block boundaries.
 
-We are currently working around the lack of a first-class feature by using the ``domain`` and ``origin`` keyword arguments to stencil calls, but doing so leads to inefficient code that is difficult for model developers to read.
-To illustrate the need for such a feature, consider a snippet of the model that computes a variable ``ub`` different based on location in the grid:
+We are currently using ``domain`` and ``origin`` keyword arguments to separate stencil calls for special block boundary computation, but doing so leads to inefficient code (multiplies stencil call overhead) that is difficult for model developers to read.
+To illustrate the need for such a feature, consider a snippet of the model that computes a variable ``ub`` differently based on location in the grid:
 
 .. code-block:: python
 
@@ -48,7 +49,7 @@ To illustrate the need for such a feature, consider a snippet of the model that 
         with computation(PARALLEL), interval(...):
             ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
 
-    # Requires new python function to call stencils on each region
+    # Requires a python function to call stencils on each region
     def ubke(uc, vc, ut, ub, dt5, dt4, grid):​
         domain_y_edge = (grid.ni, 1, grid.nz)
         domain_x_edge = (1, grid.nj, grid.nz)
@@ -64,13 +65,15 @@ To illustrate the need for such a feature, consider a snippet of the model that 
         if grid.east_edge:
             x_edge_ub(ut, ub, dt5=dt5, origin=(grid.local_iend, grid.local_jstart, 0), domain=domain_x_edge)
 
-This example motivates requirements for the feature. It must be able to:
+This example motivates requirements for the feature.
+It must be able to:
 
-1. Specify regions in the context of a third frame of reference other than the field or stencil computational domains. This can then incorporate the concept of domain decomposition.
+1. Specify regions inside a stencil, relative to locations passed at run-time to the stencil.
+   Define these integer variables on axes as `splitters`.
 2. Specify regions at and near the edges of the field data arrays, regardless of whether the computational domain exists there. If the stencil call's extended computational domain has a non-zero intersection with the region, it iterates over that portion.
 
-The specific feature that we are proposing is the addition of a ``with parallel()`` context that specifies the horizontal iteration space using ``region`` objects.
-The ``region`` object's ``__getitem__`` method uses `splitters`, which are parameter-like call-time-defined variables, to select a region of the stencil computational domain in the parallel ``I`` and ``J`` axes.
+The specific feature that we are proposing is the addition of a ``with parallel()`` context that specifies the horizontal iteration space (over parallel axes) using ``region`` objects.
+The ``region`` object's ``__getitem__`` method uses `splitters` to select a region of the stencil computational domain in the parallel ``I`` and ``J`` axes.
 
 Using this specification, the example is transformed into:
 
@@ -109,7 +112,7 @@ The ``parallel()`` call can have any number of arguments, each of which contain 
 We propse adding a `gtscript.region` object with ``__getitem__`` defined in order to make this easy.
 
 
-Region specification
+Region Specification
 ++++++++++++++++++++
 
 Regions contain information about the horizontal restriction, with variable references, axis endpoints, absolute offsets, or a combination of these.
@@ -123,17 +126,17 @@ Examples:
 Splitters
 +++++++++
 
-The variables used as splitters in the region specification, such as ``istart, iend, jend`` in the examples in the previous section, must to be given values at stencil call time.
-Since these are not traditional ordered stencil parameters, a dictionary must be passed to the keyword argument ``splitters`` at call time.
+The variables used as splitters in the region specification, such as ``istart``, ``jend`` in the examples in the previous section must to be given values at stencil call time.
+Since these are not ordered stencil parameters, a map must be passed to the keyword argument ``splitters`` at call time.
 Example:
 
 .. code-block:: python
 
-    stencil(a, b, splitters={'istart': grid.istart, 'iend': grid.iend, 'jend': grid.jend})
+    stencil(a, b, splitters=dict(istart=grid.istart, iend=grid.iend, jend=grid.jend))
 
 Where ``grid`` could be an application-defined namespace.
 
-Temporary fields
+Temporary Fields
 ^^^^^^^^^^^^^^^^
 
 The information above is sufficient for field arguments to the stencil, but what about temporaries? Assigning to temporaries in a region should be allowed, so GT4Py needs to generate an offset automatically from the application domain for these fields. The natural way to determine this is to have the `origin` of the temporary field be the origin of the compute domain.
@@ -175,13 +178,13 @@ Implementation
 
 The implementation on the GT4Py involves adding:
 
-1. the ``with parallel()`` context parsing to the AST visitor in IRMaker_
-2. the reduced iteration space to the `internal IR`_
-3. region parsing tests
-4. backend support for the IR features and ensure correct code generation
-5. code generation tests
-6. application domain arguments to stencil calls
-7. a few end to end tests
+1. The ``with parallel()`` context parsing to the AST visitor in IRMaker_
+2. The reduced iteration space to the `internal IR`_
+3. Region parsing tests
+4. Backend support for the IR features and ensure correct code generation
+5. Code generation tests
+6. Application domain arguments to stencil calls
+7. A few end to end tests
 
 .. _IRMaker: https://github.com/GridTools/gt4py/blob/master/src/gt4py/frontend/gtscript_frontend.py#L454
 .. _internal IR: https://github.com/GridTools/gt4py/blob/master/src/gt4py/ir/nodes.py
@@ -281,7 +284,7 @@ FV3 Example
 
         divg_d = rarea_c * (vf[0, -1, 0] - vf + uf[-1, 0, 0] - uf)
         with parallel(region[istart, jstart], region[istart, jend]):
-            divg_d = rarea_c * (-vf + uf[-1, 0, 0] - uf)
+            divg_d = rarea_c * (-vf[0, 0, 0] + uf[-1, 0, 0] - uf)
         with parallel(region[iend, jstart], region[iend, jend]):
             divg_d = rarea_c * (vf[0, -1, 0] + uf[-1, 0, 0] - uf)
 
