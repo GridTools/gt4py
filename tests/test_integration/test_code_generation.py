@@ -76,6 +76,19 @@ def test_generation_gpu(name, backend):
 
 @pytest.mark.requires_gpu
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
+def test_temporary_field_declared_in_if(backend):
+    @gtscript.stencil(backend=backend)
+    def definition(field_a: gtscript.Field[np.float_]):
+        with computation(PARALLEL), interval(...):
+            if field_a < 0:
+                field_b = -field_a
+            else:
+                field_b = field_a
+            field_a = field_b
+
+
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_stage_without_effect(backend):
     @gtscript.stencil(backend=backend)
     def definition(field_a: gtscript.Field[np.float_]):

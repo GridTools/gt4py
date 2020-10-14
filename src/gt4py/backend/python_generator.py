@@ -200,6 +200,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
         source = "{lhs} = {rhs}".format(lhs=lhs, rhs=rhs)
 
+        # self.var_refs_defined is used in the numpy backend
         if isinstance(node.target, gt_ir.VarRef):
             self.var_refs_defined.add(node.target.name)
 
