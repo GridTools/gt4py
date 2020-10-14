@@ -67,7 +67,7 @@ class IntervalSpecificationError(IRSpecificationError):
             if loc is None:
                 message = f"Invalid interval specification '{interval}' "
             else:
-                message = f"Invalid interval specification '{interval}' in '{loc.scope}' (line: {loc.line}, col: {loc.col})"
+                message = f"Invalid interval specification '{interval}' in '{loc.scope}' (line: {loc.line}, col: {loc.column})"
         super().__init__(message, loc=loc)
 
 
@@ -77,7 +77,7 @@ class DataTypeSpecificationError(IRSpecificationError):
             if loc is None:
                 message = f"Invalid data type specification '{data_type}'"
             else:
-                message = f"Invalid data type specification '{data_type}' in '{loc.scope}' (line: {loc.line}, col: {loc.col})"
+                message = f"Invalid data type specification '{data_type}' in '{loc.scope}' (line: {loc.line}, col: {loc.column})"
         super().__init__(message, loc=loc)
 
 
@@ -909,14 +909,21 @@ class DataTypePass(TransformPass):
         def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall, **kwargs):
             self.generic_visit(node.args, **kwargs)
 
-            data_type = set(
+            dtypes_set = set(
                 arg.data_type for arg in node.args if arg.data_type != gt_ir.DataType.DEFAULT
             )
-            if len(data_type) > 1:
-                raise DataTypeSpecificationError(
-                    "Builtin function call with mixed data types", loc=node.loc
-                )
-            data_type = data_type.pop() if len(data_type) else gt_ir.DataType.DEFAULT
+
+            if len(dtypes_set) == 0:
+                data_type = gt_ir.DataType.DEFAULT
+            elif len(dtypes_set) == 1:
+                data_type = dtypes_set.pop()
+            else:
+                # get the "largest" data type in the set
+                data_type = gt_ir.DataType.merge(*dtypes_set)
+                # cast all other args to this type
+                for index, arg in enumerate(node.args):
+                    if arg.data_type != data_type:
+                        node.args[index] = gt_ir.Cast(dtype=data_type, expr=arg, loc=node.loc)
 
             if node.func in (
                 gt_ir.NativeFunction.MIN,

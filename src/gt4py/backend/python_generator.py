@@ -133,6 +133,9 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     def generic_visit(self, node: gt_ir.Node, **kwargs):
         raise RuntimeError("Invalid IR node: {}".format(node))
 
+    def visit_Cast(self, node: gt_ir.Cast):
+        return self.visit(node.expr)
+
     def visit_Decl(self, node: gt_ir.Decl):
         raise NotImplementedError()
 
