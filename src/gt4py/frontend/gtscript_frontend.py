@@ -928,24 +928,6 @@ class IRMaker(ast.NodeVisitor):
                     else:
                         result.append(field_decl)
                     self.fields[field_decl.name] = field_decl
-
-                # if not self._is_known(t.id):
-                #     if self.in_if:
-                #         raise GTScriptSymbolError(
-                #             name=t.id,
-                #             message="Temporary field {name} implicitly defined within run-time if-else region.".format(
-                #                 name=t.id
-                #             ),
-                #         )
-                #     field_decl = gt_ir.FieldDecl(
-                #         name=t.id,
-                #         data_type=gt_ir.DataType.AUTO,
-                #         axes=[ax.name for ax in gt_ir.Domain.LatLonGrid().axes],
-                #         # layout_id=t.id,
-                #         is_api=False,
-                #     )
-                #     result.append(field_decl)
-                #     self.fields[field_decl.name] = field_decl
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
 
