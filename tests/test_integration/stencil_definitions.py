@@ -254,7 +254,9 @@ def local_var_inside_conditional(in_storage: Field3D, out_storage: Field3D):
     with computation(PARALLEL), interval(...):
         if in_storage[0, 0, 0] > 0:
             local_var = 1
-            out_storage[0, 0, 0] = local_var
+        else:
+            local_var = 0
+        out_storage = local_var
 
 
 @register
