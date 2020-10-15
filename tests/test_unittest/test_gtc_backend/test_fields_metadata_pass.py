@@ -66,5 +66,5 @@ def test_copy_shift(shift_offset: Tuple[CartesianOffset, FieldBoundary]) -> None
     assert new_copy_shift is not copy_shift
     a_meta = new_copy_shift.fields_metadata.metas["a"]
     b_meta = new_copy_shift.fields_metadata.metas["b"]
-    assert a_meta.boundary.to_tuple() == FieldBoundary(i=(0, 0), j=(0, 0), k=(0, 0)).to_tuple()
-    assert b_meta.boundary.to_tuple() == boundary.to_tuple()
+    assert a_meta.boundary.to_dict() == FieldBoundary(i=(0, 0), j=(0, 0), k=(0, 0)).to_dict()
+    assert b_meta.boundary.to_dict() == boundary.to_dict()

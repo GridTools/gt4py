@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from devtools import debug  # noqa: F401
 from eve import IntEnum, Node, SourceLocation, Str
@@ -53,9 +53,6 @@ class CartesianOffset(Node):
     @classmethod
     def zero(cls):
         return cls(i=0, j=0, k=0)
-
-    def to_tuple(self):
-        return (self.i, self.j, self.k)
 
     def to_dict(self):
         return {"i": self.i, "j": self.j, "k": self.k}
@@ -137,8 +134,8 @@ class FieldBoundary(Node):
     j: Tuple[int, int]
     k: Tuple[int, int]
 
-    def to_tuple(self):
-        return (self.i, self.j, self.k)
+    def to_dict(self):
+        return {"i": self.i, "j": self.j, "k": self.k}
 
 
 class FieldBoundaryAccumulator:
@@ -166,8 +163,47 @@ class FieldMetadata(Node):
     dtype: common.DataType
 
 
+class FieldMetadataBuilder:
+    def __init__(self) -> None:
+        self._name: Optional[str] = None
+        self._access: int = AccessKind.READ_WRITE
+        self._dtype: Optional[common.DataType] = None
+        self.boundary = FieldBoundaryAccumulator()
+
+    def name(self, name: str) -> "FieldMetadataBuilder":
+        self._name = name
+        return self
+
+    def access(self, access: AccessKind) -> "FieldMetadataBuilder":
+        self._access = access
+        return self
+
+    def dtype(self, dtype: common.DataType) -> "FieldMetadataBuilder":
+        self._dtype = dtype
+        return self
+
+    def build(self):
+        return FieldMetadata(
+            name=self._name,
+            access=self._access,
+            boundary=self.boundary.to_boundary(),
+            dtype=self._dtype,
+        )
+
+
 class FieldsMetadata(Node):
     metas: Dict[str, FieldMetadata] = {}
+
+
+class FieldsMetadataBuilder:
+    def __init__(self) -> None:
+        self.metas: Dict[str, FieldMetadataBuilder] = {}
+
+    def get_or_create(self, node: Union[FieldAccess, FieldDecl]) -> FieldMetadataBuilder:
+        return self.metas.setdefault(node.name, FieldMetadataBuilder().name(node.name))
+
+    def build(self) -> FieldsMetadata:
+        return FieldsMetadata(metas={k: v.build() for k, v in self.metas.items()})
 
 
 class Computation(LocNode):

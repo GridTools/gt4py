@@ -27,13 +27,7 @@ def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:
     return gtir.CartesianOffset(i=i, j=j, k=k)
 
 
-# TODO(Rico Häuselmann): write unit tests
-
-
 class DefIRToGTIR(IRNodeVisitor):
-    @classmethod
-    def apply(cls, root, **kwargs):
-        return cls().visit(root)
 
     GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER: ClassVar[
         Mapping[IterationOrder, int]
@@ -58,13 +52,17 @@ class DefIRToGTIR(IRNodeVisitor):
         }
     )
 
-    def visit_StencilDefinition(self, node: StencilDefinition):
+    @classmethod
+    def apply(cls, root, **kwargs):
+        return cls().visit(root)
+
+    def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Computation:
         stencils = [self.visit(c) for c in node.computations]
         return gtir.Computation(
             name=node.name, params=[self.visit(f) for f in node.api_fields], stencils=stencils
         )
 
-    def visit_ComputationBlock(self, node: ComputationBlock):
+    def visit_ComputationBlock(self, node: ComputationBlock) -> gtir.Stencil:
         horizontal_loops = [gtir.HorizontalLoop(stmt=s) for s in self.visit(node.body)]
         start, end = self.visit(node.interval)
         vertical_intervals = [
@@ -82,15 +80,15 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
         return [self.visit(s) for s in node.stmts]
 
-    def visit_Assign(self, node: Assign):
+    def visit_Assign(self, node: Assign) -> gtir.AssignStmt:
         assert isinstance(node.target, FieldRef)
         left = self.visit(node.target)
         return gtir.AssignStmt(left=left, right=self.visit(node.value))
 
-    def visit_ScalarLiteral(self, node: ScalarLiteral):
+    def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
         return gtir.Literal(value=str(node.value), dtype=common.DataType(node.data_type.value))
 
-    def visit_BinOpExpr(self, node: BinOpExpr):
+    def visit_BinOpExpr(self, node: BinOpExpr) -> gtir.BinaryOp:
         return gtir.BinaryOp(
             left=self.visit(node.lhs),
             right=self.visit(node.rhs),
