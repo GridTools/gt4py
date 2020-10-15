@@ -18,9 +18,6 @@ class _Accessor:
 """
 
 
-# TODO(Rico Häuselmann): Write unit tests for these
-
-
 class FieldInfoGenerator(TemplatedGenerator):
 
     Computation = FormatTemplate("{fields_metadata}")
