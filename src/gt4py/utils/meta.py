@@ -24,6 +24,7 @@ import copy
 import inspect
 import operator
 import textwrap
+from typing import Union
 
 from .base import shashed_id
 
@@ -244,6 +245,32 @@ class ASTTransformPass(ASTPass):
         return node
 
 
+class FullNameCreator(ast.NodeVisitor):
+    """Return the full name as str from an ast.Attribute or ast.Name"""
+
+    @classmethod
+    def run(cls, node: Union[ast.Attribute, ast.Name]) -> str:
+        instance = cls()
+        instance(node)
+        return ".".join(instance._name_parts)
+
+    def __init__(self):
+        self._name_parts = []
+
+    def __call__(self, node: ast.AST):
+        self.visit(node)
+
+    def visit_Name(self, node: ast.Name):
+        self._name_parts.append(node.id)
+
+    def visit_Attribute(self, node: ast.Attribute):
+        self.visit(node.value)
+        self._name_parts.append(node.attr)
+
+
+get_full_name = FullNameCreator.run
+
+
 class ASTEvaluator(ASTPass):
     AST_OP_TO_OP = {
         # Arithmetic operations
@@ -319,7 +346,7 @@ class ASTEvaluator(ASTPass):
         return condition
 
     def visit_Attribute(self, node: ast.Attribute):
-        return self.context[f"{node.value.id}.{node.attr}"]
+        return self.context[get_full_name(node)]
 
     def visit_Compare(self, node: ast.Compare):
         values = [self.visit(node.left)] + [self.visit(cmp) for cmp in node.comparators]
