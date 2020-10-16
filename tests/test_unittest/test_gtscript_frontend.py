@@ -289,8 +289,8 @@ class TestExternalsWithSubroutines:
 
 
 class TestCompileTimeAssertions:
-    def test_assert(self, id_version):
-        def definition_nomsg(inout_field: gtscript.Field[float]):
+    def test_nomsg(self, id_version):
+        def definition(inout_field: gtscript.Field[float]):
             from __externals__ import EXTERNAL
 
             with computation(PARALLEL), interval(...):
@@ -298,26 +298,34 @@ class TestCompileTimeAssertions:
                 inout_field = inout_field[0, 0, 0] + EXTERNAL
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
-        compile_definition(
-            definition_nomsg, "test_assert_nomsg", module, externals={"EXTERNAL": 0}
-        )
+        compile_definition(definition, "test_assert_nomsg", module, externals={"EXTERNAL": 0})
 
         with pytest.raises(gt_frontend.GTScriptAssertionError, match="Assertion failed"):
-            compile_definition(
-                definition_nomsg, "test_assert_nomsg", module, externals={"EXTERNAL": 1}
-            )
+            compile_definition(definition, "test_assert_nomsg", module, externals={"EXTERNAL": 1})
 
-        def definition_msg(inout_field: gtscript.Field[float]):
+    def test_msg(self, id_version):
+        def definition(inout_field: gtscript.Field[float]):
             from __externals__ import EXTERNAL
 
             with computation(PARALLEL), interval(...):
                 assert __INLINED(EXTERNAL < 1), "An error occurred"
                 inout_field = inout_field[0, 0, 0] + EXTERNAL
 
+        module = f"TestCompileTimeAssertions_test_module_{id_version}"
         with pytest.raises(gt_frontend.GTScriptAssertionError, match="An error occurred"):
-            compile_definition(
-                definition_msg, "test_assert_msg", module, externals={"EXTERNAL": 1}
-            )
+            compile_definition(definition, "test_assert_msg", module, externals={"EXTERNAL": 1})
+
+    def test_runtime_error(self, id_version):
+        def definition(inout_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                assert __INLINED(inout_field[0, 0, 0] < 0), "An error occurred"
+
+        module = f"TestCompileTimeAssertions_test_module_{id_version}"
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Evaluation of compile-time assertion condition failed",
+        ):
+            compile_definition(definition, "test_definition_error", module)
 
 
 class TestImports:
