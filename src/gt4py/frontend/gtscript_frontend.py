@@ -110,9 +110,9 @@ class GTScriptDataTypeError(GTScriptSyntaxError):
 class GTScriptAssertionError(gt_definitions.GTSpecificationError):
     def __init__(self, source, *, loc=None):
         if loc:
-            message = f"Assertion failed at line {loc.line}, col {loc.column}\n{source}"
+            message = f"Assertion failed at line {loc.line}, col {loc.column}:\n{source}"
         else:
-            message = f"Assertion failed\n{source}"
+            message = f"Assertion failed.\n{source}"
         super().__init__(message)
         self.loc = loc
 
@@ -134,7 +134,7 @@ class AssertionChecker(ast.NodeTransformer):
 
     def visit_Assert(self, assert_node: ast.Assert) -> None:
         if assert_node.test.func.id != "__INLINED":
-            raise GTScriptSyntaxError("Run-time assertions are not supported")
+            raise GTScriptSyntaxError("Run-time assertions are not supported.")
         eval_node = assert_node.test.args[0]
 
         condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
@@ -145,7 +145,7 @@ class AssertionChecker(ast.NodeTransformer):
                 raise GTScriptAssertionError(source_lines[loc.line - 1], loc=loc)
         else:
             raise GTScriptSyntaxError(
-                "Evaluation of compile-time assertion condition failed at the preprocessing step"
+                "Evaluation of compile-time assertion condition failed at the preprocessing step."
             )
 
         return None
