@@ -25,10 +25,9 @@ from gt4py.ir.nodes import (
 
 @pytest.fixture
 def defir_to_gtir():
-    return DefIRToGTIR()
+    yield DefIRToGTIR()
 
 
-@pytest.fixture
 def test_stencil_definition(
     defir_to_gtir, ijk_domain  # noqa: F811 [redefinition, reason: fixture]
 ):

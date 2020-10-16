@@ -210,7 +210,7 @@ class Computation(LocNode):
     name: Str
     params: List[FieldDecl]
     stencils: List[Stencil]
-    fields_metadata: FieldsMetadata = FieldsMetadata()
+    fields_metadata: FieldsMetadata
 
     @property
     def param_names(self) -> List:
