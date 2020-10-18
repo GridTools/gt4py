@@ -656,11 +656,11 @@ class GTMCBackend(BaseGTBackend):
 
 class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
     def generate_pre_run(self) -> str:
-        field_names = tuple(
+        field_names = [
             key
             for key in self.args_data["field_info"]
             if self.args_data["field_info"][key] is not None
-        )
+        ]
 
         return "\n".join([f + ".host_to_device()" for f in field_names])
 
