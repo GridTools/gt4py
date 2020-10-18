@@ -320,15 +320,11 @@ class BaseBackend(Backend):
                         dtype=implementation_ir.fields[arg.name].data_type.dtype,
                         boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
                     )
-                else:
-                    data["field_info"][arg.name] = None
             else:
                 if arg.name not in implementation_ir.unreferenced:
                     data["parameter_info"][arg.name] = gt_definitions.ParameterInfo(
                         dtype=implementation_ir.parameters[arg.name].data_type.dtype
                     )
-                else:
-                    data["parameter_info"][arg.name] = None
 
         data["unreferenced"] = implementation_ir.unreferenced
 
