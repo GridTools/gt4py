@@ -245,30 +245,16 @@ class ASTTransformPass(ASTPass):
         return node
 
 
-class FullNameCreator(ast.NodeVisitor):
-    """Return the full name as str from an ast.Attribute or ast.Name"""
-
-    @classmethod
-    def run(cls, node: Union[ast.Attribute, ast.Name]) -> str:
-        instance = cls()
-        instance(node)
-        return ".".join(instance._name_parts)
-
-    def __init__(self):
-        self._name_parts = []
-
-    def __call__(self, node: ast.AST):
-        self.visit(node)
-
-    def visit_Name(self, node: ast.Name):
-        self._name_parts.append(node.id)
-
-    def visit_Attribute(self, node: ast.Attribute):
-        self.visit(node.value)
-        self._name_parts.append(node.attr)
-
-
-get_full_name = FullNameCreator.run
+def get_qualified_name(base_node: Union[ast.Name, ast.Attribute]):
+    node = base_node.body if isinstance(base_node, ast.Expression) else base_node
+    if isinstance(node, ast.Name):
+        return node.id
+    elif isinstance(node, ast.Attribute):
+        return get_qualified_name(node.value) + "." + node.attr
+    else:
+        raise ValueError(
+            f"Expected a node of type Union[ast.Name, ast.Attribute], but got {type(node)}"
+        )
 
 
 class ASTEvaluator(ASTPass):
