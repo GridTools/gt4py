@@ -315,6 +315,15 @@ class TestCompileTimeAssertions:
         with pytest.raises(gt_frontend.GTScriptAssertionError, match="An error occurred"):
             compile_definition(definition, "test_assert_msg", module, externals={"EXTERNAL": 1})
 
+    def test_nested_attribute(self, id_version):
+        def definition(inout_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                assert __INLINED(GLOBAL_VERY_NESTED_CONSTANTS.nested.A > 1), "An error occurred"
+                inout_field = inout_field[0, 0, 0] + GLOBAL_VERY_NESTED_CONSTANTS.nested.A
+
+        module = f"TestCompileTimeAssertions_test_module_{id_version}"
+        compile_definition(definition, "test_assert_nested_attribute", module)
+
     def test_runtime_error(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
             with computation(PARALLEL), interval(...):
