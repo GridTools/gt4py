@@ -85,7 +85,7 @@ def test_stencil(copies_stencil: gtir.Stencil, gtir_to_pnir: GtirToPnir) -> None
     assert isinstance(out[0], pnir.KLoop)
 
 
-def test_vertical_loop(copies_stencil, gtir_to_pnir) -> None:
+def test_vertical_loop(copies_stencil: gtir.Stencil, gtir_to_pnir: GtirToPnir) -> None:
     out = gtir_to_pnir.visit(copies_stencil.vertical_loops[0])
     assert len(out) == 1
     assert isinstance(out[0], pnir.KLoop)
@@ -103,3 +103,11 @@ def test_vertical_interval(copies_stencil: gtir.Stencil, gtir_to_pnir: GtirToPni
     assert out.upper.level == common.LevelMarker.END
     assert len(out.ij_loops) == 2
     assert isinstance(out.ij_loops[0], pnir.IJLoop)
+
+
+def test_horizontal_loop(copies_stencil: gtir.Stencil, gtir_to_pnir: GtirToPnir) -> None:
+    horizontal_loop = copies_stencil.vertical_loops[0].vertical_intervals[0].horizontal_loops[0]
+    out = gtir_to_pnir.visit(horizontal_loop)
+    assert isinstance(out, pnir.IJLoop)
+    assert isinstance(out.body[0], gtir.AssignStmt)
+    assert out.body[0].left.name == "a"
