@@ -831,7 +831,6 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_If(self, node: ast.If) -> list:
-
         self.if_decls_stack.append([])
 
         main_stmts = []
