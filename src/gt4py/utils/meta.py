@@ -332,7 +332,10 @@ class ASTEvaluator(ASTPass):
         return condition
 
     def visit_Attribute(self, node: ast.Attribute):
-        return self.context[get_full_name(node)]
+        qualified_name = get_qualified_name(node)
+        if qualified_name not in self.context:
+            raise ValueError(f"{qualified_name} not found in context")
+        return self.context[qualified_name]
 
     def visit_Compare(self, node: ast.Compare):
         values = [self.visit(node.left)] + [self.visit(cmp) for cmp in node.comparators]
