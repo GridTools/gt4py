@@ -305,7 +305,7 @@ class GPUStorage(Storage):
     def __setitem__(self, key, value):
         if hasattr(value, "__cuda_array_interface__"):
             gpu_view = storage_utils.gpu_view(self)
-            gpu_view[key] = cp.asarray(value.data)
+            gpu_view[key] = value if isinstance(value, cp.ndarray) else cp.asarray(value.data)
             cp.cuda.Device(0).synchronize()
             return value
         else:
