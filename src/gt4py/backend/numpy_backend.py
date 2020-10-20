@@ -290,6 +290,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
             if isinstance(stmt.target, gt_ir.VarRef):
                 self.var_refs_defined.add(stmt.target.name)
+
         else:
             stmt_sources = self.visit(stmt)
             if isinstance(stmt_sources, list):
