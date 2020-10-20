@@ -100,22 +100,12 @@ class Storage(np.ndarray):
     """
     Storage class based on a numpy (CPU) or cupy (GPU) array, taking care of proper memory alignment, with additional
     information that is required by the backends.
-
-
-    Attributes
-    ----------
-    In addition to the attributes inherited, Storages have the following attributes:
-
-    backend: the backend identifier string of the storage
-
-    mask:iterable of booleans. Dimensions where the corresponding entry is `False` are ignored.
     """
 
     __array_subok__ = True
 
     def __new__(cls, shape, dtype, backend, default_origin, mask=None):
-        """ "
-
+        """
         Parameters
         ----------
 
@@ -162,10 +152,16 @@ class Storage(np.ndarray):
 
     @property
     def backend(self):
+        """The backend identifier string of the storage."""
         return self._backend
 
     @property
     def mask(self):
+        """
+        Iterable of booleans.
+
+        Dimensions where the corresponding entry is `False` are ignored.
+        """
         return self._mask
 
     @property
