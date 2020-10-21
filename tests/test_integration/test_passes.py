@@ -16,6 +16,7 @@
 
 from gt4py.gtscript import FORWARD, PARALLEL, Field, computation, function, interval
 from gt4py.stencil_builder import StencilBuilder
+from gt4py.ir import Assign, FieldRef
 
 
 @function
@@ -62,7 +63,40 @@ def test_demote_temporaries_to_variables_pass_forward():
 
 
 def test_reduce_temporary_storages_pass():
+    temp_name: str = "tmp_f"
+    temp_axes: list = ["I", "J"]
+
     builder = StencilBuilder(double_smul_forward)
     iir = builder.implementation_ir
-    assert iir.temporary_fields == ["tmp_f"]
-    assert iir.fields["tmp_f"].axes == ["I", "J"]
+    assert iir.temporary_fields == [temp_name]
+    assert iir.fields["tmp_f"].axes == temp_axes
+
+    assert len(iir.multi_stages) == 1
+    multi_stage = iir.multi_stages[0]
+    assert len(multi_stage.groups) == 2
+
+    target_ref: FieldRef = None
+    value_ref: FieldRef = None
+
+    for i in range(len(multi_stage.groups)):
+        assert len(multi_stage.groups[i].stages) == 1
+        stage = multi_stage.groups[i].stages[0]
+        assert len(stage.apply_blocks) == 1
+        body = stage.apply_blocks[0].body
+        assert len(body.stmts) == 2
+        stmt = body.stmts[1]
+        assert isinstance(stmt, Assign)
+        if target_ref:
+            value_ref = stmt
+        else:
+            target_ref = stmt
+
+    temp_fields: list = [
+        target_ref.target,
+        value_ref.value.rhs.lhs,
+        value_ref.value.rhs.rhs,
+    ]
+
+    for temp_field in temp_fields:
+        assert temp_field.name == temp_name
+        assert list(temp_field.offset.keys()) == temp_axes
