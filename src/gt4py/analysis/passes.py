@@ -36,7 +36,6 @@ from typing import (
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
-from gt4py import utils as gt_utils
 from gt4py.analysis import (
     DomainBlockInfo,
     IJBlockInfo,
@@ -82,34 +81,6 @@ class DataTypeSpecificationError(IRSpecificationError):
         super().__init__(message, loc=loc)
 
 
-def _make_parallel_interval_info(parallel_interval):
-    """Create a list of IntervalInfos from a list of AxisIntervals."""
-    if parallel_interval is None:
-        return None
-    else:
-        return [
-            IntervalInfo(
-                start=(interval.start.level, interval.start.offset),
-                end=(interval.end.level, interval.end.offset),
-            )
-            for interval in parallel_interval
-        ]
-
-
-def _make_parallel_interval_from_info(parallel_interval_info):
-    """Create a list of AxisInterval from list of IntervalInfos."""
-    if parallel_interval_info is None:
-        return None
-    else:
-        return [
-            gt_ir.AxisInterval(
-                start=gt_ir.AxisBound(level=interval_info.start[0], offset=interval_info.start[1]),
-                end=gt_ir.AxisBound(level=interval_info.end[0], offset=interval_info.end[1]),
-            )
-            for interval_info in parallel_interval_info
-        ]
-
-
 class InitInfoPass(TransformPass):
 
     _DEFAULT_OPTIONS = {"redundant_temp_fields": False}
@@ -133,9 +104,7 @@ class InitInfoPass(TransformPass):
 
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
             # Add API symbols first
-            for decl in itertools.chain(
-                node.api_fields, node.parameters, gt_utils.flatten_iter(node.splitters)
-            ):
+            for decl in itertools.chain(node.api_fields, node.parameters):
                 self._add_symbol(decl)
 
             # Build the information tables
@@ -340,10 +309,7 @@ class InitInfoPass(TransformPass):
 
         def visit_ComputationBlock(self, node: gt_ir.ComputationBlock):
             interval = next(iter(self.current_block_info.intervals))
-            parallel_interval = self.current_block_info.parallel_interval
-            interval_block = IntervalBlockInfo(
-                self.data.id_generator.new, interval, parallel_interval
-            )
+            interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
 
             assert node.body.stmts  # non-empty computation
             stmt_infos = [
@@ -370,9 +336,7 @@ class InitInfoPass(TransformPass):
                     self.current_block_info.ij_blocks.append(
                         self._make_ij_block(interval, interval_block)
                     )
-                    interval_block = IntervalBlockInfo(
-                        self.data.id_generator.new, interval, parallel_interval
-                    )
+                    interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
                     group_outputs = set()
 
                 interval_block.stmts.append(stmt_info)
@@ -390,11 +354,7 @@ class InitInfoPass(TransformPass):
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
             for computation, interval in zip(node.computations, self.computation_intervals):
                 self.current_block_info = DomainBlockInfo(
-                    id=self.data.id_generator.new,
-                    iteration_order=computation.iteration_order,
-                    intervals={interval},
-                    parallel_interval=_make_parallel_interval_info(computation.parallel_interval),
-                    ij_blocks=[],
+                    self.data.id_generator.new, computation.iteration_order, {interval}, []
                 )
                 self.visit(computation)
                 self.data.blocks.append(self.current_block_info)
@@ -404,7 +364,6 @@ class InitInfoPass(TransformPass):
                 self.data.id_generator.new,
                 {interval},
                 interval_blocks=[interval_block],
-                parallel_interval=interval_block.parallel_interval,
                 inputs={**interval_block.inputs},
                 outputs=set(interval_block.outputs),
                 compute_extent=self.zero_extent,
@@ -480,7 +439,6 @@ class NormalizeBlocksPass(TransformPass):
             self, interval_block: IntervalBlockInfo, context: Dict[str, Any]
         ) -> None:
             context["interval"] = interval_block.interval
-            context["parallel_interval"] = interval_block.parallel_interval
             for statement in interval_block.stmts:
                 self.visit_StatemenInfo(statement, context)
 
@@ -490,7 +448,6 @@ class NormalizeBlocksPass(TransformPass):
             new_interval_block = IntervalBlockInfo(
                 context["id_generator"].new,
                 context["interval"],
-                context["parallel_interval"],
                 [statement],
                 statement.inputs,
                 statement.outputs,
@@ -498,7 +455,6 @@ class NormalizeBlocksPass(TransformPass):
             new_ij_block = IJBlockInfo(
                 context["id_generator"].new,
                 {context["interval"]},
-                context["parallel_interval"],
                 [new_interval_block],
                 {**new_interval_block.inputs},
                 set(new_interval_block.outputs),
@@ -508,7 +464,6 @@ class NormalizeBlocksPass(TransformPass):
                 context["id_generator"].new,
                 context["iteration_order"],
                 set(new_ij_block.intervals),
-                context["parallel_interval"],
                 [new_ij_block],
                 {**new_ij_block.inputs},
                 set(new_ij_block.outputs),
@@ -671,9 +626,7 @@ class StageMergingWrapper:
             return False
 
         # Check that the two stages have the same compute extent
-        if not (self.compute_extent == candidate.compute_extent) or not (
-            self.parallel_interval == candidate.parallel_interval
-        ):
+        if not (self.compute_extent == candidate.compute_extent):
             return False
 
         # Check that there is not overlap between stage intervals and that
@@ -765,10 +718,6 @@ class StageMergingWrapper:
     @property
     def intervals(self) -> List[IntervalInfo]:
         return self._stage.intervals
-
-    @property
-    def parallel_interval(self) -> List[IntervalInfo]:
-        return self._stage.parallel_interval
 
     @property
     def interval_blocks(self) -> List[IntervalBlockInfo]:
@@ -866,9 +815,7 @@ class ComputeExtentsPass(TransformPass):
                 ij_block.compute_extent = Extent.zeros()
                 for name in ij_block.outputs:
                     ij_block.compute_extent |= access_extents[name]
-                for int_block in filter(
-                    lambda block: block.parallel_interval is None, ij_block.interval_blocks
-                ):
+                for int_block in ij_block.interval_blocks:
                     for name, extent in int_block.inputs.items():
                         extent = Extent(
                             list(extent[:seq_axis]) + [(0, 0)]
@@ -1092,7 +1039,6 @@ class BuildIIRPass(TransformPass):
 
             apply_block = gt_ir.ApplyBlock(
                 interval=self._make_axis_interval(int_block.interval),
-                parallel_interval=_make_parallel_interval_from_info(int_block.parallel_interval),
                 local_symbols=local_symbols,
                 body=gt_ir.BlockStmt(stmts=stmts),
             )
@@ -1319,7 +1265,6 @@ class ReduceTemporaryStoragesPass(TransformPass):
         reducible_fields_collector = self.CollectReducibleFields()
         reduced_fields = reducible_fields_collector(transform_data.implementation_ir)
         self._reduce_fields(transform_data.implementation_ir, reduced_fields)
-
         return transform_data
 
 
