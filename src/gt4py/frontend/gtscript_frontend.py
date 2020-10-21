@@ -541,7 +541,7 @@ class IRMaker(ast.NodeVisitor):
         self.domain = domain or gt_ir.Domain.LatLonGrid()
         self.extra_temp_decls = extra_temp_decls or {}
         self.parsing_context = None
-        self.in_if = False
+        self.if_decls_stack = []
         gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
             "abs": gt_ir.NativeFunction.ABS,
             "min": gt_ir.NativeFunction.MIN,
@@ -899,8 +899,9 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
-    def visit_If(self, node: ast.If) -> gt_ir.If:
-        self.in_if = True
+    def visit_If(self, node: ast.If) -> list:
+        self.if_decls_stack.append([])
+
         main_stmts = []
         for stmt in node.body:
             main_stmts.extend(gt_utils.listify(self.visit(stmt)))
@@ -912,12 +913,20 @@ class IRMaker(ast.NodeVisitor):
                 else_stmts.extend(gt_utils.listify(self.visit(stmt)))
             assert all(isinstance(item, gt_ir.Statement) for item in else_stmts)
 
-        result = gt_ir.If(
-            condition=gt_ir.utils.make_expr(self.visit(node.test)),
-            main_body=gt_ir.BlockStmt(stmts=main_stmts),
-            else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
+        result = []
+        if len(self.if_decls_stack) == 1:
+            result.extend(self.if_decls_stack.pop())
+        elif len(self.if_decls_stack) > 1:
+            self.if_decls_stack[-2].extend(self.if_decls_stack[-1])
+            self.if_decls_stack.pop()
+
+        result.append(
+            gt_ir.If(
+                condition=gt_ir.utils.make_expr(self.visit(node.test)),
+                main_body=gt_ir.BlockStmt(stmts=main_stmts),
+                else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
+            )
         )
-        self.in_if = False
 
         return result
 
@@ -975,13 +984,6 @@ class IRMaker(ast.NodeVisitor):
                     )
             if isinstance(t, ast.Name):
                 if not self._is_known(t.id):
-                    if self.in_if:
-                        raise GTScriptSymbolError(
-                            name=t.id,
-                            message="Temporary field {name} implicitly defined within run-time if-else region.".format(
-                                name=t.id
-                            ),
-                        )
                     field_decl = gt_ir.FieldDecl(
                         name=t.id,
                         data_type=gt_ir.DataType.AUTO,
@@ -989,7 +991,10 @@ class IRMaker(ast.NodeVisitor):
                         # layout_id=t.id,
                         is_api=False,
                     )
-                    result.append(field_decl)
+                    if len(self.if_decls_stack):
+                        self.if_decls_stack[-1].append(field_decl)
+                    else:
+                        result.append(field_decl)
                     self.fields[field_decl.name] = field_decl
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
