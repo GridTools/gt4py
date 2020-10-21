@@ -122,7 +122,7 @@ def test_axis_bound(pnir_to_ast: PnirToAst) -> None:
     assert isinstance(upper_1, ast.BinOp)
     assert upper_1.left.value.id == "_domain_"
     assert upper_1.left.slice.value.n == 2
-    assert upper_1.right.value.n == 1
+    assert upper_1.right.n == 1
     assert isinstance(upper_1.op, ast.Sub)
 
 
@@ -154,3 +154,47 @@ def test_k_loop(pnir_to_ast: PnirToAst) -> None:
     print(astor.code_gen.to_source(k_for))
     assert isinstance(k_for, ast.For)
     assert k_for.target.id == "K"
+
+
+def test_run_function(pnir_to_ast: PnirToAst) -> None:
+    run_function = pnir.RunFunction(
+        field_params=["a", "b", "c"],
+        scalar_params=["d"],
+        k_loops=[
+            pnir.KLoop(
+                lower=gtir.AxisBound.start(),
+                upper=gtir.AxisBound.from_end(3),
+                ij_loops=[
+                    pnir.IJLoop(
+                        body=[
+                            gtir.AssignStmt(
+                                left=gtir.FieldAccess.centered(name="a"),
+                                right=gtir.FieldAccess.centered(name="b"),
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            pnir.KLoop(
+                lower=gtir.AxisBound.from_end(2),
+                upper=gtir.AxisBound.end(),
+                ij_loops=[
+                    pnir.IJLoop(
+                        body=[
+                            gtir.AssignStmt(
+                                left=gtir.FieldAccess.centered(name="b"),
+                                right=gtir.FieldAccess.centered(name="c"),
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )
+    func_def = pnir_to_ast.visit(run_function)
+    assert isinstance(func_def, ast.FunctionDef)
+    assert func_def.name == "run"
+    assert [arg.arg for arg in func_def.args.args] == ["a", "b", "c"]
+    assert [kwarg.arg for kwarg in func_def.args.kwonlyargs] == ["d"]
+    assert isinstance(func_def.body[0], ast.For)
+    assert len(func_def.body) == 2

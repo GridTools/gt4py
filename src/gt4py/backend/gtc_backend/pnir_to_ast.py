@@ -14,6 +14,24 @@ def offset_to_index_item(name: str, offset: int):
     return ast.BinOp(left=ast.Name(id=name.upper()), right=ast.Num(n=abs(offset)), op=ast.Sub())
 
 
+def domain_for(loop_index_name: str, domain_index: int, body: List[ast.AST]):
+    return ast.For(
+        target=ast.Name(id=loop_index_name),
+        iter=ast.Call(
+            func=ast.Name(id="range"),
+            args=[
+                ast.Subscript(
+                    value=ast.Name(id="_domain_"),
+                    slice=ast.Index(value=ast.Num(n=domain_index)),
+                )
+            ],
+            keywords=[],
+        ),
+        orelse=[],
+        body=body,
+    )
+
+
 class PnirToAst(NodeVisitor):
     GTIR_OP_TO_AST_OP = {
         common.BinaryOperator.ADD: ast.Add,
@@ -21,6 +39,33 @@ class PnirToAst(NodeVisitor):
         common.BinaryOperator.MUL: ast.Mult,
         common.BinaryOperator.DIV: ast.Div,
     }
+
+    def visit_RunFunction(self, node: pnir.RunFunction) -> ast.FunctionDef:
+        return ast.FunctionDef(
+            name="run",
+            # arguments = (arg* posonlyargs, arg* args, arg? vararg, arg* kwonlyargs,
+            #     expr* kw_defaults, arg? kwarg, expr* defaults)
+            # arg = (identifier arg, expr? annotation, string? type_comment)
+            #     attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
+            args=ast.arguments(
+                args=[ast.arg(arg=name, annotation=None) for name in node.field_params],
+                vararg=None,
+                kwonlyargs=[ast.arg(arg=name, annotation=None) for name in node.scalar_params],
+                kw_defaults=[],
+                kwarg=None,
+                defaults=[],
+            ),
+            decorator_list=[],
+            returns=None,
+            body=[self.visit(k_loop) for k_loop in node.k_loops],
+        )
+
+    def visit_KLoop(self, node: pnir.KLoop) -> ast.For:
+        return domain_for(
+            loop_index_name="K",
+            domain_index=2,
+            body=[self.visit(stmt) for stmt in node.ij_loops],
+        )
 
     def visit_AxisBound(self, node: gtir.AxisBound) -> Union[ast.Num, ast.Subscript, ast.BinOp]:
         if node.level == common.LevelMarker.START:
@@ -31,33 +76,13 @@ class PnirToAst(NodeVisitor):
         return ast.BinOp(left=subscript, op=ast.Sub(), right=ast.Num(n=node.offset))
 
     def visit_IJLoop(self, node: pnir.IJLoop) -> ast.For:
-        return ast.For(
-            target=ast.Name(id="J"),
-            iter=ast.Call(
-                func=ast.Name(id="range"),
-                args=[
-                    ast.Subscript(
-                        value=ast.Name(id="_domain_"),
-                        slice=ast.Index(value=ast.Num(n=1)),
-                    )
-                ],
-                keywords=[],
-            ),
-            orelse=[],
+        return domain_for(
+            loop_index_name="J",
+            domain_index=1,
             body=[
-                ast.For(
-                    target=ast.Name(id="I"),
-                    iter=ast.Call(
-                        func=ast.Name(id="range"),
-                        args=[
-                            ast.Subscript(
-                                value=ast.Name(id="_domain_"),
-                                slice=ast.Index(value=ast.Num(n=0)),
-                            )
-                        ],
-                        keywords=[],
-                    ),
-                    orelse=[],
+                domain_for(
+                    loop_index_name="I",
+                    domain_index=0,
                     body=[self.visit(stmt) for stmt in node.body],
                 )
             ],
