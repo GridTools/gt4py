@@ -1211,22 +1211,16 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
 
 class ReduceTemporaryStoragesPass(TransformPass):
-    class CollectReducibleFields(gt_ir.IRNodeVisitor):
+    class ReducibleFieldsCollector(gt_ir.IRNodeVisitor):
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.interval: gt_ir.AxisInterval = None
             self.iteration_order: gt_ir.IterationOrder = None
-            self.reduced_fields: Dict[
-                str, Dict[str, Union[gt_ir.Extent, List[gt_ir.FieldRef]]]
-            ] = dict()
-            for temp_field in node.temporary_fields:
-                self.reduced_fields[temp_field] = dict(
-                    interval=None,
-                    nodes=list(),
-                )
+            self.reduced_fields: Dict[str, gt_ir.AxisInterval] = {
+                temp_field: None for temp_field in node.temporary_fields
+            }
             self.visit(node)
-
-            return self.reduced_fields
+            return set(self.reduced_fields.keys())
 
         def visit_MultiStage(self, node: gt_ir.MultiStage) -> None:
             self.iteration_order = node.iteration_order
@@ -1246,25 +1240,45 @@ class ReduceTemporaryStoragesPass(TransformPass):
                     if offsets[-1] != 0:
                         self.reduced_fields.pop(field_name)
                     else:
-                        interval = self.reduced_fields[field_name]["interval"]
+                        interval = self.reduced_fields[field_name]
                         if interval is not None and interval != self.interval:
                             self.reduced_fields.pop(field_name)
                         else:
-                            self.reduced_fields[field_name]["interval"] = self.interval
-                            self.reduced_fields[field_name]["nodes"].append(node)
+                            self.reduced_fields[field_name] = self.interval
 
-    def _reduce_fields(self, iir, reduced_fields):
-        for field_name in reduced_fields:
-            field_decl = iir.fields[field_name]
-            field_decl.axes.pop()
-            for node in reduced_fields[field_name]["nodes"]:
-                new_offset = {axis: node.offset[axis] for axis in field_decl.axes}
-                node.offset = new_offset
+    class StorageReducer(gt_ir.IRNodeMapper):
+        def __init__(self, reduced_fields: Set[str]):
+            self.reduced_fields = reduced_fields
+
+        def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
+            assert isinstance(node, gt_ir.StencilImplementation)
+            return self.visit(node)
+
+        def visit_StencilImplementation(
+            self, path: tuple, node_name: str, node: gt_ir.StencilImplementation
+        ) -> gt_ir.StencilImplementation:
+            self.iir = node
+            for field_name in self.reduced_fields:
+                assert field_name in node.temporary_fields, "Tried to reduce API field to 2D."
+                field_decl = node.fields[field_name]
+                field_decl.axes.pop()
+            return self.generic_visit(path, node_name, node)
+
+        def visit_FieldRef(
+            self, path: tuple, node_name: str, node: gt_ir.FieldRef
+        ) -> Tuple[bool, Union[gt_ir.FieldRef, gt_ir.VarRef]]:
+            if node.name in self.reduced_fields:
+                field_decl = self.iir.fields[node.name]
+                node.offset = {axis: node.offset[axis] for axis in field_decl.axes}
+            return True, node
 
     def apply(self, transform_data: TransformData) -> TransformData:
-        reducible_fields_collector = self.CollectReducibleFields()
+        reducible_fields_collector = self.ReducibleFieldsCollector()
         reduced_fields = reducible_fields_collector(transform_data.implementation_ir)
-        self._reduce_fields(transform_data.implementation_ir, reduced_fields)
+
+        storage_reducer = self.StorageReducer(reduced_fields)
+        transform_data.implementation_ir = storage_reducer(transform_data.implementation_ir)
+
         return transform_data
 
 
