@@ -15,8 +15,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py.gtscript import FORWARD, PARALLEL, Field, computation, function, interval
-from gt4py.stencil_builder import StencilBuilder
 from gt4py.ir import Assign, FieldRef
+from gt4py.stencil_builder import StencilBuilder
 
 
 @function
