@@ -20,6 +20,7 @@ import enum
 import inspect
 import itertools
 import numbers
+import textwrap
 import types
 from typing import List
 
@@ -105,6 +106,50 @@ class GTScriptDataTypeError(GTScriptSyntaxError):
         super().__init__(message, loc=loc)
         self.name = name
         self.data_type = data_type
+
+
+class GTScriptAssertionError(gt_definitions.GTSpecificationError):
+    def __init__(self, source, *, loc=None):
+        if loc:
+            message = f"Assertion failed at line {loc.line}, col {loc.column}:\n{source}"
+        else:
+            message = f"Assertion failed.\n{source}"
+        super().__init__(message)
+        self.loc = loc
+
+
+class AssertionChecker(ast.NodeTransformer):
+    """Check assertions and remove from the AST for further parsing."""
+
+    @classmethod
+    def apply(cls, func_node: ast.FunctionDef, context: dict, source: str):
+        checker = cls(context, source)
+        checker(func_node)
+
+    def __init__(self, context, source):
+        self.context = context
+        self.source = source
+
+    def __call__(self, func_node: ast.FunctionDef):
+        self.visit(func_node)
+
+    def visit_Assert(self, assert_node: ast.Assert) -> None:
+        if assert_node.test.func.id != "__INLINED":
+            raise GTScriptSyntaxError("Run-time assertions are not supported.")
+        eval_node = assert_node.test.args[0]
+
+        condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
+        if condition_value is not NOTHING:
+            if not condition_value:
+                source_lines = textwrap.dedent(self.source).split("\n")
+                loc = gt_ir.Location.from_ast_node(assert_node)
+                raise GTScriptAssertionError(source_lines[loc.line - 1], loc=loc)
+        else:
+            raise GTScriptSyntaxError(
+                "Evaluation of compile-time assertion condition failed at the preprocessing step."
+            )
+
+        return None
 
 
 class ValueInliner(ast.NodeTransformer):
@@ -590,7 +635,7 @@ class IRMaker(ast.NodeVisitor):
         self.extra_temp_decls = extra_temp_decls or {}
         self.splitters = splitters or {}
         self.parsing_context = None
-        self.in_if = False
+        self.if_decls_stack = []
         gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
             "abs": gt_ir.NativeFunction.ABS,
             "min": gt_ir.NativeFunction.MIN,
@@ -956,8 +1001,9 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
-    def visit_If(self, node: ast.If) -> gt_ir.If:
-        self.in_if = True
+    def visit_If(self, node: ast.If) -> list:
+        self.if_decls_stack.append([])
+
         main_stmts = []
         for stmt in node.body:
             main_stmts.extend(gt_utils.listify(self.visit(stmt)))
@@ -969,12 +1015,20 @@ class IRMaker(ast.NodeVisitor):
                 else_stmts.extend(gt_utils.listify(self.visit(stmt)))
             assert all(isinstance(item, gt_ir.Statement) for item in else_stmts)
 
-        result = gt_ir.If(
-            condition=gt_ir.utils.make_expr(self.visit(node.test)),
-            main_body=gt_ir.BlockStmt(stmts=main_stmts),
-            else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
+        result = []
+        if len(self.if_decls_stack) == 1:
+            result.extend(self.if_decls_stack.pop())
+        elif len(self.if_decls_stack) > 1:
+            self.if_decls_stack[-2].extend(self.if_decls_stack[-1])
+            self.if_decls_stack.pop()
+
+        result.append(
+            gt_ir.If(
+                condition=gt_ir.utils.make_expr(self.visit(node.test)),
+                main_body=gt_ir.BlockStmt(stmts=main_stmts),
+                else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
+            )
         )
-        self.in_if = False
 
         return result
 
@@ -1032,13 +1086,6 @@ class IRMaker(ast.NodeVisitor):
                     )
             if isinstance(t, ast.Name):
                 if not self._is_known(t.id):
-                    if self.in_if:
-                        raise GTScriptSymbolError(
-                            name=t.id,
-                            message="Temporary field {name} implicitly defined within run-time if-else region.".format(
-                                name=t.id
-                            ),
-                        )
                     field_decl = gt_ir.FieldDecl(
                         name=t.id,
                         data_type=gt_ir.DataType.AUTO,
@@ -1046,7 +1093,10 @@ class IRMaker(ast.NodeVisitor):
                         # layout_id=t.id,
                         is_api=False,
                     )
-                    result.append(field_decl)
+                    if len(self.if_decls_stack):
+                        self.if_decls_stack[-1].append(field_decl)
+                    else:
+                        result.append(field_decl)
                     self.fields[field_decl.name] = field_decl
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
@@ -1542,6 +1592,8 @@ class GTScriptParser(ast.NodeVisitor):
             self.external_context,
             exhaustive=False,
         )
+        AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
+
         ValueInliner.apply(main_func_node, context=local_context)
 
         # Inline function calls

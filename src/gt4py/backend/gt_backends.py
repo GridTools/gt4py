@@ -247,7 +247,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         return result
 
     def _make_cpp_variable(self, decl: gt_ir.VarDecl) -> str:
-        result = "{t} {name}:".format(t=self.DATA_TYPE_TO_CPP[decl.data_type], name=decl.name)
+        result = "{t} {name};".format(t=self._make_cpp_type(decl.data_type), name=decl.name)
 
         return result
 
@@ -422,16 +422,23 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
     ) -> Tuple[Tuple[Tuple[int, int], Tuple[int, int]], str, str]:
         interval_definition = self.visit(node.interval)
 
+        body_sources = gt_text.TextBlock()
+
         self.declared_symbols = set()
+        for name, var_decl in node.local_symbols.items():
+            assert isinstance(var_decl, gt_ir.VarDecl)
+            body_sources.append(self._make_cpp_variable(var_decl))
+            self.declared_symbols.add(name)
+
         self.apply_block_symbols = {**self.stage_symbols, **node.local_symbols}
-        body_sources = self.visit(node.body)
+        body_sources.extend(self.visit(node.body))
 
         if node.parallel_interval:
             condition = self._parallel_interval_condition(node.parallel_interval)
         else:
             condition = ""
 
-        return interval_definition, condition, body_sources
+        return interval_definition, condition, body_sources.text
 
     def visit_Stage(self, node: gt_ir.Stage) -> Dict[str, Any]:
         # Initialize symbols for the generation of references in this stage

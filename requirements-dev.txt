@@ -4,6 +4,6 @@ isort~=5.1
 pre-commit~=1.18
 setuptools>=40.8.0
 seed-isort-config~=2.1
-sphinx~=2.0
+sphinx~=3.1
 sphinx_rtd_theme~=0.4
 tox~=3.14
