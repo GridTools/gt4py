@@ -1141,7 +1141,7 @@ class FieldRefCollector(gt_ir.IRNodeVisitor):
         self.field_info = self.written_field_info
         self.visit(node.target)
 
-        # Reset field_info to read_field_info
+        # Also used in further visit_FieldRef calls
         self.field_info = self.read_field_info
         self.visit(node.value)
 

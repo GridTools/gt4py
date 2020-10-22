@@ -114,8 +114,9 @@ class IRTransformer:
         data_type_pass = DataTypePass()
         data_type_pass.apply(self.transform_data)
 
-        # turn temporary fields that are only written and read within the same function
-        # into local scalars
+        # turn temporary fields into local scalars if possible. A few scenarios:
+        # - read and written in same stage
+        # - written once and read at [0, 0, 0] 1+ time (possibly in multiple stages)
         demote_local_temporaries_to_variables_pass = DemoteLocalTemporariesToVariablesPass()
         demote_local_temporaries_to_variables_pass.apply(self.transform_data)
 
