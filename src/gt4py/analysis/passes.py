@@ -1114,32 +1114,71 @@ class BuildIIRPass(TransformPass):
         return result
 
 
+class FieldRefCollector(gt_ir.IRNodeVisitor):
+    @classmethod
+    def apply(cls, domain: gt_ir.Domain, node):
+        """Collect (name, access_w_offset) tuples of field accesses in children of node."""
+        collector = cls(domain)
+        return collector(node)
+
+    def __init__(self, domain: gt_ir.Domain):
+        self._domain = domain
+        self.read_field_info: Set[Tuple[str, bool]] = None
+        self.written_field_info: Set[Tuple[str, bool]] = None
+        self._field_info: Set[Tuple[str, bool]] = None
+
+    def __call__(self, node):
+        self.read_field_info = set()
+        self.written_field_info = set()
+        self.visit(node)
+        return self.read_field_info, self.written_field_info
+
+    def visit_Assign(self, node: gt_ir.Assign) -> None:
+        self._field_info = set()
+        self.visit(node.target)
+        self.written_field_info |= self._field_info
+
+        self._field_info = set()
+        self.visit(node.value)
+        self.read_field_info |= self._field_info
+
+    def visit_FieldRef(self, node: gt_ir.FieldRef) -> None:
+        parallel_offset = any(node.offset[ax.name] != 0 for ax in self._domain.parallel_axes)
+        sequential_offset = node.offset[self._domain.sequential_axis.name] != 0
+        self._field_info.add((node.name, parallel_offset, sequential_offset))
+
+
 class DemoteLocalTemporariesToVariablesPass(TransformPass):
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
+
             self.demotables = set(node.temporary_fields)
+            """List of temporary fields to demote"""
             self.seen_symbols: Set[str] = set()
-            self.stage_symbols: Optional[Set[str]] = None
+            """Collects symbols from past stages and multistages"""
+
+            self.domain = node.domain
             self.visit(node)
+
             return self.demotables
 
         def visit_Stage(self, node: gt_ir.Stage) -> None:
             self.stage_symbols = set()
 
-            self.generic_visit(node)
+            read_field_info, written_field_info = FieldRefCollector.apply(self.domain, node)
 
-            for s in self.stage_symbols:
-                if s in self.seen_symbols:
-                    self.demotables.discard(s)
-                self.seen_symbols.add(s)
-            self.stage_symbols = None
+            seen_symbols_stage = set()
+            for name, access_with_offset in read_field_info:
+                if access_with_offset:
+                    self.demotables.discard(name)
 
-        def visit_FieldRef(self, node: gt_ir.FieldRef) -> None:
-            if any(v != 0 for v in node.offset.values()):
-                self.demotables.discard(node.name)
-            assert self.stage_symbols is not None
-            self.stage_symbols.add(node.name)
+            for name, access_with_offset in written_field_info:
+                if name in self.seen_symbols:
+                    self.demotables.discard(name)
+                seen_symbols_stage.add(name)
+
+            self.seen_symbols |= seen_symbols_stage
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
         def __init__(self, demotables):
