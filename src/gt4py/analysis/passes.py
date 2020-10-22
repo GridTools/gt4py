@@ -1175,6 +1175,7 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             for name, access_with_offset in read_field_info:
                 if access_with_offset:
                     self.demotables.discard(name)
+                seen_symbols_stage.add(name)
 
             for name, access_with_offset in written_field_info:
                 if name in self.seen_symbols:
