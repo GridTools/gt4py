@@ -1122,7 +1122,7 @@ class FieldRefCollector(gt_ir.IRNodeVisitor):
         return collector(node)
 
     def __init__(self, domain: gt_ir.Domain):
-        self._domain = domain
+        self.domain = domain
         self.read_field_info: Set[Tuple[str, bool]] = None
         self.written_field_info: Set[Tuple[str, bool]] = None
         self._field_info: Set[Tuple[str, bool]] = None
@@ -1143,9 +1143,8 @@ class FieldRefCollector(gt_ir.IRNodeVisitor):
         self.read_field_info |= self._field_info
 
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> None:
-        parallel_offset = any(node.offset[ax.name] != 0 for ax in self._domain.parallel_axes)
-        sequential_offset = node.offset[self._domain.sequential_axis.name] != 0
-        self._field_info.add((node.name, parallel_offset, sequential_offset))
+        offset = any(node.offset[ax] != 0 for ax in self.domain.axes_names)
+        self._field_info.add((node.name, offset))
 
 
 class DemoteLocalTemporariesToVariablesPass(TransformPass):
