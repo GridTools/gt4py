@@ -1116,7 +1116,7 @@ class BuildIIRPass(TransformPass):
 
 class FieldRefCollector(gt_ir.IRNodeVisitor):
     @classmethod
-    def apply(cls, domain: gt_ir.Domain, node):
+    def apply(cls, domain: gt_ir.Domain, node: gt_ir.Node):
         """Collect (name, access_w_offset) tuples of field accesses in children of node."""
         collector = cls(domain)
         return collector(node)
@@ -1125,26 +1125,30 @@ class FieldRefCollector(gt_ir.IRNodeVisitor):
         self.domain = domain
         self.read_field_info: Set[Tuple[str, bool]] = None
         self.written_field_info: Set[Tuple[str, bool]] = None
-        self._field_info: Set[Tuple[str, bool]] = None
+        self.field_info: Set[Tuple[str, bool]] = None
 
-    def __call__(self, node):
+    def __call__(self, node: gt_ir.Node) -> Tuple[Set[Tuple[str, bool]], Set[Tuple[str, bool]]]:
         self.read_field_info = set()
         self.written_field_info = set()
+
+        # Default: fill read_field_info (e.g. in conditional checks)
+        self.field_info = self.read_field_info
+
         self.visit(node)
         return self.read_field_info, self.written_field_info
 
     def visit_Assign(self, node: gt_ir.Assign) -> None:
-        self._field_info = set()
+        self.field_info = self.written_field_info
         self.visit(node.target)
-        self.written_field_info |= self._field_info
 
-        self._field_info = set()
+        # Reset field_info to read_field_info
+        self.field_info = self.read_field_info
         self.visit(node.value)
-        self.read_field_info |= self._field_info
 
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> None:
         offset = any(node.offset[ax] != 0 for ax in self.domain.axes_names)
-        self._field_info.add((node.name, offset))
+        assert isinstance(self.field_info, set)
+        self.field_info.add((node.name, offset))
 
 
 class DemoteLocalTemporariesToVariablesPass(TransformPass):
