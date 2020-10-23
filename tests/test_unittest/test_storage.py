@@ -906,3 +906,28 @@ def test_sum_gpu():
     )
 
     q1[i1 : i2 + 1, jslice, 0] = cp.sum(q2[i1 : i2 + 1, jslice, :], axis=2)
+
+
+@pytest.mark.requires_gpu
+def test_add_gpu_managed():
+    shape = (5, 5, 5)
+    q1 = gt_store.from_array(
+        cp.zeros(shape),
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+        managed_memory=True,
+    )
+
+    q2 = gt_store.from_array(
+        cp.ones(shape),
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+        managed_memory=True,
+    )
+
+    q3 = q1 + q2
+    q1[:] = q3
