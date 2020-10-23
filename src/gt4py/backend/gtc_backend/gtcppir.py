@@ -111,7 +111,7 @@ class IJCache(Node):
 class GTMultiStage(Node):
     loop_order: common.LoopOrder
     stages: List[GTStage]  # TODO at least one
-    caches: Optional[List[Union[IJCache]]]
+    caches: List[Union[IJCache]]
 
 
 class AccessorRef(Expr):
@@ -144,6 +144,8 @@ class CtrlFlowStmt(Node):
 
 class Computation(Node):
     name: Str
+    # The ParamArg here, doesn't fully work as we need the type for template instantiation.
+    # But maybe the module instantiation code is actually generated from a different IR?
     parameters: List[ParamArg]
     functors: List[GTFunctor]
     ctrl_flow_ast: List[GTComputation]

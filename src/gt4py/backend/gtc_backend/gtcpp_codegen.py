@@ -55,11 +55,17 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     TernaryOp = as_fmt("({cond} ? {true_expr} : {false_expr})")
 
-    Literal = as_mako("${vtype}{${value}}")  # TODO cast
+    Literal = as_mako("static_cast<${vtype}>(${value})")  # TODO cast
 
     def visit_DataType(self, dtype: DataType, **kwargs):
-        if dtype == DataType.FLOAT64:
+        if dtype == DataType.INT64:
+            return "long long"
+        elif dtype == DataType.FLOAT64:
             return "double"
+        elif dtype == DataType.FLOAT32:
+            return "float"
+        else:
+            assert False
 
     VarDecl = as_fmt("{vtype} {name} = {init};")
 
