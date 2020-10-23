@@ -1,11 +1,33 @@
 import ast
-from typing import Iterator
+import pathlib
+from typing import Any, Iterator
 
 import astor
+import black
+import numpy
 import pytest
 
 from gt4py.backend.gtc_backend import common, gtir, pnir
 from gt4py.backend.gtc_backend.pnir_to_ast import PnirToAst
+from gt4py.utils import make_module_from_file
+
+
+def to_snippet(node: ast.AST) -> str:
+    return astor.to_source(node).strip()
+
+
+def to_literal(node: ast.AST) -> Any:
+    return eval(astor.to_source(node).strip("\n()"))
+
+
+def eval_const(node: ast.AST) -> Any:
+    return eval(
+        compile(
+            ast.fix_missing_locations(ast.Interactive(body=[ast.Expr(value=node)])),
+            filename="<none>",
+            mode="single",
+        )
+    )
 
 
 @pytest.fixture
@@ -113,16 +135,16 @@ def test_axis_bound(pnir_to_ast: PnirToAst) -> None:
     assert lower_0.n == 0
     lower_1 = pnir_to_ast.visit(gtir.AxisBound.from_start(1))
     assert isinstance(lower_1, ast.Num)
-    assert lower_1.n == 1
+    assert to_literal(lower_1) == 1
     upper_0 = pnir_to_ast.visit(gtir.AxisBound.end())
     assert isinstance(upper_0, ast.Subscript)
-    assert upper_0.value.id == "_domain_"
-    assert upper_0.slice.value.n == 2
+    assert to_snippet(upper_0.value) == "_domain_"
+    assert to_literal(upper_0.slice.value) == 2
     upper_1 = pnir_to_ast.visit(gtir.AxisBound.from_end(1))
     assert isinstance(upper_1, ast.BinOp)
-    assert upper_1.left.value.id == "_domain_"
-    assert upper_1.left.slice.value.n == 2
-    assert upper_1.right.n == 1
+    assert to_snippet(upper_1.left.value) == "_domain_"
+    assert to_literal(upper_1.left.slice.value) == 2
+    assert to_literal(upper_1.right) == 1
     assert isinstance(upper_1.op, ast.Sub)
 
 
@@ -153,7 +175,7 @@ def test_k_loop(pnir_to_ast: PnirToAst) -> None:
     print(astor.dump_tree(k_for))
     print(astor.code_gen.to_source(k_for))
     assert isinstance(k_for, ast.For)
-    assert k_for.target.id == "K"
+    assert to_snippet(k_for.target) == "K"
 
 
 def test_run_function(pnir_to_ast: PnirToAst) -> None:
@@ -195,6 +217,61 @@ def test_run_function(pnir_to_ast: PnirToAst) -> None:
     assert isinstance(func_def, ast.FunctionDef)
     assert func_def.name == "run"
     assert [arg.arg for arg in func_def.args.args] == ["a", "b", "c"]
-    assert [kwarg.arg for kwarg in func_def.args.kwonlyargs] == ["d"]
-    assert isinstance(func_def.body[0], ast.For)
-    assert len(func_def.body) == 2
+    assert [kwarg.arg for kwarg in func_def.args.kwonlyargs] == ["d", "_domain_"]
+    assert isinstance(func_def.body[1], ast.For)
+    assert len(func_def.body) == 3
+
+
+def test_module(tmp_path: pathlib.Path, pnir_to_ast: PnirToAst) -> None:
+    pnir_module = pnir.Module(
+        run=pnir.RunFunction(
+            field_params=["a", "b", "c"],
+            scalar_params=["d"],
+            k_loops=[
+                pnir.KLoop(
+                    lower=gtir.AxisBound.start(),
+                    upper=gtir.AxisBound.from_end(3),
+                    ij_loops=[
+                        pnir.IJLoop(
+                            body=[
+                                gtir.AssignStmt(
+                                    left=gtir.FieldAccess.centered(name="a"),
+                                    right=gtir.FieldAccess.centered(name="b"),
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+                pnir.KLoop(
+                    lower=gtir.AxisBound.from_end(2),
+                    upper=gtir.AxisBound.end(),
+                    ij_loops=[
+                        pnir.IJLoop(
+                            body=[
+                                gtir.AssignStmt(
+                                    left=gtir.FieldAccess.centered(name="a"),
+                                    right=gtir.FieldAccess.centered(name="c"),
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        )
+    )
+    ast_module = pnir_to_ast.visit(pnir_module)
+    comp_source = black.format_str(astor.to_source(ast_module), mode=black.Mode())
+    print(comp_source)
+    comp_mod_file = tmp_path / "test_pnir_to_ast_computation.py"
+    comp_mod_file.write_text(comp_source)
+    computation = make_module_from_file("computation", file_path=comp_mod_file)
+    assert computation
+    a = numpy.zeros((7, 7, 7))
+    b = numpy.full_like(a, 1)
+    c = numpy.full_like(a, 2)
+    with pytest.raises(TypeError):
+        computation.run(a, b, c)
+    computation.run(a, b, c, d=1.0)
+    assert (a[:, :, :-3] == b[:, :, :-3]).all()
+    assert (a[:, :, -3] == numpy.zeros((7, 7, 1))).all()
+    assert (a[:, :, -2:] == c[:, :, -2:]).all()

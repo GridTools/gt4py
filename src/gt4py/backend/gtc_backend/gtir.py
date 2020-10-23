@@ -167,18 +167,18 @@ class FieldMetadataBuilder:
     def __init__(self) -> None:
         self._name: Optional[str] = None
         self._access: int = AccessKind.READ_WRITE
-        self._dtype: Optional[common.DataType] = None
+        self._dtype: Optional[int] = None
         self.boundary = FieldBoundaryAccumulator()
 
     def name(self, name: str) -> "FieldMetadataBuilder":
         self._name = name
         return self
 
-    def access(self, access: AccessKind) -> "FieldMetadataBuilder":
+    def access(self, access: int) -> "FieldMetadataBuilder":
         self._access = access
         return self
 
-    def dtype(self, dtype: common.DataType) -> "FieldMetadataBuilder":
+    def dtype(self, dtype: int) -> "FieldMetadataBuilder":
         self._dtype = dtype
         return self
 
@@ -210,7 +210,7 @@ class Computation(LocNode):
     name: Str
     params: List[FieldDecl]
     stencils: List[Stencil]
-    fields_metadata: FieldsMetadata
+    fields_metadata: Optional[FieldsMetadata]
 
     @property
     def param_names(self) -> List:

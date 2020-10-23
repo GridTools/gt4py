@@ -1,7 +1,9 @@
 import ast
 import copy
 from collections import OrderedDict
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, cast
+
+from . import gtir
 
 
 BOUNDARY_TYPE = Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]
@@ -17,12 +19,27 @@ self._call_run(
     exec_info=exec_info,
 )"""
 
+ACCESSOR_TPL = """
+class _Accessor:
+    def __init__(self, array, origin):
+        self.array = array
+        self.origin = origin
+
+    def _shift(self, index):
+        return tuple(i + offset for i, offset in zip(index, self.origin))
+
+    def __getitem__(self, index):
+        return self.array[self._shift(index)]
+
+    def __setitem__(self, index, value):
+        self.array[self._shift(index)] = value"""
+
 
 def parse_snippet(snippet: str) -> List[ast.AST]:
     tree = ast.parse(snippet)
-    # return multiline
+    # if multiline just return all
     if len(tree.body) > 1:
-        return tree.body
+        return cast(List[ast.AST], tree.body)
     # grab the top level item if there is only one
     top = tree.body[0]
     # expressions get wrapped, return the content
@@ -54,12 +71,13 @@ class ImportBuilder:
 
     def import_(self, *args: str) -> "ImportBuilder":
         if self._asname is not None and len(args) > 1:
-            raise ArgumentError("can not import multiple names 'as'")
+            raise ValueError("can not import multiple names 'as'")
         self._name = args
+        return self
 
     def as_(self, asname: str) -> "ImportBuilder":
         if len(self._name) > 1:
-            raise ArgumentError("can not import multiple names 'as'")
+            raise ValueError("can not import multiple names 'as'")
         self._asname = asname
         return self
 
@@ -76,20 +94,19 @@ class ImportBuilder:
 
 class FieldInfoBuilder:
     def __init__(self):
-        self._access: str = None
+        self._access: gtir.AccessKind = None
         self._boundary: ast.Call = None
         self._dtype: str = None
 
-    def access(self, access_kind: str) -> "FieldInfoBuilder":
+    def access(self, access_kind: gtir.AccessKind) -> "FieldInfoBuilder":
         self._access = access_kind
         return self
 
     def boundary(self, boundary: BOUNDARY_TYPE) -> "FieldInfoBuilder":
-        boundary = [[ast.Num(n=value) for value in values] for values in boundary]
-        boundary = [ast.Tuple(elts=values) for values in boundary]
+        boundary_ast = parse_node(repr(boundary))
         self._boundary = ast.Call(
             func=ast.Name(id="Boundary"),
-            args=[ast.Tuple(elts=boundary)],
+            args=[boundary_ast],
             keywords=[],
         )
         return self
@@ -105,11 +122,15 @@ class FieldInfoBuilder:
             keywords=[
                 ast.keyword(
                     arg="access",
-                    value=ast.Attribute(value=ast.Name(id="AccessKind"), attr=self._access),
+                    value=ast.Attribute(value=ast.Name(id="AccessKind"), attr=self._access.name),
                 ),
                 ast.keyword(
                     arg="boundary",
                     value=self._boundary,
+                ),
+                ast.keyword(
+                    arg="dtype",
+                    value=parse_node(f"np.{self._dtype}"),
                 ),
             ],
         )
@@ -138,7 +159,6 @@ class FunctionDefBuilder:
 
     def kwonly(self, *defaultless: str, **withdefaults: ast.AST) -> "FunctionDefBuilder":
         self._kwonlyargs.extend([ast.arg(arg=name, annotation=None) for name in defaultless])
-        self._kw_defaults.extend([None] * len(defaultless))
         self._kwonlyargs.extend([ast.arg(arg=name, annotation=None) for name in withdefaults])
         self._kw_defaults.extend(withdefaults.values())
         return self
@@ -180,7 +200,7 @@ class StrDictBuilder:
         return self
 
     def build(self) -> ast.Dict:
-        node = parse_node("{}")
+        node = cast(ast.Dict, parse_node("{}"))
         node.keys = self._keys
         node.values = self._values
         return node
@@ -197,7 +217,7 @@ class StencilClassBuilder:
         self._run_body: List[ast.AST] = []
         self._field_names: List[str] = []
         self._parameter_names: List[str] = []
-        self._class_attrs: Mapping[str, Optional[ast.AST]] = OrderedDict(
+        self._class_attrs: OrderedDict[str, ast.AST] = OrderedDict(
             [
                 ("backend", None),
                 ("source", None),
@@ -217,13 +237,24 @@ class StencilClassBuilder:
         self._field_names.extend(names)
         return self
 
+    def parameter_names(self, *names: str) -> "StencilClassBuilder":
+        self._parameter_names = list(names)
+        return self
+
     @property
     def signature(self) -> List[str]:
         return self._field_names + self._parameter_names
 
     @property
-    def signature_args(self) -> List[str]:
+    def signature_args(self) -> List[ast.arg]:
         return [ast.arg(arg=name, annotation=None) for name in self.signature]
+
+    @property
+    def accessors(self) -> List[ast.Assign]:
+        return [
+            cast(ast.Assign, parse_node(f"{name}_at = _Accessor({name}, _origin_['{name}'])"))
+            for name in self._field_names
+        ]
 
     def add_run_line(self, node: ast.AST) -> "StencilClassBuilder":
         self._run_body.append(node)
@@ -238,8 +269,10 @@ class StencilClassBuilder:
         return self
 
     def add_gt_field_info(self, *, name: str, field_info: ast.Call) -> "StencilClassBuilder":
-        self._class_attrs["field_info"].keys.append(ast.Str(s=name))
-        self._class_attrs["field_info"].values.append(field_info)
+        field_info_dict = cast(ast.Dict, self._class_attrs["field_info"])
+        field_info_dict.keys.append(ast.Str(s=name))
+        field_info_dict.values.append(field_info)
+        return self
 
     @property
     def class_attrs(self) -> List[ast.Assign]:
@@ -288,19 +321,23 @@ class StencilClassBuilder:
         )
 
     def build_run_def(self) -> ast.FunctionDef:
-        funcdef = parse_node(
-            "\n".join(
-                [
-                    "def run(self, _domain_, _origin_, exec_info, *, placeholder):",
-                    "    if exec_info is not None:",
-                    "        exec_info['domain'] = _domain_",
-                    "        exec_info['origin'] = _origin_",
-                    "        exec_info['run_start_time'] = time.perf_counter()",
-                ]
-            )
+        funcdef = cast(
+            ast.FunctionDef,
+            parse_node(
+                "\n".join(
+                    [
+                        "def run(self, _domain_, _origin_, exec_info, *, placeholder):",
+                        "    if exec_info is not None:",
+                        "        exec_info['domain'] = _domain_",
+                        "        exec_info['origin'] = _origin_",
+                        "        exec_info['run_start_time'] = time.perf_counter()",
+                    ]
+                )
+            ),
         )
         funcdef.args.kwonlyargs = self.signature_args
-        funcdef.args.kw_defaults = [None] * len(self.signature)
+        funcdef.args.kw_defaults = []
+        funcdef.body = [cast(ast.stmt, node) for node in [*self.accessors, *self._run_body]]
         return funcdef
 
     def build_properties(self) -> List[ast.FunctionDef]:
@@ -308,7 +345,10 @@ class StencilClassBuilder:
             none_keys = [key for key, value in self._class_attrs.items() if value is None]
             raise ValueError(f"Missing stencil class attributes: {none_keys}")
         return [
-            parse_node(f"@property\ndef {name}(self):\n    return self._gt_{name}_")
+            cast(
+                ast.FunctionDef,
+                parse_node(f"@property\ndef {name}(self):\n    return self._gt_{name}_"),
+            )
             for name in self._class_attrs
         ]
 
@@ -348,7 +388,7 @@ class StencilModuleBuilder:
         self._name = self.DEFAULT_NAME
         self._stencil_class = StencilClassBuilder()
 
-    def stencil_class(self, builder: StencilClassBuilder) -> "StencilClassBuilder":
+    def stencil_class(self, builder: StencilClassBuilder) -> "StencilModuleBuilder":
         self._stencil_class = builder
         return self
 
@@ -361,4 +401,8 @@ class StencilModuleBuilder:
         return self
 
     def build(self) -> ast.Module:
-        return ast.Module(body=self._imports + [self._stencil_class.name(self._name).build()])
+        return ast.Module(
+            body=self._imports
+            + [parse_node(ACCESSOR_TPL)]
+            + [self._stencil_class.name(self._name).build()]
+        )

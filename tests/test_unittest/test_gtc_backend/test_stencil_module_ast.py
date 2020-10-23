@@ -5,7 +5,9 @@ import black
 import numpy
 import pytest
 
+from gt4py.backend.gtc_backend import gtir
 from gt4py.backend.gtc_backend.stencil_module_builder import (
+    FieldInfoBuilder,
     StencilClassBuilder,
     StencilModuleBuilder,
     parse_node,
@@ -41,7 +43,28 @@ def test_stencil_module(tmp_path):
         StencilModuleBuilder()
         .name("test_stencil")
         .stencil_class(
-            StencilClassBuilder().backend("test_backend").source("pass").field_names("a", "b")
+            StencilClassBuilder()
+            .backend("gtc:py")
+            .source("pass")
+            .field_names("a", "b")
+            .add_gt_field_info(
+                name="a",
+                field_info=FieldInfoBuilder()
+                .access(gtir.AccessKind.READ_WRITE)
+                .boundary(((0, 0), (0, 0), (0, 0)))
+                .dtype("float64")
+                .build(),
+            )
+            .add_gt_field_info(
+                name="b",
+                field_info=FieldInfoBuilder()
+                .access(gtir.AccessKind.READ_WRITE)
+                .boundary(((0, 0), (0, 0), (0, 0)))
+                .dtype("float64")
+                .build(),
+            )
+            .add_run_line(parse_node("a_at[0, 1, 0] = b_at[0, 0, 0]"))
+            .add_run_line(parse_node("a_at[0, 0, 1] = -b_at[0, 0, 1]"))
         )
         .build()
     )
@@ -52,4 +75,9 @@ def test_stencil_module(tmp_path):
     module = make_module_from_file("test_stencil_module", module_file)
     stencil = module.test_stencil()
     assert isinstance(stencil, StencilObject)
-    stencil(numpy.array([[[1, 2]]]), numpy.array([[[0, 0]]]))
+    a = numpy.zeros(shape=(2, 2, 2), dtype=numpy.float64)
+    b = numpy.ones(shape=(2, 2, 2), dtype=numpy.float64)
+    stencil(a, b, origin=(0, 0, 0))
+    assert a[0, 0, 0] == 0
+    assert a[0, 1, 0] == 1
+    assert a[0, 0, 1] == -1
