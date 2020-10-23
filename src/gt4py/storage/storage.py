@@ -156,10 +156,6 @@ class Storage(np.ndarray):
         return self._backend
 
     @property
-    def data(self):
-        return super().data
-
-    @property
     def mask(self):
         """
         Iterable of booleans.
@@ -296,7 +292,7 @@ class GPUStorage(Storage):
 
     @property
     def data(self):
-        return cp.asarray(super().data)
+        return cp.asarray(self)
 
     def __setitem__(self, key, value):
         if hasattr(value, "__cuda_array_interface__"):
