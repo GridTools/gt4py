@@ -22,7 +22,7 @@ import itertools
 import numbers
 import textwrap
 import types
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 
@@ -550,7 +550,7 @@ class RegionExtractor(ast.NodeVisitor):
                 gt_ir.AxisInterval(start=lower, end=upper, loc=gt_ir.Location.from_ast_node(node))
             )
 
-        return parallel_interval
+        return tuple(parallel_interval)
 
     def visit_Call(self, node: ast.Call) -> list:
         """Top-level call for the RegionExtractor."""
