@@ -82,6 +82,15 @@ class DataTypeSpecificationError(IRSpecificationError):
 
 
 class InitInfoPass(TransformPass):
+    """Transliterate Definition IR structure into blocks.
+
+    Outputs
+    -------
+    transform_data.symbols
+        SymbolInfo for each used symbol.
+    transform_data.blocks
+        Block structure following the original Definition IR.
+    """
 
     _DEFAULT_OPTIONS = {"redundant_temp_fields": False}
 
@@ -422,6 +431,13 @@ class InitInfoPass(TransformPass):
 
 
 class NormalizeBlocksPass(TransformPass):
+    """Create a DomainBlockInfo for each StatementInfo.
+
+    Outputs
+    -------
+    transform_data.blocks
+        DomainBlockInfo each contain only a single StatementInfo.
+    """
 
     _DEFAULT_OPTIONS = {}
 
@@ -482,9 +498,6 @@ class NormalizeBlocksPass(TransformPass):
                 set(new_ij_block.outputs),
             )
             self._split_blocks.append(new_block)
-
-    def __init__(self):
-        pass
 
     @property
     def defaults(self):
