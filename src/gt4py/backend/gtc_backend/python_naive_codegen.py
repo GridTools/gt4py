@@ -1,51 +1,58 @@
-from eve import codegen
-from mako import template as mako_tpl
-import jinja2
+from eve.codegen import FormatTemplate, JinjaTemplate, MakoTemplate, TemplatedGenerator
 
 
-class PythonNaiveCodegen(codegen.TemplatedGenerator):
+class PythonNaiveCodegen(TemplatedGenerator):
 
-    Computation_template = mako_tpl.Template(
+    Computation = JinjaTemplate(
         """
-${ '\\n'.join(params) }
-${ '\\n'.join(stencils) }
-""")
+def default_domain(*args):
+    lengths = zip(*(i.shape for i in args))
+    return tuple(max(*length) for length in lengths)
 
-    # TODO might not be the right solutions as FieldDecl might be used in different context
-    FieldDecl_template = "{name}_at = _Accessor({name}, _origin_['{name}'])"
 
-    Stencil_template = jinja2.Template(
-        """{{'\\n'.join(vertical_loops)}}"""
+def run({{', '.join(_this_node.param_names)}}, _domain_=None):
+    if _domain_ is None:
+        _domain_ = default_domain({{', '.join(_this_node.param_names)}})\
+{{ '\\n'.join(stencils) | indent(4)}}
+"""
     )
 
-    VerticalLoop_template = mako_tpl.Template("""
-${ '\\n'.join(vertical_intervals) }""")
+    Stencil = JinjaTemplate("""{{'\\n'.join(vertical_loops)}}""")
 
-    VerticalInterval_template = jinja2.Template("""
-for K in range(0, _domain_[2]):
-    {{'\\n'.join(horizontal_loops)|indent(4)}}""")
+    VerticalLoop = MakoTemplate(
+        """
+${ '\\n'.join(vertical_intervals) }"""
+    )
 
-    # AxisBound_template = mako_tpl.Template(
-    #     "<%! from gt4py.backend.gtc_backend.common import LevelMarker %>\\\n"
-    #     "% if _this_node.level == LevelMarker.START:\n"
-    #     "${ offset }\\\n"
-    #     "% elif _this_node.level == LevelMarker.END:\n"
-    #     "${ _this_node.offset and -_this_node.offset or None }\\\n"
-    #     "% endif"
-    # )
+    VerticalInterval = JinjaTemplate(
+        """
+for K in range({{start}}, {{end}}):\
+    {{'\\n'.join(horizontal_loops)|indent(4)}}"""
+    )
 
-    HorizontalLoop_template = jinja2.Template(
+    HorizontalLoop = JinjaTemplate(
         """
 for I in range(_domain_[0]):
     for J in range(_domain_[1]):
-        {{stmt|indent(8)}}""")
+        {{stmt|indent(8)}}"""
+    )
 
-    AssignStmt_template = "{left} = {right}"
+    AssignStmt = FormatTemplate("{left} = {right}")
 
-    FieldAccess_template = "{name}_at[{offset}]"
+    FieldAccess = FormatTemplate("{name}[{offset}]")
 
-    CartesianOffset_template = "I + {i}, J + {j}, K + {k}"
+    CartesianOffset = FormatTemplate("I + {i}, J + {j}, K + {k}")
 
-    BinaryOp_template = "{left} {op} {right}"
+    BinaryOp = FormatTemplate("{left} {op} {right}")
 
-    Literal_template = "{value}"
+    Literal = FormatTemplate("{value}")
+
+    AxisBound = JinjaTemplate(
+        """\
+{% if _this_node.level.name == 'END' %}\
+_domain_[2]{{' - ' + offset if _this_node.offset > 0 else ''}}\
+{% else %}\
+{{offset}}\
+{% endif %}\
+"""
+    )

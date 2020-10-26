@@ -100,7 +100,11 @@ repos:
           tests/test_unittest/test_call_interface.py |
           tests/test_unittest/test_gtscript_frontend.py |
           tests/test_unittest/test_storage.py |
+          tests/test_unittest/test_gtc_backend/test_stencil_object_snippet_generators.py |
+          tests/test_unittest/test_gtc_backend/test_pnir_to_ast.py |
           tests/definition_setup.py |
+          examples/demo_copy.py |
+          examples/demo_lap.py |
           )$
 
 -   repo: https://github.com/pre-commit/pre-commit-hooks
