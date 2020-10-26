@@ -22,7 +22,7 @@ import itertools
 import numbers
 import textwrap
 import types
-from typing import List
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -430,7 +430,7 @@ class CallInliner(ast.NodeTransformer):
     def visit_Expr(self, node: ast.Expr):
         """ignore pure string statements in callee"""
         if not isinstance(node.value, ast.Str):
-            return super().visit_Expr(node)
+            return super().visit(node)
 
 
 class CompiledIfInliner(ast.NodeTransformer):
@@ -468,27 +468,27 @@ class CompiledIfInliner(ast.NodeTransformer):
 
 class RegionExtractor(ast.NodeVisitor):
     @classmethod
-    def apply(cls, node, splitters):
+    def apply(cls, node, splitters) -> Tuple[Tuple[gt_ir.AxisInterval, gt_ir.AxisInterval]]:
         assert isinstance(node, ast.Call)
         return cls(splitters).visit(node)
 
     def __init__(self, splitters):
         self.splitters = splitters
 
-    def visit_Name(self, node: ast.Name):
+    def visit_Name(self, node: ast.Name) -> Tuple[None, int]:
         if node.id not in self.splitters:
             raise GTScriptSyntaxError(
                 f"{node.id} is not a defined splitter", loc=gt_ir.Location.from_ast_node(node)
             )
         return (gt_ir.VarRef(name=node.id), 0)
 
-    def visit_Constant(self, node: ast.Constant):
+    def visit_Constant(self, node: ast.Constant) -> Tuple[None, int]:
         return (None, int(node.value))
 
-    def visit_Num(self, node: ast.Num):
+    def visit_Num(self, node: ast.Num) -> Tuple[None, int]:
         return (None, int(node.n))
 
-    def visit_BinOp(self, node: ast.BinOp):
+    def visit_BinOp(self, node: ast.BinOp) -> Tuple[Optional[gt_ir.VarRef], int]:
         left_level, left_offset = self.visit(node.left)
         right_level, right_offset = self.visit(node.right)
 
@@ -509,7 +509,9 @@ class RegionExtractor(ast.NodeVisitor):
 
         return (level, offset)
 
-    def visit_Subscript(self, node: ast.Subscript):
+    def visit_Subscript(
+        self, node: ast.Subscript
+    ) -> Tuple[gt_ir.AxisInterval, gt_ir.AxisInterval]:
         # There is some variability with different versions of Python in what node.slice holds
         if isinstance(node.slice, ast.ExtSlice):
             slices = node.slice.dims
@@ -550,9 +552,9 @@ class RegionExtractor(ast.NodeVisitor):
                 gt_ir.AxisInterval(start=lower, end=upper, loc=gt_ir.Location.from_ast_node(node))
             )
 
-        return parallel_interval
+        return tuple(parallel_interval)
 
-    def visit_Call(self, node: ast.Call) -> list:
+    def visit_Call(self, node: ast.Call) -> List[Tuple[gt_ir.AxisInterval, gt_ir.AxisInterval]]:
         """Top-level call for the RegionExtractor."""
         return [self.visit(arg) for arg in node.args]
 

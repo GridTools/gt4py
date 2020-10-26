@@ -370,8 +370,10 @@ class InitInfoPass(TransformPass):
                     self.current_block_info.ij_blocks.append(
                         self._make_ij_block(interval, interval_block)
                     )
+                    # Cannot access an output field in a parallel region with offset in that same region
+                    assert interval_block.parallel_interval is None
                     interval_block = IntervalBlockInfo(
-                        self.data.id_generator.new, interval, parallel_interval
+                        self.data.id_generator.new, interval, interval_block.parallel_interval
                     )
                     group_outputs = set()
 
