@@ -499,6 +499,9 @@ class NormalizeBlocksPass(TransformPass):
             )
             self._split_blocks.append(new_block)
 
+    def __init__(self):
+        pass
+
     @property
     def defaults(self):
         return self._DEFAULT_OPTIONS
