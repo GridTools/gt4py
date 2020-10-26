@@ -87,13 +87,13 @@ def _make_parallel_interval_info(parallel_interval):
     if parallel_interval is None:
         return None
     else:
-        return [
+        return tuple(
             IntervalInfo(
                 start=(interval.start.level, interval.start.offset),
                 end=(interval.end.level, interval.end.offset),
             )
             for interval in parallel_interval
-        ]
+        )
 
 
 def _make_parallel_interval_from_info(parallel_interval_info):
@@ -101,13 +101,13 @@ def _make_parallel_interval_from_info(parallel_interval_info):
     if parallel_interval_info is None:
         return None
     else:
-        return [
+        return tuple(
             gt_ir.AxisInterval(
                 start=gt_ir.AxisBound(level=interval_info.start[0], offset=interval_info.start[1]),
                 end=gt_ir.AxisBound(level=interval_info.end[0], offset=interval_info.end[1]),
             )
             for interval_info in parallel_interval_info
-        ]
+        )
 
 
 class InitInfoPass(TransformPass):
@@ -340,9 +340,8 @@ class InitInfoPass(TransformPass):
 
         def visit_ComputationBlock(self, node: gt_ir.ComputationBlock):
             interval = next(iter(self.current_block_info.intervals))
-            parallel_interval = self.current_block_info.parallel_interval
             interval_block = IntervalBlockInfo(
-                self.data.id_generator.new, interval, parallel_interval
+                self.data.id_generator.new, interval, self.parallel_interval
             )
 
             assert node.body.stmts  # non-empty computation
@@ -395,8 +394,10 @@ class InitInfoPass(TransformPass):
                     id=self.data.id_generator.new,
                     iteration_order=computation.iteration_order,
                     intervals={interval},
-                    parallel_interval=_make_parallel_interval_info(computation.parallel_interval),
                     ij_blocks=[],
+                )
+                self.parallel_interval = _make_parallel_interval_info(
+                    computation.parallel_interval
                 )
                 self.visit(computation)
                 self.data.blocks.append(self.current_block_info)
@@ -406,7 +407,6 @@ class InitInfoPass(TransformPass):
                 self.data.id_generator.new,
                 {interval},
                 interval_blocks=[interval_block],
-                parallel_interval=interval_block.parallel_interval,
                 inputs={**interval_block.inputs},
                 outputs=set(interval_block.outputs),
                 compute_extent=self.zero_extent,
@@ -500,7 +500,6 @@ class NormalizeBlocksPass(TransformPass):
             new_ij_block = IJBlockInfo(
                 context["id_generator"].new,
                 {context["interval"]},
-                context["parallel_interval"],
                 [new_interval_block],
                 {**new_interval_block.inputs},
                 set(new_interval_block.outputs),
@@ -510,7 +509,6 @@ class NormalizeBlocksPass(TransformPass):
                 context["id_generator"].new,
                 context["iteration_order"],
                 set(new_ij_block.intervals),
-                context["parallel_interval"],
                 [new_ij_block],
                 {**new_ij_block.inputs},
                 set(new_ij_block.outputs),
@@ -673,9 +671,7 @@ class StageMergingWrapper:
             return False
 
         # Check that the two stages have the same compute extent
-        if not (self.compute_extent == candidate.compute_extent) or not (
-            self.parallel_interval == candidate.parallel_interval
-        ):
+        if not (self.compute_extent == candidate.compute_extent):
             return False
 
         # Check that there is not overlap between stage intervals and that
@@ -700,12 +696,11 @@ class StageMergingWrapper:
                 self._stage.inputs[name] = extent
 
     def _merge_interval_blocks_with(self, candidate: IJBlockInfo) -> None:
-        i_to_ib_map = self.interval_to_iblock_mapping
+        is_to_ib_map = self.intervals_to_iblock_mapping
         for candidate_iblock in candidate.interval_blocks:
-            if candidate_iblock.interval in i_to_ib_map:
-                self._merge_interval_block(
-                    i_to_ib_map[candidate_iblock.interval], candidate_iblock
-                )
+            key = (candidate_iblock.interval, candidate_iblock.parallel_interval)
+            if key in is_to_ib_map:
+                self._merge_interval_block(is_to_ib_map[key], candidate_iblock)
             else:
                 self._stage.interval_blocks.append(candidate_iblock)
 
@@ -769,16 +764,16 @@ class StageMergingWrapper:
         return self._stage.intervals
 
     @property
-    def parallel_interval(self) -> List[IntervalInfo]:
-        return self._stage.parallel_interval
-
-    @property
     def interval_blocks(self) -> List[IntervalBlockInfo]:
         return self._stage.interval_blocks
 
     @property
-    def interval_to_iblock_mapping(self) -> Dict[IntervalInfo, IntervalBlockInfo]:
-        return {iblock.interval: iblock for iblock in self.interval_blocks}
+    def intervals_to_iblock_mapping(
+        self,
+    ) -> Dict[Tuple[IntervalInfo, List[IntervalBlockInfo]], IntervalBlockInfo]:
+        return {
+            (iblock.interval, iblock.parallel_interval): iblock for iblock in self.interval_blocks
+        }
 
     @property
     def inputs(self) -> Dict[str, Extent]:
@@ -868,9 +863,10 @@ class ComputeExtentsPass(TransformPass):
                 ij_block.compute_extent = Extent.zeros()
                 for name in ij_block.outputs:
                     ij_block.compute_extent |= access_extents[name]
-                for int_block in filter(
-                    lambda block: block.parallel_interval is None, ij_block.interval_blocks
-                ):
+                for int_block in ij_block.interval_blocks:
+                    # for int_block in filter(
+                    #     lambda block: block.parallel_interval is None, ij_block.interval_blocks
+                    # ):
                     for name, extent in int_block.inputs.items():
                         extent = Extent(
                             list(extent[:seq_axis]) + [(0, 0)]

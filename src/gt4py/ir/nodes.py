@@ -127,7 +127,7 @@ storing a reference to the piece of source code which originated the node.
     ComputationBlock(interval: AxisInterval,
                      order: IterationOrder,
                      body: BlockStmt,
-                     [parallel_interval: List[AxisInterval]])
+                     [parallel_interval: Tuple[AxisInterval]])
 
     ArgumentInfo(name: str, is_keyword: bool, [default: Any])
 
@@ -152,7 +152,7 @@ Implementation IR
     ApplyBlock(interval: AxisInterval,
                local_symbols: Dict[str, VarDecl],
                body: BlockStmt,
-               [parallel_interval: List[AxisInterval]])
+               [parallel_interval: Tuple[AxisInterval]])
 
     Stage(name: str,
           accessors: List[Accessor],
@@ -389,7 +389,7 @@ class Ref(Expr):
     pass
 
 
-@attribclass
+@attribclass(eq=False)
 class VarRef(Ref):
     name = attribute(of=str)
     index = attribute(of=int, optional=True)
@@ -722,7 +722,7 @@ class ComputationBlock(Node):
     interval = attribute(of=AxisInterval)
     iteration_order = attribute(of=IterationOrder)
     body = attribute(of=BlockStmt)
-    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
+    parallel_interval = attribute(of=TupleOf[AxisInterval, AxisInterval], optional=True)
     loc = attribute(of=Location, optional=True)
 
 
@@ -774,7 +774,7 @@ class ApplyBlock(Node):
     interval = attribute(of=AxisInterval)
     local_symbols = attribute(of=DictOf[str, VarDecl])
     body = attribute(of=BlockStmt)
-    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
+    parallel_interval = attribute(of=TupleOf[AxisInterval, AxisInterval], optional=True)
 
 
 @attribclass
