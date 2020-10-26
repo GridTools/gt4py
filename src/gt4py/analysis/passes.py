@@ -85,10 +85,119 @@ class InitInfoPass(TransformPass):
 
     _DEFAULT_OPTIONS = {"redundant_temp_fields": False}
 
+    def make_k_intervals(self, transform_data: TransformData) -> List[IntervalInfo]:
+        """Determines intervals over which the computation runs."""
+        node: gt_ir.StencilDefinition = transform_data.definition_ir
+        transform_data.splitters_var: Optional[str] = None
+        transform_data.min_k_interval_sizes: List[int] = [0]
+
+        # First, look for dynamic splitters variable
+        for computation in node.computations:
+            interval_def = computation.interval
+            for axis_bound in [interval_def.start, interval_def.end]:
+                if isinstance(axis_bound.level, gt_ir.VarRef):
+                    name = axis_bound.level.name
+                    for item in node.parameters:
+                        if item.name == name:
+                            decl = item
+                            break
+                    else:
+                        decl = None
+
+                    if decl is None or decl.length == 0:
+                        raise IntervalSpecificationError(
+                            interval_def,
+                            "Invalid variable reference in interval specification",
+                            loc=axis_bound.loc,
+                        )
+
+                    transform_data.splitters_var = decl.name
+                    transform_data.min_k_interval_sizes = [1] * (decl.length + 1)
+
+        # Extract computation intervals
+        computation_intervals = []
+        for computation in node.computations:
+            # Process current interval definition
+            interval_def = computation.interval
+            bounds = [None, None]
+
+            for i, axis_bound in enumerate([interval_def.start, interval_def.end]):
+                if isinstance(axis_bound.level, gt_ir.VarRef):
+                    # Dynamic splitters: check existing reference and extract size info
+                    if axis_bound.level.name != transform_data.splitters_var:
+                        raise IntervalSpecificationError(
+                            interval_def,
+                            "Non matching variable reference in interval specification",
+                            loc=axis_bound.loc,
+                        )
+
+                    index = axis_bound.level.index + 1
+                    offset = axis_bound.offset
+                    if offset < 0:
+                        index = index - 1
+
+                else:
+                    # Static splitter: extract size info
+                    index = (
+                        transform_data.nk_intervals
+                        if axis_bound.offset < 0 or axis_bound.level == gt_ir.LevelMarker.END
+                        else 0
+                    )
+                    offset = axis_bound.offset
+
+                    if offset < 0 and axis_bound.level != gt_ir.LevelMarker.END:
+                        raise IntervalSpecificationError(
+                            interval_def,
+                            "Invalid offset in interval specification",
+                            loc=axis_bound.loc,
+                        )
+
+                    elif offset > 0 and axis_bound.level != gt_ir.LevelMarker.START:
+                        raise IntervalSpecificationError(
+                            interval_def,
+                            "Invalid offset in interval specification",
+                            loc=axis_bound.loc,
+                        )
+
+                # Update min sizes
+                if not 0 <= index <= transform_data.nk_intervals:
+                    raise IntervalSpecificationError(
+                        interval_def,
+                        "Invalid variable reference in interval specification",
+                        loc=axis_bound.loc,
+                    )
+
+                bounds[i] = (index, offset)
+                if index < transform_data.nk_intervals:
+                    transform_data.min_k_interval_sizes[index] = max(
+                        transform_data.min_k_interval_sizes[index], offset
+                    )
+
+            if bounds[0][0] == bounds[1][0] - 1:
+                index = bounds[0][0]
+                min_size = 1 + bounds[0][1] - bounds[1][1]
+                transform_data.min_k_interval_sizes[index] = max(
+                    transform_data.min_k_interval_sizes[index], min_size
+                )
+
+            # Create computation intervals
+            interval_info = IntervalInfo(*bounds)
+            computation_intervals.append(interval_info)
+
+        return computation_intervals
+
     class SymbolMaker(gt_ir.IRNodeVisitor):
-        def __init__(self, transform_data: TransformData, redundant_temp_fields: bool):
+        """Fills transform_data.symbols with SymbolInfo for each used in the StencilDefinition."""
+
+        @classmethod
+        def apply(cls, transform_data: TransformData, redundant_temp_fields: bool):
+            maker = cls()
+            return maker(transform_data, redundant_temp_fields)
+
+        def __call__(self, transform_data: TransformData, redundant_temp_fields: bool):
             self.data = transform_data
             self.redundant_temp_fields = redundant_temp_fields
+            self.visit(self.data.definition_ir)
 
         def visit_Ref(self, node: gt_ir.Ref):
             if node.name not in self.data.symbols:
@@ -120,115 +229,23 @@ class InitInfoPass(TransformPass):
             symbol_info = SymbolInfo(decl, has_redundancy=has_redundancy)
             self.data.symbols[decl.name] = symbol_info
 
-    class IntervalMaker(gt_ir.IRNodeVisitor):
-        def __init__(self, transform_data: TransformData):
-            self.data = transform_data
-
-        def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
-            self.data.splitters_var = None
-            self.data.min_k_interval_sizes = [0]
-
-            # First, look for dynamic splitters variable
-            for computation in node.computations:
-                interval_def = computation.interval
-                for axis_bound in [interval_def.start, interval_def.end]:
-                    if isinstance(axis_bound.level, gt_ir.VarRef):
-                        name = axis_bound.level.name
-                        for item in node.parameters:
-                            if item.name == name:
-                                decl = item
-                                break
-                        else:
-                            decl = None
-
-                        if decl is None or decl.length == 0:
-                            raise IntervalSpecificationError(
-                                interval_def,
-                                "Invalid variable reference in interval specification",
-                                loc=axis_bound.loc,
-                            )
-
-                        self.data.splitters_var = decl.name
-                        self.data.min_k_interval_sizes = [1] * (decl.length + 1)
-
-            # Extract computation intervals
-            computation_intervals = []
-            for computation in node.computations:
-                # Process current interval definition
-                interval_def = computation.interval
-                bounds = [None, None]
-
-                for i, axis_bound in enumerate([interval_def.start, interval_def.end]):
-                    if isinstance(axis_bound.level, gt_ir.VarRef):
-                        # Dynamic splitters: check existing reference and extract size info
-                        if axis_bound.level.name != self.data.splitters_var:
-                            raise IntervalSpecificationError(
-                                interval_def,
-                                "Non matching variable reference in interval specification",
-                                loc=axis_bound.loc,
-                            )
-
-                        index = axis_bound.level.index + 1
-                        offset = axis_bound.offset
-                        if offset < 0:
-                            index = index - 1
-
-                    else:
-                        # Static splitter: extract size info
-                        index = (
-                            self.data.nk_intervals
-                            if axis_bound.offset < 0 or axis_bound.level == gt_ir.LevelMarker.END
-                            else 0
-                        )
-                        offset = axis_bound.offset
-
-                        if offset < 0 and axis_bound.level != gt_ir.LevelMarker.END:
-                            raise IntervalSpecificationError(
-                                interval_def,
-                                "Invalid offset in interval specification",
-                                loc=axis_bound.loc,
-                            )
-
-                        elif offset > 0 and axis_bound.level != gt_ir.LevelMarker.START:
-                            raise IntervalSpecificationError(
-                                interval_def,
-                                "Invalid offset in interval specification",
-                                loc=axis_bound.loc,
-                            )
-
-                    # Update min sizes
-                    if not 0 <= index <= self.data.nk_intervals:
-                        raise IntervalSpecificationError(
-                            interval_def,
-                            "Invalid variable reference in interval specification",
-                            loc=axis_bound.loc,
-                        )
-
-                    bounds[i] = (index, offset)
-                    if index < self.data.nk_intervals:
-                        self.data.min_k_interval_sizes[index] = max(
-                            self.data.min_k_interval_sizes[index], offset
-                        )
-
-                if bounds[0][0] == bounds[1][0] - 1:
-                    index = bounds[0][0]
-                    min_size = 1 + bounds[0][1] - bounds[1][1]
-                    self.data.min_k_interval_sizes[index] = max(
-                        self.data.min_k_interval_sizes[index], min_size
-                    )
-
-                # Create computation intervals
-                interval_info = IntervalInfo(*bounds)
-                computation_intervals.append(interval_info)
-
-            return computation_intervals
-
     class BlockMaker(gt_ir.IRNodeVisitor):
-        def __init__(self, transform_data: TransformData, computation_intervals: list):
-            self.data = transform_data
+        """Creates the block tree consisting of DomainBlockInfo, IJBlockInfo,
+        IntervalBlockInfo, and StatementInfo."""
+
+        def __init__(self, computation_intervals: list):
             self.computation_intervals = computation_intervals
+
+        @classmethod
+        def apply(cls, transform_data: TransformData, computation_intervals: list):
+            maker = cls(computation_intervals)
+            return maker(transform_data)
+
+        def __call__(self, transform_data: TransformData):
+            self.data = transform_data
             self.current_block_info = None
             self.zero_extent = Extent.zeros(transform_data.ndims)
+            self.visit(self.data.definition_ir)
 
         def visit_Expr(self, node: gt_ir.Expr):
             return []
@@ -308,6 +325,8 @@ class InitInfoPass(TransformPass):
             return result
 
         def visit_ComputationBlock(self, node: gt_ir.ComputationBlock):
+            """Traverse statements, creating new IJBlockInfo where non-zero
+            accesses to output fields are made."""
             interval = next(iter(self.current_block_info.intervals))
             interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
 
@@ -352,6 +371,7 @@ class InitInfoPass(TransformPass):
                 )
 
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
+            """Creates a DomainBlockInfo for every interval and every computation."""
             for computation, interval in zip(node.computations, self.computation_intervals):
                 self.current_block_info = DomainBlockInfo(
                     self.data.id_generator.new, computation.iteration_order, {interval}, []
@@ -390,21 +410,14 @@ class InitInfoPass(TransformPass):
 
             return result
 
-    def __init__(self, redundant_temp_fields=_DEFAULT_OPTIONS["redundant_temp_fields"]):
-        self.redundant_temp_fields = redundant_temp_fields
-
     @property
     def defaults(self):
         return self._DEFAULT_OPTIONS
 
     def apply(self, transform_data: TransformData):
-        interval_maker = self.IntervalMaker(transform_data)
-        computation_intervals = interval_maker.visit(transform_data.definition_ir)
-        symbol_maker = self.SymbolMaker(transform_data, self.redundant_temp_fields)
-        symbol_maker.visit(transform_data.definition_ir)
-        block_maker = self.BlockMaker(transform_data, computation_intervals)
-        block_maker.visit(transform_data.definition_ir)
-
+        computation_intervals = self.make_k_intervals(transform_data)
+        self.SymbolMaker.apply(transform_data, self._DEFAULT_OPTIONS["redundant_temp_fields"])
+        self.BlockMaker.apply(transform_data, computation_intervals)
         return transform_data
 
 
