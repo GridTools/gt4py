@@ -41,6 +41,8 @@ class SymbolInfo:
         Definition statement.
     has_redundancy : `bool`
         True if the symbol is a data field allocated with redundancy.
+    in_use : `bool`
+        True if the symbol is used.
     """
 
     decl = attribute(of=gt_ir.Decl)
@@ -70,9 +72,9 @@ class IntervalInfo:
     Parameters
     ----------
     start : `tuple` of `int`
-        Start level and offset (included)
+        Start level and offset (included).
     end : `tuple` of `int`
-        End level and offset (not included)
+        End level and offset (not included).
     """
 
     start = attribute(of=TupleOf[int, int])
@@ -120,7 +122,11 @@ class StatementInfo:
     id : `int`
         Operation ID.
     stmt : `gridtools.ir.Statement`
-        Statement containing the description of the computation.
+        Statement containing the description of the computation
+    inputs : `dict` [`str`, `gt4py.definitions.Extent`]
+        Each input to this statement and extent
+    outputs : `set` [`str`]
+        Outputs from this statement (with zero extent)
     """
 
     id = attribute(of=int)
@@ -136,11 +142,15 @@ class IntervalBlockInfo:
     Parameters
     ----------
     id : `int`
-        ComputeUnitInfo Id.
-    interval : int
-        IntervalInfo Id.
-    stmts : `list` [`gridtools.ir.Statement`]
-        List of operations in the regional computation.
+        Unique identifier.
+    intervals : IntervalInfo`
+        Sequential-axis interval to which this block is applied.
+    stmts : `list` [`StatementInfo`]
+        List of operations.
+    inputs : `dict` [`str`, `gt4py.definitions.Extent`]
+        Inputs (with extent) to these operations.
+    outputs : `set` [`str`]
+        Outputs from these operations (with zero extent).
     """
 
     id = attribute(of=int)
@@ -157,11 +167,17 @@ class IJBlockInfo:
     Parameters
     ----------
     id : `int`
-        ComputeUnitInfo Id.
-    interval : int
-        IntervalInfo Id.
-    stmts : `list` [`gridtools.ir.Statement`]
-        List of operations in the regional computation.
+        Unique identifier.
+    intervals : `set` [`IntervalInfo`]
+        Set of sequential-axis intervals over which this block iterates
+    interval_blocks : `list` [`IntervalBlockInfo`]
+        List of blocks (each has a list of statements) that this block executes.
+    inputs : `dict` [`str`, `gt4py.definitions.Extent`]
+        Each input to this block with extent.
+    outputs : `set` [`str`]
+        Outputs from this block (with zero extent).
+    compute_extent : `gt4py.definitions.Extent`
+        Compute extent for this block.
     """
 
     id = attribute(of=int)
@@ -176,14 +192,22 @@ class IJBlockInfo:
 class DomainBlockInfo:
     """`AttribClass` class defining a vertical region computation.
 
+    Domain blocks become multi-stages in the IIR.
+
     Parameters
     ----------
     id : `int`
-        ComputeUnitInfo Id.
-    interval : int
-        IntervalInfo Id.
-    stmts : `list` [`gridtools.ir.Statement`]
-        List of operations in the regional computation.
+        Unique identifier.
+    iteration_order : `gt4py.ir.IterationOrder`
+        The iteration order of the resulting multistage.
+    intervals : `set` [`IntervalInfo`]
+        Set of sequential-axis intervals over which this block iterates.
+    ij_blocks : `list` [`IJBlockInfo`]
+        List of stage blocks.
+    inputs : `dict` [`str`, `gt4py.definitions.Extent`]
+        Each input to this block with extent.
+    outputs : `set` [`str`]
+        Outputs from this block (with zero extent).
     """
 
     id = attribute(of=int)
@@ -206,14 +230,16 @@ class TransformData:
         Implementation IR with the final implementation of the stencil.
     options : `gt4py.definitions.Options`
         Build options provided by the users.
-    symbols : `dict` [`str`, `SymbolInfo` ]
+    splitters_var : `str`
+        Used in IntervalMaker when parsing variable splitters.
+    min_k_interval_sizes : `list` [`int`]
+        Used in IntervalMaker for storing the interval sizes.
+    symbols : `dict` [`str`, `SymbolInfo`]
         Symbols table.
-    op_graph : `OpGraph`
-        Graph of operations.
-    stage_graph : `StageGraph`
-        Graph of stages.
-    debug_info : `dict` [`str`, `Any`]
-        Dictionary collecting debug info.
+    blocks : `list` [`DomainBlockInfo`]
+        List of domain blocks.
+    id_generator : `gt4py.utils.UniqueIdGenerator`
+        Generates unique IDs.
     """
 
     definition_ir = attribute(of=gt_ir.StencilDefinition)
