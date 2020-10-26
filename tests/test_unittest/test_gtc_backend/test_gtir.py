@@ -1,3 +1,5 @@
+import ast
+
 import pytest
 from devtools import debug
 from eve import SourceLocation
@@ -81,11 +83,11 @@ def copy_computation(copy_stencil):
 def test_copy(copy_computation):
     print(debug(copy_computation))
     assert copy_computation
+    assert copy_computation.param_names == ["a", "b"]
 
 
 def test_naive_python_copy(copy_computation):
-    print(PythonNaiveCodegen.apply(copy_computation))
-    assert False
+    assert ast.parse(PythonNaiveCodegen.apply(copy_computation))
 
 
 def test_naive_python_avg():
@@ -128,5 +130,4 @@ def test_naive_python_avg():
             )
         ],
     )
-    print(PythonNaiveCodegen.apply(horizontal_avg))
-    assert False
+    assert ast.parse(PythonNaiveCodegen.apply(horizontal_avg))
