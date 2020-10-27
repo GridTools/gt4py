@@ -82,13 +82,14 @@ class DataTypeSpecificationError(IRSpecificationError):
 
 
 class InitInfoPass(TransformPass):
-    """Transliterate Definition IR structure into blocks.
+    """Transcribe definition IR structure into blocks.
 
-    Outputs
-    -------
-    transform_data.symbols
+    Note
+    ----
+    The following `transform_data` attributes are changed:
+    - `symbols`
         SymbolInfo for each used symbol.
-    transform_data.blocks
+    - `blocks`
         Block structure following the original Definition IR.
     """
 
@@ -420,10 +421,10 @@ class InitInfoPass(TransformPass):
             return result
 
     @property
-    def defaults(self):
+    def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData):
+    def apply(self, transform_data: TransformData) -> TransformData:
         computation_intervals = self.make_k_intervals(transform_data)
         self.SymbolMaker.apply(transform_data, self._DEFAULT_OPTIONS["redundant_temp_fields"])
         self.BlockMaker.apply(transform_data, computation_intervals)
@@ -433,9 +434,10 @@ class InitInfoPass(TransformPass):
 class NormalizeBlocksPass(TransformPass):
     """Create a DomainBlockInfo for each StatementInfo.
 
-    Outputs
-    -------
-    transform_data.blocks
+    Note
+    ----
+    The following `transform_data` attributes are changed:
+    - `blocks`
         DomainBlockInfo each contain only a single StatementInfo.
     """
 
@@ -503,10 +505,10 @@ class NormalizeBlocksPass(TransformPass):
         pass
 
     @property
-    def defaults(self):
+    def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData):
+    def apply(self, transform_data: TransformData) -> TransformData:
         transform_data.blocks = self.SplitBlocksVisitor().visit(transform_data)
 
         return transform_data
@@ -797,6 +799,19 @@ def greedy_merging_with_wrapper(
 
 
 class MergeBlocksPass(TransformPass):
+    """Merges `transform_data.blocks` using a greedy algorithm.
+
+    The first step merges IJBlockInfos as long as compatibility conditions are met, then proceeds to try and merge
+    IJBlockInfos. The secondary merging step attempts to create as few IntervalBlockInfos as necessary, by re-using
+    existing blocks with the same interval. Note that this could be re-implemented as a third merging step for every
+    IJBlockInfo instead.
+
+    Note
+    ----
+    The following `transform_data` attributes are changed:
+    - `blocks`
+        Blocks are merged as much as possible.
+    """
 
     _DEFAULT_OPTIONS = {}
 
@@ -804,7 +819,7 @@ class MergeBlocksPass(TransformPass):
         pass
 
     @property
-    def defaults(self):
+    def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
     def apply(self, transform_data: TransformData) -> TransformData:
@@ -820,6 +835,13 @@ class MergeBlocksPass(TransformPass):
 
 
 class ComputeExtentsPass(TransformPass):
+    """Loop over blocks backwards and accumulate extents.
+
+    Note
+    ----
+    Writes to `transform_data.blocks` and fills each IJBlockInfo.compute_extent,
+    and creates `transform_data.implementation_ir.fields_extent`.
+    """
 
     _DEFAULT_OPTIONS = {}
 
@@ -827,10 +849,10 @@ class ComputeExtentsPass(TransformPass):
         pass
 
     @property
-    def defaults(self):
+    def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData):
+    def apply(self, transform_data: TransformData) -> TransformData:
         seq_axis = transform_data.definition_ir.domain.index(
             transform_data.definition_ir.domain.sequential_axis
         )
@@ -839,8 +861,8 @@ class ComputeExtentsPass(TransformPass):
             access_extents[name] = Extent.zeros()
 
         blocks = transform_data.blocks
-        for block in reversed(blocks):
-            for ij_block in reversed(block.ij_blocks):
+        for dom_block in reversed(blocks):
+            for ij_block in reversed(dom_block.ij_blocks):
                 ij_block.compute_extent = Extent.zeros()
                 for name in ij_block.outputs:
                     ij_block.compute_extent |= access_extents[name]
@@ -860,12 +882,19 @@ class ComputeExtentsPass(TransformPass):
 
 
 class DataTypePass(TransformPass):
+    """Fills in the concrete data_type for all set to `DataType.AUTO`"""
+
     class CollectDataTypes(gt_ir.IRNodeVisitor):
-        def __call__(self, node):
+        def __call__(self, node) -> None:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.vars = node.parameters
             self.fields = node.fields
             self.visit(node)
+
+        @classmethod
+        def apply(cls, node) -> None:
+            collector = cls()
+            return collector(node)
 
         def visit_ApplyBlock(self, node: gt_ir.Node, **kwargs):
             self.generic_visit(node, apply_block_symbols=node.local_symbols, **kwargs)
@@ -976,13 +1005,18 @@ class DataTypePass(TransformPass):
             else:
                 node.data_type = gt_ir.DataType.DEFAULT
 
-    def apply(self, transform_data: TransformData):
-        collect_data_type = self.CollectDataTypes()
-        collect_data_type(transform_data.implementation_ir)
+    def apply(self, transform_data: TransformData) -> TransformData:
+        self.CollectDataTypes.apply(transform_data.implementation_ir)
         return transform_data
 
 
 class ComputeUsedSymbolsPass(TransformPass):
+    """Fills the SymbolInfo `in_use` attribute in `transform_data.symbols`.
+
+    It does this because an entry was originally created for each Decl in the
+    SymbolMaker part of InitInfoPass, and some of these may not be referenced.
+    """
+
     class ComputeUsedVisitor(gt_ir.IRNodeVisitor):
         def __init__(self, transform_data: TransformData):
             self.data = transform_data
@@ -993,13 +1027,21 @@ class ComputeUsedSymbolsPass(TransformPass):
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
             self.data.symbols[node.name].in_use = True
 
-    def apply(self, transform_data: TransformData):
+    def apply(self, transform_data: TransformData) -> TransformData:
         visitor = self.ComputeUsedVisitor(transform_data)
         visitor.visit(transform_data.definition_ir)
         return transform_data
 
 
 class BuildIIRPass(TransformPass):
+    """Transcribe `transform_data.blocks` to `transform_data.implementation_ir`.
+
+    Note
+    ----
+    DomainBlockInfo -> MultiStage
+    IJBlockInfo -> Stage
+    IntervalBlockInfo -> ApplyBlock
+    """
 
     _DEFAULT_OPTIONS = {}
 
@@ -1008,10 +1050,10 @@ class BuildIIRPass(TransformPass):
         self.iir = None
 
     @property
-    def defaults(self):
+    def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData):
+    def apply(self, transform_data: TransformData) -> TransformData:
         self.data = transform_data
         self.iir = transform_data.implementation_ir
 
@@ -1047,7 +1089,7 @@ class BuildIIRPass(TransformPass):
 
         return transform_data
 
-    def _make_stage(self, ij_block):
+    def _make_stage(self, ij_block) -> gt_ir.Stage:
         # Apply blocks and decls
         apply_blocks = []
         decls = []
@@ -1097,7 +1139,7 @@ class BuildIIRPass(TransformPass):
 
         return stage
 
-    def _make_apply_block(self, interval_block):
+    def _make_apply_block(self, interval_block) -> gt_ir.ApplyBlock:
         # Body
         stmts = []
         for stmt_info in interval_block.stmts:
@@ -1110,7 +1152,7 @@ class BuildIIRPass(TransformPass):
 
         return result
 
-    def _make_accessor(self, name, extent, read_write: bool):
+    def _make_accessor(self, name, extent, read_write: bool) -> gt_ir.Accessor:
         assert name in self.data.symbols
         intent = gt_ir.AccessIntent.READ_WRITE if read_write else gt_ir.AccessIntent.READ_ONLY
         if self.data.symbols[name].is_field:
@@ -1123,7 +1165,7 @@ class BuildIIRPass(TransformPass):
 
         return result
 
-    def _make_axis_interval(self, interval: IntervalInfo):
+    def _make_axis_interval(self, interval: IntervalInfo) -> gt_ir.AxisInterval:
         axis_bounds = []
         for bound in (interval.start, interval.end):
             if bound[0] == 0:
@@ -1144,7 +1186,21 @@ class BuildIIRPass(TransformPass):
 
 
 class DemoteLocalTemporariesToVariablesPass(TransformPass):
+    """Demote symbols only used within a single stage to scalars.
+
+    This may occur because these can be local variables in the scope, and
+    therefore do not need to be fields.
+    """
+
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
+        def __init__(self):
+            pass
+
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation) -> Set[str]:
+            collector = cls()
+            return collector(node)
+
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.demotables = set(node.temporary_fields)
@@ -1171,6 +1227,11 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             self.stage_symbols.add(node.name)
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation, demotables: Set[str]) -> None:
+            instance = cls(demotables)
+            return instance(node)
+
         def __init__(self, demotables):
             self.demotables = demotables
             self.local_symbols = None
@@ -1230,17 +1291,24 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
                 return True, node
 
     def apply(self, transform_data: TransformData) -> TransformData:
-        collect_demotable_symbols = self.CollectDemotableSymbols()
-        demotables = collect_demotable_symbols(transform_data.implementation_ir)
-
-        demote_symbols = self.DemoteSymbols(demotables)
-        transform_data.implementation_ir = demote_symbols(transform_data.implementation_ir)
+        demotables = self.CollectDemotableSymbols.apply(transform_data.implementation_ir)
+        self.DemoteSymbols.apply(transform_data.implementation_ir, demotables)
 
         return transform_data
 
 
 class HousekeepingPass(TransformPass):
     class WarnIfNoEffect(gt_ir.IRNodeVisitor):
+        """Warn if StencilImplementation has no effect."""
+
+        def __init__(self):
+            pass
+
+        @classmethod
+        def apply(cls, stencil_name: str, node: gt_ir.StencilImplementation) -> None:
+            instance = cls()
+            return instance(stencil_name, node)
+
         def __call__(self, stencil_name: str, node: gt_ir.StencilImplementation) -> None:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.stencil_name = stencil_name
@@ -1255,6 +1323,16 @@ class HousekeepingPass(TransformPass):
                 )
 
     class PruneEmptyNodes(gt_ir.IRNodeMapper):
+        """Removes empty multi-stages, stage groups, and stages."""
+
+        def __init__(self):
+            pass
+
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation) -> None:
+            instance = cls()
+            return instance(node)
+
         def __call__(self, node: gt_ir.StencilImplementation) -> None:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.visit(node)
@@ -1293,10 +1371,9 @@ class HousekeepingPass(TransformPass):
                 return False, None
 
     def apply(self, transform_data: TransformData) -> TransformData:
-
-        prune_emtpy_nodes = self.PruneEmptyNodes()
-        prune_emtpy_nodes(transform_data.implementation_ir)
-
-        self.WarnIfNoEffect()(transform_data.definition_ir.name, transform_data.implementation_ir)
+        self.PruneEmptyNodes.apply(transform_data.implementation_ir)
+        self.WarnIfNoEffect.apply(
+            transform_data.definition_ir.name, transform_data.implementation_ir
+        )
 
         return transform_data
