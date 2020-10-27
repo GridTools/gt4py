@@ -87,10 +87,8 @@ class InitInfoPass(TransformPass):
     Note
     ----
     The following `transform_data` attributes are changed:
-    - `symbols`
-        SymbolInfo for each used symbol.
-    - `blocks`
-        Block structure following the original Definition IR.
+        - `symbols`: SymbolInfo for each used symbol.
+        - `blocks`: Block structure following the original Definition IR.
     """
 
     _DEFAULT_OPTIONS = {"redundant_temp_fields": False}
@@ -437,8 +435,7 @@ class NormalizeBlocksPass(TransformPass):
     Note
     ----
     The following `transform_data` attributes are changed:
-    - `blocks`
-        DomainBlockInfo each contain only a single StatementInfo.
+        - `blocks`: DomainBlockInfo each contain only a single StatementInfo.
     """
 
     _DEFAULT_OPTIONS = {}
@@ -809,8 +806,7 @@ class MergeBlocksPass(TransformPass):
     Note
     ----
     The following `transform_data` attributes are changed:
-    - `blocks`
-        Blocks are merged as much as possible.
+        - `blocks`: Merged as far as possible without reordering.
     """
 
     _DEFAULT_OPTIONS = {}
