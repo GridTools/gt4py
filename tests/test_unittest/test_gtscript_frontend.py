@@ -20,9 +20,10 @@ import types
 import numpy as np
 import pytest
 
-from gt4py import definitions as gt_definitions
+import gt4py.definitions as gt_definitions
+import gt4py.ir as gt_ir
+import gt4py.utils as gt_utils
 from gt4py import gtscript
-from gt4py import utils as gt_utils
 from gt4py.frontend import gtscript_frontend as gt_frontend
 
 from ..definitions import id_version
@@ -229,6 +230,66 @@ class TestImportedExternals:
 
         with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*WRONG_VALUE_CONSTANT.*"):
             compile_definition(definition_func, "test_wrong_value", module, externals=externals)
+
+
+class TestIntervalSyntax:
+    def test_simple(self):
+        def definition_func(field: gtscript.Field[float]):
+            from __gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(0, 1):
+                field = 0
+
+        module = f"TestIntervalSyntax_simple_{id_version}"
+        externals = {}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_simple", module, externals=externals
+        )
+        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START, offset=0
+        )
+        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START, offset=1
+        )
+
+    def test_none(self):
+        def definition_func(field: gtscript.Field[float]):
+            from __gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(1, None):
+                field = 0
+
+        module = f"TestIntervalSyntax_simple_{id_version}"
+        externals = {}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_none", module, externals=externals
+        )
+        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START, offset=1
+        )
+        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.END, offset=0
+        )
+
+    def test_externals(self):
+        def definition_func(field: gtscript.Field[float]):
+            from __externals__ import kstart
+            from __gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(kstart, -1):
+                field = 0
+
+        module = f"TestIntervalSyntax_simple_{id_version}"
+        externals = {"kstart": 3}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_externals", module, externals=externals
+        )
+        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START, offset=externals["kstart"]
+        )
+        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.END, offset=-1
+        )
 
 
 class TestExternalsWithSubroutines:
