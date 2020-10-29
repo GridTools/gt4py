@@ -492,6 +492,21 @@ def interval(*args):
     pass
 
 
+def parallel(*args):
+    """Define a block of code that is restricted to a set of regions in the parallel axes."""
+    pass
+
+
+class _Region:
+    def __getitem__(self, *args):
+        """Define a region in the parallel axes."""
+        pass
+
+
+# Horizontal regions
+region = _Region()
+
+
 def __INLINED(compile_if_expression):
     """Evaluate condition at compile time and inline statements from selected branch."""
     pass

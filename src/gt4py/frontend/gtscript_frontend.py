@@ -513,12 +513,6 @@ class CompiledIfInliner(ast.NodeTransformer):
 #
 
 
-@enum.unique
-class ParsingContext(enum.Enum):
-    CONTROL_FLOW = 1
-    COMPUTATION = 2
-
-
 class IRMaker(ast.NodeVisitor):
     def __init__(
         self,
@@ -542,7 +536,6 @@ class IRMaker(ast.NodeVisitor):
         self.local_symbols = local_symbols
         self.domain = domain or gt_ir.Domain.LatLonGrid()
         self.extra_temp_decls = extra_temp_decls or {}
-        self.parsing_context = None
         self.if_decls_stack = []
         gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
             "abs": gt_ir.NativeFunction.ABS,
@@ -574,7 +567,6 @@ class IRMaker(ast.NodeVisitor):
             and isinstance(ast_root.body[0], ast.FunctionDef)
         )
         func_ast = ast_root.body[0]
-        self.parsing_context = ParsingContext.CONTROL_FLOW
         computations = self.visit(func_ast)
 
         return computations
@@ -632,6 +624,9 @@ class IRMaker(ast.NodeVisitor):
 
         # if sorting didn't change anything it was already sorted
         return compute_blocks == compute_blocks_sorted
+
+    def _extract_regions(self, node: ast.Call) -> List[List[gt_ir.AxisInterval]]:
+        pass
 
     def _visit_iteration_order_node(self, node: ast.withitem, loc: gt_ir.Location):
         syntax_error = GTScriptSyntaxError(
@@ -715,6 +710,7 @@ class IRMaker(ast.NodeVisitor):
         # Parse computation specification, i.e. `withItems` nodes
         iteration_order = None
         interval = None
+        parallel_intervals = [None]
 
         try:
             for item in node.items:
@@ -730,6 +726,12 @@ class IRMaker(ast.NodeVisitor):
                 ):
                     assert interval is None  # only one spec allowed
                     interval = self._visit_interval_node(item, loc)
+                # elif (
+                #     isinstance(item.context_expr, ast.Call)
+                #     and item.context_expr.func.id == "parallel"
+                # ):
+                #     assert parallel_intervals == [None]
+                #     parallel_intervals = self._extract_regions(item.context_expr)
                 else:
                     raise syntax_error
         except AssertionError as e:
@@ -739,17 +741,19 @@ class IRMaker(ast.NodeVisitor):
             raise syntax_error
 
         #  Parse `With` body into computation blocks
-        self.parsing_context = ParsingContext.COMPUTATION
         stmts = []
         for stmt in node.body:
             stmts.extend(gt_utils.listify(self.visit(stmt)))
-        self.parsing_context = ParsingContext.CONTROL_FLOW
 
-        result = gt_ir.ComputationBlock(
-            interval=interval, iteration_order=iteration_order, body=gt_ir.BlockStmt(stmts=stmts)
-        )
-
-        return result
+        return [
+            gt_ir.ComputationBlock(
+                interval=interval,
+                iteration_order=iteration_order,
+                parallel_interval=parallel_interval,
+                body=gt_ir.BlockStmt(stmts=stmts),
+            )
+            for parallel_interval in parallel_intervals
+        ]
 
     # Visitor methods
     # -- Special nodes --
@@ -1032,6 +1036,32 @@ class IRMaker(ast.NodeVisitor):
         ast.copy_location(assignment, node)
         return self.visit_Assign(assignment)
 
+    def _unroll_computations(self, node: ast.With):
+        def recurse_unroll(node, index, items):
+            if isinstance(node.body[index], ast.With):
+                unrolled_blocks = recurse_unroll(
+                    node.body[index], 0, items + node.body[index].items
+                )
+                processed_stmts = 1
+            else:
+                new_body = list(
+                    itertools.takewhile(
+                        lambda stmt: not isinstance(stmt, ast.With), node.body[index:]
+                    )
+                )
+                unrolled_blocks = [
+                    ast.copy_location(ast.With(items=items, body=new_body), node.body[index])
+                ]
+
+                processed_stmts = len(new_body)
+
+            if index + processed_stmts < len(node.body):
+                unrolled_blocks.extend(recurse_unroll(node, index + processed_stmts, items))
+
+            return unrolled_blocks
+
+        return recurse_unroll(node, 0, node.items) if len(node.body) > 0 else []
+
     def visit_With(self, node: ast.With):
         loc = gt_ir.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
@@ -1046,48 +1076,35 @@ class IRMaker(ast.NodeVisitor):
         #  with computation(PARALLEL), interval(...):
         #    ...
         # otherwise just parse the node
-        if self.parsing_context == ParsingContext.CONTROL_FLOW and all(
-            isinstance(child_node, ast.With) for child_node in node.body
+
+        # Ensure top level `with` specifies the iteration order
+        if not any(
+            with_item.context_expr.func.id == "computation"
+            for with_item in node.items
+            if isinstance(with_item.context_expr, ast.Call)
         ):
-            # Ensure top level `with` specifies the iteration order
-            if not any(
-                with_item.context_expr.func.id == "computation"
-                for with_item in node.items
-                if isinstance(with_item.context_expr, ast.Call)
-            ):
-                raise syntax_error
-
-            # Parse nested `with` blocks
-            compute_blocks = []
-            for with_node in node.body:
-                with_node = copy.deepcopy(with_node)  # Copy to avoid altering original ast
-                # Splice `withItems` of current/primary with statement into nested with
-                with_node.items.extend(node.items)
-
-                compute_blocks.append(self._visit_computation_node(with_node))
-
-            # Validate block specification order
-            #  the nested computation blocks must be specified in their order of execution. The order of execution is
-            #  such that the lowest (highest) interval is processed first if the iteration order is forward (backward).
-            if not self._are_blocks_sorted(compute_blocks):
-                raise GTScriptSyntaxError(
-                    f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
-                )
-
-            return compute_blocks
-        elif self.parsing_context == ParsingContext.CONTROL_FLOW and not any(
-            isinstance(child_node, ast.With) for child_node in node.body
-        ):
-            return self._visit_computation_node(node)
-        else:
-            # Mixing nested `with` blocks with stmts not allowed
             raise syntax_error
+
+        # Parse nested `with` blocks
+        compute_blocks = []
+        for with_node in self._unroll_computations(node):
+            compute_blocks.extend(self._visit_computation_node(with_node))
+
+        # Validate block specification order
+        #  the nested computation blocks must be specified in their order of execution. The order of execution is
+        #  such that the lowest (highest) interval is processed first if the iteration order is forward (backward).
+        if not self._are_blocks_sorted(compute_blocks):
+            raise GTScriptSyntaxError(
+                f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
+            )
+
+        return compute_blocks
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> list:
         blocks = []
         docstring = ast.get_docstring(node)
         for stmt in node.body:
-            blocks.extend(gt_utils.listify(self.visit(stmt)))
+            blocks.extend(self.visit(stmt))
 
         if not all(isinstance(item, gt_ir.ComputationBlock) for item in blocks):
             raise GTScriptSyntaxError(
