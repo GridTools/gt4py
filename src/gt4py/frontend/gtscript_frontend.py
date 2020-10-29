@@ -22,7 +22,7 @@ import itertools
 import numbers
 import textwrap
 import types
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -460,12 +460,12 @@ class CompiledIfInliner(ast.NodeTransformer):
 
 
 class IntervalEndpointParser(ast.NodeVisitor):
-    """Parse interval endpoint expressions in interval and regions.
+    """Return AxisBound nodes from interval expressions.
 
-    This parses the expressions instead of the IRMaker, since various
-    expressions are allowed here that are not allowed in gtscript body code.
+    This parses the expressions instead of the IRMaker, since these differ from
+    gtscript in the stencil and fucntion body.
 
-    Replaces gt4py.ir.utils.make_axis_interval.
+    Replaces usage of gt4py.ir.utils.make_axis_interval.
     """
 
     @classmethod
@@ -569,6 +569,15 @@ class IntervalEndpointParser(ast.NodeVisitor):
             raise self.interval_error
 
         return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
+
+    def visit_Subscript(self, node: ast.Subscript) -> gt_ir.AxisBound:
+        if node.value != self.axis_name:
+            raise self.interval_error
+
+        if not isinstance(node.slice, ast.Index):
+            raise self.interval_error
+
+        return self.visit(node.slice.value)
 
 
 parse_axis_endpoint = IntervalEndpointParser.apply
@@ -769,36 +778,31 @@ class IRMaker(ast.NodeVisitor):
         return gt_ir.IterationOrder[iteration_order_node.id]
 
     def _visit_interval_node(self, node: ast.withitem, loc: gt_ir.Location):
-        args = node.context_expr.args
-        # if len(args) != 2:
-        #     raise GTScriptSyntaxError(
-        #         f"Invalid 'interval' specification at line {loc.line} (column {loc.column})", loc=loc
-        #     )
+        interval_node = node.context_expr
+        if interval_node.args:
+            args = interval_node.args
+        else:
+            args = [interval_node.keywords[0].value, interval_node.keywords[1].value]
 
         if isinstance(args[0], ast.Ellipsis):
             assert len(args) == 1
             return gt_ir.AxisInterval.full_interval()
 
-        elif isinstance(args[0], ast.Name):
-            assert args[0].id in self.local_symbols
-            value = self.local_symbols[args[0].id]
-            if isinstance(value, gtscript._AxisInterval):
-                assert len(args) == 1
-                if value.start >= 0 and value.end >= 0:
-                    assert value.end > value.start
-                elif value.start < 0 and value.end < 0:
-                    assert value.end > value.start
-                else:
-                    assert False
-                start = IntervalEndpointParser.make_axis_bound(value.start, loc)
-                end = IntervalEndpointParser.make_axis_bound(value.end, loc)
-                return gt_ir.AxisInterval(start=start, end=end, loc=loc)
+        elif isinstance(args[0], ast.Subscript):
+            assert isinstance(args[0].slice, ast.Slice)
+            start = parse_axis_endpoint(args[0].slice.lower, "K", self.local_symbols, loc=loc)
+            end = parse_axis_endpoint(args[0].slice.upper, "K", self.local_symbols, loc=loc)
+            return gt_ir.AxisInterval(start=start, end=end, loc=loc)
 
         else:
-            # Otherwise, this has two arguments
-            start = parse_axis_endpoint(args[0], "K", self.local_symbols, loc=loc)
-            end = parse_axis_endpoint(args[1], "K", self.local_symbols, loc=loc)
-            return gt_ir.AxisInterval(start=start, end=end, loc=loc)
+            parsed_args = [
+                parse_axis_endpoint(arg, "K", self.local_symbols, loc=loc) for arg in args
+            ]
+            # # Otherwise, this has two arguments
+            # start =
+            # end = parse_axis_endpoint(args[1], "K", self.local_symbols, loc=loc)
+
+            # return gt_ir.AxisInterval(start=start, end=end, loc=loc)
 
     def _visit_computation_node(self, node: ast.With) -> List[gt_ir.ComputationBlock]:
         loc = gt_ir.Location.from_ast_node(node)

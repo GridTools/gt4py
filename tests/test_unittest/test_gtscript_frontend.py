@@ -294,6 +294,26 @@ class TestIntervalSyntax:
             level=gt_ir.LevelMarker.END, offset=-1, loc=loc
         )
 
+    def test_axisinterval(self):
+        def definition_func(field: gtscript.Field[float]):
+            from __gtscript__ import PARALLEL, K, computation, interval
+
+            with computation(PARALLEL), interval(K[1:-1]):
+                field = 0
+
+        module = f"TestIntervalSyntax_simple_{id_version}"
+        externals = {}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_externals", module, externals=externals
+        )
+        loc = def_ir.computations[0].interval.loc
+        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START, offset=1, loc=loc
+        )
+        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.END, offset=-1, loc=loc
+        )
+
 
 class TestExternalsWithSubroutines:
     def test_all_legal_combinations(self, id_version):
