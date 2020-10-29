@@ -20,7 +20,9 @@ import numbers
 import textwrap
 import types
 
+import gt4py.frontend.gtscript_frontend as gt_frontend
 import gt4py.gtscript as gtscript
+import gt4py.ir as gt_ir
 from gt4py.utils import NOTHING
 
 from .nodes import *
@@ -67,61 +69,6 @@ def make_field_ref(name: str, offset=(0, 0, 0), *, axes_names=None):
     axes_names = axes_names or [ax.name for ax in Domain.LatLonGrid().axes]
     offset = {axes_names[i]: value for i, value in enumerate(offset) if value is not None}
     return FieldRef(name=name, offset=offset)
-
-
-def make_axis_interval(bounds: tuple):
-    if isinstance(bounds[0], (VarRef, BinOpExpr)):
-        # assuming: "var_name[index] + offset"
-        if isinstance(bounds[0], VarRef):
-            start = AxisBound(level=bounds[0])
-        else:
-            if bounds[0].op == BinaryOperator.ADD:
-                offset = bounds[0].rhs.value
-            elif bounds[0].op == BinaryOperator.SUB:
-                offset = -bounds[0].rhs.value
-            else:
-                assert False, "Invalid bound"
-            start = AxisBound(level=bounds[0].lhs, offset=offset)
-    elif bounds[0] >= 0:
-        start = AxisBound(level=LevelMarker.START, offset=bounds[0])
-    else:
-        start = AxisBound(level=LevelMarker.END, offset=bounds[0])
-
-    assert isinstance(bounds[1], (VarRef, BinOpExpr, BuiltinLiteral)) or (
-        isinstance(bounds[1], int) and abs(bounds[1])
-    )
-    if isinstance(bounds[1], (VarRef, BinOpExpr)):
-        # assuming: "var_name[index] + offset"
-        if isinstance(bounds[1], VarRef):
-            end = AxisBound(level=bounds[1])
-        else:
-            if bounds[1].op == BinaryOperator.ADD:
-                offset = bounds[1].rhs.value
-            elif bounds[1].op == BinaryOperator.SUB:
-                offset = -bounds[1].rhs.value
-            else:
-                assert False, "Invalid bound"
-            end = AxisBound(level=bounds[1].lhs, offset=offset)
-    elif isinstance(bounds[1], BuiltinLiteral):  # None
-        end = AxisBound(level=LevelMarker.END)
-    elif bounds[1] >= 0:
-        end = AxisBound(level=LevelMarker.START, offset=bounds[1])
-    else:
-        end = AxisBound(level=LevelMarker.END, offset=bounds[1])
-
-    # TODO: more thorough verifications
-    assert (
-        start.level == LevelMarker.START
-        and (start.offset < end.offset or start.level != end.level)
-    ) or (
-        start.level == LevelMarker.END
-        and end.level == LevelMarker.END
-        and start.offset < end.offset
-    )
-
-    interval = AxisInterval(start=start, end=end)
-
-    return interval
 
 
 def make_api_signature(args_list: list):
@@ -714,8 +661,14 @@ class AST2IRVisitor(ast.NodeVisitor):
         interval_axis = self.domain.sequential_axis.name
         params = [item.arg for item in expr.keywords]
         iteration = IterationOrder[expr.keywords[params.index("iteration")].value.attr]
-        bounds = self.visit(expr.keywords[params.index("k_interval")].value)
-        interval = make_axis_interval(bounds)
+
+        assert len(expr.keywords[params.index("k_interval")].value.elts) == 2
+        start, end = (
+            gt_frontend.parse_axis_bound(elt, interval_axis)
+            for elt in expr.keywords[params.index("k_interval")].value.elts
+        )
+        interval = gt_ir.AxisInterval(start=start, end=end, loc=gt_ir.Location.from_ast_node(node))
+
         result = [
             ComputationBlock(
                 interval=interval, iteration_order=iteration, body=BlockStmt(stmts=stmts)

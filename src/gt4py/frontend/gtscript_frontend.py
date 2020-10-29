@@ -473,17 +473,20 @@ class AxisBoundParser(ast.NodeVisitor):
         cls,
         node: ast.Expr,
         axis_name: str,
-        context: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None,
         loc: Optional[gt_ir.Location] = None,
     ) -> gt_ir.AxisBound:
         axis_bound = cls(axis_name, context, loc).visit(node)
         return axis_bound
 
     def __init__(
-        self, axis_name: str, context: Dict[str, Any], loc: Optional[gt_ir.Location] = None
+        self,
+        axis_name: str,
+        context: Optional[Dict[str, Any]] = None,
+        loc: Optional[gt_ir.Location] = None,
     ):
         self.axis_name = axis_name
-        self.context = context
+        self.context = context or dict()
         self.loc = loc
 
         # initialize possible exceptions
