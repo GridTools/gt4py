@@ -256,7 +256,7 @@ class TestIntervalSyntax:
             with computation(PARALLEL), interval(1, None):
                 field = 0
 
-        module = f"TestIntervalSyntax_simple_{id_version}"
+        module = f"TestIntervalSyntax_none_{id_version}"
         externals = {}
         stencil_id, def_ir = compile_definition(
             definition_func, "test_none", module, externals=externals
@@ -276,7 +276,7 @@ class TestIntervalSyntax:
             with computation(PARALLEL), interval(kstart, -1):
                 field = 0
 
-        module = f"TestIntervalSyntax_simple_{id_version}"
+        module = f"TestIntervalSyntax_externals_{id_version}"
         for kstart in (3, gtscript.K[3]):
             externals = {"kstart": kstart}
             stencil_id, def_ir = compile_definition(
@@ -289,6 +289,26 @@ class TestIntervalSyntax:
             assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
                 level=gt_ir.LevelMarker.END, offset=-1, loc=loc
             )
+
+    def test_splitter(self):
+        def definition_func(field: gtscript.Field[float]):
+            from __gtscript__ import K
+
+            with computation(PARALLEL), interval(K[2], -1):
+                field = 0
+
+        module = f"TestIntervalSyntax_splitter_{id_version}"
+        externals = {}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_splitter", module, externals=externals
+        )
+        loc = def_ir.computations[0].interval.loc
+        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START, offset=2, loc=loc
+        )
+        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.END, offset=-1, loc=loc
+        )
 
     def test_axisinterval(self):
         def definition_func(field: gtscript.Field[float]):

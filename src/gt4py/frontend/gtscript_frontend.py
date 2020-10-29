@@ -22,7 +22,7 @@ import itertools
 import numbers
 import textwrap
 import types
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import List
 
 import numpy as np
 
@@ -461,138 +461,6 @@ class CompiledIfInliner(ast.NodeTransformer):
         return node if node else None
 
 
-class AxisBoundParser(ast.NodeVisitor):
-    """This parses the expressions instead of the IRMaker, since these differ from
-    gtscript in the stencil and fucntion body.
-
-    Replaces usage of gt4py.ir.utils.make_axis_interval.
-    """
-
-    @classmethod
-    def apply(
-        cls,
-        node: ast.Expr,
-        axis_name: str,
-        context: Optional[Dict[str, Any]] = None,
-        loc: Optional[gt_ir.Location] = None,
-    ) -> gt_ir.AxisBound:
-        axis_bound = cls(axis_name, context, loc).visit(node)
-        return axis_bound
-
-    def __init__(
-        self,
-        axis_name: str,
-        context: Optional[Dict[str, Any]] = None,
-        loc: Optional[gt_ir.Location] = None,
-    ):
-        self.axis_name = axis_name
-        self.context = context or dict()
-        self.loc = loc
-
-        # initialize possible exceptions
-        self.interval_error = GTScriptSyntaxError(
-            f"Invalid 'interval' specification at line {loc.line} (column {loc.column})", loc=loc
-        )
-
-    @staticmethod
-    def make_axis_bound(offset: int, loc: gt_ir.Location = None) -> gt_ir.AxisBound:
-        return gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START if offset >= 0 else gt_ir.LevelMarker.END,
-            offset=offset,
-            loc=loc,
-        )
-
-    def visit_Name(self, node: ast.Name) -> gt_ir.AxisBound:
-        symbol = node.id
-        if symbol in self.context:
-            value = self.context[symbol]
-            if isinstance(value, gtscript._AxisSplitter):
-                if value.axis != self.axis_name:
-                    raise self.interval_error
-                offset = value.offset
-            elif isinstance(value, int):
-                offset = value
-            else:
-                raise self.interval_error
-            return self.make_axis_bound(offset, self.loc)
-        else:
-            return gt_ir.AxisBound(level=gt_ir.VarRef(name=symbol), loc=self.loc)
-
-    def visit_Constant(self, node: ast.Constant) -> gt_ir.AxisBound:
-        if node.value is not None:
-            if isinstance(node.value, gtscript._AxisSplitter):
-                if node.value.axis != self.axis_name:
-                    raise self.interval_error
-                offset = node.value.offset
-            elif isinstance(node.value, int):
-                offset = node.value
-            else:
-                raise self.interval_error
-            return self.make_axis_bound(offset, self.loc)
-        else:
-            return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
-
-    def visit_NameConstant(self, node: ast.NameConstant) -> gt_ir.AxisBound:
-        """Python < 3.8 uses ast.NameConstant for 'None'."""
-        if node.value is not None:
-            raise self.interval_error
-        else:
-            return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
-
-    def visit_Num(self, node: ast.Num) -> gt_ir.AxisBound:
-        """Equivalent to visit_Constant. Required for Python < 3.8."""
-        return self.make_axis_bound(node.n, self.loc)
-
-    def visit_BinOp(self, node: ast.BinOp) -> gt_ir.AxisBound:
-        left = self.visit(node.left)
-        right = self.visit(node.right)
-
-        if isinstance(node.op, ast.Add):
-            op = lambda x, y: x + y
-        elif isinstance(node.op, ast.Sub):
-            op = lambda x, y: x - y
-        elif isinstance(node.op, ast.Mult):
-            if left.level != right.level or not isinstance(left.level, gt_ir.LevelMarker):
-                raise self.interval_error
-            op = lambda x, y: x * y
-        else:
-            raise self.interval_error
-
-        if right.level == gt_ir.LevelMarker.END:
-            level = gt_ir.LevelMarker.END
-        else:
-            level = left.level
-
-        return gt_ir.AxisBound(level=level, offset=op(left.offset, right.offset), loc=self.loc)
-
-    def visit_UnaryOp(self, node: ast.UnaryOp) -> gt_ir.AxisBound:
-        axis_bound = self.visit(node.operand)
-        level = axis_bound.level
-        offset = axis_bound.offset
-        if isinstance(node.op, ast.USub):
-            new_level = (
-                gt_ir.LevelMarker.END
-                if level == gt_ir.LevelMarker.START
-                else gt_ir.LevelMarker.START
-            )
-            return gt_ir.AxisBound(level=new_level, offset=-offset, loc=self.loc)
-        else:
-            raise self.interval_error
-
-        return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
-
-    def visit_Subscript(self, node: ast.Subscript) -> gt_ir.AxisBound:
-        if node.value != self.axis_name:
-            raise self.interval_error
-
-        if not isinstance(node.slice, ast.Index):
-            raise self.interval_error
-
-        return self.visit(node.slice.value)
-
-
-parse_axis_bound = AxisBoundParser.apply
-
 #
 # class Cleaner(gt_ir.IRNodeVisitor):
 #     @classmethod
@@ -807,17 +675,21 @@ class IRMaker(ast.NodeVisitor):
                 raise range_error
             interval = gt_ir.AxisInterval.full_interval()
 
-        elif isinstance(args[0], ast.Subscript):
-            if not isinstance(args[0].slice, ast.Slice):
-                raise range_error
-            start = parse_axis_bound(args[0].slice.lower, "K", self.local_symbols, loc=loc)
-            end = parse_axis_bound(args[0].slice.upper, "K", self.local_symbols, loc=loc)
+        elif isinstance(args[0], ast.Subscript) and isinstance(args[0].slice, ast.Slice):
+            start = gt_ir.utils.parse_axis_bound(
+                args[0].slice.lower, "K", self.local_symbols, loc=loc
+            )
+            end = gt_ir.utils.parse_axis_bound(
+                args[0].slice.upper, "K", self.local_symbols, loc=loc
+            )
             interval = gt_ir.AxisInterval(start=start, end=end, loc=loc)
 
         else:
             if len(args) != 2:
                 raise range_error
-            bounds = [parse_axis_bound(arg, "K", self.local_symbols, loc=loc) for arg in args]
+            bounds = [
+                gt_ir.utils.parse_axis_bound(arg, "K", self.local_symbols, loc=loc) for arg in args
+            ]
             interval = gt_ir.AxisInterval(start=bounds[0], end=bounds[1], loc=loc)
 
         if (
