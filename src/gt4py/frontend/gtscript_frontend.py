@@ -516,7 +516,7 @@ class AxisBoundParser(ast.NodeVisitor):
             return gt_ir.AxisBound(level=gt_ir.VarRef(name=symbol), loc=self.loc)
 
     def visit_Constant(self, node: ast.Constant) -> gt_ir.AxisBound:
-        if not isinstance(node.value, None):
+        if node.value is not None:
             if isinstance(node.value, gtscript._AxisSplitter):
                 if node.value.axis != self.axis_name:
                     raise self.interval_error
