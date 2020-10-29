@@ -282,17 +282,18 @@ class TestIntervalSyntax:
                 field = 0
 
         module = f"TestIntervalSyntax_simple_{id_version}"
-        externals = {"kstart": 3}
-        stencil_id, def_ir = compile_definition(
-            definition_func, "test_externals", module, externals=externals
-        )
-        loc = def_ir.computations[0].interval.loc
-        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=externals["kstart"], loc=loc
-        )
-        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.END, offset=-1, loc=loc
-        )
+        for kstart in (3, gtscript.K[3]):
+            externals = {"kstart": kstart}
+            stencil_id, def_ir = compile_definition(
+                definition_func, "test_externals", module, externals=externals
+            )
+            loc = def_ir.computations[0].interval.loc
+            assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
+                level=gt_ir.LevelMarker.START, offset=3, loc=loc
+            )
+            assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
+                level=gt_ir.LevelMarker.END, offset=-1, loc=loc
+            )
 
     def test_axisinterval(self):
         def definition_func(field: gtscript.Field[float]):

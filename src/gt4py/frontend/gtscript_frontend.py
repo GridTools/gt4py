@@ -174,6 +174,8 @@ class ValueInliner(ast.NodeTransformer):
                 new_node = ast.NameConstant(value=value)
             elif isinstance(value, numbers.Number):
                 new_node = ast.Num(n=value)
+            elif isinstance(value, gtscript._AxisSplitter):
+                new_node = ast.Constant(value=value)
             elif hasattr(value, "_gtscript_"):
                 pass
             else:
@@ -423,7 +425,7 @@ class CallInliner(ast.NodeTransformer):
     def visit_Expr(self, node: ast.Expr):
         """ignore pure string statements in callee"""
         if not isinstance(node.value, ast.Str):
-            return super().visit_Expr(node)
+            return super().visit(node)
 
 
 class CompiledIfInliner(ast.NodeTransformer):
@@ -520,7 +522,13 @@ class IntervalEndpointParser(ast.NodeVisitor):
             return gt_ir.AxisBound(level=gt_ir.VarRef(name=symbol), loc=self.loc)
 
     def visit_Constant(self, node: ast.Constant) -> gt_ir.AxisBound:
-        return self.make_axis_bound(node.value, self.loc)
+        if isinstance(node.value, gtscript._AxisSplitter):
+            if node.value.axis != self.axis_name:
+                raise self.interval_error
+            offset = node.value.offset
+        else:
+            offset = node.value
+        return self.make_axis_bound(offset, self.loc)
 
     def visit_Num(self, node: ast.Num) -> gt_ir.AxisBound:
         """Equivalent to visit_Constant. Required for Python < 3.8."""
@@ -795,14 +803,9 @@ class IRMaker(ast.NodeVisitor):
             return gt_ir.AxisInterval(start=start, end=end, loc=loc)
 
         else:
-            parsed_args = [
-                parse_axis_endpoint(arg, "K", self.local_symbols, loc=loc) for arg in args
-            ]
-            # # Otherwise, this has two arguments
-            # start =
-            # end = parse_axis_endpoint(args[1], "K", self.local_symbols, loc=loc)
-
-            # return gt_ir.AxisInterval(start=start, end=end, loc=loc)
+            assert len(args) == 2
+            bounds = [parse_axis_endpoint(arg, "K", self.local_symbols, loc=loc) for arg in args]
+            return gt_ir.AxisInterval(start=bounds[0], end=bounds[1], loc=loc)
 
     def _visit_computation_node(self, node: ast.With) -> List[gt_ir.ComputationBlock]:
         loc = gt_ir.Location.from_ast_node(node)
@@ -1358,7 +1361,7 @@ class GTScriptParser(ast.NodeVisitor):
                         collected_name, name_nodes[collected_name]
                     )
                 elif root_name in context:
-                    nonlocal_symbols[collected_name] = GTScriptParser.eval_constant(
+                    nonlocal_symbols[collected_name] = GTScriptParser.eval_external(
                         collected_name,
                         context,
                         gt_ir.Location.from_ast_node(name_nodes[collected_name][0]),
@@ -1372,10 +1375,14 @@ class GTScriptParser(ast.NodeVisitor):
         return nonlocal_symbols, imported_symbols
 
     @staticmethod
-    def eval_constant(name: str, context: dict, loc=None):
+    def eval_external(name: str, context: dict, loc=None):
         try:
             value = eval(name, context)
-            assert value is None or isinstance(value, GTScriptParser.CONST_VALUE_TYPES)
+            assert (
+                value is None
+                or isinstance(value, GTScriptParser.CONST_VALUE_TYPES)
+                or isinstance(value, gtscript._AxisSplitter)
+            )
             assert not isinstance(value, types.FunctionType) or hasattr(value, "_gtscript_")
 
         except Exception as e:
@@ -1405,7 +1412,7 @@ class GTScriptParser(ast.NodeVisitor):
                         resolved_values_list.append(
                             (
                                 attr_name,
-                                GTScriptParser.eval_constant(
+                                GTScriptParser.eval_external(
                                     attr_name, context, gt_ir.Location.from_ast_node(attr_nodes[0])
                                 ),
                             )
@@ -1413,7 +1420,7 @@ class GTScriptParser(ast.NodeVisitor):
 
                 elif not exhaustive:
                     resolved_values_list.append(
-                        (name, GTScriptParser.eval_constant(name, context))
+                        (name, GTScriptParser.eval_external(name, context))
                     )
 
             for name, value in resolved_values_list:
