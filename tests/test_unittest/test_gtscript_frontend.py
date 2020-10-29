@@ -25,6 +25,7 @@ import gt4py.ir as gt_ir
 import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
+from gt4py.gtscript import __INLINED, PARALLEL, computation, interval
 
 from ..definitions import id_version
 
@@ -220,7 +221,6 @@ class TestImportedExternals:
     def test_wrong_value(self, id_version, value_type):
         def definition_func(inout_field: gtscript.Field[float]):
             from gt4py.__externals__ import WRONG_VALUE_CONSTANT
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
@@ -235,8 +235,6 @@ class TestImportedExternals:
 class TestIntervalSyntax:
     def test_simple(self):
         def definition_func(field: gtscript.Field[float]):
-            from __gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(0, 1):
                 field = 0
 
@@ -255,8 +253,6 @@ class TestIntervalSyntax:
 
     def test_none(self):
         def definition_func(field: gtscript.Field[float]):
-            from __gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(1, None):
                 field = 0
 
@@ -276,7 +272,6 @@ class TestIntervalSyntax:
     def test_externals(self):
         def definition_func(field: gtscript.Field[float]):
             from __externals__ import kstart
-            from __gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(kstart, -1):
                 field = 0
@@ -297,8 +292,6 @@ class TestIntervalSyntax:
 
     def test_axisinterval(self):
         def definition_func(field: gtscript.Field[float]):
-            from __gtscript__ import PARALLEL, K, computation, interval
-
             with computation(PARALLEL), interval(K[1:-1]):
                 field = 0
 
@@ -314,6 +307,19 @@ class TestIntervalSyntax:
         assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
             level=gt_ir.LevelMarker.END, offset=-1, loc=loc
         )
+
+    def test_reversed_interval(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(-1, 1):
+                field = 0
+
+        module = f"TestIntervalSyntax_bad_interval_{id_version}"
+        externals = {}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
+        ):
+            compile_definition(definition_func, "test_externals", module, externals=externals)
 
 
 class TestExternalsWithSubroutines:

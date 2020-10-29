@@ -492,10 +492,6 @@ class IntervalEndpointParser(ast.NodeVisitor):
         self.interval_error = GTScriptSyntaxError(
             f"Invalid 'interval' specification at line {loc.line} (column {loc.column})", loc=loc
         )
-        self.range_error = GTScriptSyntaxError(
-            f"Invalid interval range specification at line {loc.line} (column {loc.column})",
-            loc=loc,
-        )
 
     @staticmethod
     def make_axis_bound(offset: int, loc: gt_ir.Location = None) -> gt_ir.AxisBound:
@@ -786,26 +782,49 @@ class IRMaker(ast.NodeVisitor):
         return gt_ir.IterationOrder[iteration_order_node.id]
 
     def _visit_interval_node(self, node: ast.withitem, loc: gt_ir.Location):
+        range_error = GTScriptSyntaxError(
+            f"Invalid interval range specification at line {loc.line} (column {loc.column})",
+            loc=loc,
+        )
+
         interval_node = node.context_expr
         if interval_node.args:
             args = interval_node.args
         else:
-            args = [interval_node.keywords[0].value, interval_node.keywords[1].value]
+            args = [keyword.value for keyword in interval_node.keywords]
+            if len(args) != 2:
+                raise range_error
 
         if isinstance(args[0], ast.Ellipsis):
-            assert len(args) == 1
-            return gt_ir.AxisInterval.full_interval()
+            if len(args) != 1:
+                raise range_error
+            interval = gt_ir.AxisInterval.full_interval()
 
         elif isinstance(args[0], ast.Subscript):
-            assert isinstance(args[0].slice, ast.Slice)
+            if not isinstance(args[0].slice, ast.Slice):
+                raise range_error
             start = parse_axis_endpoint(args[0].slice.lower, "K", self.local_symbols, loc=loc)
             end = parse_axis_endpoint(args[0].slice.upper, "K", self.local_symbols, loc=loc)
-            return gt_ir.AxisInterval(start=start, end=end, loc=loc)
+            interval = gt_ir.AxisInterval(start=start, end=end, loc=loc)
 
         else:
-            assert len(args) == 2
+            if len(args) != 2:
+                raise range_error
             bounds = [parse_axis_endpoint(arg, "K", self.local_symbols, loc=loc) for arg in args]
-            return gt_ir.AxisInterval(start=bounds[0], end=bounds[1], loc=loc)
+            interval = gt_ir.AxisInterval(start=bounds[0], end=bounds[1], loc=loc)
+
+        if (
+            interval.start.level == gt_ir.LevelMarker.END
+            and interval.end.level == gt_ir.LevelMarker.START
+        ):
+            raise range_error
+        elif (
+            interval.start.level == interval.end.level
+            and interval.end.offset <= interval.start.offset
+        ):
+            raise range_error
+
+        return interval
 
     def _visit_computation_node(self, node: ast.With) -> List[gt_ir.ComputationBlock]:
         loc = gt_ir.Location.from_ast_node(node)

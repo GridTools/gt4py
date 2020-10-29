@@ -487,7 +487,7 @@ def computation(order):
     return _ComputationContextManager()
 
 
-def interval(start, end):
+def interval(*args):
     """Define the interval of computation in the 'K' sequential axis."""
     pass
 
