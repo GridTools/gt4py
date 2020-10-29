@@ -368,9 +368,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         elif node.level == gt_ir.LevelMarker.END:
             level = len(self.k_splitters) + 1
         else:
-            assert isinstance(node.level, gt_ir.VarRef)
-            assert len(node.level.index) == 1
-            level = self.k_splitters.index((node.name, node.index[0]))
+            raise NotImplementedError("VarRefs are not yet supported")
 
         # Shift offset to make it relative to the splitter (in-between levels)
         offset = node.offset + 1 if node.offset >= 0 else node.offset
