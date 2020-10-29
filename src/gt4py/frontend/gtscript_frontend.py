@@ -518,13 +518,25 @@ class IntervalEndpointParser(ast.NodeVisitor):
             return gt_ir.AxisBound(level=gt_ir.VarRef(name=symbol), loc=self.loc)
 
     def visit_Constant(self, node: ast.Constant) -> gt_ir.AxisBound:
-        if isinstance(node.value, gtscript._AxisSplitter):
-            if node.value.axis != self.axis_name:
+        if not isinstance(node.value, None):
+            if isinstance(node.value, gtscript._AxisSplitter):
+                if node.value.axis != self.axis_name:
+                    raise self.interval_error
+                offset = node.value.offset
+            elif isinstance(node.value, int):
+                offset = node.value
+            else:
                 raise self.interval_error
-            offset = node.value.offset
+            return self.make_axis_bound(offset, self.loc)
         else:
-            offset = node.value
-        return self.make_axis_bound(offset, self.loc)
+            return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
+
+    def visit_NameConstant(self, node: ast.NameConstant) -> gt_ir.AxisBound:
+        """Python < 3.8 uses ast.NameConstant for 'None'."""
+        if node.value is not None:
+            raise self.interval_error
+        else:
+            return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
 
     def visit_Num(self, node: ast.Num) -> gt_ir.AxisBound:
         """Equivalent to visit_Constant. Required for Python < 3.8."""
@@ -551,12 +563,6 @@ class IntervalEndpointParser(ast.NodeVisitor):
             level = left.level
 
         return gt_ir.AxisBound(level=level, offset=op(left.offset, right.offset), loc=self.loc)
-
-    def visit_NameConstant(self, node: ast.NameConstant) -> gt_ir.AxisBound:
-        if node.value is not None:
-            raise self.interval_error
-        else:
-            return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> gt_ir.AxisBound:
         axis_bound = self.visit(node.operand)
