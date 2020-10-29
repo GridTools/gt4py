@@ -245,11 +245,12 @@ class TestIntervalSyntax:
         stencil_id, def_ir = compile_definition(
             definition_func, "test_simple", module, externals=externals
         )
+        loc = def_ir.computations[0].interval.loc
         assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=0
+            level=gt_ir.LevelMarker.START, offset=0, loc=loc
         )
         assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=1
+            level=gt_ir.LevelMarker.START, offset=1, loc=loc
         )
 
     def test_none(self):
@@ -264,11 +265,12 @@ class TestIntervalSyntax:
         stencil_id, def_ir = compile_definition(
             definition_func, "test_none", module, externals=externals
         )
+        loc = def_ir.computations[0].interval.loc
         assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=1
+            level=gt_ir.LevelMarker.START, offset=1, loc=loc
         )
         assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.END, offset=0
+            level=gt_ir.LevelMarker.END, offset=0, loc=loc
         )
 
     def test_externals(self):
@@ -284,11 +286,12 @@ class TestIntervalSyntax:
         stencil_id, def_ir = compile_definition(
             definition_func, "test_externals", module, externals=externals
         )
+        loc = def_ir.computations[0].interval.loc
         assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=externals["kstart"]
+            level=gt_ir.LevelMarker.START, offset=externals["kstart"], loc=loc
         )
         assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.END, offset=-1
+            level=gt_ir.LevelMarker.END, offset=-1, loc=loc
         )
 
 
