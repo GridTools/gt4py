@@ -461,10 +461,8 @@ class CompiledIfInliner(ast.NodeTransformer):
         return node if node else None
 
 
-class IntervalEndpointParser(ast.NodeVisitor):
-    """Return AxisBound nodes from interval expressions.
-
-    This parses the expressions instead of the IRMaker, since these differ from
+class AxisBoundParser(ast.NodeVisitor):
+    """This parses the expressions instead of the IRMaker, since these differ from
     gtscript in the stencil and fucntion body.
 
     Replaces usage of gt4py.ir.utils.make_axis_interval.
@@ -590,7 +588,7 @@ class IntervalEndpointParser(ast.NodeVisitor):
         return self.visit(node.slice.value)
 
 
-parse_axis_endpoint = IntervalEndpointParser.apply
+parse_axis_bound = AxisBoundParser.apply
 
 #
 # class Cleaner(gt_ir.IRNodeVisitor):
@@ -809,14 +807,14 @@ class IRMaker(ast.NodeVisitor):
         elif isinstance(args[0], ast.Subscript):
             if not isinstance(args[0].slice, ast.Slice):
                 raise range_error
-            start = parse_axis_endpoint(args[0].slice.lower, "K", self.local_symbols, loc=loc)
-            end = parse_axis_endpoint(args[0].slice.upper, "K", self.local_symbols, loc=loc)
+            start = parse_axis_bound(args[0].slice.lower, "K", self.local_symbols, loc=loc)
+            end = parse_axis_bound(args[0].slice.upper, "K", self.local_symbols, loc=loc)
             interval = gt_ir.AxisInterval(start=start, end=end, loc=loc)
 
         else:
             if len(args) != 2:
                 raise range_error
-            bounds = [parse_axis_endpoint(arg, "K", self.local_symbols, loc=loc) for arg in args]
+            bounds = [parse_axis_bound(arg, "K", self.local_symbols, loc=loc) for arg in args]
             interval = gt_ir.AxisInterval(start=bounds[0], end=bounds[1], loc=loc)
 
         if (
