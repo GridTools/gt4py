@@ -124,7 +124,10 @@ storing a reference to the piece of source code which originated the node.
         # start is included
         # end is excluded
 
-    ComputationBlock(interval: AxisInterval, iteration_order: IterationOrder, body: BlockStmt)
+    ComputationBlock(interval: AxisInterval,
+                     [parallel_interval: List[AxisInterval],]
+                     iteration_order: IterationOrder,
+                     body: BlockStmt)
 
     ArgumentInfo(name: str, is_keyword: bool, [default: Any])
 
@@ -712,6 +715,7 @@ class AxisInterval(Node):
 @attribclass
 class ComputationBlock(Node):
     interval = attribute(of=AxisInterval)
+    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
     iteration_order = attribute(of=IterationOrder)
     body = attribute(of=BlockStmt)
     loc = attribute(of=Location, optional=True)
