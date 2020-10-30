@@ -662,35 +662,20 @@ class IRMaker(ast.NodeVisitor):
             loc=loc,
         )
 
-        interval_node = node.context_expr
-        if interval_node.args:
-            args = interval_node.args
+        if node.context_expr.args:
+            args = node.context_expr.args
         else:
-            args = [keyword.value for keyword in interval_node.keywords]
+            args = [keyword.value for keyword in node.context_expr.keywords]
             if len(args) != 2:
                 raise range_error
 
-        if isinstance(args[0], ast.Ellipsis):
-            if len(args) != 1:
-                raise range_error
-            interval = gt_ir.AxisInterval.full_interval()
-
-        elif isinstance(args[0], ast.Subscript) and isinstance(args[0].slice, ast.Slice):
-            start = gt_ir.utils.parse_axis_bound(
-                args[0].slice.lower, "K", self.local_symbols, loc=loc
-            )
-            end = gt_ir.utils.parse_axis_bound(
-                args[0].slice.upper, "K", self.local_symbols, loc=loc
-            )
-            interval = gt_ir.AxisInterval(start=start, end=end, loc=loc)
-
+        if len(args) == 2:
+            interval_node = ast.Slice(lower=args[0], upper=args[1])
+            ast.copy_location(interval_node, node)
         else:
-            if len(args) != 2:
-                raise range_error
-            bounds = [
-                gt_ir.utils.parse_axis_bound(arg, "K", self.local_symbols, loc=loc) for arg in args
-            ]
-            interval = gt_ir.AxisInterval(start=bounds[0], end=bounds[1], loc=loc)
+            interval_node = args[0]
+
+        interval = gt_ir.utils.parse_interval_node(interval_node, "K", loc=loc)
 
         if (
             interval.start.level == gt_ir.LevelMarker.END
