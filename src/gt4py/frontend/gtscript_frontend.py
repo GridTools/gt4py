@@ -766,9 +766,10 @@ class IRMaker(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name) -> gt_ir.Ref:
         symbol = node.id
         if self._is_field(symbol):
+            field_decl: gt_ir.FieldDecl = self.fields[symbol]
             result = gt_ir.FieldRef(
                 name=symbol,
-                offset={axis: value for axis, value in zip(self.domain.axes_names, (0, 0, 0))},
+                offset={axis: value for axis, value in zip(field_decl.axes, (0, 0, 0))},
             )
         elif self._is_parameter(symbol):
             result = gt_ir.VarRef(name=symbol)
