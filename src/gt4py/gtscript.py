@@ -71,6 +71,8 @@ builtins = {
     "externals",
     "computation",
     "interval",
+    "parallel",
+    "region",
     "__gtscript__",
     "__externals__",
     "__INLINED",

@@ -46,6 +46,11 @@ class AxisIntervalParser(ast.NodeVisitor):
         context: Optional[dict] = None,
         loc: Optional[Location] = None,
     ) -> AxisInterval:
+        if not context:
+            context = dict()
+        if not loc:
+            loc = Location.from_ast_node(node)
+
         parser = cls(axis_name, context, loc)
 
         if isinstance(node, ast.Ellipsis):
@@ -55,23 +60,34 @@ class AxisIntervalParser(ast.NodeVisitor):
 
         if isinstance(node, ast.Subscript):
             slice_node = node.slice
-        else:
-            if not isinstance(node, ast.Slice):
-                raise TypeError("Requires Slice node")
+        elif isinstance(node, ast.Slice):
             slice_node = node
+        else:
+            slice_node = ast.Slice(
+                lower=node, upper=ast.BinOp(left=node, op=ast.Add(), right=ast.Constant(value=1))
+            )
+            ast.copy_location(slice_node, node)
 
-        start = parser.visit(slice_node.lower)
-        end = parser.visit(slice_node.upper)
+        if slice_node.lower is not None:
+            start = parser.visit(slice_node.lower)
+        else:
+            start = AxisBound(level=LevelMarker.START, offset=0, extend=True)
+
+        if slice_node.upper is not None:
+            end = parser.visit(slice_node.upper)
+        else:
+            end = AxisBound(level=LevelMarker.END, offset=0, extend=True)
+
         return AxisInterval(start=start, end=end, loc=loc)
 
     def __init__(
         self,
         axis_name: str,
-        context: Optional[dict] = None,
-        loc: Optional[Location] = None,
+        context: dict,
+        loc: Location,
     ):
         self.axis_name = axis_name
-        self.context = context or dict()
+        self.context = context
         self.loc = loc
 
         # initialize possible exceptions

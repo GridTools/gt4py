@@ -625,8 +625,39 @@ class IRMaker(ast.NodeVisitor):
         # if sorting didn't change anything it was already sorted
         return compute_blocks == compute_blocks_sorted
 
-    def _extract_regions(self, node: ast.Call) -> List[List[gt_ir.AxisInterval]]:
-        pass
+    def _extract_regions(self, call_node: ast.Call) -> List[List[gt_ir.AxisInterval]]:
+        if (
+            any(not isinstance(arg, ast.Subscript) for arg in call_node.args)
+            or len(call_node.args) == 0
+        ):
+            raise GTScriptSyntaxError("parallel call accepts a sequence of regions")
+
+        parallel_intervals = []
+        for node in call_node.args:
+            if isinstance(node.slice, ast.ExtSlice):
+                slices = node.slice.dims
+            elif isinstance(node.slice, ast.Index):
+                slices = node.slice.value.elts
+            elif isinstance(node.slice, ast.Slice):
+                raise NotImplementedError("Subscript must contain a tuple of Slice or Index.")
+            else:
+                raise SyntaxError("Unhandled case. Please report this as a bug.")
+
+            axes_slices = tuple(
+                axis_slice.value if isinstance(axis_slice, ast.Index) else axis_slice
+                for axis_slice in slices
+            )
+
+            axis_names = [axis.name for axis in self.domain.parallel_axes]
+            parallel_intervals.append(
+                [
+                    gt_ir.utils.parse_interval_node(
+                        axis, name, loc=gt_ir.Location.from_ast_node(call_node)
+                    )
+                    for axis, name in zip(axes_slices, axis_names)
+                ]
+            )
+        return parallel_intervals
 
     def _visit_iteration_order_node(self, node: ast.withitem, loc: gt_ir.Location):
         syntax_error = GTScriptSyntaxError(
@@ -711,12 +742,12 @@ class IRMaker(ast.NodeVisitor):
                 ):
                     assert interval is None  # only one spec allowed
                     interval = self._visit_interval_node(item, loc)
-                # elif (
-                #     isinstance(item.context_expr, ast.Call)
-                #     and item.context_expr.func.id == "parallel"
-                # ):
-                #     assert parallel_intervals == [None]
-                #     parallel_intervals = self._extract_regions(item.context_expr)
+                elif (
+                    isinstance(item.context_expr, ast.Call)
+                    and item.context_expr.func.id == "parallel"
+                ):
+                    assert parallel_intervals == [None]
+                    parallel_intervals = self._extract_regions(item.context_expr)
                 else:
                     raise syntax_error
         except AssertionError as e:
