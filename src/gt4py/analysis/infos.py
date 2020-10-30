@@ -143,8 +143,10 @@ class IntervalBlockInfo:
     ----------
     id : `int`
         Unique identifier.
-    intervals : IntervalInfo`
+    interval : `IntervalInfo`
         Sequential-axis interval to which this block is applied.
+    parallel_interval : `list` [`IntervalInfo`]
+        A region of the parallel axes to which this block is applied.
     stmts : `list` [`StatementInfo`]
         List of operations.
     inputs : `dict` [`str`, `gt4py.definitions.Extent`]
@@ -155,6 +157,7 @@ class IntervalBlockInfo:
 
     id = attribute(of=int)
     interval = attribute(of=IntervalInfo)
+    parallel_interval = attribute(of=ListOf[IntervalInfo], optional=True)
     stmts = attribute(of=ListOf[StatementInfo], factory=list)
     inputs = attribute(of=DictOf[str, Extent], factory=dict)
     outputs = attribute(of=SetOf[str], factory=set)
