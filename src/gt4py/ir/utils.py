@@ -38,6 +38,14 @@ class AxisIntervalParser(ast.NodeVisitor):
     is removed.
     """
 
+    @staticmethod
+    def single_index_slice(node: ast.Expr):
+        slice_node = ast.Slice(
+            lower=node, upper=ast.BinOp(left=node, op=ast.Add(), right=ast.Constant(value=1))
+        )
+        ast.copy_location(slice_node, node)
+        return slice_node
+
     @classmethod
     def apply(
         cls,
@@ -59,14 +67,14 @@ class AxisIntervalParser(ast.NodeVisitor):
             return interval
 
         if isinstance(node, ast.Subscript):
-            slice_node = node.slice
+            if isinstance(node.slice, ast.Index):
+                slice_node = cls.single_index_slice(node.slice.value)
+            else:
+                slice_node = node.slice
         elif isinstance(node, ast.Slice):
             slice_node = node
         else:
-            slice_node = ast.Slice(
-                lower=node, upper=ast.BinOp(left=node, op=ast.Add(), right=ast.Constant(value=1))
-            )
-            ast.copy_location(slice_node, node)
+            slice_node = cls.single_index_slice(node)
 
         if slice_node.lower is not None:
             start = parser.visit(slice_node.lower)

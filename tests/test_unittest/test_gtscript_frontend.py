@@ -25,7 +25,7 @@ import gt4py.ir as gt_ir
 import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
-from gt4py.gtscript import __INLINED, PARALLEL, computation, interval
+from gt4py.gtscript import __INLINED, PARALLEL, I, computation, interval, parallel, region
 
 from ..definitions import id_version
 
@@ -846,3 +846,48 @@ class TestAnnotations:
         assert "wb" in annotations
         assert annotations["wb"] == int
         assert len(annotations) == 6
+
+
+class TestParallelIntervals:
+    def test_simple(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...), parallel(region[I[0], :]):
+                field = 0
+
+        module = f"TestParallelIntervals_simple_{id_version}"
+        externals = {}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_simple", module, externals=externals
+        )
+
+        parallel_interval = def_ir.computations[0].parallel_interval
+
+        assert parallel_interval is not None
+        assert parallel_interval[0].start.level == gt_ir.LevelMarker.START
+        assert parallel_interval[0].start.offset == 0
+        assert parallel_interval[0].start.extend == False
+        assert parallel_interval[0].end.offset == 1
+        assert parallel_interval[0].end.extend == False
+
+        assert parallel_interval[1].start.extend == True
+        assert parallel_interval[1].end.extend == True
+
+    def test_multiple(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                field = 0
+                with parallel(region[I[0], :]):
+                    field = 1
+                with parallel(region[I[-1], :]):
+                    field = -1
+
+        module = f"TestParallelIntervals_multiple_{id_version}"
+        externals = {}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_simple", module, externals=externals
+        )
+
+        assert len(def_ir.computations) == 3
+        assert def_ir.computations[0].parallel_interval is None
+        assert def_ir.computations[1].parallel_interval is not None
+        assert def_ir.computations[2].parallel_interval is not None
