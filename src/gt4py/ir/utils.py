@@ -31,7 +31,7 @@ from .nodes import *
 DEFAULT_LAYOUT_ID = "_default_layout_id_"
 
 
-class AxisBoundParser(ast.NodeVisitor):
+class AxisIntervalParser(ast.NodeVisitor):
     """Replaces usage of gt4py.ir.utils.make_axis_interval.
 
     This should be moved to gt4py.frontend.gtscript_frontend when AST2IRVisitor
@@ -41,13 +41,28 @@ class AxisBoundParser(ast.NodeVisitor):
     @classmethod
     def apply(
         cls,
-        node: ast.Expr,
+        node: Union[ast.Slice, ast.Ellipsis, ast.Subscript],
         axis_name: str,
         context: Optional[dict] = None,
         loc: Optional[Location] = None,
-    ) -> AxisBound:
-        axis_bound = cls(axis_name, context, loc).visit(node)
-        return axis_bound
+    ) -> AxisInterval:
+        parser = cls(axis_name, context, loc)
+
+        if isinstance(node, ast.Ellipsis):
+            interval = AxisInterval.full_interval()
+            interval.loc = loc
+            return interval
+
+        if isinstance(node, ast.Subscript):
+            slice_node = node.slice
+        else:
+            if not isinstance(node, ast.Slice):
+                raise TypeError("Requires Slice node")
+            slice_node = node
+
+        start = parser.visit(slice_node.lower)
+        end = parser.visit(slice_node.upper)
+        return AxisInterval(start=start, end=end, loc=loc)
 
     def __init__(
         self,
@@ -157,7 +172,7 @@ class AxisBoundParser(ast.NodeVisitor):
         return self.visit(node.slice.value)
 
 
-parse_axis_bound = AxisBoundParser.apply
+parse_interval_node = AxisIntervalParser.apply
 
 
 def make_expr(value):
@@ -791,11 +806,10 @@ class AST2IRVisitor(ast.NodeVisitor):
         iteration = IterationOrder[expr.keywords[params.index("iteration")].value.attr]
 
         assert len(expr.keywords[params.index("k_interval")].value.elts) == 2
-        start, end = (
-            parse_axis_bound(elt, interval_axis)
-            for elt in expr.keywords[params.index("k_interval")].value.elts
-        )
-        interval = AxisInterval(start=start, end=end, loc=Location.from_ast_node(node))
+
+        lower, upper = expr.keywords[params.index("k_interval")].value.elts
+        slice_node = ast.Slice(lower=lower, upper=upper)
+        interval = parse_interval_node(slice_node, interval_axis)
 
         result = [
             ComputationBlock(
