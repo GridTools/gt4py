@@ -45,7 +45,7 @@ class AxisIntervalParser(ast.NodeVisitor):
         axis_name: str,
         context: Optional[dict] = None,
         loc: Optional[Location] = None,
-    ) -> AxisBound:
+    ) -> AxisInterval:
         parser = cls(axis_name, context, loc)
 
         if isinstance(node, ast.Ellipsis):
