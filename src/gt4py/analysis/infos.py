@@ -67,14 +67,20 @@ class IntervalInfo:
     """`AttribClass` class representing an AxisInterval definition.
 
     Interval specification: (start_level, start_offset), (end_level, end_offset)
-    End is not included
+    End is not included.
+
+    For the parallel axes, the following level values are used:
+        * -2: Relative to the end of the extended parallel domain in the stage (beginning)
+        * -1: Relative to the end of the extended parallel domain in the stage (end)
+        *  0: Relative to the beginning of the output computational domain
+        *  1: Relative to the first point outside the compute domain
 
     Parameters
     ----------
     start : `tuple` of `int`
         Start level and offset (included).
-    end : `tuple` of `int`
-        End level and offset (not included).
+    end : `tuple` of
+        `int` End level and offset (not included).
     """
 
     start = attribute(of=TupleOf[int, int])
@@ -145,19 +151,19 @@ class IntervalBlockInfo:
         Unique identifier.
     interval : `IntervalInfo`
         Sequential-axis interval to which this block is applied.
-    parallel_interval : `list` [`IntervalInfo`]
-        A region of the parallel axes to which this block is applied.
     stmts : `list` [`StatementInfo`]
         List of operations.
     inputs : `dict` [`str`, `gt4py.definitions.Extent`]
         Inputs (with extent) to these operations.
     outputs : `set` [`str`]
         Outputs from these operations (with zero extent).
+    parallel_interval : `list` [`IntervalInfo`]
+        A region of the parallel axes to which this block is applied.
     """
 
     id = attribute(of=int)
     interval = attribute(of=IntervalInfo)
-    parallel_interval = attribute(of=ListOf[IntervalInfo], optional=True)
+    parallel_interval = attribute(of=ListOf[IntervalInfo])
     stmts = attribute(of=ListOf[StatementInfo], factory=list)
     inputs = attribute(of=DictOf[str, Extent], factory=dict)
     outputs = attribute(of=SetOf[str], factory=set)
