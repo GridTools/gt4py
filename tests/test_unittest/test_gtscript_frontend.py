@@ -891,3 +891,22 @@ class TestParallelIntervals:
         assert def_ir.computations[0].parallel_interval is None
         assert def_ir.computations[1].parallel_interval is not None
         assert def_ir.computations[2].parallel_interval is not None
+
+    def test_remove(self):
+        def definition_func(field: gtscript.Field[float]):
+            from __externals__ import splitter
+
+            with computation(PARALLEL), interval(...):
+                field = 0
+                with parallel(region[splitter, :]):
+                    field = 1
+                with parallel(region[I[-1], :]):
+                    field = -1
+
+        module = f"TestParallelIntervals_multiple_{id_version}"
+        externals = {"splitter": None}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_simple", module, externals=externals
+        )
+
+        assert len(def_ir.computations) == 2
