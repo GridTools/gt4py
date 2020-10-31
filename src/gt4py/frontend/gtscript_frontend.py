@@ -461,6 +461,35 @@ class CompiledIfInliner(ast.NodeTransformer):
         return node if node else None
 
 
+class RegionRemover(ast.NodeTransformer):
+    @classmethod
+    def apply(cls, node: ast.FunctionDef, context: dict) -> None:
+        cls(context).visit(node)
+
+    def __init__(self, context: dict):
+        self.keep_arg: bool = None
+        self.context = context
+
+    def visit_Call(self, node: ast.Call, **kwargs) -> ast.Call:
+        if isinstance(node.func, ast.Name) and node.func.id == "parallel":
+            new_node = copy.deepcopy(node)
+            assert all(isinstance(arg, ast.Subscript) for arg in new_node.args)
+            new_node.args = list(filter(None, (self.visit(arg) for arg in node.args)))
+            return new_node
+        else:
+            return node
+
+    def visit_Name(self, node: ast.Name):
+        if node.id in self.context and self.context[node.id] is None:
+            self.keep_arg = False
+        return node
+
+    def visit_Subscript(self, node: ast.Subscript):
+        self.keep_arg = True
+        self.generic_visit(node)
+        return node if self.keep_arg else None
+
+
 #
 # class Cleaner(gt_ir.IRNodeVisitor):
 #     @classmethod
@@ -626,16 +655,15 @@ class IRMaker(ast.NodeVisitor):
         return compute_blocks == compute_blocks_sorted
 
     def _extract_regions(self, call_node: ast.Call) -> List[List[gt_ir.AxisInterval]]:
-        if (
-            any(not isinstance(arg, ast.Subscript) for arg in call_node.args)
-            or len(call_node.args) == 0
-        ):
+        if any(not isinstance(arg, ast.Subscript) for arg in call_node.args):
             raise GTScriptSyntaxError("parallel call accepts a sequence of regions")
 
         parallel_intervals = []
         for node in call_node.args:
             if isinstance(node.slice, ast.ExtSlice):
                 slices = node.slice.dims
+            elif isinstance(node.slice, ast.Tuple):
+                slices = node.slice.elts
             elif isinstance(node.slice, ast.Index):
                 slices = node.slice.value.elts
             elif isinstance(node.slice, ast.Slice):
@@ -1490,6 +1518,9 @@ class GTScriptParser(ast.NodeVisitor):
             exhaustive=False,
         )
         AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
+
+        # Remove parallel intervals with 'None' splitters
+        RegionRemover.apply(main_func_node, context=local_context)
 
         ValueInliner.apply(main_func_node, context=local_context)
 
