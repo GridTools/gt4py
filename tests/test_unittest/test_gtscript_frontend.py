@@ -328,6 +328,19 @@ class TestIntervalSyntax:
             level=gt_ir.LevelMarker.END, offset=-1, loc=loc
         )
 
+    def test_error_none(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(None, -1):
+                field = 0
+
+        module = f"TestIntervalSyntax_error_none_{id_version}"
+        externals = {}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
+        ):
+            compile_definition(definition_func, "test_error_none", module, externals=externals)
+
     def test_reversed_interval(self):
         def definition_func(field: gtscript.Field[float]):
             with computation(PARALLEL), interval(-1, 1):
