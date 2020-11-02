@@ -1,5 +1,6 @@
 import ast
 import copy
+import pathlib
 from collections import OrderedDict
 from typing import List, Optional, Tuple, Union, cast
 
@@ -385,6 +386,7 @@ class StencilModuleBuilder:
 
     def __init__(self):
         self._imports = self.DEFAULT_IMPORTS
+        self._paths = []
         self._name = self.DEFAULT_NAME
         self._stencil_class = StencilClassBuilder()
 
@@ -400,9 +402,19 @@ class StencilModuleBuilder:
         self._imports.append(import_node)
         return self
 
+    def add_paths(self, *paths: pathlib.Path) -> "StencilModuleBuilder":
+        self._paths.extend(paths)
+        return self
+
     def build(self) -> ast.Module:
+        add_paths = []
+        if self._paths:
+            add_paths = parse_snippet(
+                f"import sys\nsys.path.extend([{', '.join([repr(str(path)) for path in self._paths])}])\n\n"
+            )
         return ast.Module(
-            body=self._imports
+            body=add_paths
+            + self._imports
             + [parse_node(ACCESSOR_TPL)]
             + [self._stencil_class.name(self._name).build()]
         )

@@ -1,10 +1,17 @@
 import ast
-from typing import List, Union, cast
+from typing import Dict, List, Tuple, Union, cast
 
+import astor
+import black
 from eve.visitors import NodeVisitor
 
 from . import common, gtir, pnir
-from .stencil_module_builder import parse_node
+from .stencil_module_builder import (
+    FieldInfoBuilder,
+    StencilClassBuilder,
+    StencilModuleBuilder,
+    parse_node,
+)
 
 
 GET_DOMAIN_TPL = """
@@ -60,15 +67,65 @@ class PnirToAst(NodeVisitor):
         common.BinaryOperator.DIV: ast.Div,
     }
 
+    def __init__(self, *, onemodule=False):
+        self._onemodule = onemodule
+
+    def visit_Stencil(
+        self, node: pnir.Stencil
+    ) -> Union[StencilModuleBuilder, Tuple[StencilModuleBuilder, ast.Module]]:
+        comp_module = self.visit(node.computation)
+        class_builder = self.visit(node.stencil_obj).source(
+            black.format_str(astor.to_source(comp_module), mode=black.Mode())
+        )
+        module_builder = (
+            StencilModuleBuilder().stencil_class(class_builder).name(node.stencil_obj.name)
+        )
+        if self._onemodule:
+            for line in cast(ast.Call, comp_module.body[0]).body:
+                class_builder.add_run_line(line)
+            return module_builder
+        else:
+            module_builder.import_(parse_node("import computation"))
+            run_call = parse_node(
+                f"computation.run({', '.join(class_builder.signature)}, _domain_=_domain_)"
+            )
+            class_builder.add_run_line(ast.Expr(value=run_call))
+            return module_builder, comp_module
+
+    def visit_StencilObject(self, node: pnir.StencilObject) -> StencilClassBuilder:
+        builder = (
+            StencilClassBuilder()
+            .name(node.name)
+            .field_names(*(decl.name for decl in node.params))
+            .backend("gtc:py")
+        )
+        for name, field_info in self.visit(node.fields_metadata).items():
+            builder.add_gt_field_info(name=name, field_info=field_info)
+        return builder
+
+    def visit_FieldsMetadata(self, node: gtir.FieldsMetadata) -> Dict[str, ast.Call]:
+        return {name: self.visit(field_meta) for name, field_meta in node.metas.items()}
+
+    def visit_FieldMetadata(self, node: gtir.FieldMetadata) -> ast.Call:
+        return (
+            FieldInfoBuilder()
+            .access(node.access)
+            .boundary((node.boundary.i, node.boundary.j, node.boundary.k))
+            .dtype(node.dtype.name.lower())
+            .build()
+        )
+
     def visit_Module(self, node: pnir.Module) -> ast.Module:
         get_domain_def = parse_node(GET_DOMAIN_TPL)
-        return ast.Module(body=[get_domain_def, self.visit(node.run)])
+        body = [] if self._onemodule else [get_domain_def]
+        return ast.Module(body=[*body, self.visit(node.run)])
 
     def visit_RunFunction(self, node: pnir.RunFunction) -> ast.FunctionDef:
         default_domain_if = cast(ast.If, parse_node(DEFAULT_DOMAIN_TPL))
         cast(ast.Call, cast(ast.Assign, default_domain_if.body[0]).value).args = [
             cast(ast.expr, parse_node(name)) for name in node.field_params
         ]
+        body = [] if self._onemodule else [default_domain_if]
         return ast.FunctionDef(
             name="run",
             args=ast.arguments(
@@ -82,7 +139,7 @@ class PnirToAst(NodeVisitor):
             ),
             decorator_list=[],
             returns=None,
-            body=[default_domain_if] + [self.visit(k_loop) for k_loop in node.k_loops],
+            body=body + [self.visit(k_loop) for k_loop in node.k_loops],
         )
 
     def visit_KLoop(self, node: pnir.KLoop) -> ast.For:
