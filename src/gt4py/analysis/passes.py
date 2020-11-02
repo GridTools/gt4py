@@ -34,6 +34,7 @@ from typing import (
     Union,
 )
 
+import gt4py.utils as gt_utils
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.analysis import (
@@ -682,7 +683,7 @@ class StageMergingWrapper:
     def _merge_interval_blocks_with(self, candidate: IJBlockInfo) -> None:
         is_to_ib_map = self.intervals_to_iblock_mapping
         for candidate_iblock in candidate.interval_blocks:
-            key = (candidate_iblock.interval, tuple(candidate_iblock.parallel_interval))
+            key = (candidate_iblock.interval, gt_utils.tuplize(candidate_iblock.parallel_interval))
             if key in is_to_ib_map:
                 self._merge_interval_block(is_to_ib_map[key], candidate_iblock)
             else:
@@ -754,7 +755,7 @@ class StageMergingWrapper:
     @property
     def intervals_to_iblock_mapping(self) -> Dict[IntervalInfo, IntervalBlockInfo]:
         return {
-            (iblock.interval, tuple(iblock.parallel_interval)): iblock
+            (iblock.interval, gt_utils.tuplize(iblock.parallel_interval)): iblock
             for iblock in self.interval_blocks
         }
 
