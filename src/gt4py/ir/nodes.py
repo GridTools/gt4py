@@ -150,6 +150,7 @@ Implementation IR
                 | FieldAccessor(symbol: str, intent: AccessIntent, extent: Extent)
 
     ApplyBlock(interval: AxisInterval,
+               [parallel_interval: List[AxisInterval],]
                local_symbols: Dict[str, VarDecl],
                body: BlockStmt)
 
@@ -768,6 +769,7 @@ class FieldAccessor(Accessor):
 @attribclass
 class ApplyBlock(Node):
     interval = attribute(of=AxisInterval)
+    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
     local_symbols = attribute(of=DictOf[str, VarDecl])
     body = attribute(of=BlockStmt)
 

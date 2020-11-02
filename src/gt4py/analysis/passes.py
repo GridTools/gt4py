@@ -148,6 +148,7 @@ class InitInfoPass(TransformPass):
                                 loc=axis_bound.loc,
                             )
 
+                        assert self.data.splitters_var is None
                         self.data.splitters_var = decl.name
                         self.data.min_k_interval_sizes = [1] * (decl.length + 1)
 
@@ -307,9 +308,28 @@ class InitInfoPass(TransformPass):
 
             return result
 
+        def _make_parallel_interval_info(
+            self,
+            parallel_interval: List[gt_ir.AxisInterval],
+        ) -> List[IntervalInfo]:
+            parallel_interval_info = []
+            for axis_interval in parallel_interval:
+                start = (-2 if axis_interval.start.extend else 0, axis_interval.start.offset)
+                end = (-1 if axis_interval.end.extend else 1, axis_interval.end.offset)
+                parallel_interval_info.append(IntervalInfo(start=start, end=end))
+
+            return parallel_interval_info
+
         def visit_ComputationBlock(self, node: gt_ir.ComputationBlock):
             interval = next(iter(self.current_block_info.intervals))
-            interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
+            parallel_interval = (
+                self._make_parallel_interval_info(node.parallel_interval)
+                if node.parallel_interval
+                else None
+            )
+            interval_block = IntervalBlockInfo(
+                self.data.id_generator.new, interval, parallel_interval=parallel_interval
+            )
 
             assert node.body.stmts  # non-empty computation
             stmt_infos = [
@@ -329,6 +349,11 @@ class InitInfoPass(TransformPass):
 
                 # Open a new stage when it is not possible to use the current one
                 if not group_outputs.isdisjoint(stmt_inputs_with_ij_offset):
+                    if parallel_interval:
+                        raise Exception(
+                            "Cannot read with an offset after writing to a symbol in a restricted compute block"
+                        )
+
                     assert interval_block.stmts
                     assert interval_block.outputs
                     # If some output field is read with an offset it likely implies different
@@ -440,10 +465,13 @@ class NormalizeBlocksPass(TransformPass):
         ) -> None:
             context["interval"] = interval_block.interval
             for statement in interval_block.stmts:
-                self.visit_StatemenInfo(statement, context)
+                self.visit_StatemenInfo(statement, context, interval_block.parallel_interval)
 
         def visit_StatemenInfo(
-            self, statement: StatementInfo, context: Dict[str, Any]
+            self,
+            statement: StatementInfo,
+            context: Dict[str, Any],
+            parallel_interval: List[gt_ir.AxisInterval],
         ) -> DomainBlockInfo:
             new_interval_block = IntervalBlockInfo(
                 context["id_generator"].new,
@@ -451,6 +479,7 @@ class NormalizeBlocksPass(TransformPass):
                 [statement],
                 statement.inputs,
                 statement.outputs,
+                parallel_interval=parallel_interval,
             )
             new_ij_block = IJBlockInfo(
                 context["id_generator"].new,
@@ -651,12 +680,11 @@ class StageMergingWrapper:
                 self._stage.inputs[name] = extent
 
     def _merge_interval_blocks_with(self, candidate: IJBlockInfo) -> None:
-        i_to_ib_map = self.interval_to_iblock_mapping
+        is_to_ib_map = self.intervals_to_iblock_mapping
         for candidate_iblock in candidate.interval_blocks:
-            if candidate_iblock.interval in i_to_ib_map:
-                self._merge_interval_block(
-                    i_to_ib_map[candidate_iblock.interval], candidate_iblock
-                )
+            key = (candidate_iblock.interval, tuple(candidate_iblock.parallel_interval))
+            if key in is_to_ib_map:
+                self._merge_interval_block(is_to_ib_map[key], candidate_iblock)
             else:
                 self._stage.interval_blocks.append(candidate_iblock)
 
@@ -724,8 +752,11 @@ class StageMergingWrapper:
         return self._stage.interval_blocks
 
     @property
-    def interval_to_iblock_mapping(self) -> Dict[IntervalInfo, IntervalBlockInfo]:
-        return {iblock.interval: iblock for iblock in self.interval_blocks}
+    def intervals_to_iblock_mapping(self) -> Dict[IntervalInfo, IntervalBlockInfo]:
+        return {
+            (iblock.interval, tuple(iblock.parallel_interval)): iblock
+            for iblock in self.interval_blocks
+        }
 
     @property
     def inputs(self) -> Dict[str, Extent]:

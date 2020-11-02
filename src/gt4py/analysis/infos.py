@@ -163,10 +163,10 @@ class IntervalBlockInfo:
 
     id = attribute(of=int)
     interval = attribute(of=IntervalInfo)
-    parallel_interval = attribute(of=ListOf[IntervalInfo])
     stmts = attribute(of=ListOf[StatementInfo], factory=list)
     inputs = attribute(of=DictOf[str, Extent], factory=dict)
     outputs = attribute(of=SetOf[str], factory=set)
+    parallel_interval = attribute(of=ListOf[IntervalInfo], optional=True)
 
 
 @attribclass

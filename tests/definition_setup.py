@@ -1,4 +1,4 @@
-from typing import Iterator, List, Set, Tuple, Union
+from typing import Iterator, List, Optional, Set, Tuple, Union
 
 import pytest
 
@@ -163,13 +163,51 @@ class TDefinition(TObject):
 
 class TComputationBlock(TObject):
     def __init__(
-        self, *, order: IterationOrder, start: int = 0, end: int = 0, scope: str = "<unnamed>"
+        self,
+        *,
+        order: IterationOrder,
+        start: int = 0,
+        end: int = 0,
+        scope: str = "<unnamed>",
     ):
         super().__init__(Location(line=0, column=0))
         self.order = order
         self.start = start
         self.end = end
         self.scope = scope
+        self.parallel_interval: Optional[List[AxisInterval]] = None
+
+    def with_parallel_interval(
+        self, *args: Tuple[Optional[int], Optional[int]]
+    ) -> "TComputationBlock":
+        """Add parallel interval to computation block."""
+        assert self.parallel_interval is None
+        assert all(len(arg) == 2 for arg in args)
+
+        self.parallel_interval = []
+
+        for arg in args:
+            start_extend = arg[0] is None
+            end_extend = arg[1] is None
+            start_offset = 0 if start_extend else arg[0]
+            size = 0 if end_extend else arg[1]
+
+            start_level = (
+                LevelMarker.START if start_offset >= 0 or start_extend else LevelMarker.END
+            )
+            end_level = (
+                LevelMarker.START if start_offset >= 0 and not end_extend else LevelMarker.END
+            )
+
+            start = AxisBound(level=start_level, offset=start_offset, extend=start_extend)
+            end = AxisBound(
+                level=end_level,
+                offset=start_offset + size if not end_extend else 0,
+                extend=end_extend,
+            )
+            self.parallel_interval.append(AxisInterval(start=start, end=end))
+
+        return self
 
     def add_statements(self, *stmts: "TStatement") -> "TComputationBlock":
         for stmt in stmts:
@@ -187,6 +225,7 @@ class TComputationBlock(TObject):
                 start=AxisBound(level=LevelMarker.START, offset=self.start),
                 end=AxisBound(level=LevelMarker.END, offset=self.end),
             ),
+            parallel_interval=self.parallel_interval,
             iteration_order=self.order,
             body=BlockStmt(
                 stmts=[stmt.build() for stmt in self.children],
