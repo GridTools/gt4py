@@ -93,7 +93,8 @@ class InitInfoPass(TransformPass):
 
     _DEFAULT_OPTIONS = {"redundant_temp_fields": False}
 
-    def make_k_intervals(self, transform_data: TransformData) -> List[IntervalInfo]:
+    @staticmethod
+    def make_k_intervals(transform_data: TransformData) -> List[IntervalInfo]:
         """Determines intervals over which the computation runs."""
         node: gt_ir.StencilDefinition = transform_data.definition_ir
         transform_data.splitters_var: Optional[str] = None
@@ -422,11 +423,11 @@ class InitInfoPass(TransformPass):
     def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData) -> TransformData:
-        computation_intervals = self.make_k_intervals(transform_data)
-        self.SymbolMaker.apply(transform_data, self._DEFAULT_OPTIONS["redundant_temp_fields"])
-        self.BlockMaker.apply(transform_data, computation_intervals)
-        return transform_data
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        computation_intervals = cls.make_k_intervals(transform_data)
+        cls.SymbolMaker.apply(transform_data, cls._DEFAULT_OPTIONS["redundant_temp_fields"])
+        cls.BlockMaker.apply(transform_data, computation_intervals)
 
 
 class NormalizeBlocksPass(TransformPass):
@@ -498,17 +499,13 @@ class NormalizeBlocksPass(TransformPass):
             )
             self._split_blocks.append(new_block)
 
-    def __init__(self):
-        pass
-
     @property
     def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData) -> TransformData:
-        transform_data.blocks = self.SplitBlocksVisitor().visit(transform_data)
-
-        return transform_data
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        transform_data.blocks = cls.SplitBlocksVisitor().visit(transform_data)
 
 
 class MultiStageMergingWrapper:
@@ -811,14 +808,12 @@ class MergeBlocksPass(TransformPass):
 
     _DEFAULT_OPTIONS = {}
 
-    def __init__(self):
-        pass
-
     @property
     def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData) -> TransformData:
+    @staticmethod
+    def apply(transform_data: TransformData) -> None:
         merged_blocks = greedy_merging_with_wrapper(
             transform_data.blocks, MultiStageMergingWrapper, parent=transform_data
         )
@@ -827,7 +822,6 @@ class MergeBlocksPass(TransformPass):
                 block.ij_blocks, StageMergingWrapper, parent=transform_data, parent_block=block
             )
         transform_data.blocks = merged_blocks
-        return transform_data
 
 
 class ComputeExtentsPass(TransformPass):
@@ -841,14 +835,12 @@ class ComputeExtentsPass(TransformPass):
 
     _DEFAULT_OPTIONS = {}
 
-    def __init__(self):
-        pass
-
     @property
     def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData) -> TransformData:
+    @staticmethod
+    def apply(transform_data: TransformData) -> None:
         seq_axis = transform_data.definition_ir.domain.index(
             transform_data.definition_ir.domain.sequential_axis
         )
@@ -873,8 +865,6 @@ class ComputeExtentsPass(TransformPass):
         transform_data.implementation_ir.fields_extents = {
             name: Extent(extent) for name, extent in access_extents.items()
         }
-
-        return transform_data
 
 
 class DataTypePass(TransformPass):
@@ -1001,9 +991,9 @@ class DataTypePass(TransformPass):
             else:
                 node.data_type = gt_ir.DataType.DEFAULT
 
-    def apply(self, transform_data: TransformData) -> TransformData:
-        self.CollectDataTypes.apply(transform_data.implementation_ir)
-        return transform_data
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        cls.CollectDataTypes.apply(transform_data.implementation_ir)
 
 
 class ComputeUsedSymbolsPass(TransformPass):
@@ -1023,10 +1013,10 @@ class ComputeUsedSymbolsPass(TransformPass):
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
             self.data.symbols[node.name].in_use = True
 
-    def apply(self, transform_data: TransformData) -> TransformData:
-        visitor = self.ComputeUsedVisitor(transform_data)
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        visitor = cls.ComputeUsedVisitor(transform_data)
         visitor.visit(transform_data.definition_ir)
-        return transform_data
 
 
 class BuildIIRPass(TransformPass):
@@ -1042,14 +1032,18 @@ class BuildIIRPass(TransformPass):
     _DEFAULT_OPTIONS = {}
 
     def __init__(self):
-        self.data = None
-        self.iir = None
+        self.data: TransformData = None
+        self.iir: gt_ir.StencilImplementation = None
 
     @property
     def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData) -> TransformData:
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        return cls()(transform_data)
+
+    def __call__(self, transform_data: TransformData) -> None:
         self.data = transform_data
         self.iir = transform_data.implementation_ir
 
@@ -1286,11 +1280,10 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             else:
                 return True, node
 
-    def apply(self, transform_data: TransformData) -> TransformData:
-        demotables = self.CollectDemotableSymbols.apply(transform_data.implementation_ir)
-        self.DemoteSymbols.apply(transform_data.implementation_ir, demotables)
-
-        return transform_data
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        demotables = cls.CollectDemotableSymbols.apply(transform_data.implementation_ir)
+        cls.DemoteSymbols.apply(transform_data.implementation_ir, demotables)
 
 
 class HousekeepingPass(TransformPass):
@@ -1366,10 +1359,9 @@ class HousekeepingPass(TransformPass):
             else:
                 return False, None
 
-    def apply(self, transform_data: TransformData) -> TransformData:
-        self.PruneEmptyNodes.apply(transform_data.implementation_ir)
-        self.WarnIfNoEffect.apply(
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        cls.PruneEmptyNodes.apply(transform_data.implementation_ir)
+        cls.WarnIfNoEffect.apply(
             transform_data.definition_ir.name, transform_data.implementation_ir
         )
-
-        return transform_data
