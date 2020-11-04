@@ -100,6 +100,7 @@ repos:
           tests/test_unittest/test_call_interface.py |
           tests/test_unittest/test_gtscript_frontend.py |
           tests/test_unittest/test_compute_extents_pass.py |
+          tests/test_unittest/test_normalize_blocks_pass.py |
           tests/test_unittest/test_storage.py |
           tests/definition_setup.py |
           )$
