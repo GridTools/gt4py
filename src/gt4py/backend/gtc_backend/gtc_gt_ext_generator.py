@@ -16,12 +16,18 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     # ParamArg = as_fmt("py::buffer {name}, std::array<gt::unit_t,3> {name}_origin")
 
     def visit_Computation(self, node: gtcppir.Computation, **kwargs):
+        assert "module_name" in kwargs
         entry_params = [
             "py::buffer {name}, std::array<gt::uint_t,3> {name}_origin".format(name=p.name)
             for p in node.parameters
         ]
         sid_params = ["gt::as_sid<double, 3>({name})".format(name=p.name) for p in node.parameters]
-        return self.generic_visit(node, entry_params=entry_params, sid_params=sid_params, **kwargs)
+        return self.generic_visit(
+            node,
+            entry_params=entry_params,
+            sid_params=sid_params,
+            **kwargs,
+        )
 
     Computation = as_mako(
         """#include <pybind11/pybind11.h>
@@ -32,7 +38,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 namespace gt = gridtools;
 namespace py = ::pybind11;
 
-PYBIND11_MODULE(m_demo_copy__gtcgt_b3121b87fe_pyext, m) {
+PYBIND11_MODULE(${module_name}, m) {
     m.def("run_computation", [](std::array<gt::uint_t, 3> domain, 
     ${','.join(entry_params)},  py::object exec_info){
         ${name}(domain)(${','.join(sid_params)});
@@ -41,21 +47,15 @@ PYBIND11_MODULE(m_demo_copy__gtcgt_b3121b87fe_pyext, m) {
     )
 
     @classmethod
-    def apply(cls, root, **kwargs) -> str:
-        generated_code = super().apply(root, **kwargs)
+    def apply(cls, root, module_name, **kwargs) -> str:
+        generated_code = cls().visit(root, module_name=module_name, **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
 
 
 class GTCGTExtGenerator:
 
-    TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
-    TEMPLATE_FILES = {
-        "computation.hpp": "computation.hpp.in",
-        "computation.src": "computation.src.in",
-        "bindings.cpp": "bindings.cpp.in",
-    }
-    COMPUTATION_FILES = ["computation.hpp", "computation.src"]
+    COMPUTATION_FILES = ["computation.hpp"]
     BINDINGS_FILES = ["bindings.cpp"]
 
     def __init__(self, class_name, module_name, gt_backend_t, options):
@@ -67,7 +67,7 @@ class GTCGTExtGenerator:
     def __call__(self, gtir: gtir.Computation) -> Dict[str, Dict[str, str]]:
         gtcpp = GTIRToGTCpp().visit(gtir)
         implementation = GTCppCodegen.apply(gtcpp)
-        bindings = GTCppBindingsCodegen.apply(gtcpp)
+        bindings = GTCppBindingsCodegen.apply(gtcpp, self.module_name)
         return {
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings.cc": bindings},

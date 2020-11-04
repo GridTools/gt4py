@@ -5,7 +5,7 @@ from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, computation, interval
 
 
-backend = "gtc:py"  # "debug", "numpy", "gtx86", "gtcuda"
+backend = "gtc:gt"  # "debug", "numpy", "gtx86", "gtcuda"
 dtype = np.float64
 
 
@@ -14,7 +14,7 @@ dtype = np.float64
 def demo_lap(in_field: gtscript.Field[dtype], out_field: gtscript.Field[dtype]):
     with computation(PARALLEL), interval(...):
         out_field = (  # noqa: F841 [assigned but not used]
-            -4 * in_field
+            -4.0 * in_field
             + in_field[-1, 0, 0]
             + in_field[1, 0, 0]
             + in_field[0, -1, -0]
