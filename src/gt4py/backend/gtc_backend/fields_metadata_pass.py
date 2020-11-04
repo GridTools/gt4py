@@ -7,7 +7,7 @@ from .gtir import Computation, FieldAccess, FieldDecl, FieldsMetadataBuilder
 
 class FieldsMetadataPass(NodeTranslator):
     def __init__(self, *, memo: Dict = None, **kwargs: Any) -> None:
-        super().__init__(memo=memo, **kwargs)
+        super().__init__(**kwargs)
         self.metas = FieldsMetadataBuilder()
 
     def visit_Computation(self, node: Computation) -> Computation:

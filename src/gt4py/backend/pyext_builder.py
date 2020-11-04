@@ -70,7 +70,8 @@ def get_gt_pyext_build_opts(
             "-ftemplate-depth=800",
             "-fvisibility=hidden",
             "-fPIC",
-            "-isystem{}".format(gt_config.build_settings["gt_include_path"]),
+            # "-isystem{}".format(gt_config.build_settings["gt_include_path"]),
+            "-isystem{}".format(gt_config.build_settings["gt2_include_path"]),  # TODO
             "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
             "-DBOOST_PP_VARIADICS",
             *extra_compile_args_from_config["cxx"],
@@ -78,7 +79,8 @@ def get_gt_pyext_build_opts(
         nvcc=[
             "-std=c++14",
             "-arch=sm_{}".format(cuda_arch),
-            "-isystem={}".format(gt_config.build_settings["gt_include_path"]),
+            # "-isystem={}".format(gt_config.build_settings["gt_include_path"]),
+            "-isystem={}".format(gt_config.build_settings["gt2_include_path"]),  # TODO
             "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
             "-DBOOST_PP_VARIADICS",
             "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",

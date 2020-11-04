@@ -5,7 +5,9 @@ from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, computation, interval
 
 
-backend = "gtc:py"  # "debug", "numpy", "gtx86", "gtcuda"
+# backend = "gtx86"  # "debug", "numpy", "gtx86", "gtcuda"
+backend = "gtc:gt"  # "debug", "numpy", "gtx86", "gtcuda"
+
 dtype = np.float64
 
 

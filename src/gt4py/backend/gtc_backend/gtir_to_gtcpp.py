@@ -48,15 +48,29 @@ class GTIRToGTCpp(eve.NodeTranslator):
         )
 
     def visit_VerticalLoop(self, node: gtir.VerticalLoop, **kwargs):
-        functor_name = "functor_" + node.id_attr_
+        functor_name = "functor_" + node.id_
+        field_accesses = set([f.name for f in eve.FindNodes.by_type(gtir.FieldAccess, node)])
+
         return gtcppir.GTMultiStage(
             loop_order=node.loop_order,
-            stages=[gtcppir.GTStage(functor=functor_name, args=[])],
+            stages=[
+                gtcppir.GTStage(
+                    functor=functor_name, args=[gtcppir.ParamArg(name=f) for f in field_accesses]
+                )
+            ],
             caches=[],
         ), gtcppir.GTFunctor(
             name=functor_name,
             applies=[self.visit(interval) for interval in node.vertical_intervals],
-            param_list=GTParamList(accessors=[]),
+            param_list=GTParamList(
+                # TODO this is a hack:
+                accessors=[
+                    gtcppir.GTAccessor(
+                        name=f, id=i, intent=gtcppir.Intent.INOUT, extent=gtcppir.GTExtent.zero()
+                    )
+                    for i, f in enumerate(field_accesses)
+                ]
+            ),
         )
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs) -> Tuple[GTComputation, List[GTFunctor]]:
@@ -64,10 +78,11 @@ class GTIRToGTCpp(eve.NodeTranslator):
             self.visit(v) for v in node.vertical_loops
         ]
         msses, functors = tuple(map(list, zip(*msses_and_functors)))
+        fields = set([arg.name for mss in msses for stage in mss.stages for arg in stage.args])
         return (
             gtcppir.GTComputation(
-                name=node.id_attr_,
-                parameters=[],
+                name=node.id_,
+                parameters=[gtcppir.ParamArg(name=f) for f in fields],
                 temporaries=[],
                 multistages=msses,
             ),

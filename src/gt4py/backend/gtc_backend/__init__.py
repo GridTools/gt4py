@@ -1,4 +1,4 @@
-from .backend import GTCPythonBackend
+from .backend import GTCPythonBackend, GTCGTBackend
 
 
-__all__ = ["GTCPythonBackend"]
+__all__ = ["GTCPythonBackend", "GTCGTBackend"]

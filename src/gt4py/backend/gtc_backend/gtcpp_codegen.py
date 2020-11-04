@@ -99,14 +99,19 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return multi_pass(${ ','.join(multistages) });
             };
 
-            st::run(${name}, cpu_ifirst /* TODO */, grid, ${','.join(parameters)});
+            run(${name}, cpu_ifirst<>{} /* TODO */, grid, ${','.join(parameters)});
         }
         """
     )
 
     Computation = as_mako(
-        """namespace ${ name }_impl_{
+        """#include <gridtools/stencil/cpu_ifirst.hpp>
+        #include <gridtools/stencil/cartesian.hpp>
+
+        namespace ${ name }_impl_{
+            using Domain = std::array<gridtools::uint_t, 3>;
             using namespace gridtools::stencil;
+            using namespace gridtools::stencil::cartesian;
            ${'\\n'.join(functors)}
 
         auto ${name}(Domain domain) {
@@ -115,11 +120,11 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
                 // ctrl flow with calls to gt computations
                 ${'\\n'.join(ctrl_flow_ast)}
-            }
+            };
         }
         }
 
-        auto ${name}(Domain domain){
+        auto ${name}(${name}_impl_::Domain domain){
             return ${name}_impl_::${name}(domain);
         }
         """

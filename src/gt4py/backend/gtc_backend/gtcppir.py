@@ -19,7 +19,7 @@ import enum
 from typing import List, Optional, Tuple, Union
 
 from devtools import debug
-from eve.types import StrEnum  # noqa: F401
+from eve import StrEnum  # noqa: F401
 from pydantic import root_validator, validator
 
 import eve
