@@ -1174,6 +1174,7 @@ class BuildIIRPass(TransformPass):
                 interval=self._make_axis_interval(int_block.interval),
                 local_symbols=local_symbols,
                 body=gt_ir.BlockStmt(stmts=stmts),
+                parallel_interval=self._make_parallel_interval(int_block.parallel_interval),
             )
             apply_blocks.append(apply_block)
 
@@ -1200,19 +1201,6 @@ class BuildIIRPass(TransformPass):
         )
 
         return stage
-
-    def _make_apply_block(self, interval_block):
-        # Body
-        stmts = []
-        for stmt_info in interval_block.stmts:
-            if not isinstance(stmt_info.stmt, gt_ir.Decl):
-                stmts.append(stmt_info.stmt)
-        body = gt_ir.BlockStmt(stmts=stmts)
-        result = gt_ir.ApplyBlock(
-            interval=self._make_axis_interval(interval_block.interval), body=body
-        )
-
-        return result
 
     def _make_accessor(self, name, extent, read_write: bool):
         assert name in self.data.symbols
@@ -1245,6 +1233,26 @@ class BuildIIRPass(TransformPass):
         result = gt_ir.AxisInterval(start=axis_bounds[0], end=axis_bounds[1])
 
         return result
+
+    def _make_parallel_interval(
+        self, intervals: Optional[List[IntervalInfo]]
+    ) -> List[gt_ir.AxisInterval]:
+        parallel_interval = []
+        for interval in intervals:
+            start = gt_ir.AxisBound(
+                level=gt_ir.LevelMarker.START
+                if interval.start[0] <= 0
+                else gt_ir.LevelMarker.START,
+                offset=interval.start[1],
+                extend=(interval.start[0] < 0),
+            )
+            end = gt_ir.AxisBound(
+                level=gt_ir.LevelMarker.START if interval.end[0] <= 0 else gt_ir.LevelMarker.START,
+                offset=interval.end[1],
+                extend=(interval.end[0] < 0),
+            )
+            parallel_interval.append(gt_ir.AxisInterval(start=start, end=end))
+        return parallel_interval
 
 
 class DemoteLocalTemporariesToVariablesPass(TransformPass):
