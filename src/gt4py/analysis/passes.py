@@ -1236,7 +1236,10 @@ class BuildIIRPass(TransformPass):
 
     def _make_parallel_interval(
         self, intervals: Optional[List[IntervalInfo]]
-    ) -> List[gt_ir.AxisInterval]:
+    ) -> Optional[List[gt_ir.AxisInterval]]:
+        if intervals is None:
+            return None
+
         parallel_interval = []
         for interval in intervals:
             start = gt_ir.AxisBound(
@@ -1252,6 +1255,7 @@ class BuildIIRPass(TransformPass):
                 extend=(interval.end[0] < 0),
             )
             parallel_interval.append(gt_ir.AxisInterval(start=start, end=end))
+
         return parallel_interval
 
 
