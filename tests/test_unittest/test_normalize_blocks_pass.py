@@ -2,7 +2,7 @@ from typing import Tuple
 
 import pytest
 
-from gt4py.ir.nodes import Domain, IterationOrder
+from gt4py.ir.nodes import AxisBound, AxisInterval, Domain, IterationOrder, LevelMarker
 
 from ..analysis_setup import AnalysisPass
 from ..definition_setup import TAssign, TComputationBlock, TDefinition
@@ -61,7 +61,13 @@ def test_parallel_interval_split_not_allowed(
                 TAssign("tmp", "in", (0, 0, 0)),
                 TAssign("out", "tmp", ij_offset),
             )
-            .with_parallel_interval((0, 1), (None, None)),
+            .with_parallel_interval(
+                AxisInterval(
+                    start=AxisBound(level=LevelMarker.START, offset=0),
+                    end=AxisBound(level=LevelMarker.START, offset=1),
+                ),
+                None,
+            ),
         )
         .build_transform()
     )
