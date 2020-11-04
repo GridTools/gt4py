@@ -50,14 +50,13 @@ def test_write_after_read_ij_offset(
 
 def test_parallel_interval_split_not_allowed(
     normalize_blocks_pass: AnalysisPass,
-    iteration_order: IterationOrder,
     ij_offset: Tuple[int, int, int],
     ijk_domain: Domain,
 ) -> None:
     transform_data = (
         TDefinition(name="ij_extended", domain=ijk_domain, fields=["out", "in", "inout"])
         .add_blocks(
-            TComputationBlock(order=iteration_order)
+            TComputationBlock(order=IterationOrder.PARALLEL)
             .add_statements(
                 TAssign("tmp", "in", (0, 0, 0)),
                 TAssign("out", "tmp", ij_offset),

@@ -99,6 +99,7 @@ repos:
           tests/test_integration/test_code_generation.py |
           tests/test_unittest/test_call_interface.py |
           tests/test_unittest/test_gtscript_frontend.py |
+          tests/test_unittest/test_compute_extents_pass.py |
           tests/test_unittest/test_storage.py |
           tests/definition_setup.py |
           )$
