@@ -25,7 +25,7 @@ from gt4py.backend import pyext_builder
 from gt4py import utils as gt_utils
 from gt4py import gt2_src_manager
 
-from gt4py.backend.gtc_backend import gtc_gt_ext_generator
+from gt4py.backend.gtc_backend import gtc_gt_generator
 
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
@@ -95,7 +95,7 @@ class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
     }
     languages = {"computation": "c++", "bindings": ["python"]}
 
-    PYEXT_GENERATOR_CLASS = gtc_gt_ext_generator.GTCGTExtGenerator
+    PYEXT_GENERATOR_CLASS = gtc_gt_generator.GTCGTExtGenerator
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(uses_cuda=False)

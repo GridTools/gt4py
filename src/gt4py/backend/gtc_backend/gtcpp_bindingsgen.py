@@ -1,15 +1,6 @@
-import os
-
-from typing import Dict
-
-from . import gtir, gtcppir
+from . import gtcppir
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
-
-from gt4py.backend.gtc_backend.gtcpp_codegen import GTCppCodegen
-from gt4py.backend.gtc_backend.gtir_to_gtcpp import GTIRToGTCpp
-
-from devtools import debug
 
 
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):
@@ -51,24 +42,3 @@ PYBIND11_MODULE(${module_name}, m) {
         generated_code = cls().visit(root, module_name=module_name, **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
-
-
-class GTCGTExtGenerator:
-
-    COMPUTATION_FILES = ["computation.hpp"]
-    BINDINGS_FILES = ["bindings.cpp"]
-
-    def __init__(self, class_name, module_name, gt_backend_t, options):
-        self.class_name = class_name
-        self.module_name = module_name
-        self.gt_backend_t = gt_backend_t
-        self.options = options
-
-    def __call__(self, gtir: gtir.Computation) -> Dict[str, Dict[str, str]]:
-        gtcpp = GTIRToGTCpp().visit(gtir)
-        implementation = GTCppCodegen.apply(gtcpp)
-        bindings = GTCppBindingsCodegen.apply(gtcpp, self.module_name)
-        return {
-            "computation": {"computation.hpp": implementation},
-            "bindings": {"bindings.cc": bindings},
-        }
