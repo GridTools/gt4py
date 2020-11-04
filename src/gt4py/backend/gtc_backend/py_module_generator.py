@@ -1,8 +1,11 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
+import astor
+
 from gt4py.backend import BaseModuleGenerator
 from gt4py.utils.text import TextBlock, format_source
 
+from .pnir_to_ast import PnirToAst
 from .stencil_object_snippet_generators import (
     ACCESSOR_CLASS_SRC,
     ComputationCallGenerator,
@@ -15,6 +18,8 @@ from .stencil_object_snippet_generators import (
 
 if TYPE_CHECKING:
     from gt4py.stencil_builder import StencilBuilder
+
+    from .backend import GTCPythonBackend
 
 
 class GTCPyModuleGenerator(BaseModuleGenerator):
@@ -87,7 +92,35 @@ class GTCPyModuleGenerator(BaseModuleGenerator):
         return ACCESSOR_CLASS_SRC
 
     @property
-    def backend(self):
+    def backend(self) -> "GTCPythonBackend":
         from .backend import GTCPythonBackend
 
         return cast(GTCPythonBackend, self.builder.backend)
+
+
+class PnirModuleGenerator:
+    """Generate a python stencil module from Python naive IR (PnIR)."""
+
+    def __init__(self, *, builder: Optional["StencilBuilder"] = None):
+        self._builder = builder
+
+    @property
+    def builder(self) -> "StencilBuilder":
+        from gt4py.stencil_builder import StencilBuilder
+
+        return cast(StencilBuilder, self._builder)
+
+    @property
+    def backend(self) -> "GTCPythonBackend":
+        from .backend import GTCPythonBackend
+
+        return cast(GTCPythonBackend, self.builder.backend)
+
+    def __call__(self, builder: Optional["StencilBuilder"] = None) -> str:
+        if builder:
+            self._builder = builder
+
+        stencil_ast_builder, _ = PnirToAst(onemodule=False).visit(self.backend.pn_ir)
+        stencil_ast_builder.name(self.builder.class_name)
+
+        return astor.to_source(stencil_ast_builder.build())

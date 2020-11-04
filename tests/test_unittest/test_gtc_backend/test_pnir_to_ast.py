@@ -369,7 +369,7 @@ def test_stencil_split(set_ones_stencil: pnir.Stencil, tmp_path: pathlib.Path) -
     # generate asts and python code from there
     pnir_to_ast = PnirToAst(onemodule=False)
     ast_module_builder, ast_comp_module = pnir_to_ast.visit(set_ones_stencil)
-    ast_module = ast_module_builder.add_paths(comp_file.parent).build()
+    ast_module = ast_module_builder.build()
     stencil_source = black.format_str(astor.to_source(ast_module), mode=black.Mode())
     computation_source = black.format_str(astor.to_source(ast_comp_module), mode=black.Mode())
     print(computation_source)

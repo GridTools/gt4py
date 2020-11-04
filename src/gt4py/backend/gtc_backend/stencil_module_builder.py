@@ -387,6 +387,7 @@ class StencilModuleBuilder:
     def __init__(self):
         self._imports = self.DEFAULT_IMPORTS
         self._paths = []
+        self._relpaths = []
         self._name = self.DEFAULT_NAME
         self._stencil_class = StencilClassBuilder()
 
@@ -406,11 +407,29 @@ class StencilModuleBuilder:
         self._paths.extend(paths)
         return self
 
+    def add_relpaths(self, *relpaths: pathlib.Path) -> "StencilModuleBuilder":
+        self._relpaths.extend(relpaths)
+        return self
+
     def build(self) -> ast.Module:
         add_paths = []
+        if self._paths or self._relpaths:
+            add_paths.append(parse_node("import sys"))
         if self._paths:
-            add_paths = parse_snippet(
-                f"import sys\nsys.path.extend([{', '.join([repr(str(path)) for path in self._paths])}])\n\n"
+            add_paths.append(
+                parse_node(
+                    f"sys.path.extend([{', '.join([repr(str(path)) for path in self._paths])}])"
+                )
+            )
+        if self._relpaths:
+            relpaths = [
+                f"str(pathlib.Path(__file__).parent / {repr(relpath)})"
+                for relpath in self._relpaths
+            ]
+            add_paths.extend(
+                parse_snippet(
+                    f"import pathlib\nsys.path.extend([{', '.join([path for path in relpaths])}])"
+                )
             )
         return ast.Module(
             body=add_paths

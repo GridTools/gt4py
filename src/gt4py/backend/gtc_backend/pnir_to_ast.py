@@ -85,7 +85,7 @@ class PnirToAst(NodeVisitor):
                 class_builder.add_run_line(line)
             return module_builder
         else:
-            module_builder.import_(parse_node("import computation"))
+            module_builder.import_(parse_node("import computation")).add_relpaths(".")
             run_call = parse_node(
                 f"computation.run({', '.join(class_builder.signature)}, _domain_=_domain_)"
             )
