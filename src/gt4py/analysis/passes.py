@@ -908,7 +908,7 @@ class ComputeExtentsPass(TransformPass):
                     axis_extent = extent[i]
                     input_extent_axis = block_inputs[name][i]
                     if iinfo.start[0] < 0:
-                        input_extent_axis[0] = min(input_extent_axis[0], extent[0])
+                        input_extent_axis[0] = min(input_extent_axis[0], axis_extent[0])
                     elif iinfo.start[0] == 0:
                         input_extent_axis[0] = min(
                             input_extent_axis[0],
@@ -919,7 +919,7 @@ class ComputeExtentsPass(TransformPass):
                         )
 
                     if iinfo.end[0] < 0:
-                        input_extent_axis[1] = min(input_extent_axis[1], extent[1])
+                        input_extent_axis[1] = min(input_extent_axis[1], axis_extent[1])
                     elif iinfo.end[0] == 1:
                         input_extent_axis[1] = max(
                             input_extent_axis[1],
