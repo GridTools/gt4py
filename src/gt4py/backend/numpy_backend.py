@@ -123,7 +123,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         # Computations body is split in different vertical regions
         assert sorted(regions, reverse=iteration_order == gt_ir.IterationOrder.BACKWARD) == regions
 
-        for bounds, body in regions:
+        for bounds, parallel_interval, body in regions:
             region_lines = self._make_regional_computation(iteration_order, bounds, body)
             source_lines.extend(region_lines)
 
