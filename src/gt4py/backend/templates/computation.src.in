@@ -100,21 +100,21 @@ using data_store_t =
 {%- for field in arg_fields %}
 using p_{{ field.name }} = gt::arg<{{ arg_counter + loop.index0 }}, data_store_t<{{ field.dtype }}, {{ field.layout_id }}>>;
 {%- endfor %}
-{% set arg_counter = arg_counter + arg_fields|length %}
-{% for param in parameters %}
+{%- set arg_counter = arg_counter + arg_fields|length %}
+{%- for param in parameters %}
 using p_{{ param.name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
-{%- endfor %}
-{% set arg_counter = arg_counter + parameters|length %}
-{%- if requires_positional %}
-{% for axis_name in axes_names %}
+{%- endfor -%}
+{%- set arg_counter = arg_counter + parameters|length %}
+{%- if requires_positional -%}
+{%- for axis_name in axes_names %}
 using p_domain_size_{{ axis_name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_parameter<gt::uint_t>>;
-{%- endfor %}
+{%- endfor -%}
 {% set arg_counter = arg_counter + axes_names|length %}
-{%- endif %}
+{%- endif -%}
 {% if tmp_fields -%}
 {%- for field in tmp_fields %}
 using p_{{ field.name }} = gt::tmp_arg<{{ arg_counter + loop.index0 }}, data_store_t<{{ field.dtype }}, 0>>;
-{%- endfor %}
+{%- endfor -%}
 {% set arg_counter = arg_counter + tmp_fields|length %}
 {%- endif %}
 
@@ -250,20 +250,19 @@ void run(const std::array<gt::uint_t, 3>& domain,
 {%- else %}
     computation_t gt_computation = gt::make_computation<backend_t>(
 {%- endif %}
-{%- set comp_comma = joiner(",") %}
-        {{- comp_comma() }}make_grid(domain)
-{% for param in parameters %}
-        {{- comp_comma() }} p_{{ param.name }}() = gt::make_global_parameter({{ param.name }})
-{% endfor %}
+        make_grid(domain),
+{%- for param in parameters %}
+        p_{{ param.name }}() = gt::make_global_parameter({{ param.name }}),
+{% endfor -%}
 {%- if requires_positional -%}
-{% for axis_name in axes_names %}
-        {{- comp_comma() }} p_domain_size_{{ axis_name }}() = gt::make_global_parameter(domain[{{ loop.index0 }}])
-{% endfor %}
+{%- for axis_name in axes_names %}
+        p_domain_size_{{ axis_name }}() = gt::make_global_parameter(domain[{{ loop.index0 }}]),
+{%- endfor -%}
 {%- endif -%}
 
+{%- set multi_comma = joiner(",") %}
 {%- for multi in multi_stages %}
-        {{- comp_comma() }}
-        gt::make_multistage(gt::execute::{{ multi.exec }}(),
+        {{ multi_comma() }}gt::make_multistage(gt::execute::{{ multi.exec }}(),
     {%- set step_comma = joiner(",") %}
     {%- for step in multi.steps %}
         {{- step_comma() }}

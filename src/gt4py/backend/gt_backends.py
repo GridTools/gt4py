@@ -395,7 +395,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                     relative_offset = (
                         "0"
                         if axis_bound.level == gt_ir.LevelMarker.START
-                        else f"domain_size_{axis_name.upper()}()"
+                        else f"static_cast<gt::int_t>(eval(domain_size_{axis_name.upper()}()))"
                     )
                     defs.append(f"{index} {oper} {relative_offset}{axis_bound.offset:+d}")
 
