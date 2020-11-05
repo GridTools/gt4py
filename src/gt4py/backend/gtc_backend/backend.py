@@ -8,11 +8,11 @@ from gt4py.backend.debug_backend import (
     debug_is_compatible_type,
     debug_layout,
 )
-from gtc.gtir import Computation
-from gtc.gtir_to_pnir import GtirToPnir
-from gtc.passes import FieldsMetadataPass
-from gtc.pnir import Stencil
-from gtc.pnir_to_ast import PnirToAst
+from gtc2.gtir import Computation
+from gtc2.gtir_to_pnir import GtirToPnir
+from gtc2.passes import FieldsMetadataPass
+from gtc2.pnir import Stencil
+from gtc2.pnir_to_ast import PnirToAst
 
 from .defir_to_gtir import DefIRToGTIR
 from .py_module_generator import PnirModuleGenerator

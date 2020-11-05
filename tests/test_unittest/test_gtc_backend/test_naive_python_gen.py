@@ -2,8 +2,8 @@ import ast
 
 import pytest
 
-from gtc.common import BinaryOperator, LoopOrder
-from gtc.gtir import (
+from gtc2.common import BinaryOperator, LoopOrder
+from gtc2.gtir import (
     AssignStmt,
     AxisBound,
     BinaryOp,
@@ -13,7 +13,7 @@ from gtc.gtir import (
     VerticalInterval,
     VerticalLoop,
 )
-from gtc.python_naive_codegen import PythonNaiveCodegen
+from gtc2.python_naive_codegen import PythonNaiveCodegen
 
 
 def ast_parse(arg):

@@ -2,8 +2,8 @@ from typing import Iterator
 
 import pytest
 
-from gtc import common, gtir, pnir
-from gtc.gtir_to_pnir import GtirToPnir
+from gtc2 import common, gtir, pnir
+from gtc2.gtir_to_pnir import GtirToPnir
 
 
 @pytest.fixture

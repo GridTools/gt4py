@@ -8,8 +8,8 @@ import numpy
 import pytest
 
 from gt4py.utils import make_module_from_file
-from gtc import common, gtir, pnir
-from gtc.pnir_to_ast import PnirToAst
+from gtc2 import common, gtir, pnir
+from gtc2.pnir_to_ast import PnirToAst
 
 
 def to_snippet(node: ast.AST) -> str:

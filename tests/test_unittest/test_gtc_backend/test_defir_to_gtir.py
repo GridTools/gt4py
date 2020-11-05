@@ -20,7 +20,7 @@ from gt4py.ir.nodes import (
     LevelMarker,
     ScalarLiteral,
 )
-from gtc import gtir
+from gtc2 import gtir
 
 
 @pytest.fixture

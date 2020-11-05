@@ -17,7 +17,7 @@ from gt4py.ir.nodes import (
     ScalarLiteral,
     StencilDefinition,
 )
-from gtc import common, gtir
+from gtc2 import common, gtir
 
 
 def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:

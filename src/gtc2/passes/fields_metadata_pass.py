@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 from eve.visitors import NodeTranslator
 
-from gtc.gtir import Computation, FieldAccess, FieldDecl, FieldsMetadataBuilder
+from gtc2.gtir import Computation, FieldAccess, FieldDecl, FieldsMetadataBuilder
 
 
 class FieldsMetadataPass(NodeTranslator):
