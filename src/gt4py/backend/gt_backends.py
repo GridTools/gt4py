@@ -386,9 +386,24 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
         return (start_splitter, start_offset), (end_splitter, end_offset)
 
+    def _parallel_interval_condition(self, parallel_interval: List[gt_ir.AxisInterval]) -> str:
+        defs = []
+        for interval, axis_name in zip(parallel_interval, self.impl_node.domain.par_axes_names):
+            index = f"eval.{axis_name.lower()}()"
+            for axis_bound, oper in zip((interval.start, interval.end), (">=", "<")):
+                if not axis_bound.extend:
+                    relative_offset = (
+                        "0"
+                        if axis_bound.level == gt_ir.LevelMarker.START
+                        else f"domain_size_{axis_name.upper()}()"
+                    )
+                    defs.append(f"{index} {oper} {relative_offset}{axis_bound.offset:+d}")
+
+        return " && ".join(defs)
+
     def visit_ApplyBlock(
         self, node: gt_ir.ApplyBlock
-    ) -> Tuple[Tuple[Tuple[int, int], Tuple[int, int]], str]:
+    ) -> Tuple[Tuple[Tuple[int, int], Tuple[int, int]], str, str]:
         interval_definition = self.visit(node.interval)
 
         body_sources = gt_text.TextBlock()
@@ -402,7 +417,12 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         self.apply_block_symbols = {**self.stage_symbols, **node.local_symbols}
         body_sources.extend(self.visit(node.body))
 
-        return interval_definition, body_sources.text
+        if node.parallel_interval:
+            condition = self._parallel_interval_condition(node.parallel_interval)
+        else:
+            condition = ""
+
+        return interval_definition, condition, body_sources.text
 
     def visit_Stage(self, node: gt_ir.Stage) -> Dict[str, Any]:
         # Initialize symbols for the generation of references in this stage
@@ -420,15 +440,28 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
         # Create regions and computations
         regions = []
+        any_condition = False
         for apply_block in node.apply_blocks:
-            interval_definition, body_sources = self.visit(apply_block)
+            interval_definition, condition, body_sources = self.visit(apply_block)
             regions.append(
                 {
                     "interval_start": interval_definition[0],
                     "interval_end": interval_definition[1],
+                    "entry_conditional": condition,
                     "body": body_sources,
                 }
             )
+            if condition:
+                any_condition = True
+
+        if any_condition:
+            args.extend(
+                [
+                    {"name": f"domain_size_{name}", "access_type": "in", "extent": None}
+                    for name in self.domain.axes_names
+                ]
+            )
+
         functor_content = {"args": args, "regions": regions}
 
         return functor_content
@@ -475,10 +508,16 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         ]
 
         stage_functors = {}
+        requires_positional = False
         for multi_stage in node.multi_stages:
             for group in multi_stage.groups:
                 for stage in group.stages:
                     stage_functors[stage.name] = self.visit(stage)
+                    if any(
+                        region["entry_conditional"]
+                        for region in stage_functors[stage.name]["regions"]
+                    ):
+                        requires_positional = True
 
         multi_stages = []
         for multi_stage in node.multi_stages:
@@ -492,6 +531,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             halo_sizes=halo_sizes,
             k_axis=k_axis,
             module_name=self.module_name,
+            requires_positional=requires_positional,
             multi_stages=multi_stages,
             parameters=parameters,
             stage_functors=stage_functors,
