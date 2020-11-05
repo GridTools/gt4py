@@ -878,17 +878,21 @@ class ComputeExtentsPass(TransformPass):
             end_overlaps = True
         else:
             if point[0] == interval.end[0]:
-                end_overlaps = interval.end[1] <= point[1]
+                end_overlaps = interval.end[1] > point[1]
             else:
                 end_overlaps = False
         return start_overlaps or end_overlaps
 
-    def compute_extents_parallel_interval(self, ij_block, int_block):
+    def compute_extents_parallel_interval(
+        self, ij_block, int_block
+    ) -> Tuple[bool, Dict[str, Extent]]:
         """Re-compute the (now correct) block extents."""
         block_inputs = {name: [[0, 0] for i in range(self.seq_axis)] for name in ij_block.inputs}
         stmt_info = make_statement_info(
             self.data, gt_ir.BlockStmt(stmts=[stmt.stmt for stmt in int_block.stmts])
         )
+
+        inside_interval = False
         for i, (iinfo, ij_extent) in enumerate(
             zip(
                 int_block.parallel_interval,
@@ -896,14 +900,13 @@ class ComputeExtentsPass(TransformPass):
             )
         ):
             ij_info = IntervalInfo(start=(0, ij_extent[0]), end=(1, ij_extent[1]))
-            for name, extent in stmt_info.inputs.items():
-                axis_extent = extent[i]
-                input_extent_axis = block_inputs[name][i]
-                # Start
-                if self._inside_interval(iinfo.start, ij_info) or self._inside_interval(
-                    iinfo.end, ij_info
-                ):
-
+            if self._inside_interval(iinfo.start, ij_info) or self._inside_interval(
+                iinfo.end, ij_info
+            ):
+                inside_interval = True
+                for name, extent in stmt_info.inputs.items():
+                    axis_extent = extent[i]
+                    input_extent_axis = block_inputs[name][i]
                     if iinfo.start[0] < 0:
                         input_extent_axis[0] = min(input_extent_axis[0], extent[0])
                     elif iinfo.start[0] == 0:
@@ -925,7 +928,7 @@ class ComputeExtentsPass(TransformPass):
                                 ij_extent[1],
                             ),
                         )
-        return block_inputs
+        return inside_interval, block_inputs
 
     def apply(self, transform_data: TransformData):
         self.data = transform_data
@@ -942,11 +945,19 @@ class ComputeExtentsPass(TransformPass):
                 ij_block.compute_extent = Extent.zeros()
                 for name in ij_block.outputs:
                     ij_block.compute_extent |= access_extents[name]
+
+                remove_blocks = []
                 for int_block in ij_block.interval_blocks:
+
                     if int_block.parallel_interval:
-                        block_inputs = self.compute_extents_parallel_interval(ij_block, int_block)
+                        inside_interval, block_inputs = self.compute_extents_parallel_interval(
+                            ij_block, int_block
+                        )
+                        if not inside_interval:
+                            remove_blocks.append(int_block)
                     else:
                         block_inputs = int_block.inputs
+
                     for name, extent in block_inputs.items():
                         extent = Extent(
                             list(extent[: self.seq_axis]) + [(0, 0)]
@@ -955,6 +966,9 @@ class ComputeExtentsPass(TransformPass):
                             access_extents[name] |= extent
                         else:
                             access_extents[name] |= ij_block.compute_extent + extent
+
+                for block in remove_blocks:
+                    ij_block.interval_blocks.remove(block)
 
         self.data.implementation_ir.fields_extents = {
             name: Extent(extent) for name, extent in access_extents.items()
