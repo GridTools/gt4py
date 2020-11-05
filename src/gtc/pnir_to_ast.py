@@ -5,13 +5,14 @@ import astor
 import black
 from eve.visitors import NodeVisitor
 
-from . import common, gtir, pnir
-from .stencil_module_builder import (
+from gt4py.backend.gtc_backend.stencil_module_builder import (
     FieldInfoBuilder,
     StencilClassBuilder,
     StencilModuleBuilder,
     parse_node,
 )
+
+from . import common, gtir, pnir
 
 
 GET_DOMAIN_TPL = """

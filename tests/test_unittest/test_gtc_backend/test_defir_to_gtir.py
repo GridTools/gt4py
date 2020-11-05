@@ -9,7 +9,6 @@ from tests.definition_setup import (
     TFieldRef,
 )
 
-from gt4py.backend.gtc_backend import gtir
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.ir.nodes import (
     AxisBound,
@@ -21,6 +20,7 @@ from gt4py.ir.nodes import (
     LevelMarker,
     ScalarLiteral,
 )
+from gtc import gtir
 
 
 @pytest.fixture

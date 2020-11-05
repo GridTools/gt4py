@@ -7,9 +7,9 @@ import black
 import numpy
 import pytest
 
-from gt4py.backend.gtc_backend import common, gtir, pnir
-from gt4py.backend.gtc_backend.pnir_to_ast import PnirToAst
 from gt4py.utils import make_module_from_file
+from gtc import common, gtir, pnir
+from gtc.pnir_to_ast import PnirToAst
 
 
 def to_snippet(node: ast.AST) -> str:
