@@ -166,16 +166,13 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 for axis_bound, regular_bound in zip(
                     (axis_interval.start, axis_interval.end), regular_bounds
                 ):
-                    if isinstance(axis_bound.level, gt_ir.VarRef):
-                        total_offset = axis_bound.offset + offset
-
-                        bounds.append(
-                            f"{axis_bound.level.name}"
-                            + (f"{total_offset:+d}" if total_offset != 0 else "")
-                        )
-                    elif isinstance(axis_bound.level, int):
-                        total_offset = axis_bound.level + offset
-                        bounds.append(f"{total_offset}")
+                    relative_offset = (
+                        "0"
+                        if axis_bound.level == gt_ir.LevelMarker.START
+                        else f"{self.domain_arg_name}[{d}]"
+                    )
+                    if not axis_bound.extend:
+                        bounds.append(f"{relative_offset}{axis_bound.offset:+d}")
                     else:
                         bounds.append(regular_bound)
 
