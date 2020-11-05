@@ -347,11 +347,11 @@ class InitInfoPass(TransformPass):
             self,
             parallel_interval: List[gt_ir.AxisInterval],
         ) -> List[IntervalInfo]:
-            def _make_level_info(info: gt_ir.AxisInterval, extend_value: int):
+            def _make_level_info(info: gt_ir.AxisBound, extend_value: int):
                 if info.extend:
                     level = extend_value
                 else:
-                    level = 0 if info.offset >= 0 else 1
+                    level = 0 if info.level == gt_ir.LevelMarker.START else 1
                 return (level, info.offset)
 
             parallel_interval_info = [
@@ -866,19 +866,19 @@ class ComputeExtentsPass(TransformPass):
         return self._DEFAULT_OPTIONS
 
     @staticmethod
-    def _inside_interval(point: Tuple[int, int], interval: IntervalInfo):
+    def _inside_interval(point: Tuple[int, int], interval: IntervalInfo, subtract=0):
         if interval.start[0] < 0:
             start_overlaps = True
         else:
             if point[0] == interval.start[0]:
-                start_overlaps = interval.start[1] <= point[1]
+                start_overlaps = interval.start[1] <= point[1] - subtract
             else:
                 start_overlaps = False
         if interval.end[0] < 0:
             end_overlaps = True
         else:
             if point[0] == interval.end[0]:
-                end_overlaps = interval.end[1] > point[1]
+                end_overlaps = interval.end[1] > point[1] - subtract
             else:
                 end_overlaps = False
         return start_overlaps or end_overlaps
@@ -901,7 +901,7 @@ class ComputeExtentsPass(TransformPass):
         ):
             ij_info = IntervalInfo(start=(0, ij_extent[0]), end=(1, ij_extent[1]))
             if self._inside_interval(iinfo.start, ij_info) or self._inside_interval(
-                iinfo.end, ij_info
+                iinfo.end, ij_info, subtract=1
             ):
                 inside_interval = True
                 for name, extent in stmt_info.inputs.items():
