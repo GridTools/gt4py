@@ -1257,14 +1257,12 @@ class BuildIIRPass(TransformPass):
         parallel_interval = []
         for interval in intervals:
             start = gt_ir.AxisBound(
-                level=gt_ir.LevelMarker.START
-                if interval.start[0] <= 0
-                else gt_ir.LevelMarker.START,
+                level=gt_ir.LevelMarker.START if interval.start[0] <= 0 else gt_ir.LevelMarker.END,
                 offset=interval.start[1],
                 extend=(interval.start[0] < 0),
             )
             end = gt_ir.AxisBound(
-                level=gt_ir.LevelMarker.START if interval.end[0] <= 0 else gt_ir.LevelMarker.START,
+                level=gt_ir.LevelMarker.START if interval.end[0] <= 0 else gt_ir.LevelMarker.END,
                 offset=interval.end[1],
                 extend=(interval.end[0] < 0),
             )
