@@ -251,6 +251,10 @@ class Domain(Node):
         return [ax.name for ax in self.axes]
 
     @property
+    def par_axes_names(self):
+        return [axis.name for axis in self.parallel_axes]
+
+    @property
     def ndims(self):
         return self.domain_ndims + self.data_ndims
 
