@@ -135,3 +135,30 @@ def test_write_consume_parallel_interval(
         correct_field_extents[field] == extent[0]
         for field, extent in impl_ir.fields_extents.items()
     )
+
+
+def test_remove_interval(
+    compute_extents_pass: AnalysisPass,
+    ijk_domain: Domain,
+) -> None:
+    transform_data = (
+        TDefinition(name="ij_extended", domain=ijk_domain, fields=["out", "in"])
+        .add_blocks(
+            # fill in region
+            TComputationBlock(order=IterationOrder.PARALLEL)
+            .add_statements(
+                TAssign("out", "in", (0, 0, 0)),
+            )
+            .with_parallel_interval(
+                AxisInterval(
+                    start=AxisBound(level=LevelMarker.START, offset=-1),
+                    end=AxisBound(level=LevelMarker.START, offset=0),
+                ),
+                None,
+            ),
+        )
+        .build_transform()
+    )
+
+    transform_data = compute_extents_pass(transform_data)
+    assert len(transform_data.blocks[0].ij_blocks[0].interval_blocks) == 0
