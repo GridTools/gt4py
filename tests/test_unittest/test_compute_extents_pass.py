@@ -128,7 +128,7 @@ def test_write_consume_parallel_interval(
 
     correct_field_extents = {
         "out": (0, 0),
-        "in": (0, 0),
+        "in": (-1, 0),
         "tmp": (-1, 0),
     }
     assert all(
