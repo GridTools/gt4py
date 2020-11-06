@@ -87,41 +87,32 @@ class IRTransformer:
         )
 
         # Initialize auxiliary data
-        init_pass = InitInfoPass()
-        init_pass.apply(self.transform_data)
+        InitInfoPass.apply(self.transform_data)
 
         # Turn compute units into atomic execution units
-        normalize_blocks_pass = NormalizeBlocksPass()
-        normalize_blocks_pass.apply(self.transform_data)
+        NormalizeBlocksPass.apply(self.transform_data)
 
         # Compute stage extents
-        compute_extent_pass = ComputeExtentsPass()
-        compute_extent_pass.apply(self.transform_data)
+        ComputeExtentsPass.apply(self.transform_data)
 
         # Merge compatible blocks
-        merge_blocks_pass = MergeBlocksPass()
-        merge_blocks_pass.apply(self.transform_data)
+        MergeBlocksPass.apply(self.transform_data)
 
         # Compute used symbols
-        compute_used_symbols_pass = ComputeUsedSymbolsPass()
-        compute_used_symbols_pass.apply(self.transform_data)
+        ComputeUsedSymbolsPass.apply(self.transform_data)
 
         # Build IIR
-        build_iir_pass = BuildIIRPass()
-        build_iir_pass.apply(self.transform_data)
+        BuildIIRPass.apply(self.transform_data)
 
         # Fill in missing dtypes
-        data_type_pass = DataTypePass()
-        data_type_pass.apply(self.transform_data)
+        DataTypePass.apply(self.transform_data)
 
         # turn temporary fields that are only written and read within the same function
         # into local scalars
-        demote_local_temporaries_to_variables_pass = DemoteLocalTemporariesToVariablesPass()
-        demote_local_temporaries_to_variables_pass.apply(self.transform_data)
+        DemoteLocalTemporariesToVariablesPass.apply(self.transform_data)
 
         # prune some stages that don't have effect
-        housekeeping_pass = HousekeepingPass()
-        housekeeping_pass.apply(self.transform_data)
+        HousekeepingPass.apply(self.transform_data)
 
         if options.build_info is not None:
             options.build_info["def_ir"] = self.transform_data.definition_ir
