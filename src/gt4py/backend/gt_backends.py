@@ -424,6 +424,31 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
         return interval_definition, condition, body_sources.text
 
+    @staticmethod
+    def _merge_regions(regions: List[dict]) -> List[dict]:
+        def iterate_new_intervals(regions):
+            def get_key(region: dict) -> Tuple[Tuple[int, int], ...]:
+                return (region["interval_start"], region["interval_end"])
+
+            upper = lower = 0
+            while upper < len(regions):
+                while upper < len(regions) and get_key(regions[upper]) == get_key(regions[lower]):
+                    upper += 1
+                if upper > lower:
+                    yield regions[lower:upper]
+                    lower = upper
+
+        new_regions = []
+        for region_sublist in iterate_new_intervals(regions):
+            bodies = [
+                {"stmts": region["body"], "entry_conditional": region["entry_conditional"]}
+                for region in region_sublist
+            ]
+            intervals = {key: region_sublist[0][key] for key in ("interval_start", "interval_end")}
+            new_regions.append({**intervals, "bodies": bodies})
+
+        return new_regions
+
     def visit_Stage(self, node: gt_ir.Stage) -> Dict[str, Any]:
         # Initialize symbols for the generation of references in this stage
         self.stage_symbols = {}
@@ -462,7 +487,12 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 ]
             )
 
-        functor_content = {"args": args, "regions": regions}
+        # merges regions, new list has "bodies" sublist
+        merged_regions = self._merge_regions(
+            sorted(regions, key=lambda region: (region["interval_start"], region["interval_end"])),
+        )
+
+        functor_content = {"args": args, "regions": merged_regions}
 
         return functor_content
 
@@ -513,11 +543,9 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             for group in multi_stage.groups:
                 for stage in group.stages:
                     stage_functors[stage.name] = self.visit(stage)
-                    if any(
-                        region["entry_conditional"]
-                        for region in stage_functors[stage.name]["regions"]
-                    ):
-                        requires_positional = True
+                    for region in stage_functors[stage.name]["regions"]:
+                        if any(body["entry_conditional"] for body in region["bodies"]):
+                            requires_positional = True
 
         multi_stages = []
         for multi_stage in node.multi_stages:

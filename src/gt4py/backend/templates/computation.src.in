@@ -144,16 +144,17 @@ struct {{ name }}_func {
                                                gt::level<{{ region.interval_end|join(", ") }}, level_offset_limit>>)
     {
 {%- filter indent(width=8) %}
-{%- if region.entry_conditional|length > 0 %}
-if ({{ region.entry_conditional }}) {
+{%- for body in region.bodies %}
+{%- if body.entry_conditional|length > 0 %}
+if ({{ body.entry_conditional }}) {
 {%- filter indent(width=4) %}
-{{ region.body }}
+{{ body.stmts }}
 {%- endfilter %}
 }
 {%- else %}
-{{ region.body }}
+{{ body.stmts }}
 {%- endif %}
-
+{%- endfor %}
 {%- endfilter %}
     }
     {%- endfor %}
