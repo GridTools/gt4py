@@ -11,8 +11,8 @@ from gt4py.backend.gtc_backend.stencil_module_builder import (
     StencilModuleBuilder,
     parse_node,
 )
-from gtc2 import common, gtir
-from gtc2.python import pnir
+from gt4py.gtc import common, gtir
+from gt4py.gtc.python import pnir
 
 
 GET_DOMAIN_TPL = """

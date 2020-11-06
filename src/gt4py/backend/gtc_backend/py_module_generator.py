@@ -3,8 +3,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 import astor
 
 from gt4py.backend import BaseModuleGenerator
+from gt4py.gtc.python.pnir_to_ast import PnirToAst
 from gt4py.utils.text import TextBlock, format_source
-from gtc2.python.pnir_to_ast import PnirToAst
 
 from .stencil_object_snippet_generators import (
     ACCESSOR_CLASS_SRC,
@@ -121,6 +121,6 @@ class PnirModuleGenerator:
             self._builder = builder
 
         stencil_ast_builder, _ = PnirToAst(onemodule=False).visit(self.backend.pn_ir)
-        stencil_ast_builder.name(self.builder.class_name)
+        stencil_ast_builder.name(self.builder.class_name).backend(self.backend.name)
 
         return astor.to_source(stencil_ast_builder.build())

@@ -7,10 +7,10 @@ import black
 import numpy
 import pytest
 
+from gt4py.gtc import common, gtir
+from gt4py.gtc.python import pnir
+from gt4py.gtc.python.pnir_to_ast import PnirToAst
 from gt4py.utils import make_module_from_file
-from gtc2 import common, gtir
-from gtc2.python import pnir
-from gtc2.python.pnir_to_ast import PnirToAst
 
 
 def to_snippet(node: ast.AST) -> str:

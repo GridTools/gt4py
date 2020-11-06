@@ -4,7 +4,7 @@ import pathlib
 from collections import OrderedDict
 from typing import List, Optional, Tuple, Union, cast
 
-from gtc2 import gtir
+from gt4py.gtc import gtir
 
 
 BOUNDARY_TYPE = Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]

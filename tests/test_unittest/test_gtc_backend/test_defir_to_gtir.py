@@ -10,6 +10,7 @@ from tests.definition_setup import (
 )
 
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
+from gt4py.gtc import common, gtir
 from gt4py.ir.nodes import (
     AxisBound,
     AxisInterval,
@@ -20,7 +21,6 @@ from gt4py.ir.nodes import (
     LevelMarker,
     ScalarLiteral,
 )
-from gtc2 import gtir
 
 
 @pytest.fixture
@@ -74,7 +74,7 @@ def test_scalar_literal(defir_to_gtir):
     literal = defir_to_gtir.visit_ScalarLiteral(scalar_literal)
     assert isinstance(literal, gtir.Literal)
     assert literal.value == "5"
-    assert literal.dtype == gtir.common.DataType.AUTO
+    assert literal.dtype == common.DataType.AUTO
 
 
 def test_bin_op_expr(defir_to_gtir):
@@ -109,7 +109,7 @@ def test_axis_bound(defir_to_gtir):
     axis_bound = AxisBound(level=LevelMarker.START, offset=-51)
     gtir_bound = defir_to_gtir.visit_AxisBound(axis_bound)
     assert isinstance(gtir_bound, gtir.AxisBound)
-    assert gtir_bound.level == gtir.common.LevelMarker.START
+    assert gtir_bound.level == common.LevelMarker.START
     assert gtir_bound.offset == -51
 
 
@@ -118,4 +118,4 @@ def test_field_decl(defir_to_gtir):
     gtir_decl = defir_to_gtir.visit_FieldDecl(field_decl)
     assert isinstance(gtir_decl, gtir.FieldDecl)
     assert gtir_decl.name == "a"
-    assert gtir_decl.dtype == gtir.common.DataType.BOOL
+    assert gtir_decl.dtype == common.DataType.BOOL

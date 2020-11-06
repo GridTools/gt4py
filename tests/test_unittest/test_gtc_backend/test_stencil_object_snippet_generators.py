@@ -11,8 +11,8 @@ from gt4py.backend.gtc_backend.stencil_object_snippet_generators import (
     ParameterInfoGenerator,
     RunBodyGenerator,
 )
-from gtc2.common import DataType, LoopOrder
-from gtc2.gtir import (
+from gt4py.gtc.common import DataType, LoopOrder
+from gt4py.gtc.gtir import (
     AccessKind,
     AssignStmt,
     AxisBound,

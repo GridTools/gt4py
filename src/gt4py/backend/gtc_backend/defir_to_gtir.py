@@ -1,6 +1,7 @@
 from types import MappingProxyType
 from typing import ClassVar, Dict, List, Mapping
 
+from gt4py.gtc import common, gtir
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
     Assign,
@@ -17,7 +18,6 @@ from gt4py.ir.nodes import (
     ScalarLiteral,
     StencilDefinition,
 )
-from gtc2 import common, gtir
 
 
 def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:

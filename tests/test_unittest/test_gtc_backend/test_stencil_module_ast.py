@@ -12,9 +12,9 @@ from gt4py.backend.gtc_backend.stencil_module_builder import (
     parse_node,
     parse_snippet,
 )
+from gt4py.gtc import gtir
 from gt4py.stencil_object import StencilObject
 from gt4py.utils import make_module_from_file
-from gtc2 import gtir
 
 
 def test_parse_snippet():
@@ -44,7 +44,7 @@ def test_stencil_module(tmp_path):
         .name("test_stencil")
         .stencil_class(
             StencilClassBuilder()
-            .backend("gtc2:py")
+            .backend("gtc:py")
             .source("pass")
             .field_names("a", "b")
             .add_gt_field_info(
