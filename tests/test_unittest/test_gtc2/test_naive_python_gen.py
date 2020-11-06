@@ -13,7 +13,7 @@ from gtc2.gtir import (
     VerticalInterval,
     VerticalLoop,
 )
-from gtc2.python_naive_codegen import PythonNaiveCodegen
+from gtc2.python.python_naive_codegen import PythonNaiveCodegen
 
 
 def ast_parse(arg):

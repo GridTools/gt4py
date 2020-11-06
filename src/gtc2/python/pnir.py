@@ -2,7 +2,7 @@ from typing import List, Union
 
 from eve import Str
 
-from .gtir import AxisBound, Expr, FieldDecl, FieldsMetadata, LocNode, Stmt
+from gtc2.gtir import AxisBound, Expr, FieldDecl, FieldsMetadata, LocNode, Stmt
 
 
 class IJLoop(LocNode):

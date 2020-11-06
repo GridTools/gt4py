@@ -3,7 +3,8 @@ from typing import List
 
 from eve.visitors import NodeTranslator
 
-from . import gtir, pnir
+from gtc2 import gtir
+from gtc2.python import pnir
 
 
 class GtirToPnir(NodeTranslator):

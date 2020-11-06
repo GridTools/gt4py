@@ -4,7 +4,7 @@ import astor
 
 from gt4py.backend import BaseModuleGenerator
 from gt4py.utils.text import TextBlock, format_source
-from gtc2.pnir_to_ast import PnirToAst
+from gtc2.python.pnir_to_ast import PnirToAst
 
 from .stencil_object_snippet_generators import (
     ACCESSOR_CLASS_SRC,
