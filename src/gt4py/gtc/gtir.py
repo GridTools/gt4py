@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Tuple, Union
 from devtools import debug  # noqa: F401
 from eve import IntEnum, Node, SourceLocation, Str
 
-from . import common
+from gt4py.gtc import common
 
 
 class LocNode(Node):

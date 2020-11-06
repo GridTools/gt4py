@@ -7,8 +7,9 @@ import black
 import numpy
 import pytest
 
-from gt4py.backend.gtc_backend import common, gtir, pnir
-from gt4py.backend.gtc_backend.pnir_to_ast import PnirToAst
+from gt4py.gtc import common, gtir
+from gt4py.gtc.python import pnir
+from gt4py.gtc.python.pnir_to_ast import PnirToAst
 from gt4py.utils import make_module_from_file
 
 
@@ -275,3 +276,111 @@ def test_module(tmp_path: pathlib.Path, pnir_to_ast: PnirToAst) -> None:
     assert (a[:, :, :-3] == b[:, :, :-3]).all()
     assert (a[:, :, -3] == numpy.zeros((7, 7, 1))).all()
     assert (a[:, :, -2:] == c[:, :, -2:]).all()
+
+
+def test_field_metadata(pnir_to_ast: PnirToAst) -> None:
+    meta = gtir.FieldMetadata(
+        name="a",
+        access=gtir.AccessKind.READ_WRITE,
+        boundary=gtir.FieldBoundary(i=(0, 0), j=(0, 0), k=(0, 0)),
+        dtype=common.DataType.FLOAT64,
+    )
+    field_info = pnir_to_ast.visit(meta)
+    assert isinstance(field_info, ast.Call)
+
+
+def test_fields_metadata(pnir_to_ast: PnirToAst) -> None:
+    meta_builder = (
+        gtir.FieldMetadataBuilder()
+        .access(gtir.AccessKind.READ_WRITE)
+        .dtype(common.DataType.FLOAT64)
+    )
+    metas = gtir.FieldsMetadata(
+        metas={"a": meta_builder.name("a").build(), "b": meta_builder.name("b").build()}
+    )
+    infos = pnir_to_ast.visit(metas)
+    assert set(infos.keys()) == {"a", "b"}
+    assert isinstance(infos["b"], ast.Call)
+
+
+@pytest.fixture
+def set_ones_stencil() -> Iterator[pnir.Stencil]:
+    yield pnir.Stencil(
+        computation=pnir.Module(
+            run=pnir.RunFunction(
+                field_params=["a"],
+                scalar_params=[],
+                k_loops=[
+                    pnir.KLoop(
+                        lower=gtir.AxisBound.start(),
+                        upper=gtir.AxisBound.end(),
+                        ij_loops=[
+                            pnir.IJLoop(
+                                body=[
+                                    gtir.AssignStmt(
+                                        left=gtir.FieldAccess.centered(name="a"),
+                                        right=gtir.Literal(value="1", dtype=common.DataType.INT32),
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ),
+        stencil_obj=pnir.StencilObject(
+            name="set_ones",
+            params=[gtir.FieldDecl(name="a", dtype=common.DataType.INT32)],
+            fields_metadata=gtir.FieldsMetadata(
+                metas={
+                    "a": (
+                        gtir.FieldMetadataBuilder()
+                        .name("a")
+                        .access(gtir.AccessKind.READ_WRITE)
+                        .dtype(common.DataType.INT32)
+                        .build()
+                    ),
+                },
+            ),
+        ),
+    )
+
+
+def test_stencil_onemod(set_ones_stencil: pnir.Stencil, tmp_path: pathlib.Path) -> None:
+    pnir_to_ast = PnirToAst(onemodule=True)
+    ast_module_builder = pnir_to_ast.visit(set_ones_stencil)
+    ast_module = ast_module_builder.build()
+    stencil_source = black.format_str(astor.to_source(ast_module), mode=black.Mode())
+    print(stencil_source)
+    mod_file = tmp_path / "test_pnir_to_ast_stencil_onemod.py"
+    mod_file.write_text(stencil_source)
+    stencil = make_module_from_file("stencil", file_path=mod_file)
+    assert stencil
+    a = numpy.zeros((4, 4, 4), dtype=numpy.int32)
+    stencil.set_ones()(a, origin=(0, 0, 0))
+    assert (a == numpy.ones_like(a)).all()
+
+
+def test_stencil_split(set_ones_stencil: pnir.Stencil, tmp_path: pathlib.Path) -> None:
+    # file paths
+    cur_path = tmp_path / "test_pnir_to_ast_split"
+    cur_path.mkdir()
+    comp_file = cur_path / "computation.py"
+    mod_file = cur_path / "stencil.py"
+    # generate asts and python code from there
+    pnir_to_ast = PnirToAst(onemodule=False)
+    ast_module_builder, ast_comp_module = pnir_to_ast.visit(set_ones_stencil)
+    ast_module = ast_module_builder.build()
+    stencil_source = black.format_str(astor.to_source(ast_module), mode=black.Mode())
+    computation_source = black.format_str(astor.to_source(ast_comp_module), mode=black.Mode())
+    print(computation_source)
+    print("----")
+    print(stencil_source)
+    # write and use python sources
+    comp_file.write_text(computation_source)
+    mod_file.write_text(stencil_source)
+    stencil = make_module_from_file("stencil", file_path=mod_file)
+    assert stencil
+    a = numpy.zeros((4, 4, 4), dtype=numpy.int32)
+    stencil.set_ones()(a, origin=(0, 0, 0))
+    assert (a == numpy.ones_like(a)).all()

@@ -5,7 +5,6 @@ import black
 import numpy
 import pytest
 
-from gt4py.backend.gtc_backend import gtir
 from gt4py.backend.gtc_backend.stencil_module_builder import (
     FieldInfoBuilder,
     StencilClassBuilder,
@@ -13,6 +12,7 @@ from gt4py.backend.gtc_backend.stencil_module_builder import (
     parse_node,
     parse_snippet,
 )
+from gt4py.gtc import gtir
 from gt4py.stencil_object import StencilObject
 from gt4py.utils import make_module_from_file
 

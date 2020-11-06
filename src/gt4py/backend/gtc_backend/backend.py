@@ -1,17 +1,21 @@
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
+import astor
+
 from gt4py.backend.base import BaseBackend, CLIBackendMixin, register
 from gt4py.backend.debug_backend import (
     debug_is_compatible_layout,
     debug_is_compatible_type,
     debug_layout,
 )
+from gt4py.gtc.gtir import Computation
+from gt4py.gtc.passes import FieldsMetadataPass
+from gt4py.gtc.python.gtir_to_pnir import GtirToPnir
+from gt4py.gtc.python.pnir import Stencil
+from gt4py.gtc.python.pnir_to_ast import PnirToAst
 
 from .defir_to_gtir import DefIRToGTIR
-from .fields_metadata_pass import FieldsMetadataPass
-from .gtir import Computation
-from .py_module_generator import GTCPyModuleGenerator
-from .python_naive_codegen import PythonNaiveCodegen
+from .py_module_generator import PnirModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -36,12 +40,13 @@ class GTCPythonBackend(BaseBackend, CLIBackendMixin):
 
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
         if language_name == "python":
-            return {self.builder.module_path.name: GTCPyModuleGenerator(builder=self.builder)()}
+            return {self.builder.module_path.name: PnirModuleGenerator(builder=self.builder)()}
         return super().generate_bindings(language_name)
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         filename = "computation.py"
-        source = PythonNaiveCodegen().apply(self.gtc_ir)
+        _, computation_ast = PnirToAst(onemodule=False).visit(self.pn_ir)
+        source = astor.to_source(computation_ast)
         return {filename: source}
 
     def generate(self) -> Type["StencilObject"]:
@@ -63,3 +68,11 @@ class GTCPythonBackend(BaseBackend, CLIBackendMixin):
         return self.builder.with_backend_data(
             {"gtc_ir": FieldsMetadataPass().visit(DefIRToGTIR.apply(self.builder.definition_ir))}
         ).backend_data["gtc_ir"]
+
+    @property
+    def pn_ir(self) -> Stencil:
+        if "pn_ir" in self.builder.backend_data:
+            return self.builder.backend_data["pn_ir"]
+        return self.builder.with_backend_data(
+            {"pn_ir": GtirToPnir().visit(self.gtc_ir)}
+        ).backend_data["pn_ir"]

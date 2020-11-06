@@ -2,9 +2,8 @@ from typing import Iterator, Tuple
 
 import pytest
 
-from gt4py.backend.gtc_backend.common import DataType, LevelMarker, LoopOrder
-from gt4py.backend.gtc_backend.fields_metadata_pass import FieldsMetadataPass
-from gt4py.backend.gtc_backend.gtir import (
+from gt4py.gtc.common import DataType, LevelMarker, LoopOrder
+from gt4py.gtc.gtir import (
     AssignStmt,
     AxisBound,
     CartesianOffset,
@@ -17,6 +16,7 @@ from gt4py.backend.gtc_backend.gtir import (
     VerticalInterval,
     VerticalLoop,
 )
+from gt4py.gtc.passes import FieldsMetadataPass
 
 
 @pytest.fixture(
