@@ -42,6 +42,7 @@ class Literal(Expr):
 
 
 class Domain(LocNode):
+    # TODO
     pass
 
 
@@ -58,6 +59,10 @@ class CartesianOffset(Node):
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
+class ScalarAccess(Expr):
+    name: Str
+
+
 class FieldAccess(Expr):
     name: Str  # via symbol table
     offset: CartesianOffset
@@ -67,9 +72,15 @@ class FieldAccess(Expr):
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
 
-class AssignStmt(Stmt):
+class ParAssignStmt(Stmt):
     left: FieldAccess  # there are no local variables in gtir, only fields
     right: Expr
+
+
+class IfStmt(Stmt):
+    cond: Expr  # TODO bool expr? scalar vs field expr
+    true_branch: List[Stmt]
+    false_branch: List[Stmt]
 
 
 class BinaryOp(Expr):
@@ -81,10 +92,6 @@ class BinaryOp(Expr):
 class FieldDecl(LocNode):
     name: Str
     dtype: common.DataType
-
-
-class HorizontalLoop(LocNode):
-    stmt: Stmt
 
 
 class AxisBound(Node):
@@ -109,7 +116,7 @@ class AxisBound(Node):
 
 
 class VerticalInterval(LocNode):
-    horizontal_loops: List[HorizontalLoop]
+    body: List[Stmt]
     start: AxisBound
     end: AxisBound
 
@@ -117,10 +124,6 @@ class VerticalInterval(LocNode):
 class VerticalLoop(LocNode):
     vertical_intervals: List[VerticalInterval]
     loop_order: common.LoopOrder
-
-
-class Stencil(LocNode):
-    vertical_loops: List[VerticalLoop]
 
 
 @enum.unique
@@ -209,7 +212,7 @@ class FieldsMetadataBuilder:
 class Computation(LocNode):
     name: Str
     params: List[FieldDecl]
-    stencils: List[Stencil]
+    vertical_loops: List[VerticalLoop]
     fields_metadata: Optional[FieldsMetadata]
 
     @property
