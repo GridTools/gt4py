@@ -172,7 +172,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                         else f"{self.domain_arg_name}[{d}]"
                     )
                     if not axis_bound.extend:
-                        bounds.append(f"{relative_offset}{axis_bound.offset:+d}")
+                        bounds.append(f"{relative_offset}{axis_bound.offset:+d}{offset:+d}")
                     else:
                         bounds.append(regular_bound)
 
