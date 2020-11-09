@@ -73,6 +73,12 @@ class FieldAccess(Expr):
 
 
 class ParAssignStmt(Stmt):
+    """Parallel assignment.
+
+    R.h.s. is evaluated for all points and the resulting field is assigned
+    (GTScript parallel model).
+    """
+
     left: FieldAccess  # there are no local variables in gtir, only fields
     right: Expr
 
