@@ -149,10 +149,11 @@ Implementation IR
     Accessor    = ParameterAccessor(symbol: str)
                 | FieldAccessor(symbol: str, intent: AccessIntent, extent: Extent)
 
+    Region(body: BlockStmt, [parallel_interval: List[AxisInterval]])
+
     ApplyBlock(interval: AxisInterval,
-               [parallel_interval: List[AxisInterval],]
                local_symbols: Dict[str, VarDecl],
-               body: BlockStmt)
+               regions: List[Region])
 
     Stage(name: str,
           accessors: List[Accessor],
@@ -767,11 +768,16 @@ class FieldAccessor(Accessor):
 
 
 @attribclass
+class Region(Node):
+    body = attribute(of=BlockStmt)
+    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
+
+
+@attribclass
 class ApplyBlock(Node):
     interval = attribute(of=AxisInterval)
-    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
     local_symbols = attribute(of=DictOf[str, VarDecl])
-    body = attribute(of=BlockStmt)
+    regions = attribute(of=List[Region])
 
 
 @attribclass
