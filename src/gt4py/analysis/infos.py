@@ -103,7 +103,7 @@ class IntervalInfo:
         actual_self = self.as_tuple(k_interval_sizes)
         if isinstance(other, IntervalInfo):
             other = other.as_tuple(k_interval_sizes)
-        if order == gt_ir.IterationOrder.FORWARD:
+        if order == gt_ir.IterationOrder.FORWARD or order == gt_ir.IterationOrder.PARALLEL:
             result = actual_self[0] < other[0]
         else:
             result = actual_self[1] > other[1]
