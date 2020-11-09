@@ -13,6 +13,8 @@ from gt4py.backend.gtc_backend.gtcppir import (
     IJCache,
 )
 
+# TODO qualify gridtools stuff
+
 
 class GTCppCodegen(codegen.TemplatedGenerator):
 
@@ -36,10 +38,16 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     """
     )
 
+    GTLevel = as_fmt(
+        "gridtools::stencil::core::level<{splitter}, {offset}, 2>"
+    )  # TODO offset limit
+
+    GTInterval = as_fmt("gridtools::stencil::core::interval<{from_level}, {to_level}>")
+
     GTApplyMethod = as_mako(
         """
     template<typename Evaluation> // TODO interval
-    GT_FUNCTION static void apply(Evaluation eval) {
+    GT_FUNCTION static void apply(Evaluation eval, ${interval}) {
         ${ '\\n'.join(body) }
     }
     """

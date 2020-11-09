@@ -51,8 +51,15 @@ class GTGrid(Node):
     pass
 
 
+class GTLevel(Node):
+    splitter: int
+    offset: int
+    # TODO validator offset != 0
+
+
 class GTInterval(Node):
-    pass
+    from_level: GTLevel
+    to_level: GTLevel
 
 
 class GTApplyMethod(Node):

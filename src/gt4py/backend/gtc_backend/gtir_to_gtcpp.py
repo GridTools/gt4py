@@ -2,7 +2,7 @@ from typing import List, Tuple
 from devtools import debug  # noqa: F401
 
 import eve  # noqa: F401
-from gtc import common
+from . import common
 from gt4py.backend.gtc_backend import gtir, gtcppir
 from gt4py.backend.gtc_backend import stencil_ast_nodes
 from gt4py.backend.gtc_backend import gtcpp_codegen
@@ -42,9 +42,24 @@ class GTIRToGTCpp(eve.NodeTranslator):
     def visit_AssignStmt(self, node: gtir.AssignStmt, **kwargs):
         return gtcppir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
 
+    def visit_AxisBound(self, node: gtir.AxisBound, *, is_start: bool, **kwargs):
+        if node.level == common.LevelMarker.START:
+            splitter = 0
+            offset = node.offset + 1 if (node.offset >= 0 and is_start) else node.offset
+        elif node.level == common.LevelMarker.END:
+            splitter = 1
+            offset = node.offset - 1 if (node.offset <= 0 and not is_start) else node.offset
+        else:
+            raise ValueError("Cannot handle dynamic levels")
+        return gtcppir.GTLevel(splitter=splitter, offset=offset)
+
     def visit_VerticalInterval(self, node: gtir.VerticalInterval, **kwargs):
         return gtcppir.GTApplyMethod(
-            interval=GTInterval(), body=[self.visit(hloop.stmt) for hloop in node.horizontal_loops]
+            interval=GTInterval(
+                from_level=self.visit(node.start, is_start=True),
+                to_level=self.visit(node.end, is_start=False),
+            ),
+            body=[self.visit(hloop.stmt) for hloop in node.horizontal_loops],
         )
 
     def visit_VerticalLoop(self, node: gtir.VerticalLoop, **kwargs):

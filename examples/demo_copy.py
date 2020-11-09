@@ -14,8 +14,12 @@ dtype = np.float64
 # this decorator triggers compilation of the stencil
 @gtscript.lazy_stencil(backend=backend, rebuild=True)
 def demo_copy(in_field: gtscript.Field[dtype], out_field: gtscript.Field[dtype]):
-    with computation(PARALLEL), interval(...):
+    with computation(PARALLEL), interval(0, 1):
+        out_field = 2.0  # noqa: F841 [assigned but not used]
+    with computation(PARALLEL), interval(1, -1):
         out_field = in_field  # noqa: F841 [assigned but not used]
+    with computation(PARALLEL), interval(-1, None):
+        out_field = 3.0  # noqa: F841 [assigned but not used]
 
 
 if __name__ == "__main__":
@@ -36,4 +40,6 @@ if __name__ == "__main__":
 
     demo_copy(in_storage, out_storage)
 
-    print(out_storage[1, 1, 1])
+    assert out_storage[1, 1, 0] == 2.0
+    assert out_storage[1, 1, 1] == 1.0
+    assert out_storage[1, 1, 29] == 3.0
