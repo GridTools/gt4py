@@ -827,7 +827,7 @@ class StageMergingWrapper:
         return self._stage.interval_blocks
 
     @property
-    def intervals_to_iblock_mapping(self) -> Dict[IntervalInfo, IntervalBlockInfo]:
+    def interval_to_iblock_mapping(self) -> Dict[IntervalInfo, IntervalBlockInfo]:
         return {iblock.interval: iblock for iblock in self.interval_blocks}
 
     @property
