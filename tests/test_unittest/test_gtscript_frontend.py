@@ -278,6 +278,9 @@ class TestIntervalSyntax:
 
         module = f"TestIntervalSyntax_externals_{id_version}"
         for kstart in (3, gtscript.K[3]):
+            # An implementation quirk allows us to use gtscript.K[3] here,
+            # although it is not great form to do so, since two-argument syntax
+            # should not use AxisOffsets.
             externals = {"kstart": kstart}
             stencil_id, def_ir = compile_definition(
                 definition_func, "test_externals", module, externals=externals
@@ -289,26 +292,6 @@ class TestIntervalSyntax:
             assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
                 level=gt_ir.LevelMarker.END, offset=-1, loc=loc
             )
-
-    def test_splitter(self):
-        def definition_func(field: gtscript.Field[float]):
-            from __gtscript__ import K
-
-            with computation(PARALLEL), interval(K[2], -1):
-                field = 0
-
-        module = f"TestIntervalSyntax_splitter_{id_version}"
-        externals = {}
-        stencil_id, def_ir = compile_definition(
-            definition_func, "test_splitter", module, externals=externals
-        )
-        loc = def_ir.computations[0].interval.loc
-        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=2, loc=loc
-        )
-        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.END, offset=-1, loc=loc
-        )
 
     def test_axisinterval(self):
         def definition_func(field: gtscript.Field[float]):
@@ -340,6 +323,20 @@ class TestIntervalSyntax:
             gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
         ):
             compile_definition(definition_func, "test_error_none", module, externals=externals)
+
+    def test_error_do_not_mix(self):
+        def definition_func(field: gtscript.Field[float]):
+            from __gtscript__ import K
+
+            with computation(PARALLEL), interval(K[2], -1):
+                field = 0
+
+        module = f"TestIntervalSyntax_error_do_not_mix_{id_version}"
+        externals = {}
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Two-argument syntax"):
+            compile_definition(
+                definition_func, "test_error_do_not_mix", module, externals=externals
+            )
 
     def test_reversed_interval(self):
         def definition_func(field: gtscript.Field[float]):
