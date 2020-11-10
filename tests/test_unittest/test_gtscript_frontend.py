@@ -83,6 +83,12 @@ def sinus(field_in):
     return sin(field_in)
 
 
+def undecorated_function(field_in):
+    from __externals__ import A
+
+    return field_in + A
+
+
 class TestInlinedExternals:
     def test_all_legal_combinations(self, id_version):
         module = f"TestInlinedExternals_test_module_{id_version}"
@@ -132,6 +138,18 @@ class TestInlinedExternals:
             compile_definition(
                 definition_func, "test_missing_nested_symbol", module, externals=externals
             )
+
+    def test_undecorated_delay(self, id_version):
+        module = f"TestInlinedExternals_test_undecorated_delay_{id_version}"
+        externals = {"A": 1}
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = undecorated_function(inout_field)
+
+        compile_definition(definition_func, "test_undecorated_delay", module, externals=externals)
 
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, id_version, value_type):

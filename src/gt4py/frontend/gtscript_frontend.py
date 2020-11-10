@@ -1247,6 +1247,9 @@ class GTScriptParser(ast.NodeVisitor):
                     imported_symbols[root_name].setdefault(
                         collected_name, name_nodes[collected_name]
                     )
+                elif root_name in context and inspect.isfunction(context[root_name]):
+                    GTScriptParser.annotate_definition(context[root_name])
+                    nonlocal_symbols[collected_name] = context[root_name]
                 elif root_name in context:
                     nonlocal_symbols[collected_name] = GTScriptParser.eval_constant(
                         collected_name,
