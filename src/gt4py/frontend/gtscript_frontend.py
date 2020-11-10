@@ -212,7 +212,7 @@ class AxisIntervalParser(ast.NodeVisitor):
         symbol = node.id
         if symbol in self.context:
             value = self.context[symbol]
-            if isinstance(value, gtscript._AxisSplitter):
+            if isinstance(value, gtscript._AxisOffset):
                 if value.axis != self.axis_name:
                     raise self.interval_error
                 offset = value.offset
@@ -222,11 +222,11 @@ class AxisIntervalParser(ast.NodeVisitor):
                 raise self.interval_error
             return self.make_axis_bound(offset, self.loc)
         else:
-            return gt_ir.xisBound(level=gt_ir.VarRef(name=symbol), loc=self.loc)
+            return gt_ir.AxisBound(level=gt_ir.VarRef(name=symbol), loc=self.loc)
 
     def visit_Constant(self, node: ast.Constant) -> gt_ir.AxisBound:
         if node.value is not None:
-            if isinstance(node.value, gtscript._AxisSplitter):
+            if isinstance(node.value, gtscript._AxisOffset):
                 if node.value.axis != self.axis_name:
                     raise self.interval_error
                 offset = node.value.offset
@@ -322,7 +322,7 @@ class ValueInliner(ast.NodeTransformer):
                 new_node = ast.NameConstant(value=value)
             elif isinstance(value, numbers.Number):
                 new_node = ast.Num(n=value)
-            elif isinstance(value, gtscript._AxisSplitter):
+            elif isinstance(value, gtscript._AxisOffset):
                 new_node = ast.Constant(value=value)
             elif hasattr(value, "_gtscript_"):
                 pass
@@ -1256,7 +1256,7 @@ class GTScriptParser(ast.NodeVisitor):
         *gtscript._VALID_DATA_TYPES,
         types.FunctionType,
         type(None),
-        gtscript._AxisSplitter,
+        gtscript._AxisOffset,
     )
 
     def __init__(self, definition, *, options, externals=None):
