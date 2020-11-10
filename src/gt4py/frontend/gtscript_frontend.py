@@ -175,14 +175,25 @@ class AxisIntervalParser(ast.NodeVisitor):
             return interval
 
         if isinstance(node, ast.Subscript):
-            slice_node = node.slice
-        else:
-            if not isinstance(node, ast.Slice):
-                raise TypeError("Requires Slice node")
+            if isinstance(node.slice, ast.Index):
+                slice_node = cls.single_index_slice(node.slice.value)
+            else:
+                slice_node = node.slice
+        elif isinstance(node, ast.Slice):
             slice_node = node
+        else:
+            slice_node = cls.single_index_slice(node)
 
-        start = parser.visit(slice_node.lower)
-        end = parser.visit(slice_node.upper)
+        if slice_node.lower is not None:
+            start = parser.visit(slice_node.lower)
+        else:
+            start = gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0, extend=True)
+
+        if slice_node.upper is not None:
+            end = parser.visit(slice_node.upper)
+        else:
+            end = gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, extend=True)
+
         return gt_ir.AxisInterval(start=start, end=end, loc=loc)
 
     def __init__(
@@ -199,6 +210,14 @@ class AxisIntervalParser(ast.NodeVisitor):
         self.interval_error = ValueError(
             f"Invalid 'interval' specification at line {loc.line} (column {loc.column})"
         )
+
+    @staticmethod
+    def single_index_slice(node: ast.Expr):
+        slice_node = ast.Slice(
+            lower=node, upper=ast.BinOp(left=node, op=ast.Add(), right=ast.Constant(value=1))
+        )
+        ast.copy_location(slice_node, node)
+        return slice_node
 
     @staticmethod
     def make_axis_bound(offset: int, loc: gt_ir.Location = None) -> gt_ir.AxisBound:
@@ -273,15 +292,13 @@ class AxisIntervalParser(ast.NodeVisitor):
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> gt_ir.AxisBound:
         axis_bound = self.visit(node.operand)
-        level = axis_bound.level
-        offset = axis_bound.offset
         if isinstance(node.op, ast.USub):
             new_level = (
                 gt_ir.LevelMarker.END
-                if level == gt_ir.LevelMarker.START
+                if axis_bound.level == gt_ir.LevelMarker.START
                 else gt_ir.LevelMarker.START
             )
-            return gt_ir.AxisBound(level=new_level, offset=-offset, loc=self.loc)
+            return gt_ir.AxisBound(level=new_level, offset=-axis_bound.offset, loc=self.loc)
         else:
             raise self.interval_error
 
