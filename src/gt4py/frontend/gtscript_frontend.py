@@ -828,9 +828,7 @@ class IRMaker(ast.NodeVisitor):
         if (
             interval.start.level == gt_ir.LevelMarker.END
             and interval.end.level == gt_ir.LevelMarker.START
-        ):
-            raise range_error
-        elif (
+        ) or (
             interval.start.level == interval.end.level
             and interval.end.offset <= interval.start.offset
         ):
