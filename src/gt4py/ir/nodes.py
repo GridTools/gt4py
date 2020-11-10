@@ -150,14 +150,14 @@ Implementation IR
                 | FieldAccessor(symbol: str, intent: AccessIntent, extent: Extent)
 
     ApplyBlock(interval: AxisInterval,
-               [parallel_interval: List[AxisInterval],]
                local_symbols: Dict[str, VarDecl],
                body: BlockStmt)
 
     Stage(name: str,
           accessors: List[Accessor],
           apply_blocks: List[ApplyBlock],
-          compute_extent: Extent)
+          compute_extent: Extent,
+          [parallel_interval: List[AxisInterval]])
 
     StageGroup(stages: List[Stage])
 
@@ -773,7 +773,6 @@ class FieldAccessor(Accessor):
 @attribclass
 class ApplyBlock(Node):
     interval = attribute(of=AxisInterval)
-    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
     local_symbols = attribute(of=DictOf[str, VarDecl])
     body = attribute(of=BlockStmt)
 
@@ -784,6 +783,7 @@ class Stage(IIRNode):
     accessors = attribute(of=ListOf[Accessor])
     apply_blocks = attribute(of=ListOf[ApplyBlock])
     compute_extent = attribute(of=Extent)
+    parallel_interval = attribute(of=ListOf[AxisInterval], optional=True)
 
 
 # @enum.unique
