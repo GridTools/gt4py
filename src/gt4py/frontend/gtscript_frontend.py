@@ -22,7 +22,7 @@ import itertools
 import numbers
 import textwrap
 import types
-from typing import List
+from typing import List, Optional, Union
 
 import numpy as np
 
@@ -152,6 +152,154 @@ class AssertionChecker(ast.NodeTransformer):
         return None
 
 
+class AxisIntervalParser(ast.NodeVisitor):
+    """Parse Python AST interval syntax in the form of a Slice.
+
+    Corner cases: `ast.Ellipsis` refers to the entire interval, and
+    if an `ast.Subscript` is passed, this parses its slice attribute.
+    """
+
+    @classmethod
+    def apply(
+        cls,
+        node: Union[ast.Slice, ast.Ellipsis, ast.Subscript],
+        axis_name: str,
+        context: Optional[dict] = None,
+        loc: Optional[gt_ir.Location] = None,
+    ) -> gt_ir.AxisInterval:
+        parser = cls(axis_name, context, loc)
+
+        if isinstance(node, ast.Ellipsis):
+            interval = gt_ir.AxisInterval.full_interval()
+            interval.loc = loc
+            return interval
+
+        if isinstance(node, ast.Subscript):
+            slice_node = node.slice
+        else:
+            if not isinstance(node, ast.Slice):
+                raise TypeError("Requires Slice node")
+            slice_node = node
+
+        start = parser.visit(slice_node.lower)
+        end = parser.visit(slice_node.upper)
+        return gt_ir.AxisInterval(start=start, end=end, loc=loc)
+
+    def __init__(
+        self,
+        axis_name: str,
+        context: Optional[dict] = None,
+        loc: Optional[gt_ir.Location] = None,
+    ):
+        self.axis_name = axis_name
+        self.context = context or dict()
+        self.loc = loc
+
+        # initialize possible exceptions
+        self.interval_error = ValueError(
+            f"Invalid 'interval' specification at line {loc.line} (column {loc.column})"
+        )
+
+    @staticmethod
+    def make_axis_bound(offset: int, loc: gt_ir.Location = None) -> gt_ir.AxisBound:
+        return gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START if offset >= 0 else gt_ir.LevelMarker.END,
+            offset=offset,
+            loc=loc,
+        )
+
+    def visit_Name(self, node: ast.Name) -> gt_ir.AxisBound:
+        symbol = node.id
+        if symbol in self.context:
+            value = self.context[symbol]
+            if isinstance(value, gtscript._AxisOffset):
+                if value.axis != self.axis_name:
+                    raise self.interval_error
+                offset = value.offset
+            elif isinstance(value, int):
+                offset = value
+            else:
+                raise self.interval_error
+            return self.make_axis_bound(offset, self.loc)
+        else:
+            return gt_ir.AxisBound(level=gt_ir.VarRef(name=symbol), loc=self.loc)
+
+    def visit_Constant(self, node: ast.Constant) -> gt_ir.AxisBound:
+        if node.value is not None:
+            if isinstance(node.value, gtscript._AxisOffset):
+                if node.value.axis != self.axis_name:
+                    raise self.interval_error
+                offset = node.value.offset
+            elif isinstance(node.value, int):
+                offset = node.value
+            else:
+                raise self.interval_error
+            return self.make_axis_bound(offset, self.loc)
+        else:
+            return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
+
+    def visit_NameConstant(self, node: ast.NameConstant) -> gt_ir.AxisBound:
+        """Python < 3.8 uses ast.NameConstant for 'None'."""
+        if node.value is not None:
+            raise self.interval_error
+        else:
+            return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
+
+    def visit_Num(self, node: ast.Num) -> gt_ir.AxisBound:
+        """Equivalent to visit_Constant. Required for Python < 3.8."""
+        return self.make_axis_bound(node.n, self.loc)
+
+    def visit_BinOp(self, node: ast.BinOp) -> gt_ir.AxisBound:
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+
+        if isinstance(node.op, ast.Add):
+            op = lambda x, y: x + y
+        elif isinstance(node.op, ast.Sub):
+            op = lambda x, y: x - y
+        elif isinstance(node.op, ast.Mult):
+            if left.level != right.level or not isinstance(left.level, gt_ir.LevelMarker):
+                raise self.interval_error
+            op = lambda x, y: x * y
+        else:
+            raise self.interval_error
+
+        if right.level == gt_ir.LevelMarker.END:
+            level = gt_ir.LevelMarker.END
+        else:
+            level = left.level
+
+        return gt_ir.AxisBound(level=level, offset=op(left.offset, right.offset), loc=self.loc)
+
+    def visit_UnaryOp(self, node: ast.UnaryOp) -> gt_ir.AxisBound:
+        axis_bound = self.visit(node.operand)
+        level = axis_bound.level
+        offset = axis_bound.offset
+        if isinstance(node.op, ast.USub):
+            new_level = (
+                gt_ir.LevelMarker.END
+                if level == gt_ir.LevelMarker.START
+                else gt_ir.LevelMarker.START
+            )
+            return gt_ir.AxisBound(level=new_level, offset=-offset, loc=self.loc)
+        else:
+            raise self.interval_error
+
+        return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
+
+    def visit_Subscript(self, node: ast.Subscript) -> gt_ir.AxisBound:
+        if node.value.id != self.axis_name:
+            raise self.interval_error
+
+        if not isinstance(node.slice, ast.Index):
+            raise self.interval_error
+
+        return self.visit(node.slice.value)
+
+
+parse_interval_node = AxisIntervalParser.apply
+
+
 class ValueInliner(ast.NodeTransformer):
     @classmethod
     def apply(cls, func_node: ast.FunctionDef, context: dict):
@@ -174,7 +322,7 @@ class ValueInliner(ast.NodeTransformer):
                 new_node = ast.NameConstant(value=value)
             elif isinstance(value, numbers.Number):
                 new_node = ast.Num(n=value)
-            elif isinstance(value, gtscript._AxisSplitter):
+            elif isinstance(value, gtscript._AxisOffset):
                 new_node = ast.Constant(value=value)
             elif hasattr(value, "_gtscript_"):
                 pass
@@ -724,19 +872,21 @@ class IRMaker(ast.NodeVisitor):
                 raise range_error
 
         if len(args) == 2:
+            if any(isinstance(arg, ast.Subscript) for arg in args):
+                raise GTScriptSyntaxError(
+                    "Two-argument syntax should not use AxisOffsets or AxisIntervals"
+                )
             interval_node = ast.Slice(lower=args[0], upper=args[1])
             ast.copy_location(interval_node, node)
         else:
             interval_node = args[0]
 
-        interval = gt_ir.utils.parse_interval_node(interval_node, "K", loc=loc)
+        interval = parse_interval_node(interval_node, "K", loc=loc)
 
         if (
             interval.start.level == gt_ir.LevelMarker.END
             and interval.end.level == gt_ir.LevelMarker.START
-        ):
-            raise range_error
-        elif (
+        ) or (
             interval.start.level == interval.end.level
             and interval.end.offset <= interval.start.offset
         ):
@@ -1186,7 +1336,7 @@ class GTScriptParser(ast.NodeVisitor):
         *gtscript._VALID_DATA_TYPES,
         types.FunctionType,
         type(None),
-        gtscript._AxisSplitter,
+        gtscript._AxisOffset,
     )
 
     def __init__(self, definition, *, options, externals=None):
