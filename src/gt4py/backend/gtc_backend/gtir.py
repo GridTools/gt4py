@@ -16,6 +16,7 @@
 
 import enum
 from typing import Dict, List, Optional, Tuple, Union
+from pydantic import validator
 
 from devtools import debug  # noqa: F401
 from eve import IntEnum, Node, SourceLocation, Str
@@ -81,6 +82,12 @@ class ParAssignStmt(Stmt):
 
     left: FieldAccess  # there are no local variables in gtir, only fields
     right: Expr
+
+    @validator("left")
+    def no_horizontal_offset_in_assignment(cls, v):
+        if v.offset.i != 0 or v.offset.j != 0:
+            raise ValueError("Lhs of assignment must not have a horizontal offset.")
+        return v
 
 
 class IfStmt(Stmt):
