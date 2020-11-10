@@ -4,8 +4,8 @@ import pytest
 from devtools import debug
 from eve import SourceLocation
 
-from gt4py.backend.gtc_backend.common import BinaryOperator, DataType, LevelMarker, LoopOrder
-from gt4py.backend.gtc_backend.gtir import (
+from gt4py.gtc.common import BinaryOperator, DataType, LevelMarker, LoopOrder
+from gt4py.gtc.gtir import (
     AssignStmt,
     AxisBound,
     BinaryOp,
@@ -18,7 +18,7 @@ from gt4py.backend.gtc_backend.gtir import (
     VerticalInterval,
     VerticalLoop,
 )
-from gt4py.backend.gtc_backend.python_naive_codegen import PythonNaiveCodegen
+from gt4py.gtc.python.python_naive_codegen import PythonNaiveCodegen
 
 
 @pytest.fixture
