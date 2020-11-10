@@ -827,9 +827,7 @@ class IRMaker(ast.NodeVisitor):
             axis_names = [axis.name for axis in self.domain.parallel_axes]
             parallel_intervals.append(
                 [
-                    gt_ir.utils.parse_interval_node(
-                        axis, name, loc=gt_ir.Location.from_ast_node(call_node)
-                    )
+                    parse_interval_node(axis, name, loc=gt_ir.Location.from_ast_node(call_node))
                     for axis, name in zip(axes_slices, axis_names)
                 ]
             )
