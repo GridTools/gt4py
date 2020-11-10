@@ -2,7 +2,13 @@ from typing import List, Union
 
 from eve import Str
 
-from gt4py.gtc.gtir import AxisBound, Expr, FieldDecl, FieldsMetadata, LocNode, Stmt
+from gt4py.gtc.gtir import AxisBound, Expr, FieldAccess, FieldDecl, FieldsMetadata, LocNode, Stmt
+
+
+# TODO here we inject a new node to gtirs stmt system -> need generic stmt to decouple
+class AssignStmt(Stmt):
+    left: FieldAccess
+    right: Expr
 
 
 class IJLoop(LocNode):

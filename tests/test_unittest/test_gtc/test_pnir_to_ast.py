@@ -83,7 +83,7 @@ def test_binary_op(pnir_to_ast: PnirToAst) -> None:
 
 def test_assign_stmt(pnir_to_ast: PnirToAst) -> None:
     assign = pnir_to_ast.visit(
-        gtir.AssignStmt(
+        pnir.AssignStmt(
             left=gtir.FieldAccess.centered(name="a"), right=gtir.FieldAccess.centered(name="b")
         )
     )
@@ -96,7 +96,7 @@ def test_assign_stmt(pnir_to_ast: PnirToAst) -> None:
 def test_ij_loop(pnir_to_ast: PnirToAst) -> None:
     ij_loop = pnir.IJLoop(
         body=[
-            gtir.AssignStmt(
+            pnir.AssignStmt(
                 left=gtir.FieldAccess.centered(name="a"),
                 right=gtir.BinaryOp(
                     left=gtir.FieldAccess(name="b", offset=gtir.CartesianOffset(i=1, j=0, k=0)),
@@ -104,7 +104,7 @@ def test_ij_loop(pnir_to_ast: PnirToAst) -> None:
                     op=common.BinaryOperator.ADD,
                 ),
             ),
-            gtir.AssignStmt(
+            pnir.AssignStmt(
                 left=gtir.FieldAccess.centered(name="b"),
                 right=gtir.BinaryOp(
                     left=gtir.FieldAccess(name="a", offset=gtir.CartesianOffset(i=0, j=0, k=-1)),
@@ -156,7 +156,7 @@ def test_k_loop(pnir_to_ast: PnirToAst) -> None:
         ij_loops=[
             pnir.IJLoop(
                 body=[
-                    gtir.AssignStmt(
+                    pnir.AssignStmt(
                         left=gtir.FieldAccess.centered(name="a"),
                         right=gtir.FieldAccess.centered(name="b"),
                     )
@@ -164,7 +164,7 @@ def test_k_loop(pnir_to_ast: PnirToAst) -> None:
             ),
             pnir.IJLoop(
                 body=[
-                    gtir.AssignStmt(
+                    pnir.AssignStmt(
                         left=gtir.FieldAccess.centered(name="b"),
                         right=gtir.FieldAccess.centered(name="c"),
                     )
@@ -190,7 +190,7 @@ def test_run_function(pnir_to_ast: PnirToAst) -> None:
                 ij_loops=[
                     pnir.IJLoop(
                         body=[
-                            gtir.AssignStmt(
+                            pnir.AssignStmt(
                                 left=gtir.FieldAccess.centered(name="a"),
                                 right=gtir.FieldAccess.centered(name="b"),
                             ),
@@ -204,7 +204,7 @@ def test_run_function(pnir_to_ast: PnirToAst) -> None:
                 ij_loops=[
                     pnir.IJLoop(
                         body=[
-                            gtir.AssignStmt(
+                            pnir.AssignStmt(
                                 left=gtir.FieldAccess.centered(name="b"),
                                 right=gtir.FieldAccess.centered(name="c"),
                             ),
@@ -235,7 +235,7 @@ def test_module(tmp_path: pathlib.Path, pnir_to_ast: PnirToAst) -> None:
                     ij_loops=[
                         pnir.IJLoop(
                             body=[
-                                gtir.AssignStmt(
+                                pnir.AssignStmt(
                                     left=gtir.FieldAccess.centered(name="a"),
                                     right=gtir.FieldAccess.centered(name="b"),
                                 ),
@@ -249,7 +249,7 @@ def test_module(tmp_path: pathlib.Path, pnir_to_ast: PnirToAst) -> None:
                     ij_loops=[
                         pnir.IJLoop(
                             body=[
-                                gtir.AssignStmt(
+                                pnir.AssignStmt(
                                     left=gtir.FieldAccess.centered(name="a"),
                                     right=gtir.FieldAccess.centered(name="c"),
                                 ),
@@ -317,7 +317,7 @@ def set_ones_stencil() -> Iterator[pnir.Stencil]:
                         ij_loops=[
                             pnir.IJLoop(
                                 body=[
-                                    gtir.AssignStmt(
+                                    pnir.AssignStmt(
                                         left=gtir.FieldAccess.centered(name="a"),
                                         right=gtir.Literal(value="1", dtype=common.DataType.INT32),
                                     ),

@@ -6,8 +6,8 @@ from gt4py.gtc.gtir import Computation, FieldAccess, FieldDecl, FieldsMetadataBu
 
 
 class FieldsMetadataPass(NodeTranslator):
-    def __init__(self, *, memo: Dict = None, **kwargs: Any) -> None:
-        super().__init__(memo=memo, **kwargs)
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
         self.metas = FieldsMetadataBuilder()
 
     def visit_Computation(self, node: Computation) -> Computation:

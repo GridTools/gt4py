@@ -57,33 +57,29 @@ class DefIRToGTIR(IRNodeVisitor):
         return cls().visit(root)
 
     def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Computation:
-        stencils = [self.visit(c) for c in node.computations]
+        vertical_loops = [self.visit(c) for c in node.computations]
         return gtir.Computation(
-            name=node.name, params=[self.visit(f) for f in node.api_fields], stencils=stencils
+            name=node.name,
+            params=[self.visit(f) for f in node.api_fields],
+            vertical_loops=vertical_loops,
         )
 
-    def visit_ComputationBlock(self, node: ComputationBlock) -> gtir.Stencil:
-        horizontal_loops = [gtir.HorizontalLoop(stmt=s) for s in self.visit(node.body)]
+    def visit_ComputationBlock(self, node: ComputationBlock) -> List[gtir.VerticalLoop]:
+        assigns = [s for s in self.visit(node.body)]
         start, end = self.visit(node.interval)
-        vertical_intervals = [
-            gtir.VerticalInterval(horizontal_loops=horizontal_loops, start=start, end=end)
-        ]
-        return gtir.Stencil(
-            vertical_loops=[
-                gtir.VerticalLoop(
-                    loop_order=self.GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER[node.iteration_order],
-                    vertical_intervals=vertical_intervals,
-                )
-            ]
+        vertical_intervals = [gtir.VerticalInterval(body=assigns, start=start, end=end)]
+        return gtir.VerticalLoop(
+            loop_order=self.GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER[node.iteration_order],
+            vertical_intervals=vertical_intervals,
         )
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
         return [self.visit(s) for s in node.stmts]
 
-    def visit_Assign(self, node: Assign) -> gtir.AssignStmt:
+    def visit_Assign(self, node: Assign) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef)
         left = self.visit(node.target)
-        return gtir.AssignStmt(left=left, right=self.visit(node.value))
+        return gtir.ParAssignStmt(left=left, right=self.visit(node.value))
 
     def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
         return gtir.Literal(value=str(node.value), dtype=common.DataType(node.data_type.value))

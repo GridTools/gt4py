@@ -4,15 +4,13 @@ import pytest
 
 from gt4py.gtc.common import DataType, LevelMarker, LoopOrder
 from gt4py.gtc.gtir import (
-    AssignStmt,
+    ParAssignStmt,
     AxisBound,
     CartesianOffset,
     Computation,
     FieldAccess,
     FieldBoundary,
     FieldDecl,
-    HorizontalLoop,
-    Stencil,
     VerticalInterval,
     VerticalLoop,
 )
@@ -38,27 +36,21 @@ def test_copy_shift(shift_offset: Tuple[CartesianOffset, FieldBoundary]) -> None
             FieldDecl(name="a", dtype=DataType.FLOAT64),
             FieldDecl(name="b", dtype=DataType.FLOAT64),
         ],
-        stencils=[
-            Stencil(
-                vertical_loops=[
-                    VerticalLoop(
-                        loop_order=LoopOrder.FORWARD,
-                        vertical_intervals=[
-                            VerticalInterval(
-                                start=AxisBound(level=LevelMarker.START, offset=0),
-                                end=AxisBound(level=LevelMarker.END, offset=0),
-                                horizontal_loops=[
-                                    HorizontalLoop(
-                                        stmt=AssignStmt(
-                                            left=FieldAccess.centered(name="a"),
-                                            right=FieldAccess(name="b", offset=offset),
-                                        )
-                                    )
-                                ],
+        vertical_loops=[
+            VerticalLoop(
+                loop_order=LoopOrder.FORWARD,
+                vertical_intervals=[
+                    VerticalInterval(
+                        start=AxisBound(level=LevelMarker.START, offset=0),
+                        end=AxisBound(level=LevelMarker.END, offset=0),
+                        body=[
+                            ParAssignStmt(
+                                left=FieldAccess.centered(name="a"),
+                                right=FieldAccess(name="b", offset=offset),
                             )
                         ],
                     )
-                ]
+                ],
             )
         ],
     )

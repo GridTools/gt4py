@@ -171,7 +171,7 @@ class PnirToAst(NodeVisitor):
             ],
         )
 
-    def visit_AssignStmt(self, node: gtir.AssignStmt) -> ast.Assign:
+    def visit_AssignStmt(self, node: pnir.AssignStmt) -> ast.Assign:
         return ast.Assign(targets=[self.visit(node.left)], value=self.visit(node.right))
 
     def visit_BinaryOp(self, node: gtir.BinaryOp) -> ast.BinOp:

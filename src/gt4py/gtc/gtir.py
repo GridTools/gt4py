@@ -138,6 +138,8 @@ class VerticalLoop(LocNode):
     vertical_intervals: List[VerticalInterval]
     loop_order: common.LoopOrder
 
+    # TODO validate that intervals are contiguous
+
 
 @enum.unique
 class AccessKind(IntEnum):

@@ -13,46 +13,38 @@ def gtir_to_pnir() -> Iterator[GtirToPnir]:
 
 
 @pytest.fixture
-def copies_stencil() -> Iterator[gtir.Stencil]:
-    yield gtir.Stencil(
-        vertical_loops=[
-            gtir.VerticalLoop(
-                loop_order=common.LoopOrder.PARALLEL,
-                vertical_intervals=[
-                    gtir.VerticalInterval(
-                        start=gtir.AxisBound.from_start(offset=1),
-                        end=gtir.AxisBound.from_end(offset=2),
-                        horizontal_loops=[
-                            gtir.HorizontalLoop(
-                                stmt=gtir.AssignStmt(
-                                    left=gtir.FieldAccess.centered(name="a"),
-                                    right=gtir.FieldAccess.centered(name="b"),
-                                )
-                            ),
-                            gtir.HorizontalLoop(
-                                stmt=gtir.AssignStmt(
-                                    left=gtir.FieldAccess.centered(name="b"),
-                                    right=gtir.FieldAccess(
-                                        name="a", offset=gtir.CartesianOffset(i=2, j=1, k=0)
-                                    ),
-                                )
-                            ),
-                        ],
-                    )
+def copies_vertical_loop() -> Iterator[gtir.VerticalLoop]:
+    yield gtir.VerticalLoop(
+        loop_order=common.LoopOrder.PARALLEL,
+        vertical_intervals=[
+            gtir.VerticalInterval(
+                start=gtir.AxisBound.from_start(offset=1),
+                end=gtir.AxisBound.from_end(offset=2),
+                body=[
+                    gtir.ParAssignStmt(
+                        left=gtir.FieldAccess.centered(name="a"),
+                        right=gtir.FieldAccess.centered(name="b"),
+                    ),
+                    gtir.ParAssignStmt(
+                        left=gtir.FieldAccess.centered(name="b"),
+                        right=gtir.FieldAccess(
+                            name="a", offset=gtir.CartesianOffset(i=2, j=1, k=0)
+                        ),
+                    ),
                 ],
             )
-        ]
+        ],
     )
 
 
-def test_computation(copies_stencil: gtir.Stencil, gtir_to_pnir: GtirToPnir) -> None:
+def test_computation(copies_vertical_loop: gtir.VerticalLoop, gtir_to_pnir: GtirToPnir) -> None:
     inp = gtir.Computation(
         name="test_computation",
         params=[
             gtir.FieldDecl(name="a", dtype=common.DataType.INT8),
             gtir.FieldDecl(name="b", dtype=common.DataType.FLOAT64),
         ],
-        stencils=[copies_stencil, copies_stencil],
+        vertical_loops=[copies_vertical_loop, copies_vertical_loop],
         fields_metadata=gtir.FieldsMetadata(
             metas={
                 "a": gtir.FieldMetadataBuilder()
@@ -80,20 +72,16 @@ def test_computation(copies_stencil: gtir.Stencil, gtir_to_pnir: GtirToPnir) -> 
     assert isinstance(out.computation.run.k_loops[1], pnir.KLoop)
 
 
-def test_stencil(copies_stencil: gtir.Stencil, gtir_to_pnir: GtirToPnir) -> None:
-    out = gtir_to_pnir.visit(copies_stencil)
+def test_vertical_loop(copies_vertical_loop: gtir.VerticalLoop, gtir_to_pnir: GtirToPnir) -> None:
+    out = gtir_to_pnir.visit(copies_vertical_loop)
     assert len(out) == 1
     assert isinstance(out[0], pnir.KLoop)
 
 
-def test_vertical_loop(copies_stencil: gtir.Stencil, gtir_to_pnir: GtirToPnir) -> None:
-    out = gtir_to_pnir.visit(copies_stencil.vertical_loops[0])
-    assert len(out) == 1
-    assert isinstance(out[0], pnir.KLoop)
-
-
-def test_vertical_interval(copies_stencil: gtir.Stencil, gtir_to_pnir: GtirToPnir) -> None:
-    vertical_interval = copies_stencil.vertical_loops[0].vertical_intervals[0]
+def test_vertical_interval(
+    copies_vertical_loop: gtir.VerticalLoop, gtir_to_pnir: GtirToPnir
+) -> None:
+    vertical_interval = copies_vertical_loop.vertical_intervals[0]
     out = gtir_to_pnir.visit(vertical_interval)
     assert isinstance(out, pnir.KLoop)
     assert isinstance(out.lower, gtir.AxisBound)
@@ -104,11 +92,3 @@ def test_vertical_interval(copies_stencil: gtir.Stencil, gtir_to_pnir: GtirToPni
     assert out.upper.level == common.LevelMarker.END
     assert len(out.ij_loops) == 2
     assert isinstance(out.ij_loops[0], pnir.IJLoop)
-
-
-def test_horizontal_loop(copies_stencil: gtir.Stencil, gtir_to_pnir: GtirToPnir) -> None:
-    horizontal_loop = copies_stencil.vertical_loops[0].vertical_intervals[0].horizontal_loops[0]
-    out = gtir_to_pnir.visit(horizontal_loop)
-    assert isinstance(out, pnir.IJLoop)
-    assert isinstance(out.body[0], gtir.AssignStmt)
-    assert out.body[0].left.name == "a"

@@ -14,7 +14,7 @@ from gt4py.backend.gtc_backend.stencil_object_snippet_generators import (
 from gt4py.gtc.common import DataType, LoopOrder
 from gt4py.gtc.gtir import (
     AccessKind,
-    AssignStmt,
+    ParAssignStmt,
     AxisBound,
     CartesianOffset,
     Computation,
@@ -23,8 +23,6 @@ from gt4py.gtc.gtir import (
     FieldDecl,
     FieldMetadata,
     FieldsMetadata,
-    HorizontalLoop,
-    Stencil,
     VerticalInterval,
     VerticalLoop,
 )
@@ -59,29 +57,23 @@ def copy_stencil() -> Iterator[Computation]:
                 ),
             }
         ),
-        stencils=[
-            Stencil(
-                vertical_loops=[
-                    VerticalLoop(
-                        loop_order=LoopOrder.PARALLEL,
-                        vertical_intervals=[
-                            VerticalInterval(
-                                start=AxisBound.start(),
-                                end=AxisBound.end(),
-                                horizontal_loops=[
-                                    HorizontalLoop(
-                                        stmt=AssignStmt(
-                                            left=FieldAccess.centered(name="a"),
-                                            right=FieldAccess(
-                                                name="b", offset=CartesianOffset(i=-1, j=0, k=0)
-                                            ),
-                                        )
-                                    )
-                                ],
+        vertical_loops=[
+            VerticalLoop(
+                loop_order=LoopOrder.PARALLEL,
+                vertical_intervals=[
+                    VerticalInterval(
+                        start=AxisBound.start(),
+                        end=AxisBound.end(),
+                        body=[
+                            ParAssignStmt(
+                                left=FieldAccess.centered(name="a"),
+                                right=FieldAccess(
+                                    name="b", offset=CartesianOffset(i=-1, j=0, k=0)
+                                ),
                             )
                         ],
                     )
-                ]
+                ],
             )
         ],
     )
