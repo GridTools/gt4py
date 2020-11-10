@@ -157,8 +157,6 @@ class IntervalBlockInfo:
         Inputs (with extent) to these operations.
     outputs : `set` [`str`]
         Outputs from these operations (with zero extent).
-    parallel_interval : `list` [`IntervalInfo`]
-        A region of the parallel axes to which this block is applied.
     """
 
     id = attribute(of=int)
@@ -166,7 +164,6 @@ class IntervalBlockInfo:
     stmts = attribute(of=ListOf[StatementInfo], factory=list)
     inputs = attribute(of=DictOf[str, Extent], factory=dict)
     outputs = attribute(of=SetOf[str], factory=set)
-    parallel_interval = attribute(of=ListOf[IntervalInfo], optional=True)
 
 
 @attribclass
@@ -187,10 +184,13 @@ class IJBlockInfo:
         Outputs from this block (with zero extent).
     compute_extent : `gt4py.definitions.Extent`
         Compute extent for this block.
+    parallel_interval : `list` [`IntervalInfo`]
+        A region of the parallel axes to which this block is applied.
     """
 
     id = attribute(of=int)
     intervals = attribute(of=SetOf[IntervalInfo])
+    parallel_interval = attribute(of=ListOf[IntervalInfo], optional=True)
     interval_blocks = attribute(of=ListOf[IntervalBlockInfo], factory=list)
     inputs = attribute(of=DictOf[str, Extent], factory=dict)
     outputs = attribute(of=SetOf[str], factory=set)

@@ -161,4 +161,4 @@ def test_remove_interval(
     )
 
     transform_data = compute_extents_pass(transform_data)
-    assert len(transform_data.blocks[0].ij_blocks[0].interval_blocks) == 0
+    assert len(transform_data.blocks[0].ij_blocks) == 0
