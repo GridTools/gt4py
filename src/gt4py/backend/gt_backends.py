@@ -403,7 +403,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
     def visit_ApplyBlock(
         self, node: gt_ir.ApplyBlock
-    ) -> Tuple[Tuple[Tuple[int, int], Tuple[int, int]], str, str]:
+    ) -> Tuple[Tuple[Tuple[int, int], Tuple[int, int]], str]:
         interval_definition = self.visit(node.interval)
 
         body_sources = gt_text.TextBlock()
@@ -417,37 +417,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         self.apply_block_symbols = {**self.stage_symbols, **node.local_symbols}
         body_sources.extend(self.visit(node.body))
 
-        if node.parallel_interval:
-            condition = self._parallel_interval_condition(node.parallel_interval)
-        else:
-            condition = ""
-
-        return interval_definition, condition, body_sources.text
-
-    @staticmethod
-    def _merge_regions(regions: List[dict]) -> List[dict]:
-        def iterate_new_intervals(regions):
-            def get_key(region: dict) -> Tuple[Tuple[int, int], ...]:
-                return (region["interval_start"], region["interval_end"])
-
-            upper = lower = 0
-            while upper < len(regions):
-                while upper < len(regions) and get_key(regions[upper]) == get_key(regions[lower]):
-                    upper += 1
-                if upper > lower:
-                    yield regions[lower:upper]
-                    lower = upper
-
-        new_regions = []
-        for region_sublist in iterate_new_intervals(regions):
-            bodies = [
-                {"stmts": region["body"], "entry_conditional": region["entry_conditional"]}
-                for region in region_sublist
-            ]
-            intervals = {key: region_sublist[0][key] for key in ("interval_start", "interval_end")}
-            new_regions.append({**intervals, "bodies": bodies})
-
-        return new_regions
+        return interval_definition, body_sources.text
 
     def visit_Stage(self, node: gt_ir.Stage) -> Dict[str, Any]:
         # Initialize symbols for the generation of references in this stage
@@ -463,37 +433,31 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 arg["extent"] = gt_utils.flatten(accessor.extent)
             args.append(arg)
 
-        # Create regions and computations
-        regions = []
-        any_condition = False
-        for apply_block in node.apply_blocks:
-            interval_definition, condition, body_sources = self.visit(apply_block)
-            regions.append(
-                {
-                    "interval_start": interval_definition[0],
-                    "interval_end": interval_definition[1],
-                    "entry_conditional": condition,
-                    "body": body_sources,
-                }
-            )
-            if condition:
-                any_condition = True
-
-        if any_condition:
+        if node.parallel_interval:
+            conditional = self._parallel_interval_condition(node.parallel_interval)
             args.extend(
                 [
                     {"name": f"domain_size_{name}", "access_type": "in", "extent": None}
                     for name in self.domain.axes_names
                 ]
             )
+        else:
+            conditional = ""
 
-        # merges regions, new list has "bodies" sublist
-        merged_regions = self._merge_regions(
-            sorted(regions, key=lambda region: (region["interval_start"], region["interval_end"])),
-        )
+        # Create regions and computations
+        regions = []
+        for apply_block in node.apply_blocks:
+            interval_definition, body_sources = self.visit(apply_block)
+            regions.append(
+                {
+                    "interval_start": interval_definition[0],
+                    "interval_end": interval_definition[1],
+                    "entry_conditional": conditional,
+                    "body": body_sources,
+                }
+            )
 
-        functor_content = {"args": args, "regions": merged_regions}
-
+        functor_content = {"args": args, "regions": regions}
         return functor_content
 
     def visit_StencilImplementation(
@@ -537,15 +501,14 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             if name not in node.unreferenced
         ]
 
-        stage_functors = {}
         requires_positional = False
+        stage_functors = {}
         for multi_stage in node.multi_stages:
             for group in multi_stage.groups:
                 for stage in group.stages:
+                    if stage.parallel_interval is not None:
+                        requires_positional = True
                     stage_functors[stage.name] = self.visit(stage)
-                    for region in stage_functors[stage.name]["regions"]:
-                        if any(body["entry_conditional"] for body in region["bodies"]):
-                            requires_positional = True
 
         multi_stages = []
         for multi_stage in node.multi_stages:

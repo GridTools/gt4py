@@ -100,23 +100,24 @@ using data_store_t =
 {%- for field in arg_fields %}
 using p_{{ field.name }} = gt::arg<{{ arg_counter + loop.index0 }}, data_store_t<{{ field.dtype }}, {{ field.layout_id }}>>;
 {%- endfor %}
-{%- set arg_counter = arg_counter + arg_fields|length %}
-{%- for param in parameters %}
+{% set arg_counter = arg_counter + arg_fields|length %}
+{% for param in parameters %}
 using p_{{ param.name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
-{%- endfor -%}
-{%- set arg_counter = arg_counter + parameters|length %}
+{%- endfor %}
+{% set arg_counter = arg_counter + parameters|length %}
 {%- if requires_positional -%}
-{%- for axis_name in axes_names %}
+{% for axis_name in axes_names %}
 using p_domain_size_{{ axis_name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_parameter<gt::uint_t>>;
-{%- endfor -%}
+{%- endfor %}
 {% set arg_counter = arg_counter + axes_names|length %}
 {%- endif -%}
 {% if tmp_fields -%}
 {%- for field in tmp_fields %}
 using p_{{ field.name }} = gt::tmp_arg<{{ arg_counter + loop.index0 }}, data_store_t<{{ field.dtype }}, 0>>;
-{%- endfor -%}
+{%- endfor %}
 {% set arg_counter = arg_counter + tmp_fields|length %}
 {%- endif %}
+
 
 // Constants
 {% for name, value in constants.items() %}
@@ -144,17 +145,15 @@ struct {{ name }}_func {
                                                gt::level<{{ region.interval_end|join(", ") }}, level_offset_limit>>)
     {
 {%- filter indent(width=8) %}
-{%- for body in region.bodies %}
-{%- if body.entry_conditional|length > 0 %}
-if ({{ body.entry_conditional }}) {
+{%- if region.entry_conditional|length > 0 %}
+if ({{ region.entry_conditional }}) {
 {%- filter indent(width=4) %}
-{{ body.stmts }}
+{{ region.body }}
 {%- endfilter %}
 }
 {%- else %}
-{{ body.stmts }}
+{{ region.body }}
 {%- endif %}
-{%- endfor %}
 {%- endfilter %}
     }
     {%- endfor %}
@@ -241,6 +240,7 @@ void run(const std::array<gt::uint_t, 3>& domain,
     auto ds_{{ field.name }} = make_data_store<{{ field.dtype }}, {{ field.layout_id }}>(bi_{{ field.name }}, domain, {{ field.name }}_origin);
 {%- endfor %}
 
+    // Run computation and wait for the synchronization of the output stores
 {%- if requires_positional %}
     auto gt_computation = gt::make_positional_computation<backend_t>(
 {%- else %}
@@ -258,7 +258,8 @@ void run(const std::array<gt::uint_t, 3>& domain,
 
 {%- set multi_comma = joiner(",") %}
 {%- for multi in multi_stages %}
-        {{ multi_comma() }}gt::make_multistage(gt::execute::{{ multi.exec }}(),
+        {{- multi_comma() }}
+        gt::make_multistage(gt::execute::{{ multi.exec }}(),
     {%- set step_comma = joiner(",") %}
     {%- for step in multi.steps %}
         {{- step_comma() }}
@@ -289,7 +290,6 @@ void run(const std::array<gt::uint_t, 3>& domain,
 {%- for field in arg_fields -%}
                      {{ comma() }}p_{{ field.name }}()=ds_{{ field.name }}
 {%- endfor %});
-
         // computation_.sync_bound_data_stores();
 }
 
