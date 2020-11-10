@@ -823,7 +823,7 @@ class IRMaker(ast.NodeVisitor):
         else:
             interval_node = args[0]
 
-        interval = gt_ir.utils.parse_interval_node(interval_node, "K", loc=loc)
+        interval = parse_interval_node(interval_node, "K", loc=loc)
 
         if (
             interval.start.level == gt_ir.LevelMarker.END
