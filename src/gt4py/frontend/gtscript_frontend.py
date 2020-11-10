@@ -818,6 +818,10 @@ class IRMaker(ast.NodeVisitor):
                 raise range_error
 
         if len(args) == 2:
+            if any(isinstance(arg, ast.Subscript) for arg in args):
+                raise GTScriptSyntaxError(
+                    "Two-argument syntax should not use AxisOffsets or AxisIntervals"
+                )
             interval_node = ast.Slice(lower=args[0], upper=args[1])
             ast.copy_location(interval_node, node)
         else:
