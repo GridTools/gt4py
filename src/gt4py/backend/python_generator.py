@@ -251,17 +251,17 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
         interval_definition = self.visit(node.interval)
         self.block_info.interval = interval_definition
-        self.block_info.parallel_interval = node.parallel_interval
         self.block_info.symbols = node.local_symbols
         body_sources = self.visit(node.body)
 
-        return interval_definition, self.block_info.parallel_interval, body_sources
+        return interval_definition, body_sources
 
     def visit_Stage(self, node: gt_ir.Stage, *, iteration_order):
         # Initialize symbols for the generation of references in this stage
         self.block_info.accessors = {accessor.symbol for accessor in node.accessors}
         self.block_info.iteration_order = iteration_order
         self.block_info.extent = node.compute_extent
+        self.block_info.parallel_interval = node.parallel_interval
 
         # Create regions and computations
         regions = []

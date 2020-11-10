@@ -90,6 +90,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
     def make_stage_source(self, iteration_order: gt_ir.IterationOrder, regions: list):
         extent = self.block_info.extent
+        parallel_interval = self.block_info.parallel_interval
         lower_extent = extent.lower_indices
         upper_extent = extent.upper_indices
         # seq_axis_name = self.impl_node.domain.sequential_axis.name
@@ -114,7 +115,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
             == regions
         )
 
-        for bounds, parallel_interval, body_sources in regions:
+        for bounds, body_sources in regions:
             source_lines.extend(self._make_regional_computation(iteration_order, bounds))
             with source_lines.indented(steps=1):
                 source_lines.extend(ij_loop_lines.text)
