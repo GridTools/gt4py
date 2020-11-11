@@ -16,6 +16,7 @@
 
 import enum
 from typing import Dict, List, Optional, Tuple, Union
+from gt4py.gtc.common import DataType
 from pydantic import validator
 
 from devtools import debug  # noqa: F401
@@ -103,6 +104,12 @@ class ParAssignStmt(Stmt):
         return v
 
 
+def condition_is_boolean(parent_node_cls, cond: Expr) -> Expr:
+    if cond.dtype and cond.dtype is not common.DataType.BOOL:
+        raise ValueError("Condition in `{}` must be boolean.".format(parent_node_cls.__name__))
+    return cond
+
+
 class IfStmt(Stmt):
     cond: Expr
     true_branch: List[Stmt]
@@ -110,39 +117,71 @@ class IfStmt(Stmt):
 
     @validator("cond")
     def condition_is_boolean(cls, cond):
-        if cond.dtype and cond.dtype is not common.DataType.BOOL:
-            raise ValueError("Condition in `IfStmt` must be boolean.")
-        return cond
+        return condition_is_boolean(cls, cond)
+
+    # TODO or like this (but how to pass the name)
+    # _cond_is_bool = validator("cond", allow_reuse=True)(condition_is_boolean)
+
+
+def verify_and_get_common_dtype(node_cls, values: List[Expr]) -> common.DataType:
+    assert len(values) > 0
+    if all([v.dtype for v in values]):
+        dtype = values[0].dtype
+        if all([v.dtype == dtype for v in values]):
+            return dtype
+        else:
+            raise ValueError(
+                "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
+                + ", ".join(v.dtype.name for v in values)
+            )
+    else:
+        return None
 
 
 class TernaryOp(Expr):
     cond: Expr
-    true_branch: Expr
-    false_branch: Expr
+    true_expr: Expr
+    false_expr: Expr
 
     @validator("cond")
     def condition_is_boolean(cls, cond):
-        if cond.dtype and cond.dtype is not common.DataType.BOOL:
-            raise ValueError("Condition in `TernaryOp` must be boolean.")
-        return cond
+        return condition_is_boolean(cls, cond)
+
+    @root_validator(pre=True)
+    def type_propagation_and_check(cls, values):
+        common_dtype = verify_and_get_common_dtype(
+            cls, [values["true_expr"], values["false_expr"]]
+        )
+        if common_dtype:
+            values["dtype"] = common_dtype
+        return values
 
 
 class BinaryOp(Expr):
-    op: common.BinaryOperator
+    op: Union[common.BinaryOperator, common.ComparisonOperator, common.LogicalOperator]
     left: Expr
     right: Expr
 
     @root_validator(pre=True)
     def type_propagation_and_check(cls, values):
-        if values["left"].dtype and values["right"].dtype:
-            if values["left"].dtype == values["right"].dtype:
-                values["dtype"] = values["left"].dtype
-            else:
-                raise ValueError(
-                    "Type mismatch in `BinaryOp` left={left}, right={right}".format(
-                        left=values["left"].dtype.name, right=values["right"].dtype.name
+        common_dtype = verify_and_get_common_dtype(cls, [values["left"], values["right"]])
+
+        if common_dtype:
+            if isinstance(values["op"], common.BinaryOperator):
+                if common_dtype is not common.DataType.BOOL:
+                    values["dtype"] = common_dtype
+                else:
+                    raise ValueError(
+                        "Boolean expression is not allowed with arithmetic operation."
                     )
-                )
+            elif isinstance(values["op"], common.LogicalOperator):
+                if common_dtype is common.DataType.BOOL:
+                    values["dtype"] = common.DataType.BOOL
+                else:
+                    raise ValueError("Arithmetic expression is not allowed in logical operation.")
+            elif isinstance(values["op"], common.ComparisonOperator):
+                values["dtype"] = common.DataType.BOOL
+
         return values
 
 

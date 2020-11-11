@@ -48,6 +48,25 @@ class BinaryOperator(StrEnum):
 
 
 @enum.unique
+class ComparisonOperator(StrEnum):
+    """Comparison operators."""
+
+    GT = ">"
+    LT = "<"
+    GEQ = ">="
+    LEQ = "<="
+    EQ = "=="
+    NEQ = "!="
+
+
+@enum.unique
+class LogicalOperator(StrEnum):
+    AND = "and"
+    NOT = "not"
+    OR = "or"
+
+
+@enum.unique
 class DataType(IntEnum):
     """Data type identifier."""
 
@@ -71,14 +90,6 @@ class LoopOrder(IntEnum):
     PARALLEL = 0
     FORWARD = 1
     BACKWARD = 2
-
-
-@enum.unique
-class LocationType(IntEnum):
-    Vertex = 0
-    Edge = 1
-    Cell = 2
-    NoLocation = 3
 
 
 @enum.unique

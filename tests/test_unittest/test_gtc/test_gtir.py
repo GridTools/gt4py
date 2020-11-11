@@ -6,7 +6,14 @@ import pytest
 from devtools import debug
 from eve import SourceLocation
 
-from gt4py.gtc.common import BinaryOperator, DataType, LevelMarker, LoopOrder
+from gt4py.gtc.common import (
+    BinaryOperator,
+    ComparisonOperator,
+    DataType,
+    LevelMarker,
+    LogicalOperator,
+    LoopOrder,
+)
 from gt4py.gtc.gtir import (
     AxisBound,
     BinaryOp,
@@ -17,6 +24,7 @@ from gt4py.gtc.gtir import (
     IfStmt,
     Stmt,
     Literal,
+    TernaryOp,
     VerticalInterval,
     VerticalLoop,
     ParAssignStmt,
@@ -145,6 +153,30 @@ def test_ParAssignStmtWithHorizontalOffsetIsError():
         )
 
 
+def test_TernaryOpValidation():
+    assert (
+        TernaryOp(
+            cond=DummyExpr(dtype=DataType.BOOL),
+            true_expr=DummyExpr(dtype=DataType.INT32),
+            false_expr=DummyExpr(dtype=DataType.INT32),
+        ).dtype
+        == DataType.INT32
+    )
+
+    with pytest.raises(ValidationError):
+        TernaryOp(
+            cond=DummyExpr(dtype=DataType.BOOL),
+            true_expr=DummyExpr(dtype=DataType.BOOL),
+            false_expr=DummyExpr(dtype=DataType.INT32),
+        )
+
+        TernaryOp(
+            cond=DummyExpr(dtype=DataType.INT32),
+            true_expr=DummyExpr(dtype=DataType.INT32),
+            false_expr=DummyExpr(dtype=DataType.INT32),
+        )
+
+
 def test_NonBooleanIfStmtConditionIsError():
     with pytest.raises(ValidationError):
         IfStmt(cond=DummyExpr(dtype=DataType.INT32), true_branch=[], false_branch=[])
@@ -156,5 +188,49 @@ def test_LiteralRequiresDtype():
 
 
 def test_BinaryOpErrorsForIncompatibleTypes():
+    BinaryOp(
+        left=DummyExpr(dtype=DataType.INT32),
+        right=DummyExpr(dtype=DataType.INT32),
+        op=BinaryOperator.ADD,
+    )
     with pytest.raises(ValidationError):
-        BinaryOp(left=DummyExpr(dtype=DataType.INT32), right=DummyExpr(dtype=DataType.INT16))
+        BinaryOp(
+            left=DummyExpr(dtype=DataType.INT32),
+            right=DummyExpr(dtype=DataType.INT16),
+            op=BinaryOperator.ADD,
+        )
+
+
+def test_BinaryOpErrorsForArithmeticOperationOnBooleanExpr():
+    with pytest.raises(ValidationError):
+        BinaryOp(
+            left=DummyExpr(dtype=DataType.BOOL),
+            right=DummyExpr(dtype=DataType.BOOL),
+            op=BinaryOperator.ADD,
+        )
+
+
+def test_BinaryOpComparison():
+    comparison = BinaryOp(
+        left=DummyExpr(dtype=DataType.INT32),
+        right=DummyExpr(dtype=DataType.INT32),
+        op=ComparisonOperator.EQ,
+    )
+    assert comparison.dtype == DataType.BOOL
+
+
+def test_BinaryOpLogical():
+    assert (
+        BinaryOp(
+            left=DummyExpr(dtype=DataType.BOOL),
+            right=DummyExpr(dtype=DataType.BOOL),
+            op=LogicalOperator.AND,
+        ).dtype
+        == DataType.BOOL
+    )
+    with pytest.raises(ValueError):
+        BinaryOp(
+            left=DummyExpr(dtype=DataType.INT32),
+            right=DummyExpr(dtype=DataType.INT32),
+            op=LogicalOperator.AND,
+        )
