@@ -1,5 +1,6 @@
 import ast
 import pydantic
+from pydantic.error_wrappers import ValidationError
 
 import pytest
 from devtools import debug
@@ -13,6 +14,9 @@ from gt4py.gtc.gtir import (
     Computation,
     FieldAccess,
     FieldDecl,
+    IfStmt,
+    Stmt,
+    Literal,
     VerticalInterval,
     VerticalLoop,
     ParAssignStmt,
@@ -113,9 +117,44 @@ def test_naive_python_avg():
     assert ast.parse(PythonNaiveCodegen.apply(horizontal_avg))
 
 
+def test_ExprBaseclassIsNotInstantiatable():
+    with pytest.raises(TypeError):
+        Expr()
+
+
+def test_StmtBaseclassIsNotInstantiatable():
+    with pytest.raises(TypeError):
+        Stmt()
+
+
+class DummyExpr(Expr):
+    """Fake expression for cases where a concrete expression is not needed."""
+
+
 # Validation tests
-def test_FieldAccess():
-    with pytest.raises(pydantic.error_wrappers.ValidationError):
+def test_ParAssignStmtWithVerticalOffsetIsOk():
+    ParAssignStmt(
+        left=FieldAccess(name="foo", offset=CartesianOffset(i=0, j=0, k=1)), right=DummyExpr()
+    )
+
+
+def test_ParAssignStmtWithHorizontalOffsetIsError():
+    with pytest.raises(ValidationError):
         ParAssignStmt(
-            left=FieldAccess(name="foo", offset=CartesianOffset(i=1, j=0, k=0)), right=Expr()
+            left=FieldAccess(name="foo", offset=CartesianOffset(i=1, j=0, k=0)), right=DummyExpr()
         )
+
+
+def test_NonBooleanIfStmtConditionIsError():
+    with pytest.raises(ValidationError):
+        IfStmt(cond=DummyExpr(dtype=DataType.INT32), true_branch=[], false_branch=[])
+
+
+def test_LiteralRequiresDtype():
+    with pytest.raises(ValidationError):
+        Literal(value="foo")
+
+
+def test_BinaryOpErrorsForIncompatibleTypes():
+    with pytest.raises(ValidationError):
+        BinaryOp(left=DummyExpr(dtype=DataType.INT32), right=DummyExpr(dtype=DataType.INT16))

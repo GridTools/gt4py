@@ -104,50 +104,50 @@ def test_binary_op(naive_codegen, binary_operator):
 #     assert for_i.target.id == "I"
 
 
-def test_vertical_loop(naive_codegen, loop_order):
-    vertical_loop = VerticalLoop(
-        loop_order=loop_order,
-        vertical_intervals=[
-            VerticalInterval(
-                start=AxisBound.start(),
-                end=AxisBound.from_end(2),
-                body=[
-                    AssignStmt(
-                        left=FieldAccess.centered(name="a"),
-                        right=FieldAccess.centered(name="b"),
-                    )
-                ],
-            ),
-            VerticalInterval(
-                start=AxisBound.from_end(1),
-                end=AxisBound.end(),
-                body=[
-                    AssignStmt(
-                        left=FieldAccess.centered(name="a"),
-                        right=FieldAccess.centered(name="b"),
-                    )
-                ],
-            ),
-        ],
-    )
-    source_tree = ast_parse(naive_codegen.apply(vertical_loop))
+# def test_vertical_loop(naive_codegen, loop_order):
+#     vertical_loop = VerticalLoop(
+#         loop_order=loop_order,
+#         vertical_intervals=[
+#             VerticalInterval(
+#                 start=AxisBound.start(),
+#                 end=AxisBound.from_end(2),
+#                 body=[
+#                     AssignStmt(
+#                         left=FieldAccess.centered(name="a"),
+#                         right=FieldAccess.centered(name="b"),
+#                     )
+#                 ],
+#             ),
+#             VerticalInterval(
+#                 start=AxisBound.from_end(1),
+#                 end=AxisBound.end(),
+#                 body=[
+#                     AssignStmt(
+#                         left=FieldAccess.centered(name="a"),
+#                         right=FieldAccess.centered(name="b"),
+#                     )
+#                 ],
+#             ),
+#         ],
+#     )
+#     source_tree = ast_parse(naive_codegen.apply(vertical_loop))
 
-    for_k = source_tree.body[0]
-    assert isinstance(for_k, ast.For)
-    assert for_k.target.id == "K"
-    assert isinstance(for_k.iter, ast.Call)
-    range_end = for_k.iter.args[-1]
-    assert isinstance(range_end, ast.BinOp)
-    assert isinstance(range_end.op, ast.Sub)
-    assert range_end.right.n == 2
+#     for_k = source_tree.body[0]
+#     assert isinstance(for_k, ast.For)
+#     assert for_k.target.id == "K"
+#     assert isinstance(for_k.iter, ast.Call)
+#     range_end = for_k.iter.args[-1]
+#     assert isinstance(range_end, ast.BinOp)
+#     assert isinstance(range_end.op, ast.Sub)
+#     assert range_end.right.n == 2
 
-    for_k = source_tree.body[1]
-    assert isinstance(for_k, ast.For)
-    assert for_k.target.id == "K"
-    assert isinstance(for_k.iter, ast.Call)
-    range_start = for_k.iter.args[0]
-    range_end = for_k.iter.args[-1]
-    assert isinstance(range_start, ast.BinOp)
-    assert isinstance(range_end, ast.Subscript)
-    assert isinstance(range_start.op, ast.Sub)
-    assert range_start.right.n == 1
+#     for_k = source_tree.body[1]
+#     assert isinstance(for_k, ast.For)
+#     assert for_k.target.id == "K"
+#     assert isinstance(for_k.iter, ast.Call)
+#     range_start = for_k.iter.args[0]
+#     range_end = for_k.iter.args[-1]
+#     assert isinstance(range_start, ast.BinOp)
+#     assert isinstance(range_end, ast.Subscript)
+#     assert isinstance(range_start.op, ast.Sub)
+#     assert range_start.right.n == 1

@@ -19,9 +19,12 @@ from typing import Dict, List, Optional, Tuple, Union
 from pydantic import validator
 
 from devtools import debug  # noqa: F401
-from eve import IntEnum, Node, SourceLocation, Str
+from eve import IntEnum, Node, SourceLocation, Str, SymbolName
+from eve.type_definitions import SymbolRef
+
 
 from gt4py.gtc import common
+from pydantic.class_validators import root_validator
 
 
 class LocNode(Node):
@@ -29,11 +32,21 @@ class LocNode(Node):
 
 
 class Expr(LocNode):
-    pass
+    dtype: Optional[common.DataType]
+
+    # TODO Eve could provide support for making a node abstract
+    def __init__(self, *args, **kwargs):
+        if type(self) is Expr:
+            raise TypeError("Trying to instantiate `Expr` abstract class.")
+        super().__init__(*args, **kwargs)
 
 
 class Stmt(LocNode):
-    pass
+    # TODO Eve could provide support for making a node abstract
+    def __init__(self, *args, **kwargs):
+        if type(self) is Stmt:
+            raise TypeError("Trying to instantiate `Expr` abstract class.")
+        super().__init__(*args, **kwargs)
 
 
 class Literal(Expr):
@@ -61,11 +74,11 @@ class CartesianOffset(Node):
 
 
 class ScalarAccess(Expr):
-    name: Str
+    name: SymbolRef
 
 
 class FieldAccess(Expr):
-    name: Str  # via symbol table
+    name: SymbolRef
     offset: CartesianOffset
 
     @classmethod
@@ -91,9 +104,27 @@ class ParAssignStmt(Stmt):
 
 
 class IfStmt(Stmt):
-    cond: Expr  # TODO bool expr? scalar vs field expr
+    cond: Expr
     true_branch: List[Stmt]
     false_branch: List[Stmt]
+
+    @validator("cond")
+    def condition_is_boolean(cls, cond):
+        if cond.dtype and cond.dtype is not common.DataType.BOOL:
+            raise ValueError("Condition in `IfStmt` must be boolean.")
+        return cond
+
+
+class TernaryOp(Expr):
+    cond: Expr
+    true_branch: Expr
+    false_branch: Expr
+
+    @validator("cond")
+    def condition_is_boolean(cls, cond):
+        if cond.dtype and cond.dtype is not common.DataType.BOOL:
+            raise ValueError("Condition in `TernaryOp` must be boolean.")
+        return cond
 
 
 class BinaryOp(Expr):
@@ -101,8 +132,22 @@ class BinaryOp(Expr):
     left: Expr
     right: Expr
 
+    @root_validator(pre=True)
+    def type_propagation_and_check(cls, values):
+        if values["left"].dtype and values["right"].dtype:
+            if values["left"].dtype == values["right"].dtype:
+                values["dtype"] = values["left"].dtype
+            else:
+                raise ValueError(
+                    "Type mismatch in `BinaryOp` left={left}, right={right}".format(
+                        left=values["left"].dtype.name, right=values["right"].dtype.name
+                    )
+                )
+        return values
+
 
 class FieldDecl(LocNode):
+    # name: SymbolName
     name: Str
     dtype: common.DataType
 
@@ -225,7 +270,7 @@ class FieldsMetadataBuilder:
 
 
 class Computation(LocNode):
-    name: Str
+    name: SymbolName
     params: List[FieldDecl]
     vertical_loops: List[VerticalLoop]
     fields_metadata: Optional[FieldsMetadata]
