@@ -8,7 +8,7 @@ from gt4py.backend.debug_backend import (
     debug_is_compatible_type,
     debug_layout,
 )
-from gt4py.gtc.gtir import Computation
+from gt4py.gtc.gtir import Stencil
 from gt4py.gtc.passes import FieldsMetadataPass
 from gt4py.gtc.python.gtir_to_pnir import GtirToPnir
 from gt4py.gtc.python.pnir import Stencil
@@ -62,7 +62,7 @@ class GTCPythonBackend(BaseBackend, CLIBackendMixin):
         return self._load()
 
     @property
-    def gtc_ir(self) -> Computation:
+    def gtc_ir(self) -> Stencil:
         if "gtc_ir" in self.builder.backend_data:
             return self.builder.backend_data["gtc_ir"]
         return self.builder.with_backend_data(

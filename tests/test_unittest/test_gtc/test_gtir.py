@@ -18,7 +18,7 @@ from gt4py.gtc.gtir import (
     AxisBound,
     BinaryOp,
     CartesianOffset,
-    Computation,
+    Stencil,
     FieldAccess,
     FieldDecl,
     IfStmt,
@@ -67,7 +67,7 @@ def copy_v_loop(copy_interval):
 
 @pytest.fixture
 def copy_computation(copy_v_loop):
-    yield Computation(
+    yield Stencil(
         name="copy_gtir",
         loc=SourceLocation(line=1, column=1, source="copy_gtir"),
         params=[
@@ -89,7 +89,7 @@ def test_naive_python_copy(copy_computation):
 
 
 def test_naive_python_avg():
-    horizontal_avg = Computation(
+    horizontal_avg = Stencil(
         name="horizontal_avg",
         params=[
             FieldDecl(name="a", dtype=DataType.FLOAT32),

@@ -8,7 +8,7 @@ from gt4py.gtc.python import pnir
 
 
 class GtirToPnir(NodeTranslator):
-    def visit_Computation(self, node: gtir.Computation) -> pnir.Stencil:
+    def visit_Stencil(self, node: gtir.Stencil) -> pnir.Stencil:
         stencil_obj = pnir.StencilObject(
             name=node.name, params=node.params, fields_metadata=node.fields_metadata
         )
@@ -22,10 +22,6 @@ class GtirToPnir(NodeTranslator):
             )
         )
         return pnir.Stencil(computation=comp_module, stencil_obj=stencil_obj)
-
-    # def visit_Stencil(self, node: gtir.Stencil) -> List[pnir.KLoop]:
-    #     res = list(chain(*(self.visit(vertical_loop) for vertical_loop in node.vertical_loops)))
-    #     return res
 
     def visit_VerticalLoop(self, node: gtir.VerticalLoop) -> List[pnir.KLoop]:
         res = [self.visit(vertical_interval) for vertical_interval in node.vertical_intervals]

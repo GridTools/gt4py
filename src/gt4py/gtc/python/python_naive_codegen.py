@@ -3,7 +3,7 @@ from eve.codegen import FormatTemplate, JinjaTemplate, MakoTemplate, TemplatedGe
 
 class PythonNaiveCodegen(TemplatedGenerator):
 
-    Computation = JinjaTemplate(
+    Stencil = JinjaTemplate(
         """
 def default_domain(*args):
     lengths = zip(*(i.shape for i in args))
@@ -13,11 +13,9 @@ def default_domain(*args):
 def run({{', '.join(_this_node.param_names)}}, _domain_=None):
     if _domain_ is None:
         _domain_ = default_domain({{', '.join(_this_node.param_names)}})\
-{{ '\\n'.join(stencils) | indent(4)}}
+{{ '\\n'.join(vertical_loop) | indent(4)}}
 """
     )
-
-    Stencil = JinjaTemplate("""{{'\\n'.join(vertical_loops)}}""")
 
     VerticalLoop = MakoTemplate(
         """

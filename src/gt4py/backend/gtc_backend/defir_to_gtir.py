@@ -56,9 +56,9 @@ class DefIRToGTIR(IRNodeVisitor):
     def apply(cls, root, **kwargs):
         return cls().visit(root)
 
-    def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Computation:
+    def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
         vertical_loops = [self.visit(c) for c in node.computations]
-        return gtir.Computation(
+        return gtir.Stencil(
             name=node.name,
             params=[self.visit(f) for f in node.api_fields],
             vertical_loops=vertical_loops,

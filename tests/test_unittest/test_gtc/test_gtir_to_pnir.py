@@ -38,7 +38,7 @@ def copies_vertical_loop() -> Iterator[gtir.VerticalLoop]:
 
 
 def test_computation(copies_vertical_loop: gtir.VerticalLoop, gtir_to_pnir: GtirToPnir) -> None:
-    inp = gtir.Computation(
+    inp = gtir.Stencil(
         name="test_computation",
         params=[
             gtir.FieldDecl(name="a", dtype=common.DataType.INT8),

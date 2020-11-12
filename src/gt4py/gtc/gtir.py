@@ -308,7 +308,7 @@ class FieldsMetadataBuilder:
         return FieldsMetadata(metas={k: v.build() for k, v in self.metas.items()})
 
 
-class Computation(LocNode):
+class Stencil(LocNode):
     name: SymbolName
     params: List[FieldDecl]
     vertical_loops: List[VerticalLoop]

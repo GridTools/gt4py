@@ -7,7 +7,7 @@ from gt4py.gtc.gtir import (
     ParAssignStmt,
     AxisBound,
     CartesianOffset,
-    Computation,
+    Stencil,
     FieldAccess,
     FieldBoundary,
     FieldDecl,
@@ -30,7 +30,7 @@ def shift_offset(request) -> Iterator[Tuple[CartesianOffset, FieldBoundary]]:
 
 def test_copy_shift(shift_offset: Tuple[CartesianOffset, FieldBoundary]) -> None:
     offset, boundary = shift_offset
-    copy_shift = Computation(
+    copy_shift = Stencil(
         name="copy_shift",
         params=[
             FieldDecl(name="a", dtype=DataType.FLOAT64),

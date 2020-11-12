@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 from eve.visitors import NodeTranslator
 
-from gt4py.gtc.gtir import Computation, FieldAccess, FieldDecl, FieldsMetadataBuilder
+from gt4py.gtc.gtir import Stencil, FieldAccess, FieldDecl, FieldsMetadataBuilder
 
 
 class FieldsMetadataPass(NodeTranslator):
@@ -10,7 +10,7 @@ class FieldsMetadataPass(NodeTranslator):
         super().__init__(**kwargs)
         self.metas = FieldsMetadataBuilder()
 
-    def visit_Computation(self, node: Computation) -> Computation:
+    def visit_Stencil(self, node: Stencil) -> Stencil:
         new_node = self.generic_visit(node)
         new_node.fields_metadata = self.metas.build()
         return new_node
