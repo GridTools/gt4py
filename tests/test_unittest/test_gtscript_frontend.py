@@ -20,11 +20,12 @@ import types
 import numpy as np
 import pytest
 
+import gt4py.definitions as gt_definitions
 import gt4py.ir as gt_ir
-from gt4py import definitions as gt_definitions
+import gt4py.utils as gt_utils
 from gt4py import gtscript
-from gt4py import utils as gt_utils
 from gt4py.frontend import gtscript_frontend as gt_frontend
+from gt4py.gtscript import __INLINED, PARALLEL, computation, interval
 
 from ..definitions import id_version
 
@@ -260,7 +261,6 @@ class TestImportedExternals:
     def test_wrong_value(self, id_version, value_type):
         def definition_func(inout_field: gtscript.Field[float]):
             from gt4py.__externals__ import WRONG_VALUE_CONSTANT
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
@@ -270,6 +270,126 @@ class TestImportedExternals:
 
         with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*WRONG_VALUE_CONSTANT.*"):
             compile_definition(definition_func, "test_wrong_value", module, externals=externals)
+
+
+class TestIntervalSyntax:
+    def test_simple(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(0, 1):
+                field = 0
+
+        module = f"TestIntervalSyntax_simple_{id_version}"
+        externals = {}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_simple", module, externals=externals
+        )
+        loc = def_ir.computations[0].interval.loc
+        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START, offset=0, loc=loc
+        )
+        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START, offset=1, loc=loc
+        )
+
+    def test_none(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(1, None):
+                field = 0
+
+        module = f"TestIntervalSyntax_none_{id_version}"
+        externals = {}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_none", module, externals=externals
+        )
+        loc = def_ir.computations[0].interval.loc
+        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START, offset=1, loc=loc
+        )
+        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.END, offset=0, loc=loc
+        )
+
+    def test_externals(self):
+        def definition_func(field: gtscript.Field[float]):
+            from __externals__ import kstart
+
+            with computation(PARALLEL), interval(kstart, -1):
+                field = 0
+
+        module = f"TestIntervalSyntax_externals_{id_version}"
+        for kstart in (3, gtscript.K[3]):
+            # An implementation quirk allows us to use gtscript.K[3] here,
+            # although it is not great form to do so, since two-argument syntax
+            # should not use AxisOffsets.
+            externals = {"kstart": kstart}
+            stencil_id, def_ir = compile_definition(
+                definition_func, "test_externals", module, externals=externals
+            )
+            loc = def_ir.computations[0].interval.loc
+            assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
+                level=gt_ir.LevelMarker.START, offset=3, loc=loc
+            )
+            assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
+                level=gt_ir.LevelMarker.END, offset=-1, loc=loc
+            )
+
+    def test_axisinterval(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(K[1:-1]):
+                field = 0
+
+        module = f"TestIntervalSyntax_simple_{id_version}"
+        externals = {}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_externals", module, externals=externals
+        )
+        loc = def_ir.computations[0].interval.loc
+        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START, offset=1, loc=loc
+        )
+        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.END, offset=-1, loc=loc
+        )
+
+    def test_error_none(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(None, -1):
+                field = 0
+
+        module = f"TestIntervalSyntax_error_none_{id_version}"
+        externals = {}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
+        ):
+            compile_definition(definition_func, "test_error_none", module, externals=externals)
+
+    def test_error_do_not_mix(self):
+        def definition_func(field: gtscript.Field[float]):
+            from __gtscript__ import K
+
+            with computation(PARALLEL), interval(K[2], -1):
+                field = 0
+
+        module = f"TestIntervalSyntax_error_do_not_mix_{id_version}"
+        externals = {}
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Two-argument syntax"):
+            compile_definition(
+                definition_func, "test_error_do_not_mix", module, externals=externals
+            )
+
+    def test_reversed_interval(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(-1, 1):
+                field = 0
+
+        module = f"TestIntervalSyntax_bad_interval_{id_version}"
+        externals = {}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
+        ):
+            compile_definition(definition_func, "test_externals", module, externals=externals)
 
 
 class TestExternalsWithSubroutines:

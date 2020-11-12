@@ -685,8 +685,6 @@ class AxisBound(Node):
     level = attribute(of=UnionOf[LevelMarker, VarRef])
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
-    name: str
-    index: List
 
 
 @attribclass
