@@ -919,14 +919,14 @@ class ComputeExtentsPass(TransformPass):
 
     @staticmethod
     def _inside_interval(point: Tuple[int, int], interval: IntervalInfo, subtract=0):
-        if interval.start[0] < 0:
+        if interval.start[0] < 0 or point[0] == -2:
             start_overlaps = True
         else:
             if point[0] == interval.start[0]:
                 start_overlaps = interval.start[1] <= point[1] - subtract
             else:
                 start_overlaps = False
-        if interval.end[0] < 0:
+        if interval.end[0] < 0 or point[0] == -1:
             end_overlaps = True
         else:
             if point[0] == interval.end[0]:
@@ -955,7 +955,6 @@ class ComputeExtentsPass(TransformPass):
             if self._inside_interval(iinfo.start, ij_info) or self._inside_interval(
                 iinfo.end, ij_info, subtract=1
             ):
-                inside_interval = inside_interval and True
                 for name, extent in stmt_info.inputs.items():
                     axis_extent = extent[i]
                     input_extent_axis = block_inputs[name][i]
