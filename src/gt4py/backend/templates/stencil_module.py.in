@@ -137,7 +137,7 @@ class {{ class_name }}(StencilObject):
             domain=domain,
             origin=origin,
             validate_args=validate_args,
-            exec_info=stencil_info,
+            exec_info=exec_info,
         )
 
 {%- filter indent(width=8) %}
@@ -160,17 +160,17 @@ class {{ class_name }}(StencilObject):
                 stencil_info.get("ncalls", 0) + 1
             )
             stencil_info["run_time"] = (
-                stencil_info["run_end_time"]
-                - stencil_info["run_start_time"]
+                exec_info["run_end_time"]
+                - exec_info["run_start_time"]
             )
             stencil_info["total_run_time"] = (
                 stencil_info.get("total_run_time", 0.0)
                 + stencil_info["run_time"]
             )
-            if "run_cpp_start_time" in stencil_info:
+            if "run_cpp_start_time" in exec_info:
                 stencil_info["run_cpp_time"] = (
-                    stencil_info["run_cpp_end_time"]
-                    - stencil_info["run_cpp_start_time"]
+                    exec_info["run_cpp_end_time"]
+                    - exec_info["run_cpp_start_time"]
                 )
                 stencil_info["total_run_cpp_time"] = (
                     stencil_info.get("total_run_cpp_time", 0.0)
