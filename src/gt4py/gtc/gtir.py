@@ -46,7 +46,7 @@ class Stmt(LocNode):
     # TODO Eve could provide support for making a node abstract
     def __init__(self, *args, **kwargs):
         if type(self) is Stmt:
-            raise TypeError("Trying to instantiate `Expr` abstract class.")
+            raise TypeError("Trying to instantiate `Stmt` abstract class.")
         super().__init__(*args, **kwargs)
 
 
