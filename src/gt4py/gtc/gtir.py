@@ -185,13 +185,18 @@ class BinaryOp(Expr):
 
 
 class Decl(LocNode):
-    # name: SymbolName
-    name: Str
+    name: SymbolName
     dtype: common.DataType
+
+    def __init__(self, *args, **kwargs):
+        if type(self) is Decl:
+            raise TypeError("Trying to instantiate `Decl` abstract class.")
+        super().__init__(*args, **kwargs)
 
 
 class FieldDecl(Decl):
-    dummy = "bla"  # TODO replace by dimensions
+    # TODO dimensions
+    pass
 
 
 class ScalarDecl(Decl):
@@ -266,7 +271,7 @@ class FieldBoundaryAccumulator:
 
 
 class FieldMetadata(Node):
-    name: str
+    name: Str
     access: AccessKind
     boundary: FieldBoundary
     dtype: common.DataType
@@ -274,7 +279,7 @@ class FieldMetadata(Node):
 
 class FieldMetadataBuilder:
     def __init__(self) -> None:
-        self._name: Optional[str] = None
+        self._name: Optional[Str] = None
         self._access: int = AccessKind.READ_WRITE
         self._dtype: Optional[int] = None
         self.boundary = FieldBoundaryAccumulator()
@@ -301,7 +306,7 @@ class FieldMetadataBuilder:
 
 
 class FieldsMetadata(Node):
-    metas: Dict[str, FieldMetadata] = {}
+    metas: Dict[Str, FieldMetadata] = {}
 
 
 class FieldsMetadataBuilder:
