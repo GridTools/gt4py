@@ -17,9 +17,9 @@ backend_list = [key for key in gt_backend.REGISTRY if key != "debug"]
 class TestExecInfo:
     @staticmethod
     def advection_def(
-        in_phi: gtscript.Field[float],
-        in_u: gtscript.Field[float],
-        in_v: gtscript.Field[float],
+        in_phi: gtscript.Field[float],  # type: ignore
+        in_u: gtscript.Field[float],  # type: ignore
+        in_v: gtscript.Field[float],  # type: ignore
         out_phi: gtscript.Field[float],  # type: ignore  # noqa
     ):
         with computation(PARALLEL), interval(...):  # type: ignore  # noqa
@@ -175,7 +175,7 @@ class TestExecInfo:
 
     @given(data=hyp_st.data())
     @pytest.mark.parametrize("backend", backend_list)
-    def test(self, data, backend):
+    def test_backcompatibility(self, data, backend):
         # set backend as instance attribute
         self.backend = backend
 
@@ -186,7 +186,50 @@ class TestExecInfo:
         self.init_fields(data, backend)
 
         # initialize exec_info
-        exec_info: Dict[str, Dict[str, Any]] = {}
+        exec_info: Dict[str, Any] = {}
+
+        # run (sequential-splitting mode)
+        self.nt = data.draw(hyp_st.integers(1, 64), label="nt")
+        for _ in range(self.nt):
+            self.advection(
+                self.in_phi,
+                self.in_u,
+                self.in_v,
+                self.tmp_phi,
+                origin=(1, 1, 0),
+                domain=(self.nx - 2, self.ny - 2, self.nz),
+                exec_info=exec_info,
+            )
+            self.diffusion(
+                self.in_phi,
+                self.out_phi,
+                alpha=self.alpha,
+                origin=(3, 3, 0),
+                domain=(self.nx - 6, self.ny - 6, self.nz),
+                exec_info=exec_info,
+            )
+
+        # check
+        self.subtest_exec_info(exec_info)
+        assert "__aggregate_data" in exec_info
+        assert exec_info["__aggregate_data"] is False
+        assert type(self.advection).__name__ not in exec_info
+        assert type(self.diffusion).__name__ not in exec_info
+
+    @given(data=hyp_st.data())
+    @pytest.mark.parametrize("backend", backend_list)
+    def test_aggregate(self, data, backend):
+        # set backend as instance attribute
+        self.backend = backend
+
+        # compile stencils
+        self.compile_stencils(backend)
+
+        # initialize storages and parameters
+        self.init_fields(data, backend)
+
+        # initialize exec_info
+        exec_info: Dict[str, Any] = {"__aggregate_data": True}
 
         # run (sequential-splitting mode)
         self.nt = data.draw(hyp_st.integers(1, 64), label="nt")
