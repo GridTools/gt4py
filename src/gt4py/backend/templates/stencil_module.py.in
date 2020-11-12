@@ -115,15 +115,9 @@ class {{ class_name }}(StencilObject):
     def __call__(
         self, {{ stencil_signature }}, domain=None, origin=None, validate_args=True, exec_info=None
     ):
-        stencil_info = (
-            exec_info.get("{{ class_name }}", {})
-            if exec_info is not None else None
-        )
-        if stencil_info is not None:
-            exec_info["{{ class_name  }}"] = stencil_info
-
-        if stencil_info is not None:
-            stencil_info["call_start_time"] = time.perf_counter()
+        if exec_info is not None:
+            stencil_info = exec_info.setdefault("{{ class_name }}", {})
+            exec_info["call_start_time"] = stencil_info["call_start_time"] = time.perf_counter()
 
         field_args=dict(
 {%- set comma = joiner(", ") -%}{%- for field in field_names -%} {{- comma() }} {{ field }}={{ field }}{%- endfor -%}
@@ -150,8 +144,8 @@ class {{ class_name }}(StencilObject):
 {{ post_run }}
 {%- endfilter %}
 
-        if stencil_info is not None:
-            stencil_info["call_end_time"] = time.perf_counter()
+        if exec_info is not None:
+            exec_info["call_end_time"] = stencil_info["call_end_time"] = time.perf_counter()
 
             # Update performance counters
             stencil_info["call_time"] = (
