@@ -10,11 +10,11 @@ from gt4py.stencil_builder import StencilBuilder
 def stencil_def(
     out: Field[float],  # type: ignore  # noqa
     pa: float,
-    fa: Field[float],
+    fa: Field[float],  # type: ignore
     pb: float = None,
-    fb: Field[float] = None,
+    fb: Field[float] = None,  # type: ignore
     pc: float = None,
-    fc: Field[float] = None,
+    fc: Field[float] = None,  # type: ignore
 ):
     from __externals__ import MODE
 
@@ -103,3 +103,4 @@ def test_generate_post_run(backend_name, mode):
 
 if __name__ == "__main__":
     pytest.main([__file__])
+    print("")
