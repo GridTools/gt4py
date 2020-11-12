@@ -6,6 +6,8 @@ from gt4py.backend import REGISTRY as backend_registry
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
+from ..definitions import ALL_BACKENDS
+
 
 def stencil_def(
     out: Field[float],  # type: ignore  # noqa
@@ -32,7 +34,7 @@ parameter_info_val = {0: ("pa",), 1: ("pa", "pb"), 2: ("pa", "pb", "pc")}
 unreferenced_val = {0: ("pb", "fb", "pc", "fc"), 1: ("pc", "fc"), 2: ()}
 
 
-@pytest.mark.parametrize("backend_name", backend_registry.keys())
+@pytest.mark.parametrize("backend_name", ALL_BACKENDS)
 @pytest.mark.parametrize("mode", (0, 1, 2))
 def test_make_args_data_from_iir(backend_name, mode):
     backend_cls = backend_registry[backend_name]
@@ -62,7 +64,7 @@ def test_make_args_data_from_iir(backend_name, mode):
         args_found.add(key)
 
 
-@pytest.mark.parametrize("backend_name", backend_registry.keys())
+@pytest.mark.parametrize("backend_name", ALL_BACKENDS)
 @pytest.mark.parametrize("mode", (0, 1, 2))
 def test_generate_pre_run(backend_name, mode):
     backend_cls = backend_registry[backend_name]
@@ -83,7 +85,7 @@ def test_generate_pre_run(backend_name, mode):
             assert f"{key}.host_to_device()" not in source
 
 
-@pytest.mark.parametrize("backend_name", backend_registry.keys())
+@pytest.mark.parametrize("backend_name", ALL_BACKENDS)
 @pytest.mark.parametrize("mode", (0, 1, 2))
 def test_generate_post_run(backend_name, mode):
     backend_cls = backend_registry[backend_name]
@@ -103,4 +105,3 @@ def test_generate_post_run(backend_name, mode):
 
 if __name__ == "__main__":
     pytest.main([__file__])
-    print("")
