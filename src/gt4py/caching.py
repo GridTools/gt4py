@@ -24,7 +24,7 @@ import types
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import gt4py
-import gt4py.definitions
+from gt4py.definitions import StencilID
 
 
 if TYPE_CHECKING:
@@ -40,9 +40,7 @@ class CachingStrategy(abc.ABC):
     @property
     @abc.abstractmethod
     def root_path(self) -> pathlib.Path:
-        """
-        Calculate and if necessary create the root file path for stencil generation operations.
-        """
+        """Calculate and if necessary create the root path for stencil generation operations."""
         raise NotImplementedError
 
     @property
@@ -58,9 +56,7 @@ class CachingStrategy(abc.ABC):
     @property
     @abc.abstractmethod
     def cache_info_path(self) -> Optional[pathlib.Path]:
-        """
-        Calculate the file path where caching info for the current process should be stored.
-        """
+        """Calculate the file path where caching info for the current process should be stored."""
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -104,10 +100,8 @@ class CachingStrategy(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def stencil_id(self) -> gt4py.definitions.StencilID:
-        """
-        Calculate the stencil ID used for naming and cache consistency checks.
-        """
+    def stencil_id(self) -> StencilID:
+        """Calculate the stencil ID used for naming and cache consistency checks."""
         pass
 
     @property
@@ -158,9 +152,7 @@ class CachingStrategy(abc.ABC):
 
     @property
     def class_name(self) -> str:
-        """
-        Calculate the name for the stencil class, default is to read from build options.
-        """
+        """Calculate the name for the stencil class, default is to read from build options."""
         return self.builder.options.name
 
 
@@ -268,7 +260,7 @@ class JITCachingStrategy(CachingStrategy):
         return self._unpickle_cache_info_file(self.cache_info_path)
 
     @staticmethod
-    def _unpickle_cache_info_file(cache_info_path: pathlib.Path):
+    def _unpickle_cache_info_file(cache_info_path: pathlib.Path) -> Dict[str, Any]:
         with cache_info_path.open("rb") as cache_info_file:
             return pickle.load(cache_info_file)
 
@@ -290,7 +282,7 @@ class JITCachingStrategy(CachingStrategy):
         return [str(item) for item in self.builder.definition._gtscript_["api_annotations"]]
 
     @property
-    def stencil_id(self) -> gt4py.definitions.StencilID:
+    def stencil_id(self) -> StencilID:
         fingerprint = {
             "__main__": self.builder.definition._gtscript_["canonical_ast"],
             "docstring": inspect.getdoc(self.builder.definition),
@@ -299,7 +291,7 @@ class JITCachingStrategy(CachingStrategy):
         }
 
         # typeignore because attrclass StencilID has generated constructor
-        return gt4py.definitions.StencilID(  # type: ignore
+        return StencilID(  # type: ignore
             self.builder.options.qualified_name,
             gt4py.utils.shashed_id(gt4py.utils.shashed_id(fingerprint), self.options_id),
         )
@@ -354,6 +346,8 @@ class NoCachingStrategy(CachingStrategy):
     @property
     def root_path(self) -> pathlib.Path:
         """Get stencil code output path set during initialization."""
+        if not self._output_path.exists():
+            self._output_path.mkdir(parents=True)
         return self._output_path
 
     @property
@@ -379,13 +373,16 @@ class NoCachingStrategy(CachingStrategy):
         return {}
 
     @property
-    def stencil_id(self):
+    def stencil_id(self) -> StencilID:
         """Get a fingerprint-less stencil id."""
-        return gt4py.definitions.StencilID(
+        # ignore type because mypy does not understand attrib classes
+        return StencilID(  # type: ignore
             qualified_name=self.builder.options.qualified_name, version=""
         )
 
 
-def strategy_factory(name: str, builder: "StencilBuilder", *args, **kwargs) -> CachingStrategy:
+def strategy_factory(
+    name: str, builder: "StencilBuilder", *args: Any, **kwargs: Any
+) -> CachingStrategy:
     strategies = {"jit": JITCachingStrategy, "nocaching": NoCachingStrategy}
     return strategies[name](builder, *args, **kwargs)

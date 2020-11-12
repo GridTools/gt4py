@@ -118,7 +118,7 @@ class StencilObject(abc.ABC):
 
     def _get_max_domain(self, field_args, origin):
         """Return the maximum domain size possible
-        
+
         Parameters
         ----------
             field_args: `dict`
@@ -132,7 +132,7 @@ class StencilObject(abc.ABC):
         -------
             `Shape`: the maximum domain size.
         """
-        max_domain = Shape([sys.maxsize] * self.domain_info.ndims)
+        max_domain = Shape([np.iinfo(np.uintc).max] * self.domain_info.ndims)
         shapes = {name: Shape(field.shape) for name, field in field_args.items()}
         for name, shape in shapes.items():
             upper_boundary = Index(self.field_info[name].boundary.upper_indices)
@@ -308,6 +308,10 @@ class StencilObject(abc.ABC):
         # Domain
         if domain is None:
             domain = self._get_max_domain(used_field_args, origin)
+            if any(axis_bound == np.iinfo(np.uintc).max for axis_bound in domain):
+                raise ValueError(
+                    f"Compute domain could not be deduced. Specifiy the domain explicitly or ensure you reference at least one field."
+                )
         else:
             domain = normalize_domain(domain)
 

@@ -1,5 +1,10 @@
-.. figure:: https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?branch=master
-   :alt: 
+|tox| |format|
+
+.. |tox| image:: https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?branch=master
+   :alt:
+.. |format| image:: https://github.com/GridTools/gt4py/workflows/Formatting%20&%20compliance/badge.svg?branch=master
+   :alt:
+
 
 GT4Py: GridTools for Python
 ===========================
@@ -76,7 +81,7 @@ complete the installation would be:
     git clone https://github.com/gridtools/gt4py.git
 
     # Then install the Python package directly from the local repository
-    # For the CUDA backends add the '[cudaXX]' optional dependency 
+    # For the CUDA backends add the '[cudaXX]' optional dependency
     # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
     pip install -e ./gt4py     # pip install -e ./gt4py[cudaXX]
 
@@ -87,7 +92,7 @@ repository:
 ::
 
     # Install the package directly from GitHub:
-    # For the CUDA backends add the '[cudaXX]' optional dependency 
+    # For the CUDA backends add the '[cudaXX]' optional dependency
     # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
     pip install git+https://github.com/gridtools/gt4py.git
     # pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cudaXX]
@@ -122,7 +127,7 @@ repository and use an *editable* installation of GT4Py:
 
     # Then install the Python package directly from the local repository
     # adding the '-e' flag to get an editable installation
-    # For the CUDA backends add the '[cudaXX]' optional dependency 
+    # For the CUDA backends add the '[cudaXX]' optional dependency
     # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
     pip install -e ./gt4py     # pip install -e ./gt4py[cudaXX]
 
@@ -132,7 +137,7 @@ repository and use an *editable* installation of GT4Py:
     # Install the pre-commit checks
     pip install pre-commit
     # You need to have a python3.6 interpreter in your PATH for the following:
-    pre-commit install-hooks  # in the repo directory 
+    pre-commit install-hooks  # in the repo directory
     # But you can develop using any version >= 3.6
 
 

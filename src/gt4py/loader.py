@@ -21,16 +21,27 @@ a high-level stencil function definition using a specific code generating backen
 """
 
 import types
+from typing import TYPE_CHECKING, Any, Dict, Type
 
 from gt4py import backend as gt_backend
 from gt4py import frontend as gt_frontend
 from gt4py.stencil_builder import StencilBuilder
+from gt4py.type_hints import StencilFunc
 
 
-def load_stencil(frontend_name, backend_name, definition_func, externals, build_options):
-    """Generate a new class object implementing the provided definition.
-    """
+if TYPE_CHECKING:
+    from gt4py.definitions import BuildOptions
+    from gt4py.stencil_object import StencilObject
 
+
+def load_stencil(
+    frontend_name: str,
+    backend_name: str,
+    definition_func: StencilFunc,
+    externals: Dict[str, Any],
+    build_options: "BuildOptions",
+) -> Type["StencilObject"]:
+    """Generate a new class object implementing the provided definition."""
     # Load components
     backend_cls = gt_backend.from_name(backend_name)
     if backend_cls is None:
@@ -44,16 +55,15 @@ def load_stencil(frontend_name, backend_name, definition_func, externals, build_
         definition_func, options=build_options, backend=backend_cls, frontend=frontend
     ).with_externals(externals)
 
-    # Load or generate class
-    stencil_class = None if build_options.rebuild else builder.backend.load()
-
-    if stencil_class is None:
-        stencil_class = builder.backend.generate()
-
-    return stencil_class
+    return builder.build()
 
 
-def gtscript_loader(definition_func, backend, build_options, externals):
+def gtscript_loader(
+    definition_func: StencilFunc,
+    backend: str,
+    build_options: "BuildOptions",
+    externals: Dict[str, Any],
+) -> "StencilObject":
     if not isinstance(definition_func, types.FunctionType):
         raise ValueError("Invalid stencil definition object ({obj})".format(obj=definition_func))
 

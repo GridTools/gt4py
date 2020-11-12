@@ -20,7 +20,9 @@ import enum
 import inspect
 import itertools
 import numbers
+import textwrap
 import types
+from typing import List
 
 import numpy as np
 
@@ -72,8 +74,10 @@ class GTScriptValueError(GTScriptDefinitionError):
             if loc is None:
                 message = "Invalid value for '{name}' symbol ".format(name=name)
             else:
-                message = "Invalid value for '{name}' in '{scope}' (line: {line}, col: {col})".format(
-                    name=name, scope=loc.scope, line=loc.line, col=loc.column
+                message = (
+                    "Invalid value for '{name}' in '{scope}' (line: {line}, col: {col})".format(
+                        name=name, scope=loc.scope, line=loc.line, col=loc.column
+                    )
                 )
         super().__init__(name, value, message, loc=loc)
 
@@ -102,6 +106,50 @@ class GTScriptDataTypeError(GTScriptSyntaxError):
         super().__init__(message, loc=loc)
         self.name = name
         self.data_type = data_type
+
+
+class GTScriptAssertionError(gt_definitions.GTSpecificationError):
+    def __init__(self, source, *, loc=None):
+        if loc:
+            message = f"Assertion failed at line {loc.line}, col {loc.column}:\n{source}"
+        else:
+            message = f"Assertion failed.\n{source}"
+        super().__init__(message)
+        self.loc = loc
+
+
+class AssertionChecker(ast.NodeTransformer):
+    """Check assertions and remove from the AST for further parsing."""
+
+    @classmethod
+    def apply(cls, func_node: ast.FunctionDef, context: dict, source: str):
+        checker = cls(context, source)
+        checker(func_node)
+
+    def __init__(self, context, source):
+        self.context = context
+        self.source = source
+
+    def __call__(self, func_node: ast.FunctionDef):
+        self.visit(func_node)
+
+    def visit_Assert(self, assert_node: ast.Assert) -> None:
+        if assert_node.test.func.id != "__INLINED":
+            raise GTScriptSyntaxError("Run-time assertions are not supported.")
+        eval_node = assert_node.test.args[0]
+
+        condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
+        if condition_value is not NOTHING:
+            if not condition_value:
+                source_lines = textwrap.dedent(self.source).split("\n")
+                loc = gt_ir.Location.from_ast_node(assert_node)
+                raise GTScriptAssertionError(source_lines[loc.line - 1], loc=loc)
+        else:
+            raise GTScriptSyntaxError(
+                "Evaluation of compile-time assertion condition failed at the preprocessing step."
+            )
+
+        return None
 
 
 class ValueInliner(ast.NodeTransformer):
@@ -493,7 +541,7 @@ class IRMaker(ast.NodeVisitor):
         self.domain = domain or gt_ir.Domain.LatLonGrid()
         self.extra_temp_decls = extra_temp_decls or {}
         self.parsing_context = None
-        self.in_if = False
+        self.if_decls_stack = []
         gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
             "abs": gt_ir.NativeFunction.ABS,
             "min": gt_ir.NativeFunction.MIN,
@@ -553,23 +601,46 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
-    @staticmethod
-    def _sort_blocks_key(comp_block):
-        start = comp_block.interval.start
-        assert isinstance(start.level, gt_ir.LevelMarker)
-        key = 0 if start.level == gt_ir.LevelMarker.START else 100000
-        key += start.offset
-        return key
+    def _are_blocks_sorted(self, compute_blocks: List[gt_ir.ComputationBlock]):
+        def sort_blocks_key(comp_block):
+            start = comp_block.interval.start
+            assert isinstance(start.level, gt_ir.LevelMarker)
+            key = 0 if start.level == gt_ir.LevelMarker.START else 100000
+            key += start.offset
+            return key
+
+        if len(compute_blocks) < 1:
+            return True
+
+        # validate invariant
+        assert all(
+            comp_block.iteration_order == compute_blocks[0].iteration_order
+            for comp_block in compute_blocks
+        )
+
+        # extract iteration order
+        iteration_order = compute_blocks[0].iteration_order
+
+        # sort blocks
+        compute_blocks_sorted = sorted(
+            compute_blocks,
+            key=sort_blocks_key,
+            reverse=iteration_order == gt_ir.IterationOrder.BACKWARD,
+        )
+
+        # if sorting didn't change anything it was already sorted
+        return compute_blocks == compute_blocks_sorted
 
     def _visit_iteration_order_node(self, node: ast.withitem, loc: gt_ir.Location):
+        syntax_error = GTScriptSyntaxError(
+            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
+            loc=loc,
+        )
         comp_node = node.context_expr
         if len(comp_node.args) + len(comp_node.keywords) != 1 or any(
             keyword.arg not in ["order"] for keyword in comp_node.keywords
         ):
-            raise GTScriptSyntaxError(
-                f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
-                loc=loc,
-            )
+            raise syntax_error
 
         if comp_node.args:
             iteration_order_node = comp_node.args[0]
@@ -623,7 +694,7 @@ class IRMaker(ast.NodeVisitor):
 
         return interval
 
-    def _visit_computation_node(self, node: ast.With) -> list:
+    def _visit_computation_node(self, node: ast.With) -> List[gt_ir.ComputationBlock]:
         loc = gt_ir.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
             f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
@@ -828,8 +899,9 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
-    def visit_If(self, node: ast.If) -> gt_ir.If:
-        self.in_if = True
+    def visit_If(self, node: ast.If) -> list:
+        self.if_decls_stack.append([])
+
         main_stmts = []
         for stmt in node.body:
             main_stmts.extend(gt_utils.listify(self.visit(stmt)))
@@ -841,19 +913,27 @@ class IRMaker(ast.NodeVisitor):
                 else_stmts.extend(gt_utils.listify(self.visit(stmt)))
             assert all(isinstance(item, gt_ir.Statement) for item in else_stmts)
 
-        result = gt_ir.If(
-            condition=gt_ir.utils.make_expr(self.visit(node.test)),
-            main_body=gt_ir.BlockStmt(stmts=main_stmts),
-            else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
+        result = []
+        if len(self.if_decls_stack) == 1:
+            result.extend(self.if_decls_stack.pop())
+        elif len(self.if_decls_stack) > 1:
+            self.if_decls_stack[-2].extend(self.if_decls_stack[-1])
+            self.if_decls_stack.pop()
+
+        result.append(
+            gt_ir.If(
+                condition=gt_ir.utils.make_expr(self.visit(node.test)),
+                main_body=gt_ir.BlockStmt(stmts=main_stmts),
+                else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
+            )
         )
-        self.in_if = False
 
         return result
 
     def visit_Call(self, node: ast.Call):
         native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 
-        args = [self.visit(arg) for arg in node.args]
+        args = [gt_ir.utils.make_expr(self.visit(arg)) for arg in node.args]
         if len(args) != native_fcn.arity:
             raise GTScriptSyntaxError(
                 "Invalid native function call", loc=gt_ir.Location.from_ast_node(node)
@@ -904,11 +984,6 @@ class IRMaker(ast.NodeVisitor):
                     )
             if isinstance(t, ast.Name):
                 if not self._is_known(t.id):
-                    if self.in_if:
-                        raise GTScriptSymbolError(
-                            name=t.id,
-                            message="Temporary field {name} implicitly defined within run-time if-else region.",
-                        )
                     field_decl = gt_ir.FieldDecl(
                         name=t.id,
                         data_type=gt_ir.DataType.AUTO,
@@ -916,7 +991,10 @@ class IRMaker(ast.NodeVisitor):
                         # layout_id=t.id,
                         is_api=False,
                     )
-                    result.append(field_decl)
+                    if len(self.if_decls_stack):
+                        self.if_decls_stack[-1].append(field_decl)
+                    else:
+                        result.append(field_decl)
                     self.fields[field_decl.name] = field_decl
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
@@ -938,7 +1016,7 @@ class IRMaker(ast.NodeVisitor):
     def visit_AugAssign(self, node: ast.AugAssign):
         """Implement left <op>= right in terms of left = left <op> right."""
         binary_operation = ast.BinOp(left=node.target, op=node.op, right=node.value)
-        assignment = ast.Assign(targets=[node.target], value=node.target)
+        assignment = ast.Assign(targets=[node.target], value=binary_operation)
         ast.copy_location(binary_operation, node)
         ast.copy_location(assignment, node)
         return self.visit_Assign(assignment)
@@ -977,21 +1055,13 @@ class IRMaker(ast.NodeVisitor):
 
                 compute_blocks.append(self._visit_computation_node(with_node))
 
-            # Reorder blocks
-            #  the nested computation blocks need not to be specified in their order of execution, but the backends
-            #  expect them to the given in that order so sort them. The order of execution is such that the lowest
-            #  (highest) interval is processed first if the iteration order is forward (backward).
-            if len(compute_blocks) > 1:
-                # Validate invariant
-                assert all(
-                    comp_block.iteration_order == compute_blocks[0].iteration_order
-                    for comp_block in compute_blocks
+            # Validate block specification order
+            #  the nested computation blocks must be specified in their order of execution. The order of execution is
+            #  such that the lowest (highest) interval is processed first if the iteration order is forward (backward).
+            if not self._are_blocks_sorted(compute_blocks):
+                raise GTScriptSyntaxError(
+                    f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
                 )
-
-                # Vertical regions with variable references are not supported yet
-                compute_blocks.sort(key=self._sort_blocks_key)
-                if compute_blocks[0].iteration_order == gt_ir.IterationOrder.BACKWARD:
-                    compute_blocks.reverse()
 
             return compute_blocks
         elif self.parsing_context == ParsingContext.CONTROL_FLOW and not any(
@@ -1370,6 +1440,8 @@ class GTScriptParser(ast.NodeVisitor):
             self.external_context,
             exhaustive=False,
         )
+        AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
+
         ValueInliner.apply(main_func_node, context=local_context)
 
         # Inline function calls
@@ -1404,6 +1476,7 @@ class GTScriptParser(ast.NodeVisitor):
             computations=computations,
             externals=self.resolved_externals,
             docstring=inspect.getdoc(self.definition) or "",
+            loc=gt_ir.Location.from_ast_node(self.ast_root.body[0]),
         )
 
         return self.definition_ir

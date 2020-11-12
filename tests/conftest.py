@@ -25,6 +25,23 @@ import pytest
 
 from gt4py import config as gt_config
 
+from .analysis_setup import (
+    AnalysisPass,
+    compute_extents_pass,
+    init_pass,
+    merge_blocks_pass,
+    normalize_blocks_pass,
+)
+from .definition_setup import (
+    TAssign,
+    TComputationBlock,
+    TDefinition,
+    ij_offset,
+    ijk_domain,
+    iteration_order,
+    non_parallel_iteration_order,
+)
+
 
 # Delete cache folder
 shutil.rmtree(

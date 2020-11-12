@@ -14,5 +14,6 @@ Authors
 * Häuselmann, Rico. ETH Zurich - CSCS
 * Madonna, Alberto. ETH Zurich - CSCS
 * Mariotti, Kean. ETH Zurich - CSCS
+* Ubbiali, Stefano. ETH Zurich
 * Vogt, Hannes. ETH Zurich - CSCS
 * Wicky, Tobias. Vulcan Inc.

@@ -55,7 +55,9 @@ def get_gt_pyext_build_opts(
         cuda_arch = gt_config.build_settings["cuda_arch"] or compute_capability
         if not cuda_arch:
             raise RuntimeError("CUDA architecture could not be determined")
-        elif compute_capability and int(compute_capability) < int(cuda_arch):
+        if cuda_arch.startswith("sm_"):
+            cuda_arch = cuda_arch.replace("sm_", "")
+        if compute_capability and int(compute_capability) < int(cuda_arch):
             raise RuntimeError(
                 f"CUDA architecture {cuda_arch} exceeds compute capability {compute_capability}"
             )
@@ -135,7 +137,11 @@ def get_gt_pyext_build_opts(
 # The following tells mypy to accept unpacking kwargs
 @overload
 def build_pybind_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str,
+    name: str,
+    sources: list,
+    build_path: str,
+    target_path: str,
+    **kwargs: str,
 ) -> Tuple[str, str]:
     pass
 
@@ -224,7 +230,11 @@ def build_pybind_ext(
 # The following tells mypy to accept unpacking kwargs
 @overload
 def build_pybind_cuda_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str,
+    name: str,
+    sources: list,
+    build_path: str,
+    target_path: str,
+    **kwargs: str,
 ) -> Tuple[str, str]:
     pass
 

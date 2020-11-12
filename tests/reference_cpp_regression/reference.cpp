@@ -187,9 +187,28 @@ namespace horizontal_diffusion {
 
 } // namespace horizontal_diffusion
 
+namespace large_k_interval {
+
+    template <typename DType>
+    py::dict get(gt::uint_t d1, gt::uint_t d2, gt::uint_t d3) {
+        std::array<gt::uint_t, 3> zero_origin{0, 0, 0};
+
+        py::dict fields;
+        fields["in_field"] =
+            apply_function<DType>(d1, d2, d3, [](gt::int_t, gt::int_t, gt::int_t) { return 1.; }, zero_origin);
+        fields["out_field"] =
+            apply_function<DType>(d1, d2, d3, [](gt::int_t, gt::int_t, gt::int_t) { return 0; }, zero_origin);
+        fields["out_field_reference"] =
+            apply_function<DType>(d1, d2, d3, [d3](gt::int_t, gt::int_t, gt::int_t k) { return k >= 6 && k < d3-10 ? 2 : 1; }, zero_origin);
+        return fields;
+    }
+
+} // namespace tridiagonal_solver
+
 PYBIND11_MODULE(reference_cpp_regression, m) {
     m.def("tridiagonal_solver", &tridiagonal_solver::get<double>);
     m.def("vertical_advection_dycore", &vertical_advection_dycore::get<double>);
     m.def("vertical_advection_dycore_with_scalar_storage", &vertical_advection_dycore_with_scalar_storage::get<double>);
     m.def("horizontal_diffusion", &horizontal_diffusion::get<double>);
+    m.def("large_k_interval", &large_k_interval::get<double>);
 }

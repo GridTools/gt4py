@@ -94,7 +94,9 @@ storing a reference to the piece of source code which originated the node.
 
     NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
-    Expr        = Literal | Ref | NativeFuncCall | CompositeExpr | InvalidBranch
+    Cast(dtype: DataType, expr: Expr)
+
+    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch
 
     CompositeExpr   = UnaryOpExpr(op: UnaryOperator, arg: Expr)
                     | BinOpExpr(op: BinaryOperator, lhs: Expr, rhs: Expr)
@@ -122,14 +124,13 @@ storing a reference to the piece of source code which originated the node.
         # start is included
         # end is excluded
 
-    ComputationBlock(interval: AxisInterval, order: IterationOrder, body: BlockStmt)
+    ComputationBlock(interval: AxisInterval, iteration_order: IterationOrder, body: BlockStmt)
 
     ArgumentInfo(name: str, is_keyword: bool, [default: Any])
 
     StencilDefinition(name: str,
                       domain: Domain,
                       api_signature: List[ArgumentInfo],
-                      domain: Domain,
                       api_fields: List[FieldDecl],
                       parameters: List[VarDecl],
                       computations: List[ComputationBlock],
@@ -396,6 +397,13 @@ class FieldRef(Ref):
     loc = attribute(of=Location, optional=True)
 
 
+@attribclass
+class Cast(Expr):
+    dtype = attribute(of=DataType)
+    expr = attribute(of=Expr)
+    loc = attribute(of=Location, optional=True)
+
+
 @enum.unique
 class NativeFunction(enum.Enum):
     ABS = 1
@@ -630,14 +638,6 @@ class Assign(Statement):
 
 
 @attribclass
-class AugAssign(Statement):
-    target = attribute(of=Ref)
-    value = attribute(of=Expr)
-    op = attribute(of=BinaryOperator)
-    loc = attribute(of=Location, optional=True)
-
-
-@attribclass
 class If(Statement):
     condition = attribute(of=Expr)
     main_body = attribute(of=BlockStmt)
@@ -736,7 +736,8 @@ class StencilDefinition(Node):
     computations = attribute(of=ListOf[ComputationBlock])
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
-    docstring = attribute(of=str)
+    docstring = attribute(of=str, default="")
+    loc = attribute(of=Location, optional=True)
 
 
 # ---- Implementation IR (IIR) ----
@@ -831,6 +832,18 @@ class StencilImplementation(IIRNode):
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
     docstring = attribute(of=str)
+
+    @property
+    def has_effect(self):
+        """
+        Determine whether the stencil modifies any of its arguments.
+
+        Note that the only guarantee of this function is that the stencil has no effect if it returns ``false``. It
+        might however return true in cases where the optimization passes were not able to deduce this.
+        """
+        return self.multi_stages and not all(
+            arg_field in self.unreferenced for arg_field in self.arg_fields
+        )
 
     @property
     def arg_fields(self):

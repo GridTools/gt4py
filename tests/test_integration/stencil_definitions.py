@@ -64,7 +64,7 @@ def afunc(b):
 @register
 def native_functions(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
-        field_a = min(afunc(field_b), field_b)
+        field_a = max(min(afunc(field_b), field_b), 1)
 
 
 @register
@@ -107,10 +107,10 @@ def tridiagonal_solver(inf: Field3D, diag: Field3D, sup: Field3D, rhs: Field3D, 
             sup = sup / (diag - sup[0, 0, -1] * inf)
             rhs = (rhs - inf * rhs[0, 0, -1]) / (diag - sup[0, 0, -1] * inf)
     with computation(BACKWARD):
-        with interval(0, -1):
-            out = rhs - sup * out[0, 0, 1]
         with interval(-1, None):
             out = rhs
+        with interval(0, -1):
+            out = rhs - sup * out[0, 0, 1]
 
 
 @register(externals={"BET_M": 0.5, "BET_P": 0.5})
@@ -221,6 +221,17 @@ def horizontal_diffusion(in_field: Field3D, out_field: Field3D, coeff: Field3D):
 
 
 @register
+def large_k_interval(in_field: Field3D, out_field: Field3D):
+    with computation(PARALLEL):
+        with interval(0, 6):
+            out_field = in_field
+        with interval(6, -10):  # this stage will only run if field has more than 16 elements
+            out_field = in_field + 1
+        with interval(-10, None):
+            out_field = in_field
+
+
+@register
 def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
     with computation(PARALLEL), interval(...):
         mask = in_field >= 0
@@ -236,3 +247,16 @@ def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3D
             a4_3 = a4_1
         else:
             diff_23 = a4_2 - a4_3
+
+
+@register
+def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3D):
+    with computation(PARALLEL), interval(...):
+        mid_storage = 2
+        if in_storage[0, 0, 0] > 0:
+            local_var = 4
+            if local_var + in_storage < out_storage:
+                mid_storage = 3
+            else:
+                mid_storage = 4
+            out_storage[0, 0, 0] = local_var + mid_storage
