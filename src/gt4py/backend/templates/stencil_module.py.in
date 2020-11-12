@@ -116,8 +116,10 @@ class {{ class_name }}(StencilObject):
         self, {{ stencil_signature }}, domain=None, origin=None, validate_args=True, exec_info=None
     ):
         if exec_info is not None:
-            stencil_info = exec_info.setdefault("{{ class_name }}", {})
-            exec_info["call_start_time"] = stencil_info["call_start_time"] = time.perf_counter()
+            exec_info["call_start_time"] = time.perf_counter()
+            if exec_info.setdefault("__aggregate_data", False):
+                stencil_info = exec_info.setdefault("{{ class_name }}", {})
+                stencil_info["call_start_time"] = exec_info["call_start_time"]
 
         field_args=dict(
 {%- set comma = joiner(", ") -%}{%- for field in field_names -%} {{- comma() }} {{ field }}={{ field }}{%- endfor -%}
@@ -145,37 +147,39 @@ class {{ class_name }}(StencilObject):
 {%- endfilter %}
 
         if exec_info is not None:
-            exec_info["call_end_time"] = stencil_info["call_end_time"] = time.perf_counter()
+            exec_info["call_end_time"] = time.perf_counter()
 
-            # Update performance counters
-            stencil_info["call_time"] = (
-                stencil_info["call_end_time"]
-                - stencil_info["call_start_time"]
-            )
-            stencil_info["total_call_time"] = (
-                stencil_info.get("total_call_time", 0.0)
-                + stencil_info["call_time"]
-            )
-            stencil_info["ncalls"] = (
-                stencil_info.get("ncalls", 0) + 1
-            )
-            stencil_info["run_time"] = (
-                exec_info["run_end_time"]
-                - exec_info["run_start_time"]
-            )
-            stencil_info["total_run_time"] = (
-                stencil_info.get("total_run_time", 0.0)
-                + stencil_info["run_time"]
-            )
-            if "run_cpp_start_time" in exec_info:
-                stencil_info["run_cpp_time"] = (
-                    exec_info["run_cpp_end_time"]
-                    - exec_info["run_cpp_start_time"]
+            if exec_info["__aggregate_data"]:
+                # Update performance counters
+                stencil_info["call_end_time"] = exec_info["call_end_time"]
+                stencil_info["call_time"] = (
+                    stencil_info["call_end_time"]
+                    - stencil_info["call_start_time"]
                 )
-                stencil_info["total_run_cpp_time"] = (
-                    stencil_info.get("total_run_cpp_time", 0.0)
-                    + stencil_info["run_cpp_time"]
+                stencil_info["total_call_time"] = (
+                    stencil_info.get("total_call_time", 0.0)
+                    + stencil_info["call_time"]
                 )
+                stencil_info["ncalls"] = (
+                    stencil_info.get("ncalls", 0) + 1
+                )
+                stencil_info["run_time"] = (
+                    exec_info["run_end_time"]
+                    - exec_info["run_start_time"]
+                )
+                stencil_info["total_run_time"] = (
+                    stencil_info.get("total_run_time", 0.0)
+                    + stencil_info["run_time"]
+                )
+                if "run_cpp_start_time" in exec_info:
+                    stencil_info["run_cpp_time"] = (
+                        exec_info["run_cpp_end_time"]
+                        - exec_info["run_cpp_start_time"]
+                    )
+                    stencil_info["total_run_cpp_time"] = (
+                        stencil_info.get("total_run_cpp_time", 0.0)
+                        + stencil_info["run_cpp_time"]
+                    )
 
     def run(self, _domain_, _origin_, exec_info, *, {{- field_names|join(", ") -}}, {{- param_names|join(", ") -}}):
         if exec_info is not None:
