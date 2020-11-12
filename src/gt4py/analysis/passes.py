@@ -944,7 +944,7 @@ class ComputeExtentsPass(TransformPass):
             self.data, gt_ir.BlockStmt(stmts=[stmt.stmt for stmt in int_block.stmts])
         )
 
-        inside_interval = False
+        inside_interval = True
         for i, (iinfo, ij_extent) in enumerate(
             zip(
                 ij_block.parallel_interval,
@@ -955,7 +955,7 @@ class ComputeExtentsPass(TransformPass):
             if self._inside_interval(iinfo.start, ij_info) or self._inside_interval(
                 iinfo.end, ij_info, subtract=1
             ):
-                inside_interval = True
+                inside_interval = inside_interval and True
                 for name, extent in stmt_info.inputs.items():
                     axis_extent = extent[i]
                     input_extent_axis = block_inputs[name][i]
@@ -980,6 +980,8 @@ class ComputeExtentsPass(TransformPass):
                                 ij_extent[1],
                             ),
                         )
+            else:
+                inside_interval = False
         return inside_interval, block_inputs
 
     def __init__(self, transform_data: TransformData):
