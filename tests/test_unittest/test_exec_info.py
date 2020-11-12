@@ -10,8 +10,10 @@ from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 
+from ..definitions import CPU_BACKENDS
 
-backend_list = [key for key in gt_backend.REGISTRY if key != "debug"]
+
+backend_list = [backend for backend in CPU_BACKENDS if backend != "debug"]
 
 
 class TestExecInfo:
@@ -24,9 +26,9 @@ class TestExecInfo:
     ):
         with computation(PARALLEL), interval(...):  # type: ignore  # noqa
             u = 0.5 * (in_u[-1, 0, 0] + in_u[0, 0, 0])
-            flux_x = u[0, 0, 0] * (in_phi[-1, 0, 0] if u[0, 0, 0] > 0 else in_phi[0, 0, 0])
-            v = 0.5 * (in_v[0, -1, 0] + in_v[0, 0, 0])
-            flux_y = v[0, 0, 0] * (in_phi[0, -1, 0] if v[0, 0, 0] > 0 else in_phi[0, 0, 0])
+            flux_x = u[0, 0, 0] * (in_phi[-1, 0, 0] if u[0, 0, 0] > 0 else in_phi[0, 0, 0])  # noqa
+            v = 0.5 * (in_v[0, -1, 0] + in_v[0, 0, 0])  # noqa
+            flux_y = v[0, 0, 0] * (in_phi[0, -1, 0] if v[0, 0, 0] > 0 else in_phi[0, 0, 0])  # noqa
             out_phi = (  # noqa
                 in_phi - (flux_x[1, 0, 0] - flux_x[0, 0, 0]) - (flux_y[0, 1, 0] - flux_y[0, 0, 0])
             )
@@ -36,22 +38,22 @@ class TestExecInfo:
         in_phi: gtscript.Field[float], out_phi: gtscript.Field[float], *, alpha: float  # type: ignore  # noqa
     ):
         with computation(PARALLEL), interval(...):  # type: ignore  # noqa
-            lap1 = (
+            lap1 = (  # noqa
                 -4 * in_phi[0, 0, 0]
                 + in_phi[-1, 0, 0]
                 + in_phi[1, 0, 0]
                 + in_phi[0, -1, 0]
                 + in_phi[0, 1, 0]
             )
-            lap2 = (
+            lap2 = (  # noqa
                 -4 * lap1[0, 0, 0]
                 + lap1[-1, 0, 0]
                 + lap1[1, 0, 0]
                 + lap1[0, -1, 0]
                 + lap1[0, 1, 0]
             )
-            flux_x = lap2[1, 0, 0] - lap2[0, 0, 0]
-            flux_y = lap2[0, 1, 0] - lap2[0, 0, 0]
+            flux_x = lap2[1, 0, 0] - lap2[0, 0, 0]  # noqa
+            flux_y = lap2[0, 1, 0] - lap2[0, 0, 0]  # noqa
             out_phi = in_phi + alpha * (  # noqa
                 flux_x[0, 0, 0] - flux_x[-1, 0, 0] + flux_y[0, 0, 0] - flux_y[0, -1, 0]
             )
