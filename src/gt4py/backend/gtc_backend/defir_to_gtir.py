@@ -1,9 +1,10 @@
 from types import MappingProxyType
-from typing import ClassVar, Dict, List, Mapping
+from typing import ClassVar, Dict, List, Mapping, Union
 
 from gt4py.gtc import common, gtir
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
+    ArgumentInfo,
     Assign,
     AxisBound,
     AxisInterval,
@@ -17,6 +18,8 @@ from gt4py.ir.nodes import (
     LevelMarker,
     ScalarLiteral,
     StencilDefinition,
+    VarDecl,
+    VarRef,
 )
 
 
@@ -58,11 +61,21 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
         vertical_loops = [self.visit(c) for c in node.computations]
+        field_params = {f.name: self.visit(f) for f in node.api_fields}
+        scalar_params = {p.name: self.visit(p) for p in node.parameters}
         return gtir.Stencil(
             name=node.name,
-            params=[self.visit(f) for f in node.api_fields],
+            params=[
+                self.visit(f, all_params={**field_params, **scalar_params})
+                for f in node.api_signature
+            ],
             vertical_loops=vertical_loops,
         )
+
+    def visit_ArgumentInfo(
+        self, node: ArgumentInfo, all_params: Dict[str, Union[gtir.Decl]]
+    ) -> Union[gtir.Decl]:
+        return all_params[node.name]
 
     def visit_ComputationBlock(self, node: ComputationBlock) -> List[gtir.VerticalLoop]:
         assigns = [s for s in self.visit(node.body)]
@@ -94,6 +107,12 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_FieldRef(self, node: FieldRef):
         return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))
 
+    def visit_VarRef(self, node: VarRef):
+        return gtir.ScalarAccess(
+            name=node.name,
+            # TODO index
+        )
+
     def visit_AxisInterval(self, node: AxisInterval):
         return self.visit(node.start), self.visit(node.end)
 
@@ -106,3 +125,7 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_FieldDecl(self, node: FieldDecl):
         # datatype conversion works via same ID
         return gtir.FieldDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
+
+    def visit_VarDecl(self, node: VarDecl):
+        # datatype conversion works via same ID
+        return gtir.ScalarDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))

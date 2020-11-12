@@ -39,6 +39,8 @@ for I in range(_domain_[0]):
 
     FieldAccess = FormatTemplate("{name}[{offset}]")
 
+    ScalarAccess = FormatTemplate("{name}")
+
     CartesianOffset = FormatTemplate("I + {i}, J + {j}, K + {k}")
 
     BinaryOp = FormatTemplate("{left} {op} {right}")

@@ -189,6 +189,9 @@ class PnirToAst(NodeVisitor):
             slice=ast.Index(value=ast.Tuple(elts=self.visit(node.offset))),
         )
 
+    def visit_ScalarAccess(self, node: gtir.ScalarAccess) -> ast.Name:
+        return ast.Name(id=node.name)
+
     def visit_CartesianOffset(
         self, node: gtir.CartesianOffset
     ) -> List[Union[ast.Name, ast.BinOp]]:

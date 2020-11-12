@@ -16,7 +16,6 @@
 
 import enum
 from typing import Dict, List, Optional, Tuple, Union
-from gt4py.gtc.common import DataType
 from pydantic import validator
 
 from devtools import debug  # noqa: F401
@@ -185,10 +184,18 @@ class BinaryOp(Expr):
         return values
 
 
-class FieldDecl(LocNode):
+class Decl(LocNode):
     # name: SymbolName
     name: Str
     dtype: common.DataType
+
+
+class FieldDecl(Decl):
+    dummy = "bla"  # TODO replace by dimensions
+
+
+class ScalarDecl(Decl):
+    pass
 
 
 class AxisBound(Node):
@@ -309,8 +316,8 @@ class FieldsMetadataBuilder:
 
 
 class Stencil(LocNode):
-    name: SymbolName
-    params: List[FieldDecl]
+    name: SymbolName.constrained(r"[a-zA-Z_][\w\.]*")
+    params: List[Union[Decl]]
     vertical_loops: List[VerticalLoop]
     fields_metadata: Optional[FieldsMetadata]
 
