@@ -20,6 +20,7 @@ import types
 import numpy as np
 import pytest
 
+import gt4py.ir as gt_ir
 from gt4py import definitions as gt_definitions
 from gt4py import gtscript
 from gt4py import utils as gt_utils
@@ -83,12 +84,6 @@ def sinus(field_in):
     return sin(field_in)
 
 
-def undecorated_function(field_in):
-    from __externals__ import A
-
-    return field_in + A
-
-
 class TestInlinedExternals:
     def test_all_legal_combinations(self, id_version):
         module = f"TestInlinedExternals_test_module_{id_version}"
@@ -140,16 +135,44 @@ class TestInlinedExternals:
             )
 
     def test_undecorated_delay(self, id_version):
-        module = f"TestInlinedExternals_test_undecorated_delay_{id_version}"
-        externals = {"A": 1}
+        A = 0
 
+        def undecorated_function():
+            return A
+
+        module = f"TestInlinedExternals_test_undecorated_delay_{id_version}"
+        externals = {"func": undecorated_function}
+
+        A = 1
+
+        # Direct function
         def definition_func(inout_field: gtscript.Field[float]):
             from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
-                inout_field = undecorated_function(inout_field)
+                inout_field = undecorated_function()
 
-        compile_definition(definition_func, "test_undecorated_delay", module, externals=externals)
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_undecorated_delay", module, externals=externals
+        )
+
+        stmt = def_ir.computations[0].body.stmts[0]
+        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
+
+        # As external
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__externals__ import func
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func()
+
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_undecorated_delay", module, externals=externals
+        )
+
+        stmt = def_ir.computations[0].body.stmts[0]
+        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
 
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, id_version, value_type):

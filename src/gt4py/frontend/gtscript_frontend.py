@@ -1230,7 +1230,7 @@ class GTScriptParser(ast.NodeVisitor):
         imported_symbols = {name: {} for name in imported_names}
 
         context, unbound = gt_meta.get_closure(
-            definition, included_nonlocals=False, include_builtins=False
+            definition, included_nonlocals=True, include_builtins=False
         )
 
         gtscript_ast = ast.parse(gt_meta.get_ast(definition)).body[0]
@@ -1247,11 +1247,8 @@ class GTScriptParser(ast.NodeVisitor):
                     imported_symbols[root_name].setdefault(
                         collected_name, name_nodes[collected_name]
                     )
-                elif root_name in context and inspect.isfunction(context[root_name]):
-                    GTScriptParser.annotate_definition(context[root_name])
-                    nonlocal_symbols[collected_name] = context[root_name]
                 elif root_name in context:
-                    nonlocal_symbols[collected_name] = GTScriptParser.eval_constant(
+                    nonlocal_symbols[collected_name] = GTScriptParser.eval_external(
                         collected_name,
                         context,
                         gt_ir.Location.from_ast_node(name_nodes[collected_name][0]),
@@ -1265,11 +1262,17 @@ class GTScriptParser(ast.NodeVisitor):
         return nonlocal_symbols, imported_symbols
 
     @staticmethod
-    def eval_constant(name: str, context: dict, loc=None):
+    def eval_external(name: str, context: dict, loc=None):
         try:
             value = eval(name, context)
-            assert value is None or isinstance(value, GTScriptParser.CONST_VALUE_TYPES)
-            assert not isinstance(value, types.FunctionType) or hasattr(value, "_gtscript_")
+            if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
+                GTScriptParser.annotate_definition(value)
+
+            assert (
+                value is None
+                or isinstance(value, GTScriptParser.CONST_VALUE_TYPES)
+                or hasattr(value, "_gtscript_")
+            )
 
         except Exception as e:
             raise GTScriptDefinitionError(
@@ -1298,7 +1301,7 @@ class GTScriptParser(ast.NodeVisitor):
                         resolved_values_list.append(
                             (
                                 attr_name,
-                                GTScriptParser.eval_constant(
+                                GTScriptParser.eval_external(
                                     attr_name, context, gt_ir.Location.from_ast_node(attr_nodes[0])
                                 ),
                             )
@@ -1306,7 +1309,7 @@ class GTScriptParser(ast.NodeVisitor):
 
                 elif not exhaustive:
                     resolved_values_list.append(
-                        (name, GTScriptParser.eval_constant(name, context))
+                        (name, GTScriptParser.eval_external(name, context))
                     )
 
             for name, value in resolved_values_list:
