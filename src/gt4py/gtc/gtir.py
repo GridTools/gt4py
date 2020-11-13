@@ -321,6 +321,7 @@ class FieldsMetadataBuilder:
 
 
 class Stencil(LocNode):
+    # TODO remove `__main__.`` from name and use default SymbolName constraint
     name: SymbolName.constrained(r"[a-zA-Z_][\w\.]*")
     # TODO deal with gtscript externals
     params: List[Decl]
