@@ -322,6 +322,7 @@ class FieldsMetadataBuilder:
 
 class Stencil(LocNode):
     name: SymbolName.constrained(r"[a-zA-Z_][\w\.]*")
+    # TODO deal with gtscript externals
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
     fields_metadata: Optional[FieldsMetadata]
