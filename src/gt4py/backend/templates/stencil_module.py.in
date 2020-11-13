@@ -63,7 +63,12 @@ class {{ class_name }}(StencilObject):
 
     exec_info : `dict`, optional
         Dictionary used to store information about the stencil execution.
-        (`None` by default).
+        (`None` by default). If the dictionary contains the magic key
+        '__aggregate_data' and it evaluates to `True`, the dictionary is
+        populated with the sub-dictionary '{{ class_name }}' containing
+        different performance statistics. These include the stencil calls count,
+        the cumulative time spent in all stencil calls, and the actual time spent
+        in carrying out the computations.
     """
 
 {%- filter indent(width=4) %}
