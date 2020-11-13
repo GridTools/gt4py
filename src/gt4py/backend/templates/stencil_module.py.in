@@ -153,7 +153,7 @@ class {{ class_name }}(StencilObject):
 
             if exec_info.setdefault("__aggregate_data", False):
                 stencil_info = exec_info.setdefault("{{ class_name }}", {})
-                
+
                 # Update performance counters
                 stencil_info["call_start_time"] = exec_info["call_start_time"]
                 stencil_info["call_end_time"] = exec_info["call_end_time"]

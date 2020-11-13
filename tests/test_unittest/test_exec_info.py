@@ -107,13 +107,13 @@ class TestExecInfo:
     def subtest_exec_info(self, exec_info):
         assert "call_start_time" in exec_info
         assert "call_end_time" in exec_info
-        assert np.greater(exec_info["call_end_time"], exec_info["call_start_time"])
+        assert exec_info["call_end_time"] > exec_info["call_start_time"]
 
         assert "run_start_time" in exec_info
-        assert np.greater(exec_info["run_start_time"], exec_info["call_start_time"])
+        assert exec_info["run_start_time"] > exec_info["call_start_time"]
         assert "run_end_time" in exec_info
-        assert np.greater(exec_info["run_end_time"], exec_info["run_start_time"])
-        assert np.greater(exec_info["call_end_time"], exec_info["run_end_time"])
+        assert exec_info["run_end_time"] > exec_info["run_start_time"]
+        assert exec_info["call_end_time"] > exec_info["run_end_time"]
 
         if gt_backend.from_name(self.backend).languages["computation"] == "c++":
             assert "run_cpp_start_time" in exec_info
@@ -137,7 +137,7 @@ class TestExecInfo:
 
         assert "call_start_time" in stencil_info
         assert "call_end_time" in stencil_info
-        assert np.greater(stencil_info["call_end_time"], stencil_info["call_start_time"])
+        assert stencil_info["call_end_time"] > stencil_info["call_start_time"]
         assert "call_time" in stencil_info
         assert "total_call_time" in stencil_info
         assert np.isclose(
@@ -145,12 +145,12 @@ class TestExecInfo:
             stencil_info["call_end_time"] - stencil_info["call_start_time"],
         )
         if self.nt == 1:
-            assert np.equal(stencil_info["total_call_time"], stencil_info["call_time"])
+            assert stencil_info["total_call_time"] == stencil_info["call_time"]
         else:
-            assert np.greater(stencil_info["total_call_time"], stencil_info["call_time"])
+            assert stencil_info["total_call_time"] > stencil_info["call_time"]
         if last_called_stencil:
-            assert np.equal(stencil_info["call_start_time"], exec_info["call_start_time"])
-            assert np.equal(stencil_info["call_end_time"], exec_info["call_end_time"])
+            assert stencil_info["call_start_time"] == exec_info["call_start_time"]
+            assert stencil_info["call_end_time"] == exec_info["call_end_time"]
 
         assert "run_time" in stencil_info
         if last_called_stencil:
@@ -158,12 +158,12 @@ class TestExecInfo:
                 stencil_info["run_time"],
                 exec_info["run_end_time"] - exec_info["run_start_time"],
             )
-        assert np.greater(stencil_info["call_time"], stencil_info["run_time"])
+        assert stencil_info["call_time"] > stencil_info["run_time"]
         assert "total_run_time" in stencil_info
         if self.nt == 1:
-            assert np.equal(stencil_info["total_run_time"], stencil_info["run_time"])
+            assert stencil_info["total_run_time"] == stencil_info["run_time"]
         else:
-            assert np.greater(stencil_info["total_run_time"], stencil_info["run_time"])
+            assert stencil_info["total_run_time"] > stencil_info["run_time"]
 
         if gt_backend.from_name(self.backend).languages["computation"] == "c++":
             assert "run_cpp_time" in stencil_info
@@ -172,12 +172,12 @@ class TestExecInfo:
                     stencil_info["run_cpp_time"],
                     exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"],
                 )
-            assert np.greater(stencil_info["run_time"], stencil_info["run_cpp_time"])
+            assert stencil_info["run_time"] > stencil_info["run_cpp_time"]
             assert "total_run_cpp_time" in stencil_info
             if self.nt == 1:
-                assert np.equal(stencil_info["total_run_cpp_time"], stencil_info["run_cpp_time"])
+                assert stencil_info["total_run_cpp_time"] == stencil_info["run_cpp_time"]
             else:
-                assert np.greater(stencil_info["total_run_cpp_time"], stencil_info["run_cpp_time"])
+                assert stencil_info["total_run_cpp_time"] > stencil_info["run_cpp_time"]
 
     @given(data=hyp_st.data())
     @pytest.mark.parametrize("backend", backend_list)
