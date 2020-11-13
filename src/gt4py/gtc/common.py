@@ -38,8 +38,8 @@ class UnaryOperator(StrEnum):
 
 
 @enum.unique
-class BinaryOperator(StrEnum):
-    """Binary operator identifier."""
+class ArithmeticOperator(StrEnum):
+    """Arithmetic operators."""
 
     ADD = "+"
     SUB = "-"
@@ -61,6 +61,8 @@ class ComparisonOperator(StrEnum):
 
 @enum.unique
 class LogicalOperator(StrEnum):
+    """Logical operators."""
+
     AND = "and"
     NOT = "not"
     OR = "or"

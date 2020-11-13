@@ -157,7 +157,7 @@ class TernaryOp(Expr):
 
 
 class BinaryOp(Expr):
-    op: Union[common.BinaryOperator, common.ComparisonOperator, common.LogicalOperator]
+    op: Union[common.ArithmeticOperator, common.ComparisonOperator, common.LogicalOperator]
     left: Expr
     right: Expr
 
@@ -166,7 +166,7 @@ class BinaryOp(Expr):
         common_dtype = verify_and_get_common_dtype(cls, [values["left"], values["right"]])
 
         if common_dtype:
-            if isinstance(values["op"], common.BinaryOperator):
+            if isinstance(values["op"], common.ArithmeticOperator):
                 if common_dtype is not common.DataType.BOOL:
                     values["dtype"] = common_dtype
                 else:

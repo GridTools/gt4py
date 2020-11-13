@@ -62,10 +62,10 @@ def domain_for(
 
 class PnirToAst(NodeVisitor):
     GTIR_OP_TO_AST_OP = {
-        common.BinaryOperator.ADD: ast.Add,
-        common.BinaryOperator.SUB: ast.Sub,
-        common.BinaryOperator.MUL: ast.Mult,
-        common.BinaryOperator.DIV: ast.Div,
+        common.ArithmeticOperator.ADD: ast.Add,
+        common.ArithmeticOperator.SUB: ast.Sub,
+        common.ArithmeticOperator.MUL: ast.Mult,
+        common.ArithmeticOperator.DIV: ast.Div,
     }
 
     def __init__(self, *, onemodule=False):
@@ -180,7 +180,7 @@ class PnirToAst(NodeVisitor):
         )
         return ast.BinOp()
 
-    def visit_BinaryOperator(self, node: common.BinaryOperator) -> ast.operator:
+    def visit_ArithmeticOperator(self, node: common.ArithmeticOperator) -> ast.operator:
         return self.GTIR_OP_TO_AST_OP[node]()
 
     def visit_FieldAccess(self, node: gtir.FieldAccess) -> ast.Subscript:

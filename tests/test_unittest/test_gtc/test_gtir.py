@@ -1,13 +1,14 @@
 import ast
-import pydantic
+
 from pydantic.error_wrappers import ValidationError
 
 import pytest
 from devtools import debug
 from eve import SourceLocation
+from .gtir_utils import FieldAccessBuilder, DummyExpr
 
 from gt4py.gtc.common import (
-    BinaryOperator,
+    ArithmeticOperator,
     ComparisonOperator,
     DataType,
     LevelMarker,
@@ -18,6 +19,7 @@ from gt4py.gtc.gtir import (
     AxisBound,
     BinaryOp,
     CartesianOffset,
+    Decl,
     Stencil,
     FieldAccess,
     FieldDecl,
@@ -31,6 +33,11 @@ from gt4py.gtc.gtir import (
     Expr,
 )
 from gt4py.gtc.python.python_naive_codegen import PythonNaiveCodegen
+
+# IR testing guidelines
+# - For testing leave nodes: use the node directly
+#   (a builder/maker pattern would in general hide what's being tested)
+# - For testing complex nodes, introduce buildes with defaults also for leave nodes
 
 
 @pytest.fixture
@@ -113,7 +120,7 @@ def test_naive_python_avg():
                                     right=FieldAccess(
                                         name="b", offset=CartesianOffset(i=1, j=0, k=0)
                                     ),
-                                    op=BinaryOperator.ADD,
+                                    op=ArithmeticOperator.ADD,
                                 ),
                             )
                         ],
@@ -135,51 +142,62 @@ def test_StmtBaseclassIsNotInstantiatable():
         Stmt()
 
 
-class DummyExpr(Expr):
-    """Fake expression for cases where a concrete expression is not needed."""
+def test_DeclBaseclassIsNotInstantiatable():
+    with pytest.raises(TypeError):
+        Decl()
 
 
 # Validation tests
 def test_ParAssignStmtWithVerticalOffsetIsOk():
     ParAssignStmt(
-        left=FieldAccess(name="foo", offset=CartesianOffset(i=0, j=0, k=1)), right=DummyExpr()
+        left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=0, k=1))(), right=DummyExpr()
     )
 
 
 def test_ParAssignStmtWithHorizontalOffsetIsError():
     with pytest.raises(ValidationError):
         ParAssignStmt(
-            left=FieldAccess(name="foo", offset=CartesianOffset(i=1, j=0, k=0)), right=DummyExpr()
+            left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0))(),
+            right=DummyExpr(),
         )
 
 
-def test_TernaryOpValidation():
+arithmetic_type = DataType.FLOAT32
+another_arithmetic_type = DataType.INT32
+
+
+def test_TernaryOpValidNode():
     assert (
         TernaryOp(
             cond=DummyExpr(dtype=DataType.BOOL),
-            true_expr=DummyExpr(dtype=DataType.INT32),
-            false_expr=DummyExpr(dtype=DataType.INT32),
+            true_expr=DummyExpr(dtype=arithmetic_type),
+            false_expr=DummyExpr(dtype=arithmetic_type),
         ).dtype
-        == DataType.INT32
+        == arithmetic_type
     )
 
+
+def test_TernaryOpExprTypesMismatch():
     with pytest.raises(ValidationError):
         TernaryOp(
             cond=DummyExpr(dtype=DataType.BOOL),
-            true_expr=DummyExpr(dtype=DataType.BOOL),
-            false_expr=DummyExpr(dtype=DataType.INT32),
-        )
-
-        TernaryOp(
-            cond=DummyExpr(dtype=DataType.INT32),
-            true_expr=DummyExpr(dtype=DataType.INT32),
-            false_expr=DummyExpr(dtype=DataType.INT32),
+            true_expr=DummyExpr(dtype=arithmetic_type),
+            false_expr=DummyExpr(dtype=another_arithmetic_type),
         )
 
 
-def test_NonBooleanIfStmtConditionIsError():
+def test_TernaryOpConditionIsNotBool():
     with pytest.raises(ValidationError):
-        IfStmt(cond=DummyExpr(dtype=DataType.INT32), true_branch=[], false_branch=[])
+        TernaryOp(
+            cond=DummyExpr(dtype=arithmetic_type),
+            true_expr=DummyExpr(),
+            false_expr=DummyExpr(),
+        )
+
+
+def test_IfStmtConditionIsNotBool():
+    with pytest.raises(ValidationError):
+        IfStmt(cond=DummyExpr(dtype=arithmetic_type), true_branch=[], false_branch=[])
 
 
 def test_LiteralRequiresDtype():
@@ -187,17 +205,26 @@ def test_LiteralRequiresDtype():
         Literal(value="foo")
 
 
-def test_BinaryOpErrorsForIncompatibleTypes():
-    BinaryOp(
-        left=DummyExpr(dtype=DataType.INT32),
-        right=DummyExpr(dtype=DataType.INT32),
-        op=BinaryOperator.ADD,
+def test_BinaryOpTypePropagation():
+    assert (
+        BinaryOp(
+            left=DummyExpr(dtype=arithmetic_type),
+            right=DummyExpr(dtype=arithmetic_type),
+            op=ArithmeticOperator.ADD,
+        ).dtype
+        == arithmetic_type
     )
+
+
+a_binary_operator = ArithmeticOperator.ADD
+
+
+def test_BinaryOpExprTypesMismatch():
     with pytest.raises(ValidationError):
         BinaryOp(
-            left=DummyExpr(dtype=DataType.INT32),
-            right=DummyExpr(dtype=DataType.INT16),
-            op=BinaryOperator.ADD,
+            left=DummyExpr(dtype=arithmetic_type),
+            right=DummyExpr(dtype=another_arithmetic_type),
+            op=a_binary_operator,
         )
 
 
@@ -206,20 +233,20 @@ def test_BinaryOpErrorsForArithmeticOperationOnBooleanExpr():
         BinaryOp(
             left=DummyExpr(dtype=DataType.BOOL),
             right=DummyExpr(dtype=DataType.BOOL),
-            op=BinaryOperator.ADD,
+            op=a_binary_operator,
         )
 
 
 def test_BinaryOpComparison():
     comparison = BinaryOp(
-        left=DummyExpr(dtype=DataType.INT32),
-        right=DummyExpr(dtype=DataType.INT32),
+        left=DummyExpr(dtype=arithmetic_type),
+        right=DummyExpr(dtype=arithmetic_type),
         op=ComparisonOperator.EQ,
     )
     assert comparison.dtype == DataType.BOOL
 
 
-def test_BinaryOpLogical():
+def test_BinaryOpLogicalTypePropagation():
     assert (
         BinaryOp(
             left=DummyExpr(dtype=DataType.BOOL),
@@ -228,9 +255,12 @@ def test_BinaryOpLogical():
         ).dtype
         == DataType.BOOL
     )
+
+
+def test_BinaryOpLogicalWithArithmeticTypes():
     with pytest.raises(ValueError):
         BinaryOp(
-            left=DummyExpr(dtype=DataType.INT32),
-            right=DummyExpr(dtype=DataType.INT32),
+            left=DummyExpr(dtype=arithmetic_type),
+            right=DummyExpr(dtype=arithmetic_type),
             op=LogicalOperator.AND,
         )

@@ -72,7 +72,7 @@ def test_binary_op(pnir_to_ast: PnirToAst) -> None:
         gtir.BinaryOp(
             left=gtir.FieldAccess.centered(name="a"),
             right=gtir.FieldAccess.centered(name="b"),
-            op=common.BinaryOperator.DIV,
+            op=common.ArithmeticOperator.DIV,
         )
     )
     assert isinstance(bin_op, ast.BinOp)
@@ -101,7 +101,7 @@ def test_ij_loop(pnir_to_ast: PnirToAst) -> None:
                 right=gtir.BinaryOp(
                     left=gtir.FieldAccess(name="b", offset=gtir.CartesianOffset(i=1, j=0, k=0)),
                     right=gtir.Literal(value="1", dtype=common.DataType.INT32),
-                    op=common.BinaryOperator.ADD,
+                    op=common.ArithmeticOperator.ADD,
                 ),
             ),
             pnir.AssignStmt(
@@ -109,7 +109,7 @@ def test_ij_loop(pnir_to_ast: PnirToAst) -> None:
                 right=gtir.BinaryOp(
                     left=gtir.FieldAccess(name="a", offset=gtir.CartesianOffset(i=0, j=0, k=-1)),
                     right=gtir.FieldAccess.centered(name="b"),
-                    op=common.BinaryOperator.MUL,
+                    op=common.ArithmeticOperator.MUL,
                 ),
             ),
         ]

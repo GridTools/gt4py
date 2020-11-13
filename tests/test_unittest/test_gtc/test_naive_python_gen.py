@@ -4,7 +4,7 @@ import ast
 
 import pytest
 
-from gt4py.gtc.common import BinaryOperator, LoopOrder
+from gt4py.gtc.common import ArithmeticOperator, LoopOrder
 from gt4py.gtc.gtir import (
     AxisBound,
     BinaryOp,
@@ -23,10 +23,10 @@ def ast_parse(arg):
 
 
 GTIROP_TO_ASTOP = {
-    BinaryOperator.ADD: ast.Add,
-    BinaryOperator.SUB: ast.Sub,
-    BinaryOperator.MUL: ast.Mult,
-    BinaryOperator.DIV: ast.Div,
+    ArithmeticOperator.ADD: ast.Add,
+    ArithmeticOperator.SUB: ast.Sub,
+    ArithmeticOperator.MUL: ast.Mult,
+    ArithmeticOperator.DIV: ast.Div,
 }
 
 
@@ -35,7 +35,7 @@ def naive_codegen():
     yield PythonNaiveCodegen()
 
 
-@pytest.fixture(params=BinaryOperator.__members__.values())
+@pytest.fixture(params=ArithmeticOperator.__members__.values())
 def binary_operator(request):
     yield request.param
 
