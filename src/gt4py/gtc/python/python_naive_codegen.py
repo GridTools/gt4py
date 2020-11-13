@@ -25,17 +25,15 @@ ${ '\\n'.join(vertical_intervals) }"""
     VerticalInterval = JinjaTemplate(
         """
 for K in range({{start}}, {{end}}):\
-    {{'\\n'.join(horizontal_loops)|indent(4)}}"""
+    {{'\\n'.join(body)|indent(4)}}"""
     )
 
-    HorizontalLoop = JinjaTemplate(
+    ParAssignStmt = JinjaTemplate(
         """
 for I in range(_domain_[0]):
     for J in range(_domain_[1]):
-        {{stmt|indent(8)}}"""
+        {{left|indent(8)}} = {{right}}"""
     )
-
-    AssignStmt = FormatTemplate("{left} = {right}")
 
     FieldAccess = FormatTemplate("{name}[{offset}]")
 
