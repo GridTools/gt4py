@@ -122,9 +122,6 @@ class {{ class_name }}(StencilObject):
     ):
         if exec_info is not None:
             exec_info["call_start_time"] = time.perf_counter()
-            if exec_info.setdefault("__aggregate_data", False):
-                stencil_info = exec_info.setdefault("{{ class_name }}", {})
-                stencil_info["call_start_time"] = exec_info["call_start_time"]
 
         field_args=dict(
 {%- set comma = joiner(", ") -%}{%- for field in field_names -%} {{- comma() }} {{ field }}={{ field }}{%- endfor -%}
@@ -154,8 +151,11 @@ class {{ class_name }}(StencilObject):
         if exec_info is not None:
             exec_info["call_end_time"] = time.perf_counter()
 
-            if exec_info["__aggregate_data"]:
+            if exec_info.setdefault("__aggregate_data", False):
+                stencil_info = exec_info.setdefault("{{ class_name }}", {})
+                
                 # Update performance counters
+                stencil_info["call_start_time"] = exec_info["call_start_time"]
                 stencil_info["call_end_time"] = exec_info["call_end_time"]
                 stencil_info["call_time"] = (
                     stencil_info["call_end_time"]
