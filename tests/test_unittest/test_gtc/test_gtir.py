@@ -177,22 +177,30 @@ def test_TernaryOpValidNode():
     )
 
 
-def test_TernaryOpExprTypesMismatch():
-    with pytest.raises(ValidationError):
-        TernaryOp(
-            cond=DummyExpr(dtype=DataType.BOOL),
-            true_expr=DummyExpr(dtype=arithmetic_type),
-            false_expr=DummyExpr(dtype=another_arithmetic_type),
-        )
+def ternaryOpExprTypesMismatch():
+    return TernaryOp(
+        cond=DummyExpr(dtype=DataType.BOOL),
+        true_expr=DummyExpr(dtype=arithmetic_type),
+        false_expr=DummyExpr(dtype=another_arithmetic_type),
+    )
 
 
-def test_TernaryOpConditionIsNotBool():
+def ternaryOpConditionIsNotBool():
+    return TernaryOp(
+        cond=DummyExpr(dtype=arithmetic_type),
+        true_expr=DummyExpr(),
+        false_expr=DummyExpr(),
+    )
+
+
+@pytest.fixture(params=[ternaryOpConditionIsNotBool, ternaryOpExprTypesMismatch])
+def invalidNodes(request):
+    yield request.param
+
+
+def test_NodeValidation(invalidNodes):
     with pytest.raises(ValidationError):
-        TernaryOp(
-            cond=DummyExpr(dtype=arithmetic_type),
-            true_expr=DummyExpr(),
-            false_expr=DummyExpr(),
-        )
+        invalidNodes()
 
 
 def test_IfStmtConditionIsNotBool():

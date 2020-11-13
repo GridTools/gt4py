@@ -241,6 +241,7 @@ class VerticalLoop(LocNode):
 class AccessKind(IntEnum):
     READ_ONLY = 0
     READ_WRITE = 1
+    # TODO add WRITE_ONLY using flag enums
 
 
 class FieldBoundary(Node):
