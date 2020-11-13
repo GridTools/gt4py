@@ -103,7 +103,7 @@ class ParAssignStmt(Stmt):
         return v
 
 
-def condition_is_boolean(parent_node_cls, cond: Expr) -> Expr:
+def verify_condition_is_boolean(parent_node_cls, cond: Expr) -> Expr:
     if cond.dtype and cond.dtype is not common.DataType.BOOL:
         raise ValueError("Condition in `{}` must be boolean.".format(parent_node_cls.__name__))
     return cond
@@ -116,7 +116,7 @@ class IfStmt(Stmt):
 
     @validator("cond")
     def condition_is_boolean(cls, cond):
-        return condition_is_boolean(cls, cond)
+        return verify_condition_is_boolean(cls, cond)
 
     # TODO or like this (but how to pass the name)
     # _cond_is_bool = validator("cond", allow_reuse=True)(condition_is_boolean)
@@ -144,7 +144,7 @@ class TernaryOp(Expr):
 
     @validator("cond")
     def condition_is_boolean(cls, cond):
-        return condition_is_boolean(cls, cond)
+        return verify_condition_is_boolean(cls, cond)
 
     @root_validator(pre=True)
     def type_propagation_and_check(cls, values):
@@ -322,7 +322,7 @@ class FieldsMetadataBuilder:
 
 class Stencil(LocNode):
     name: SymbolName.constrained(r"[a-zA-Z_][\w\.]*")
-    params: List[Union[Decl]]
+    params: List[Decl]
     vertical_loops: List[VerticalLoop]
     fields_metadata: Optional[FieldsMetadata]
 

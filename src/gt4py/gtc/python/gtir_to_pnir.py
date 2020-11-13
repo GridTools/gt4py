@@ -38,6 +38,3 @@ class GtirToPnir(NodeTranslator):
         return pnir.IJLoop(
             body=[pnir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))]
         )
-
-    # def visit_HorizontalLoop(self, node: gtir.HorizontalLoop) -> pnir.IJLoop:
-    #     return pnir.IJLoop(body=[self.visit(node.stmt)])
