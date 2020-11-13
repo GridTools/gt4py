@@ -242,6 +242,7 @@ class StencilClassBuilder:
         self._parameter_names = list(names)
         return self
 
+    # TODO deal with scalar parameters
     @property
     def signature(self) -> List[str]:
         return self._field_names + self._parameter_names
@@ -250,6 +251,7 @@ class StencilClassBuilder:
     def signature_args(self) -> List[ast.arg]:
         return [ast.arg(arg=name, annotation=None) for name in self.signature]
 
+    # TODO bug: currently the _at variables are not used!
     @property
     def accessors(self) -> List[ast.Assign]:
         return [

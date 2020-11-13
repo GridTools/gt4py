@@ -35,6 +35,7 @@ class UnaryOperator(StrEnum):
 
     POS = "+"
     NEG = "-"
+    NOT = "not"
 
 
 @enum.unique
@@ -53,10 +54,10 @@ class ComparisonOperator(StrEnum):
 
     GT = ">"
     LT = "<"
-    GEQ = ">="
-    LEQ = "<="
+    GE = ">="
+    LE = "<="
     EQ = "=="
-    NEQ = "!="
+    NE = "!="
 
 
 @enum.unique
@@ -64,7 +65,6 @@ class LogicalOperator(StrEnum):
     """Logical operators."""
 
     AND = "and"
-    NOT = "not"
     OR = "or"
 
 

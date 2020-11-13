@@ -46,13 +46,28 @@ class DefIRToGTIR(IRNodeVisitor):
         {LevelMarker.START: common.LevelMarker.START, LevelMarker.END: common.LevelMarker.END}
     )
 
-    GT4PY_OP_TO_GTIR_OP: ClassVar[Mapping[BinaryOperator, str]] = MappingProxyType(
+    GT4PY_OP_TO_GTIR_OP: ClassVar[
+        Mapping[
+            BinaryOperator,
+            Union[common.ArithmeticOperator, common.LogicalOperator, common.ComparisonOperator],
+        ]
+    ] = MappingProxyType(
         {
-            # TODO logical and comparison
+            # arithmetic
             BinaryOperator.ADD: common.ArithmeticOperator.ADD,
             BinaryOperator.SUB: common.ArithmeticOperator.SUB,
             BinaryOperator.MUL: common.ArithmeticOperator.MUL,
             BinaryOperator.DIV: common.ArithmeticOperator.DIV,
+            # logical
+            BinaryOperator.AND: common.LogicalOperator.AND,
+            BinaryOperator.OR: common.LogicalOperator.OR,
+            # comparison
+            BinaryOperator.EQ: common.ComparisonOperator.EQ,
+            BinaryOperator.NE: common.ComparisonOperator.NE,
+            BinaryOperator.LT: common.ComparisonOperator.LT,
+            BinaryOperator.LE: common.ComparisonOperator.LE,
+            BinaryOperator.GT: common.ComparisonOperator.GT,
+            BinaryOperator.GE: common.ComparisonOperator.GE,
         }
     )
 
