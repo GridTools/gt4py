@@ -395,6 +395,10 @@ class StencilModuleBuilder:
         self._stencil_class = builder
         return self
 
+    def backend(self, backend_name: str) -> "StencilModuleBuilder":
+        self._stencil_class.backend(backend_name)
+        return self
+
     def name(self, name: str) -> "StencilModuleBuilder":
         self._name = name
         return self
