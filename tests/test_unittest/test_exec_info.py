@@ -25,10 +25,14 @@ class TestExecInfo:
         out_phi: gtscript.Field[float],  # type: ignore  # noqa
     ):
         with computation(PARALLEL), interval(...):  # type: ignore  # noqa
-            u = 0.5 * (in_u[-1, 0, 0] + in_u[0, 0, 0])
-            flux_x = u[0, 0, 0] * (in_phi[-1, 0, 0] if u[0, 0, 0] > 0 else in_phi[0, 0, 0])  # noqa
-            v = 0.5 * (in_v[0, -1, 0] + in_v[0, 0, 0])  # noqa
-            flux_y = v[0, 0, 0] * (in_phi[0, -1, 0] if v[0, 0, 0] > 0 else in_phi[0, 0, 0])  # noqa
+            u = 0.5 * (in_u[-1, 0, 0] + in_u[0, 0, 0])  # type: ignore
+            flux_x = u[0, 0, 0] * (
+                in_phi[-1, 0, 0] if u[0, 0, 0] > 0 else in_phi[0, 0, 0]  # type: ignore
+            )
+            v = 0.5 * (in_v[0, -1, 0] + in_v[0, 0, 0])  # type: ignore
+            flux_y = v[0, 0, 0] * (
+                in_phi[0, -1, 0] if v[0, 0, 0] > 0 else in_phi[0, 0, 0]  # type: ignore
+            )
             out_phi = (  # noqa
                 in_phi - (flux_x[1, 0, 0] - flux_x[0, 0, 0]) - (flux_y[0, 1, 0] - flux_y[0, 0, 0])
             )
@@ -38,12 +42,12 @@ class TestExecInfo:
         in_phi: gtscript.Field[float], out_phi: gtscript.Field[float], *, alpha: float  # type: ignore  # noqa
     ):
         with computation(PARALLEL), interval(...):  # type: ignore  # noqa
-            lap1 = (  # noqa
-                -4 * in_phi[0, 0, 0]
-                + in_phi[-1, 0, 0]
-                + in_phi[1, 0, 0]
-                + in_phi[0, -1, 0]
-                + in_phi[0, 1, 0]
+            lap1 = (
+                -4 * in_phi[0, 0, 0]  # type: ignore
+                + in_phi[-1, 0, 0]  # type: ignore
+                + in_phi[1, 0, 0]  # type: ignore
+                + in_phi[0, -1, 0]  # type: ignore
+                + in_phi[0, 1, 0]  # type: ignore
             )
             lap2 = (  # noqa
                 -4 * lap1[0, 0, 0]
