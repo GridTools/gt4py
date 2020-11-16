@@ -186,12 +186,12 @@ def test_dtype_propagation(node, expected):
     assert node.dtype == expected
 
 
-@pytest.mark.parameterize(
+@pytest.mark.parametrize(
     "valid_node",
     [
         pytest.param(
             lambda: ParAssignStmt(
-                left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=0, k=1))(),
+                left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=0, k=1)).build(),
                 right=DummyExpr(),
             ),
             id="vertical offset is allowed in l.h.s. of assignment",
@@ -255,7 +255,7 @@ def test_valid_nodes(valid_node):
         ),
         pytest.param(
             lambda: ParAssignStmt(
-                left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0))(),
+                left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0)).build(),
                 right=DummyExpr(),
             ),
             id="non-zero horizontal offset not allowed",

@@ -1,4 +1,4 @@
-from gt4py.gtc.gtir import CartesianOffset, FieldAccess, TernaryOp, Expr
+from gt4py.gtc.gtir import CartesianOffset, FieldAccess, Expr
 from gt4py.gtc.common import DataType
 
 
@@ -16,5 +16,5 @@ class FieldAccessBuilder:
         self.node = FieldAccess(name=self.node.name, offset=offset)
         return self
 
-    def __call__(self) -> FieldAccess:
+    def build(self) -> FieldAccess:
         return self.node
