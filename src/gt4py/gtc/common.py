@@ -192,7 +192,7 @@ class Literal(Expr):
 
 class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
     left: TargetT
-    right: Expr
+    right: ExprT
 
 
 class BinaryOp(GenericNode, Expr, Generic[ExprT]):
