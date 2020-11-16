@@ -217,7 +217,7 @@ class BinaryOp(GenericNode, Expr, Generic[ExprT]):
                 if common_dtype is DataType.BOOL:
                     values["dtype"] = DataType.BOOL
                 else:
-                    raise ValueError("Arithmetic expression is not allowed in logical operation.")
+                    raise ValueError("Arithmetic expression is not allowed in boolean operation.")
             elif isinstance(values["op"], ComparisonOperator):
                 values["dtype"] = DataType.BOOL
 

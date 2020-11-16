@@ -74,60 +74,59 @@ def test_dtype_propagation(node, expected):
     assert node.dtype == expected
 
 
-# TODO add `pytest.raises` `match` expression for each test (maybe `id` becomes obsolete)
 @pytest.mark.parametrize(
-    "invalid_node",
+    "invalid_node,expected_regex",
     [
-        pytest.param(
+        (
             lambda: TernaryOp(
                 cond=DummyExpr(dtype=ARITHMETIC_TYPE),
                 true_expr=DummyExpr(),
                 false_expr=DummyExpr(),
             ),
-            id="condition is not bool",
+            r"Condition.*must be bool.*",
         ),
-        pytest.param(
+        (
             lambda: TernaryOp(
                 cond=DummyExpr(dtype=DataType.BOOL),
                 true_expr=DummyExpr(dtype=ARITHMETIC_TYPE),
                 false_expr=DummyExpr(dtype=ANOTHER_ARITHMETIC_TYPE),
             ),
-            id="expr dtype mismatch",
+            r"Type mismatch",
         ),
-        pytest.param(
+        (
             lambda: IfStmt(cond=DummyExpr(dtype=ARITHMETIC_TYPE), true_branch=[], false_branch=[]),
-            id="condition is not bool",
+            r"Condition.*must be bool.*",
         ),
-        pytest.param(
+        (
             lambda: Literal(value="foo"),
-            id="missing dtype",
+            r".*dtype\n.*field required",
         ),
-        pytest.param(
+        (
             lambda: BinaryOp(
                 left=DummyExpr(dtype=ARITHMETIC_TYPE),
                 right=DummyExpr(dtype=ANOTHER_ARITHMETIC_TYPE),
                 op=A_ARITHMETIC_OPERATOR,
             ),
-            id="expr dtype mismatch",
+            r"Type mismatch",
         ),
-        pytest.param(
+        (
             lambda: BinaryOp(
                 left=DummyExpr(dtype=DataType.BOOL),
                 right=DummyExpr(dtype=DataType.BOOL),
                 op=A_ARITHMETIC_OPERATOR,
             ),
-            id="arithmetic operation on boolean expr not allowed",
+            r"Bool.* expr.* not allowed with arithmetic op.*",
         ),
-        pytest.param(
+        (
             lambda: BinaryOp(
                 left=DummyExpr(dtype=ARITHMETIC_TYPE),
                 right=DummyExpr(dtype=ARITHMETIC_TYPE),
                 op=LogicalOperator.AND,
             ),
-            id="logical operation on arithmetic exprs not allowed",
+            r"Arithmetic expr.* not allowed in bool.* op.*",
         ),
     ],
 )
-def test_invalid_nodes(invalid_node):
-    with pytest.raises(ValidationError):
+def test_invalid_nodes(invalid_node, expected_regex):
+    with pytest.raises(ValidationError, match=expected_regex):
         invalid_node()
