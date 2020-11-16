@@ -16,11 +16,15 @@
 
 import enum
 from typing import Dict, List, Optional, Tuple, Union
+from pydantic import validator
 
 from devtools import debug  # noqa: F401
-from eve import IntEnum, Node, SourceLocation, Str
+from eve import IntEnum, Node, SourceLocation, Str, SymbolName
+from eve.type_definitions import SymbolRef
+
 
 from gt4py.gtc import common
+from pydantic.class_validators import root_validator
 
 
 class LocNode(Node):
@@ -28,11 +32,21 @@ class LocNode(Node):
 
 
 class Expr(LocNode):
-    pass
+    dtype: Optional[common.DataType]
+
+    # TODO Eve could provide support for making a node abstract
+    def __init__(self, *args, **kwargs):
+        if type(self) is Expr:
+            raise TypeError("Trying to instantiate `Expr` abstract class.")
+        super().__init__(*args, **kwargs)
 
 
 class Stmt(LocNode):
-    pass
+    # TODO Eve could provide support for making a node abstract
+    def __init__(self, *args, **kwargs):
+        if type(self) is Stmt:
+            raise TypeError("Trying to instantiate `Stmt` abstract class.")
+        super().__init__(*args, **kwargs)
 
 
 class Literal(Expr):
@@ -42,6 +56,7 @@ class Literal(Expr):
 
 
 class Domain(LocNode):
+    # TODO
     pass
 
 
@@ -58,8 +73,12 @@ class CartesianOffset(Node):
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
+class ScalarAccess(Expr):
+    name: SymbolRef
+
+
 class FieldAccess(Expr):
-    name: Str  # via symbol table
+    name: SymbolRef
     offset: CartesianOffset
 
     @classmethod
@@ -67,24 +86,122 @@ class FieldAccess(Expr):
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
 
-class AssignStmt(Stmt):
-    left: FieldAccess  # there are no local variables in gtir, only fields
+class ParAssignStmt(Stmt):
+    """Parallel assignment.
+
+    R.h.s. is evaluated for all points and the resulting field is assigned
+    (GTScript parallel model).
+    """
+
+    left: FieldAccess
+    """No local scalar variables, only fields. Scalar Stencil parameters are read-only"""
     right: Expr
+
+    @validator("left")
+    def no_horizontal_offset_in_assignment(cls, v):
+        if v.offset.i != 0 or v.offset.j != 0:
+            raise ValueError("Lhs of assignment must not have a horizontal offset.")
+        return v
+
+
+def verify_condition_is_boolean(parent_node_cls, cond: Expr) -> Expr:
+    if cond.dtype and cond.dtype is not common.DataType.BOOL:
+        raise ValueError("Condition in `{}` must be boolean.".format(parent_node_cls.__name__))
+    return cond
+
+
+class IfStmt(Stmt):
+    cond: Expr
+    true_branch: List[Stmt]
+    false_branch: List[Stmt]
+
+    @validator("cond")
+    def condition_is_boolean(cls, cond):
+        return verify_condition_is_boolean(cls, cond)
+
+    # TODO or like this (but how to pass the name)
+    # _cond_is_bool = validator("cond", allow_reuse=True)(condition_is_boolean)
+
+
+def verify_and_get_common_dtype(node_cls, values: List[Expr]) -> common.DataType:
+    assert len(values) > 0
+    if all([v.dtype for v in values]):
+        dtype = values[0].dtype
+        if all([v.dtype == dtype for v in values]):
+            return dtype
+        else:
+            raise ValueError(
+                "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
+                + ", ".join(v.dtype.name for v in values)
+            )
+    else:
+        return None
+
+
+class TernaryOp(Expr):
+    cond: Expr
+    true_expr: Expr
+    false_expr: Expr
+
+    @validator("cond")
+    def condition_is_boolean(cls, cond):
+        return verify_condition_is_boolean(cls, cond)
+
+    @root_validator(pre=True)
+    def type_propagation_and_check(cls, values):
+        common_dtype = verify_and_get_common_dtype(
+            cls, [values["true_expr"], values["false_expr"]]
+        )
+        if common_dtype:
+            values["dtype"] = common_dtype
+        return values
 
 
 class BinaryOp(Expr):
-    op: common.BinaryOperator
+    op: Union[common.ArithmeticOperator, common.ComparisonOperator, common.LogicalOperator]
     left: Expr
     right: Expr
 
+    @root_validator(pre=True)
+    def type_propagation_and_check(cls, values):
+        common_dtype = verify_and_get_common_dtype(cls, [values["left"], values["right"]])
 
-class FieldDecl(LocNode):
-    name: Str
+        if common_dtype:
+            if isinstance(values["op"], common.ArithmeticOperator):
+                if common_dtype is not common.DataType.BOOL:
+                    values["dtype"] = common_dtype
+                else:
+                    raise ValueError(
+                        "Boolean expression is not allowed with arithmetic operation."
+                    )
+            elif isinstance(values["op"], common.LogicalOperator):
+                if common_dtype is common.DataType.BOOL:
+                    values["dtype"] = common.DataType.BOOL
+                else:
+                    raise ValueError("Arithmetic expression is not allowed in logical operation.")
+            elif isinstance(values["op"], common.ComparisonOperator):
+                values["dtype"] = common.DataType.BOOL
+
+        return values
+
+
+class Decl(LocNode):
+    name: SymbolName
     dtype: common.DataType
 
+    def __init__(self, *args, **kwargs):
+        if type(self) is Decl:
+            raise TypeError("Trying to instantiate `Decl` abstract class.")
+        super().__init__(*args, **kwargs)
 
-class HorizontalLoop(LocNode):
-    stmt: Stmt
+
+class FieldDecl(Decl):
+    # TODO dimensions
+    pass
+
+
+class ScalarDecl(Decl):
+    pass
 
 
 class AxisBound(Node):
@@ -109,7 +226,7 @@ class AxisBound(Node):
 
 
 class VerticalInterval(LocNode):
-    horizontal_loops: List[HorizontalLoop]
+    body: List[Stmt]
     start: AxisBound
     end: AxisBound
 
@@ -118,15 +235,14 @@ class VerticalLoop(LocNode):
     vertical_intervals: List[VerticalInterval]
     loop_order: common.LoopOrder
 
-
-class Stencil(LocNode):
-    vertical_loops: List[VerticalLoop]
+    # TODO validate that intervals are contiguous
 
 
 @enum.unique
 class AccessKind(IntEnum):
     READ_ONLY = 0
     READ_WRITE = 1
+    # TODO add WRITE_ONLY using flag enums
 
 
 class FieldBoundary(Node):
@@ -157,7 +273,7 @@ class FieldBoundaryAccumulator:
 
 
 class FieldMetadata(Node):
-    name: str
+    name: Str
     access: AccessKind
     boundary: FieldBoundary
     dtype: common.DataType
@@ -165,7 +281,7 @@ class FieldMetadata(Node):
 
 class FieldMetadataBuilder:
     def __init__(self) -> None:
-        self._name: Optional[str] = None
+        self._name: Optional[Str] = None
         self._access: int = AccessKind.READ_WRITE
         self._dtype: Optional[int] = None
         self.boundary = FieldBoundaryAccumulator()
@@ -192,7 +308,7 @@ class FieldMetadataBuilder:
 
 
 class FieldsMetadata(Node):
-    metas: Dict[str, FieldMetadata] = {}
+    metas: Dict[Str, FieldMetadata] = {}
 
 
 class FieldsMetadataBuilder:
@@ -206,10 +322,12 @@ class FieldsMetadataBuilder:
         return FieldsMetadata(metas={k: v.build() for k, v in self.metas.items()})
 
 
-class Computation(LocNode):
-    name: Str
-    params: List[FieldDecl]
-    stencils: List[Stencil]
+class Stencil(LocNode):
+    # TODO remove `__main__.`` from name and use default SymbolName constraint
+    name: SymbolName.constrained(r"[a-zA-Z_][\w\.]*")
+    # TODO deal with gtscript externals
+    params: List[Decl]
+    vertical_loops: List[VerticalLoop]
     fields_metadata: Optional[FieldsMetadata]
 
     @property

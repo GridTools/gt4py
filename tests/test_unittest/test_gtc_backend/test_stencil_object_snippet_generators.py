@@ -14,17 +14,15 @@ from gt4py.backend.gtc_backend.stencil_object_snippet_generators import (
 from gt4py.gtc.common import DataType, LoopOrder
 from gt4py.gtc.gtir import (
     AccessKind,
-    AssignStmt,
+    ParAssignStmt,
     AxisBound,
     CartesianOffset,
-    Computation,
+    Stencil,
     FieldAccess,
     FieldBoundary,
     FieldDecl,
     FieldMetadata,
     FieldsMetadata,
-    HorizontalLoop,
-    Stencil,
     VerticalInterval,
     VerticalLoop,
 )
@@ -36,8 +34,8 @@ def ast_parse(source):
 
 
 @pytest.fixture
-def copy_stencil() -> Iterator[Computation]:
-    yield Computation(
+def copy_stencil() -> Iterator[Stencil]:
+    yield Stencil(
         name="copy_shift",
         params=[
             FieldDecl(name="a", dtype=DataType.AUTO),
@@ -59,29 +57,23 @@ def copy_stencil() -> Iterator[Computation]:
                 ),
             }
         ),
-        stencils=[
-            Stencil(
-                vertical_loops=[
-                    VerticalLoop(
-                        loop_order=LoopOrder.PARALLEL,
-                        vertical_intervals=[
-                            VerticalInterval(
-                                start=AxisBound.start(),
-                                end=AxisBound.end(),
-                                horizontal_loops=[
-                                    HorizontalLoop(
-                                        stmt=AssignStmt(
-                                            left=FieldAccess.centered(name="a"),
-                                            right=FieldAccess(
-                                                name="b", offset=CartesianOffset(i=-1, j=0, k=0)
-                                            ),
-                                        )
-                                    )
-                                ],
+        vertical_loops=[
+            VerticalLoop(
+                loop_order=LoopOrder.PARALLEL,
+                vertical_intervals=[
+                    VerticalInterval(
+                        start=AxisBound.start(),
+                        end=AxisBound.end(),
+                        body=[
+                            ParAssignStmt(
+                                left=FieldAccess.centered(name="a"),
+                                right=FieldAccess(
+                                    name="b", offset=CartesianOffset(i=-1, j=0, k=0)
+                                ),
                             )
                         ],
                     )
-                ]
+                ],
             )
         ],
     )
@@ -133,7 +125,7 @@ def test_field_info_fields_metadata() -> None:
     )
 
 
-def test_field_info(copy_stencil: Computation) -> None:
+def test_field_info(copy_stencil: Stencil) -> None:
     source = FieldInfoGenerator.apply(copy_stencil)
     info_pattern = re.compile(
         (
@@ -154,12 +146,12 @@ def test_field_info(copy_stencil: Computation) -> None:
     assert infos[1][2] == "(1, 0), (0, 0), (0, 0)"
 
 
-def test_parameter_info(copy_stencil: Computation) -> None:
+def test_parameter_info(copy_stencil: Stencil) -> None:
     source = ParameterInfoGenerator.apply(copy_stencil)
     assert source == "{}"
 
 
-def test_computation_call(copy_stencil: Computation) -> None:
+def test_computation_call(copy_stencil: Stencil) -> None:
     source = ComputationCallGenerator.apply(copy_stencil)
     tree = ast_parse(source)
     call = tree.body[0].value
@@ -168,7 +160,7 @@ def test_computation_call(copy_stencil: Computation) -> None:
     assert [name.id for name in call.args] == ["a", "b", "_domain_"]
 
 
-def test_run_body(copy_stencil: Computation) -> None:
+def test_run_body(copy_stencil: Stencil) -> None:
     source = RunBodyGenerator.apply(copy_stencil)
     tree = ast_parse(source)
     assert isinstance(tree.body[0], ast.Assign)
@@ -181,7 +173,7 @@ def test_run_body(copy_stencil: Computation) -> None:
     assert tree.body[1].value.args[0].id == "b"
 
 
-def test_domain_info(copy_stencil: Computation) -> None:
+def test_domain_info(copy_stencil: Stencil) -> None:
     assert (
         DomainInfoGenerator.apply(copy_stencil)
         == "DomainInfo(parallel_axes=('I', 'J'), sequential_axis='K', ndims=3)"

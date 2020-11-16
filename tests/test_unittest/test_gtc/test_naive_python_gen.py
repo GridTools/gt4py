@@ -1,16 +1,17 @@
+# TODO tests
+
 import ast
 
 import pytest
 
-from gt4py.gtc.common import BinaryOperator, LoopOrder
+from gt4py.gtc.common import ArithmeticOperator, LoopOrder
 from gt4py.gtc.gtir import (
-    AssignStmt,
     AxisBound,
     BinaryOp,
     CartesianOffset,
     FieldAccess,
-    HorizontalLoop,
     VerticalInterval,
+    ParAssignStmt,
     VerticalLoop,
 )
 from gt4py.gtc.python.python_naive_codegen import PythonNaiveCodegen
@@ -22,10 +23,10 @@ def ast_parse(arg):
 
 
 GTIROP_TO_ASTOP = {
-    BinaryOperator.ADD: ast.Add,
-    BinaryOperator.SUB: ast.Sub,
-    BinaryOperator.MUL: ast.Mult,
-    BinaryOperator.DIV: ast.Div,
+    ArithmeticOperator.ADD: ast.Add,
+    ArithmeticOperator.SUB: ast.Sub,
+    ArithmeticOperator.MUL: ast.Mult,
+    ArithmeticOperator.DIV: ast.Div,
 }
 
 
@@ -34,7 +35,7 @@ def naive_codegen():
     yield PythonNaiveCodegen()
 
 
-@pytest.fixture(params=BinaryOperator.__members__.values())
+@pytest.fixture(params=ArithmeticOperator.__members__.values())
 def binary_operator(request):
     yield request.param
 
@@ -62,9 +63,10 @@ def test_field_access(naive_codegen, field_access):
 
 
 def test_assign(naive_codegen):
-    assign = AssignStmt(left=FieldAccess.centered(name="a"), right=FieldAccess.centered(name="b"))
-    source_tree = ast_parse(naive_codegen.apply(assign))
-    assert isinstance(source_tree.body[0], ast.Assign)
+    assign = ParAssignStmt(
+        left=FieldAccess.centered(name="a"), right=FieldAccess.centered(name="b")
+    )
+    ast_parse(naive_codegen.apply(assign))
 
 
 def test_binary_op(naive_codegen, binary_operator):
@@ -80,37 +82,20 @@ def test_binary_op(naive_codegen, binary_operator):
     assert isinstance(toplevel.value.op, GTIROP_TO_ASTOP[binary_operator])
 
 
-def test_horizontal_loop(naive_codegen):
-    horizontal_loop = HorizontalLoop(
-        stmt=AssignStmt(left=FieldAccess.centered(name="a"), right=FieldAccess.centered(name="b"))
-    )
-    source_tree = ast_parse(naive_codegen.apply(horizontal_loop))
-    for_i = source_tree.body[0]
-    assert isinstance(for_i, ast.For)
-    assert for_i.target.id == "I"
-    for_j = for_i.body[0]
-    assert isinstance(for_j, ast.For)
-    assert for_j.target.id == "J"
-    assert isinstance(for_j.body[0], ast.Assign)
-
-
 def test_vertical_interval(naive_codegen):
     vertical_interval = VerticalInterval(
         start=AxisBound.start(),
         end=AxisBound.end(),
-        horizontal_loops=[
-            HorizontalLoop(
-                stmt=AssignStmt(
-                    left=FieldAccess.centered(name="a"), right=FieldAccess.centered(name="b")
-                )
+        body=[
+            ParAssignStmt(
+                left=FieldAccess.centered(name="a"), right=FieldAccess.centered(name="b")
             ),
-            HorizontalLoop(
-                stmt=AssignStmt(
-                    left=FieldAccess.centered(name="b"), right=FieldAccess.centered(name="c")
-                )
+            ParAssignStmt(
+                left=FieldAccess.centered(name="b"), right=FieldAccess.centered(name="c")
             ),
         ],
     )
+    print(naive_codegen.apply(vertical_interval))
     source_tree = ast_parse(naive_codegen.apply(vertical_interval))
     for_k = source_tree.body[0]
     assert isinstance(for_k, ast.For)
@@ -132,24 +117,20 @@ def test_vertical_loop(naive_codegen, loop_order):
             VerticalInterval(
                 start=AxisBound.start(),
                 end=AxisBound.from_end(2),
-                horizontal_loops=[
-                    HorizontalLoop(
-                        stmt=AssignStmt(
-                            left=FieldAccess.centered(name="a"),
-                            right=FieldAccess.centered(name="b"),
-                        )
+                body=[
+                    ParAssignStmt(
+                        left=FieldAccess.centered(name="a"),
+                        right=FieldAccess.centered(name="b"),
                     )
                 ],
             ),
             VerticalInterval(
                 start=AxisBound.from_end(1),
                 end=AxisBound.end(),
-                horizontal_loops=[
-                    HorizontalLoop(
-                        stmt=AssignStmt(
-                            left=FieldAccess.centered(name="a"),
-                            right=FieldAccess.centered(name="b"),
-                        )
+                body=[
+                    ParAssignStmt(
+                        left=FieldAccess.centered(name="a"),
+                        right=FieldAccess.centered(name="b"),
                     )
                 ],
             ),

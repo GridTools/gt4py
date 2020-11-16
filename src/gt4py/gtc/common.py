@@ -35,16 +35,37 @@ class UnaryOperator(StrEnum):
 
     POS = "+"
     NEG = "-"
+    NOT = "not"
 
 
 @enum.unique
-class BinaryOperator(StrEnum):
-    """Binary operator identifier."""
+class ArithmeticOperator(StrEnum):
+    """Arithmetic operators."""
 
     ADD = "+"
     SUB = "-"
     MUL = "*"
     DIV = "/"
+
+
+@enum.unique
+class ComparisonOperator(StrEnum):
+    """Comparison operators."""
+
+    GT = ">"
+    LT = "<"
+    GE = ">="
+    LE = "<="
+    EQ = "=="
+    NE = "!="
+
+
+@enum.unique
+class LogicalOperator(StrEnum):
+    """Logical operators."""
+
+    AND = "and"
+    OR = "or"
 
 
 @enum.unique
@@ -71,14 +92,6 @@ class LoopOrder(IntEnum):
     PARALLEL = 0
     FORWARD = 1
     BACKWARD = 2
-
-
-@enum.unique
-class LocationType(IntEnum):
-    Vertex = 0
-    Edge = 1
-    Cell = 2
-    NoLocation = 3
 
 
 @enum.unique

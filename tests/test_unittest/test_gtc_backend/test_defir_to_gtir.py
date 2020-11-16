@@ -43,8 +43,8 @@ def test_stencil_definition(
     gtir1 = defir_to_gtir.apply(stencil_definition)
     gtir2 = defir_to_gtir.visit_StencilDefinition(stencil_definition)
     assert gtir1 is not gtir2
-    assert isinstance(gtir1, gtir.Computation)
-    assert isinstance(gtir2, gtir.Computation)
+    assert isinstance(gtir1, gtir.Stencil)
+    assert isinstance(gtir2, gtir.Stencil)
 
 
 def test_computation_block(defir_to_gtir):

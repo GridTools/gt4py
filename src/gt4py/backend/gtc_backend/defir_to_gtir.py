@@ -1,9 +1,10 @@
 from types import MappingProxyType
-from typing import ClassVar, Dict, List, Mapping
+from typing import ClassVar, Dict, List, Mapping, Union
 
 from gt4py.gtc import common, gtir
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
+    ArgumentInfo,
     Assign,
     AxisBound,
     AxisInterval,
@@ -17,6 +18,8 @@ from gt4py.ir.nodes import (
     LevelMarker,
     ScalarLiteral,
     StencilDefinition,
+    VarDecl,
+    VarRef,
 )
 
 
@@ -43,12 +46,28 @@ class DefIRToGTIR(IRNodeVisitor):
         {LevelMarker.START: common.LevelMarker.START, LevelMarker.END: common.LevelMarker.END}
     )
 
-    GT4PY_OP_TO_GTIR_OP: ClassVar[Mapping[BinaryOperator, str]] = MappingProxyType(
+    GT4PY_OP_TO_GTIR_OP: ClassVar[
+        Mapping[
+            BinaryOperator,
+            Union[common.ArithmeticOperator, common.LogicalOperator, common.ComparisonOperator],
+        ]
+    ] = MappingProxyType(
         {
-            BinaryOperator.ADD: common.BinaryOperator.ADD,
-            BinaryOperator.SUB: common.BinaryOperator.SUB,
-            BinaryOperator.MUL: common.BinaryOperator.MUL,
-            BinaryOperator.DIV: common.BinaryOperator.DIV,
+            # arithmetic
+            BinaryOperator.ADD: common.ArithmeticOperator.ADD,
+            BinaryOperator.SUB: common.ArithmeticOperator.SUB,
+            BinaryOperator.MUL: common.ArithmeticOperator.MUL,
+            BinaryOperator.DIV: common.ArithmeticOperator.DIV,
+            # logical
+            BinaryOperator.AND: common.LogicalOperator.AND,
+            BinaryOperator.OR: common.LogicalOperator.OR,
+            # comparison
+            BinaryOperator.EQ: common.ComparisonOperator.EQ,
+            BinaryOperator.NE: common.ComparisonOperator.NE,
+            BinaryOperator.LT: common.ComparisonOperator.LT,
+            BinaryOperator.LE: common.ComparisonOperator.LE,
+            BinaryOperator.GT: common.ComparisonOperator.GT,
+            BinaryOperator.GE: common.ComparisonOperator.GE,
         }
     )
 
@@ -56,34 +75,40 @@ class DefIRToGTIR(IRNodeVisitor):
     def apply(cls, root, **kwargs):
         return cls().visit(root)
 
-    def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Computation:
-        stencils = [self.visit(c) for c in node.computations]
-        return gtir.Computation(
-            name=node.name, params=[self.visit(f) for f in node.api_fields], stencils=stencils
+    def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
+        vertical_loops = [self.visit(c) for c in node.computations]
+        field_params = {f.name: self.visit(f) for f in node.api_fields}
+        scalar_params = {p.name: self.visit(p) for p in node.parameters}
+        return gtir.Stencil(
+            name=node.name,
+            params=[
+                self.visit(f, all_params={**field_params, **scalar_params})
+                for f in node.api_signature
+            ],
+            vertical_loops=vertical_loops,
         )
 
-    def visit_ComputationBlock(self, node: ComputationBlock) -> gtir.Stencil:
-        horizontal_loops = [gtir.HorizontalLoop(stmt=s) for s in self.visit(node.body)]
+    def visit_ArgumentInfo(
+        self, node: ArgumentInfo, all_params: Dict[str, Union[gtir.Decl]]
+    ) -> Union[gtir.Decl]:
+        return all_params[node.name]
+
+    def visit_ComputationBlock(self, node: ComputationBlock) -> List[gtir.VerticalLoop]:
+        assigns = [s for s in self.visit(node.body)]
         start, end = self.visit(node.interval)
-        vertical_intervals = [
-            gtir.VerticalInterval(horizontal_loops=horizontal_loops, start=start, end=end)
-        ]
-        return gtir.Stencil(
-            vertical_loops=[
-                gtir.VerticalLoop(
-                    loop_order=self.GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER[node.iteration_order],
-                    vertical_intervals=vertical_intervals,
-                )
-            ]
+        vertical_intervals = [gtir.VerticalInterval(body=assigns, start=start, end=end)]
+        return gtir.VerticalLoop(
+            loop_order=self.GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER[node.iteration_order],
+            vertical_intervals=vertical_intervals,
         )
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
         return [self.visit(s) for s in node.stmts]
 
-    def visit_Assign(self, node: Assign) -> gtir.AssignStmt:
+    def visit_Assign(self, node: Assign) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef)
         left = self.visit(node.target)
-        return gtir.AssignStmt(left=left, right=self.visit(node.value))
+        return gtir.ParAssignStmt(left=left, right=self.visit(node.value))
 
     def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
         return gtir.Literal(value=str(node.value), dtype=common.DataType(node.data_type.value))
@@ -98,6 +123,12 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_FieldRef(self, node: FieldRef):
         return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))
 
+    def visit_VarRef(self, node: VarRef):
+        return gtir.ScalarAccess(
+            name=node.name,
+            # TODO index
+        )
+
     def visit_AxisInterval(self, node: AxisInterval):
         return self.visit(node.start), self.visit(node.end)
 
@@ -110,3 +141,7 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_FieldDecl(self, node: FieldDecl):
         # datatype conversion works via same ID
         return gtir.FieldDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
+
+    def visit_VarDecl(self, node: VarDecl):
+        # datatype conversion works via same ID
+        return gtir.ScalarDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
