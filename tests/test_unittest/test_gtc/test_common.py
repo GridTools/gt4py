@@ -1,15 +1,18 @@
 import pytest
 
 from pydantic import ValidationError
+from devtools import debug
 
 from gt4py.gtc.common import (
     IfStmt,
     Literal,
     Expr,
+    Stmt,
     DataType,
     ExprKind,
     BinaryOp,
     TernaryOp,
+    AssignStmt,
     ArithmeticOperator,
     LogicalOperator,
     ComparisonOperator,
@@ -130,3 +133,36 @@ def test_dtype_propagation(node, expected):
 def test_invalid_nodes(invalid_node, expected_regex):
     with pytest.raises(ValidationError, match=expected_regex):
         invalid_node()
+
+
+# For pydantic, nodes are the same (convertible to each other) if all fields are same.
+# For checking, we need to make the Expr categories clearly different.
+class ExprA(Expr):
+    clearly_a_expr = ""
+
+
+class DummyExprA(ExprA):
+    dtype: DataType = DataType.FLOAT32
+    kind: ExprKind = ExprKind.FIELD
+
+
+class ExprB(Expr):
+    clearly_b_expr = ""
+
+
+class DummyExprB(ExprB):
+    dtype: DataType = DataType.FLOAT32
+    kind: ExprKind = ExprKind.FIELD
+
+
+class StmtA(Stmt):
+    pass
+
+
+class StmtB(Stmt):
+    pass
+
+
+def test_AssignSmt_category():
+    assign = AssignStmt[ExprA, ExprA](left=DummyExprA(), right=DummyExprA())
+    debug(assign)
