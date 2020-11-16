@@ -34,10 +34,14 @@ from gt4py.gtc.gtir import (
 )
 from gt4py.gtc.python.python_naive_codegen import PythonNaiveCodegen
 
+ARITHMETIC_TYPE = DataType.FLOAT32
+ANOTHER_ARITHMETIC_TYPE = DataType.INT32
+A_ARITHMETIC_OPERATOR = ArithmeticOperator.ADD
+
 # IR testing guidelines
 # - For testing leave nodes: use the node directly
-#   (a builder/maker pattern would in general hide what's being tested)
-# - For testing complex nodes, introduce buildes with defaults also for leave nodes
+#   (the builder pattern would in general hide what's being tested)
+# - For testing non-leave nodes, introduce builders with defaults (for leave nodes as well)
 
 
 @pytest.fixture
@@ -132,143 +136,132 @@ def test_naive_python_avg():
     assert ast.parse(PythonNaiveCodegen.apply(horizontal_avg))
 
 
-def test_ExprBaseclassIsNotInstantiatable():
+@pytest.mark.parametrize(
+    "invalid_node",
+    [Decl, Expr, Stmt],
+)
+def test_abstract_classes_not_instantiatable(invalid_node):
     with pytest.raises(TypeError):
-        Expr()
+        invalid_node()
 
 
-def test_StmtBaseclassIsNotInstantiatable():
-    with pytest.raises(TypeError):
-        Stmt()
+@pytest.mark.parametrize(
+    "node,expected",
+    [
+        (
+            TernaryOp(
+                cond=DummyExpr(dtype=DataType.BOOL),
+                true_expr=DummyExpr(dtype=ARITHMETIC_TYPE),
+                false_expr=DummyExpr(dtype=ARITHMETIC_TYPE),
+            ),
+            ARITHMETIC_TYPE,
+        ),
+        (
+            BinaryOp(
+                left=DummyExpr(dtype=ARITHMETIC_TYPE),
+                right=DummyExpr(dtype=ARITHMETIC_TYPE),
+                op=ArithmeticOperator.ADD,
+            ),
+            ARITHMETIC_TYPE,
+        ),
+        (
+            BinaryOp(
+                left=DummyExpr(dtype=DataType.BOOL),
+                right=DummyExpr(dtype=DataType.BOOL),
+                op=LogicalOperator.AND,
+            ),
+            DataType.BOOL,
+        ),
+        (
+            BinaryOp(
+                left=DummyExpr(dtype=ARITHMETIC_TYPE),
+                right=DummyExpr(dtype=ARITHMETIC_TYPE),
+                op=ComparisonOperator.EQ,
+            ),
+            DataType.BOOL,
+        ),
+    ],
+)
+def test_dtype_propagation(node, expected):
+    assert node.dtype == expected
 
 
-def test_DeclBaseclassIsNotInstantiatable():
-    with pytest.raises(TypeError):
-        Decl()
-
-
-# Validation tests
-def test_ParAssignStmtWithVerticalOffsetIsOk():
-    ParAssignStmt(
-        left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=0, k=1))(), right=DummyExpr()
-    )
-
-
-def test_ParAssignStmtWithHorizontalOffsetIsError():
-    with pytest.raises(ValidationError):
-        ParAssignStmt(
-            left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0))(),
-            right=DummyExpr(),
+@pytest.mark.parameterize(
+    "valid_node",
+    [
+        pytest.param(
+            lambda: ParAssignStmt(
+                left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=0, k=1))(),
+                right=DummyExpr(),
+            ),
+            id="vertical offset is allowed in l.h.s. of assignment",
         )
+    ],
+)
+def test_valid_nodes(valid_node):
+    valid_node()
 
 
-arithmetic_type = DataType.FLOAT32
-another_arithmetic_type = DataType.INT32
-
-
-def test_TernaryOpValidNode():
-    assert (
-        TernaryOp(
-            cond=DummyExpr(dtype=DataType.BOOL),
-            true_expr=DummyExpr(dtype=arithmetic_type),
-            false_expr=DummyExpr(dtype=arithmetic_type),
-        ).dtype
-        == arithmetic_type
-    )
-
-
-def ternaryOpExprTypesMismatch():
-    return TernaryOp(
-        cond=DummyExpr(dtype=DataType.BOOL),
-        true_expr=DummyExpr(dtype=arithmetic_type),
-        false_expr=DummyExpr(dtype=another_arithmetic_type),
-    )
-
-
-def ternaryOpConditionIsNotBool():
-    return TernaryOp(
-        cond=DummyExpr(dtype=arithmetic_type),
-        true_expr=DummyExpr(),
-        false_expr=DummyExpr(),
-    )
-
-
-@pytest.fixture(params=[ternaryOpConditionIsNotBool, ternaryOpExprTypesMismatch])
-def invalidNodes(request):
-    yield request.param
-
-
-def test_NodeValidation(invalidNodes):
+@pytest.mark.parametrize(
+    "invalid_node",
+    [
+        pytest.param(
+            lambda: TernaryOp(
+                cond=DummyExpr(dtype=ARITHMETIC_TYPE),
+                true_expr=DummyExpr(),
+                false_expr=DummyExpr(),
+            ),
+            id="condition is not bool",
+        ),
+        pytest.param(
+            lambda: TernaryOp(
+                cond=DummyExpr(dtype=DataType.BOOL),
+                true_expr=DummyExpr(dtype=ARITHMETIC_TYPE),
+                false_expr=DummyExpr(dtype=ANOTHER_ARITHMETIC_TYPE),
+            ),
+            id="expr dtype mismatch",
+        ),
+        pytest.param(
+            lambda: IfStmt(cond=DummyExpr(dtype=ARITHMETIC_TYPE), true_branch=[], false_branch=[]),
+            id="condition is not bool",
+        ),
+        pytest.param(
+            lambda: Literal(value="foo"),
+            id="missing dtype",
+        ),
+        pytest.param(
+            lambda: BinaryOp(
+                left=DummyExpr(dtype=ARITHMETIC_TYPE),
+                right=DummyExpr(dtype=ANOTHER_ARITHMETIC_TYPE),
+                op=A_ARITHMETIC_OPERATOR,
+            ),
+            id="expr dtype mismatch",
+        ),
+        pytest.param(
+            lambda: BinaryOp(
+                left=DummyExpr(dtype=DataType.BOOL),
+                right=DummyExpr(dtype=DataType.BOOL),
+                op=A_ARITHMETIC_OPERATOR,
+            ),
+            id="arithmetic operation on boolean expr not allowed",
+        ),
+        pytest.param(
+            lambda: BinaryOp(
+                left=DummyExpr(dtype=ARITHMETIC_TYPE),
+                right=DummyExpr(dtype=ARITHMETIC_TYPE),
+                op=LogicalOperator.AND,
+            ),
+            id="logical operation on arithmetic exprs not allowed",
+        ),
+        pytest.param(
+            lambda: ParAssignStmt(
+                left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0))(),
+                right=DummyExpr(),
+            ),
+            id="non-zero horizontal offset not allowed",
+        ),
+    ],
+)
+def test_invalid_nodes(invalid_node):
     with pytest.raises(ValidationError):
-        invalidNodes()
-
-
-def test_IfStmtConditionIsNotBool():
-    with pytest.raises(ValidationError):
-        IfStmt(cond=DummyExpr(dtype=arithmetic_type), true_branch=[], false_branch=[])
-
-
-def test_LiteralRequiresDtype():
-    with pytest.raises(ValidationError):
-        Literal(value="foo")
-
-
-def test_BinaryOpTypePropagation():
-    assert (
-        BinaryOp(
-            left=DummyExpr(dtype=arithmetic_type),
-            right=DummyExpr(dtype=arithmetic_type),
-            op=ArithmeticOperator.ADD,
-        ).dtype
-        == arithmetic_type
-    )
-
-
-a_binary_operator = ArithmeticOperator.ADD
-
-
-def test_BinaryOpExprTypesMismatch():
-    with pytest.raises(ValidationError):
-        BinaryOp(
-            left=DummyExpr(dtype=arithmetic_type),
-            right=DummyExpr(dtype=another_arithmetic_type),
-            op=a_binary_operator,
-        )
-
-
-def test_BinaryOpErrorsForArithmeticOperationOnBooleanExpr():
-    with pytest.raises(ValidationError):
-        BinaryOp(
-            left=DummyExpr(dtype=DataType.BOOL),
-            right=DummyExpr(dtype=DataType.BOOL),
-            op=a_binary_operator,
-        )
-
-
-def test_BinaryOpComparison():
-    comparison = BinaryOp(
-        left=DummyExpr(dtype=arithmetic_type),
-        right=DummyExpr(dtype=arithmetic_type),
-        op=ComparisonOperator.EQ,
-    )
-    assert comparison.dtype == DataType.BOOL
-
-
-def test_BinaryOpLogicalTypePropagation():
-    assert (
-        BinaryOp(
-            left=DummyExpr(dtype=DataType.BOOL),
-            right=DummyExpr(dtype=DataType.BOOL),
-            op=LogicalOperator.AND,
-        ).dtype
-        == DataType.BOOL
-    )
-
-
-def test_BinaryOpLogicalWithArithmeticTypes():
-    with pytest.raises(ValueError):
-        BinaryOp(
-            left=DummyExpr(dtype=arithmetic_type),
-            right=DummyExpr(dtype=arithmetic_type),
-            op=LogicalOperator.AND,
-        )
+        invalid_node()

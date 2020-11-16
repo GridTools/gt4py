@@ -93,7 +93,8 @@ class ParAssignStmt(Stmt):
     (GTScript parallel model).
     """
 
-    left: FieldAccess  # there are no local variables in gtir, only fields
+    left: FieldAccess
+    """No local scalar variables, only fields. Scalar Stencil parameters are read-only"""
     right: Expr
 
     @validator("left")
