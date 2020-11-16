@@ -16,7 +16,10 @@
 
 import enum
 
-from eve import IntEnum, StrEnum
+from eve import IntEnum, StrEnum, GenericNode, Node, SourceLocation, Str
+from typing import List, Generic, TypeVar, Optional, Union
+from pydantic import validator
+from pydantic.class_validators import root_validator
 
 
 class AssignmentKind(StrEnum):
@@ -106,3 +109,145 @@ class BuiltInLiteral(IntEnum):
 class LevelMarker(StrEnum):
     START = "start"
     END = "end"
+
+
+@enum.unique
+class ExprKind(IntEnum):
+    SCALAR = 0
+    FIELD = 1
+
+
+class LocNode(Node):
+    loc: Optional[SourceLocation]
+
+
+class Expr(LocNode):
+    dtype: Optional[DataType]
+    kind: ExprKind
+
+    # TODO Eve could provide support for making a node abstract
+    def __init__(self, *args, **kwargs):
+        if type(self) is Expr:
+            raise TypeError("Trying to instantiate `Expr` abstract class.")
+        super().__init__(*args, **kwargs)
+
+
+class Stmt(LocNode):
+    # TODO Eve could provide support for making a node abstract
+    def __init__(self, *args, **kwargs):
+        if type(self) is Stmt:
+            raise TypeError("Trying to instantiate `Stmt` abstract class.")
+        super().__init__(*args, **kwargs)
+
+
+def verify_condition_is_boolean(parent_node_cls, cond: Expr) -> Expr:
+    if cond.dtype and cond.dtype is not DataType.BOOL:
+        raise ValueError("Condition in `{}` must be boolean.".format(parent_node_cls.__name__))
+    return cond
+
+
+def verify_and_get_common_dtype(node_cls, values: List[Expr]) -> DataType:
+    assert len(values) > 0
+    if all([v.dtype for v in values]):
+        dtype = values[0].dtype
+        if all([v.dtype == dtype for v in values]):
+            return dtype
+        else:
+            raise ValueError(
+                "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
+                + ", ".join(v.dtype.name for v in values)
+            )
+    else:
+        return None
+
+
+def compute_kind(values: List[Expr]) -> ExprKind:
+    if any([v.kind == ExprKind.FIELD for v in values]):
+        return ExprKind.FIELD
+    else:
+        return ExprKind.SCALAR
+
+
+StmtT = TypeVar("StmtT")
+ExprT = TypeVar("ExprT")
+TargetT = TypeVar("TargetT")
+
+
+class IfStmt(GenericNode, Generic[StmtT, ExprT]):
+    cond: ExprT
+    true_branch: List[StmtT]
+    false_branch: List[StmtT]
+
+    @validator("cond")
+    def condition_is_boolean(cls, cond):
+        return verify_condition_is_boolean(cls, cond)
+
+
+class Literal(Expr):
+    # TODO when coming from python AST we know more than just the string representation, I suppose
+    value: Str
+    dtype: DataType
+    kind = ExprKind.SCALAR
+
+
+class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
+    left: TargetT
+    right: ExprT
+
+
+class BinaryOp(GenericNode, Expr, Generic[ExprT]):
+    # TODO parametrize on op?
+    op: Union[ArithmeticOperator, ComparisonOperator, LogicalOperator]
+    left: ExprT
+    right: ExprT
+
+    @root_validator(pre=True)
+    def type_propagation_and_check(cls, values):
+        common_dtype = verify_and_get_common_dtype(cls, [values["left"], values["right"]])
+
+        if common_dtype:
+            if isinstance(values["op"], ArithmeticOperator):
+                if common_dtype is not DataType.BOOL:
+                    values["dtype"] = common_dtype
+                else:
+                    raise ValueError(
+                        "Boolean expression is not allowed with arithmetic operation."
+                    )
+            elif isinstance(values["op"], LogicalOperator):
+                if common_dtype is DataType.BOOL:
+                    values["dtype"] = DataType.BOOL
+                else:
+                    raise ValueError("Arithmetic expression is not allowed in boolean operation.")
+            elif isinstance(values["op"], ComparisonOperator):
+                values["dtype"] = DataType.BOOL
+
+        return values
+
+    @root_validator(pre=True)
+    def kind_propagation(cls, values):
+        values["kind"] = compute_kind([values["left"], values["right"]])
+        return values
+
+
+class TernaryOp(GenericNode, Expr, Generic[ExprT]):
+    cond: ExprT
+    true_expr: ExprT
+    false_expr: ExprT
+
+    @validator("cond")
+    def condition_is_boolean(cls, cond):
+        return verify_condition_is_boolean(cls, cond)
+
+    @root_validator(pre=True)
+    def type_propagation_and_check(cls, values):
+        common_dtype = verify_and_get_common_dtype(
+            cls, [values["true_expr"], values["false_expr"]]
+        )
+        if common_dtype:
+            values["dtype"] = common_dtype
+        return values
+
+    @root_validator(pre=True)
+    def kind_propagation(cls, values):
+        values["kind"] = compute_kind([values["true_expr"], values["false_expr"]])
+        return values

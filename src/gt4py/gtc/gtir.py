@@ -19,21 +19,15 @@ from typing import Dict, List, Optional, Tuple, Union
 from pydantic import validator
 
 from devtools import debug  # noqa: F401
-from eve import IntEnum, Node, SourceLocation, Str, SymbolName
+from eve import IntEnum, Node, Str, SymbolName
 from eve.type_definitions import SymbolRef
 
 
 from gt4py.gtc import common
-from pydantic.class_validators import root_validator
+from gt4py.gtc.common import LocNode
 
 
-class LocNode(Node):
-    loc: Optional[SourceLocation]
-
-
-class Expr(LocNode):
-    dtype: Optional[common.DataType]
-
+class Expr(common.Expr):
     # TODO Eve could provide support for making a node abstract
     def __init__(self, *args, **kwargs):
         if type(self) is Expr:
@@ -41,7 +35,7 @@ class Expr(LocNode):
         super().__init__(*args, **kwargs)
 
 
-class Stmt(LocNode):
+class Stmt(common.Stmt):
     # TODO Eve could provide support for making a node abstract
     def __init__(self, *args, **kwargs):
         if type(self) is Stmt:
@@ -49,10 +43,8 @@ class Stmt(LocNode):
         super().__init__(*args, **kwargs)
 
 
-class Literal(Expr):
-    # TODO when coming from python AST we know more than just the string representation, I suppose
-    value: Str
-    dtype: common.DataType
+class Literal(common.Literal, Expr):
+    pass
 
 
 class Domain(LocNode):
@@ -75,27 +67,27 @@ class CartesianOffset(Node):
 
 class ScalarAccess(Expr):
     name: SymbolRef
+    kind = common.ExprKind.SCALAR
 
 
 class FieldAccess(Expr):
     name: SymbolRef
     offset: CartesianOffset
+    kind = common.ExprKind.FIELD
 
     @classmethod
     def centered(cls, *, name, loc=None):
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
 
-class ParAssignStmt(Stmt):
+class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
     """Parallel assignment.
 
     R.h.s. is evaluated for all points and the resulting field is assigned
     (GTScript parallel model).
+    Scalar variables on the l.h.s. are not allowed,
+    as the only scalar variables are read-only stencil parameters.
     """
-
-    left: FieldAccess
-    """No local scalar variables, only fields. Scalar Stencil parameters are read-only"""
-    right: Expr
 
     @validator("left")
     def no_horizontal_offset_in_assignment(cls, v):
@@ -104,85 +96,28 @@ class ParAssignStmt(Stmt):
         return v
 
 
-def verify_condition_is_boolean(parent_node_cls, cond: Expr) -> Expr:
-    if cond.dtype and cond.dtype is not common.DataType.BOOL:
-        raise ValueError("Condition in `{}` must be boolean.".format(parent_node_cls.__name__))
-    return cond
-
-
-class IfStmt(Stmt):
-    cond: Expr
-    true_branch: List[Stmt]
-    false_branch: List[Stmt]
-
+class FieldIfStmt(common.IfStmt[Stmt, Expr], Stmt):
     @validator("cond")
-    def condition_is_boolean(cls, cond):
-        return verify_condition_is_boolean(cls, cond)
-
-    # TODO or like this (but how to pass the name)
-    # _cond_is_bool = validator("cond", allow_reuse=True)(condition_is_boolean)
-
-
-def verify_and_get_common_dtype(node_cls, values: List[Expr]) -> common.DataType:
-    assert len(values) > 0
-    if all([v.dtype for v in values]):
-        dtype = values[0].dtype
-        if all([v.dtype == dtype for v in values]):
-            return dtype
-        else:
-            raise ValueError(
-                "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
-                + ", ".join(v.dtype.name for v in values)
-            )
-    else:
-        return None
+    def verify_scalar_condition(cls, cond):
+        if cond.kind != common.ExprKind.FIELD:
+            raise ValueError("Condition is not a field expression")
+        return cond
 
 
-class TernaryOp(Expr):
-    cond: Expr
-    true_expr: Expr
-    false_expr: Expr
-
+class ScalarIfStmt(common.IfStmt[Stmt, Expr], Stmt):
     @validator("cond")
-    def condition_is_boolean(cls, cond):
-        return verify_condition_is_boolean(cls, cond)
-
-    @root_validator(pre=True)
-    def type_propagation_and_check(cls, values):
-        common_dtype = verify_and_get_common_dtype(
-            cls, [values["true_expr"], values["false_expr"]]
-        )
-        if common_dtype:
-            values["dtype"] = common_dtype
-        return values
+    def verify_scalar_condition(cls, cond):
+        if cond.kind != common.ExprKind.SCALAR:
+            raise ValueError("Condition is not scalar")
+        return cond
 
 
-class BinaryOp(Expr):
-    op: Union[common.ArithmeticOperator, common.ComparisonOperator, common.LogicalOperator]
-    left: Expr
-    right: Expr
+class BinaryOp(common.BinaryOp[Expr], Expr):
+    pass
 
-    @root_validator(pre=True)
-    def type_propagation_and_check(cls, values):
-        common_dtype = verify_and_get_common_dtype(cls, [values["left"], values["right"]])
 
-        if common_dtype:
-            if isinstance(values["op"], common.ArithmeticOperator):
-                if common_dtype is not common.DataType.BOOL:
-                    values["dtype"] = common_dtype
-                else:
-                    raise ValueError(
-                        "Boolean expression is not allowed with arithmetic operation."
-                    )
-            elif isinstance(values["op"], common.LogicalOperator):
-                if common_dtype is common.DataType.BOOL:
-                    values["dtype"] = common.DataType.BOOL
-                else:
-                    raise ValueError("Arithmetic expression is not allowed in logical operation.")
-            elif isinstance(values["op"], common.ComparisonOperator):
-                values["dtype"] = common.DataType.BOOL
-
-        return values
+class TernaryOp(common.TernaryOp[Expr], Expr):
+    pass
 
 
 class Decl(LocNode):
