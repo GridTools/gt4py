@@ -216,7 +216,7 @@ class FieldAccess(Expr):
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
 
-class IfStmt(GenericNode, Generic[StmtT, ExprT]):
+class IfStmt(GenericNode, Generic[StmtT, ExprT], Stmt):
     """Generic if statement.
 
     Verifies that `cond` is a boolean expr (if `dtype` is set).
@@ -231,7 +231,7 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT]):
         return verify_condition_is_boolean(cls, cond)
 
 
-class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
+class AssignStmt(GenericNode, Generic[TargetT, ExprT], Stmt):
     left: TargetT
     right: ExprT
 

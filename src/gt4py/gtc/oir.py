@@ -21,13 +21,11 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-import enum
 from typing import Dict, List, Optional, Tuple, Union
 from pydantic import validator
 
 from devtools import debug  # noqa: F401
-from eve import IntEnum, Node, Str, SymbolName
-from eve.type_definitions import SymbolRef
+from eve import Node, SymbolName
 
 
 from gt4py.gtc import common
@@ -62,7 +60,7 @@ class FieldAccess(common.FieldAccess, Expr):
     pass
 
 
-class AssignStmt(common.AssignStmt[ScalarAccess, FieldAccess, Expr], Stmt):
+class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt):
     @validator("left")
     def no_horizontal_offset_in_assignment(cls, v):
         if isinstance(v, FieldAccess) and (v.offset.i != 0 or v.offset.j != 0):
@@ -101,6 +99,7 @@ class ScalarDecl(Decl):
     pass
 
 
+# TODO move to common or do we need a different representation here?
 class AxisBound(Node):
     level: common.LevelMarker
     offset: int = 0
@@ -122,59 +121,24 @@ class AxisBound(Node):
         return cls.from_end(0)
 
 
-class StageInterval:
+class HorizontalExecution(LocNode):
     body: List[Stmt]
+
+
+class VerticalInterval(LocNode):
+    horizontal_executions: List[HorizontalExecution]
     start: AxisBound
     end: AxisBound
 
 
-class Stage(LocNode):
-    """Stage according to the `GridTools execution model<https://gridtools.github.io/gridtools/latest/user_manual/user_manual.html#execution-model>`
-
-    If the execution policy is forward (backward), it is guaranteed that if a stage is executed
-    at index k, then all stages of the multistage were already applied to the same column
-    with smaller (larger) k.
-    There is no guarantee that previous stages of the multistage have not already been applied
-    to the indices in the same column with larger (smaller) k.
-
-    Example:
-    Assume 2 stages, called `a` and `b`, all of the following pseudo-code snippets are valid:
-
-    - stages in same loop, vertical loop outside
-        ```
-        for k
-            for ij
-                a
-                b
-        ```
-
-    - one loop per stage, vertical loop outside
-        ```
-        for k
-            for ij
-                a
-        for k
-            for ij
-                b
-        ```
-
-    - one loop per stage, vertical loop inside
-        ```
-        for ij
-            for k
-                a
-        for ij
-            for k
-                b
-        ```
-    """
-
-    intervals: List[StageInterval]
+class Temporary(LocNode):
+    name: SymbolName
 
 
-class MultiStage(LocNode):
-    stages: List[Stage]
+class VerticalLoop(LocNode):
+    vertical_intervals: List[VerticalInterval]
     loop_order: common.LoopOrder
+    declarations: List[Temporary]
     # caches: List[Union[IJCache,KCache]]
 
 
@@ -182,4 +146,4 @@ class Stencil(LocNode):
     # TODO remove `__main__.`` from name and use default SymbolName constraint
     name: SymbolName.constrained(r"[a-zA-Z_][\w\.]*")
     params: List[Decl]
-    multi_stages: List[MultiStage]
+    vertical_loops: List[VerticalLoop]
