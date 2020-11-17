@@ -186,7 +186,12 @@ class {{ class_name }}(StencilObject):
                         + stencil_info["run_cpp_time"]
                     )
 
-    def run(self, _domain_, _origin_, exec_info, *, {{- field_names|join(", ") -}}, {{- param_names|join(", ") -}}):
+    def run(self, _domain_, _origin_, exec_info,
+        {{- "*," if field_names|length > 0 or param_names|length > 0 -}}
+        {{- field_names|join(", ") -}}
+        {{- "," if field_names|length > 0 -}}
+        {{- param_names|join(", ") -}}
+    ):
         if exec_info is not None:
             exec_info["domain"] = _domain_
             exec_info["origin"] = _origin_
