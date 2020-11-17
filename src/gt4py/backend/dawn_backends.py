@@ -384,8 +384,18 @@ import cupy
         return source
 
     def generate_pre_run(self) -> str:
+        field_size_check = """
+for name_other, field_other in used_field_args.items():
+    if field_other.mask == field.mask:
+        if not field_other.shape == field.shape:
+            raise ValueError(
+                f"The fields {name} and {name_other} have the same mask but different shapes."
+            )"""
+
         field_names = self.args_data["field_info"].keys()
-        return "\n".join([f + ".host_to_device()" for f in field_names])
+        host_to_device = "\n".join([f + ".host_to_device()" for f in field_names])
+
+        return field_size_check + "\n\n" + host_to_device
 
     def generate_post_run(self) -> str:
         output_field_names = [
