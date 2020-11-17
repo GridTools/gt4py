@@ -158,10 +158,12 @@ class StmtB(Stmt):
 
 
 def test_AssignSmt_category():
-    AssignStmt[ExprA, ExprA](left=ExprA(), right=ExprA())
-    AssignStmt[ExprA, ExprB](left=ExprA(), right=ExprB())
+    Testee = AssignStmt[ExprA, ExprA]
+
+    Testee(left=ExprA(), right=ExprA())
     with pytest.raises(ValidationError):
-        AssignStmt[ExprA, ExprA](left=ExprA(), right=ExprB())
+        Testee(left=ExprB(), right=ExprA())
+        Testee(left=ExprA(), right=ExprB())
 
 
 def test_IfStmt_category():
