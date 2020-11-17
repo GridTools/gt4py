@@ -144,7 +144,13 @@ def test_vertical_pass_seq() -> None:
     )
     print(result)
     match = re.match(
-        r"k, K = DOMAIN_k + 1, DOMAIN_K - 2\nfor k_ in range(k, K):\n    a[.*] = b[.*]\n    c[.*] = d[.*]",
+        (
+            r"\n"
+            r"k, K = DOMAIN_k \+ 1, DOMAIN_K - 2\n"
+            r"for k_ in range\(k, K\):\n"
+            r"    a\[.*?\] = b\[.*?\]\n"
+            r"    c\[.*?\] = d\[.*?\]"
+        ),
         result,
         re.MULTILINE,
     )
