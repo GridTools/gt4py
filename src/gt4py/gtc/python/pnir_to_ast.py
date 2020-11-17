@@ -143,20 +143,6 @@ class PnirToAst(NodeVisitor):
             body=body + [self.visit(k_loop) for k_loop in node.k_loops],
         )
 
-    def visit_Computation(self, node: pnir.Computation) -> ast.FunctionDef:
-        default_domain_if = cast(ast.If, parse_node(DEFAULT_DOMAIN_TPL))
-        cast(ast.Call, cast(ast.Assign, default_domain_if.body[0]).value).args = [
-            cast(ast.expr, parse_node(name)) for name in node.field_params
-        ]
-        body = [default_domain_if]
-        run_fn = parse_node("def run():")
-        run_fn.args.args = [ast.arg(arg=name, annotation=None) for name in node.field_params]
-        run_fn.args.kwonlyargs = [
-            ast.arg(arg=name, annotation=None) for name in node.scalar_params
-        ] + [ast.arg(arg="_domain_", annotation=None)]
-        run_fn.args.kw_defaults = [parse_node("None")]
-        run_fn.body = body + [self.visit(k_loop) for k_loop in node.k_loops]
-
     def visit_KLoop(self, node: pnir.KLoop) -> ast.For:
         return domain_for(
             loop_index_name="K",
