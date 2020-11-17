@@ -175,6 +175,31 @@ class TestInlinedExternals:
         stmt = def_ir.computations[0].body.stmts[0]
         assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
 
+    def test_decorated_freeze(self):
+        A = 0
+
+        @gtscript.function
+        def undecorated_function():
+            return A
+
+        module = f"TestInlinedExternals_test_undecorated_delay_{id_version}"
+        externals = {"func": undecorated_function}
+
+        A = 1
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = undecorated_function()
+
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_decorated_freeze", module, externals=externals
+        )
+
+        stmt = def_ir.computations[0].body.stmts[0]
+        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 0
+
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, id_version, value_type):
         module = f"TestInlinedExternals_test_module_{id_version}"
