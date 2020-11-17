@@ -473,6 +473,29 @@ class TestExternalsWithSubroutines:
             definition_func, "test_all_legal_combinations", module, externals=externals
         )
 
+    def test_no_nested_function_call(self, id_version):
+        @gtscript.function
+        def _lap(dx, phi):
+            return (phi[0, -1, 0] - 2.0 * phi[0, 0, 0] + phi[0, 1, 0]) / (dx * dx)
+
+        def definition_func(phi: gtscript.Field[np.float64], dx: float):
+            from __externals__ import lap
+
+            with computation(PARALLEL), interval(...):
+                phi = lap(lap(phi, dx), dx)
+
+        module = f"TestExternalsWithSubroutines_test_no_nested_function_call_{id_version}"
+        externals = {
+            "lap": _lap,
+        }
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"
+        ):
+            compile_definition(
+                definition_func, "test_no_nested_function_calls", module, externals=externals
+            )
+
 
 class TestCompileTimeAssertions:
     def test_nomsg(self, id_version):

@@ -259,6 +259,7 @@ class BaseBackend(Backend):
         stencil_class = getattr(stencil_module, stencil_class_name)
         stencil_class.__module__ = self.builder.module_qualname
         stencil_class._gt_id_ = self.builder.stencil_id.version
+        stencil_class._file_name = file_name
         stencil_class.definition_func = staticmethod(self.builder.definition)
 
         return stencil_class

@@ -464,6 +464,11 @@ class CallInliner(ast.NodeTransformer):
         if call_name in gtscript.MATH_BUILTINS:
             node.args = [self.visit(arg) for arg in node.args]
             return node
+        elif any(isinstance(arg, ast.Call) for arg in node.args):
+            raise GTScriptSyntaxError(
+                "Function calls are not supported in arguments to function calls",
+                loc=gt_ir.Location.from_ast_node(node),
+            )
 
         elif call_name not in self.context and not hasattr(self.context[call_name], "_gtscript_"):
             raise GTScriptSyntaxError("Unknown call", loc=gt_ir.Location.from_ast_node(node))
