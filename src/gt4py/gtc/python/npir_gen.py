@@ -29,7 +29,7 @@ class NpirGen(TemplatedGenerator):
 
     VectorAssign = FormatTemplate("{left} = {right}")
 
-    VectorBinOp = FormatTemplate("({left} {op} {right})")
+    VectorArithmetic = FormatTemplate("({left} {op} {right})")
 
     VerticalPass = JinjaTemplate(VERTICAL_PASS_JTPL)
 

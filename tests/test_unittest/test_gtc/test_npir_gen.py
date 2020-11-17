@@ -100,12 +100,12 @@ def test_vector_assign() -> None:
     assert result == "a[i:I, j:J, k_] = b[i:I, j:J, k_]"
 
 
-def test_vector_binop() -> None:
+def test_vector_arithmetic() -> None:
     result = npir_gen.NpirGen().apply(
-        npir.VectorBinOp(
+        npir.VectorArithmetic(
             left=FieldSliceBuilder("a").build(),
             right=FieldSliceBuilder("b").build(),
-            op=common.BinaryOperator.ADD,
+            op=common.ArithmeticOperator.ADD,
         )
     )
     assert result == "(a[i:I, j:J, k_] + b[i:I, j:J, k_])"

@@ -60,10 +60,10 @@ class FieldSlice(VectorExpression):
     k_offset: Offset
 
 
-class VectorBinOp(VectorExpression):
+class VectorArithmetic(VectorExpression):
     left: VectorExpression
     right: VectorExpression
-    op: common.BinaryOperator
+    op: common.ArithmeticOperator
 
 
 class VectorAssign(VectorExpression):
