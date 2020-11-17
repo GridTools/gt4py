@@ -175,6 +175,13 @@ def compute_kind(values: List[Expr]) -> ExprKind:
         return ExprKind.SCALAR
 
 
+class Literal(Expr):
+    # TODO when coming from python AST we know more than just the string representation, I suppose
+    value: Str
+    dtype: DataType
+    kind = ExprKind.SCALAR
+
+
 StmtT = TypeVar("StmtT")
 ExprT = TypeVar("ExprT")
 TargetT = TypeVar("TargetT")
@@ -193,13 +200,6 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT]):
     @validator("cond")
     def condition_is_boolean(cls, cond):
         return verify_condition_is_boolean(cls, cond)
-
-
-class Literal(Expr):
-    # TODO when coming from python AST we know more than just the string representation, I suppose
-    value: Str
-    dtype: DataType
-    kind = ExprKind.SCALAR
 
 
 class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
@@ -257,6 +257,7 @@ class TernaryOp(GenericNode, Expr, Generic[ExprT]):
     - type propagation.
     """
 
+    # TODO parametrize cond expr separately?
     cond: ExprT
     true_expr: ExprT
     false_expr: ExprT
