@@ -122,6 +122,13 @@ class LocNode(Node):
 
 
 class Expr(LocNode):
+    """Expression base class.
+
+    All expressions have
+    - an optional `dtype`
+    - an expression `kind` (scalar or field)
+    """
+
     dtype: Optional[DataType]
     kind: ExprKind
 
@@ -174,6 +181,11 @@ TargetT = TypeVar("TargetT")
 
 
 class IfStmt(GenericNode, Generic[StmtT, ExprT]):
+    """Generic if statement.
+
+    Verifies that `cond` is a boolean expr (if `dtype` is set).
+    """
+
     cond: ExprT
     true_branch: List[StmtT]
     false_branch: List[StmtT]
@@ -196,6 +208,13 @@ class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
 
 
 class BinaryOp(GenericNode, Expr, Generic[ExprT]):
+    """Generic binary operation with type propagation.
+
+    The generic BinaryOp already contains logic for
+    - strict type checking if the `dtype` for `left` and `right` is set.
+    - type propagation (taking `operator` type into account).
+    """
+
     # TODO parametrize on op?
     op: Union[ArithmeticOperator, ComparisonOperator, LogicalOperator]
     left: ExprT
@@ -230,6 +249,14 @@ class BinaryOp(GenericNode, Expr, Generic[ExprT]):
 
 
 class TernaryOp(GenericNode, Expr, Generic[ExprT]):
+    """Generic ternary operation with type propagation.
+
+    The generic TernaryOp already contains logic for
+    - strict type checking if the `dtype` for `true_expr` and `false_expr` is set.
+    - type checking for `cond`
+    - type propagation.
+    """
+
     cond: ExprT
     true_expr: ExprT
     false_expr: ExprT

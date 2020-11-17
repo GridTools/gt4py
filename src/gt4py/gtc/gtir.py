@@ -14,6 +14,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""
+GridTools Intermediate Representation
+
+GTIR represents a computation with the semantics of the
+`GTScript parallel model <https://github.com/GridTools/concepts/wiki/GTScript-Parallel-model>`.
+
+Type constraints and validators narrow the IR as much as reasonable to valid (executable) IR.
+
+Analysis is required to generate valid code (complying with the parallel model)
+- extent analysis to define the extended compute domain
+- `FieldIfStmt` expansion to comply with the parallel model
+"""
+
 import enum
 from typing import Dict, List, Optional, Tuple, Union
 from pydantic import validator
@@ -97,6 +110,20 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
 
 
 class FieldIfStmt(common.IfStmt[Stmt, Expr], Stmt):
+    """If statement with a field expression as condition.
+
+
+    - The condition is evaluated for all gridpoints and stored in a mask.
+    - Each statement inside the if and else branches is executed according
+      to the same rules as statements outside of branches.
+
+    The following restriction applies:
+    - Inside the if and else blocks the same field cannot be written to
+      and read with an offset in the parallel axises (order does not matter).
+
+    See `parallel model <https://github.com/GridTools/concepts/wiki/GTScript-Parallel-model#conditionals-on-field-expressions>`
+    """
+
     @validator("cond")
     def verify_scalar_condition(cls, cond):
         if cond.kind != common.ExprKind.FIELD:
@@ -105,6 +132,11 @@ class FieldIfStmt(common.IfStmt[Stmt, Expr], Stmt):
 
 
 class ScalarIfStmt(common.IfStmt[Stmt, Expr], Stmt):
+    """If statement with a scalar expression as condition.
+
+    No special rules apply.
+    """
+
     @validator("cond")
     def verify_scalar_condition(cls, cond):
         if cond.kind != common.ExprKind.SCALAR:
