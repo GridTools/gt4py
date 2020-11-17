@@ -18,6 +18,7 @@ import enum
 
 from eve import IntEnum, StrEnum, GenericNode, Node, SourceLocation, Str
 from typing import List, Generic, TypeVar, Optional, Union
+from eve.type_definitions import SymbolRef
 from pydantic import validator
 from pydantic.class_validators import root_validator
 
@@ -185,6 +186,34 @@ class Literal(Expr):
 StmtT = TypeVar("StmtT")
 ExprT = TypeVar("ExprT")
 TargetT = TypeVar("TargetT")
+
+
+class CartesianOffset(Node):
+    i: int
+    j: int
+    k: int
+
+    @classmethod
+    def zero(cls):
+        return cls(i=0, j=0, k=0)
+
+    def to_dict(self):
+        return {"i": self.i, "j": self.j, "k": self.k}
+
+
+class ScalarAccess(Expr):
+    name: SymbolRef
+    kind = ExprKind.SCALAR
+
+
+class FieldAccess(Expr):
+    name: SymbolRef
+    offset: CartesianOffset
+    kind = ExprKind.FIELD
+
+    @classmethod
+    def centered(cls, *, name, loc=None):
+        return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
 
 class IfStmt(GenericNode, Generic[StmtT, ExprT]):

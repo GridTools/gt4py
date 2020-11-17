@@ -78,19 +78,12 @@ class CartesianOffset(Node):
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
-class ScalarAccess(Expr):
-    name: SymbolRef
-    kind = common.ExprKind.SCALAR
+class ScalarAccess(common.ScalarAccess, Expr):
+    pass
 
 
-class FieldAccess(Expr):
-    name: SymbolRef
-    offset: CartesianOffset
-    kind = common.ExprKind.FIELD
-
-    @classmethod
-    def centered(cls, *, name, loc=None):
-        return cls(name=name, loc=loc, offset=CartesianOffset.zero())
+class FieldAccess(common.FieldAccess, Expr):
+    pass
 
 
 class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
