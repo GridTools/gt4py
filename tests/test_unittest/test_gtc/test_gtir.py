@@ -22,7 +22,7 @@ from gt4py.gtc.gtir import (
     FieldAccess,
     FieldDecl,
     Stmt,
-    VerticalInterval,
+    Interval,
     VerticalLoop,
     ParAssignStmt,
     Expr,
@@ -48,21 +48,21 @@ def copy_assign():
 
 
 @pytest.fixture
-def copy_interval(copy_assign):
-    yield VerticalInterval(
+def interval(copy_assign):
+    yield Interval(
         loc=SourceLocation(line=2, column=11, source="copy_gtir"),
         start=AxisBound(level=LevelMarker.START, offset=0),
         end=AxisBound(level=LevelMarker.END, offset=0),
-        body=[copy_assign],
     )
 
 
 @pytest.fixture
-def copy_v_loop(copy_interval):
+def copy_v_loop(copy_assign, interval):
     yield VerticalLoop(
         loc=SourceLocation(line=2, column=1, source="copy_gtir"),
         loop_order=LoopOrder.FORWARD,
-        vertical_intervals=[copy_interval],
+        interval=interval,
+        body=[copy_assign],
     )
 
 
@@ -99,25 +99,21 @@ def test_naive_python_avg():
         vertical_loops=[
             VerticalLoop(
                 loop_order=LoopOrder.FORWARD,
-                vertical_intervals=[
-                    VerticalInterval(
-                        start=AxisBound(level=LevelMarker.START, offset=0),
-                        end=AxisBound(level=LevelMarker.END, offset=0),
-                        body=[
-                            ParAssignStmt(
-                                left=FieldAccess.centered(name="a"),
-                                right=BinaryOp(
-                                    left=FieldAccess(
-                                        name="b",
-                                        offset=CartesianOffset(i=-1, j=0, k=0),
-                                    ),
-                                    right=FieldAccess(
-                                        name="b", offset=CartesianOffset(i=1, j=0, k=0)
-                                    ),
-                                    op=ArithmeticOperator.ADD,
-                                ),
-                            )
-                        ],
+                interval=Interval(
+                    start=AxisBound(level=LevelMarker.START, offset=0),
+                    end=AxisBound(level=LevelMarker.END, offset=0),
+                ),
+                body=[
+                    ParAssignStmt(
+                        left=FieldAccess.centered(name="a"),
+                        right=BinaryOp(
+                            left=FieldAccess(
+                                name="b",
+                                offset=CartesianOffset(i=-1, j=0, k=0),
+                            ),
+                            right=FieldAccess(name="b", offset=CartesianOffset(i=1, j=0, k=0)),
+                            op=ArithmeticOperator.ADD,
+                        ),
                     )
                 ],
             )
