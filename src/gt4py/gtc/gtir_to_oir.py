@@ -6,7 +6,6 @@ import itertools
 from gt4py.gtc.common import CartesianOffset
 
 from devtools import debug
-from gt4py.gtc.gtir import VerticalInterval
 from gt4py.gtc.oir import HorizontalExecution, Temporary
 
 
@@ -37,28 +36,23 @@ class GTIRToOIR(eve.NodeTranslator):
             ),
         ]
 
-    def visit_VerticalInterval(self, node: gtir.VerticalInterval, **kwargs):
-        # [decls, horizontal_executions] = self.visit(node.body)
-        decls_and_hexecs: List[Tuple[Temporary, List[HorizontalExecution]]] = self.visit(node.body)
-        decls, hexecs = tuple(map(list, zip(*decls_and_hexecs)))
-
-        return decls, oir.VerticalInterval(
+    def visit_Interval(self, node: gtir.Interval, **kwargs):
+        return oir.Interval(
             start=self.visit(node.start),
             end=self.visit(node.end),
-            horizontal_executions=list(itertools.chain.from_iterable(hexecs)),
         )
 
     def visit_VerticalLoop(self, node: gtir.VerticalLoop, **kwargs):
-        decls_and_intervals: List[Tuple[List[Temporary], List[VerticalInterval]]] = self.visit(
-            node.vertical_intervals
+        decls_and_h_execs: List[Tuple[List[Temporary], List[HorizontalExecution]]] = self.visit(
+            node.body
         )
-        decls, intervals = tuple(map(list, zip(*decls_and_intervals)))
+        decls, h_execs = tuple(map(list, zip(*decls_and_h_execs)))
         debug(decls)
-        debug(intervals)
         return oir.VerticalLoop(
-            vertical_intervals=intervals,
+            interval=self.visit(node.interval),
             loop_order=node.loop_order,
             declarations=list(itertools.chain.from_iterable(decls)),
+            body=list(itertools.chain.from_iterable(h_execs)),
         )
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs):

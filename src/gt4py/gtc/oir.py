@@ -125,8 +125,7 @@ class HorizontalExecution(LocNode):
     body: List[Stmt]
 
 
-class VerticalInterval(LocNode):
-    horizontal_executions: List[HorizontalExecution]
+class Interval(LocNode):
     start: AxisBound
     end: AxisBound
 
@@ -136,7 +135,8 @@ class Temporary(LocNode):
 
 
 class VerticalLoop(LocNode):
-    vertical_intervals: List[VerticalInterval]
+    interval: Interval
+    horizontal_executions: List[HorizontalExecution]
     loop_order: common.LoopOrder
     declarations: List[Temporary]
     # caches: List[Union[IJCache,KCache]]
