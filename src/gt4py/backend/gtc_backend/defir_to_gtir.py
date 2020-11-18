@@ -98,10 +98,11 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_ComputationBlock(self, node: ComputationBlock) -> List[gtir.VerticalLoop]:
         assigns = [s for s in self.visit(node.body)]
         start, end = self.visit(node.interval)
-        vertical_intervals = [gtir.VerticalInterval(body=assigns, start=start, end=end)]
+        vertical_interval = gtir.Interval(start=start, end=end)
         return gtir.VerticalLoop(
+            vertical_interval=vertical_interval,
             loop_order=self.GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER[node.iteration_order],
-            vertical_intervals=vertical_intervals,
+            body=assigns,
         )
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:

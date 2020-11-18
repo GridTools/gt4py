@@ -17,16 +17,13 @@ def run({{', '.join(_this_node.param_names)}}, _domain_=None):
 """
     )
 
-    VerticalLoop = MakoTemplate(
+    VerticalLoop = JinjaTemplate(
         """
-${ '\\n'.join(vertical_intervals) }"""
-    )
-
-    VerticalInterval = JinjaTemplate(
-        """
-for K in range({{start}}, {{end}}):\
+for K in range({{interval}}):\
     {{'\\n'.join(body)|indent(4)}}"""
     )
+
+    Interval = FormatTemplate("{start}, {end}")
 
     ParAssignStmt = JinjaTemplate(
         """

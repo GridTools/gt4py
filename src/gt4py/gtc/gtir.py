@@ -185,17 +185,15 @@ class AxisBound(Node):
         return cls.from_end(0)
 
 
-class VerticalInterval(LocNode):
-    body: List[Stmt]
+class Interval(LocNode):
     start: AxisBound
     end: AxisBound
 
 
 class VerticalLoop(LocNode):
-    vertical_intervals: List[VerticalInterval]
+    interval: Interval
     loop_order: common.LoopOrder
-
-    # TODO validate that intervals are contiguous
+    body: List[Stmt]
 
 
 @enum.unique

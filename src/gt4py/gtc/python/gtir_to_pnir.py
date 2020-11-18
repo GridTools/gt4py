@@ -1,9 +1,10 @@
 from itertools import chain
-from typing import List
+from typing import List, Tuple
 
 from eve.visitors import NodeTranslator
 
 from gt4py.gtc import gtir
+from gt4py.gtc.gtir import AxisBound
 from gt4py.gtc.python import pnir
 
 
@@ -24,15 +25,17 @@ class GtirToPnir(NodeTranslator):
         return pnir.Stencil(computation=comp_module, stencil_obj=stencil_obj)
 
     def visit_VerticalLoop(self, node: gtir.VerticalLoop) -> List[pnir.KLoop]:
-        res = [self.visit(vertical_interval) for vertical_interval in node.vertical_intervals]
-        return res
+        lower, upper = self.visit(node.interval)
+        return [
+            pnir.KLoop(
+                lower=lower,
+                upper=upper,
+                ij_loops=[self.visit(stmt) for stmt in node.body],
+            )
+        ]
 
-    def visit_VerticalInterval(self, node: gtir.VerticalInterval) -> pnir.KLoop:
-        return pnir.KLoop(
-            lower=self.visit(node.start),
-            upper=self.visit(node.end),
-            ij_loops=[self.visit(stmt) for stmt in node.body],
-        )
+    def visit_Interval(self, node: gtir.Interval) -> Tuple[AxisBound, AxisBound]:
+        return self.visit(node.start), self.visit(node.end)
 
     def visit_ParAssignStmt(self, node: gtir.ParAssignStmt) -> pnir.IJLoop:
         return pnir.IJLoop(
