@@ -42,26 +42,33 @@ def test_make_args_data_from_iir(backend_name, mode):
     iir = builder.implementation_ir
     args_data = backend_cls.make_args_data_from_iir(iir)
 
-    # assert that all arguments appear in args_data once and only once
     args_list = set(inspect.signature(stencil_def).parameters.keys())
     args_found = set()
+
     for key in args_data["field_info"]:
         assert key in args_list
-        assert key in field_info_val[mode]
-        assert args_data["field_info"][key] is not None
+        if key in field_info_val[mode]:
+            assert args_data["field_info"][key] is not None
+        else:
+            assert args_data["field_info"][key] is None
         assert key not in args_found
         args_found.add(key)
+
     for key in args_data["parameter_info"]:
         assert key in args_list
-        assert key in parameter_info_val[mode]
-        assert args_data["parameter_info"][key] is not None
+        if key in parameter_info_val[mode]:
+            assert args_data["parameter_info"][key] is not None
+        else:
+            assert args_data["parameter_info"][key] is None
         assert key not in args_found
         args_found.add(key)
+
     for key in args_data["unreferenced"]:
         assert key in args_list
+        assert key not in field_info_val[mode]
+        assert key not in parameter_info_val[mode]
         assert key in unreferenced_val[mode]
-        assert key not in args_found
-        args_found.add(key)
+        assert key in args_found
 
 
 @pytest.mark.parametrize("backend_name", ALL_BACKENDS)
