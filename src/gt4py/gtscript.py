@@ -329,6 +329,35 @@ def lazy_stencil(
     return _decorator(definition)
 
 
+class _AxisOffset:
+    def __init__(self, axis: str, offset: int):
+        self.axis = axis
+        self.offset = offset
+
+    def __repr__(self):
+        return f"_AxisOffset(axis={self.axis}, offset={self.offset})"
+
+    def __str__(self):
+        return f"{self.axis}[{self.offset}]"
+
+
+class _AxisInterval:
+    def __init__(self, axis: str, start: int, end: int):
+        assert start < end
+        self.axis = axis
+        self.start = start
+        self.end = end
+
+    def __repr__(self):
+        return f"_AxisInterval(axis={self.axis}, start={self.start}, end={self.end})"
+
+    def __str__(self):
+        return f"{self.axis}[{self.start}:{self.end}]"
+
+    def __len__(self):
+        return self.end - self.start
+
+
 # GTScript builtins: domain axes
 class _Axis:
     def __init__(self, name: str):
@@ -340,6 +369,14 @@ class _Axis:
 
     def __str__(self):
         return self.name
+
+    def __getitem__(self, interval):
+        if isinstance(interval, slice):
+            return _AxisInterval(self.name, interval.start, interval.stop)
+        elif isinstance(interval, int):
+            return _AxisOffset(self.name, interval)
+        else:
+            raise TypeError("Unrecognized index type")
 
 
 I = _Axis("I")
@@ -450,7 +487,7 @@ def computation(order):
     return _ComputationContextManager()
 
 
-def interval(start, end):
+def interval(*args):
     """Define the interval of computation in the 'K' sequential axis."""
     pass
 

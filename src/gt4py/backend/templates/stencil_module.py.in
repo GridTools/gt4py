@@ -63,7 +63,12 @@ class {{ class_name }}(StencilObject):
 
     exec_info : `dict`, optional
         Dictionary used to store information about the stencil execution.
-        (`None` by default).
+        (`None` by default). If the dictionary contains the magic key
+        '__aggregate_data' and it evaluates to `True`, the dictionary is
+        populated with the sub-dictionary '{{ class_name }}' containing
+        different performance statistics. These include the stencil calls count,
+        the cumulative time spent in all stencil calls, and the actual time spent
+        in carrying out the computations.
     """
 
 {%- filter indent(width=4) %}
@@ -117,6 +122,7 @@ class {{ class_name }}(StencilObject):
     ):
         if exec_info is not None:
             exec_info["call_start_time"] = time.perf_counter()
+
         field_args=dict(
 {%- set comma = joiner(", ") -%}{%- for field in field_names -%} {{- comma() }} {{ field }}={{ field }}{%- endfor -%}
         )
@@ -144,6 +150,41 @@ class {{ class_name }}(StencilObject):
 
         if exec_info is not None:
             exec_info["call_end_time"] = time.perf_counter()
+
+            if exec_info.setdefault("__aggregate_data", False):
+                stencil_info = exec_info.setdefault("{{ class_name }}", {})
+
+                # Update performance counters
+                stencil_info["call_start_time"] = exec_info["call_start_time"]
+                stencil_info["call_end_time"] = exec_info["call_end_time"]
+                stencil_info["call_time"] = (
+                    stencil_info["call_end_time"]
+                    - stencil_info["call_start_time"]
+                )
+                stencil_info["total_call_time"] = (
+                    stencil_info.get("total_call_time", 0.0)
+                    + stencil_info["call_time"]
+                )
+                stencil_info["ncalls"] = (
+                    stencil_info.get("ncalls", 0) + 1
+                )
+                stencil_info["run_time"] = (
+                    exec_info["run_end_time"]
+                    - exec_info["run_start_time"]
+                )
+                stencil_info["total_run_time"] = (
+                    stencil_info.get("total_run_time", 0.0)
+                    + stencil_info["run_time"]
+                )
+                if "run_cpp_start_time" in exec_info:
+                    stencil_info["run_cpp_time"] = (
+                        exec_info["run_cpp_end_time"]
+                        - exec_info["run_cpp_start_time"]
+                    )
+                    stencil_info["total_run_cpp_time"] = (
+                        stencil_info.get("total_run_cpp_time", 0.0)
+                        + stencil_info["run_cpp_time"]
+                    )
 
     def run(self, _domain_, _origin_, exec_info, *, {{- field_names|join(", ") -}}, {{- param_names|join(", ") -}}):
         if exec_info is not None:
