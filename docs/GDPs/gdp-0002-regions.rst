@@ -65,13 +65,6 @@ To illustrate the need for such a feature, consider a snippet of the model that 
         if grid.east_edge:
             x_edge_ub(ut, ub, dt5=dt5, origin=(grid.local_iend, grid.local_jstart, 0), domain=domain_x_edge)
 
-This example motivates requirements for the feature.
-It must be able to:
-
-1. Specify regions inside a stencil, relative to locations passed at run-time to the stencil.
-   Define these integer variables on axes as `splitters`.
-2. Specify regions at and near the edges of the field data arrays, regardless of whether the computational domain exists there. If the stencil call's extended computational domain has a non-zero intersection with the region, it iterates over that portion.
-
 The specific feature that we are proposing is the addition of a ``with parallel()`` context that specifies the horizontal iteration space (over parallel axes) using ``region`` objects.
 The ``region`` object's ``__getitem__`` method uses `splitters` to select a region of the stencil computational domain in the parallel ``I`` and ``J`` axes.
 
@@ -79,9 +72,14 @@ Using this specification, the example is transformed into:
 
 .. code-block:: python
 
+    istart = I[0] if grid.west_edge else None
+    jstart = J[0] if grid.south_edge else None
+    iend = I[-1] if grid.east_edge else None
+    jend = J[-1] if grid.north_edge else None
+
     @gtscript.stencil()
     def stencil(uc: Field, vc: Field, cosa: Field, rsina: Field, ut: Field, ub: Field, dt5: float, dt4: float):
-        from __splitters__ import istart, iend, jstart, jend
+        from __externals__ import istart, iend, jstart, jend
         with computation(PARALLEL), interval(...):
             ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina
             with parallel(region[istart, :], region[iend, :]):
@@ -89,7 +87,9 @@ Using this specification, the example is transformed into:
             with parallel(region[:, jstart], region[:, jend]):
                 ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
 
-This reduces the complexity of the code and consolidates operations on ``ub`` - it is now immediately clear what the stencil is filling into ``ub`` everywhere.
+Notice that distributed domain decomposition works with this feature - if the external has the value ``None``, then any ``region`` objects using this in its slices ignores it.
+
+This greatly reduces the complexity of the code and consolidates operations on ``ub`` - it is now immediately clear what the stencil is filling into ``ub`` everywhere.
 
 
 Usage and Impact
@@ -107,70 +107,29 @@ This GDP aims to be fully backward-compatible.
 Detailed Description
 --------------------
 
-As introduced above, we propose adding a new ``with parallel()`` context that specializes the stencil on a region of the horizontal axes bounds using variables with values defined at stencil call time.
-The ``parallel()`` call can have any number of arguments, each of which contain information about the horizontal region.
-We propse adding a `gtscript.region` object with ``__getitem__`` defined in order to make this easy.
+As introduced above, we propose adding a new ``with parallel()`` context that specializes the stencil on a region of the horizontal axes bounds using ``region`` objects, which pass information to GT4Py about the horizontal iteration space through the indexing operator, similar to numpy arrays.
 
+``region`` objects use Axis Offsets like ``I[0]``.
+
+
+Axis Offsets
+++++++++++++
+
+The way to specify axis extents in GT4Py is to index into the axes ``I``, ``J``, ``K``.
+These can be indexed, which returns the specific indices within a stencil relative to the compute origin. For example: ``I[0]`` is the first compute point, ``I[1]`` the second, and finally ``I[-1]`` is the last point in the stencil compute domain along the ``I`` axis.
+This concept is critical for specifying regional computation.
+
+Externals may be such Axis Offsets, and can be used in region indexing.
+If the external variable is set to ``None``, then any regions using that external are ignored.
 
 Region Specification
 ++++++++++++++++++++
 
-Regions contain information about the horizontal restriction, with variable references, axis endpoints, absolute offsets, or a combination of these.
-Examples:
+When ``region`` objects are indexed, they pass information about the intended horizontal iteration space to GT4Py. This is easily explained through a few examples:
 
-1. ``region[:, jstart]``: This specifies a restriction in the ``J`` axis to a single column of the iteration space at ``jstart`` (defined at stencil call-time). There is no restriction on the ``I`` axis, and it will be naturally extended as far as needed for the computation.
+1. ``region[I[0], :]``: This specifies a restriction to the first compute point on the ``I`` axis, and no restriction in the ``J`` axis.
 
-2. ``region[istart : iend, : jend]``: ``istart <= I < iend``, ``J <= jend``. As in the previous example, there is no lower restriction on ``J``.
-
-
-Splitters
-+++++++++
-
-The variables used as splitters in the region specification, such as ``istart``, ``jend`` in the examples in the previous section must to be given values at stencil call time.
-Since these are not ordered stencil parameters, a map must be passed to the keyword argument ``splitters`` at call time.
-Example:
-
-.. code-block:: python
-
-    stencil(a, b, splitters=dict(istart=grid.istart, iend=grid.iend, jend=grid.jend))
-
-Where ``grid`` could be an application-defined namespace.
-
-Temporary Fields
-^^^^^^^^^^^^^^^^
-
-The information above is sufficient for field arguments to the stencil, but what about temporaries? Assigning to temporaries in a region should be allowed, so GT4Py needs to generate an offset automatically from the application domain for these fields. The natural way to determine this is to have the `origin` of the temporary field be the origin of the compute domain.
-
-Take for example the double Laplacian example, with a special case before applying the second Laplacian:
-
-.. code-block:: python
-
-    @gtscript.stencil()
-    def double_lap(in_f: gtscript.Field[float],
-                out_f: gtscript.Field[float]):
-        with computation(PARALLEL), interval(...):
-            tmp_f = lap(in_f)
-            with parallel(region[-1, :]):
-                tmp_f = 1.0
-            out_f = lap(tmp_f)
-
-    # Both halo lines will be consumed
-    in_f = storage(shape=(8,8), halos=((2,2),(2,2)))
-    out_f = storage(shape=(8,8), halos=((2,2),(2,2)))
-    double_lap(in_f, out_f)
-
-Observations:
-
-* Both halo lines of ``in_f`` are consumed by the stencil.
-* The extended left edge of ``tmp_f`` is filled with ones. This is one point outside the computational domain.
-* The application domain shape, since it was not passed to the stencil, is automatically set to the compute domain shape, which itself is automatically determined to be ``(4,4)``.
-* The natural origins are used to align the fields, in this case both are the same size.
-
-
-Related Work
-------------
-
-The dawn compiler accepts regions of the horizontal iteration space in its stencil intermediate representation.
+2. ``region[I[0]-1, :]``: This specifies a restriction to the first compute point outside the compute domain in the ``I`` axis, and no restriction in the ``J`` axis. Code will only be created for the region if another statement consumes the field indices set in the region.
 
 
 Implementation
@@ -188,8 +147,6 @@ The implementation on the GT4Py involves adding:
 
 .. _IRMaker: https://github.com/GridTools/gt4py/blob/master/src/gt4py/frontend/gtscript_frontend.py#L454
 .. _internal IR: https://github.com/GridTools/gt4py/blob/master/src/gt4py/ir/nodes.py
-
-The application must define functions that create the tuples or subclass tuple.
 
 
 FV3 Example
@@ -271,22 +228,23 @@ FV3 Example
 
     @gtscript.stencil
     def divergence_corner(...):
-    with computation(PARALLEL), interval(...):
-        uf = (u - 0.25*(va[0, -1, 0] + va)*(cos_sg4[0, -1, 0] + cos_sg2))  \
-                                  *dyc*0.5*(sin_sg4[0, -1, 0] + sin_sg2)
-        with parallel(region[:, jstart], region[:, jend)):
-            uf = u*dyc*0.5*(sin_sg4[0, -1, 0] + sin_sg2)
+        from __externals__ import istart, iend, jstart, jend
+        with computation(PARALLEL), interval(...):
+            uf = (u - 0.25*(va[0, -1, 0] + va)*(cos_sg4[0, -1, 0] + cos_sg2))  \
+                                      *dyc*0.5*(sin_sg4[0, -1, 0] + sin_sg2)
+            with parallel(region[:, jstart], region[:, jend)):
+                uf = u*dyc*0.5*(sin_sg4[0, -1, 0] + sin_sg2)
 
-        vf = (v - 0.25*(ua[-1, 0, 0] + ua)*(cos_sg3[-1, 0, 0] + cos_sg1))  \
-                                  *dxc*0.5*(sin_sg3[-1, 0, 0] + sin_sg1)
-        with parallel(region[istart, :], region[iend, :]):
-            vf = v*dxc*0.5*(sin_sg3[-1, 0, 0] + sin_sg1)
+            vf = (v - 0.25*(ua[-1, 0, 0] + ua)*(cos_sg3[-1, 0, 0] + cos_sg1))  \
+                                      *dxc*0.5*(sin_sg3[-1, 0, 0] + sin_sg1)
+            with parallel(region[istart, :], region[iend, :]):
+                vf = v*dxc*0.5*(sin_sg3[-1, 0, 0] + sin_sg1)
 
-        divg_d = rarea_c * (vf[0, -1, 0] - vf + uf[-1, 0, 0] - uf)
-        with parallel(region[istart, jstart], region[istart, jend]):
-            divg_d = rarea_c * (-vf[0, 0, 0] + uf[-1, 0, 0] - uf)
-        with parallel(region[iend, jstart], region[iend, jend]):
-            divg_d = rarea_c * (vf[0, -1, 0] + uf[-1, 0, 0] - uf)
+            divg_d = rarea_c * (vf[0, -1, 0] - vf + uf[-1, 0, 0] - uf)
+            with parallel(region[istart, jstart], region[istart, jend]):
+                divg_d = rarea_c * (-vf[0, 0, 0] + uf[-1, 0, 0] - uf)
+            with parallel(region[iend, jstart], region[iend, jend]):
+                divg_d = rarea_c * (vf[0, -1, 0] + uf[-1, 0, 0] - uf)
 
 
 Alternatives
