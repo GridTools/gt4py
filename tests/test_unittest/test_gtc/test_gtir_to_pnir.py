@@ -16,23 +16,19 @@ def gtir_to_pnir() -> Iterator[GtirToPnir]:
 def copies_vertical_loop() -> Iterator[gtir.VerticalLoop]:
     yield gtir.VerticalLoop(
         loop_order=common.LoopOrder.PARALLEL,
-        vertical_intervals=[
-            gtir.VerticalInterval(
-                start=gtir.AxisBound.from_start(offset=1),
-                end=gtir.AxisBound.from_end(offset=2),
-                body=[
-                    gtir.ParAssignStmt(
-                        left=gtir.FieldAccess.centered(name="a"),
-                        right=gtir.FieldAccess.centered(name="b"),
-                    ),
-                    gtir.ParAssignStmt(
-                        left=gtir.FieldAccess.centered(name="b"),
-                        right=gtir.FieldAccess(
-                            name="a", offset=gtir.CartesianOffset(i=2, j=1, k=0)
-                        ),
-                    ),
-                ],
-            )
+        interval=gtir.Interval(
+            start=gtir.AxisBound.from_start(offset=1),
+            end=gtir.AxisBound.from_end(offset=2),
+        ),
+        body=[
+            gtir.ParAssignStmt(
+                left=gtir.FieldAccess.centered(name="a"),
+                right=gtir.FieldAccess.centered(name="b"),
+            ),
+            gtir.ParAssignStmt(
+                left=gtir.FieldAccess.centered(name="b"),
+                right=gtir.FieldAccess(name="a", offset=gtir.CartesianOffset(i=2, j=1, k=0)),
+            ),
         ],
     )
 
@@ -81,14 +77,11 @@ def test_vertical_loop(copies_vertical_loop: gtir.VerticalLoop, gtir_to_pnir: Gt
 def test_vertical_interval(
     copies_vertical_loop: gtir.VerticalLoop, gtir_to_pnir: GtirToPnir
 ) -> None:
-    vertical_interval = copies_vertical_loop.vertical_intervals[0]
-    out = gtir_to_pnir.visit(vertical_interval)
-    assert isinstance(out, pnir.KLoop)
-    assert isinstance(out.lower, gtir.AxisBound)
-    assert isinstance(out.upper, gtir.AxisBound)
-    assert out.lower.offset == 1
-    assert out.lower.level == common.LevelMarker.START
-    assert out.upper.offset == 2
-    assert out.upper.level == common.LevelMarker.END
-    assert len(out.ij_loops) == 2
-    assert isinstance(out.ij_loops[0], pnir.IJLoop)
+    vertical_interval = copies_vertical_loop.interval
+    out_lower, out_upper = gtir_to_pnir.visit(vertical_interval)
+    assert isinstance(out_lower, gtir.AxisBound)
+    assert isinstance(out_upper, gtir.AxisBound)
+    assert out_lower.offset == 1
+    assert out_lower.level == common.LevelMarker.START
+    assert out_upper.offset == 2
+    assert out_upper.level == common.LevelMarker.END

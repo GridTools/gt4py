@@ -11,7 +11,7 @@ from gt4py.gtc.gtir import (
     FieldAccess,
     FieldBoundary,
     FieldDecl,
-    VerticalInterval,
+    Interval,
     VerticalLoop,
 )
 from gt4py.gtc.passes import FieldsMetadataPass
@@ -39,16 +39,14 @@ def test_copy_shift(shift_offset: Tuple[CartesianOffset, FieldBoundary]) -> None
         vertical_loops=[
             VerticalLoop(
                 loop_order=LoopOrder.FORWARD,
-                vertical_intervals=[
-                    VerticalInterval(
-                        start=AxisBound(level=LevelMarker.START, offset=0),
-                        end=AxisBound(level=LevelMarker.END, offset=0),
-                        body=[
-                            ParAssignStmt(
-                                left=FieldAccess.centered(name="a"),
-                                right=FieldAccess(name="b", offset=offset),
-                            )
-                        ],
+                interval=Interval(
+                    start=AxisBound(level=LevelMarker.START, offset=0),
+                    end=AxisBound(level=LevelMarker.END, offset=0),
+                ),
+                body=[
+                    ParAssignStmt(
+                        left=FieldAccess.centered(name="a"),
+                        right=FieldAccess(name="b", offset=offset),
                     )
                 ],
             )
