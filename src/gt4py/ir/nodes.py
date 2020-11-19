@@ -96,7 +96,9 @@ storing a reference to the piece of source code which originated the node.
 
     Cast(dtype: DataType, expr: Expr)
 
-    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch
+    AxisIndex(axis: str)
+
+    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | AxisIndex | InvalidBranch
 
     CompositeExpr   = UnaryOpExpr(op: UnaryOperator, arg: Expr)
                     | BinOpExpr(op: BinaryOperator, lhs: Expr, rhs: Expr)
@@ -402,6 +404,11 @@ class Cast(Expr):
     dtype = attribute(of=DataType)
     expr = attribute(of=Expr)
     loc = attribute(of=Location, optional=True)
+
+
+@attribclass
+class AxisIndex(Expr):
+    axis = attribute(of=str)
 
 
 @enum.unique

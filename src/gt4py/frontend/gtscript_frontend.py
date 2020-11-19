@@ -449,7 +449,10 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        if isinstance(node.value, ast.Call) and node.value.func.id not in gtscript.MATH_BUILTINS:
+        if isinstance(node.value, ast.Call) and node.value.func.id not in (
+            gtscript.MATH_BUILTINS,
+            "index",
+        ):
             assert len(node.targets) == 1
             self.visit(node.value, target_node=node.targets[0])
             # This node can be now removed since the trivial assignment has been already done
@@ -461,7 +464,8 @@ class CallInliner(ast.NodeTransformer):
     def visit_Call(self, node: ast.Call, *, target_node=None):
         call_name = node.func.id
 
-        if call_name in gtscript.MATH_BUILTINS:
+        # TODO Make an ALLOWED_CALLS list
+        if call_name in (gtscript.MATH_BUILTINS, "index"):
             node.args = [self.visit(arg) for arg in node.args]
             return node
         elif any(isinstance(arg, ast.Call) for arg in node.args):
@@ -1098,24 +1102,36 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
-    def visit_Call(self, node: ast.Call):
-        native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
+    def visit_Call(self, node: ast.Call) -> Union[List[gt_ir.Expr], gt_ir.Expr]:
+        assert isinstance(node.func, ast.Name), "Function should be an ast.Name instance"
 
-        args = [gt_ir.utils.make_expr(self.visit(arg)) for arg in node.args]
-        if len(args) != native_fcn.arity:
+        func_id = node.func.id
+        if func_id == "index":
+            assert all(isinstance(arg, ast.Name) for arg in node.args)
+            axis_indices = [gt_ir.AxisIndex(axis=arg.id) for arg in node.args]
+            return axis_indices if len(axis_indices) > 0 else axis_indices[0]
+        elif func_id in gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP:
+            native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
+
+            args = [gt_ir.utils.make_expr(self.visit(arg)) for arg in node.args]
+            if len(args) != native_fcn.arity:
+                raise GTScriptSyntaxError(
+                    "Invalid native function call", loc=gt_ir.Location.from_ast_node(node)
+                )
+
+            return gt_ir.NativeFuncCall(
+                func=native_fcn,
+                args=args,
+                data_type=gt_ir.DataType.AUTO,
+                loc=gt_ir.Location.from_ast_node(node),
+            )
+        else:
             raise GTScriptSyntaxError(
-                "Invalid native function call", loc=gt_ir.Location.from_ast_node(node)
+                f"Unrecognized function name {func_id}", loc=gt_ir.Location.from_ast_node(node)
             )
 
-        return gt_ir.NativeFuncCall(
-            func=native_fcn,
-            args=args,
-            data_type=gt_ir.DataType.AUTO,
-            loc=gt_ir.Location.from_ast_node(node),
-        )
-
     # -- Statement nodes --
-    def visit_Assign(self, node: ast.Assign) -> list:
+    def visit_Assign(self, node: ast.Assign) -> List[gt_ir.Statement]:
         result = []
 
         # assert len(node.targets) == 1
@@ -1171,7 +1187,7 @@ class IRMaker(ast.NodeVisitor):
 
         value = self.visit(node.value)
         if len(target) == 1:
-            value = [gt_ir.utils.make_expr(value)]
+            value = [gt_ir.utils.make_expr(gt_utils.listify(value)[0])]
         else:
             value = [gt_ir.utils.make_expr(item) for item in value]
 

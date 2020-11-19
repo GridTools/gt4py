@@ -497,6 +497,18 @@ class TestExternalsWithSubroutines:
             )
 
 
+class TestIndex:
+    def test_single(self, id_version):
+        def definition(inout_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                i_index = index(I)
+                inout_field = i_index
+
+        module = f"TestIndex_test_single_{id_version}"
+        stencil_id, def_ir = compile_definition(definition, "test_single", module)
+        pass
+
+
 class TestCompileTimeAssertions:
     def test_nomsg(self, id_version):
         def definition(inout_field: gtscript.Field[float]):

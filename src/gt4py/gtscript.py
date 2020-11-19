@@ -70,6 +70,7 @@ builtins = {
     "Sequence",
     "externals",
     "computation",
+    "index",
     "interval",
     "__gtscript__",
     "__externals__",
@@ -485,6 +486,11 @@ class _ComputationContextManager:
 def computation(order):
     """Define the computation."""
     return _ComputationContextManager()
+
+
+def index(*axes):
+    """Return current index along axes as a tuple."""
+    pass
 
 
 def interval(*args):
