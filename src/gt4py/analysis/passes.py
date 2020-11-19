@@ -260,7 +260,7 @@ class InitInfoPass(TransformPass):
             return []
 
         def visit_VarRef(self, node: gt_ir.VarRef):
-            result = [(node.name, node.index)]
+            result = [(node.name, None)]
             return result
 
         def visit_FieldRef(self, node: gt_ir.FieldRef):
@@ -406,16 +406,9 @@ class InitInfoPass(TransformPass):
 
             # Merge offsets for same symbol
             for name, extent in refs:
-                if extent is None:
-                    assert name in params or result.get(name, Extent.zeros()) == Extent.zeros()
-                    params |= {name}
-                    result.setdefault(name, Extent.zeros())
-                else:
-                    assert name not in params
-                    if name in result:
-                        result[name] |= extent
-                    else:
-                        result[name] = extent
+                extent = extent or Extent.zeros()
+                result.setdefault(name, Extent.zeros())
+                result[name] |= extent
 
             return result
 
