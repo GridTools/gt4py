@@ -15,12 +15,16 @@ from gt4py.gtc.common import (
     ArithmeticOperator,
     LogicalOperator,
     ComparisonOperator,
+    UnaryOp,
+    UnaryOperator,
 )
 
 
 ARITHMETIC_TYPE = DataType.FLOAT32
 ANOTHER_ARITHMETIC_TYPE = DataType.INT32
 A_ARITHMETIC_OPERATOR = ArithmeticOperator.ADD
+A_ARITHMETIC_UNARY_OPERATOR = UnaryOperator.POS
+A_LOGICAL_UNARY_OPERATOR = UnaryOperator.NOT
 
 # IR testing guidelines
 # - For testing leave nodes: use the node directly
@@ -69,6 +73,13 @@ class DummyExpr(Expr):
                 op=ComparisonOperator.EQ,
             ),
             DataType.BOOL,
+        ),
+        (
+            UnaryOp(
+                expr=DummyExpr(dtype=ARITHMETIC_TYPE),
+                op=A_ARITHMETIC_UNARY_OPERATOR,
+            ),
+            ARITHMETIC_TYPE,
         ),
     ],
 )
@@ -127,6 +138,14 @@ def test_dtype_propagation(node, expected):
             ),
             r"Arithmetic expr.* not allowed in bool.* op.*",
         ),
+        (
+            lambda: UnaryOp(op=A_LOGICAL_UNARY_OPERATOR, expr=DummyExpr(dtype=ARITHMETIC_TYPE)),
+            r"Unary op.*only .* with bool.*",
+        ),
+        (
+            lambda: UnaryOp(op=A_ARITHMETIC_UNARY_OPERATOR, expr=DummyExpr(dtype=DataType.BOOL)),
+            r"Unary op.* not allowed with bool.*",
+        ),
     ],
 )
 def test_invalid_nodes(invalid_node, expected_regex):
@@ -174,6 +193,14 @@ def test_IfStmt_category():
         Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=[StmtB()], false_branch=[StmtA()])
         Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=[StmtA()], false_branch=[StmtB()])
         Testee(cond=ExprB(dtype=DataType.BOOL), true_branch=[StmtA()], false_branch=[StmtA()])
+
+
+def test_UnaryOp_category():
+    Testee = UnaryOp[ExprA]
+
+    Testee(op=A_ARITHMETIC_UNARY_OPERATOR, expr=ExprA())
+    with pytest.raises(ValidationError):
+        Testee(op=A_ARITHMETIC_UNARY_OPERATOR, expr=ExprB())
 
 
 def test_BinaryOp_category():

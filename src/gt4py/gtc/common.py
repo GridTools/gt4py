@@ -216,7 +216,7 @@ class FieldAccess(Expr):
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
 
-class IfStmt(GenericNode, Generic[StmtT, ExprT], Stmt):
+class IfStmt(GenericNode, Stmt, Generic[StmtT, ExprT]):
     """Generic if statement.
 
     Verifies that `cond` is a boolean expr (if `dtype` is set).
@@ -224,16 +224,51 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT], Stmt):
 
     cond: ExprT
     true_branch: List[StmtT]
-    false_branch: List[StmtT]
+    false_branch: Optional[List[StmtT]]
 
     @validator("cond")
     def condition_is_boolean(cls, cond):
         return verify_condition_is_boolean(cls, cond)
 
 
-class AssignStmt(GenericNode, Generic[TargetT, ExprT], Stmt):
+class AssignStmt(GenericNode, Stmt, Generic[TargetT, ExprT]):
     left: TargetT
     right: ExprT
+
+
+class UnaryOp(GenericNode, Expr, Generic[ExprT]):
+    """Generic unary operation with type propagation.
+
+    The generic `UnaryOp` already contains logic for type propagation.
+    """
+
+    op: UnaryOperator
+    expr: ExprT
+
+    @root_validator(pre=True)
+    def dtype_propagation(cls, values):
+        values["dtype"] = values["expr"].dtype
+        return values
+
+    @root_validator(pre=True)
+    def kind_propagation(cls, values):
+        values["kind"] = values["expr"].kind
+        return values
+
+    @root_validator(pre=True)
+    def op_to_dtype_check(cls, values):
+        if values["expr"].dtype:
+            if values["op"] == UnaryOperator.NOT:
+                if not values["expr"].dtype == DataType.BOOL:
+                    raise ValueError("Unary operator `NOT` only allowed with boolean expression.")
+            else:
+                if values["expr"].dtype == DataType.BOOL:
+                    raise ValueError(
+                        "Unary operator `{}` not allowed with boolean expression.".format(
+                            values["op"].name
+                        )
+                    )
+        return values
 
 
 class BinaryOp(GenericNode, Expr, Generic[ExprT]):
@@ -250,7 +285,7 @@ class BinaryOp(GenericNode, Expr, Generic[ExprT]):
     right: ExprT
 
     @root_validator(pre=True)
-    def type_propagation_and_check(cls, values):
+    def dtype_propagation_and_check(cls, values):
         common_dtype = verify_and_get_common_dtype(cls, [values["left"], values["right"]])
 
         if common_dtype:
@@ -296,7 +331,7 @@ class TernaryOp(GenericNode, Expr, Generic[ExprT]):
         return verify_condition_is_boolean(cls, cond)
 
     @root_validator(pre=True)
-    def type_propagation_and_check(cls, values):
+    def dtype_propagation_and_check(cls, values):
         common_dtype = verify_and_get_common_dtype(
             cls, [values["true_expr"], values["false_expr"]]
         )
