@@ -4,7 +4,7 @@ from typing import List, Tuple
 from eve.visitors import NodeTranslator
 
 from gt4py.gtc import gtir
-from gt4py.gtc.gtir import AxisBound
+from gt4py.gtc.gtir import AxisBound, ParAssignStmt
 from gt4py.gtc.python import pnir
 
 
@@ -30,7 +30,9 @@ class GtirToPnir(NodeTranslator):
             pnir.KLoop(
                 lower=lower,
                 upper=upper,
-                ij_loops=[self.visit(stmt) for stmt in node.body],
+                ij_loops=[
+                    self.visit(stmt) for stmt in node.body if isinstance(stmt, ParAssignStmt)
+                ],  # TODO fix the filter
             )
         ]
 

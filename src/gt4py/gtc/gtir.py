@@ -137,6 +137,10 @@ class ScalarIfStmt(common.IfStmt[Stmt, Expr], Stmt):
         return cond
 
 
+class UnaryOp(common.UnaryOp[Expr], Expr):
+    pass
+
+
 class BinaryOp(common.BinaryOp[Expr], Expr):
     pass
 

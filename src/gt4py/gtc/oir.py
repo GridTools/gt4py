@@ -72,6 +72,10 @@ class IfStmt(common.IfStmt[Stmt, Expr], Stmt):
     pass
 
 
+class UnaryOp(common.UnaryOp[Expr], Expr):
+    pass
+
+
 class BinaryOp(common.BinaryOp[Expr], Expr):
     pass
 
@@ -123,6 +127,9 @@ class AxisBound(Node):
 
 class HorizontalExecution(LocNode):
     body: List[Stmt]
+    mask: Optional[Expr]
+
+    # TODO validator: mask is bool, mask has field kind
 
 
 class Interval(LocNode):

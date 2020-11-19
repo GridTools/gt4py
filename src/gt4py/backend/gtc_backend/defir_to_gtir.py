@@ -14,6 +14,7 @@ from gt4py.ir.nodes import (
     ComputationBlock,
     FieldDecl,
     FieldRef,
+    If,
     IterationOrder,
     LevelMarker,
     ScalarLiteral,
@@ -125,6 +126,13 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_FieldRef(self, node: FieldRef):
         return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))
+
+    def visit_If(self, node: If):
+        return gtir.FieldIfStmt(
+            cond=self.visit(node.condition),
+            true_branch=self.visit(node.main_body),
+            false_branch=self.visit(node.else_body),
+        )
 
     def visit_VarRef(self, node: VarRef):
         return gtir.ScalarAccess(
