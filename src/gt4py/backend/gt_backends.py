@@ -247,7 +247,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         return result
 
     def _make_cpp_variable(self, decl: gt_ir.VarDecl) -> str:
-        result = "{t} {name}:".format(t=self.DATA_TYPE_TO_CPP[decl.data_type], name=decl.name)
+        result = "{t} {name};".format(t=self._make_cpp_type(decl.data_type), name=decl.name)
 
         return result
 
@@ -368,9 +368,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         elif node.level == gt_ir.LevelMarker.END:
             level = len(self.k_splitters) + 1
         else:
-            assert isinstance(node.level, gt_ir.VarRef)
-            assert len(node.level.index) == 1
-            level = self.k_splitters.index((node.name, node.index[0]))
+            raise NotImplementedError("VarRefs are not yet supported")
 
         # Shift offset to make it relative to the splitter (in-between levels)
         offset = node.offset + 1 if node.offset >= 0 else node.offset
@@ -393,11 +391,18 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
     ) -> Tuple[Tuple[Tuple[int, int], Tuple[int, int]], str]:
         interval_definition = self.visit(node.interval)
 
-        self.declared_symbols = set()
-        self.apply_block_symbols = {**self.stage_symbols, **node.local_symbols}
-        body_sources = self.visit(node.body)
+        body_sources = gt_text.TextBlock()
 
-        return interval_definition, body_sources
+        self.declared_symbols = set()
+        for name, var_decl in node.local_symbols.items():
+            assert isinstance(var_decl, gt_ir.VarDecl)
+            body_sources.append(self._make_cpp_variable(var_decl))
+            self.declared_symbols.add(name)
+
+        self.apply_block_symbols = {**self.stage_symbols, **node.local_symbols}
+        body_sources.extend(self.visit(node.body))
+
+        return interval_definition, body_sources.text
 
     def visit_Stage(self, node: gt_ir.Stage) -> Dict[str, Any]:
         # Initialize symbols for the generation of references in this stage
@@ -656,7 +661,11 @@ class GTMCBackend(BaseGTBackend):
 
 class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
     def generate_pre_run(self) -> str:
-        field_names = self.args_data["field_info"].keys()
+        field_names = [
+            key
+            for key in self.args_data["field_info"]
+            if self.args_data["field_info"][key] is not None
+        ]
 
         return "\n".join([f + ".host_to_device()" for f in field_names])
 
@@ -664,7 +673,7 @@ class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
         output_field_names = [
             name
             for name, info in self.args_data["field_info"].items()
-            if info.access == gt_definitions.AccessKind.READ_WRITE
+            if info is not None and info.access == gt_definitions.AccessKind.READ_WRITE
         ]
 
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])

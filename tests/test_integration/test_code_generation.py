@@ -74,20 +74,17 @@ def test_generation_gpu(name, backend):
     stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3))
 
 
-def test_temporary_field_declared_in_if_raises():
-
-    from gt4py.frontend.gtscript_frontend import GTScriptSymbolError
-
-    with pytest.raises(GTScriptSymbolError):
-
-        @gtscript.stencil(backend="debug")
-        def definition(field_a: gtscript.Field[np.float_]):
-            with computation(PARALLEL), interval(...):
-                if field_a < 0:
-                    field_b = -field_a
-                else:
-                    field_b = field_a
-                field_a = field_b
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
+def test_temporary_field_declared_in_if(backend):
+    @gtscript.stencil(backend=backend)
+    def definition(field_a: gtscript.Field[np.float_]):
+        with computation(PARALLEL), interval(...):
+            if field_a < 0:
+                field_b = -field_a
+            else:
+                field_b = field_a
+            field_a = field_b
 
 
 @pytest.mark.requires_gpu
