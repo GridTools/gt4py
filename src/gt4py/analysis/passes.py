@@ -402,7 +402,6 @@ class InitInfoPass(TransformPass):
 
         def _merge_extents(self, refs: list):
             result = {}
-            params = set()
 
             # Merge offsets for same symbol
             for name, extent in refs:
