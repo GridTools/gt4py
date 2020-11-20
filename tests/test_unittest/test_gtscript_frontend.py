@@ -497,6 +497,91 @@ class TestExternalsWithSubroutines:
             )
 
 
+class TestFunctionReturn:
+    def test_no_return(self, id_version):
+        @gtscript.function
+        def _test_no_return(arg):
+            arg = 1
+
+        def definition_func(phi: gtscript.Field[np.float64]):
+            from __externals__ import test
+
+            with computation(PARALLEL), interval(...):
+                phi = test(phi)
+
+        module = f"TestFunctionReturn_test_no_return_{id_version}"
+        externals = {"test": _test_no_return}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="should have a single return statement"
+        ):
+            compile_definition(definition_func, "test_no_return", module, externals=externals)
+
+    def test_number_return_args(self, id_version):
+        @gtscript.function
+        def _test_return_args(arg):
+            return 1, 2
+
+        def definition_func(phi: gtscript.Field[np.float64]):
+            from __externals__ import test
+
+            with computation(PARALLEL), interval(...):
+                phi = test(phi)
+
+        module = f"TestFunctionReturn_test_number_return_args_{id_version}"
+        externals = {"test": _test_return_args}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Number of returns values does not match arguments on left side",
+        ):
+            compile_definition(
+                definition_func, "test_number_return_args", module, externals=externals
+            )
+
+    def test_multiple_return(self, id_version):
+        @gtscript.function
+        def _test_multiple_return(arg):
+            return 1
+            return 2
+
+        def definition_func(phi: gtscript.Field[np.float64]):
+            from __externals__ import test
+
+            with computation(PARALLEL), interval(...):
+                phi = test(phi)
+
+        module = f"TestFunctionReturn_test_multiple_return_{id_version}"
+        externals = {"test": _test_multiple_return}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="should have a single return statement"
+        ):
+            compile_definition(
+                definition_func, "test_multiple_return", module, externals=externals
+            )
+
+    def test_conditional_return(self, id_version):
+        @gtscript.function
+        def _test_conditional_return(arg):
+            if arg > 1:
+                tmp = 1
+            else:
+                tmp = 2
+            return tmp
+
+        def definition_func(phi: gtscript.Field[np.float64]):
+            from __externals__ import test
+
+            with computation(PARALLEL), interval(...):
+                phi = test(phi)
+
+        module = f"TestFunctionReturn_test_conditional_return_{id_version}"
+        externals = {"test": _test_conditional_return}
+
+        compile_definition(definition_func, "test_conditional_return", module, externals=externals)
+
+
 class TestCompileTimeAssertions:
     def test_nomsg(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
