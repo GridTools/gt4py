@@ -365,25 +365,18 @@ class ReturnReplacer(gt_utils.meta.ASTTransformPass):
     @classmethod
     def apply(cls, ast_object, target_node):
         # Ensure that there is only a single return statement (can still return a tuple)
-        ret_count = 0
-        for node in ast.walk(ast_object):
-            if isinstance(node, ast.Return):
-                ret_count += 1
+        ret_count = sum(isinstance(node, ast.Return) for node in ast.walk(ast_object))
         if ret_count != 1:
             raise GTScriptSyntaxError("GTScript Functions should have a single return statement")
         cls().visit(ast_object, target_node=target_node)
 
-    def visit_Return(self, node: ast.Return, **kwargs):
-        target_node = kwargs["target_node"]
-        if isinstance(node.value, ast.Tuple):
-            rhs_length = len(node.value.elts)
-        else:
-            rhs_length = 1
+    @staticmethod
+    def _get_num_values(node) -> int:
+        return len(node.elts) if isinstance(node, ast.Tuple) else 1
 
-        if isinstance(target_node, ast.Tuple):
-            lhs_length = len(target_node.elts)
-        else:
-            lhs_length = 1
+    def visit_Return(self, node: ast.Return, target_node: ast.AST) -> ast.Assign:
+        rhs_length = self._get_num_values(node.value)
+        lhs_length = self._get_num_values(target_node)
 
         if lhs_length == rhs_length:
             return ast.Assign(
