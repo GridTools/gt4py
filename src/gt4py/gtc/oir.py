@@ -21,7 +21,7 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Union
 from pydantic import validator
 
 from devtools import debug  # noqa: F401
@@ -33,6 +33,8 @@ from gt4py.gtc.common import LocNode
 
 
 class Expr(common.Expr):
+    # dtype: common.DataType # TODO enable once we have a dtype pass in gtir
+
     # TODO Eve could provide support for making a node abstract
     def __init__(self, *args, **kwargs):
         if type(self) is Expr:
