@@ -176,7 +176,7 @@ def compute_kind(values: List[Expr]) -> ExprKind:
         return ExprKind.SCALAR
 
 
-class Literal(Expr):
+class Literal(Node):
     # TODO when coming from python AST we know more than just the string representation, I suppose
     value: Str
     dtype: DataType
@@ -201,12 +201,12 @@ class CartesianOffset(Node):
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
-class ScalarAccess(Expr):
+class ScalarAccess(Node):
     name: SymbolRef
     kind = ExprKind.SCALAR
 
 
-class FieldAccess(Expr):
+class FieldAccess(Node):
     name: SymbolRef
     offset: CartesianOffset
     kind = ExprKind.FIELD
@@ -216,7 +216,7 @@ class FieldAccess(Expr):
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
 
-class IfStmt(GenericNode, Stmt, Generic[StmtT, ExprT]):
+class IfStmt(GenericNode, Generic[StmtT, ExprT]):
     """Generic if statement.
 
     Verifies that `cond` is a boolean expr (if `dtype` is set).
@@ -231,12 +231,12 @@ class IfStmt(GenericNode, Stmt, Generic[StmtT, ExprT]):
         return verify_condition_is_boolean(cls, cond)
 
 
-class AssignStmt(GenericNode, Stmt, Generic[TargetT, ExprT]):
+class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
     left: TargetT
     right: ExprT
 
 
-class UnaryOp(GenericNode, Expr, Generic[ExprT]):
+class UnaryOp(GenericNode, Generic[ExprT]):
     """Generic unary operation with type propagation.
 
     The generic `UnaryOp` already contains logic for type propagation.
@@ -271,7 +271,7 @@ class UnaryOp(GenericNode, Expr, Generic[ExprT]):
         return values
 
 
-class BinaryOp(GenericNode, Expr, Generic[ExprT]):
+class BinaryOp(GenericNode, Generic[ExprT]):
     """Generic binary operation with type propagation.
 
     The generic BinaryOp already contains logic for
@@ -312,7 +312,7 @@ class BinaryOp(GenericNode, Expr, Generic[ExprT]):
         return values
 
 
-class TernaryOp(GenericNode, Expr, Generic[ExprT]):
+class TernaryOp(GenericNode, Generic[ExprT]):
     """Generic ternary operation with type propagation.
 
     The generic TernaryOp already contains logic for

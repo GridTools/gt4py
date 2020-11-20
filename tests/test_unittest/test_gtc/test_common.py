@@ -2,6 +2,7 @@ import pytest
 
 from pydantic import ValidationError
 
+from gt4py.gtc import common
 from gt4py.gtc.common import (
     IfStmt,
     Literal,
@@ -9,13 +10,9 @@ from gt4py.gtc.common import (
     Stmt,
     DataType,
     ExprKind,
-    BinaryOp,
-    TernaryOp,
-    AssignStmt,
     ArithmeticOperator,
     LogicalOperator,
     ComparisonOperator,
-    UnaryOp,
     UnaryOperator,
 )
 
@@ -37,6 +34,18 @@ class DummyExpr(Expr):
 
     dtype: DataType = DataType.FLOAT32
     kind: ExprKind = ExprKind.FIELD
+
+
+class UnaryOp(Expr, common.UnaryOp[Expr]):
+    pass
+
+
+class BinaryOp(Expr, common.BinaryOp[Expr]):
+    pass
+
+
+class TernaryOp(Expr, common.TernaryOp[Expr]):
+    pass
 
 
 @pytest.mark.parametrize(
@@ -177,7 +186,7 @@ class StmtB(Stmt):
 
 
 def test_AssignSmt_category():
-    Testee = AssignStmt[ExprA, ExprA]
+    Testee = common.AssignStmt[ExprA, ExprA]
 
     Testee(left=ExprA(), right=ExprA())
     with pytest.raises(ValidationError):
@@ -186,7 +195,7 @@ def test_AssignSmt_category():
 
 
 def test_IfStmt_category():
-    Testee = IfStmt[StmtA, ExprA]
+    Testee = common.IfStmt[StmtA, ExprA]
 
     Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=[StmtA()], false_branch=[StmtA()])
     with pytest.raises(ValidationError):
@@ -196,7 +205,8 @@ def test_IfStmt_category():
 
 
 def test_UnaryOp_category():
-    Testee = UnaryOp[ExprA]
+    class Testee(ExprA, common.UnaryOp[ExprA]):
+        pass
 
     Testee(op=A_ARITHMETIC_UNARY_OPERATOR, expr=ExprA())
     with pytest.raises(ValidationError):
@@ -204,7 +214,8 @@ def test_UnaryOp_category():
 
 
 def test_BinaryOp_category():
-    Testee = BinaryOp[ExprA]
+    class Testee(ExprA, common.BinaryOp[ExprA]):
+        pass
 
     Testee(op=A_ARITHMETIC_OPERATOR, left=ExprA(), right=ExprA())
     with pytest.raises(ValidationError):
@@ -213,7 +224,8 @@ def test_BinaryOp_category():
 
 
 def test_TernaryOp_category():
-    Testee = TernaryOp[ExprA]
+    class Testee(ExprA, common.TernaryOp[ExprA]):
+        pass
 
     Testee(cond=ExprA(dtype=DataType.BOOL), true_expr=ExprA(), false_expr=ExprA())
     with pytest.raises(ValidationError):
