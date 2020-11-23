@@ -1,9 +1,9 @@
 from eve import NodeTranslator
 
-from gt4py.gtc import gtir, common
-from gt4py.gtc.gtir import AxisBound, FieldAccess, ParAssignStmt, VerticalLoop, Interval
+from gt4py.gtc import gtir
 
-from devtools import debug
+# TODO How do we deal with AUTO types?
+# Especially in the dtype propagator, currently AUTO is included in strict type checking.
 
 
 class GTIRSetDtype(NodeTranslator):
@@ -14,24 +14,3 @@ class GTIRSetDtype(NodeTranslator):
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs):
         return self.generic_visit(node, symtable=node.symtable_)
-
-
-# stencil = gtir.Stencil(
-#     name="dummy",
-#     params=[gtir.FieldDecl(name="tmp", dtype=common.DataType.BOOL)],
-#     vertical_loops=[
-#         VerticalLoop(
-#             interval=Interval(start=AxisBound.start(), end=AxisBound.end()),
-#             loop_order=common.LoopOrder.FORWARD,
-#             body=[
-#                 ParAssignStmt(
-#                     left=FieldAccess.centered(name="tmp"), right=FieldAccess.centered(name="tmp")
-#                 )
-#             ],
-#         )
-#     ],
-# )
-
-
-# # debug(stencil)
-# debug(GTIRSetDtype().visit(stencil))
