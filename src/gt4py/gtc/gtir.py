@@ -32,7 +32,7 @@ from typing import Dict, List, Optional, Tuple, Union
 from pydantic import validator
 
 from devtools import debug  # noqa: F401
-from eve import IntEnum, Node, Str, SymbolName
+from eve import IntEnum, Node, Str, SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
 
 
@@ -153,7 +153,7 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     pass
 
 
-class Decl(LocNode):
+class Decl(LocNode):  # TODO probably Stmt
     name: SymbolName
     dtype: common.DataType
 
@@ -289,7 +289,7 @@ class FieldsMetadataBuilder:
         return FieldsMetadata(metas={k: v.build() for k, v in self.metas.items()})
 
 
-class Stencil(LocNode):
+class Stencil(LocNode, SymbolTableTrait):
     # TODO remove `__main__.`` from name and use default SymbolName constraint
     name: SymbolName.constrained(r"[a-zA-Z_][\w\.]*")
     # TODO deal with gtscript externals
