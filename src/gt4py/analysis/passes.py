@@ -82,13 +82,131 @@ class DataTypeSpecificationError(IRSpecificationError):
 
 
 class InitInfoPass(TransformPass):
+    """Transcribe definition IR structure into blocks.
+
+    Note
+    ----
+    The following `transform_data` attributes are changed:
+        - `symbols`: SymbolInfo for each used symbol.
+        - `blocks`: Block structure following the original Definition IR.
+    """
 
     _DEFAULT_OPTIONS = {"redundant_temp_fields": False}
 
+    @staticmethod
+    def make_k_intervals(transform_data: TransformData) -> List[IntervalInfo]:
+        """Determines intervals over which the computation runs."""
+        node: gt_ir.StencilDefinition = transform_data.definition_ir
+        transform_data.splitters_var: Optional[str] = None
+        transform_data.min_k_interval_sizes: List[int] = [0]
+
+        # First, look for dynamic splitters variable
+        for computation in node.computations:
+            interval_def = computation.interval
+            for axis_bound in [interval_def.start, interval_def.end]:
+                if isinstance(axis_bound.level, gt_ir.VarRef):
+                    name = axis_bound.level.name
+                    for item in node.parameters:
+                        if item.name == name:
+                            decl = item
+                            break
+                    else:
+                        decl = None
+
+                    if decl is None or decl.length == 0:
+                        raise IntervalSpecificationError(
+                            interval_def,
+                            "Invalid variable reference in interval specification",
+                            loc=axis_bound.loc,
+                        )
+
+                    transform_data.splitters_var = decl.name
+                    transform_data.min_k_interval_sizes = [1] * (decl.length + 1)
+
+        # Extract computation intervals
+        computation_intervals = []
+        for computation in node.computations:
+            # Process current interval definition
+            interval_def = computation.interval
+            bounds = [None, None]
+
+            for i, axis_bound in enumerate([interval_def.start, interval_def.end]):
+                if isinstance(axis_bound.level, gt_ir.VarRef):
+                    # Dynamic splitters: check existing reference and extract size info
+                    if axis_bound.level.name != transform_data.splitters_var:
+                        raise IntervalSpecificationError(
+                            interval_def,
+                            "Non matching variable reference in interval specification",
+                            loc=axis_bound.loc,
+                        )
+
+                    index = axis_bound.level.index + 1
+                    offset = axis_bound.offset
+                    if offset < 0:
+                        index = index - 1
+
+                else:
+                    # Static splitter: extract size info
+                    index = (
+                        transform_data.nk_intervals
+                        if axis_bound.offset < 0 or axis_bound.level == gt_ir.LevelMarker.END
+                        else 0
+                    )
+                    offset = axis_bound.offset
+
+                    if offset < 0 and axis_bound.level != gt_ir.LevelMarker.END:
+                        raise IntervalSpecificationError(
+                            interval_def,
+                            "Invalid offset in interval specification",
+                            loc=axis_bound.loc,
+                        )
+
+                    elif offset > 0 and axis_bound.level != gt_ir.LevelMarker.START:
+                        raise IntervalSpecificationError(
+                            interval_def,
+                            "Invalid offset in interval specification",
+                            loc=axis_bound.loc,
+                        )
+
+                # Update min sizes
+                if not 0 <= index <= transform_data.nk_intervals:
+                    raise IntervalSpecificationError(
+                        interval_def,
+                        "Invalid variable reference in interval specification",
+                        loc=axis_bound.loc,
+                    )
+
+                bounds[i] = (index, offset)
+                if index < transform_data.nk_intervals:
+                    transform_data.min_k_interval_sizes[index] = max(
+                        transform_data.min_k_interval_sizes[index], offset
+                    )
+
+            if bounds[0][0] == bounds[1][0] - 1:
+                index = bounds[0][0]
+                min_size = 1 + bounds[0][1] - bounds[1][1]
+                transform_data.min_k_interval_sizes[index] = max(
+                    transform_data.min_k_interval_sizes[index], min_size
+                )
+
+            # Create computation intervals
+            interval_info = IntervalInfo(*bounds)
+            computation_intervals.append(interval_info)
+
+        return computation_intervals
+
     class SymbolMaker(gt_ir.IRNodeVisitor):
-        def __init__(self, transform_data: TransformData, redundant_temp_fields: bool):
+        """Fills transform_data.symbols with SymbolInfo for each used in the StencilDefinition."""
+
+        @classmethod
+        def apply(cls, transform_data: TransformData, redundant_temp_fields: bool):
+            maker = cls()
+            return maker(transform_data, redundant_temp_fields)
+
+        def __call__(self, transform_data: TransformData, redundant_temp_fields: bool):
             self.data = transform_data
             self.redundant_temp_fields = redundant_temp_fields
+            self.visit(self.data.definition_ir)
 
         def visit_Ref(self, node: gt_ir.Ref):
             if node.name not in self.data.symbols:
@@ -120,115 +238,23 @@ class InitInfoPass(TransformPass):
             symbol_info = SymbolInfo(decl, has_redundancy=has_redundancy)
             self.data.symbols[decl.name] = symbol_info
 
-    class IntervalMaker(gt_ir.IRNodeVisitor):
-        def __init__(self, transform_data: TransformData):
-            self.data = transform_data
-
-        def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
-            self.data.splitters_var = None
-            self.data.min_k_interval_sizes = [0]
-
-            # First, look for dynamic splitters variable
-            for computation in node.computations:
-                interval_def = computation.interval
-                for axis_bound in [interval_def.start, interval_def.end]:
-                    if isinstance(axis_bound.level, gt_ir.VarRef):
-                        name = axis_bound.level.name
-                        for item in node.parameters:
-                            if item.name == name:
-                                decl = item
-                                break
-                        else:
-                            decl = None
-
-                        if decl is None or decl.length == 0:
-                            raise IntervalSpecificationError(
-                                interval_def,
-                                "Invalid variable reference in interval specification",
-                                loc=axis_bound.loc,
-                            )
-
-                        self.data.splitters_var = decl.name
-                        self.data.min_k_interval_sizes = [1] * (decl.length + 1)
-
-            # Extract computation intervals
-            computation_intervals = []
-            for computation in node.computations:
-                # Process current interval definition
-                interval_def = computation.interval
-                bounds = [None, None]
-
-                for i, axis_bound in enumerate([interval_def.start, interval_def.end]):
-                    if isinstance(axis_bound.level, gt_ir.VarRef):
-                        # Dynamic splitters: check existing reference and extract size info
-                        if axis_bound.level.name != self.data.splitters_var:
-                            raise IntervalSpecificationError(
-                                interval_def,
-                                "Non matching variable reference in interval specification",
-                                loc=axis_bound.loc,
-                            )
-
-                        index = axis_bound.level.index + 1
-                        offset = axis_bound.offset
-                        if offset < 0:
-                            index = index - 1
-
-                    else:
-                        # Static splitter: extract size info
-                        index = (
-                            self.data.nk_intervals
-                            if axis_bound.offset < 0 or axis_bound.level == gt_ir.LevelMarker.END
-                            else 0
-                        )
-                        offset = axis_bound.offset
-
-                        if offset < 0 and axis_bound.level != gt_ir.LevelMarker.END:
-                            raise IntervalSpecificationError(
-                                interval_def,
-                                "Invalid offset in interval specification",
-                                loc=axis_bound.loc,
-                            )
-
-                        elif offset > 0 and axis_bound.level != gt_ir.LevelMarker.START:
-                            raise IntervalSpecificationError(
-                                interval_def,
-                                "Invalid offset in interval specification",
-                                loc=axis_bound.loc,
-                            )
-
-                    # Update min sizes
-                    if not 0 <= index <= self.data.nk_intervals:
-                        raise IntervalSpecificationError(
-                            interval_def,
-                            "Invalid variable reference in interval specification",
-                            loc=axis_bound.loc,
-                        )
-
-                    bounds[i] = (index, offset)
-                    if index < self.data.nk_intervals:
-                        self.data.min_k_interval_sizes[index] = max(
-                            self.data.min_k_interval_sizes[index], offset
-                        )
-
-                if bounds[0][0] == bounds[1][0] - 1:
-                    index = bounds[0][0]
-                    min_size = 1 + bounds[0][1] - bounds[1][1]
-                    self.data.min_k_interval_sizes[index] = max(
-                        self.data.min_k_interval_sizes[index], min_size
-                    )
-
-                # Create computation intervals
-                interval_info = IntervalInfo(*bounds)
-                computation_intervals.append(interval_info)
-
-            return computation_intervals
-
     class BlockMaker(gt_ir.IRNodeVisitor):
-        def __init__(self, transform_data: TransformData, computation_intervals: list):
-            self.data = transform_data
+        """Creates the block tree consisting of DomainBlockInfo, IJBlockInfo,
+        IntervalBlockInfo, and StatementInfo."""
+
+        def __init__(self, computation_intervals: list):
             self.computation_intervals = computation_intervals
+
+        @classmethod
+        def apply(cls, transform_data: TransformData, computation_intervals: list):
+            maker = cls(computation_intervals)
+            return maker(transform_data)
+
+        def __call__(self, transform_data: TransformData):
+            self.data = transform_data
             self.current_block_info = None
             self.zero_extent = Extent.zeros(transform_data.ndims)
+            self.visit(self.data.definition_ir)
 
         def visit_Expr(self, node: gt_ir.Expr):
             return []
@@ -308,6 +334,8 @@ class InitInfoPass(TransformPass):
             return result
 
         def visit_ComputationBlock(self, node: gt_ir.ComputationBlock):
+            """Traverse statements, creating new IJBlockInfo where non-zero
+            accesses to output fields are made."""
             interval = next(iter(self.current_block_info.intervals))
             interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
 
@@ -352,6 +380,7 @@ class InitInfoPass(TransformPass):
                 )
 
         def visit_StencilDefinition(self, node: gt_ir.StencilDefinition):
+            """Creates a DomainBlockInfo for every interval and every computation."""
             for computation, interval in zip(node.computations, self.computation_intervals):
                 self.current_block_info = DomainBlockInfo(
                     self.data.id_generator.new, computation.iteration_order, {interval}, []
@@ -373,42 +402,34 @@ class InitInfoPass(TransformPass):
 
         def _merge_extents(self, refs: list):
             result = {}
-            params = set()
 
             # Merge offsets for same symbol
             for name, extent in refs:
-                if extent is None:
-                    assert name in params or name not in result
-                    params |= {name}
-                    result.setdefault(name, Extent((0, 0), (0, 0), (0, 0)))
-                else:
-                    assert name not in params
-                    if name in result:
-                        result[name] |= extent
-                    else:
-                        result[name] = extent
+                extent = extent or Extent.zeros()
+                result.setdefault(name, Extent.zeros())
+                result[name] |= extent
 
             return result
 
-    def __init__(self, redundant_temp_fields=_DEFAULT_OPTIONS["redundant_temp_fields"]):
-        self.redundant_temp_fields = redundant_temp_fields
-
     @property
-    def defaults(self):
+    def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData):
-        interval_maker = self.IntervalMaker(transform_data)
-        computation_intervals = interval_maker.visit(transform_data.definition_ir)
-        symbol_maker = self.SymbolMaker(transform_data, self.redundant_temp_fields)
-        symbol_maker.visit(transform_data.definition_ir)
-        block_maker = self.BlockMaker(transform_data, computation_intervals)
-        block_maker.visit(transform_data.definition_ir)
-
-        return transform_data
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        computation_intervals = cls.make_k_intervals(transform_data)
+        cls.SymbolMaker.apply(transform_data, cls._DEFAULT_OPTIONS["redundant_temp_fields"])
+        cls.BlockMaker.apply(transform_data, computation_intervals)
 
 
 class NormalizeBlocksPass(TransformPass):
+    """Create a DomainBlockInfo for each StatementInfo.
+
+    Note
+    ----
+    The following `transform_data` attributes are changed:
+        - `blocks`: DomainBlockInfo each contain only a single StatementInfo.
+    """
 
     _DEFAULT_OPTIONS = {}
 
@@ -470,17 +491,13 @@ class NormalizeBlocksPass(TransformPass):
             )
             self._split_blocks.append(new_block)
 
-    def __init__(self):
-        pass
-
     @property
-    def defaults(self):
+    def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData):
-        transform_data.blocks = self.SplitBlocksVisitor().visit(transform_data)
-
-        return transform_data
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        transform_data.blocks = cls.SplitBlocksVisitor().visit(transform_data)
 
 
 class MultiStageMergingWrapper:
@@ -768,17 +785,27 @@ def greedy_merging_with_wrapper(
 
 
 class MergeBlocksPass(TransformPass):
+    """Merges `transform_data.blocks` using a greedy algorithm.
+
+    The first step merges IJBlockInfos as long as compatibility conditions are met, then proceeds to try and merge
+    IJBlockInfos. The secondary merging step attempts to create as few IntervalBlockInfos as necessary, by re-using
+    existing blocks with the same interval. Note that this could be re-implemented as a third merging step for every
+    IJBlockInfo instead.
+
+    Note
+    ----
+    The following `transform_data` attributes are changed:
+        - `blocks`: Merged as far as possible without reordering.
+    """
 
     _DEFAULT_OPTIONS = {}
 
-    def __init__(self):
-        pass
-
     @property
-    def defaults(self):
+    def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData) -> TransformData:
+    @staticmethod
+    def apply(transform_data: TransformData) -> None:
         merged_blocks = greedy_merging_with_wrapper(
             transform_data.blocks, MultiStageMergingWrapper, parent=transform_data
         )
@@ -787,21 +814,25 @@ class MergeBlocksPass(TransformPass):
                 block.ij_blocks, StageMergingWrapper, parent=transform_data, parent_block=block
             )
         transform_data.blocks = merged_blocks
-        return transform_data
 
 
 class ComputeExtentsPass(TransformPass):
+    """Loop over blocks backwards and accumulate extents.
+
+    Note
+    ----
+    Writes to `transform_data.blocks` and fills each IJBlockInfo.compute_extent,
+    and creates `transform_data.implementation_ir.fields_extent`.
+    """
 
     _DEFAULT_OPTIONS = {}
 
-    def __init__(self):
-        pass
-
     @property
-    def defaults(self):
+    def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData):
+    @staticmethod
+    def apply(transform_data: TransformData) -> None:
         seq_axis = transform_data.definition_ir.domain.index(
             transform_data.definition_ir.domain.sequential_axis
         )
@@ -810,8 +841,8 @@ class ComputeExtentsPass(TransformPass):
             access_extents[name] = Extent.zeros()
 
         blocks = transform_data.blocks
-        for block in reversed(blocks):
-            for ij_block in reversed(block.ij_blocks):
+        for dom_block in reversed(blocks):
+            for ij_block in reversed(dom_block.ij_blocks):
                 ij_block.compute_extent = Extent.zeros()
                 for name in ij_block.outputs:
                     ij_block.compute_extent |= access_extents[name]
@@ -827,16 +858,21 @@ class ComputeExtentsPass(TransformPass):
             name: Extent(extent) for name, extent in access_extents.items()
         }
 
-        return transform_data
-
 
 class DataTypePass(TransformPass):
+    """Fills in the concrete data_type for all set to `DataType.AUTO`"""
+
     class CollectDataTypes(gt_ir.IRNodeVisitor):
-        def __call__(self, node):
+        def __call__(self, node) -> None:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.vars = node.parameters
             self.fields = node.fields
             self.visit(node)
+
+        @classmethod
+        def apply(cls, node) -> None:
+            collector = cls()
+            return collector(node)
 
         def visit_ApplyBlock(self, node: gt_ir.Node, **kwargs):
             self.generic_visit(node, apply_block_symbols=node.local_symbols, **kwargs)
@@ -947,13 +983,18 @@ class DataTypePass(TransformPass):
             else:
                 node.data_type = gt_ir.DataType.DEFAULT
 
-    def apply(self, transform_data: TransformData):
-        collect_data_type = self.CollectDataTypes()
-        collect_data_type(transform_data.implementation_ir)
-        return transform_data
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        cls.CollectDataTypes.apply(transform_data.implementation_ir)
 
 
 class ComputeUsedSymbolsPass(TransformPass):
+    """Fills the SymbolInfo `in_use` attribute in `transform_data.symbols`.
+
+    It does this because an entry was originally created for each Decl in the
+    SymbolMaker part of InitInfoPass, and some of these may not be referenced.
+    """
+
     class ComputeUsedVisitor(gt_ir.IRNodeVisitor):
         def __init__(self, transform_data: TransformData):
             self.data = transform_data
@@ -964,25 +1005,37 @@ class ComputeUsedSymbolsPass(TransformPass):
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
             self.data.symbols[node.name].in_use = True
 
-    def apply(self, transform_data: TransformData):
-        visitor = self.ComputeUsedVisitor(transform_data)
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        visitor = cls.ComputeUsedVisitor(transform_data)
         visitor.visit(transform_data.definition_ir)
-        return transform_data
 
 
 class BuildIIRPass(TransformPass):
+    """Transcribe `transform_data.blocks` to `transform_data.implementation_ir`.
+
+    Note
+    ----
+    DomainBlockInfo -> MultiStage
+    IJBlockInfo -> Stage
+    IntervalBlockInfo -> ApplyBlock
+    """
 
     _DEFAULT_OPTIONS = {}
 
     def __init__(self):
-        self.data = None
-        self.iir = None
+        self.data: TransformData = None
+        self.iir: gt_ir.StencilImplementation = None
 
     @property
-    def defaults(self):
+    def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    def apply(self, transform_data: TransformData):
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        return cls()(transform_data)
+
+    def __call__(self, transform_data: TransformData) -> None:
         self.data = transform_data
         self.iir = transform_data.implementation_ir
 
@@ -1018,7 +1071,7 @@ class BuildIIRPass(TransformPass):
 
         return transform_data
 
-    def _make_stage(self, ij_block):
+    def _make_stage(self, ij_block) -> gt_ir.Stage:
         # Apply blocks and decls
         apply_blocks = []
         decls = []
@@ -1068,7 +1121,7 @@ class BuildIIRPass(TransformPass):
 
         return stage
 
-    def _make_apply_block(self, interval_block):
+    def _make_apply_block(self, interval_block) -> gt_ir.ApplyBlock:
         # Body
         stmts = []
         for stmt_info in interval_block.stmts:
@@ -1081,7 +1134,7 @@ class BuildIIRPass(TransformPass):
 
         return result
 
-    def _make_accessor(self, name, extent, read_write: bool):
+    def _make_accessor(self, name, extent, read_write: bool) -> gt_ir.Accessor:
         assert name in self.data.symbols
         intent = gt_ir.AccessIntent.READ_WRITE if read_write else gt_ir.AccessIntent.READ_ONLY
         if self.data.symbols[name].is_field:
@@ -1094,7 +1147,7 @@ class BuildIIRPass(TransformPass):
 
         return result
 
-    def _make_axis_interval(self, interval: IntervalInfo):
+    def _make_axis_interval(self, interval: IntervalInfo) -> gt_ir.AxisInterval:
         axis_bounds = []
         for bound in (interval.start, interval.end):
             if bound[0] == 0:
@@ -1115,7 +1168,21 @@ class BuildIIRPass(TransformPass):
 
 
 class DemoteLocalTemporariesToVariablesPass(TransformPass):
+    """Demote symbols only used within a single stage to scalars.
+
+    This may occur because these can be local variables in the scope, and
+    therefore do not need to be fields.
+    """
+
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
+        def __init__(self):
+            pass
+
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation) -> Set[str]:
+            collector = cls()
+            return collector(node)
+
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.demotables = set(node.temporary_fields)
@@ -1142,6 +1209,11 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             self.stage_symbols.add(node.name)
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation, demotables: Set[str]) -> None:
+            instance = cls(demotables)
+            return instance(node)
+
         def __init__(self, demotables):
             self.demotables = demotables
             self.local_symbols = None
@@ -1200,14 +1272,10 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             else:
                 return True, node
 
-    def apply(self, transform_data: TransformData) -> TransformData:
-        collect_demotable_symbols = self.CollectDemotableSymbols()
-        demotables = collect_demotable_symbols(transform_data.implementation_ir)
-
-        demote_symbols = self.DemoteSymbols(demotables)
-        transform_data.implementation_ir = demote_symbols(transform_data.implementation_ir)
-
-        return transform_data
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        demotables = cls.CollectDemotableSymbols.apply(transform_data.implementation_ir)
+        cls.DemoteSymbols.apply(transform_data.implementation_ir, demotables)
 
 
 class ReduceTemporaryStoragesPass(TransformPass):
@@ -1284,6 +1352,16 @@ class ReduceTemporaryStoragesPass(TransformPass):
 
 class HousekeepingPass(TransformPass):
     class WarnIfNoEffect(gt_ir.IRNodeVisitor):
+        """Warn if StencilImplementation has no effect."""
+
+        def __init__(self):
+            pass
+
+        @classmethod
+        def apply(cls, stencil_name: str, node: gt_ir.StencilImplementation) -> None:
+            instance = cls()
+            return instance(stencil_name, node)
+
         def __call__(self, stencil_name: str, node: gt_ir.StencilImplementation) -> None:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.stencil_name = stencil_name
@@ -1295,6 +1373,16 @@ class HousekeepingPass(TransformPass):
                 warnings.warn(f"Stencil `{self.stencil_name}` has no effect.", RuntimeWarning)
 
     class PruneEmptyNodes(gt_ir.IRNodeMapper):
+        """Removes empty multi-stages, stage groups, and stages."""
+
+        def __init__(self):
+            pass
+
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation) -> None:
+            instance = cls()
+            return instance(node)
+
         def __call__(self, node: gt_ir.StencilImplementation) -> None:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.visit(node)
@@ -1332,11 +1420,9 @@ class HousekeepingPass(TransformPass):
             else:
                 return False, None
 
-    def apply(self, transform_data: TransformData) -> TransformData:
-
-        prune_emtpy_nodes = self.PruneEmptyNodes()
-        prune_emtpy_nodes(transform_data.implementation_ir)
-
-        self.WarnIfNoEffect()(transform_data.definition_ir.name, transform_data.implementation_ir)
-
-        return transform_data
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        cls.PruneEmptyNodes.apply(transform_data.implementation_ir)
+        cls.WarnIfNoEffect.apply(
+            transform_data.definition_ir.name, transform_data.implementation_ir
+        )

@@ -77,8 +77,8 @@ target/
 .python-version
 
 # Environments
-.env
-.venv
+*.env
+*.venv
 env/
 venv/
 ENV/
