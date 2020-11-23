@@ -197,11 +197,11 @@ def test_AssignSmt_category():
 def test_IfStmt_category():
     Testee = common.IfStmt[StmtA, ExprA]
 
-    Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=[StmtA()], false_branch=[StmtA()])
+    Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=StmtA(), false_branch=StmtA())
     with pytest.raises(ValidationError):
-        Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=[StmtB()], false_branch=[StmtA()])
-        Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=[StmtA()], false_branch=[StmtB()])
-        Testee(cond=ExprB(dtype=DataType.BOOL), true_branch=[StmtA()], false_branch=[StmtA()])
+        Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=StmtB(), false_branch=StmtA())
+        Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=StmtA(), false_branch=StmtB())
+        Testee(cond=ExprB(dtype=DataType.BOOL), true_branch=StmtA(), false_branch=StmtA())
 
 
 def test_UnaryOp_category():
