@@ -1,9 +1,6 @@
-from __future__ import annotations
-
-from typing import List, Tuple, Union
+from typing import List, Tuple
 
 import eve
-import numpy
 from pydantic import validator
 
 from gt4py.gtc import common, gtir
@@ -22,31 +19,32 @@ class NumericalOffset(eve.Node):
     value: int
 
 
-class Offset(eve.Node):
+class AxisName(eve.StrEnum):
+    I = "I"  # noqa: E741 (ambiguous variable name)
+    J = "J"
+    K = "K"
+
+
+class AxisOffset(eve.Node):
     offset: NumericalOffset
-    axis_name: str
+    axis_name: AxisName
+    parallel: bool
 
     @classmethod
-    def from_int(cls, *, axis_name: str, offset: int) -> Offset:
-        return cls(axis_name=axis_name, offset=NumericalOffset(value=offset))
+    def from_int(cls, *, axis_name: str, offset: int, parallel: bool) -> "AxisOffset":
+        return cls(axis_name=axis_name, offset=NumericalOffset(value=offset), parallel=parallel)
 
     @classmethod
-    def k(cls, offset: int) -> Offset:
-        return cls.from_int(axis_name="k", offset=offset)
-
-
-class ParallelOffset(Offset):
-    @classmethod
-    def i(cls, offset: int) -> ParallelOffset:
-        return cls.from_int(axis_name="i", offset=offset)
+    def i(cls, offset: int, *, parallel=True) -> "AxisOffset":
+        return cls.from_int(axis_name=AxisName.I, offset=offset, parallel=parallel)
 
     @classmethod
-    def j(cls, offset: int) -> ParallelOffset:
-        return cls.from_int(axis_name="j", offset=offset)
+    def j(cls, offset: int, *, parallel=True) -> "AxisOffset":
+        return cls.from_int(axis_name=AxisName.J, offset=offset, parallel=parallel)
 
-
-class SequentialOffset(Offset):
-    pass
+    @classmethod
+    def k(cls, offset: int, *, parallel=False) -> "AxisOffset":
+        return cls.from_int(axis_name=AxisName.K, offset=offset, parallel=parallel)
 
 
 class VectorExpression(gtir.LocNode):
@@ -55,9 +53,9 @@ class VectorExpression(gtir.LocNode):
 
 class FieldSlice(VectorExpression):
     name: str
-    i_offset: ParallelOffset
-    j_offset: ParallelOffset
-    k_offset: Offset
+    i_offset: AxisOffset
+    j_offset: AxisOffset
+    k_offset: AxisOffset
 
 
 class VectorArithmetic(VectorExpression):
@@ -79,9 +77,8 @@ class VerticalPass(gtir.LocNode):
 
 
 class DomainPadding(eve.Node):
-    i: Tuple[int, int]
-    j: Tuple[int, int]
-    k: Tuple[int, int]
+    lower: Tuple[int, int, int]
+    upper: Tuple[int, int, int]
 
 
 class Computation(gtir.LocNode):
