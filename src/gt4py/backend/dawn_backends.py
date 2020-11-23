@@ -51,6 +51,15 @@ def _enum_dict(enum: enum.Enum) -> Dict[str, Any]:
 DAWN_PASS_GROUPS = _enum_dict(dawn4py.PassGroup)
 DAWN_CODEGEN_BACKENDS = _enum_dict(dawn4py.CodeGenBackend)
 
+FIELD_SIZE_CHECK = """
+for name, other_name in itertools.combinations(used_field_args, 2):
+    field = used_field_args[name]
+    other_field = used_field_args[name_other]
+    if field.mask == other_field.mask and not other_field.shape == field.shape:
+        raise ValueError(
+            f"The fields {name} and {other_name} have the same mask but different shapes."
+        )"""
+
 
 class FieldInfoCollector(gt_ir.IRNodeVisitor):
     @classmethod
@@ -362,6 +371,9 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 
         return sources.text
 
+    def generate_pre_run(self) -> str:
+        return FIELD_SIZE_CHECK
+
 
 class DawnCUDAPyModuleGenerator(DawnPyModuleGenerator):
     def generate_implementation(self) -> str:
@@ -384,18 +396,8 @@ import cupy
         return source
 
     def generate_pre_run(self) -> str:
-        field_size_check = """
-for name_other, field_other in used_field_args.items():
-    if field_other.mask == field.mask:
-        if not field_other.shape == field.shape:
-            raise ValueError(
-                f"The fields {name} and {name_other} have the same mask but different shapes."
-            )"""
-
         field_names = self.args_data["field_info"].keys()
-        host_to_device = "\n".join([f + ".host_to_device()" for f in field_names])
-
-        return field_size_check + "\n\n" + host_to_device
+        return FIELD_SIZE_CHECK + "\n" + "\n".join([f + ".host_to_device()" for f in field_names])
 
     def generate_post_run(self) -> str:
         output_field_names = [
