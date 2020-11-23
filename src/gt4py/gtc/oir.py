@@ -33,7 +33,7 @@ from gt4py.gtc.common import LocNode
 
 
 class Expr(common.Expr):
-    # dtype: common.DataType # TODO enable once we have a dtype pass in gtir
+    dtype: common.DataType
 
     # TODO Eve could provide support for making a node abstract
     def __init__(self, *args, **kwargs):
@@ -146,6 +146,7 @@ class Interval(LocNode):
 
 class Temporary(LocNode):
     name: SymbolName
+    dtype: common.DataType
 
 
 class VerticalLoop(LocNode):

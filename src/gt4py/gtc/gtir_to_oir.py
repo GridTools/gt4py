@@ -2,7 +2,7 @@ import eve  # noqa: F401
 from gt4py.gtc import gtir, oir
 from typing import Sequence, Tuple, List
 
-from gt4py.gtc.common import CartesianOffset, LogicalOperator, UnaryOperator
+from gt4py.gtc.common import CartesianOffset, LogicalOperator, UnaryOperator, DataType
 
 from devtools import debug
 
@@ -13,14 +13,16 @@ class GTIRToOIR(eve.NodeTranslator):
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, **kwargs
     ) -> Tuple[List[oir.Temporary], List[oir.AssignStmt]]:
-        tmp = oir.Temporary(name="tmp_" + node.left.name + "_" + node.id_)
+        tmp = oir.Temporary(name="tmp_" + node.left.name + "_" + node.id_, dtype=node.left.dtype)
         return ListTuple(
             [tmp],
             [
                 oir.HorizontalExecution(
                     body=[
                         oir.AssignStmt(
-                            left=oir.FieldAccess(name=tmp.name, offset=CartesianOffset.zero()),
+                            left=oir.FieldAccess(
+                                name=tmp.name, offset=CartesianOffset.zero(), dtype=tmp.dtype
+                            ),
                             right=self.visit(node.right),
                         )
                     ],
@@ -30,7 +32,9 @@ class GTIRToOIR(eve.NodeTranslator):
                     body=[
                         oir.AssignStmt(
                             left=self.visit(node.left),
-                            right=oir.FieldAccess(name=tmp.name, offset=CartesianOffset.zero()),
+                            right=oir.FieldAccess(
+                                name=tmp.name, offset=CartesianOffset.zero(), dtype=tmp.dtype
+                            ),
                         )
                     ],
                     mask=mask,
@@ -39,7 +43,7 @@ class GTIRToOIR(eve.NodeTranslator):
         )
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs):
-        return oir.FieldAccess(name=node.name, offset=node.offset)
+        return oir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
 
     def visit_Literal(self, node: gtir.Literal, **kwargs):
         return oir.Literal(value=self.visit(node.value), dtype=node.dtype, kind=node.kind)
@@ -49,11 +53,15 @@ class GTIRToOIR(eve.NodeTranslator):
         return oir.BinaryOp(op=node.op, left=self.visit(node.left), right=self.visit(node.right))
 
     def create_mask(self, node: gtir.FieldIfStmt) -> Tuple:
-        mask_field_decl = oir.Temporary(name="mask_" + node.id_)
+        mask_field_decl = oir.Temporary(name="mask_" + node.id_, dtype=DataType.BOOL)
         fill_mask_field = oir.HorizontalExecution(
             body=[
                 oir.AssignStmt(
-                    left=oir.FieldAccess(name=mask_field_decl.name, offset=CartesianOffset.zero()),
+                    left=oir.FieldAccess(
+                        name=mask_field_decl.name,
+                        offset=CartesianOffset.zero(),
+                        dtype=mask_field_decl.dtype,
+                    ),
                     right=self.visit(node.cond),
                 )
             ]
@@ -64,7 +72,9 @@ class GTIRToOIR(eve.NodeTranslator):
         mask_field_decl, fill_mask_h_exec = self.create_mask(node)
         decls_and_h_execs = ListTuple([mask_field_decl], [fill_mask_h_exec])
 
-        new_mask = oir.FieldAccess(name=mask_field_decl.name, offset=CartesianOffset.zero())
+        new_mask = oir.FieldAccess(
+            name=mask_field_decl.name, offset=CartesianOffset.zero(), dtype=mask_field_decl.dtype
+        )
         if mask:
             new_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=new_mask)
 

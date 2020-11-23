@@ -94,11 +94,8 @@ class DefIRToGTIR(IRNodeVisitor):
     ) -> Union[gtir.Decl]:
         return all_params[node.name]
 
-    # TODO there is a problem with the GTScript parallel model in the DefinitionIR:
-    # intervals of the same `with computation` are in different ComputationBlocks
     def visit_ComputationBlock(self, node: ComputationBlock) -> List[gtir.VerticalLoop]:
         stmts = [s for s in self.visit(node.body)]
-        debug(stmts)
         start, end = self.visit(node.interval)
         interval = gtir.Interval(start=start, end=end)
         return gtir.VerticalLoop(
