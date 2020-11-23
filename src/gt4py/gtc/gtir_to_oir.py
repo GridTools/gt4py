@@ -68,10 +68,10 @@ class GTIRToOIR(eve.NodeTranslator):
         if mask:
             new_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=new_mask)
 
-        decls_and_h_execs += self.visit(node.true_branch, mask=new_mask)
+        decls_and_h_execs += self.visit(node.true_branch.body, mask=new_mask)
         if node.false_branch:
             decls_and_h_execs += self.visit(
-                node.false_branch, mask=oir.UnaryOp(op=UnaryOperator.NOT, expr=new_mask)
+                node.false_branch.body, mask=oir.UnaryOp(op=UnaryOperator.NOT, expr=new_mask)
             )
 
         return decls_and_h_execs

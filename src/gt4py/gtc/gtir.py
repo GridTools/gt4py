@@ -56,6 +56,10 @@ class Stmt(common.Stmt):
         super().__init__(*args, **kwargs)
 
 
+class BlockStmt(common.BlockStmt[Stmt], Stmt):
+    pass
+
+
 class Literal(common.Literal, Expr):
     pass
 
@@ -102,7 +106,7 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
         return v
 
 
-class FieldIfStmt(common.IfStmt[Stmt, Expr], Stmt):
+class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
     """If statement with a field expression as condition.
 
 
@@ -124,7 +128,7 @@ class FieldIfStmt(common.IfStmt[Stmt, Expr], Stmt):
         return cond
 
 
-class ScalarIfStmt(common.IfStmt[Stmt, Expr], Stmt):
+class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
     """If statement with a scalar expression as condition.
 
     No special rules apply.
@@ -194,6 +198,7 @@ class Interval(LocNode):
     end: AxisBound
 
 
+# TODO should vertical loop open a scope
 class VerticalLoop(LocNode):
     interval: Interval
     loop_order: common.LoopOrder

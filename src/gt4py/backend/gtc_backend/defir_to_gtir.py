@@ -1,6 +1,6 @@
 from types import MappingProxyType
 from typing import ClassVar, Dict, List, Mapping, Union
-
+from devtools import debug
 from gt4py.gtc import common, gtir
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
@@ -97,13 +97,14 @@ class DefIRToGTIR(IRNodeVisitor):
     # TODO there is a problem with the GTScript parallel model in the DefinitionIR:
     # intervals of the same `with computation` are in different ComputationBlocks
     def visit_ComputationBlock(self, node: ComputationBlock) -> List[gtir.VerticalLoop]:
-        assigns = [s for s in self.visit(node.body)]
+        stmts = [s for s in self.visit(node.body)]
+        debug(stmts)
         start, end = self.visit(node.interval)
         interval = gtir.Interval(start=start, end=end)
         return gtir.VerticalLoop(
             interval=interval,
             loop_order=self.GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER[node.iteration_order],
-            body=assigns,
+            body=stmts,
         )
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
@@ -130,8 +131,8 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_If(self, node: If):
         return gtir.FieldIfStmt(
             cond=self.visit(node.condition),
-            true_branch=self.visit(node.main_body),
-            false_branch=self.visit(node.else_body),
+            true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
+            false_branch=gtir.BlockStmt(body=self.visit(node.else_body)),
         )
 
     def visit_VarRef(self, node: VarRef):

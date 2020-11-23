@@ -16,7 +16,7 @@
 
 import enum
 
-from eve import IntEnum, StrEnum, GenericNode, Node, SourceLocation, Str
+from eve import IntEnum, StrEnum, GenericNode, Node, SourceLocation, Str, SymbolTableTrait
 from typing import List, Generic, TypeVar, Optional, Union
 from eve.type_definitions import SymbolRef
 from pydantic import validator
@@ -216,6 +216,10 @@ class FieldAccess(Node):
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
 
+class BlockStmt(GenericNode, SymbolTableTrait, Generic[StmtT]):
+    body: List[StmtT]
+
+
 class IfStmt(GenericNode, Generic[StmtT, ExprT]):
     """Generic if statement.
 
@@ -223,8 +227,8 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT]):
     """
 
     cond: ExprT
-    true_branch: List[StmtT]
-    false_branch: Optional[List[StmtT]]
+    true_branch: StmtT
+    false_branch: Optional[StmtT]
 
     @validator("cond")
     def condition_is_boolean(cls, cond):

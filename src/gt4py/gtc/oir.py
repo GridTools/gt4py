@@ -70,7 +70,12 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
         return v
 
 
-class IfStmt(common.IfStmt[Stmt, Expr], Stmt):
+# TODO
+# class BlockStmt(common.BlockStmt[Stmt], Stmt):
+#     pass
+
+
+class IfStmt(common.IfStmt[List[Stmt], Expr], Stmt):  # TODO replace List[Stmt] by BlockStmt?
     pass
 
 
