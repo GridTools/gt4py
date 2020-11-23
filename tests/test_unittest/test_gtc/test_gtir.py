@@ -148,17 +148,17 @@ def test_valid_nodes(valid_node):
 
 
 @pytest.mark.parametrize(
-    "invalid_node",
+    "invalid_node,expected_regex",
     [
-        pytest.param(
+        (
             lambda: ParAssignStmt(
                 left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0)).build(),
                 right=DummyExpr(),
             ),
-            id="non-zero horizontal offset not allowed",
-        ),
+            r"must not have .*horizontal offset",
+        )
     ],
 )
-def test_invalid_nodes(invalid_node):
-    with pytest.raises(ValidationError):
+def test_invalid_nodes(invalid_node, expected_regex):
+    with pytest.raises(ValidationError, match=expected_regex):
         invalid_node()
