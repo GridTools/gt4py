@@ -177,5 +177,5 @@ def test_stage_merger_induced_interval_block_reordering(backend):
 
     stencil(field_in, field_out)
 
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 0:-1], 3)
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, -1], 2)
+    np.testing.assert_allclose(np.asarray(field_out)[:, :, 0:-1], 3)
+    np.testing.assert_allclose(np.asarray(field_out)[:, :, -1], 2)

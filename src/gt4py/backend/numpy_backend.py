@@ -29,7 +29,7 @@ from .python_generator import PythonSourceGenerator
 
 if TYPE_CHECKING:
     from gt4py.stencil_builder import StencilBuilder
-    from gt4py.storage.storage import Storage
+    from gt4py.storage.definitions import Storage
 
 
 class NumPySourceGenerator(PythonSourceGenerator):
@@ -196,7 +196,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
             if info.name in node.fields and info.name not in node.unreferenced:
                 self.sources.extend(self._make_field_origin(info.name))
                 self.sources.extend(
-                    "{name} = {name}.view({np}.ndarray)".format(
+                    "{name} = np.asarray({name})".format(
                         name=info.name, np=self.numpy_prefix
                     )
                 )
@@ -383,7 +383,6 @@ class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
         "device": "cpu",
         "layout_map": numpy_layout,
         "is_compatible_layout": numpy_is_compatible_layout,
-        "is_compatible_type": numpy_is_compatible_type,
     }
 
     languages = {"computation": "python", "bindings": []}

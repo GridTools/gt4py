@@ -643,7 +643,10 @@ pyext_module = gt_utils.make_module_from_file(
         api_fields = set(field.name for field in definition_ir.api_fields)
         for arg in definition_ir.api_signature:
             if arg.name not in self.args_data["unreferenced"]:
-                args.append(arg.name)
+                if from_name(self.backend_name).storage_info['device']=="cpu":
+                    args.append(f"np.asarray({arg.name})")
+                else:
+                    args.append(arg.name)
                 if arg.name in api_fields:
                     args.append("list(_origin_['{}'])".format(arg.name))
 

@@ -35,7 +35,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
         if origin is None:
             origin = "{origin_arg}['{name}']".format(origin_arg=self.origin_arg_name, name=name)
         source_lines = [
-            "{name}{marker} = _Accessor({name}, {origin})".format(
+            "{name}{marker} = _Accessor(np.asarray({name}), {origin})".format(
                 marker=self.origin_marker, name=name, origin=origin
             )
         ]
@@ -220,8 +220,7 @@ def debug_is_compatible_layout(field):
     return sum(field.shape) > 0
 
 
-def debug_is_compatible_type(field):
-    return isinstance(field, np.ndarray)
+
 
 
 @gt_backend.register
@@ -235,7 +234,6 @@ class DebugBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
         "device": "cpu",
         "layout_map": debug_layout,
         "is_compatible_layout": debug_is_compatible_layout,
-        "is_compatible_type": debug_is_compatible_type,
     }
 
     languages = {"computation": "python", "bindings": []}

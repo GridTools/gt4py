@@ -313,43 +313,6 @@ def test_np_array_int_types():
         domain=np.asarray((20, 20, 10), dtype=np.int64),
     )
 
-
-def test_ndarray_warning():
-    """test that proper warnings are raised depending on field type."""
-    backend = "numpy"
-    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
-
-    # test numpy int types are accepted
-    in_field = gt_storage.ones(
-        backend=backend,
-        shape=np.asarray((23, 23, 10), dtype=np.int64),
-        default_origin=np.asarray((1, 1, 0), dtype=np.int64),
-        dtype=np.float64,
-    )
-    out_field = gt_storage.zeros(
-        backend=backend,
-        shape=np.asarray((23, 23, 10), dtype=np.int64),
-        default_origin=np.asarray((1, 1, 0), dtype=np.int64),
-        dtype=np.float64,
-    )
-    with pytest.warns(RuntimeWarning):
-        stencil(
-            in_field=in_field.view(np.ndarray),
-            out_field=out_field.view(np.ndarray),
-            origin=np.asarray((2, 2, 0), dtype=np.int64),
-            domain=np.asarray((20, 20, 10), dtype=np.int64),
-        )
-
-    with pytest.warns(None) as record:
-        stencil(
-            in_field=in_field,
-            out_field=out_field,
-            origin=np.asarray((2, 2, 0), dtype=np.int64),
-            domain=np.asarray((20, 20, 10), dtype=np.int64),
-        )
-    assert len(record) == 0
-
-
 @pytest.mark.parametrize("backend", ["debug", "numpy", "gtx86"])
 def test_exec_info(backend):
     """test that proper warnings are raised depending on field type."""

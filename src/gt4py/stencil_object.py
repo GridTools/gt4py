@@ -158,26 +158,11 @@ class StencilObject(abc.ABC):
                     f"The layout of the field {name} is not compatible with the backend."
                 )
 
-            if not gt_backend.from_name(self.backend).storage_info["is_compatible_type"](field):
-                raise ValueError(
-                    f"Field '{name}' has type '{type(field)}', which is not compatible with the '{self.backend}' backend."
-                )
-            elif type(field) is np.ndarray:
-                warnings.warn(
-                    "NumPy ndarray passed as field. This is discouraged and only works with constraints and only for certain backends.",
-                    RuntimeWarning,
-                )
             if not field.dtype == self.field_info[name].dtype:
                 raise TypeError(
                     f"The dtype of field '{name}' is '{field.dtype}' instead of '{self.field_info[name].dtype}'"
                 )
             # ToDo: check if mask is correct: need mask info in stencil object.
-
-            if isinstance(field, gt_storage.storage.Storage):
-                if not field.is_stencil_view:
-                    raise ValueError(
-                        f"An incompatible view was passed for field {name} to the stencil. "
-                    )
 
         # assert compatibility of parameters with stencil
         for name, parameter in used_param_args.items():

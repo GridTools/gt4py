@@ -72,31 +72,31 @@ class TestExecInfo:
         self.nz = data.draw(hyp_st.integers(min_value=1, max_value=32), label="nz")
         shape = (self.nx, self.ny, self.nz)
 
-        self.in_phi = gt_storage.from_array(
+        self.in_phi = gt_storage.storage(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
             default_origin=(0, 0, 0),
             dtype=float,
         )
-        self.in_u = gt_storage.from_array(
+        self.in_u = gt_storage.storage(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
             default_origin=(0, 0, 0),
             dtype=float,
         )
-        self.in_v = gt_storage.from_array(
+        self.in_v = gt_storage.storage(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
             default_origin=(0, 0, 0),
             dtype=float,
         )
-        self.tmp_phi = gt_storage.from_array(
+        self.tmp_phi = gt_storage.storage(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
             default_origin=(1, 1, 0),
             dtype=float,
         )
-        self.out_phi = gt_storage.from_array(
+        self.out_phi = gt_storage.storage(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
             default_origin=(3, 3, 0),

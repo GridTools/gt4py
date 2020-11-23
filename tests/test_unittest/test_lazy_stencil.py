@@ -83,10 +83,10 @@ def test_lazy_call(frontend, backend):
     """Test that the lazy stencil is callable like the compiled stencil object."""
     import numpy
 
-    a = gt4py.storage.from_array(
+    a = gt4py.storage.storage(
         numpy.array([[[1.0]]]), default_origin=(0, 0, 0), backend=backend.name
     )
-    b = gt4py.storage.from_array(
+    b = gt4py.storage.storage(
         numpy.array([[[0.0]]]), default_origin=(0, 0, 0), backend=backend.name
     )
     lazy_s = LazyStencil(

@@ -35,7 +35,7 @@ from . import pyext_builder
 
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
-    from gt4py.storage.storage import Storage
+    from gt4py.storage.definitions import Storage
 
 
 def make_x86_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
@@ -116,9 +116,9 @@ def cuda_is_compatible_layout(field: "Storage") -> bool:
 
 
 def cuda_is_compatible_type(field: Any) -> bool:
-    from gt4py.storage.storage import ExplicitlySyncedGPUStorage, GPUStorage
+    from gt4py.storage.definitions import ExplicitlyManagedGPUStorage, CudaManagedGPUStorage
 
-    return isinstance(field, (GPUStorage, ExplicitlySyncedGPUStorage))
+    return isinstance(field, (CudaManagedGPUStorage, ExplicitlyManagedGPUStorage))
 
 
 class _MaxKOffsetExtractor(gt_ir.IRNodeVisitor):
@@ -629,7 +629,6 @@ class GTX86Backend(BaseGTBackend):
         "device": "cpu",
         "layout_map": make_x86_layout_map,
         "is_compatible_layout": x86_is_compatible_layout,
-        "is_compatible_type": gtcpu_is_compatible_type,
     }
 
     languages = {"computation": "c++", "bindings": ["python"]}
@@ -650,7 +649,6 @@ class GTMCBackend(BaseGTBackend):
         "device": "cpu",
         "layout_map": make_mc_layout_map,
         "is_compatible_layout": mc_is_compatible_layout,
-        "is_compatible_type": gtcpu_is_compatible_type,
     }
 
     languages = {"computation": "c++", "bindings": ["python"]}
@@ -693,7 +691,6 @@ class GTCUDABackend(BaseGTBackend):
         "device": "gpu",
         "layout_map": cuda_layout,
         "is_compatible_layout": cuda_is_compatible_layout,
-        "is_compatible_type": cuda_is_compatible_type,
     }
 
     languages = {"computation": "cuda", "bindings": ["python"]}

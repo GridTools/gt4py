@@ -481,7 +481,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 if isinstance(f, np.ndarray):
                     patched_f = np.empty(shape=patched_shape)
                     patched_f[patching_slices] = f
-                    inputs[k] = gt_storage.from_array(
+                    inputs[k] = gt_storage.storage(
                         patched_f,
                         dtype=test["definition"].__annotations__[k],
                         shape=patched_f.shape,
@@ -541,8 +541,8 @@ class StencilTestSuite(metaclass=SuiteMeta):
                         for d in range(len(domain))
                     ]
                     np.testing.assert_allclose(
-                        value.data[domain_slice],
-                        expected_value[domain_slice],
+                        np.asarray(value)[domain_slice],
+                        np.asarray(expected_value)[domain_slice],
                         rtol=RTOL,
                         atol=ATOL,
                         equal_nan=EQUAL_NAN,
