@@ -135,6 +135,71 @@ class TestInlinedExternals:
                 definition_func, "test_missing_nested_symbol", module, externals=externals
             )
 
+    def test_undecorated_delay(self, id_version):
+        A = 0
+
+        def undecorated_function():
+            return A
+
+        module = f"TestInlinedExternals_test_undecorated_delay_{id_version}"
+        externals = {"func": undecorated_function}
+
+        A = 1
+
+        # Direct function
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = undecorated_function()
+
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_undecorated_delay", module, externals=externals
+        )
+
+        stmt = def_ir.computations[0].body.stmts[0]
+        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
+
+        # As external
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__externals__ import func
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func()
+
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_undecorated_delay", module, externals=externals
+        )
+
+        stmt = def_ir.computations[0].body.stmts[0]
+        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
+
+    def test_decorated_freeze(self):
+        A = 0
+
+        @gtscript.function
+        def undecorated_function():
+            return A
+
+        module = f"TestInlinedExternals_test_undecorated_delay_{id_version}"
+        externals = {"func": undecorated_function}
+
+        A = 1
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = undecorated_function()
+
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_decorated_freeze", module, externals=externals
+        )
+
+        stmt = def_ir.computations[0].body.stmts[0]
+        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 0
+
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, id_version, value_type):
         module = f"TestInlinedExternals_test_module_{id_version}"
@@ -148,7 +213,7 @@ class TestInlinedExternals:
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
 
-        with pytest.raises(gt_frontend.GTScriptSymbolError, match=r".*WRONG_VALUE_CONSTANT.*"):
+        with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*WRONG_VALUE_CONSTANT.*"):
             compile_definition(definition_func, "test_wrong_value", module, externals=externals)
 
 
@@ -407,6 +472,29 @@ class TestExternalsWithSubroutines:
         compile_definition(
             definition_func, "test_all_legal_combinations", module, externals=externals
         )
+
+    def test_no_nested_function_call(self, id_version):
+        @gtscript.function
+        def _lap(dx, phi):
+            return (phi[0, -1, 0] - 2.0 * phi[0, 0, 0] + phi[0, 1, 0]) / (dx * dx)
+
+        def definition_func(phi: gtscript.Field[np.float64], dx: float):
+            from __externals__ import lap
+
+            with computation(PARALLEL), interval(...):
+                phi = lap(lap(phi, dx), dx)
+
+        module = f"TestExternalsWithSubroutines_test_no_nested_function_call_{id_version}"
+        externals = {
+            "lap": _lap,
+        }
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"
+        ):
+            compile_definition(
+                definition_func, "test_no_nested_function_calls", module, externals=externals
+            )
 
 
 class TestCompileTimeAssertions:

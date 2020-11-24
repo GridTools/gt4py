@@ -402,20 +402,12 @@ class InitInfoPass(TransformPass):
 
         def _merge_extents(self, refs: list):
             result = {}
-            params = set()
 
             # Merge offsets for same symbol
             for name, extent in refs:
-                if extent is None:
-                    assert name in params or name not in result
-                    params |= {name}
-                    result.setdefault(name, Extent((0, 0), (0, 0), (0, 0)))
-                else:
-                    assert name not in params
-                    if name in result:
-                        result[name] |= extent
-                    else:
-                        result[name] = extent
+                extent = extent or Extent.zeros()
+                result.setdefault(name, Extent.zeros())
+                result[name] |= extent
 
             return result
 
