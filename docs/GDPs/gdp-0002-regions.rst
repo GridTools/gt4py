@@ -30,9 +30,7 @@ We are developing a weather model on a cubed-sphere multi-block structured grid,
 We are currently using ``domain`` and ``origin`` keyword arguments to separate stencil calls for special block boundary computation, but doing so leads to inefficient code (multiplies stencil call overhead) that is difficult for model developers to read.
 To illustrate the need for such a feature, consider a snippet of the model that computes a variable ``ub`` differently based on location in the grid:
 
-.. code-block:: python
-
-    Field = gtscript.Field[np.float]​
+.. code-block::
 
     @gtscript.stencil()​
     def main_ub(uc: Field, vc: Field, cosa: Field, rsina: Field, ub: Field, dt5: float):​
@@ -259,17 +257,17 @@ This may be not quite consistent because the `with computation()` still refers t
 To correct this we could rename 'with computation' to 'with vertical_computation', or something similar, at the expense of backward compatibility.
 With this idea, the interval could specify an arbitrary number of region bounds.
 
-.. code-block:: python
+.. code-block::
 
-  @gtscript.stencil()​
-  def ubke(uc: Field, vc: Field, cosa: Field, rsina: Field, ub: Field, ut: Field, dt4: float, dt5: float):​
-    with computation(gtscript.PARALLEL):​
-      with interval(...): # indicates compute domain specified with 'origin' and 'domain'
-        ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina​
-      with interval(Vertical(0, None), (WestEdge(0, 1), EastEdge(0, 1)):​
-        ub = dt5 * (ut[0, -1, 0] + ut)​
-      with interval((SouthEdge(0, 1), NorthEdge(0, 1))):​
-        ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])​
+    @gtscript.stencil()​
+    def ubke(uc: Field, vc: Field, cosa: Field, rsina: Field, ub: Field, ut: Field, dt4: float, dt5: float):​
+        with computation(gtscript.PARALLEL):​
+            with interval(...): # indicates compute domain specified with 'origin' and 'domain'
+                ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina​
+            with interval(Vertical(0, None), (WestEdge(0, 1), EastEdge(0, 1)):​
+                ub = dt5 * (ut[0, -1, 0] + ut)​
+            with interval((SouthEdge(0, 1), NorthEdge(0, 1))):​
+                ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])​
 
 In this case we would have special `Vertical` objects for slicing the vertical direction.
 This might lend itself more naturally to expanding to an arbitrary Nd array.
