@@ -18,6 +18,7 @@ def flatten_list_iter(nested_iterables, filter_none=False, *, skip_types=(str, b
 
 class ListTuple(collections.abc.Sequence):
     def __init__(self, *args):
+        assert len(args) > 0
         assert all([isinstance(arg, list) for arg in args])
         self.tpl = args
 
@@ -29,8 +30,9 @@ class ListTuple(collections.abc.Sequence):
 
     def __add__(self, other):
         if isinstance(other, ListTuple):
-            assert len(self.tpl) == len(other.tpl)
-            return ListTuple(self.tpl[0] + other.tpl[0], self.tpl[1] + other.tpl[1])
+            if len(self.tpl) != len(other.tpl):
+                raise ValueError("Can only concatenate only ListTuple of same arity.")
+            return ListTuple(*(_self + _other for _self, _other in zip(self.tpl, other.tpl)))
         elif isinstance(other, list):
             flattened = flatten_list(other)
             if all([isinstance(elem, ListTuple) for elem in flattened]):
