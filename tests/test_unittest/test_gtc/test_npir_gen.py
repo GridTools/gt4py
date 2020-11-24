@@ -37,7 +37,7 @@ def defined_dtype(request) -> Iterator[common.DataType]:
 
 
 def test_literal(defined_dtype: common.DataType) -> None:
-    result = npir_gen.NpirGen.apply(npir.Literal(dtype=defined_dtype, value="42"))
+    result = npir_gen.NpirGen().visit(npir.Literal(dtype=defined_dtype, value="42"))
     print(result)
     match = re.match(r"np.(\w*?)\(42\)", result)
     assert match
@@ -45,55 +45,45 @@ def test_literal(defined_dtype: common.DataType) -> None:
 
 
 def test_parallel_offset() -> None:
-    result = npir_gen.NpirGen.apply(npir.AxisOffset.i(-3))
+    result = npir_gen.NpirGen().visit(npir.AxisOffset.i(-3))
     print(result)
     assert result == "(i - 3):(I - 3)"
 
 
 def test_parallel_offset_zero() -> None:
-    result = npir_gen.NpirGen.apply(npir.AxisOffset.j(0))
+    result = npir_gen.NpirGen().visit(npir.AxisOffset.j(0))
     print(result)
     assert result == "j:J"
 
 
 def test_sequential_offset() -> None:
-    result = npir_gen.NpirGen.apply(npir.AxisOffset.k(5))
+    result = npir_gen.NpirGen().visit(npir.AxisOffset.k(5))
     print(result)
     assert result == "k_ + 5"
 
 
 def test_sequential_offset_zero() -> None:
-    result = npir_gen.NpirGen.apply(npir.AxisOffset.k(0))
+    result = npir_gen.NpirGen().visit(npir.AxisOffset.k(0))
     print(result)
     assert result == "k_"
 
 
 def test_field_slice_sequential_k() -> None:
-    result = npir_gen.NpirGen().apply(
-        npir.FieldSlice(
-            name="a_field",
-            i_offset=npir.AxisOffset.i(-1),
-            j_offset=npir.AxisOffset.j(0),
-            k_offset=npir.AxisOffset.k(4),
-        )
+    result = npir_gen.NpirGen().visit(
+        FieldSliceBuilder("a_field", parallel_k=False).offsets(-1, 0, 4).build()
     )
     assert result == "a_field_[(i - 1):(I - 1), j:J, k_ + 4]"
 
 
 def test_field_slice_parallel_k() -> None:
-    result = npir_gen.NpirGen().apply(
-        npir.FieldSlice(
-            name="another_field",
-            i_offset=npir.AxisOffset.i(0),
-            j_offset=npir.AxisOffset.j(0),
-            k_offset=npir.AxisOffset.k(-3, parallel=True),
-        )
+    result = npir_gen.NpirGen().visit(
+        FieldSliceBuilder("another_field", parallel_k=True).offsets(0, 0, -3).build()
     )
     assert result == "another_field_[i:I, j:J, (k - 3):(K - 3)]"
 
 
 def test_vector_assign() -> None:
-    result = npir_gen.NpirGen().apply(
+    result = npir_gen.NpirGen().visit(
         npir.VectorAssign(
             left=FieldSliceBuilder("a").build(),
             right=FieldSliceBuilder("b").build(),
@@ -103,7 +93,7 @@ def test_vector_assign() -> None:
 
 
 def test_vector_arithmetic() -> None:
-    result = npir_gen.NpirGen().apply(
+    result = npir_gen.NpirGen().visit(
         npir.VectorArithmetic(
             left=FieldSliceBuilder("a").build(),
             right=FieldSliceBuilder("b").build(),
@@ -114,22 +104,22 @@ def test_vector_arithmetic() -> None:
 
 
 def test_numerical_offset_pos() -> None:
-    result = npir_gen.NpirGen().apply(npir.NumericalOffset(value=1))
+    result = npir_gen.NpirGen().visit(npir.NumericalOffset(value=1))
     assert result == " + 1"
 
 
 def test_numerical_offset_neg() -> None:
-    result = npir_gen.NpirGen().apply(npir.NumericalOffset(value=-1))
+    result = npir_gen.NpirGen().visit(npir.NumericalOffset(value=-1))
     assert result == " - 1"
 
 
 def test_numerical_offset_zero() -> None:
-    result = npir_gen.NpirGen().apply(npir.NumericalOffset(value=0))
+    result = npir_gen.NpirGen().visit(npir.NumericalOffset(value=0))
     assert result == ""
 
 
 def test_vertical_pass_seq() -> None:
-    result = npir_gen.NpirGen().apply(
+    result = npir_gen.NpirGen().visit(
         npir.VerticalPass(
             body=[],
             lower=npir.NumericalOffset(value=1),
@@ -147,7 +137,7 @@ def test_vertical_pass_seq() -> None:
 
 
 def test_vertical_pass_par() -> None:
-    result = npir_gen.NpirGen().apply(
+    result = npir_gen.NpirGen().visit(
         npir.VerticalPass(
             body=[],
             lower=npir.NumericalOffset(value=0),
@@ -165,7 +155,7 @@ def test_vertical_pass_par() -> None:
 
 
 def test_domain_padding() -> None:
-    result = npir_gen.NpirGen().apply(
+    result = npir_gen.NpirGen().visit(
         npir.DomainPadding(
             lower=(1, 2, 0),
             upper=(0, 6, 2),
@@ -191,7 +181,7 @@ def test_domain_padding() -> None:
 
 
 def test_computation() -> None:
-    result = npir_gen.NpirGen().apply(
+    result = npir_gen.NpirGen().visit(
         npir.Computation(
             domain_padding=npir.DomainPadding(
                 lower=(0, 0, 0),
@@ -212,7 +202,7 @@ def test_computation() -> None:
 
 
 def test_full_computation_valid(tmp_path) -> None:
-    result = npir_gen.NpirGen().apply(
+    result = npir_gen.NpirGen.apply(
         npir.Computation(
             domain_padding=npir.DomainPadding(
                 lower=(2, 2, 0),
