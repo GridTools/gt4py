@@ -1,33 +1,29 @@
 import ast
 
-from pydantic.error_wrappers import ValidationError
-
 import pytest
 from devtools import debug
 from eve import SourceLocation
-from .gtir_utils import FieldAccessBuilder, DummyExpr
+from pydantic.error_wrappers import ValidationError
 
-from gt4py.gtc.common import (
-    ArithmeticOperator,
-    DataType,
-    LevelMarker,
-    LoopOrder,
-)
+from gt4py.gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
 from gt4py.gtc.gtir import (
     AxisBound,
     BinaryOp,
     CartesianOffset,
     Decl,
-    Stencil,
+    Expr,
     FieldAccess,
     FieldDecl,
-    Stmt,
     Interval,
-    VerticalLoop,
     ParAssignStmt,
-    Expr,
+    Stencil,
+    Stmt,
+    VerticalLoop,
 )
 from gt4py.gtc.python.python_naive_codegen import PythonNaiveCodegen
+
+from .gtir_utils import DummyExpr, FieldAccessBuilder
+
 
 ARITHMETIC_TYPE = DataType.FLOAT32
 ANOTHER_ARITHMETIC_TYPE = DataType.INT32

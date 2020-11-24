@@ -1,9 +1,11 @@
+from eve.tree_utils import FindNodes
+
+from gt4py.gtc import common
 from gt4py.gtc.gtir import FieldAccess, FieldDecl, ParAssignStmt
 from gt4py.gtc.passes.gtir_set_dtype import GTIRSetDtype
 
 from .gtir_utils import FieldAccessBuilder, StencilBuilder
-from gt4py.gtc import common
-from eve.tree_utils import FindNodes
+
 
 A_ARITHMETIC_TYPE = common.DataType.FLOAT32
 

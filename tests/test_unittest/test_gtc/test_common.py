@@ -1,18 +1,17 @@
 import pytest
-
 from pydantic import ValidationError
 
 from gt4py.gtc import common
 from gt4py.gtc.common import (
+    ArithmeticOperator,
+    ComparisonOperator,
+    DataType,
+    Expr,
+    ExprKind,
     IfStmt,
     Literal,
-    Expr,
-    Stmt,
-    DataType,
-    ExprKind,
-    ArithmeticOperator,
     LogicalOperator,
-    ComparisonOperator,
+    Stmt,
     UnaryOperator,
 )
 

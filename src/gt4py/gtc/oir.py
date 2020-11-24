@@ -22,11 +22,10 @@ e.g. stage merging, staged computations to compute-on-the-fly, cache annotations
 """
 
 from typing import List, Optional, Union
-from pydantic import validator
 
 from devtools import debug  # noqa: F401
 from eve import Node, SymbolName
-
+from pydantic import validator
 
 from gt4py.gtc import common
 from gt4py.gtc.common import LocNode

@@ -15,9 +15,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+from typing import Generic, List, Optional, TypeVar, Union
 
-from eve import IntEnum, StrEnum, GenericNode, Node, SourceLocation, Str, SymbolTableTrait
-from typing import List, Generic, TypeVar, Optional, Union
+from eve import GenericNode, IntEnum, Node, SourceLocation, Str, StrEnum, SymbolTableTrait
 from eve.type_definitions import SymbolRef
 from pydantic import validator
 from pydantic.class_validators import root_validator

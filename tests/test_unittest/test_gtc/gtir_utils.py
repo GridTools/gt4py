@@ -1,19 +1,20 @@
 from typing import List
+
+from gt4py.gtc.common import DataType, ExprKind, LoopOrder
 from gt4py.gtc.gtir import (
     AxisBound,
     BlockStmt,
     CartesianOffset,
-    FieldAccess,
+    Decl,
     Expr,
+    FieldAccess,
+    FieldIfStmt,
     Interval,
     ParAssignStmt,
-    FieldIfStmt,
-    Stmt,
     Stencil,
-    Decl,
+    Stmt,
     VerticalLoop,
 )
-from gt4py.gtc.common import DataType, ExprKind, LoopOrder
 
 
 class DummyExpr(Expr):

@@ -29,12 +29,10 @@ Analysis is required to generate valid code (complying with the parallel model)
 
 import enum
 from typing import Dict, List, Optional, Tuple, Union
-from pydantic import validator
 
 from devtools import debug  # noqa: F401
 from eve import IntEnum, Node, Str, SymbolName, SymbolTableTrait
-from eve.type_definitions import SymbolRef
-
+from pydantic import validator
 
 from gt4py.gtc import common
 from gt4py.gtc.common import LocNode

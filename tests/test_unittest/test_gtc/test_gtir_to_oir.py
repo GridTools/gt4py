@@ -1,12 +1,14 @@
 from typing import Type
 
+import pytest
 from eve import Node
-from gt4py.gtc import gtir, oir, gtir_to_oir
+
+from gt4py.gtc import gtir, gtir_to_oir, oir
 from gt4py.gtc.common import DataType, ExprKind
 from gt4py.gtc.gtir_to_oir import GTIRToOIR
+
 from .gtir_utils import FieldAccessBuilder, FieldIfStmtBuilder
 
-import pytest
 
 A_ARITHMETIC_TYPE = DataType.FLOAT32
 

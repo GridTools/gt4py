@@ -1,6 +1,6 @@
 from types import MappingProxyType
 from typing import ClassVar, Dict, List, Mapping, Union
-from devtools import debug
+
 from gt4py.gtc import common, gtir
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (

@@ -1,12 +1,11 @@
+from typing import List, Sequence, Tuple
+
 import eve  # noqa: F401
-from gt4py.gtc import gtir, oir
-from typing import Sequence, Tuple, List
-
-from gt4py.gtc.common import CartesianOffset, LogicalOperator, UnaryOperator, DataType
-
 from devtools import debug
 
-from gt4py.gtc.utils import flatten_list, ListTuple
+from gt4py.gtc import gtir, oir
+from gt4py.gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
+from gt4py.gtc.utils import ListTuple, flatten_list
 
 
 def _create_mask(name: str, cond: oir.Expr) -> Tuple:

@@ -1,8 +1,9 @@
-from gt4py.gtc.oir import Expr, HorizontalExecution
-from gt4py.gtc.common import ExprKind, DataType
-
-from pydantic.error_wrappers import ValidationError
 import pytest
+from pydantic.error_wrappers import ValidationError
+
+from gt4py.gtc.common import DataType, ExprKind
+from gt4py.gtc.oir import Expr, HorizontalExecution
+
 
 A_ARITHMETIC_TYPE = DataType.INT32
 
