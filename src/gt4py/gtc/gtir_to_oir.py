@@ -9,6 +9,23 @@ from devtools import debug
 from gt4py.gtc.utils import flatten_list, ListTuple
 
 
+def _create_mask(name: str, cond: oir.Expr) -> Tuple:
+    mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL)
+    fill_mask_field = oir.HorizontalExecution(
+        body=[
+            oir.AssignStmt(
+                left=oir.FieldAccess(
+                    name=mask_field_decl.name,
+                    offset=CartesianOffset.zero(),
+                    dtype=mask_field_decl.dtype,
+                ),
+                right=cond,
+            )
+        ]
+    )
+    return mask_field_decl, fill_mask_field
+
+
 class GTIRToOIR(eve.NodeTranslator):
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, **kwargs
@@ -52,24 +69,8 @@ class GTIRToOIR(eve.NodeTranslator):
         debug(node.left)
         return oir.BinaryOp(op=node.op, left=self.visit(node.left), right=self.visit(node.right))
 
-    def create_mask(self, node: gtir.FieldIfStmt) -> Tuple:
-        mask_field_decl = oir.Temporary(name="mask_" + node.id_, dtype=DataType.BOOL)
-        fill_mask_field = oir.HorizontalExecution(
-            body=[
-                oir.AssignStmt(
-                    left=oir.FieldAccess(
-                        name=mask_field_decl.name,
-                        offset=CartesianOffset.zero(),
-                        dtype=mask_field_decl.dtype,
-                    ),
-                    right=self.visit(node.cond),
-                )
-            ]
-        )
-        return mask_field_decl, fill_mask_field
-
     def visit_FieldIfStmt(self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, **kwargs):
-        mask_field_decl, fill_mask_h_exec = self.create_mask(node)
+        mask_field_decl, fill_mask_h_exec = _create_mask("mask_" + node.id_, self.visit(node.cond))
         decls_and_h_execs = ListTuple([mask_field_decl], [fill_mask_h_exec])
 
         new_mask = oir.FieldAccess(

@@ -102,7 +102,7 @@ class Decl(LocNode):
 
 
 class FieldDecl(Decl):
-    # TODO dimensions
+    # TODO dimensions (or mask?)
     pass
 
 
@@ -137,11 +137,12 @@ class HorizontalExecution(LocNode):
     mask: Optional[Expr]
 
     @validator("mask")
-    def no_horizontal_offset_in_assignment(cls, v):
-        if v.dtype != common.DataType.BOOL:
-            raise ValueError("Mask must be a boolean expression.")
-        if v.kind != common.ExprKind.FIELD:
-            raise ValueError("Mask must be a field expression.")
+    def mask_is_boolean_field_expr(cls, v):
+        if v:
+            if v.dtype != common.DataType.BOOL:
+                raise ValueError("Mask must be a boolean expression.")
+            if v.kind != common.ExprKind.FIELD:
+                raise ValueError("Mask must be a field expression.")
         return v
 
 
