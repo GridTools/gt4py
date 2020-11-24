@@ -339,7 +339,6 @@ class InitInfoPass(TransformPass):
             interval = next(iter(self.current_block_info.intervals))
             interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
 
-            # assert node.body.stmts  # non-empty computation
             stmt_infos = [
                 info for info in [self.visit(stmt) for stmt in node.body.stmts] if info is not None
             ]
