@@ -73,9 +73,9 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
 # class BlockStmt(common.BlockStmt[Stmt], Stmt):
 #     pass
 
-
-class IfStmt(common.IfStmt[List[Stmt], Expr], Stmt):  # TODO replace List[Stmt] by BlockStmt?
-    pass
+# TODO
+# class IfStmt(common.IfStmt[List[Stmt], Expr], Stmt):  # TODO replace List[Stmt] by BlockStmt?
+#     pass
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):

@@ -86,6 +86,11 @@ class GTIRToOIR(eve.NodeTranslator):
 
         return decls_and_h_execs
 
+    def visit_ScalarIfStmt(self, node: gtir.ScalarIfStmt, **kwargs):
+        # TODO Not sure if we should use a mask as well or generate an IfStmt with nesting.
+        # Needs discussion
+        raise NotImplementedError()
+
     def visit_Interval(self, node: gtir.Interval, **kwargs):
         return oir.Interval(
             start=self.visit(node.start),

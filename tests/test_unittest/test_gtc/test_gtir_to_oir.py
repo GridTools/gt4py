@@ -1,11 +1,15 @@
 from typing import Type
+from gt4py.gtc.gtir import ScalarIfStmt
 
 import pytest
 from eve import Node
 
 from gt4py.gtc import gtir, gtir_to_oir, oir
-from gt4py.gtc.common import DataType, ExprKind
+from gt4py.gtc.common import BlockStmt, DataType, ExprKind
 from gt4py.gtc.gtir_to_oir import GTIRToOIR
+
+
+from . import gtir_utils
 
 from .gtir_utils import FieldAccessBuilder, FieldIfStmtBuilder
 
@@ -94,3 +98,12 @@ def test_visit_FieldIfStmt(field_if_stmt):
     # Testing only that lowering doesn't error.
     # I see no good testing strategy which is robust against changes of the lowering.
     GTIRToOIR().visit(field_if_stmt)
+
+
+def test_visit_ScalarIfStmt():
+    testee = ScalarIfStmt(
+        cond=gtir_utils.DummyExpr(dtype=DataType.BOOL, kind=ExprKind.SCALAR),
+        true_branch=BlockStmt(body=[]),
+    )
+    with pytest.raises(NotImplementedError):
+        GTIRToOIR().visit(testee)  # TODO don't forget to add a test
