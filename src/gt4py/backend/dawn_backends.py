@@ -381,7 +381,9 @@ for name, other_name in itertools.combinations(field_args, 2):
         return "\n".join(self.backend_pre_run() + [field_size_check])
 
     def generate_imports(self) -> str:
-        return "\n".join(self.backend_imports() + ["import itertools"])
+        return "\n".join(
+            self.backend_imports() + ["import itertools"] + [super().generate_imports()]
+        )
 
 
 class DawnCUDAPyModuleGenerator(DawnPyModuleGenerator):
