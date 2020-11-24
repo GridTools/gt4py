@@ -277,6 +277,8 @@ def multibranch_param_conditional(
 
 @register(externals={"DO_SOMETHING": False})
 def allow_empty_computation(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+    from __externals__ import DO_SOMETHING
+
     with computation(FORWARD), interval(...):
         out_field = in_field
     with computation(PARALLEL), interval(...):
