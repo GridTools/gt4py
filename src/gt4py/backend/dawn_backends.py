@@ -372,7 +372,7 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
         field_size_check = """
 for name, other_name in itertools.combinations(field_args, 2):
     field = field_args[name]
-    other_field = field_args[name_other]
+    other_field = field_args[other_name]
     if field.mask == other_field.mask and not other_field.shape == field.shape:
         raise ValueError(
             f"The fields {name} and {other_name} have the same mask but different shapes."
