@@ -51,15 +51,6 @@ def _enum_dict(enum: enum.Enum) -> Dict[str, Any]:
 DAWN_PASS_GROUPS = _enum_dict(dawn4py.PassGroup)
 DAWN_CODEGEN_BACKENDS = _enum_dict(dawn4py.CodeGenBackend)
 
-FIELD_SIZE_CHECK = """
-for name, other_name in itertools.combinations(used_field_args, 2):
-    field = used_field_args[name]
-    other_field = used_field_args[name_other]
-    if field.mask == other_field.mask and not other_field.shape == field.shape:
-        raise ValueError(
-            f"The fields {name} and {other_name} have the same mask but different shapes."
-        )"""
-
 
 class FieldInfoCollector(gt_ir.IRNodeVisitor):
     @classmethod
@@ -371,8 +362,28 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 
         return sources.text
 
+    @abc.abstractmethod
+    def backend_pre_run(self) -> List[str]:
+        return []
+
+    @abc.abstractmethod
+    def backend_imports(self) -> List[str]:
+        return []
+
     def generate_pre_run(self) -> str:
-        return FIELD_SIZE_CHECK
+        field_size_check = """
+for name, other_name in itertools.combinations(used_field_args, 2):
+    field = used_field_args[name]
+    other_field = used_field_args[name_other]
+    if field.mask == other_field.mask and not other_field.shape == field.shape:
+        raise ValueError(
+            f"The fields {name} and {other_name} have the same mask but different shapes."
+        )"""
+
+        return "\n".join(self.backend_pre_run() + [field_size_check])
+
+    def generate_imports(self) -> str:
+        return "\n".join(self.backend_imports() + ["import itertools"])
 
 
 class DawnCUDAPyModuleGenerator(DawnPyModuleGenerator):
@@ -386,18 +397,12 @@ cupy.cuda.Device(0).synchronize()
 
         return source
 
-    def generate_imports(self) -> str:
-        source = (
-            super().generate_imports()
-            + """
-import cupy
-    """
-        )
-        return source
+    def backend_imports(self) -> List[str]:
+        return ["import cupy"]
 
-    def generate_pre_run(self) -> str:
+    def backend_pre_run(self) -> List[str]:
         field_names = self.args_data["field_info"].keys()
-        return FIELD_SIZE_CHECK + "\n" + "\n".join([f + ".host_to_device()" for f in field_names])
+        return ["{name}.host_to_device()" for name in field_names]
 
     def generate_post_run(self) -> str:
         output_field_names = [
