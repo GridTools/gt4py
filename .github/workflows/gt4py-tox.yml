@@ -10,7 +10,6 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -26,7 +25,7 @@ jobs:
         tar xzf boost_1_72_0.tar.gz
         mkdir -p boost/include
         mv boost_1_72_0/boost boost/include/
-        echo ::set-env name=BOOST_ROOT::${PWD}/boost
+        echo "BOOST_ROOT=${PWD}/boost" >> $GITHUB_ENV
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v1
       with:
