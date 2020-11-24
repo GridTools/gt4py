@@ -362,11 +362,9 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 
         return sources.text
 
-    @abc.abstractmethod
     def backend_pre_run(self) -> List[str]:
         return []
 
-    @abc.abstractmethod
     def backend_imports(self) -> List[str]:
         return []
 
