@@ -131,14 +131,7 @@ def test_numerical_offset_zero() -> None:
 def test_vertical_pass_seq() -> None:
     result = npir_gen.NpirGen().apply(
         npir.VerticalPass(
-            body=[
-                npir.VectorAssign(
-                    left=FieldSliceBuilder("a").build(), right=FieldSliceBuilder("b").build()
-                ),
-                npir.VectorAssign(
-                    left=FieldSliceBuilder("c").build(), right=FieldSliceBuilder("d").build()
-                ),
-            ],
+            body=[],
             lower=npir.NumericalOffset(value=1),
             upper=npir.NumericalOffset(value=-2),
             direction=common.LoopOrder.FORWARD,
@@ -146,14 +139,7 @@ def test_vertical_pass_seq() -> None:
     )
     print(result)
     match = re.match(
-        (
-            r"\n"
-            r"(#.*?\n)?"
-            r"k, K = DOMAIN_k \+ 1, DOMAIN_K - 2\n"
-            r"for k_ in range\(k, K\):\n"
-            r"    a_?\[.*?\] = b_?\[.*?\]\n"
-            r"    c_?\[.*?\] = d_?\[.*?\]\n"
-        ),
+        (r"\n" r"(#.*?\n)?" r"k, K = DOMAIN_k \+ 1, DOMAIN_K - 2\n" r"for k_ in range\(k, K\):\n"),
         result,
         re.MULTILINE,
     )
@@ -163,12 +149,7 @@ def test_vertical_pass_seq() -> None:
 def test_vertical_pass_par() -> None:
     result = npir_gen.NpirGen().apply(
         npir.VerticalPass(
-            body=[
-                npir.VectorAssign(
-                    left=FieldSliceBuilder("a", parallel_k=True).build(),
-                    right=FieldSliceBuilder("b", parallel_k=True).build(),
-                ),
-            ],
+            body=[],
             lower=npir.NumericalOffset(value=0),
             upper=npir.NumericalOffset(value=0),
             direction=common.LoopOrder.PARALLEL,
@@ -176,7 +157,7 @@ def test_vertical_pass_par() -> None:
     )
     print(result)
     match = re.match(
-        (r"\n" r"(#.*?\n)?" r"k, K = DOMAIN_k, DOMAIN_K\n" r"a_?\[.*?, k:K\] = b_?\[.*?, k:K\]\n"),
+        (r"\n" r"(#.*?\n)?" r"k, K = DOMAIN_k, DOMAIN_K\n"),
         result,
         re.MULTILINE,
     )
@@ -209,7 +190,28 @@ def test_domain_padding() -> None:
     assert match
 
 
-def test_computation(tmp_path) -> None:
+def test_computation() -> None:
+    result = npir_gen.NpirGen().apply(
+        npir.Computation(
+            domain_padding=npir.DomainPadding(
+                lower=(0, 0, 0),
+                upper=(0, 0, 0),
+            ),
+            scalar_params=[],
+            field_params=[],
+            vertical_passes=[],
+        )
+    )
+    print(result)
+    match = re.match(
+        (r"\n" r"def run\(\*, _domain_, _origin_\):\n" r"\n?" r"(    .*?\n)*"),
+        result,
+        re.MULTILINE,
+    )
+    assert match
+
+
+def test_full_computation_valid(tmp_path) -> None:
     result = npir_gen.NpirGen().apply(
         npir.Computation(
             domain_padding=npir.DomainPadding(
@@ -233,6 +235,23 @@ def test_computation(tmp_path) -> None:
                                 .build(),
                                 right=FieldSliceBuilder("f3", parallel_k=True)
                                 .offsets(0, 3, 1)
+                                .build(),
+                            ),
+                        ),
+                    ],
+                ),
+                npir.VerticalPass(
+                    lower=npir.NumericalOffset(value=1),
+                    upper=npir.NumericalOffset(value=-3),
+                    direction=common.LoopOrder.BACKWARD,
+                    body=[
+                        npir.VectorAssign(
+                            left=FieldSliceBuilder("f2", parallel_k=False).build(),
+                            right=npir.VectorArithmetic(
+                                op=common.ArithmeticOperator.ADD,
+                                left=FieldSliceBuilder("f2", parallel_k=False).build(),
+                                right=FieldSliceBuilder("f2", parallel_k=False)
+                                .offsets(0, 0, 1)
                                 .build(),
                             ),
                         ),
@@ -267,3 +286,7 @@ def test_computation(tmp_path) -> None:
     assert (f1[:, 0:2, :] == 0).all()
     assert (f1[:, -3:, :] == 0).all()
     assert (f1[:, :, -1:] == 0).all()
+
+    exp_f2 = np.ones((10)) * 3
+    exp_f2[-3:1:-1] = np.cumsum(exp_f2[1:-3])
+    assert (f2[3, 3, :] == exp_f2[:]).all()
