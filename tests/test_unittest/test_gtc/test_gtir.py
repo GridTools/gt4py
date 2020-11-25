@@ -1,7 +1,6 @@
 import ast
 
 import pytest
-from devtools import debug
 from eve import SourceLocation
 from pydantic.error_wrappers import ValidationError
 
@@ -76,7 +75,6 @@ def copy_computation(copy_v_loop):
 
 
 def test_copy(copy_computation):
-    print(debug(copy_computation))
     assert copy_computation
     assert copy_computation.param_names == ["a", "b"]
 

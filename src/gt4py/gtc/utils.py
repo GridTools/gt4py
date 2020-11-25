@@ -1,7 +1,5 @@
 import collections.abc
 
-from devtools import debug  # noqa: F401
-
 
 def flatten_list(nested_iterables, filter_none=False, *, skip_types=(str, bytes)):
     return list(flatten_list_iter(nested_iterables, filter_none, skip_types=skip_types))
