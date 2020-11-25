@@ -30,7 +30,6 @@ Analysis is required to generate valid code (complying with the parallel model)
 import enum
 from typing import Dict, List, Optional, Tuple, Union
 
-from devtools import debug  # noqa: F401
 from eve import IntEnum, Node, Str, SymbolName, SymbolTableTrait
 from pydantic import validator
 

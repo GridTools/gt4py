@@ -1,7 +1,6 @@
 from typing import List, Sequence, Tuple
 
 import eve  # noqa: F401
-from devtools import debug
 
 from gt4py.gtc import gtir, oir
 from gt4py.gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
@@ -65,7 +64,6 @@ class GTIRToOIR(eve.NodeTranslator):
         return oir.Literal(value=self.visit(node.value), dtype=node.dtype, kind=node.kind)
 
     def visit_BinaryOp(self, node: gtir.BinaryOp, **kwargs):
-        debug(node.left)
         return oir.BinaryOp(op=node.op, left=self.visit(node.left), right=self.visit(node.right))
 
     def visit_FieldIfStmt(self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, **kwargs):
