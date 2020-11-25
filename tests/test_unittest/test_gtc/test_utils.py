@@ -47,6 +47,7 @@ def test_ListTuple_add(list_tuple_expr, expected_list_tuple):
     [
         (ListTuple([]) + [ListTuple([]), ListTuple([])], ListTuple([])),
         (ListTuple([1]) + [ListTuple([2]), ListTuple([3])], ListTuple([1, 2, 3])),
+        (ListTuple([1]) + [ListTuple([2]), [ListTuple([3])]], ListTuple([1, 2, 3])),
     ],
 )
 def test_ListTuple_add_list(list_tuple_expr, expected_list_tuple):
