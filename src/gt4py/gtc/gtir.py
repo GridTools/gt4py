@@ -125,6 +125,8 @@ class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
             raise ValueError("Condition is not a field expression")
         return cond
 
+    # TODO(havogt) add validator for the restriction (it's a pass over the subtrees...)
+
 
 class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
     """If statement with a scalar expression as condition.
