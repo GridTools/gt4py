@@ -1,5 +1,7 @@
 import enum
 from typing import List, Tuple, Union
+from eve.type_definitions import SymbolRef
+from eve import SymbolTableTrait
 from gt4py.gtc import common
 from gt4py.gtc.common import LocNode
 from eve import SymbolName, StrEnum, Str
@@ -7,6 +9,8 @@ from pydantic.class_validators import validator
 
 
 class Expr(common.Expr):
+    dtype: common.DataType
+
     # TODO Eve could provide support for making a node abstract
     def __init__(self, *args, **kwargs):
         if type(self) is Expr:
@@ -111,7 +115,7 @@ class GTExtent(LocNode):
 
 
 class GTAccessor(LocNode):
-    name: Str
+    name: SymbolName
     id: int
     intent: Intent
     extent: GTExtent
@@ -121,20 +125,21 @@ class GTParamList(LocNode):
     accessors: List[GTAccessor]
 
 
-class GTFunctor(LocNode):
-    name: Str
+class GTFunctor(LocNode, SymbolTableTrait):
+    name: SymbolName
     applies: List[GTApplyMethod]
     param_list: GTParamList
 
 
 # A ParamArg is an argument that maps to a parameter of something with the same name.
 # Because all things are called exactly once there is a one-to-one mapping.
+# TODO with symbol table the concept probably doesn't make sense anymore
 class ParamArg(LocNode):
     name: Str
 
 
 class GTStage(LocNode):
-    functor: str  # symbol ref
+    functor: SymbolRef  # symbol ref
     args: List[ParamArg]  # symbol ref to GTComputation params
 
 
@@ -149,16 +154,17 @@ class GTMultiStage(LocNode):
 
 
 class GTComputation(LocNode):
-    name: Str
+    name: SymbolName
     parameters: List[ParamArg]  # ?
     temporaries: List[Temporary]
-    multistages: List[GTMultiStage]  # TODO at least one
+    multi_stages: List[GTMultiStage]  # TODO at least one
 
 
-class Computation(LocNode):
+class Program(LocNode, SymbolTableTrait):
     name: Str
     # The ParamArg here, doesn't fully work as we need the type for template instantiation.
     # But maybe the module instantiation code is actually generated from a different IR?
     parameters: List[ParamArg]
     functors: List[GTFunctor]
     gt_computation: GTComputation
+    # control_flow_ast: List[GTComputation]

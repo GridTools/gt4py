@@ -81,7 +81,9 @@ class DefIRToGTIR(IRNodeVisitor):
         field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
         return gtir.Stencil(
-            name=node.name,
+            name=node.name.split(".")[
+                -1
+            ],  # TODO probably definition IR should not contain '.' in the name
             params=[
                 self.visit(f, all_params={**field_params, **scalar_params})
                 for f in node.api_signature

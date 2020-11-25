@@ -61,11 +61,6 @@ class Literal(common.Literal, Expr):
     pass
 
 
-class Domain(LocNode):
-    # TODO
-    pass
-
-
 class CartesianOffset(Node):
     i: int
     j: int
