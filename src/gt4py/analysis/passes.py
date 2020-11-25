@@ -720,8 +720,12 @@ class StageMergingWrapper:
         interval_a: IntervalInfo,
         interval_b: IntervalInfo,
     ) -> bool:
-        return interval_a != interval_b and interval_a.overlaps(
-            interval_b, self.min_k_interval_sizes
+        return (
+            interval_a != interval_b
+            and interval_a.overlaps(interval_b, self.min_k_interval_sizes)
+            or interval_b.precedes(
+                interval_a, self.min_k_interval_sizes, self._parent_block.iteration_order
+            )
         )
 
     @property
