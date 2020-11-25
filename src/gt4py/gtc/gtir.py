@@ -105,8 +105,8 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
 
 
 class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
-    """If statement with a field expression as condition.
-
+    """
+    If statement with a field expression as condition.
 
     - The condition is evaluated for all gridpoints and stored in a mask.
     - Each statement inside the if and else branches is executed according
@@ -114,7 +114,7 @@ class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
 
     The following restriction applies:
     - Inside the if and else blocks the same field cannot be written to
-      and read with an offset in the parallel axises (order does not matter).
+      and read with an offset in the parallel axes (order does not matter).
 
     See `parallel model <https://github.com/GridTools/concepts/wiki/GTScript-Parallel-model#conditionals-on-field-expressions>`
     """
@@ -129,7 +129,8 @@ class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
 
 
 class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
-    """If statement with a scalar expression as condition.
+    """
+    If statement with a scalar expression as condition.
 
     No special rules apply.
     """
