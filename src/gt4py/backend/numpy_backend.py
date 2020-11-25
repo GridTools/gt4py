@@ -121,14 +121,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         source_lines = []
 
         # Computations body is split in different vertical regions
-        assert (
-            sorted(
-                regions,
-                reverse=iteration_order == gt_ir.IterationOrder.BACKWARD,
-                key=lambda tup: tup[0],
-            )
-            == regions
-        )
+        assert sorted(regions, reverse=iteration_order == gt_ir.IterationOrder.BACKWARD) == regions
 
         for bounds, body in regions:
             region_lines = self._make_regional_computation(iteration_order, bounds, body)
