@@ -123,7 +123,8 @@ class LocNode(Node):
 
 
 class Expr(LocNode):
-    """Expression base class.
+    """
+    Expression base class.
 
     All expressions have
     - an optional `dtype`
@@ -221,7 +222,8 @@ class BlockStmt(GenericNode, SymbolTableTrait, Generic[StmtT]):
 
 
 class IfStmt(GenericNode, Generic[StmtT, ExprT]):
-    """Generic if statement.
+    """
+    Generic if statement.
 
     Verifies that `cond` is a boolean expr (if `dtype` is set).
     """
@@ -241,7 +243,8 @@ class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
 
 
 class UnaryOp(GenericNode, Generic[ExprT]):
-    """Generic unary operation with type propagation.
+    """
+    Generic unary operation with type propagation.
 
     The generic `UnaryOp` already contains logic for type propagation.
     """
@@ -317,7 +320,8 @@ class BinaryOp(GenericNode, Generic[ExprT]):
 
 
 class TernaryOp(GenericNode, Generic[ExprT]):
-    """Generic ternary operation with type propagation.
+    """
+    Generic ternary operation with type propagation.
 
     The generic TernaryOp already contains logic for
     - strict type checking if the `dtype` for `true_expr` and `false_expr` is set.

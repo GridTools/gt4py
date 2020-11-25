@@ -1,8 +1,8 @@
 import pytest
 from pydantic.error_wrappers import ValidationError
 
-from gt4py.gtc.common import DataType, ExprKind
-from gt4py.gtc.oir import Expr, HorizontalExecution
+from gt4py.gtc.common import CartesianOffset, DataType, ExprKind
+from gt4py.gtc.oir import AssignStmt, Expr, FieldAccess, HorizontalExecution
 
 
 A_ARITHMETIC_TYPE = DataType.INT32
@@ -31,6 +31,15 @@ def test_dtype_required():
                 body=[], mask=DummyExpr(dtype=DataType.BOOL, kind=ExprKind.SCALAR)
             ),
             r".*must be.* field.*",
+        ),
+        (
+            lambda: AssignStmt(
+                left=FieldAccess(
+                    name="foo", dtype=A_ARITHMETIC_TYPE, offset=CartesianOffset(i=1, j=0, k=0)
+                ),
+                right=DummyExpr(dtype=A_ARITHMETIC_TYPE),
+            ),
+            r"must not have .*horizontal offset",
         ),
     ],
 )
