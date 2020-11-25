@@ -109,6 +109,10 @@ class ScalarDecl(Decl):
     pass
 
 
+class Temporary(FieldDecl):
+    pass
+
+
 # TODO move to common or do we need a different representation here?
 class AxisBound(Node):
     level: common.LevelMarker
@@ -148,11 +152,6 @@ class HorizontalExecution(LocNode):
 class Interval(LocNode):
     start: AxisBound
     end: AxisBound
-
-
-class Temporary(LocNode):
-    name: SymbolName
-    dtype: common.DataType
 
 
 class VerticalLoop(LocNode):

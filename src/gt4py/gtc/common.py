@@ -178,7 +178,7 @@ def compute_kind(values: List[Expr]) -> ExprKind:
 
 class Literal(Node):
     # TODO when coming from python AST we know more than just the string representation, I suppose
-    value: Str
+    value: Union[BuiltInLiteral, Str]
     dtype: DataType
     kind = ExprKind.SCALAR
 
