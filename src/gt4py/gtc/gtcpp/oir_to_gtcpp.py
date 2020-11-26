@@ -1,17 +1,36 @@
-from typing import List, Tuple, Sequence
+from typing import Sequence
 from devtools import debug  # noqa: F401
 
 from eve import NodeTranslator, FindNodes
-from gt4py.gtc.common import CartesianOffset, DataType
+from eve.concepts import field
 
 from gt4py.gtc.gtcpp import gtcpp
 from gt4py.gtc import oir, utils, common
-from gt4py.gtc.gtcpp.gtcpp import GTFunctor, GTMultiStage, GTParamList
 
 # TODO between oir and gtcpp we need to group oir.VerticalLoops
 
 # - Each vertical loop is a functor (and a stage)
 # - All vertical loops build a multistage
+
+
+class HelperExtend(gtcpp.GTExtent):
+    def __add__(self, other):
+        # if isinstance(other, gtcpp.GTExtent):
+        #     # TODO make nice
+        #     return HelperExtent(
+        #         i=(min(self.i[0], other.i[0]), max(self.i[1], other.i[1])),
+        #         j=(min(self.j[0], other.j[0]), max(self.j[1], other.j[1])),
+        #         k=(min(self.k[0], other.k[0]), max(self.k[1], other.k[1])),
+        #     )
+        # el
+        if isinstance(other, common.CartesianOffset):
+            return HelperExtend(
+                i=(min(self.i[0], other.i), max(self.i[1], other.i)),
+                j=(min(self.j[0], other.j), max(self.j[1], other.j)),
+                k=(min(self.k[0], other.k), max(self.k[1], other.k)),
+            )
+        else:
+            assert "Cannot add this thing"  # TODO
 
 
 class OIRToGTCpp(NodeTranslator):
@@ -57,17 +76,33 @@ class OIRToGTCpp(NodeTranslator):
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, interval, **kwargs):
         body = self.visit(node.body)
-        fields = set([f.name for f in FindNodes.by_type(oir.FieldAccess, node)])
-        param_list = GTParamList(
-            # TODO this is a hack:
+        field_accesses = FindNodes.by_type(oir.FieldAccess, node)
+        extents = (
+            {}
+        )  # = {field_access.name: HelperExtend.zero() for field_access in field_accesses}
+        for field_access in field_accesses:
+            if field_access.name not in extents:
+                extents[field_access.name] = HelperExtend.zero()
+            extents[field_access.name] += field_access.offset
+
+        inout_fields = set()
+        for assign in FindNodes.by_type(oir.AssignStmt, node):
+            if isinstance(assign.left, oir.FieldAccess):
+                inout_fields.add(assign.left.name)
+
+        field_names = set([f.name for f in field_accesses])
+        param_list = gtcpp.GTParamList(
             accessors=[
                 gtcpp.GTAccessor(
-                    name=f, id=i, intent=gtcpp.Intent.INOUT, extent=gtcpp.GTExtent.zero()  # TODO
+                    name=f,
+                    id=i,
+                    intent=gtcpp.Intent.INOUT if f in inout_fields else gtcpp.Intent.IN,
+                    extent=extents[f],
                 )
-                for i, f in enumerate(fields)
+                for i, f in enumerate(field_names)
             ]
         )
-        stage_args = [gtcpp.ParamArg(name=f) for f in fields]
+        stage_args = [gtcpp.ParamArg(name=f) for f in field_names]
         return (
             gtcpp.GTFunctor(
                 name=node.id_,
@@ -85,7 +120,7 @@ class OIRToGTCpp(NodeTranslator):
         return (
             functors,
             temporaries,
-            GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches),
+            gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches),
         )
 
     def visit_Decl(self, node: oir.Decl, **kwargs):

@@ -1,7 +1,7 @@
 import enum
 from typing import List, Tuple, Union
 from eve.type_definitions import SymbolRef
-from eve import SymbolTableTrait
+from eve import SymbolTableTrait, Node
 from gt4py.gtc import common
 from gt4py.gtc.common import LocNode
 from eve import SymbolName, StrEnum, Str
