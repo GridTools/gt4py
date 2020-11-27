@@ -2,7 +2,9 @@ from typing import Sequence
 from devtools import debug  # noqa: F401
 
 from eve import NodeTranslator, FindNodes
+from eve.utils import xiter
 from eve.concepts import field
+from gt4py.gtc.common import FieldAccess
 
 from gt4py.gtc.gtcpp import gtcpp
 from gt4py.gtc import oir, utils, common
@@ -15,14 +17,6 @@ from gt4py.gtc import oir, utils, common
 
 class HelperExtend(gtcpp.GTExtent):
     def __add__(self, other):
-        # if isinstance(other, gtcpp.GTExtent):
-        #     # TODO make nice
-        #     return HelperExtent(
-        #         i=(min(self.i[0], other.i[0]), max(self.i[1], other.i[1])),
-        #         j=(min(self.j[0], other.j[0]), max(self.j[1], other.j[1])),
-        #         k=(min(self.k[0], other.k[0]), max(self.k[1], other.k[1])),
-        #     )
-        # el
         if isinstance(other, common.CartesianOffset):
             return HelperExtend(
                 i=(min(self.i[0], other.i), max(self.i[1], other.i)),
@@ -30,7 +24,7 @@ class HelperExtend(gtcpp.GTExtent):
                 k=(min(self.k[0], other.k), max(self.k[1], other.k)),
             )
         else:
-            assert "Cannot add this thing"  # TODO
+            assert "Can only add CartesianOffsets"
 
 
 class OIRToGTCpp(NodeTranslator):
@@ -77,18 +71,18 @@ class OIRToGTCpp(NodeTranslator):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, interval, **kwargs):
         body = self.visit(node.body)
         field_accesses = FindNodes.by_type(oir.FieldAccess, node)
-        extents = (
-            {}
-        )  # = {field_access.name: HelperExtend.zero() for field_access in field_accesses}
+        extents = {}
         for field_access in field_accesses:
             if field_access.name not in extents:
                 extents[field_access.name] = HelperExtend.zero()
             extents[field_access.name] += field_access.offset
 
-        inout_fields = set()
-        for assign in FindNodes.by_type(oir.AssignStmt, node):
-            if isinstance(assign.left, oir.FieldAccess):
-                inout_fields.add(assign.left.name)
+        inout_fields = set(
+            xiter(FindNodes.by_type(oir.AssignStmt, node))
+            .__or__(lambda x: x.left)
+            .__and__(lambda x: isinstance(x, oir.FieldAccess))
+            .__or__(lambda x: x.name)
+        )
 
         field_names = set([f.name for f in field_accesses])
         param_list = gtcpp.GTParamList(
