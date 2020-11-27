@@ -1,33 +1,28 @@
 import ast
 
+import pytest
+from eve import SourceLocation
 from pydantic.error_wrappers import ValidationError
 
-import pytest
-from devtools import debug
-from eve import SourceLocation
-from .gtir_utils import FieldAccessBuilder, DummyExpr
-
-from gt4py.gtc.common import (
-    ArithmeticOperator,
-    DataType,
-    LevelMarker,
-    LoopOrder,
-)
+from gt4py.gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
 from gt4py.gtc.gtir import (
     AxisBound,
     BinaryOp,
     CartesianOffset,
     Decl,
-    Stencil,
+    Expr,
     FieldAccess,
     FieldDecl,
-    Stmt,
     Interval,
-    VerticalLoop,
     ParAssignStmt,
-    Expr,
+    Stencil,
+    Stmt,
+    VerticalLoop,
 )
 from gt4py.gtc.python.python_naive_codegen import PythonNaiveCodegen
+
+from .gtir_utils import DummyExpr, FieldAccessBuilder
+
 
 ARITHMETIC_TYPE = DataType.FLOAT32
 ANOTHER_ARITHMETIC_TYPE = DataType.INT32
@@ -80,7 +75,6 @@ def copy_computation(copy_v_loop):
 
 
 def test_copy(copy_computation):
-    print(debug(copy_computation))
     assert copy_computation
     assert copy_computation.param_names == ["a", "b"]
 
@@ -148,17 +142,17 @@ def test_valid_nodes(valid_node):
 
 
 @pytest.mark.parametrize(
-    "invalid_node",
+    "invalid_node,expected_regex",
     [
-        pytest.param(
+        (
             lambda: ParAssignStmt(
                 left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0)).build(),
                 right=DummyExpr(),
             ),
-            id="non-zero horizontal offset not allowed",
-        ),
+            r"must not have .*horizontal offset",
+        )
     ],
 )
-def test_invalid_nodes(invalid_node):
-    with pytest.raises(ValidationError):
+def test_invalid_nodes(invalid_node, expected_regex):
+    with pytest.raises(ValidationError, match=expected_regex):
         invalid_node()

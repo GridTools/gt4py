@@ -1,26 +1,26 @@
 import pytest
-
 from pydantic import ValidationError
 
+from gt4py.gtc import common
 from gt4py.gtc.common import (
+    ArithmeticOperator,
+    ComparisonOperator,
+    DataType,
+    Expr,
+    ExprKind,
     IfStmt,
     Literal,
-    Expr,
-    Stmt,
-    DataType,
-    ExprKind,
-    BinaryOp,
-    TernaryOp,
-    AssignStmt,
-    ArithmeticOperator,
     LogicalOperator,
-    ComparisonOperator,
+    Stmt,
+    UnaryOperator,
 )
 
 
 ARITHMETIC_TYPE = DataType.FLOAT32
 ANOTHER_ARITHMETIC_TYPE = DataType.INT32
 A_ARITHMETIC_OPERATOR = ArithmeticOperator.ADD
+A_ARITHMETIC_UNARY_OPERATOR = UnaryOperator.POS
+A_LOGICAL_UNARY_OPERATOR = UnaryOperator.NOT
 
 # IR testing guidelines
 # - For testing leave nodes: use the node directly
@@ -33,6 +33,18 @@ class DummyExpr(Expr):
 
     dtype: DataType = DataType.FLOAT32
     kind: ExprKind = ExprKind.FIELD
+
+
+class UnaryOp(Expr, common.UnaryOp[Expr]):
+    pass
+
+
+class BinaryOp(Expr, common.BinaryOp[Expr]):
+    pass
+
+
+class TernaryOp(Expr, common.TernaryOp[Expr]):
+    pass
 
 
 @pytest.mark.parametrize(
@@ -69,6 +81,13 @@ class DummyExpr(Expr):
                 op=ComparisonOperator.EQ,
             ),
             DataType.BOOL,
+        ),
+        (
+            UnaryOp(
+                expr=DummyExpr(dtype=ARITHMETIC_TYPE),
+                op=A_ARITHMETIC_UNARY_OPERATOR,
+            ),
+            ARITHMETIC_TYPE,
         ),
     ],
 )
@@ -127,6 +146,14 @@ def test_dtype_propagation(node, expected):
             ),
             r"Arithmetic expr.* not allowed in bool.* op.*",
         ),
+        (
+            lambda: UnaryOp(op=A_LOGICAL_UNARY_OPERATOR, expr=DummyExpr(dtype=ARITHMETIC_TYPE)),
+            r"Unary op.*only .* with bool.*",
+        ),
+        (
+            lambda: UnaryOp(op=A_ARITHMETIC_UNARY_OPERATOR, expr=DummyExpr(dtype=DataType.BOOL)),
+            r"Unary op.* not allowed with bool.*",
+        ),
     ],
 )
 def test_invalid_nodes(invalid_node, expected_regex):
@@ -158,7 +185,7 @@ class StmtB(Stmt):
 
 
 def test_AssignSmt_category():
-    Testee = AssignStmt[ExprA, ExprA]
+    Testee = common.AssignStmt[ExprA, ExprA]
 
     Testee(left=ExprA(), right=ExprA())
     with pytest.raises(ValidationError):
@@ -167,17 +194,27 @@ def test_AssignSmt_category():
 
 
 def test_IfStmt_category():
-    Testee = IfStmt[StmtA, ExprA]
+    Testee = common.IfStmt[StmtA, ExprA]
 
-    Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=[StmtA()], false_branch=[StmtA()])
+    Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=StmtA(), false_branch=StmtA())
     with pytest.raises(ValidationError):
-        Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=[StmtB()], false_branch=[StmtA()])
-        Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=[StmtA()], false_branch=[StmtB()])
-        Testee(cond=ExprB(dtype=DataType.BOOL), true_branch=[StmtA()], false_branch=[StmtA()])
+        Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=StmtB(), false_branch=StmtA())
+        Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=StmtA(), false_branch=StmtB())
+        Testee(cond=ExprB(dtype=DataType.BOOL), true_branch=StmtA(), false_branch=StmtA())
+
+
+def test_UnaryOp_category():
+    class Testee(ExprA, common.UnaryOp[ExprA]):
+        pass
+
+    Testee(op=A_ARITHMETIC_UNARY_OPERATOR, expr=ExprA())
+    with pytest.raises(ValidationError):
+        Testee(op=A_ARITHMETIC_UNARY_OPERATOR, expr=ExprB())
 
 
 def test_BinaryOp_category():
-    Testee = BinaryOp[ExprA]
+    class Testee(ExprA, common.BinaryOp[ExprA]):
+        pass
 
     Testee(op=A_ARITHMETIC_OPERATOR, left=ExprA(), right=ExprA())
     with pytest.raises(ValidationError):
@@ -186,7 +223,8 @@ def test_BinaryOp_category():
 
 
 def test_TernaryOp_category():
-    Testee = TernaryOp[ExprA]
+    class Testee(ExprA, common.TernaryOp[ExprA]):
+        pass
 
     Testee(cond=ExprA(dtype=DataType.BOOL), true_expr=ExprA(), false_expr=ExprA())
     with pytest.raises(ValidationError):

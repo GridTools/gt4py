@@ -15,9 +15,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+from typing import Generic, List, Optional, TypeVar, Union
 
-from eve import IntEnum, StrEnum, GenericNode, Node, SourceLocation, Str
-from typing import List, Generic, TypeVar, Optional, Union
+from eve import GenericNode, IntEnum, Node, SourceLocation, Str, StrEnum, SymbolTableTrait
+from eve.type_definitions import SymbolRef
 from pydantic import validator
 from pydantic.class_validators import root_validator
 
@@ -122,6 +123,14 @@ class LocNode(Node):
 
 
 class Expr(LocNode):
+    """
+    Expression base class.
+
+    All expressions have
+    - an optional `dtype`
+    - an expression `kind` (scalar or field)
+    """
+
     dtype: Optional[DataType]
     kind: ExprKind
 
@@ -168,7 +177,7 @@ def compute_kind(values: List[Expr]) -> ExprKind:
         return ExprKind.SCALAR
 
 
-class Literal(Expr):
+class Literal(Node):
     # TODO when coming from python AST we know more than just the string representation, I suppose
     value: Str
     dtype: DataType
@@ -180,10 +189,48 @@ ExprT = TypeVar("ExprT")
 TargetT = TypeVar("TargetT")
 
 
+class CartesianOffset(Node):
+    i: int
+    j: int
+    k: int
+
+    @classmethod
+    def zero(cls):
+        return cls(i=0, j=0, k=0)
+
+    def to_dict(self):
+        return {"i": self.i, "j": self.j, "k": self.k}
+
+
+class ScalarAccess(Node):
+    name: SymbolRef
+    kind = ExprKind.SCALAR
+
+
+class FieldAccess(Node):
+    name: SymbolRef
+    offset: CartesianOffset
+    kind = ExprKind.FIELD
+
+    @classmethod
+    def centered(cls, *, name, loc=None):
+        return cls(name=name, loc=loc, offset=CartesianOffset.zero())
+
+
+class BlockStmt(GenericNode, SymbolTableTrait, Generic[StmtT]):
+    body: List[StmtT]
+
+
 class IfStmt(GenericNode, Generic[StmtT, ExprT]):
+    """
+    Generic if statement.
+
+    Verifies that `cond` is a boolean expr (if `dtype` is set).
+    """
+
     cond: ExprT
-    true_branch: List[StmtT]
-    false_branch: List[StmtT]
+    true_branch: StmtT
+    false_branch: Optional[StmtT]
 
     @validator("cond")
     def condition_is_boolean(cls, cond):
@@ -195,14 +242,57 @@ class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
     right: ExprT
 
 
-class BinaryOp(GenericNode, Expr, Generic[ExprT]):
+class UnaryOp(GenericNode, Generic[ExprT]):
+    """
+    Generic unary operation with type propagation.
+
+    The generic `UnaryOp` already contains logic for type propagation.
+    """
+
+    op: UnaryOperator
+    expr: ExprT
+
+    @root_validator(pre=True)
+    def dtype_propagation(cls, values):
+        values["dtype"] = values["expr"].dtype
+        return values
+
+    @root_validator(pre=True)
+    def kind_propagation(cls, values):
+        values["kind"] = values["expr"].kind
+        return values
+
+    @root_validator(pre=True)
+    def op_to_dtype_check(cls, values):
+        if values["expr"].dtype:
+            if values["op"] == UnaryOperator.NOT:
+                if not values["expr"].dtype == DataType.BOOL:
+                    raise ValueError("Unary operator `NOT` only allowed with boolean expression.")
+            else:
+                if values["expr"].dtype == DataType.BOOL:
+                    raise ValueError(
+                        "Unary operator `{}` not allowed with boolean expression.".format(
+                            values["op"].name
+                        )
+                    )
+        return values
+
+
+class BinaryOp(GenericNode, Generic[ExprT]):
+    """Generic binary operation with type propagation.
+
+    The generic BinaryOp already contains logic for
+    - strict type checking if the `dtype` for `left` and `right` is set.
+    - type propagation (taking `operator` type into account).
+    """
+
     # TODO parametrize on op?
     op: Union[ArithmeticOperator, ComparisonOperator, LogicalOperator]
     left: ExprT
     right: ExprT
 
     @root_validator(pre=True)
-    def type_propagation_and_check(cls, values):
+    def dtype_propagation_and_check(cls, values):
         common_dtype = verify_and_get_common_dtype(cls, [values["left"], values["right"]])
 
         if common_dtype:
@@ -229,7 +319,16 @@ class BinaryOp(GenericNode, Expr, Generic[ExprT]):
         return values
 
 
-class TernaryOp(GenericNode, Expr, Generic[ExprT]):
+class TernaryOp(GenericNode, Generic[ExprT]):
+    """
+    Generic ternary operation with type propagation.
+
+    The generic TernaryOp already contains logic for
+    - strict type checking if the `dtype` for `true_expr` and `false_expr` is set.
+    - type checking for `cond`
+    - type propagation.
+    """
+
     # TODO parametrize cond expr separately?
     cond: ExprT
     true_expr: ExprT
@@ -240,7 +339,7 @@ class TernaryOp(GenericNode, Expr, Generic[ExprT]):
         return verify_condition_is_boolean(cls, cond)
 
     @root_validator(pre=True)
-    def type_propagation_and_check(cls, values):
+    def dtype_propagation_and_check(cls, values):
         common_dtype = verify_and_get_common_dtype(
             cls, [values["true_expr"], values["false_expr"]]
         )

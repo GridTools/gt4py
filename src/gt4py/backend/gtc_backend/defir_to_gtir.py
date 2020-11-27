@@ -14,6 +14,7 @@ from gt4py.ir.nodes import (
     ComputationBlock,
     FieldDecl,
     FieldRef,
+    If,
     IterationOrder,
     LevelMarker,
     ScalarLiteral,
@@ -94,13 +95,13 @@ class DefIRToGTIR(IRNodeVisitor):
         return all_params[node.name]
 
     def visit_ComputationBlock(self, node: ComputationBlock) -> List[gtir.VerticalLoop]:
-        assigns = [s for s in self.visit(node.body)]
+        stmts = [s for s in self.visit(node.body)]
         start, end = self.visit(node.interval)
         interval = gtir.Interval(start=start, end=end)
         return gtir.VerticalLoop(
             interval=interval,
             loop_order=self.GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER[node.iteration_order],
-            body=assigns,
+            body=stmts,
         )
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
@@ -123,6 +124,13 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_FieldRef(self, node: FieldRef):
         return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))
+
+    def visit_If(self, node: If):
+        return gtir.FieldIfStmt(
+            cond=self.visit(node.condition),
+            true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
+            false_branch=gtir.BlockStmt(body=self.visit(node.else_body)),
+        )
 
     def visit_VarRef(self, node: VarRef):
         return gtir.ScalarAccess(

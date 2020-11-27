@@ -14,15 +14,15 @@ from gt4py.backend.gtc_backend.stencil_object_snippet_generators import (
 from gt4py.gtc.common import DataType, LoopOrder
 from gt4py.gtc.gtir import (
     AccessKind,
-    ParAssignStmt,
     AxisBound,
     CartesianOffset,
-    Stencil,
     FieldAccess,
     FieldBoundary,
     FieldDecl,
     FieldMetadata,
     FieldsMetadata,
+    ParAssignStmt,
+    Stencil,
     VerticalInterval,
     VerticalLoop,
 )

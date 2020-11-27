@@ -2,6 +2,7 @@ from eve import NodeTranslator
 
 from gt4py.gtc import gtir
 
+
 # TODO How do we deal with AUTO types?
 # Especially in the dtype propagator, currently AUTO is included in strict type checking.
 
