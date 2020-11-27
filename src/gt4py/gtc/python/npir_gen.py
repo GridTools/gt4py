@@ -60,26 +60,26 @@ class NpirGen(TemplatedGenerator):
     VerticalPass = JinjaTemplate(
         textwrap.dedent(
             """\
-        ## -- begin vertical region --
-        k, K = DOMAIN_k{{ lower }}, DOMAIN_K{{ upper }}{{ for_loop_line }}
-        {% for assign in body %}{{ assign | indent(body_indent, first=True) }}
-        {% endfor %}## -- end vertical region --
-        """
+            ## -- begin vertical region --
+            k, K = DOMAIN_k{{ lower }}, DOMAIN_K{{ upper }}{{ for_loop_line }}
+            {% for assign in body %}{{ assign | indent(body_indent, first=True) }}
+            {% endfor %}## -- end vertical region --
+            """
         )
     )
 
     DomainPadding = FormatTemplate(
         textwrap.dedent(
             """\
-        ## -- begin domain padding --
-        i, j, k = {lower[0]}, {lower[1]}, {lower[2]}
-        _ui, _uj, _uk = {upper[0]}, {upper[1]}, {upper[2]}
-        _di, _dj, _dk = _domain_
-        I, J, K = _di + i, _dj + j, _dk + k
-        DOMAIN_k = k
-        DOMAIN_K = K
-        ## -- end domain padding --
-        """
+            ## -- begin domain padding --
+            i, j, k = {lower[0]}, {lower[1]}, {lower[2]}
+            _ui, _uj, _uk = {upper[0]}, {upper[1]}, {upper[2]}
+            _di, _dj, _dk = _domain_
+            I, J, K = _di + i, _dj + j, _dk + k
+            DOMAIN_k = k
+            DOMAIN_K = K
+            ## -- end domain padding --
+            """
         )
     )
 
@@ -88,14 +88,14 @@ class NpirGen(TemplatedGenerator):
         data_views = JinjaTemplate(
             textwrap.dedent(
                 """\
-            # -- begin data views --
-            {% for name in field_params %}{{ name }}_ = {{ name }}[
-                (_origin_["{{ name }}"][0] - i):(_origin_["{{ name }}"][0] + _di + _ui),
-                (_origin_["{{ name }}"][1] - j):(_origin_["{{ name }}"][1] + _dj + _uj),
-                (_origin_["{{ name }}"][2] - k):(_origin_["{{ name }}"][2] + _dk + _uk)
-            ]
-            {% endfor %}# -- end data views --
-            """
+                # -- begin data views --
+                {% for name in field_params %}{{ name }}_ = {{ name }}[
+                    (_origin_["{{ name }}"][0] - i):(_origin_["{{ name }}"][0] + _di + _ui),
+                    (_origin_["{{ name }}"][1] - j):(_origin_["{{ name }}"][1] + _dj + _uj),
+                    (_origin_["{{ name }}"][2] - k):(_origin_["{{ name }}"][2] + _dk + _uk)
+                ]
+                {% endfor %}# -- end data views --
+                """
             )
         ).render(field_params=node.field_params)
         return self.generic_visit(
@@ -105,12 +105,12 @@ class NpirGen(TemplatedGenerator):
     Computation = JinjaTemplate(
         textwrap.dedent(
             """\
-        def run({{ signature }}):
-            {{ domain_padding | indent(4) }}
-            {{ data_views | indent(4) }}
-            {% for pass in vertical_passes %}
-            {{ pass | indent(4) }}
-            {% endfor %}
-        """
+            def run({{ signature }}):
+                {{ domain_padding | indent(4) }}
+                {{ data_views | indent(4) }}
+                {% for pass in vertical_passes %}
+                {{ pass | indent(4) }}
+                {% endfor %}
+            """
         )
     )
