@@ -37,6 +37,13 @@ GT_REPO_PATH: str = os.path.abspath(
 
 GT_INCLUDE_PATH: str = os.path.abspath(os.path.join(GT_REPO_PATH, "include"))
 
+GT2_REPO_PATH: str = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "_external_src", "gridtools2")
+)
+
+GT2_INCLUDE_PATH: str = os.path.abspath(os.path.join(GT2_REPO_PATH, "include"))
+
+
 # Settings dict
 build_settings: Dict[str, Any] = {
     "boost_include_path": os.path.join(BOOST_ROOT, "include"),
@@ -45,6 +52,7 @@ build_settings: Dict[str, Any] = {
     "cuda_library_path": os.path.join(CUDA_ROOT, "lib64"),
     "cuda_arch": os.environ.get("CUDA_ARCH", None),
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
+    "gt2_include_path": os.environ.get("GT2_INCLUDE_PATH", GT2_INCLUDE_PATH),
     "openmp_cppflags": os.environ.get("OPENMP_CPPFLAGS", "-fopenmp").split(),
     "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", "-fopenmp").split(),
     "extra_compile_args": {

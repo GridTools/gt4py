@@ -13,7 +13,7 @@ def default_domain(*args):
 def run({{', '.join(_this_node.param_names)}}, _domain_=None):
     if _domain_ is None:
         _domain_ = default_domain({{', '.join(_this_node.param_names)}})\
-{{ '\\n'.join(vertical_loop) | indent(4)}}
+{{ '\\n'.join(vertical_loops) | indent(4)}}
 """
     )
 
