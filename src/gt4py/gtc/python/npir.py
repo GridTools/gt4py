@@ -7,7 +7,7 @@ from gt4py.gtc import common
 
 
 class Expr(common.Expr):
-    # MARK: remove when abstract nodes implemented in eve
+    # TODO: remove when abstract nodes implemented in eve
     def __init__(self, *args, **kwargs):
         if type(self) is Expr:
             raise TypeError("Cannot instantiate abstract Expr type of numpy IR")
@@ -58,7 +58,7 @@ class AxisOffset(eve.Node):
 
 
 class VectorExpression(Expr):
-    # MARK: remove when abstract nodes implemented in eve
+    # TODO: remove when abstract nodes implemented in eve
     kind = cast(common.ExprKind, common.ExprKind.FIELD)
 
     def __init__(self, *args, **kwargs):
