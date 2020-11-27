@@ -1,12 +1,22 @@
-from typing import List, Tuple
+from typing import List, Tuple, cast
 
 import eve
 from pydantic import validator
 
-from gt4py.gtc import common, gtir
+from gt4py.gtc import common
 
 
-class Literal(gtir.Literal):
+class Expr(common.Expr):
+    # MARK: remove when abstract nodes implemented in eve
+    def __init__(self, *args, **kwargs):
+        if type(self) is Expr:
+            raise TypeError("Cannot instantiate abstract Expr type of numpy IR")
+        super().__init__(*args, **kwargs)
+
+
+class Literal(common.Literal, Expr):
+    kind = cast(common.ExprKind, common.ExprKind.SCALAR)
+
     @validator("dtype")
     def is_defined(cls, dtype):
         undefined = [common.DataType.AUTO, common.DataType.DEFAULT, common.DataType.INVALID]
@@ -47,8 +57,14 @@ class AxisOffset(eve.Node):
         return cls.from_int(axis_name=AxisName.K, offset=offset, parallel=parallel)
 
 
-class VectorExpression(gtir.LocNode):
-    pass
+class VectorExpression(Expr):
+    # MARK: remove when abstract nodes implemented in eve
+    kind = cast(common.ExprKind, common.ExprKind.FIELD)
+
+    def __init__(self, *args, **kwargs):
+        if type(self) is Expr:
+            raise TypeError("Cannot instantiate abstract VectorExpression type of numpy IR")
+        super().__init__(*args, **kwargs)
 
 
 class FieldSlice(VectorExpression):
@@ -58,18 +74,16 @@ class FieldSlice(VectorExpression):
     k_offset: AxisOffset
 
 
-class VectorArithmetic(VectorExpression):
-    left: VectorExpression
-    right: VectorExpression
-    op: common.ArithmeticOperator
+class VectorArithmetic(common.BinaryOp[VectorExpression], VectorExpression):
+    pass
 
 
-class VectorAssign(VectorExpression):
+class VectorAssign(common.AssignStmt[FieldSlice, VectorExpression], VectorExpression):
     left: FieldSlice
     right: VectorExpression
 
 
-class VerticalPass(gtir.LocNode):
+class VerticalPass(common.LocNode):
     body: List[VectorAssign]
     lower: NumericalOffset
     upper: NumericalOffset
@@ -81,7 +95,7 @@ class DomainPadding(eve.Node):
     upper: Tuple[int, int, int]
 
 
-class Computation(gtir.LocNode):
+class Computation(common.LocNode):
     field_params: List[str]
     scalar_params: List[str]
     vertical_passes: List[VerticalPass]
