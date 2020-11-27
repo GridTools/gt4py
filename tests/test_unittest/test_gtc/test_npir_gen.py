@@ -129,7 +129,7 @@ def test_vertical_pass_seq() -> None:
     )
     print(result)
     match = re.match(
-        (r"\n" r"(#.*?\n)?" r"k, K = DOMAIN_k \+ 1, DOMAIN_K - 2\n" r"for k_ in range\(k, K\):\n"),
+        (r"(#.*?\n)?" r"k, K = DOMAIN_k \+ 1, DOMAIN_K - 2\n" r"for k_ in range\(k, K\):\n"),
         result,
         re.MULTILINE,
     )
@@ -147,7 +147,7 @@ def test_vertical_pass_par() -> None:
     )
     print(result)
     match = re.match(
-        (r"\n" r"(#.*?\n)?" r"k, K = DOMAIN_k, DOMAIN_K\n"),
+        (r"(#.*?\n)?" r"k, K = DOMAIN_k, DOMAIN_K\n"),
         result,
         re.MULTILINE,
     )
@@ -164,7 +164,6 @@ def test_domain_padding() -> None:
     print(result)
     match = re.match(
         (
-            r"\n"
             r"(#.*?\n)?"
             r"i, j, k = \d*?, \d*?, \d*?\n"
             r"_ui, _uj, _uk = \d*?, \d*?, \d*?\n"
@@ -194,7 +193,7 @@ def test_computation() -> None:
     )
     print(result)
     match = re.match(
-        (r"\n" r"def run\(\*, _domain_, _origin_\):\n" r"\n?" r"(    .*?\n)*"),
+        (r"def run\(\*, _domain_, _origin_\):\n" r"\n?" r"(    .*?\n)*"),
         result,
         re.MULTILINE,
     )
