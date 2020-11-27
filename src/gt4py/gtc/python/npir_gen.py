@@ -57,6 +57,7 @@ class NpirGen(TemplatedGenerator):
             node, for_loop_line=for_loop_line, body_indent=body_indent, **kwargs
         )
 
+    ## TODO: change to use AxisBounds, k can also be derived from DOMAIN_K and so on...
     VerticalPass = JinjaTemplate(
         textwrap.dedent(
             """\
@@ -84,7 +85,7 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_Computation(self, node, **kwargs):
-        signature = [*node.field_params, "*", *node.scalar_params, "_domain_", "_origin_"]
+        signature = ["*", *node.params, "_domain_", "_origin_"]
         data_views = JinjaTemplate(
             textwrap.dedent(
                 """\

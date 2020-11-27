@@ -154,6 +154,10 @@ def test_vertical_pass_par() -> None:
     assert match
 
 
+## TODO: test_vertical_pass in region DOMAIN_k, DOMAIN_k + 5
+## TODO: test_vertical_pass in region DOMAIN_K-4, DOMAIN_k - 1
+
+
 def test_domain_padding() -> None:
     result = npir_gen.NpirGen().visit(
         npir.DomainPadding(
@@ -186,7 +190,7 @@ def test_computation() -> None:
                 lower=(0, 0, 0),
                 upper=(0, 0, 0),
             ),
-            scalar_params=[],
+            params=[],
             field_params=[],
             vertical_passes=[],
         )
@@ -207,7 +211,7 @@ def test_full_computation_valid(tmp_path) -> None:
                 lower=(2, 2, 0),
                 upper=(0, 3, 1),
             ),
-            scalar_params=["s1"],
+            params=["f1", "f2", "f3", "s1"],
             field_params=["f1", "f2", "f3"],
             vertical_passes=[
                 npir.VerticalPass(
@@ -263,9 +267,9 @@ def test_full_computation_valid(tmp_path) -> None:
     f3 = np.ones_like(f1) * 2
     s1 = 5
     mod.run(
-        f1,
-        f2,
-        f3,
+        f1=f1,
+        f2=f2,
+        f3=f3,
         s1=s1,
         _domain_=(8, 5, 9),
         _origin_={"f1": (2, 2, 0), "f2": (2, 2, 0), "f3": (2, 2, 0)},
