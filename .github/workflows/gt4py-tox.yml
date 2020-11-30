@@ -37,5 +37,5 @@ jobs:
       run: |
         pyversion_no_dot="${{ matrix.python-version }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
-        pip install tox
+        pip install tox pytest
         tox -r -e py${pyversion_no_dot}-cpu
