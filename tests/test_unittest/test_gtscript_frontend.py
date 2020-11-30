@@ -1001,7 +1001,7 @@ class TestParallelIntervals:
                 with parallel(region[I[-1], :]):
                     field = -1
 
-        module = f"TestParallelIntervals_multiple_{id_version}"
+        module = f"TestParallelIntervals_remove_{id_version}"
         externals = {"ext": None}
         stencil_id, def_ir = compile_definition(
             definition_func, "test_simple", module, externals=externals
@@ -1020,7 +1020,7 @@ class TestParallelIntervals:
                 with parallel(region[I[-1], other]):
                     field = -1
 
-        module = f"TestParallelIntervals_multiple_{id_version}"
+        module = f"TestParallelIntervals_remove_split_{id_version}"
         externals = {"ext": None, "other": 1}
         stencil_id, def_ir = compile_definition(
             definition_func, "test_simple", module, externals=externals
