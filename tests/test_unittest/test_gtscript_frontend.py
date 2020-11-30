@@ -982,7 +982,7 @@ class TestParallelIntervals:
         module = f"TestParallelIntervals_multiple_{id_version}"
         externals = {}
         stencil_id, def_ir = compile_definition(
-            definition_func, "test_simple", module, externals=externals
+            definition_func, "test_multiple", module, externals=externals
         )
 
         assert len(def_ir.computations) == 3
@@ -1004,7 +1004,7 @@ class TestParallelIntervals:
         module = f"TestParallelIntervals_remove_{id_version}"
         externals = {"ext": None}
         stencil_id, def_ir = compile_definition(
-            definition_func, "test_simple", module, externals=externals
+            definition_func, "test_remove", module, externals=externals
         )
 
         assert len(def_ir.computations) == 2
@@ -1023,7 +1023,7 @@ class TestParallelIntervals:
         module = f"TestParallelIntervals_remove_split_{id_version}"
         externals = {"ext": None, "other": 1}
         stencil_id, def_ir = compile_definition(
-            definition_func, "test_simple", module, externals=externals
+            definition_func, "test_remove_split", module, externals=externals
         )
 
         assert len(def_ir.computations) == 2
