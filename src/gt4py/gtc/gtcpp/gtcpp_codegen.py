@@ -89,7 +89,9 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     Temporary = as_fmt("GT_DECLARE_TMP({dtype}, {name});")
 
     GTComputation = as_mako(
-        """{
+        """
+        %if len(multi_stages) > 0:
+        {
             auto grid = make_grid(domain[0], domain[1], domain[2]);
 
             auto ${ name } = [](${ ','.join('auto ' + p for p in parameters) }) {
@@ -100,6 +102,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
             run(${name}, cpu_ifirst<>{} /* TODO */, grid, ${','.join(parameters)});
         }
+        %endif
         """
     )
 

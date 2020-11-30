@@ -1,13 +1,49 @@
-from gt4py.gtc.gtcpp.gtcpp import GTComputation
+from typing import Literal, Pattern, Union
+from devtools import debug
+from gt4py.gtc.common import FieldAccess
+from gt4py.gtc.gtcpp.gtcpp import (
+    AssignStmt,
+    GTAccessor,
+    GTApplyMethod,
+    GTComputation,
+    GTExtent,
+    GTStage,
+    Intent,
+    ParamArg,
+    Program,
+)
+import re
 import setuptools
 from gt4py import gt2_src_manager, config  # TODO must not include gt4py package
 from pathlib import Path
-
-from gt4py.gtc.gtcpp import gtcpp
+import pytest
 from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
+
+from .gtcpp_utils import (
+    AccessorRefBuilder,
+    GTApplyMethodBuilder,
+    GTComputationBuilder,
+    GTFunctorBuilder,
+    ProgramBuilder,
+)
+from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 
 if not gt2_src_manager.has_gt_sources() and not gt2_src_manager.install_gt_sources():
     raise RuntimeError("Missing GridTools sources.")
+
+
+# TODO does this exist in pytest already?
+def match(value: str, regexp: "Union[str, Pattern]") -> "Literal[True]":
+    """
+    Stolen from `pytest.raises`.
+    Check whether the regular expression `regexp` matches `value` using :func:`python:re.search`.
+    If it matches `True` is returned.
+    If it doesn't match an `AssertionError` is raised.
+    """
+    assert re.search(regexp, str(value)), "Pattern {!r} does not match {!r}".format(
+        regexp, str(value)
+    )
+    return True
 
 
 def build_gridtools_test(source: Path):
@@ -16,8 +52,14 @@ def build_gridtools_test(source: Path):
         [str(source.absolute())],
         include_dirs=[config.GT2_INCLUDE_PATH],
         language="c++",
+        # extra_compile_args=["-Wno-unknown-pragmas"],
     )
-    args = ["build_ext", "--build-temp=" + source.stem, "--build-lib=" + source.stem, "--force"]
+    args = [
+        "build_ext",
+        "--build-temp=" + str(source.parent),
+        "--build-lib=" + str(source.parent),
+        "--force",
+    ]
     setuptools.setup(
         name="test",
         ext_modules=[
@@ -27,28 +69,106 @@ def build_gridtools_test(source: Path):
     )
 
 
-# name: SymbolName
-#     parameters: List[ParamArg]  # ?
-#     temporaries: List[Temporary]
-#     multi_stages: List[GTMultiStage]  # TODO at least one
-
-
-def test_building(tmp_path):
-
-    prog = gtcpp.Program(
-        name="test",
-        parameters=[],
-        functors=[],
-        gt_computation=GTComputation(name="test", parameters=[], temporaries=[], multi_stages=[]),
-    )
-
-    code = GTCppCodegen.apply(prog)
-
+@pytest.mark.parametrize(
+    "gtcpp_program,expected_regex",
+    [
+        (ProgramBuilder("test").build(), r"auto test"),
+        (
+            ProgramBuilder("test").add_functor(GTFunctorBuilder("fun").build()).build(),
+            r"struct fun",
+        ),
+        (
+            ProgramBuilder("test")
+            .add_functor(
+                GTFunctorBuilder("fun")
+                .add_accessor(
+                    GTAccessor(
+                        name="field",
+                        id=0,
+                        extent=GTExtent(i=(1, 2), j=(-3, -4), k=(10, -10)),
+                        intent=Intent.INOUT,
+                    )
+                )
+                .build()
+            )
+            .build(),
+            r"inout_accessor<0, extent<1,\s*2,\s*-3,\s*-4,\s*10,\s*-10>",
+        ),
+        (
+            ProgramBuilder("test")
+            .add_functor(
+                GTFunctorBuilder("fun").add_apply_method().build(),
+            )
+            .build(),
+            r"void\s*apply\(",
+        ),
+        (ProgramBuilder("test").add_parameter("my_param").build(), r"my_param"),
+        # TODO the following test is creating invalid IR (we could check by validating symbols)
+        # (
+        #     ProgramBuilder("test")
+        #     .add_parameter("outer_param")
+        #     .add_functor(
+        #         GTFunctorBuilder("fun").add_apply_method().build(),
+        #     )
+        #     .gt_computation(
+        #         GTComputationBuilder("test")
+        #         .add_stage(GTStage(functor="fun", args=[ParamArg(name="stage_arg")]))
+        #         .add_parameter("gt_comp_param")
+        #         .build()
+        #     )
+        #     .build(),
+        #     r"",
+        # ),
+    ],
+)
+def test_program_compilation_succeeds(tmp_path, gtcpp_program, expected_regex):
+    assert isinstance(gtcpp_program, Program)
+    code = GTCppCodegen.apply(gtcpp_program)
     tmp_src = tmp_path / "test.cpp"
-
     tmp_src.write_text(code)
 
-    print("tmp_path: " + str(tmp_src))
     print(code)
+    match(code, expected_regex)
+    build_gridtools_test(tmp_src)
 
-    # build_gridtools_test(tmp_src)
+
+# TODO make separate test which tests the stencil ast part
+@pytest.mark.parametrize(
+    "apply_method,expected_regex",
+    [
+        (GTApplyMethodBuilder().build(), r""),
+        (
+            GTApplyMethodBuilder()
+            .add_stmt(
+                AssignStmt(
+                    left=AccessorRefBuilder("a").build(),
+                    right=AccessorRefBuilder(name="b").build(),
+                )
+            )
+            .build(),
+            r"",
+        ),
+    ],
+)
+def test_apply_method_compilation_succeeds(tmp_path, apply_method, expected_regex):
+    # This test could be improved by just compiling the body
+    # and introducing fakes for `eval` and `gridtools::accessor`.
+    assert isinstance(apply_method, GTApplyMethod)
+    debug(apply_method)
+    accessors = _extract_accessors(apply_method)
+    debug(accessors)
+    program = (
+        ProgramBuilder("test")
+        .add_functor(
+            GTFunctorBuilder("fun").add_accessors(accessors).add_apply_method(apply_method).build()
+        )
+        .build()
+    )
+    print(GTCppCodegen.apply(program))
+    tmp_src = tmp_path / "test.cpp"
+    tmp_src.write_text(GTCppCodegen.apply(program))
+
+    apply_method_code = GTCppCodegen().visit(apply_method)
+    print(apply_method_code)
+    match(apply_method_code, expected_regex)
+    build_gridtools_test(tmp_src)

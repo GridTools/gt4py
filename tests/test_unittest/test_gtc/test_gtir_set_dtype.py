@@ -35,8 +35,8 @@ def test_stencil():
         .build()
     )
 
-    result = GTIRSetDtype().visit(testee)
+    result: eve.Node = GTIRSetDtype().visit(testee)
 
-    field_accesses = eve.select_from(result, by_type=FieldAccess)
+    field_accesses = result.iter_tree().filter_by_type(FieldAccess)
     for acc in field_accesses:
         assert acc.dtype == A_ARITHMETIC_TYPE
