@@ -1,5 +1,5 @@
 import functools
-from typing import Sequence
+from typing import Dict, List, Sequence
 from devtools import debug  # noqa: F401
 
 from eve.utils import xiter
@@ -9,11 +9,44 @@ from gt4py.gtc.common import FieldAccess
 
 from gt4py.gtc.gtcpp import gtcpp
 from gt4py.gtc import oir, utils, common
+from gt4py.gtc.gtcpp.gtcpp import GTParamList
 
 # TODO between oir and gtcpp we need to group oir.VerticalLoops
 
 # - Each vertical loop is a functor (and a stage)
 # - All vertical loops build a multistage
+
+
+def _extract_accessors(node: eve.Node) -> GTParamList:
+    extents: Dict[str, gtcpp.GTExtent] = (
+        node.iter_tree()
+        .filter_by_type(oir.FieldAccess)
+        .reduceby(
+            (lambda extent, field_access: extent + field_access.offset),
+            "name",
+            init=gtcpp.GTExtent.zero(),
+            as_dict=True,
+        )
+    )
+
+    inout_fields: List[str] = (
+        node.iter_tree()
+        .filter_by_type(oir.AssignStmt)
+        .getattr("left")
+        .filter_by_type(oir.FieldAccess)
+        .getattr("name")
+        .unique()
+    )
+
+    return [
+        gtcpp.GTAccessor(
+            name=name,
+            id=i,
+            intent=gtcpp.Intent.INOUT if name in inout_fields else gtcpp.Intent.IN,
+            extent=extent,
+        )
+        for i, (name, extent) in enumerate(extents.items())
+    ]
 
 
 class OIRToGTCpp(eve.NodeTranslator):
@@ -59,49 +92,13 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, interval, **kwargs):
         body = self.visit(node.body)
-        field_accesses = eve.select_from(node, by_type=oir.FieldAccess)
-
-        def reduce_extents(extents, name_and_offset):
-            name, offset = name_and_offset
-            extents[name] = extents.get(name, gtcpp.GTExtent.zero()) + offset
-            return extents
-
-        extents = functools.reduce(
-            reduce_extents,
-            eve.select_from(node, by_type=oir.FieldAccess).map(lambda x: (x.name, x.offset)),
-            {},
-        )
-
-        # for field_access in field_accesses:
-        #     if field_access.name not in extents:
-        #         extents[field_access.name] = HelperExtend.zero()
-        #     extents[field_access.name] += field_access.offset
-
-        inout_fields = set(
-            eve.select_from(node, by_type=oir.AssignStmt)
-            .map(lambda x: x.left)
-            .filter(lambda x: isinstance(x, oir.FieldAccess))
-            .map(lambda x: x.name)
-        )
-
-        field_names = set([f.name for f in field_accesses])
-        param_list = gtcpp.GTParamList(
-            accessors=[
-                gtcpp.GTAccessor(
-                    name=f,
-                    id=i,
-                    intent=gtcpp.Intent.INOUT if f in inout_fields else gtcpp.Intent.IN,
-                    extent=extents[f],
-                )
-                for i, f in enumerate(field_names)
-            ]
-        )
-        stage_args = [gtcpp.ParamArg(name=f) for f in field_names]
+        accessors = _extract_accessors(node)
+        stage_args = [gtcpp.ParamArg(name=acc.name) for acc in accessors]
         return (
             gtcpp.GTFunctor(
                 name=node.id_,
                 applies=[gtcpp.GTApplyMethod(interval=self.visit(interval), body=body)],
-                param_list=param_list,
+                param_list=GTParamList(accessors=accessors),
             ),
             gtcpp.GTStage(functor=node.id_, args=stage_args),
         )
