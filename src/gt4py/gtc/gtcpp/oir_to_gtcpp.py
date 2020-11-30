@@ -20,9 +20,9 @@ from gt4py.gtc.gtcpp.gtcpp import GTParamList
 def _extract_accessors(node: eve.Node) -> GTParamList:
     extents: Dict[str, gtcpp.GTExtent] = (
         node.iter_tree()
-        .filter_by_type(oir.FieldAccess)
+        .filter_by_type(gtcpp.AccessorRef)
         .reduceby(
-            (lambda extent, field_access: extent + field_access.offset),
+            (lambda extent, accessor_ref: extent + accessor_ref.offset),
             "name",
             init=gtcpp.GTExtent.zero(),
             as_dict=True,
@@ -31,9 +31,9 @@ def _extract_accessors(node: eve.Node) -> GTParamList:
 
     inout_fields: List[str] = (
         node.iter_tree()
-        .filter_by_type(oir.AssignStmt)
+        .filter_by_type(gtcpp.AssignStmt)
         .getattr("left")
-        .filter_by_type(oir.FieldAccess)
+        .filter_by_type(gtcpp.AccessorRef)
         .getattr("name")
         .unique()
     )
@@ -91,13 +91,15 @@ class OIRToGTCpp(eve.NodeTranslator):
         return gtcpp.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, interval, **kwargs):
-        body = self.visit(node.body)
-        accessors = _extract_accessors(node)
+        apply_method = gtcpp.GTApplyMethod(
+            interval=self.visit(interval), body=self.visit(node.body)
+        )
+        accessors = _extract_accessors(apply_method)
         stage_args = [gtcpp.ParamArg(name=acc.name) for acc in accessors]
         return (
             gtcpp.GTFunctor(
                 name=node.id_,
-                applies=[gtcpp.GTApplyMethod(interval=self.visit(interval), body=body)],
+                applies=[apply_method],
                 param_list=GTParamList(accessors=accessors),
             ),
             gtcpp.GTStage(functor=node.id_, args=stage_args),
