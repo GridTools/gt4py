@@ -1467,7 +1467,9 @@ class GTScriptParser(ast.NodeVisitor):
         resolved_values_list = list(nonlocals.items())
 
         # Resolve function-like imports recursively
-        func_externals = {key: value for key, value in context.items() if isinstance(value, types.FunctionType)}
+        func_externals = {
+            key: value for key, value in context.items() if isinstance(value, types.FunctionType)
+        }
         while func_externals:
             new_func_externals = {}
             for name, value in func_externals.items():
