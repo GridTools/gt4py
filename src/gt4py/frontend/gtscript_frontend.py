@@ -644,14 +644,16 @@ class RegionValidator(gt_meta.ASTPass):
     def __init__(self, context: dict):
         self.context = context
         self.valid = True
+        self.par_axes_names = [axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes]
 
     def visit_Name(self, node: ast.Name):
-        if node.id not in self.context:
-            raise ValueError(
-                f"Expected {node.id} in context but is not present. Did you forget to add an external?"
-            )
-        if self.context[node.id] is None:
-            self.valid = False
+        if node.id not in self.par_axes_names:
+            if node.id not in self.context:
+                raise ValueError(
+                    f"Expected {node.id} in context but is not present. Did you forget to add an external?"
+                )
+            if self.context[node.id] is None:
+                self.valid = False
 
     def visit_NameConstant(self, node: ast.NameConstant):
         if node.value is None:
