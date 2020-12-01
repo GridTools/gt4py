@@ -151,3 +151,31 @@ def test_stencil_without_effect(backend):
     # test without domain specified
     with pytest.raises(ValueError):
         stencil1(field_in)
+
+
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
+def test_stage_merger_induced_interval_block_reordering(backend):
+    field_in = gt_storage.ones(
+        dtype=np.float_, backend=backend, shape=(23, 23, 23), default_origin=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float_, backend=backend, shape=(23, 23, 23), default_origin=(0, 0, 0)
+    )
+
+    @gtscript.stencil(backend=backend)
+    def stencil(field_in: gtscript.Field[np.float_], field_out: gtscript.Field[np.float_]):
+        with computation(BACKWARD):
+            with interval(-2, -1):  # block 1
+                field_out = field_in
+            with interval(0, -2):  # block 2
+                field_out = field_in
+        with computation(BACKWARD):
+            with interval(-1, None):  # block 3
+                field_out = 2 * field_in
+            with interval(0, -1):  # block 4
+                field_out = 3 * field_in
+
+    stencil(field_in, field_out)
+
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 0:-1], 3)
+    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, -1], 2)
