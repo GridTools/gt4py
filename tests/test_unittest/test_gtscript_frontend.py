@@ -175,6 +175,35 @@ class TestInlinedExternals:
         stmt = def_ir.computations[0].body.stmts[0]
         assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
 
+    def test_recursive_imports(self, id_version):
+        module = f"TestInlinedExternals_test_recursive_imports_{id_version}"
+
+        def func_nest2():
+            from __externals__ import const
+
+            return const
+
+        def func_nest1():
+            from __externals__ import other
+
+            return other() + func_nest2()
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                inout_field = func_nest1()
+
+        stencil_id, def_ir = compile_definition(
+            definition_func,
+            "test_recursive_imports",
+            module,
+            externals={"other": func_nest2, "const": GLOBAL_CONSTANT},
+        )
+        assert set(def_ir.externals.keys()) == {
+            "const",
+            "func_nest1",
+            "tests.test_unittest.test_gtscript_frontend.func_nest1.func_nest2",
+        }
+
     def test_decorated_freeze(self):
         A = 0
 
