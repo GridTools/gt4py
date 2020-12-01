@@ -666,9 +666,12 @@ class RegionRemover(gt_meta.ASTTransformPass):
     @classmethod
     def apply(cls, node: ast.FunctionDef, context: dict) -> None:
         """Removes any regions using an external value of 'None'"""
-        cls().visit(node, context=context)
+        cls(context).visit(node)
 
-    def visit_Call(self, node: ast.Call, **kwargs) -> ast.Call:
+    def __init__(self, context: dict):
+        self.context = context
+
+    def visit_Call(self, node: ast.Call) -> ast.Call:
         if isinstance(node.func, ast.Name) and node.func.id == "parallel":
             new_node = copy.deepcopy(node)
             if any(not isinstance(arg, ast.Subscript) for arg in new_node.args):
@@ -677,7 +680,7 @@ class RegionRemover(gt_meta.ASTTransformPass):
                     loc=gt_ir.Location.from_ast_node(node),
                 )
             new_node.args = list(
-                filter(lambda arg: RegionValidator().apply(arg.slice, **kwargs), node.args)
+                filter(lambda arg: RegionValidator.apply(arg.slice, self.context), node.args)
             )
             return new_node
         else:
