@@ -175,6 +175,31 @@ class TestInlinedExternals:
         stmt = def_ir.computations[0].body.stmts[0]
         assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
 
+    def test_function_import(self, id_version):
+        module = f"TestInlinedExternals_test_recursive_imports_{id_version}"
+
+        def some_function():
+            from __externals__ import const
+
+            return const
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from __externals__ import some_call
+
+            with computation(PARALLEL), interval(...):
+                inout_field = some_call()
+
+        stencil_id, def_ir = compile_definition(
+            definition_func,
+            "test_recursive_imports",
+            module,
+            externals={"some_call": some_function, "const": GLOBAL_CONSTANT},
+        )
+        assert set(def_ir.externals.keys()) == {
+            "some_call",
+            "const",
+        }
+
     def test_recursive_imports(self, id_version):
         module = f"TestInlinedExternals_test_recursive_imports_{id_version}"
 
@@ -189,17 +214,21 @@ class TestInlinedExternals:
             return other() + func_nest2()
 
         def definition_func(inout_field: gtscript.Field[float]):
+            from __externals__ import some_call
+
             with computation(PARALLEL), interval(...):
-                inout_field = func_nest1()
+                inout_field = func_nest1() + some_call()
 
         stencil_id, def_ir = compile_definition(
             definition_func,
             "test_recursive_imports",
             module,
-            externals={"other": func_nest2, "const": GLOBAL_CONSTANT},
+            externals={"some_call": func_nest1, "other": func_nest2, "const": GLOBAL_CONSTANT},
         )
         assert set(def_ir.externals.keys()) == {
+            "some_call",
             "const",
+            "other",
             "func_nest1",
             "tests.test_unittest.test_gtscript_frontend.func_nest1.func_nest2",
         }

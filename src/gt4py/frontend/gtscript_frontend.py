@@ -1473,7 +1473,8 @@ class GTScriptParser(ast.NodeVisitor):
             key: value for key, value in context.items() if isinstance(value, types.FunctionType)
         }
         for name, value in func_externals.items():
-            # Resolve import
+            if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
+                GTScriptParser.annotate_definition(value)
             for imported_name, imported_value in value._gtscript_["imported"].items():
                 resolved_imports[imported_name] = imported_value
 
