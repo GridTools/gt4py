@@ -1441,8 +1441,6 @@ class GTScriptParser(ast.NodeVisitor):
     def eval_external(name: str, context: dict, loc=None):
         try:
             value = eval(name, context)
-            if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
-                GTScriptParser.annotate_definition(value)
 
             assert (
                 value is None
@@ -1467,6 +1465,33 @@ class GTScriptParser(ast.NodeVisitor):
         accepted_imports = set(imported.keys())
         resolved_imports = {**imported}
         resolved_values_list = list(nonlocals.items())
+
+        # Resolve function-like imports recursively
+        func_externals = dict(
+            filter(
+                lambda name_value: isinstance(name_value[1], types.FunctionType), context.items()
+            )
+        )
+        while func_externals:
+            new_func_externals = {}
+            for name, value in func_externals.items():
+                # Annotate if not already done
+                if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
+                    GTScriptParser.annotate_definition(value)
+
+                # Get sub-context
+                sub_context, sub_unbound = gt_meta.get_closure(
+                    value, included_nonlocals=True, include_builtins=False
+                )
+
+                # Resolve imports or add to list to recursively resolve
+                for imported_name, imported_value in value._gtscript_["imported"].items():
+                    if isinstance(imported_value, types.FunctionType):
+                        add_func_externals[imported_name] = sub_context[imported_value]
+                    else:
+                        resolved_imports[imported_name] = imported_value
+
+                func_externals = new_func_externals
 
         # Collect all imported and inlined values recursively through all the external symbols
         while resolved_imports or resolved_values_list:
