@@ -186,7 +186,7 @@ class TestInlinedExternals:
         def func_nest1():
             from __externals__ import other
 
-            return other()
+            return other() + func_nest2()
 
         def definition_func(inout_field: gtscript.Field[float]):
             from __externals__ import func
