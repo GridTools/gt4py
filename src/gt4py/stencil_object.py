@@ -178,12 +178,6 @@ class StencilObject(abc.ABC):
                     raise ValueError(
                         f"An incompatible view was passed for field {name} to the stencil. "
                     )
-                for name_other, field_other in used_field_args.items():
-                    if field_other.mask == field.mask:
-                        if not field_other.shape == field.shape:
-                            raise ValueError(
-                                f"The fields {name} and {name_other} have the same mask but different shapes."
-                            )
 
         # assert compatibility of parameters with stencil
         for name, parameter in used_param_args.items():
