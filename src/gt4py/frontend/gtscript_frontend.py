@@ -634,10 +634,11 @@ class CompiledIfInliner(ast.NodeTransformer):
 class RegionRemover(ast.NodeTransformer):
     @classmethod
     def apply(cls, node: ast.FunctionDef, context: dict) -> None:
+        """Removes any regions using an external value of 'None'"""
         cls(context).visit(node)
 
     def __init__(self, context: dict):
-        self.keep_arg: bool = None
+        self.keep_arg: bool
         self.context = context
 
     def visit_Call(self, node: ast.Call, **kwargs) -> ast.Call:
@@ -649,12 +650,13 @@ class RegionRemover(ast.NodeTransformer):
         else:
             return node
 
-    def visit_Name(self, node: ast.Name):
-        if node.id in self.context and self.context[node.id] is None:
+    def visit_Name(self, node: ast.Name) -> ast.Name:
+        assert node.id in self.context
+        if self.context[node.id] is None:
             self.keep_arg = False
         return node
 
-    def visit_Subscript(self, node: ast.Subscript):
+    def visit_Subscript(self, node: ast.Subscript) -> Optional[ast.Subscript]:
         self.keep_arg = True
         self.generic_visit(node)
         return node if self.keep_arg else None
