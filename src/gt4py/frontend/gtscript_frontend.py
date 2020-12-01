@@ -651,7 +651,10 @@ class RegionRemover(ast.NodeTransformer):
             return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
-        assert node.id in self.context
+        if node.id not in self.context:
+            raise ValueError(
+                f"Expected {node.id} in context but is not present. Did you forget to add an external?"
+            )
         if self.context[node.id] is None:
             self.keep_arg = False
         return node
