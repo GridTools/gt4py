@@ -118,10 +118,12 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
         functors, temporaries, multi_stages = self.tuple_visit(node.vertical_loops)
-        fields = set(
+
+        # TODO think about this pattern, just scanning of used parameters is probably wrong...
+        api_fields = set(
             [arg.name for mss in multi_stages for stage in mss.stages for arg in stage.args]
-        )
-        gt_comp_parameters = [gtcpp.ParamArg(name=f) for f in fields]  # TODO
+        ) - set(t.name for t in temporaries)
+        gt_comp_parameters = [gtcpp.ParamArg(name=f) for f in api_fields]  # TODO
         gt_computation = gtcpp.GTComputation(
             name=node.name,
             parameters=gt_comp_parameters,
