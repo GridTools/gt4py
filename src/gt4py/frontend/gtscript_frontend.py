@@ -650,6 +650,14 @@ class RegionValidator(gt_meta.ASTPass):
         if context[node.id] is None:
             self.valid = False
 
+    def visit_NameConstant(self, node: ast.NameConstant, **kwargs):
+        if node.value is None:
+            self.valid = False
+
+    def visit_Constant(self, node: ast.Constant, **kwargs):
+        if node.value is None:
+            self.valid = False
+
 
 class RegionRemover(gt_meta.ASTTransformPass):
     @classmethod
@@ -660,13 +668,13 @@ class RegionRemover(gt_meta.ASTTransformPass):
     def visit_Call(self, node: ast.Call, **kwargs) -> ast.Call:
         if isinstance(node.func, ast.Name) and node.func.id == "parallel":
             new_node = copy.deepcopy(node)
-            if any(isinstance(arg, ast.Subscript) for arg in new_node.args):
+            if any(not isinstance(arg, ast.Subscript) for arg in new_node.args):
                 raise GTScriptSyntaxError(
                     "Found parallel() argument that is not a region.",
                     loc=gt_ir.Location.from_ast_node(node),
                 )
             new_node.args = list(
-                filter(lambda arg: RegionValidator().apply(arg, **kwargs), node.args)
+                filter(lambda arg: RegionValidator().apply(arg.slice, **kwargs), node.args)
             )
             return new_node
         else:
