@@ -631,38 +631,46 @@ class CompiledIfInliner(ast.NodeTransformer):
         return node if node else None
 
 
-class RegionRemover(ast.NodeTransformer):
+class RegionValidator(gt_meta.ASTPass):
+    @classmethod
+    def apply(cls, node: ast.AST, context: dict):
+        validator = cls()
+        validator.visit(node, context=context)
+        return validator.valid
+
+    def __init__(self):
+        self.valid = True
+
+    def visit_Name(self, node: ast.Name, **kwargs):
+        context = kwargs["context"]
+        if node.id not in context:
+            raise ValueError(
+                f"Expected {node.id} in context but is not present. Did you forget to add an external?"
+            )
+        if context[node.id] is None:
+            self.valid = False
+
+
+class RegionRemover(gt_meta.ASTTransformPass):
     @classmethod
     def apply(cls, node: ast.FunctionDef, context: dict) -> None:
         """Removes any regions using an external value of 'None'"""
-        cls(context).visit(node)
-
-    def __init__(self, context: dict):
-        self.keep_arg: bool
-        self.context = context
+        cls().visit(node, context=context)
 
     def visit_Call(self, node: ast.Call, **kwargs) -> ast.Call:
         if isinstance(node.func, ast.Name) and node.func.id == "parallel":
             new_node = copy.deepcopy(node)
-            assert all(isinstance(arg, ast.Subscript) for arg in new_node.args)
-            new_node.args = list(filter(None, (self.visit(arg) for arg in node.args)))
+            if any(isinstance(arg, ast.Subscript) for arg in new_node.args):
+                raise GTScriptSyntaxError(
+                    "Found parallel() argument that is not a region.",
+                    loc=gt_ir.Location.from_ast_node(node),
+                )
+            new_node.args = list(
+                filter(lambda arg: RegionValidator().apply(arg, **kwargs), node.args)
+            )
             return new_node
         else:
             return node
-
-    def visit_Name(self, node: ast.Name) -> ast.Name:
-        if node.id not in self.context:
-            raise ValueError(
-                f"Expected {node.id} in context but is not present. Did you forget to add an external?"
-            )
-        if self.context[node.id] is None:
-            self.keep_arg = False
-        return node
-
-    def visit_Subscript(self, node: ast.Subscript) -> Optional[ast.Subscript]:
-        self.keep_arg = True
-        self.generic_visit(node)
-        return node if self.keep_arg else None
 
 
 #
