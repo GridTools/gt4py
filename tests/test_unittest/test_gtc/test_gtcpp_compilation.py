@@ -1,20 +1,16 @@
 from typing import Literal, Pattern, Union
 from devtools import debug
-from gt4py.gtc.common import FieldAccess
 from gt4py.gtc.gtcpp.gtcpp import (
     AssignStmt,
     GTAccessor,
     GTApplyMethod,
-    GTComputation,
     GTExtent,
-    GTStage,
     Intent,
-    ParamArg,
     Program,
 )
 import re
 import setuptools
-from gt4py import gt2_src_manager, config  # TODO must not include gt4py package
+from gt4py import gt2_src_manager, config  # TODO must not include gt4py package or ok for test?
 from pathlib import Path
 import pytest
 from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
@@ -22,7 +18,6 @@ from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from .gtcpp_utils import (
     AccessorRefBuilder,
     GTApplyMethodBuilder,
-    GTComputationBuilder,
     GTFunctorBuilder,
     ProgramBuilder,
 )
@@ -46,18 +41,22 @@ def match(value: str, regexp: "Union[str, Pattern]") -> "Literal[True]":
     return True
 
 
-def build_gridtools_test(source: Path):
+# TODO can I get tmp_path automagically here?
+def build_gridtools_test(tmp_path: Path, code: str):
+    tmp_src = tmp_path / "test.cpp"
+    tmp_src.write_text(code)
+
     ext_module = setuptools.Extension(
         "test",
-        [str(source.absolute())],
+        [str(tmp_src.absolute())],
         include_dirs=[config.GT2_INCLUDE_PATH],
         language="c++",
         # extra_compile_args=["-Wno-unknown-pragmas"],
     )
     args = [
         "build_ext",
-        "--build-temp=" + str(source.parent),
-        "--build-lib=" + str(source.parent),
+        "--build-temp=" + str(tmp_src.parent),
+        "--build-lib=" + str(tmp_src.parent),
         "--force",
     ]
     setuptools.setup(
@@ -124,15 +123,22 @@ def build_gridtools_test(source: Path):
 def test_program_compilation_succeeds(tmp_path, gtcpp_program, expected_regex):
     assert isinstance(gtcpp_program, Program)
     code = GTCppCodegen.apply(gtcpp_program)
-    tmp_src = tmp_path / "test.cpp"
-    tmp_src.write_text(code)
-
     print(code)
     match(code, expected_regex)
-    build_gridtools_test(tmp_src)
+    build_gridtools_test(tmp_path, code)
 
 
-# TODO make separate test which tests the stencil ast part
+def _embed_apply_method_in_program(apply_method: GTApplyMethod):
+    accessors = _extract_accessors(apply_method)
+    return (
+        ProgramBuilder("test")
+        .add_functor(
+            GTFunctorBuilder("fun").add_accessors(accessors).add_apply_method(apply_method).build()
+        )
+        .build()
+    )
+
+
 @pytest.mark.parametrize(
     "apply_method,expected_regex",
     [
@@ -154,21 +160,10 @@ def test_apply_method_compilation_succeeds(tmp_path, apply_method, expected_rege
     # This test could be improved by just compiling the body
     # and introducing fakes for `eval` and `gridtools::accessor`.
     assert isinstance(apply_method, GTApplyMethod)
-    debug(apply_method)
-    accessors = _extract_accessors(apply_method)
-    debug(accessors)
-    program = (
-        ProgramBuilder("test")
-        .add_functor(
-            GTFunctorBuilder("fun").add_accessors(accessors).add_apply_method(apply_method).build()
-        )
-        .build()
-    )
-    print(GTCppCodegen.apply(program))
-    tmp_src = tmp_path / "test.cpp"
-    tmp_src.write_text(GTCppCodegen.apply(program))
-
     apply_method_code = GTCppCodegen().visit(apply_method)
     print(apply_method_code)
     match(apply_method_code, expected_regex)
-    build_gridtools_test(tmp_src)
+
+    build_gridtools_test(
+        tmp_path, GTCppCodegen.apply(_embed_apply_method_in_program(apply_method))
+    )
