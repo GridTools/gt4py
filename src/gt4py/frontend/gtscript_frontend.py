@@ -1733,13 +1733,13 @@ class GTScriptParser(ast.NodeVisitor):
         )
         AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
 
+        # Inline function calls
+        CallInliner.apply(main_func_node, context=local_context)
+
         # Remove parallel intervals with 'None' splitters
         RegionRemover.apply(main_func_node, context=local_context)
 
         ValueInliner.apply(main_func_node, context=local_context)
-
-        # Inline function calls
-        CallInliner.apply(main_func_node, context=local_context)
 
         # Evaluate and inline compile-time conditionals
         CompiledIfInliner.apply(main_func_node, context=local_context)

@@ -1056,3 +1056,25 @@ class TestParallelIntervals:
         )
 
         assert len(def_ir.computations) == 2
+
+    def test_inside_func_ext(self):
+        def func(field):
+            from __externals__ import ext, other
+
+            with parallel(region[ext, other]):
+                field = 1
+            with parallel(region[I[-1], other]):
+                field = -1
+            return field
+
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                field = func(field)
+
+        module = f"TestParallelIntervals_inside_func_ext_{id_version}"
+        externals = {"ext": None, "other": 1}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_inside_func_ext", module, externals=externals
+        )
+
+        assert len(def_ir.computations) == 3
