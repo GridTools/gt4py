@@ -1441,6 +1441,8 @@ class GTScriptParser(ast.NodeVisitor):
     def eval_external(name: str, context: dict, loc=None):
         try:
             value = eval(name, context)
+            if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
+                GTScriptParser.annotate_definition(value)
 
             assert (
                 value is None
@@ -1471,10 +1473,6 @@ class GTScriptParser(ast.NodeVisitor):
             key: value for key, value in context.items() if isinstance(value, types.FunctionType)
         }
         for name, value in func_externals.items():
-            # Annotate if not already done
-            if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
-                GTScriptParser.annotate_definition(value)
-
             # Resolve import
             for imported_name, imported_value in value._gtscript_["imported"].items():
                 resolved_imports[imported_name] = imported_value

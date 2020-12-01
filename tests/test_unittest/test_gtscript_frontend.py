@@ -189,17 +189,20 @@ class TestInlinedExternals:
             return other() + func_nest2()
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from __externals__ import func
-
             with computation(PARALLEL), interval(...):
-                inout_field = func()
+                inout_field = func_nest1()
 
-        compile_definition(
+        stencil_id, def_ir = compile_definition(
             definition_func,
             "test_recursive_imports",
             module,
-            externals={"func": func_nest1, "other": func_nest2, "const": GLOBAL_CONSTANT},
+            externals={"other": func_nest2, "const": GLOBAL_CONSTANT},
         )
+        assert set(def_ir.externals.keys()) == {
+            "const",
+            "func_nest1",
+            "tests.test_unittest.test_gtscript_frontend.func_nest1.func_nest2",
+        }
 
     def test_decorated_freeze(self):
         A = 0
