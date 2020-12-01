@@ -1,27 +1,18 @@
-from typing import Literal, Pattern, Union
-from devtools import debug
-from gt4py.gtc.gtcpp.gtcpp import (
-    AssignStmt,
-    GTAccessor,
-    GTApplyMethod,
-    GTExtent,
-    Intent,
-    Program,
-)
 import re
-import setuptools
-from gt4py import gt2_src_manager, config  # TODO must not include gt4py package or ok for test?
 from pathlib import Path
-import pytest
-from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
+from typing import Literal, Pattern, Union
 
-from .gtcpp_utils import (
-    AccessorRefBuilder,
-    GTApplyMethodBuilder,
-    GTFunctorBuilder,
-    ProgramBuilder,
-)
+import pytest
+import setuptools
+from devtools import debug
+
+from gt4py import config, gt2_src_manager  # TODO must not include gt4py package or ok for test?
+from gt4py.gtc.gtcpp.gtcpp import AssignStmt, GTAccessor, GTApplyMethod, GTExtent, Intent, Program
+from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
+
+from .gtcpp_utils import AccessorRefBuilder, GTApplyMethodBuilder, GTFunctorBuilder, ProgramBuilder
+
 
 if not gt2_src_manager.has_gt_sources() and not gt2_src_manager.install_gt_sources():
     raise RuntimeError("Missing GridTools sources.")

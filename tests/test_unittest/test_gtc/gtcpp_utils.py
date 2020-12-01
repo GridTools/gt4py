@@ -1,11 +1,12 @@
 from typing import List
+
 from gt4py.gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
 from gt4py.gtc.gtcpp.gtcpp import (
+    AccessorRef,
     GTAccessor,
     GTApplyMethod,
     GTComputation,
     GTFunctor,
-    Stmt,
     GTInterval,
     GTLevel,
     GTMultiStage,
@@ -13,7 +14,7 @@ from gt4py.gtc.gtcpp.gtcpp import (
     GTStage,
     ParamArg,
     Program,
-    AccessorRef,
+    Stmt,
 )
 
 

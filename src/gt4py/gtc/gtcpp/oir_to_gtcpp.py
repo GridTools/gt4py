@@ -1,15 +1,12 @@
-import functools
 from typing import Dict, List, Sequence
+
+import eve
 from devtools import debug  # noqa: F401
 
-from eve.utils import xiter
-from eve.concepts import field
-import eve
-from gt4py.gtc.common import FieldAccess
-
+from gt4py.gtc import common, oir, utils
 from gt4py.gtc.gtcpp import gtcpp
-from gt4py.gtc import oir, utils, common
 from gt4py.gtc.gtcpp.gtcpp import GTParamList
+
 
 # TODO between oir and gtcpp we need to group oir.VerticalLoops
 
