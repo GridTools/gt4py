@@ -637,27 +637,27 @@ class CompiledIfInliner(ast.NodeTransformer):
 class RegionValidator(gt_meta.ASTPass):
     @classmethod
     def apply(cls, node: ast.AST, context: dict):
-        validator = cls()
-        validator.visit(node, context=context)
+        validator = cls(context)
+        validator.visit(node)
         return validator.valid
 
-    def __init__(self):
+    def __init__(self, context: dict):
+        self.context = context
         self.valid = True
 
-    def visit_Name(self, node: ast.Name, **kwargs):
-        context = kwargs["context"]
-        if node.id not in context:
+    def visit_Name(self, node: ast.Name):
+        if node.id not in self.context:
             raise ValueError(
                 f"Expected {node.id} in context but is not present. Did you forget to add an external?"
             )
-        if context[node.id] is None:
+        if self.context[node.id] is None:
             self.valid = False
 
-    def visit_NameConstant(self, node: ast.NameConstant, **kwargs):
+    def visit_NameConstant(self, node: ast.NameConstant):
         if node.value is None:
             self.valid = False
 
-    def visit_Constant(self, node: ast.Constant, **kwargs):
+    def visit_Constant(self, node: ast.Constant):
         if node.value is None:
             self.valid = False
 
