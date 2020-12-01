@@ -1695,7 +1695,7 @@ class GTScriptFrontend(gt_frontend.Frontend):
 
     @classmethod
     def get_stencil_id(cls, qualified_name, definition, externals, options_id):
-        cls.prepare_stencil_definition(definition, externals)
+        cls.prepare_stencil_definition(definition, externals or {})
         fingerprint = {
             "__main__": definition._gtscript_["canonical_ast"],
             "docstring": inspect.getdoc(definition),
