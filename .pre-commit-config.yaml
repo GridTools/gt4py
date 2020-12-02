@@ -71,6 +71,7 @@ repos:
           tests/test_integration/test_suites.py |
           tests/test_integration/utils.py |
           tests/test_unittest/test_call_interface.py |
+          tests/test_unittest/test_dawn_backends.py |
           tests/test_unittest/test_gtscript_frontend.py |
           tests/test_unittest/test_storage.py |
           )$
@@ -100,6 +101,7 @@ repos:
           tests/test_unittest/test_call_interface.py |
           tests/test_unittest/test_gtscript_frontend.py |
           tests/test_unittest/test_storage.py |
+          tests/test_unittest/test_dawn_backends.py |
           tests/definition_setup.py |
           )$
 

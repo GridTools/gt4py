@@ -260,3 +260,27 @@ def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3
             else:
                 mid_storage = 4
             out_storage[0, 0, 0] = local_var + mid_storage
+
+
+@register
+def multibranch_param_conditional(
+    in_field: gtscript.Field[float], out_field: gtscript.Field[float], c: float
+):
+    with computation(PARALLEL), interval(...):
+        if c > 0.0:
+            out_field = in_field + in_field[1, 0, 0]
+        elif c < -1.0:
+            out_field = in_field - in_field[1, 0, 0]
+        else:
+            out_field = in_field
+
+
+@register(externals={"DO_SOMETHING": False})
+def allow_empty_computation(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+    from __externals__ import DO_SOMETHING
+
+    with computation(FORWARD), interval(...):
+        out_field = in_field
+    with computation(PARALLEL), interval(...):
+        if __INLINED(DO_SOMETHING):
+            out_field = abs(in_field)

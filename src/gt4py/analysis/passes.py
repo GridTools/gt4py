@@ -339,7 +339,6 @@ class InitInfoPass(TransformPass):
             interval = next(iter(self.current_block_info.intervals))
             interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
 
-            assert node.body.stmts  # non-empty computation
             stmt_infos = [
                 info for info in [self.visit(stmt) for stmt in node.body.stmts] if info is not None
             ]
@@ -402,20 +401,12 @@ class InitInfoPass(TransformPass):
 
         def _merge_extents(self, refs: list):
             result = {}
-            params = set()
 
             # Merge offsets for same symbol
             for name, extent in refs:
-                if extent is None:
-                    assert name in params or name not in result
-                    params |= {name}
-                    result.setdefault(name, Extent((0, 0), (0, 0), (0, 0)))
-                else:
-                    assert name not in params
-                    if name in result:
-                        result[name] |= extent
-                    else:
-                        result[name] = extent
+                extent = extent or Extent.zeros()
+                result.setdefault(name, Extent.zeros())
+                result[name] |= extent
 
             return result
 
@@ -662,6 +653,9 @@ class StageMergingWrapper:
         # Check that there are not data dependencies between stages
         if self.has_data_dependencies_with(candidate):
             return False
+
+        self.has_incompatible_intervals_with(candidate)
+
         return True
 
     def merge_with(self, candidate: IJBlockInfo):
@@ -683,7 +677,24 @@ class StageMergingWrapper:
                     i_to_ib_map[candidate_iblock.interval], candidate_iblock
                 )
             else:
-                self._stage.interval_blocks.append(candidate_iblock)
+                # candidate block must be inserted at the correct position so that they appear in the order dictated
+                #  by the iteration order. note that this reordering is valid as candidate was already checked for
+                #  dependencies
+                insert_pos = len(self._stage.interval_blocks)
+                try:
+                    insert_pos = next(
+                        i
+                        for i, iblock in enumerate(self._stage.interval_blocks)
+                        if not iblock.interval.precedes(
+                            candidate_iblock.interval,
+                            self.min_k_interval_sizes,
+                            self._parent_block.iteration_order,
+                        )
+                    )
+                except StopIteration:
+                    pass
+
+                self._stage.interval_blocks.insert(insert_pos, candidate_iblock)
 
     def _merge_interval_block(self, target_iblock, candidate_iblock: IntervalBlockInfo) -> None:
         target_iblock.id = self.parent.id_generator.new
