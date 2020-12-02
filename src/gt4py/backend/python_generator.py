@@ -78,6 +78,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         self.param_names = None
 
         self.var_refs_defined = set()
+        self.range_args = []
 
     def __call__(self, impl_node: gt_ir.Node, sources: gt_text.TextBlock):
         assert isinstance(impl_node, gt_ir.StencilImplementation)

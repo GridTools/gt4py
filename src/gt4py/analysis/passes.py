@@ -1299,6 +1299,11 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
 class ReduceTemporaryStoragesPass(TransformPass):
     class ReducibleFieldsCollector(gt_ir.IRNodeVisitor):
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation) -> Set[str]:
+            collector = cls()
+            return collector(node)
+
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.interval: gt_ir.AxisInterval = None
@@ -1334,6 +1339,11 @@ class ReduceTemporaryStoragesPass(TransformPass):
                             self.reduced_fields[field_name] = self.interval
 
     class StorageReducer(gt_ir.IRNodeMapper):
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation, reduced_fields: Set[str]) -> None:
+            instance = cls(reduced_fields)
+            return instance(node)
+
         def __init__(self, reduced_fields: Set[str]):
             self.reduced_fields = reduced_fields
 
@@ -1359,14 +1369,11 @@ class ReduceTemporaryStoragesPass(TransformPass):
                 node.offset = {axis: node.offset[axis] for axis in field_decl.axes}
             return True, node
 
-    def apply(self, transform_data: TransformData) -> TransformData:
-        reducible_fields_collector = self.ReducibleFieldsCollector()
-        reduced_fields = reducible_fields_collector(transform_data.implementation_ir)
-
-        storage_reducer = self.StorageReducer(reduced_fields)
-        transform_data.implementation_ir = storage_reducer(transform_data.implementation_ir)
-
-        return transform_data
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        reduced_fields = cls.ReducibleFieldsCollector.apply(transform_data.implementation_ir)
+        if len(reduced_fields) > 0:
+            cls.StorageReducer.apply(transform_data.implementation_ir, reduced_fields)
 
 
 class HousekeepingPass(TransformPass):
