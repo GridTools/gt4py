@@ -11,6 +11,8 @@ from gt4py.gtc.common import (
     IfStmt,
     Literal,
     LogicalOperator,
+    NativeFuncCall,
+    NativeFunction,
     Stmt,
     UnaryOperator,
 )
@@ -154,6 +156,10 @@ def test_dtype_propagation(node, expected):
             lambda: UnaryOp(op=A_ARITHMETIC_UNARY_OPERATOR, expr=DummyExpr(dtype=DataType.BOOL)),
             r"Unary op.* not allowed with bool.*",
         ),
+        (
+            lambda: NativeFuncCall(func=NativeFunction.SIN, args=[DummyExpr(), DummyExpr()]),
+            r"accepts 1 arg.* 2.*passed",
+        ),
     ],
 )
 def test_invalid_nodes(invalid_node, expected_regex):
@@ -230,3 +236,12 @@ def test_TernaryOp_category():
     with pytest.raises(ValidationError):
         Testee(cond=ExprB(dtype=DataType.BOOL), true_expr=ExprB(), false_expr=ExprA())
         Testee(cond=ExprA(dtype=DataType.BOOL), true_expr=ExprA(), false_expr=ExprB())
+
+
+def test_NativeFuncCall_category():
+    class Testee(ExprA, common.NativeFuncCall[ExprA]):
+        pass
+
+    Testee(func=NativeFunction.SIN, args=[ExprA()])
+    with pytest.raises(ValidationError):
+        Testee(func=NativeFunction.SIN, args=[ExprB()])

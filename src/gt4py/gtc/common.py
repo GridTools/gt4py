@@ -107,6 +107,59 @@ class BuiltInLiteral(IntEnum):
 
 
 @enum.unique
+class NativeFunction(StrEnum):
+    ABS = "abs"
+    MIN = "min"
+    MAX = "max"
+    MOD = "mod"
+
+    SIN = "sin"
+    COS = "cos"
+    TAN = "tan"
+    ARCSIN = "arcsin"
+    ARCCOS = "arccos"
+    ARCTAN = "arctan"
+
+    SQRT = "sqrt"
+    EXP = "exp"
+    LOG = "log"
+
+    ISFINITE = "isfinite"
+    ISINF = "isinf"
+    ISNAN = "isnan"
+    FLOOR = "floor"
+    CEIL = "ceil"
+    TRUNC = "trunc"
+
+    @property
+    def arity(self):
+        return type(self).IR_OP_TO_NUM_ARGS[self]
+
+
+NativeFunction.IR_OP_TO_NUM_ARGS = {
+    NativeFunction.ABS: 1,
+    NativeFunction.MIN: 2,
+    NativeFunction.MAX: 2,
+    NativeFunction.MOD: 2,
+    NativeFunction.SIN: 1,
+    NativeFunction.COS: 1,
+    NativeFunction.TAN: 1,
+    NativeFunction.ARCSIN: 1,
+    NativeFunction.ARCCOS: 1,
+    NativeFunction.ARCTAN: 1,
+    NativeFunction.SQRT: 1,
+    NativeFunction.EXP: 1,
+    NativeFunction.LOG: 1,
+    NativeFunction.ISFINITE: 1,
+    NativeFunction.ISINF: 1,
+    NativeFunction.ISNAN: 1,
+    NativeFunction.FLOOR: 1,
+    NativeFunction.CEIL: 1,
+    NativeFunction.TRUNC: 1,
+}
+
+
+@enum.unique
 class LevelMarker(StrEnum):
     START = "start"
     END = "end"
@@ -350,4 +403,21 @@ class TernaryOp(GenericNode, Generic[ExprT]):
     @root_validator(pre=True)
     def kind_propagation(cls, values):
         values["kind"] = compute_kind([values["true_expr"], values["false_expr"]])
+        return values
+
+
+class NativeFuncCall(GenericNode, Generic[ExprT]):
+    """"""
+
+    func: NativeFunction
+    args: List[ExprT]
+
+    @root_validator(pre=True)
+    def arity_check(cls, values):
+        if values["func"].arity != len(values["args"]):
+            raise ValueError(
+                "{} accepts {} arguments, {} where passed.".format(
+                    values["func"], values["func"].arity, len(values["args"])
+                )
+            )
         return values
