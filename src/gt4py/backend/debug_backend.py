@@ -60,7 +60,9 @@ class DebugSourceGenerator(PythonSourceGenerator):
             self.range_args = range_args
             range_expr = "range({args})".format(args=", ".join(a for a in range_args))
             seq_axis = self.impl_node.domain.sequential_axis.name
-            source_lines.append("for {ax} in {range_expr}:".format(ax=seq_axis, range_expr=range_expr))
+            source_lines.append(
+                "for {ax} in {range_expr}:".format(ax=seq_axis, range_expr=range_expr)
+            )
 
         return source_lines
 
