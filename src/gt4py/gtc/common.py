@@ -161,6 +161,9 @@ def verify_and_get_common_dtype(node_cls, values: List[Expr]) -> DataType:
         dtype = values[0].dtype
         if all([v.dtype == dtype for v in values]):
             return dtype
+        elif all([v.dtype == DataType.FLOAT64 or v.dtype == DataType.INT64 for v in values]):
+            # TODO remove this is casting INT64 to FLOAT64 we should do this in a pass
+            return DataType.FLOAT64
         else:
             raise ValueError(
                 "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
