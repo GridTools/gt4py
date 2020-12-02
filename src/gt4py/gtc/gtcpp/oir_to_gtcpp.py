@@ -17,7 +17,7 @@ from gt4py.gtc.gtcpp.gtcpp import GTParamList
 def _extract_accessors(node: eve.Node) -> GTParamList:
     extents: Dict[str, gtcpp.GTExtent] = (
         node.iter_tree()
-        .filter_by_type(gtcpp.AccessorRef)
+        .if_isinstance(gtcpp.AccessorRef)
         .reduceby(
             (lambda extent, accessor_ref: extent + accessor_ref.offset),
             "name",
@@ -28,9 +28,9 @@ def _extract_accessors(node: eve.Node) -> GTParamList:
 
     inout_fields: List[str] = (
         node.iter_tree()
-        .filter_by_type(gtcpp.AssignStmt)
+        .if_isinstance(gtcpp.AssignStmt)
         .getattr("left")
-        .filter_by_type(gtcpp.AccessorRef)
+        .if_isinstance(gtcpp.AccessorRef)
         .getattr("name")
         .unique()
     )
