@@ -1194,9 +1194,6 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
     """
 
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
-        def __init__(self):
-            pass
-
         @classmethod
         def apply(cls, node: gt_ir.StencilImplementation) -> Set[str]:
             collector = cls()
@@ -1204,28 +1201,32 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
-            self.demotables = set(node.temporary_fields)
-            self.seen_symbols: Set[str] = set()
-            self.stage_symbols: Optional[Set[str]] = None
+            self.demotables: Dict[str, str] = {
+                field_name: "" for field_name in node.temporary_fields
+            }
             self.visit(node)
-            return self.demotables
+            return set(self.demotables.keys())
 
         def visit_Stage(self, node: gt_ir.Stage) -> None:
-            self.stage_symbols = set()
-
+            self.stage_name = node.name
             self.generic_visit(node)
 
-            for s in self.stage_symbols:
-                if s in self.seen_symbols:
-                    self.demotables.discard(s)
-                self.seen_symbols.add(s)
-            self.stage_symbols = None
+        def visit_Assign(self, node: gt_ir.Assign) -> None:
+            target_name = node.target.name
+            if target_name in self.demotables:
+                assert len(self.stage_name) > 0
+                self.demotables[target_name] = self.stage_name
+            self.generic_visit(node.target)
+            self.generic_visit(node.value)
 
         def visit_FieldRef(self, node: gt_ir.FieldRef) -> None:
-            if any(v != 0 for v in node.offset.values()):
-                self.demotables.discard(node.name)
-            assert self.stage_symbols is not None
-            self.stage_symbols.add(node.name)
+            field_name = node.name
+            if field_name in self.demotables:
+                assert len(self.demotables[field_name]) > 0
+                if self.stage_name != self.demotables[field_name] or any(
+                    val != 0 for val in node.offset.values()
+                ):
+                    self.demotables.pop(field_name)
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
         @classmethod
