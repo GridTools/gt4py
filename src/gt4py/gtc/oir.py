@@ -89,6 +89,10 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     pass
 
 
+class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
+    pass
+
+
 class Decl(LocNode):
     name: SymbolName
     dtype: common.DataType
