@@ -106,7 +106,6 @@ class BuiltInLiteral(IntEnum):
     ONE = 3
 
 
-# TODO maybe StrEnum?
 @enum.unique
 class NativeFunction(StrEnum):
     ABS = "abs"
