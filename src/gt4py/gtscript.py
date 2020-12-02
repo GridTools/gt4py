@@ -332,15 +332,32 @@ def lazy_stencil(
 
 
 class _AxisOffset:
-    def __init__(self, axis: str, offset: int):
+    def __init__(self, axis: str, index: int, offset: int = 0):
         self.axis = axis
+        self.index = index
         self.offset = offset
 
     def __repr__(self):
-        return f"_AxisOffset(axis={self.axis}, offset={self.offset})"
+        return f"_AxisOffset(axis={self.axis}, index={self.index}, offset={self.offset})"
 
     def __str__(self):
-        return f"{self.axis}[{self.offset}]"
+        return f"{self.axis}[{self.index}] + {self.offset}"
+
+    def __add__(self, offset: int):
+        if not isinstance(offset, int):
+            raise TypeError("Offset should be an integer")
+        if offset == 0:
+            return self
+        else:
+            return _AxisOffset(self.axis, self.index, self.offset + offset)
+
+    def __radd__(self, offset: int):
+        if not isinstance(offset, int):
+            raise TypeError("Offset should be an integer")
+        if offset == 0:
+            return self
+        else:
+            return self.__add__(offset)
 
 
 class _AxisInterval:
