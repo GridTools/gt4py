@@ -1214,10 +1214,8 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
         def visit_Assign(self, node: gt_ir.Assign) -> None:
             target_name = node.target.name
             if target_name in self.demotables:
-                assert len(self.stage_name) > 0
                 self.demotables[target_name] = self.stage_name
-            self.generic_visit(node.target)
-            self.generic_visit(node.value)
+            self.visit(node.value)
 
         def visit_FieldRef(self, node: gt_ir.FieldRef) -> None:
             field_name = node.name
