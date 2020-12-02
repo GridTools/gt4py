@@ -219,41 +219,38 @@ class AxisIntervalParser(ast.NodeVisitor):
         ast.copy_location(slice_node, node)
         return slice_node
 
-    @staticmethod
-    def make_axis_bound(offset: int, loc: gt_ir.Location = None) -> gt_ir.AxisBound:
-        return gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START if offset >= 0 else gt_ir.LevelMarker.END,
-            offset=offset,
-            loc=loc,
-        )
+    def make_axis_bound(self, value: Union[int, gtscript._AxisOffset, str]) -> gt_ir.AxisBound:
+        if isinstance(value, int):
+            axis_bound = gt_ir.AxisBound(
+                level=gt_ir.LevelMarker.START if value >= 0 else gt_ir.LevelMarker.END,
+                offset=value,
+                loc=self.loc,
+            )
+        elif isinstance(value, gtscript._AxisOffset):
+            if value.axis != self.axis_name:
+                raise self.interval_error
+            level = gt_ir.LevelMarker.START if value.index >= 0 else gt_ir.LevelMarker.END
+            offset = value.index + value.offset
+            axis_bound = gt_ir.AxisBound(level=level, offset=offset, loc=self.loc)
+        elif isinstance(value, str):
+            axis_bound = gt_ir.AxisBound(level=gt_ir.VarRef(name=value), loc=self.loc)
+        else:
+            raise GTScriptSyntaxError(
+                "Unexpected type found. Expected int, AxisOffset, or string (var ref).",
+                loc=self.loc,
+            )
+        return axis_bound
 
     def visit_Name(self, node: ast.Name) -> gt_ir.AxisBound:
-        symbol = node.id
-        if symbol in self.context:
-            value = self.context[symbol]
-            if isinstance(value, gtscript._AxisOffset):
-                if value.axis != self.axis_name:
-                    raise self.interval_error
-                offset = value.offset
-            elif isinstance(value, int):
-                offset = value
-            else:
-                raise self.interval_error
-            return self.make_axis_bound(offset, self.loc)
-        else:
-            return gt_ir.AxisBound(level=gt_ir.VarRef(name=symbol), loc=self.loc)
+        value = self.context.get(node.id, None)
+        if value is None:
+            # Assume this is a variable reference (str)
+            value = node.id
+        return self.make_axis_bound(value)
 
     def visit_Constant(self, node: ast.Constant) -> gt_ir.AxisBound:
         if node.value is not None:
-            if isinstance(node.value, gtscript._AxisOffset):
-                if node.value.axis != self.axis_name:
-                    raise self.interval_error
-                offset = node.value.offset
-            elif isinstance(node.value, int):
-                offset = node.value
-            else:
-                raise self.interval_error
-            return self.make_axis_bound(offset, self.loc)
+            return self.make_axis_bound(node.value)
         else:
             return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
 
@@ -266,7 +263,11 @@ class AxisIntervalParser(ast.NodeVisitor):
 
     def visit_Num(self, node: ast.Num) -> gt_ir.AxisBound:
         """Equivalent to visit_Constant. Required for Python < 3.8."""
-        return self.make_axis_bound(node.n, self.loc)
+        return gt_ir.AxisBound(
+            level=gt_ir.LevelMarker.START if node.n >= 0 else gt_ir.LevelMarker.END,
+            offset=node.n,
+            loc=self.loc,
+        )
 
     def visit_BinOp(self, node: ast.BinOp) -> gt_ir.AxisBound:
         left = self.visit(node.left)
