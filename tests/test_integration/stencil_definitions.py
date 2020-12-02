@@ -273,3 +273,14 @@ def multibranch_param_conditional(
             out_field = in_field - in_field[1, 0, 0]
         else:
             out_field = in_field
+
+
+@register(externals={"DO_SOMETHING": False})
+def allow_empty_computation(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+    from __externals__ import DO_SOMETHING
+
+    with computation(FORWARD), interval(...):
+        out_field = in_field
+    with computation(PARALLEL), interval(...):
+        if __INLINED(DO_SOMETHING):
+            out_field = abs(in_field)
