@@ -249,8 +249,10 @@ class AxisIntervalParser(ast.NodeVisitor):
         return self.make_axis_bound(value)
 
     def visit_Constant(self, node: ast.Constant) -> gt_ir.AxisBound:
-        value = node.value if node.value is not None else 0
-        return self.make_axis_bound(value)
+        if node.value is not None:
+            return self.make_axis_bound(node.value)
+        else:
+            return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
 
     def visit_NameConstant(self, node: ast.NameConstant) -> gt_ir.AxisBound:
         """Python < 3.8 uses ast.NameConstant for 'None'."""
