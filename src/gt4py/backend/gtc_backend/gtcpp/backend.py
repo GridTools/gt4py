@@ -51,7 +51,12 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             "py::buffer {name}, std::array<gt::uint_t,3> {name}_origin".format(name=p.name)
             for p in node.parameters
         ]
-        sid_params = ["gt::as_sid<double, 3>({name})".format(name=p.name) for p in node.parameters]
+        sid_params = [
+            "gt::sid::shift_sid_origin(gt::as_sid<double, 3>({name}), {name}_origin)".format(
+                name=p.name
+            )
+            for p in node.parameters
+        ]
         return self.generic_visit(
             node,
             entry_params=entry_params,
@@ -64,6 +69,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         #include <pybind11/pybind11.h>
         #include <pybind11/stl.h>
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
+        #include <gridtools/sid/sid_shift_origin.hpp>
         #include "computation.hpp"
         namespace gt = gridtools;
         namespace py = ::pybind11;
