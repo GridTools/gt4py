@@ -22,7 +22,7 @@ import itertools
 import numbers
 import textwrap
 import types
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 
@@ -632,6 +632,129 @@ class CompiledIfInliner(ast.NodeTransformer):
                 )
 
         return node if node else None
+
+
+class FieldTupleUnroller(ast.NodeTransformer):
+    """Unrolls statements containing field tuples"""
+
+    @classmethod
+    def apply(cls, func_node: ast.FunctionDef, definition: Dict[str, Any]):
+        unroller = cls(definition)
+        return unroller(func_node)
+
+    def __init__(self, definition: Dict[str, Any]):
+        self.current_block: ast.AST = None
+        self.unroll_factor: int = 0
+        self.unroll_index: int = 0
+        self.unroll_sizes: Dict[str, int] = dict()
+
+        for n in range(len(definition["api_signature"])):
+            annotation = definition["api_annotations"][n]
+            if isinstance(annotation, tuple):
+                name = definition["api_signature"][n].name
+                self.unroll_sizes[name] = len(annotation)
+
+    def __call__(self, func_node: ast.FunctionDef):
+        return self.visit(func_node)
+
+    def visit(self, node, **kwargs):
+        """Visit a node."""
+        method = "visit_" + node.__class__.__name__
+        visitor = getattr(self, method, self.generic_visit)
+        return visitor(node, **kwargs)
+
+    def _process_stmts(self, stmts):
+        new_stmts = []
+        outer_block = self.current_block
+        self.current_block = new_stmts
+        for stmt in stmts:
+            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                new_stmts.append(self.visit(stmt))
+        self.current_block = outer_block
+        return new_stmts
+
+    def visit_arguments(self, node):
+        new_args: List[ast.arg] = []
+        for arg in node.args:
+            if arg.arg in self.unroll_sizes:
+                new_args.extend(self.visit(arg))
+                self.unroll_factor = max(self.unroll_factor, self.unroll_sizes[arg.arg])
+            else:
+                new_args.append(arg)
+        return ast.arguments(args=new_args)
+
+    def visit_arg(self, node: ast.arg):
+        args: List[ast.arg] = []
+        for n in range(self.unroll_sizes[node.arg]):
+            new_type = ast.copy_location(
+                ast.Name(node.annotation.id, node.annotation.ctx), node.annotation
+            )
+            args.append(ast.arg(f"{node.arg}_{n}", new_type))
+        return args
+
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        node.args = self.visit(node.args)
+        new_body: list = []
+        for n in range(self.unroll_factor):
+            self.unroll_index = n
+            new_stmts = self._process_stmts(node.body)
+            new_body.extend(new_stmts)
+        node.body = new_body
+        return node
+
+    def visit_With(self, node: ast.With):
+        new_body = self._process_stmts(node.body)
+        return ast.copy_location(ast.With(node.items, new_body), node)
+
+    def visit_If(self, node: ast.If):
+        new_test = self.visit(node.test)
+        new_body = self._process_stmts(node.body)
+        new_orelse = self._process_stmts(node.orelse) if node.orelse else []
+        return ast.copy_location(ast.If(new_test, new_body, new_orelse), node)
+
+    def visit_IfExp(self, node: ast.IfExp):
+        new_test = self.visit(node.test)
+        new_body = self.visit(node.body)
+        new_orelse = self.visit(node.orelse) if node.orelse else None
+        return ast.copy_location(ast.IfExp(new_test, new_body, new_orelse), node)
+
+    def visit_BoolOp(self, node: ast.BoolOp):
+        new_values: List[ast.AST] = [self.visit(value) for value in node.values]
+        return ast.copy_location(ast.BoolOp(node.op, new_values), node)
+
+    def visit_Compare(self, node: ast.Compare):
+        new_left = self.visit(node.left)
+        new_comparators: List[ast.AST] = [
+            self.visit(comparator) for comparator in node.comparators
+        ]
+        return ast.copy_location(ast.Compare(new_left, node.ops, new_comparators), node)
+
+    def visit_Assign(self, node: ast.Assign):
+        new_targets = [self.visit(target) for target in node.targets]
+        new_value = self.visit(node.value)
+        return ast.copy_location(ast.Assign(new_targets, new_value), node)
+
+    def visit_AugAssign(self, node: ast.AugAssign):
+        new_target = self.visit(node.target)
+        new_value = self.visit(node.value)
+        return ast.copy_location(ast.AugAssign(new_target, node.op, new_value), node)
+
+    def visit_Name(self, node: ast.Name):
+        new_id = f"{node.id}_{self.unroll_index}" if node.id in self.unroll_sizes else node.id
+        return ast.copy_location(ast.Name(new_id, node.ctx), node)
+
+    def visit_Subscript(self, node: ast.Subscript):
+        new_value = self.visit(node.value)
+        return ast.copy_location(ast.Subscript(new_value, node.slice, node.ctx), node)
+
+    def visit_BinOp(self, node: ast.BinOp):
+        new_left = self.visit(node.left)
+        new_right = self.visit(node.right)
+        return ast.copy_location(ast.BinOp(new_left, node.op, new_right), node)
+
+    def visit_UnaryOp(self, node: ast.UnaryOp):
+        new_operand = self.visit(node.operand)
+        return ast.copy_location(ast.UnaryOp(node.op, new_operand), node)
 
 
 #
@@ -1341,7 +1464,7 @@ class GTScriptParser(ast.NodeVisitor):
                         )
                     default = param.default
 
-                if isinstance(param.annotation, (str, gtscript._FieldDescriptor)):
+                if isinstance(param.annotation, (str, tuple, gtscript._FieldDescriptor)):
                     dtype_annotation = param.annotation
                 elif (
                     isinstance(param.annotation, type)
@@ -1523,6 +1646,32 @@ class GTScriptParser(ast.NodeVisitor):
 
         return result
 
+
+    def update_arg_descriptors(self):
+        new_signature: List[gt_ir.ArgumentInfo] = []
+        new_annotations: List[gtscript._FieldDescriptor] = []
+        num_fields = len(self.definition._gtscript_["api_signature"])
+
+        for n in range(num_fields):
+            arg_info = self.definition._gtscript_["api_signature"][n]
+            field_desc = self.definition._gtscript_["api_annotations"][n]
+            if isinstance(field_desc, tuple):
+                for m in range(len(field_desc)):
+                    new_signature.append(
+                        gt_ir.ArgumentInfo(
+                            name=f"{arg_info.name}_{m}",
+                            is_keyword=arg_info.is_keyword,
+                            default=arg_info.default,
+                        )
+                    )
+                    new_annotations.append(field_desc[m])
+            else:
+                new_signature.append(arg_info)
+                new_annotations.append(field_desc)
+
+        self.definition._gtscript_["api_signature"] = new_signature
+        self.definition._gtscript_["api_annotations"] = new_annotations
+
     def extract_arg_descriptors(self):
         api_signature = self.definition._gtscript_["api_signature"]
         api_annotations = self.definition._gtscript_["api_annotations"]
@@ -1642,6 +1791,14 @@ class GTScriptParser(ast.NodeVisitor):
         # Evaluate and inline compile-time conditionals
         CompiledIfInliner.apply(main_func_node, context=local_context)
         # Cleaner.apply(self.definition_ir)
+
+        annotations = self.definition._gtscript_["api_annotations"]
+        n_tuples = sum(1 for annotation in annotations if isinstance(annotation, tuple))
+        if n_tuples > 0:
+            FieldTupleUnroller.apply(main_func_node, self.definition._gtscript_)
+            self.update_arg_descriptors()
+
+        api_signature, fields_decls, parameter_decls = self.extract_arg_descriptors()
 
         # Generate definition IR
         domain = gt_ir.Domain.LatLonGrid()

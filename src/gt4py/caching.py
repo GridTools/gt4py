@@ -172,6 +172,10 @@ class JITCachingStrategy(CachingStrategy):
 
     name = "jit"
 
+    def __init__(self, builder: "StencilBuilder"):
+        super().__init__(builder)
+        self._api_annotations: List[str] = []
+
     @property
     def root_path(self) -> pathlib.Path:
         settings = gt4py.config.cache_settings
@@ -279,7 +283,11 @@ class JITCachingStrategy(CachingStrategy):
 
     def _extract_api_annotations(self) -> List[str]:
         """Extract API annotations from the annotated stencil definition for fingerprinting."""
-        return [str(item) for item in self.builder.definition._gtscript_["api_annotations"]]
+        if not self._api_annotations:
+            self._api_annotations = [
+                str(item) for item in self.builder.definition._gtscript_["api_annotations"]
+            ]
+        return self._api_annotations
 
     @property
     def stencil_id(self) -> StencilID:
