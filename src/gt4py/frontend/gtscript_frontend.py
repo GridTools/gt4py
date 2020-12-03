@@ -1468,6 +1468,16 @@ class GTScriptParser(ast.NodeVisitor):
         resolved_imports = {**imported}
         resolved_values_list = list(nonlocals.items())
 
+        # Resolve function-like imports
+        func_externals = {
+            key: value for key, value in context.items() if isinstance(value, types.FunctionType)
+        }
+        for name, value in func_externals.items():
+            if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
+                GTScriptParser.annotate_definition(value)
+            for imported_name, imported_value in value._gtscript_["imported"].items():
+                resolved_imports[imported_name] = imported_value
+
         # Collect all imported and inlined values recursively through all the external symbols
         while resolved_imports or resolved_values_list:
             new_imports = {}
@@ -1670,7 +1680,7 @@ class GTScriptFrontend(gt_frontend.Frontend):
 
     @classmethod
     def get_stencil_id(cls, qualified_name, definition, externals, options_id):
-        cls.prepare_stencil_definition(definition, externals)
+        cls.prepare_stencil_definition(definition, externals or {})
         fingerprint = {
             "__main__": definition._gtscript_["canonical_ast"],
             "docstring": inspect.getdoc(definition),
