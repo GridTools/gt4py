@@ -48,6 +48,7 @@ def register(externals):
 
 Field0D = gtscript.Field[np.float_, ()]
 Field3D = gtscript.Field[np.float_]
+Field3DBool = gtscript.Field[np.bool]
 
 
 @register
@@ -238,7 +239,7 @@ def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
 
 
 @register
-def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3D, qmin: float):
+def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3DBool):
     with computation(PARALLEL), interval(...):
         diff_23 = 0.0
         if extm and extm[0, 0, -1]:
@@ -264,7 +265,7 @@ def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3
 
 @register
 def multibranch_param_conditional(
-    in_field: gtscript.Field[float], out_field: gtscript.Field[float], c: float
+    in_field: Field3D, out_field: Field3D, c: float
 ):
     with computation(PARALLEL), interval(...):
         if c > 0.0:
@@ -276,7 +277,7 @@ def multibranch_param_conditional(
 
 
 @register(externals={"DO_SOMETHING": False})
-def allow_empty_computation(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+def allow_empty_computation(in_field: Field3D, out_field: Field3D):
     from __externals__ import DO_SOMETHING
 
     with computation(FORWARD), interval(...):
