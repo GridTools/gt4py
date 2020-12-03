@@ -264,9 +264,7 @@ def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3
 
 
 @register
-def multibranch_param_conditional(
-    in_field: Field3D, out_field: Field3D, c: float
-):
+def multibranch_param_conditional(in_field: Field3D, out_field: Field3D, c: float):
     with computation(PARALLEL), interval(...):
         if c > 0.0:
             out_field = in_field + in_field[1, 0, 0]
