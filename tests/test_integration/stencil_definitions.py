@@ -284,3 +284,18 @@ def allow_empty_computation(in_field: gtscript.Field[float], out_field: gtscript
     with computation(PARALLEL), interval(...):
         if __INLINED(DO_SOMETHING):
             out_field = abs(in_field)
+
+
+@register
+def field_tuple_args(
+    in_field: gtscript.Field[float],
+    out_field: (gtscript.Field[float], gtscript.Field[float], gtscript.Field[float]),
+    c: float,
+):
+    with computation(PARALLEL), interval(...):
+        if c > 0.0:
+            out_field = in_field[1, 0, 0]
+        elif c < -1.0:
+            out_field = in_field[1, 0, 0]
+        else:
+            out_field = in_field

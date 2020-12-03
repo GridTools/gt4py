@@ -678,7 +678,7 @@ class FieldTupleUnroller(ast.NodeTransformer):
         for arg in node.args:
             if arg.arg in self.unroll_sizes:
                 new_args.extend(self.visit(arg))
-                self.unroll_factor = max(self.unroll_factor, self.unroll_sizes[arg.arg])
+                self.unroll_factor = self.unroll_sizes[arg.arg]
             else:
                 new_args.append(arg)
         return ast.arguments(args=new_args)
@@ -1646,7 +1646,6 @@ class GTScriptParser(ast.NodeVisitor):
 
         return result
 
-
     def update_arg_descriptors(self):
         new_signature: List[gt_ir.ArgumentInfo] = []
         new_annotations: List[gtscript._FieldDescriptor] = []
@@ -1758,7 +1757,6 @@ class GTScriptParser(ast.NodeVisitor):
         #     self.external_context,
         # )
         self.resolved_externals = self.definition._gtscript_["externals"]
-        api_signature, fields_decls, parameter_decls = self.extract_arg_descriptors()
 
         # Inline constant values
         for name, value in self.resolved_externals.items():
@@ -1792,9 +1790,10 @@ class GTScriptParser(ast.NodeVisitor):
         CompiledIfInliner.apply(main_func_node, context=local_context)
         # Cleaner.apply(self.definition_ir)
 
-        annotations = self.definition._gtscript_["api_annotations"]
-        n_tuples = sum(1 for annotation in annotations if isinstance(annotation, tuple))
-        if n_tuples > 0:
+        if any(
+            isinstance(annotation, tuple)
+            for annotation in self.definition._gtscript_["api_annotations"]
+        ):
             FieldTupleUnroller.apply(main_func_node, self.definition._gtscript_)
             self.update_arg_descriptors()
 
