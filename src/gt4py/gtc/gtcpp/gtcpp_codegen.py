@@ -2,7 +2,7 @@ from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 
-from gt4py.gtc.common import DataType, LoopOrder
+from gt4py.gtc.common import DataType, LoopOrder, NativeFunction
 
 
 # TODO qualify gridtools stuff
@@ -49,13 +49,27 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     AccessorRef = as_fmt("eval({name}({offset}))")
 
+    ScalarAccess = as_fmt("{name}")
+
     CartesianOffset = as_fmt("{i}, {j}, {k}")
 
     BinaryOp = as_fmt("({left} {op} {right})")
 
+    UnaryOp = as_fmt("({op}{expr})")
+
     TernaryOp = as_fmt("({cond} ? {true_expr} : {false_expr})")
 
     Literal = as_mako("static_cast<${dtype}>(${value})")
+
+    def visit_NativeFunction(self, func: NativeFunction, **kwargs):
+        if func == NativeFunction.SQRT:
+            return "gridtools::math::sqrt"
+        elif func == NativeFunction.MIN:
+            return "gridtools::math::min"
+        else:
+            assert False
+
+    NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
     def visit_DataType(self, dtype: DataType, **kwargs):
         if dtype == DataType.INT64:
@@ -64,6 +78,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "double"
         elif dtype == DataType.FLOAT32:
             return "float"
+        elif dtype == DataType.BOOL:
+            return "bool"
         else:
             assert False
 
@@ -72,6 +88,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     # VarAccess = as_fmt("{name}")
 
     ParamArg = as_fmt("{name}")
+
+    Decl = as_fmt("{name}")
 
     GTStage = as_mako(".stage(${functor}(), ${','.join(args)})")
 

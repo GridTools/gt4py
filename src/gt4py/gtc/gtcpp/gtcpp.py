@@ -70,6 +70,10 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     pass
 
 
+class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
+    pass
+
+
 class VerticalDimension(LocNode):
     pass
 
@@ -149,6 +153,25 @@ class ParamArg(LocNode):
     name: Str
 
 
+class Decl(LocNode):
+    name: SymbolName
+    dtype: common.DataType
+
+    def __init__(self, *args, **kwargs):
+        if type(self) is Decl:
+            raise TypeError("Trying to instantiate `Decl` abstract class.")
+        super().__init__(*args, **kwargs)
+
+
+class FieldDecl(Decl):
+    # TODO dimensions (or mask?)
+    pass
+
+
+class ScalarDecl(Decl):
+    pass
+
+
 class GTStage(LocNode):
     functor: SymbolRef  # symbol ref
     args: List[ParamArg]  # symbol ref to GTComputation params
@@ -175,7 +198,7 @@ class Program(LocNode, SymbolTableTrait):
     name: Str
     # The ParamArg here, doesn't fully work as we need the type for template instantiation.
     # But maybe the module instantiation code is actually generated from a different IR?
-    parameters: List[ParamArg]
+    parameters: List[Decl]
     functors: List[GTFunctor]
     gt_computation: GTComputation
     # control_flow_ast: List[GTComputation]

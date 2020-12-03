@@ -12,11 +12,14 @@ from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 
 from gt4py import utils as gt_utils
 from gt4py.gtc import gtir, gtir_to_oir, passes
+from gt4py.gtc.common import DataType
 from gt4py.gtc.gtcpp import oir_to_gtcpp, gtcpp, gtcpp_codegen
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py.gtc.passes.gtir_set_dtype import GTIRSetDtype
+
+from devtools import debug
 
 
 class GTCGTExtGenerator:
@@ -31,8 +34,10 @@ class GTCGTExtGenerator:
 
     # TODO here definition IR should be the input
     def __call__(self, gtir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+        # debug(gtir)
         dtype_deduced = GTIRSetDtype().visit(gtir)
         oir = gtir_to_oir.GTIRToOIR().visit(dtype_deduced)
+        # debug(oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp)
         bindings = GTCppBindingsCodegen.apply(gtcpp, self.module_name)
@@ -45,18 +50,40 @@ class GTCGTExtGenerator:
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     # ParamArg = as_fmt("py::buffer {name}, std::array<gt::unit_t,3> {name}_origin")
 
+    def visit_DataType(self, dtype: DataType, **kwargs):
+        if dtype == DataType.INT64:
+            return "long long"
+        elif dtype == DataType.FLOAT64:
+            return "double"
+        elif dtype == DataType.FLOAT32:
+            return "float"
+        elif dtype == DataType.BOOL:
+            return "bool"
+        else:
+            assert False
+
+    def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
+        if "external_arg" in kwargs:
+            if kwargs["external_arg"]:
+                return "py::buffer {name}, std::array<gt::uint_t,3> {name}_origin".format(
+                    name=node.name
+                )
+            else:
+                return "gt::sid::shift_sid_origin(gt::as_sid<{dtype}, 3>({name}), {name}_origin)".format(
+                    name=node.name, dtype=self.visit(node.dtype)
+                )
+
+    def visit_ScalarDecl(self, node: gtcpp.ScalarDecl, **kwargs):
+        if "external_arg" in kwargs:
+            if kwargs["external_arg"]:
+                return "{dtype} {name}".format(name=node.name, dtype=self.visit(node.dtype))
+            else:
+                return "{name}".format(name=node.name)
+
     def visit_Program(self, node: gtcpp.Program, **kwargs):
         assert "module_name" in kwargs
-        entry_params = [
-            "py::buffer {name}, std::array<gt::uint_t,3> {name}_origin".format(name=p.name)
-            for p in node.parameters
-        ]
-        sid_params = [
-            "gt::sid::shift_sid_origin(gt::as_sid<double, 3>({name}), {name}_origin)".format(
-                name=p.name
-            )
-            for p in node.parameters
-        ]
+        entry_params = self.visit(node.parameters, external_arg=True)
+        sid_params = self.visit(node.parameters, external_arg=False)
         return self.generic_visit(
             node,
             entry_params=entry_params,

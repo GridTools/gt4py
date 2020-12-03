@@ -201,6 +201,7 @@ class Interval(LocNode):
 class VerticalLoop(LocNode):
     interval: Interval
     loop_order: common.LoopOrder
+    temporaries: List[FieldDecl]
     body: List[Stmt]
 
 

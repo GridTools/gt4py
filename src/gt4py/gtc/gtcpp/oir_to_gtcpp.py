@@ -50,8 +50,21 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_Literal(self, node: oir.Literal, **kwargs):
         return gtcpp.Literal(value=node.value, dtype=node.dtype)
 
+    def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs):
+        return gtcpp.UnaryOp(op=node.op, expr=self.visit(node.expr))
+
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs):
         return gtcpp.BinaryOp(op=node.op, left=self.visit(node.left), right=self.visit(node.right))
+
+    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs):
+        return gtcpp.TernaryOp(
+            cond=self.visit(node.cond),
+            true_expr=self.visit(node.true_expr),
+            false_expr=self.visit(node.false_expr),
+        )
+
+    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs):
+        return gtcpp.NativeFuncCall(func=node.func, args=self.visit(node.args))
 
     def visit_Temporary(self, node: oir.Temporary, **kwargs):
         return gtcpp.Temporary(name=node.name, dtype=node.dtype)
@@ -61,6 +74,9 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs):
         return gtcpp.AccessorRef(name=node.name, offset=self.visit(node.offset), dtype=node.dtype)
+
+    def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs):
+        return gtcpp.ScalarAccess(name=node.name, dtype=node.dtype)
 
     def visit_AxisBound(self, node: oir.AxisBound, *, is_start: bool, **kwargs):
         if node.level == common.LevelMarker.START:
@@ -113,8 +129,11 @@ class OIRToGTCpp(eve.NodeTranslator):
             gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches),
         )
 
-    def visit_Decl(self, node: oir.Decl, **kwargs):
-        return gtcpp.ParamArg(name=node.name)
+    def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs):
+        return gtcpp.FieldDecl(name=node.name, dtype=node.dtype)
+
+    def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs):
+        return gtcpp.ScalarDecl(name=node.name, dtype=node.dtype)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
         functors, temporaries, multi_stages = self.tuple_visit(node.vertical_loops)

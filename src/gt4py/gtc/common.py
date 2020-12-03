@@ -424,3 +424,16 @@ class NativeFuncCall(GenericNode, Generic[ExprT]):
                 )
             )
         return values
+
+    @root_validator(pre=True)
+    def dtype_propagation_and_check(cls, values):
+        # assumes all NativeFunction args have a common dtype
+        common_dtype = verify_and_get_common_dtype(cls, values["args"])
+        if common_dtype:
+            values["dtype"] = common_dtype
+        return values
+
+    @root_validator(pre=True)
+    def kind_propagation(cls, values):
+        values["kind"] = compute_kind(values["args"])
+        return values
