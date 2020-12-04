@@ -22,6 +22,7 @@ definitions for the keywords of the DSL.
 
 import collections
 import inspect
+import numbers
 import types
 
 import numpy as np
@@ -344,16 +345,14 @@ class _AxisOffset:
         return f"{self.axis}[{self.index}] + {self.offset}"
 
     def __add__(self, offset: int):
-        if not isinstance(offset, int):
-            raise TypeError("Offset should be an integer")
+        if not isinstance(offset, numbers.Integral):
+            raise TypeError("Offset should be an integer type")
         if offset == 0:
             return self
         else:
             return _AxisOffset(self.axis, self.index, self.offset + offset)
 
     def __radd__(self, offset: int):
-        if not isinstance(offset, int):
-            raise TypeError("Offset should be an integer")
         if offset == 0:
             return self
         else:
