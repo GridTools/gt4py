@@ -46,6 +46,15 @@ def test_generation_cpu(name, backend):
                 shape=(23, 23, 23),
                 default_origin=(10, 10, 10),
             )
+        elif isinstance(v, tuple):
+            for n in range(len(v)):
+                args[f"{k}_{n}"] = gt_storage.ones(
+                    dtype=v[n].dtype,
+                    mask=gtscript.mask_from_axes(v[n].axes),
+                    backend=backend,
+                    shape=(23, 23, 23),
+                    default_origin=(10, 10, 10),
+                )
         else:
             args[k] = v(1.5)
     stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3))

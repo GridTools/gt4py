@@ -48,6 +48,7 @@ def register(externals):
 
 Field0D = gtscript.Field[np.float_, ()]
 Field3D = gtscript.Field[np.float_]
+FieldTuple = (Field3D,) * 3
 
 
 @register
@@ -288,8 +289,8 @@ def allow_empty_computation(in_field: gtscript.Field[float], out_field: gtscript
 
 @register
 def field_tuple_args(
-    in_field: gtscript.Field[float],
-    out_field: (gtscript.Field[float], gtscript.Field[float], gtscript.Field[float]),
+    in_field: Field3D,
+    out_field: FieldTuple,
     c: float,
 ):
     with computation(PARALLEL), interval(...):
