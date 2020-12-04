@@ -200,6 +200,8 @@ def get_qualified_name_from_node(name_or_attribute, *, as_list=False):
 
 
 class ASTPass:
+    """Clone of the ast.NodeVisitor that supports forwarding **kwargs."""
+
     def __call__(self, func_or_source_or_ast):
         ast_root = get_ast(func_or_source_or_ast)
         return self.visit(ast_root)
@@ -222,6 +224,8 @@ class ASTPass:
 
 
 class ASTTransformPass(ASTPass):
+    """Clone of the ast.NodeTransformer that supports forwarding **kwargs."""
+
     def generic_visit(self, node, **kwargs):
         for field, old_value in ast.iter_fields(node):
             if isinstance(old_value, list):
