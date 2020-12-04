@@ -199,7 +199,7 @@ def get_qualified_name_from_node(name_or_attribute, *, as_list=False):
     return components if as_list else ".".join(components)
 
 
-class ASTPass(ast.NodeVisitor):
+class ASTPass:
     def __call__(self, func_or_source_or_ast):
         ast_root = get_ast(func_or_source_or_ast)
         return self.visit(ast_root)

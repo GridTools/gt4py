@@ -364,26 +364,23 @@ class ValueInliner(ast.NodeTransformer):
 class ReturnReplacer(gt_utils.meta.ASTTransformPass):
     @classmethod
     def apply(cls, ast_object: ast.AST, target_node: ast.AST) -> None:
-        # Ensure that there is only a single return statement (can still return a tuple)
+        """Ensure that there is only a single return statement (can still return a tuple)."""
         ret_count = sum(isinstance(node, ast.Return) for node in ast.walk(ast_object))
         if ret_count != 1:
             raise GTScriptSyntaxError("GTScript Functions should have a single return statement")
-        cls(target_node).visit(ast_object)
-
-    def __init__(self, target_node: ast.AST):
-        self.target_node = target_node
+        cls().visit(ast_object, target_node=target_node)
 
     @staticmethod
-    def _get_num_values(node) -> int:
+    def _get_num_values(node: ast.AST) -> int:
         return len(node.elts) if isinstance(node, ast.Tuple) else 1
 
-    def visit_Return(self, node: ast.Return) -> ast.Assign:
+    def visit_Return(self, node: ast.Return, *, target_node: ast.AST) -> ast.Assign:
         rhs_length = self._get_num_values(node.value)
-        lhs_length = self._get_num_values(self.target_node)
+        lhs_length = self._get_num_values(target_node)
 
         if lhs_length == rhs_length:
             return ast.Assign(
-                targets=[self.target_node],
+                targets=[target_node],
                 value=node.value,
                 lineno=node.lineno,
                 col_offset=node.col_offset,
