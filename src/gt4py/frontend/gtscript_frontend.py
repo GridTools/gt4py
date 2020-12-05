@@ -1470,7 +1470,9 @@ class GTScriptParser(ast.NodeVisitor):
 
         # Resolve function-like imports
         func_externals = {
-            key: value for key, value in context.items() if isinstance(value, types.FunctionType)
+            key: value
+            for key, value in itertools.chain(context.items(), resolved_values_list)
+            if isinstance(value, types.FunctionType)
         }
         for name, value in func_externals.items():
             if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
