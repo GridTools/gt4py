@@ -353,10 +353,13 @@ class _AxisOffset:
             return _AxisOffset(self.axis, self.index, self.offset + offset)
 
     def __radd__(self, offset: int):
-        if offset == 0:
-            return self
-        else:
-            return self.__add__(offset)
+        return self.__add__(offset)
+
+    def __sub__(self, offset: int):
+        return self.__add__(-offset)
+
+    def __rsub__(self, offset: int):
+        return self.__radd__(-offset)
 
 
 class _AxisInterval:
