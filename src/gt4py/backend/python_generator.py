@@ -77,6 +77,8 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         self.io_field_names = None
         self.param_names = None
 
+        self.var_refs_defined = set()
+
     def __call__(self, impl_node: gt_ir.Node, sources: gt_text.TextBlock):
         assert isinstance(impl_node, gt_ir.StencilImplementation)
         assert impl_node.domain.sequential_axis.name == gt_definitions.CartesianSpace.Axis.K.name
@@ -132,6 +134,9 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     # ---- Visitor handlers ----
     def generic_visit(self, node: gt_ir.Node, **kwargs):
         raise RuntimeError("Invalid IR node: {}".format(node))
+
+    def visit_Cast(self, node: gt_ir.Cast):
+        return self.visit(node.expr)
 
     def visit_Decl(self, node: gt_ir.Decl):
         raise NotImplementedError()
@@ -195,7 +200,12 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     def visit_Assign(self, node: gt_ir.Assign):
         lhs = self.visit(node.target)
         rhs = self.visit(node.value)
+
         source = "{lhs} = {rhs}".format(lhs=lhs, rhs=rhs)
+
+        # self.var_refs_defined is used in the numpy backend
+        if isinstance(node.target, gt_ir.VarRef):
+            self.var_refs_defined.add(node.target.name)
 
         return source
         # if node.target.name in self.state["variables"]:

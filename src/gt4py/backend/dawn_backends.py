@@ -362,6 +362,29 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 
         return sources.text
 
+    def backend_pre_run(self) -> List[str]:
+        return []
+
+    def backend_imports(self) -> List[str]:
+        return []
+
+    def generate_pre_run(self) -> str:
+        field_size_check = """
+for name, other_name in itertools.combinations(field_args, 2):
+    field = field_args[name]
+    other_field = field_args[other_name]
+    if field.mask == other_field.mask and not other_field.shape == field.shape:
+        raise ValueError(
+            f"The fields {name} and {other_name} have the same mask but different shapes."
+        )"""
+
+        return "\n".join(self.backend_pre_run() + [field_size_check])
+
+    def generate_imports(self) -> str:
+        return "\n".join(
+            self.backend_imports() + ["import itertools"] + [super().generate_imports()]
+        )
+
 
 class DawnCUDAPyModuleGenerator(DawnPyModuleGenerator):
     def generate_implementation(self) -> str:
@@ -374,18 +397,12 @@ cupy.cuda.Device(0).synchronize()
 
         return source
 
-    def generate_imports(self) -> str:
-        source = (
-            super().generate_imports()
-            + """
-import cupy
-    """
-        )
-        return source
+    def backend_imports(self) -> List[str]:
+        return ["import cupy"]
 
-    def generate_pre_run(self) -> str:
+    def backend_pre_run(self) -> List[str]:
         field_names = self.args_data["field_info"].keys()
-        return "\n".join([f + ".host_to_device()" for f in field_names])
+        return ["{name}.host_to_device()" for name in field_names]
 
     def generate_post_run(self) -> str:
         output_field_names = [

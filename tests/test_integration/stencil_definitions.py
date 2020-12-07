@@ -64,7 +64,7 @@ def afunc(b):
 @register
 def native_functions(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
-        field_a = min(afunc(field_b), field_b)
+        field_a = max(min(afunc(field_b), field_b), 1)
 
 
 @register
@@ -107,10 +107,10 @@ def tridiagonal_solver(inf: Field3D, diag: Field3D, sup: Field3D, rhs: Field3D, 
             sup = sup / (diag - sup[0, 0, -1] * inf)
             rhs = (rhs - inf * rhs[0, 0, -1]) / (diag - sup[0, 0, -1] * inf)
     with computation(BACKWARD):
-        with interval(0, -1):
-            out = rhs - sup * out[0, 0, 1]
         with interval(-1, None):
             out = rhs
+        with interval(0, -1):
+            out = rhs - sup * out[0, 0, 1]
 
 
 @register(externals={"BET_M": 0.5, "BET_P": 0.5})
@@ -247,3 +247,40 @@ def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3D
             a4_3 = a4_1
         else:
             diff_23 = a4_2 - a4_3
+
+
+@register
+def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3D):
+    with computation(PARALLEL), interval(...):
+        mid_storage = 2
+        if in_storage[0, 0, 0] > 0:
+            local_var = 4
+            if local_var + in_storage < out_storage:
+                mid_storage = 3
+            else:
+                mid_storage = 4
+            out_storage[0, 0, 0] = local_var + mid_storage
+
+
+@register
+def multibranch_param_conditional(
+    in_field: gtscript.Field[float], out_field: gtscript.Field[float], c: float
+):
+    with computation(PARALLEL), interval(...):
+        if c > 0.0:
+            out_field = in_field + in_field[1, 0, 0]
+        elif c < -1.0:
+            out_field = in_field - in_field[1, 0, 0]
+        else:
+            out_field = in_field
+
+
+@register(externals={"DO_SOMETHING": False})
+def allow_empty_computation(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+    from __externals__ import DO_SOMETHING
+
+    with computation(FORWARD), interval(...):
+        out_field = in_field
+    with computation(PARALLEL), interval(...):
+        if __INLINED(DO_SOMETHING):
+            out_field = abs(in_field)
