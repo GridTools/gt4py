@@ -78,7 +78,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             if kwargs["external_arg"]:
                 return "{dtype} {name}".format(name=node.name, dtype=self.visit(node.dtype))
             else:
-                return "{name}".format(name=node.name)
+                return "gridtools::stencil::make_global_parameter({name})".format(name=node.name)
 
     def visit_Program(self, node: gtcpp.Program, **kwargs):
         assert "module_name" in kwargs
@@ -96,6 +96,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         #include <pybind11/pybind11.h>
         #include <pybind11/stl.h>
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
+        #include <gridtools/stencil/global_parameter.hpp>
         #include <gridtools/sid/sid_shift_origin.hpp>
         #include "computation.hpp"
         namespace gt = gridtools;

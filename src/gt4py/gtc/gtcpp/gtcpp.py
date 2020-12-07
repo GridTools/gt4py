@@ -172,6 +172,10 @@ class ScalarDecl(Decl):
     pass
 
 
+class GlobalParmDecl(Decl):
+    pass
+
+
 class GTStage(LocNode):
     functor: SymbolRef  # symbol ref
     args: List[ParamArg]  # symbol ref to GTComputation params

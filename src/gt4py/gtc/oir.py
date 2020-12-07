@@ -166,7 +166,6 @@ class VerticalLoop(LocNode):
 
 
 class Stencil(LocNode):
-    # TODO remove `__main__.`` from name and use default SymbolName constraint
-    name: SymbolName.constrained(r"[a-zA-Z_][\w\.]*")
+    name: SymbolName
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
