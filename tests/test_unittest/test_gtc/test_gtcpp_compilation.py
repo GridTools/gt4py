@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 from typing import Literal, Pattern, Union
+from gt4py.gtc.common import DataType
 
 import pytest
 import setuptools
@@ -92,7 +93,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
             .build(),
             r"void\s*apply\(",
         ),
-        (ProgramBuilder("test").add_parameter("my_param").build(), r"my_param"),
+        (ProgramBuilder("test").add_parameter("my_param", DataType.FLOAT64).build(), r"my_param"),
         # TODO the following test is creating invalid IR (we could check by validating symbols)
         # (
         #     ProgramBuilder("test")
@@ -151,7 +152,7 @@ def test_apply_method_compilation_succeeds(tmp_path, apply_method, expected_rege
     # This test could be improved by just compiling the body
     # and introducing fakes for `eval` and `gridtools::accessor`.
     assert isinstance(apply_method, GTApplyMethod)
-    apply_method_code = GTCppCodegen().visit(apply_method)
+    apply_method_code = GTCppCodegen().visit(apply_method, offset_limit=2)
     print(apply_method_code)
     match(apply_method_code, expected_regex)
 
