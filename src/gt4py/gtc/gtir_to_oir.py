@@ -72,7 +72,6 @@ class GTIRToOIR(eve.NodeTranslator):
         return oir.UnaryOp(op=node.op, expr=self.visit(node.expr))
 
     def visit_BinaryOp(self, node: gtir.BinaryOp, **kwargs):
-        debug(node.left)
         return oir.BinaryOp(op=node.op, left=self.visit(node.left), right=self.visit(node.right))
 
     def visit_TernaryOp(self, node: gtir.TernaryOp, **kwargs):

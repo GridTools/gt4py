@@ -160,7 +160,6 @@ class DefIRToGTIR(IRNodeVisitor):
                 temporaries.append(gtir.FieldDecl(name=s.name, dtype=dtype))
             else:
                 stmts.append(self.visit(s))
-        debug(stmts)
         start, end = self.visit(node.interval)
         interval = gtir.Interval(start=start, end=end)
         return gtir.VerticalLoop(
