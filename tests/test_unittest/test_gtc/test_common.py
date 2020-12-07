@@ -237,7 +237,16 @@ def test_TernaryOp_category():
         Testee(cond=ExprB(dtype=DataType.BOOL), true_expr=ExprB(), false_expr=ExprA())
         Testee(cond=ExprA(dtype=DataType.BOOL), true_expr=ExprA(), false_expr=ExprB())
 
+        
+def test_Cast_category():
+    class Testee(ExprA, common.Cast[ExprA]):
+        pass
 
+    Testee(dtype=ARITHMETIC_TYPE, expr=ExprA())
+    with pytest.raises(ValidationError):
+        Testee(dtype=ARITHMETIC_TYPE, expr=ExprB())
+        
+        
 def test_NativeFuncCall_category():
     class Testee(ExprA, common.NativeFuncCall[ExprA]):
         pass

@@ -89,6 +89,10 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     pass
 
 
+class Cast(common.Cast[Expr], Expr):
+    pass
+  
+  
 class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     pass
 

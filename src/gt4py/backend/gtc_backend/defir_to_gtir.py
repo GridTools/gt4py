@@ -11,6 +11,7 @@ from gt4py.ir.nodes import (
     BinaryOperator,
     BinOpExpr,
     BlockStmt,
+    Cast,
     ComputationBlock,
     FieldDecl,
     FieldRef,
@@ -152,6 +153,9 @@ class DefIRToGTIR(IRNodeVisitor):
             right=self.visit(node.rhs),
             op=self.GT4PY_OP_TO_GTIR_OP[node.op],
         )
+
+    def visit_Cast(self, node: Cast) -> gtir.Cast:
+        return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))
 
     def visit_NativeFuncCall(self, node: NativeFuncCall) -> gtir.NativeFuncCall:
         return gtir.NativeFuncCall(
