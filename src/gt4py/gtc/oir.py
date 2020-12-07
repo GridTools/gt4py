@@ -93,6 +93,10 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     pass
 
 
+class Cast(common.Cast[Expr], Expr):
+    pass
+
+
 class Decl(LocNode):
     name: SymbolName
     dtype: common.DataType
