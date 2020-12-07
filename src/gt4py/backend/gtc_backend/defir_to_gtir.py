@@ -2,6 +2,7 @@ from types import MappingProxyType
 from typing import ClassVar, Dict, List, Mapping, Union
 
 from gt4py.gtc import common, gtir
+from gt4py.gtc.common import ExprKind
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
     ArgumentInfo,
@@ -211,11 +212,23 @@ class DefIRToGTIR(IRNodeVisitor):
         return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))
 
     def visit_If(self, node: If):
-        return gtir.FieldIfStmt(
-            cond=self.visit(node.condition),
-            true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
-            false_branch=gtir.BlockStmt(body=self.visit(node.else_body)),
-        )
+        cond = self.visit(node.condition)
+        if cond.kind == ExprKind.FIELD:
+            return gtir.FieldIfStmt(
+                cond=cond,
+                true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
+                false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
+                if node.else_body
+                else None,
+            )
+        else:
+            return gtir.ScalarIfStmt(
+                cond=cond,
+                true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
+                false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
+                if node.else_body
+                else None,
+            )
 
     def visit_VarRef(self, node: VarRef, **kwargs):
         # TODO seems wrong, but check the DefinitionIR for
