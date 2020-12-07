@@ -182,6 +182,9 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
         return gtir.Literal(value=str(node.value), dtype=common.DataType(node.data_type.value))
 
+    def visit_UnaryOpExpr(self, node: UnaryOpExpr) -> gtir.UnaryOp:
+        return gtir.UnaryOp(op=self.GT4PY_UNARYOP_TO_GTIR[node.op], expr=self.visit(node.arg))
+
     def visit_BinOpExpr(self, node: BinOpExpr) -> gtir.BinaryOp:
         return gtir.BinaryOp(
             left=self.visit(node.lhs),
@@ -196,17 +199,14 @@ class DefIRToGTIR(IRNodeVisitor):
             false_expr=self.visit(node.else_expr),
         )
 
-    def visit_UnaryOpExpr(self, node: UnaryOpExpr) -> gtir.UnaryOp:
-        return gtir.UnaryOp(op=self.GT4PY_UNARYOP_TO_GTIR[node.op], expr=self.visit(node.arg))
+    def visit_Cast(self, node: Cast) -> gtir.Cast:
+        return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))
 
     def visit_NativeFuncCall(self, node: NativeFuncCall) -> gtir.NativeFuncCall:
         return gtir.NativeFuncCall(
             func=self.GT4PY_NATIVE_FUNC_TO_GTIR[node.func],
             args=[self.visit(arg) for arg in node.args],
         )
-
-    def visit_Cast(self, node: Cast) -> gtir.Cast:
-        return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))
 
     def visit_FieldRef(self, node: FieldRef):
         return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))

@@ -409,6 +409,11 @@ class TernaryOp(GenericNode, Generic[ExprT]):
         return values
 
 
+class Cast(GenericNode, Generic[ExprT]):
+    dtype: DataType
+    expr: ExprT
+
+
 class NativeFuncCall(GenericNode, Generic[ExprT]):
     """"""
 
