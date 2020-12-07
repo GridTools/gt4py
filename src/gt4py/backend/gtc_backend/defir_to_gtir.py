@@ -156,14 +156,14 @@ class DefIRToGTIR(IRNodeVisitor):
             op=self.GT4PY_OP_TO_GTIR_OP[node.op],
         )
 
+    def visit_Cast(self, node: Cast) -> gtir.Cast:
+        return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))
+
     def visit_NativeFuncCall(self, node: NativeFuncCall) -> gtir.NativeFuncCall:
         return gtir.NativeFuncCall(
             func=self.GT4PY_NATIVE_FUNC_TO_GTIR[node.func],
             args=[self.visit(arg) for arg in node.args],
         )
-
-    def visit_Cast(self, node: Cast) -> gtir.Cast:
-        return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))
 
     def visit_FieldRef(self, node: FieldRef):
         return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))
