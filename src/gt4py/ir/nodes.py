@@ -94,7 +94,9 @@ storing a reference to the piece of source code which originated the node.
 
     NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
-    Expr        = Literal | Ref | NativeFuncCall | CompositeExpr | InvalidBranch
+    Cast(dtype: DataType, expr: Expr)
+
+    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch
 
     CompositeExpr   = UnaryOpExpr(op: UnaryOperator, arg: Expr)
                     | BinOpExpr(op: BinaryOperator, lhs: Expr, rhs: Expr)
@@ -395,6 +397,13 @@ class FieldRef(Ref):
     loc = attribute(of=Location, optional=True)
 
 
+@attribclass
+class Cast(Expr):
+    dtype = attribute(of=DataType)
+    expr = attribute(of=Expr)
+    loc = attribute(of=Location, optional=True)
+
+
 @enum.unique
 class NativeFunction(enum.Enum):
     ABS = 1
@@ -676,8 +685,6 @@ class AxisBound(Node):
     level = attribute(of=UnionOf[LevelMarker, VarRef])
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
-    name: str
-    index: List
 
 
 @attribclass

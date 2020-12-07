@@ -96,9 +96,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         # Create K for-loop: computation body is split in different vertical regions
         source_lines = []
-        regions = sorted(regions)
-        if iteration_order == gt_ir.IterationOrder.BACKWARD:
-            regions = reversed(regions)
+        assert sorted(regions, reverse=iteration_order == gt_ir.IterationOrder.BACKWARD) == regions
 
         for bounds, body_sources in regions:
             region_lines = self._make_regional_computation(iteration_order, bounds)
