@@ -1,5 +1,3 @@
-from eve.tree_utils import FindNodes
-
 from gt4py.gtc import common
 from gt4py.gtc.gtir import FieldAccess, FieldDecl, ParAssignStmt
 from gt4py.gtc.passes.gtir_set_dtype import GTIRSetDtype
@@ -37,6 +35,6 @@ def test_stencil():
 
     result = GTIRSetDtype().visit(testee)
 
-    field_accesses = FindNodes.by_type(FieldAccess, result)
+    field_accesses = result.iter_tree().if_isinstance(FieldAccess)
     for acc in field_accesses:
         assert acc.dtype == A_ARITHMETIC_TYPE
