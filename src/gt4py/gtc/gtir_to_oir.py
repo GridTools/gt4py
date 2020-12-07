@@ -66,6 +66,9 @@ class GTIRToOIR(eve.NodeTranslator):
     def visit_BinaryOp(self, node: gtir.BinaryOp, **kwargs):
         return oir.BinaryOp(op=node.op, left=self.visit(node.left), right=self.visit(node.right))
 
+    def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs):
+        return oir.NativeFuncCall(func=node.func, args=self.visit(node.args))
+
     def visit_FieldIfStmt(self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, **kwargs):
         mask_field_decl, fill_mask_h_exec = _create_mask("mask_" + node.id_, self.visit(node.cond))
         decls_and_h_execs = ListTuple([mask_field_decl], [fill_mask_h_exec])
