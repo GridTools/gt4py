@@ -50,6 +50,13 @@ class GTCGTExtGenerator:
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     # ParamArg = as_fmt("py::buffer {name}, std::array<gt::unit_t,3> {name}_origin")
 
+    def __init__(self):
+        self._unique_index = 0
+
+    def unique_index(self) -> int:
+        self._unique_index += 1
+        return self._unique_index
+
     def visit_DataType(self, dtype: DataType, **kwargs):
         if dtype == DataType.INT64:
             return "long long"
@@ -69,8 +76,8 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                     name=node.name
                 )
             else:
-                return "gt::sid::shift_sid_origin(gt::as_sid<{dtype}, 3>({name}), {name}_origin)".format(
-                    name=node.name, dtype=self.visit(node.dtype)
+                return "gt::sid::shift_sid_origin(gt::as_sid<{dtype}, 3, std::integral_constant<int, {unique_index}>>({name}), {name}_origin)".format(
+                    name=node.name, dtype=self.visit(node.dtype), unique_index=self.unique_index()
                 )
 
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
