@@ -1,11 +1,20 @@
-from eve import codegen
+from eve import codegen, Node
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 
 from gt4py.gtc.common import DataType, LoopOrder, NativeFunction
-
+from gt4py.gtc.gtcpp import gtcpp
 
 # TODO qualify gridtools stuff
+
+
+def _offset_limit(root: Node):
+    return (
+        root.iter_tree()
+        .if_isinstance(gtcpp.GTLevel)
+        .getattr("offset")
+        .reduce(lambda state, cur: max(state, abs(cur)), init=0)
+    )
 
 
 class GTCppCodegen(codegen.TemplatedGenerator):
@@ -31,7 +40,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     )
 
     GTLevel = as_fmt(
-        "gridtools::stencil::core::level<{splitter}, {offset}, 2>"
+        "gridtools::stencil::core::level<{splitter}, {offset}, {offset_limit}>"
     )  # TODO offset limit
 
     GTInterval = as_fmt("gridtools::stencil::core::interval<{from_level}, {to_level}>")
@@ -114,7 +123,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         """
         %if len(multi_stages) > 0:
         {
-            auto grid = make_grid(domain[0], domain[1], domain[2]);
+            auto grid = make_grid(domain[0], domain[1], axis<1, axis_config::offset_limit<${offset_limit}>>{domain[2]});
 
             auto ${ name } = [](${ ','.join('auto ' + p for p in parameters) }) {
 
@@ -154,6 +163,6 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     @classmethod
     def apply(cls, root, **kwargs) -> str:
-        generated_code = super().apply(root, **kwargs)
+        generated_code = super().apply(root, offset_limit=_offset_limit(root), **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
