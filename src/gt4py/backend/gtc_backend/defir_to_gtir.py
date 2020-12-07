@@ -18,6 +18,8 @@ from gt4py.ir.nodes import (
     If,
     IterationOrder,
     LevelMarker,
+    NativeFuncCall,
+    NativeFunction,
     ScalarLiteral,
     StencilDefinition,
     VarDecl,
@@ -73,6 +75,35 @@ class DefIRToGTIR(IRNodeVisitor):
         }
     )
 
+    GT4PY_NATIVE_FUNC_TO_GTIR: ClassVar[
+        Mapping[
+            NativeFunction,
+            common.NativeFunction,
+        ]
+    ] = MappingProxyType(
+        {
+            NativeFunction.ABS: common.NativeFunction.ABS,
+            NativeFunction.MIN: common.NativeFunction.MIN,
+            NativeFunction.MAX: common.NativeFunction.MAX,
+            NativeFunction.MOD: common.NativeFunction.MOD,
+            NativeFunction.SIN: common.NativeFunction.SIN,
+            NativeFunction.COS: common.NativeFunction.COS,
+            NativeFunction.TAN: common.NativeFunction.TAN,
+            NativeFunction.ARCSIN: common.NativeFunction.ARCSIN,
+            NativeFunction.ARCCOS: common.NativeFunction.ARCCOS,
+            NativeFunction.ARCTAN: common.NativeFunction.ARCTAN,
+            NativeFunction.SQRT: common.NativeFunction.SQRT,
+            NativeFunction.EXP: common.NativeFunction.EXP,
+            NativeFunction.LOG: common.NativeFunction.LOG,
+            NativeFunction.ISFINITE: common.NativeFunction.ISFINITE,
+            NativeFunction.ISINF: common.NativeFunction.ISINF,
+            NativeFunction.ISNAN: common.NativeFunction.ISNAN,
+            NativeFunction.FLOOR: common.NativeFunction.FLOOR,
+            NativeFunction.CEIL: common.NativeFunction.CEIL,
+            NativeFunction.TRUNC: common.NativeFunction.TRUNC,
+        }
+    )
+
     @classmethod
     def apply(cls, root, **kwargs):
         return cls().visit(root)
@@ -125,6 +156,12 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_Cast(self, node: Cast) -> gtir.Cast:
         return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))
+
+    def visit_NativeFuncCall(self, node: NativeFuncCall) -> gtir.NativeFuncCall:
+        return gtir.NativeFuncCall(
+            func=self.GT4PY_NATIVE_FUNC_TO_GTIR[node.func],
+            args=[self.visit(arg) for arg in node.args],
+        )
 
     def visit_FieldRef(self, node: FieldRef):
         return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))

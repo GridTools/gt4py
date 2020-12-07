@@ -155,6 +155,10 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
 
 class Cast(common.Cast[Expr], Expr):
     pass
+  
+  
+class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
+    pass
 
 
 class Decl(LocNode):  # TODO probably Stmt
