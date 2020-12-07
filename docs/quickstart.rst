@@ -50,9 +50,9 @@ Finally, the last step to install the required GridTools C++ sources:
 ------------
 Introduction
 ------------
-In GT4Py, grid computations such as stencils are defined in a Domain Specific Language (DSL) which is called GTScript.
+In GT4Py, grid computations such as stencils are defined in a Domain Specific Language (DSL) called GTScript.
 GTScript is syntactically a subset of python, but has different semantics. Computations defined in this DSL are then
-translated by the GT4Py tool chain into code in Python based on `NumPy <http://www.numpy.org/>`_ or C++/CUDA based on
+translated by the GT4Py toolchain into code in Python based on `NumPy <http://www.numpy.org/>`_ or C++/CUDA based on
 the `GridTools <http://gridtools.github.io/>`_ library. To be able to achieve full performance with GridTools, data has
 to adhere to certain layout requirements, which are taken care of by storing the data in GT4Py storage containers.
 
@@ -66,10 +66,27 @@ we could define this stencil with three input fields (``field_a``, ``field_b`` a
 .. code:: python
 
     import numpy as np
+    
+    # assuming fields of size nx, ny, nz
+    result = np.zeros((nx, ny, nz))
+
+    def stencil_example(field_a, field_b, field_c, result, alpha, weight):
+        nx, ny, nz = result.shape
+        for i in range(nx):
+            for j in range(ny):
+                for k in range(nz):
+	            result[i, j, k] = field_a[i, j, k] - (1 - alpha) * (
+                    field_b[i, j, k] - weight * field_c[i, j, k]
+                )
+
+To express this calculation using GTScript, we would create a function and use specific syntax to represent the loop
+over 3 dimensions:
+
+.. code:: python
+
+    import numpy as np
 
     import gt4py.gtscript as gtscript
-
-    backend = "numpy"
 
     def stencil_example(
         field_a: gtscript.Field[np.float64],
@@ -87,7 +104,8 @@ we could define this stencil with three input fields (``field_a``, ``field_b`` a
 
     assert callable(stencil_example) is True
     print(type(stencil_example), "\n", stencil_example)
-
+    # --> <class 'function'> 
+    # --> <function stencil_example>
 
 This definition basically expresses the operations (or *kernel*) performed at every point of the computation domain to
 generate the output values. The indices inside the brackets are interpreted as offsets relative to the
@@ -127,6 +145,8 @@ function with the ``stencil`` decorator provided by GT4Py. In this case, for exa
 
     assert callable(stencil_example) is True
     print(type(stencil_example), "\n", stencil_example)
+    # --> <class '_GT_.__main__.stencil_example.m_stencil_example__numpy'...
+    # --> <StencilObject: __main__.stencil_example> [backend="numpy"] ...
 
 The ``stencil`` decorator generates code in Python or C++ depending on the ``backend`` specified by name.
 Currently, the following backends are available:
@@ -145,6 +165,8 @@ regular function call receiving the definition function:
 
 .. code:: python
 
+    import gt4py.gtscript as gtscript
+    
     def stencil_example(
         field_a: gtscript.Field[np.float64],
         field_b: gtscript.Field[np.float64],
@@ -163,7 +185,8 @@ regular function call receiving the definition function:
 
     another_example_implementation = gtscript.stencil(backend="gtmc", definition=stencil_example)
 
-
+The generated code is written to a local '.gt-cache' folder where the code ran. 
+    
 --------
 Storages
 --------
@@ -184,6 +207,8 @@ The ``default_origin`` parameter plays two roles:
 
     import gt4py.storage as gt_storage
 
+    backend= "numpy"
+    
     field_a = gt_storage.from_array(
         data=np.random.randn(10, 10, 10),
         backend=backend,
@@ -212,13 +237,15 @@ dimension is iterated over. ``FORWARD`` stands for an iteration from low to high
 iteration from high to low index. For contexts declared ``PARALLEL``, no order can be assumed and only statement are
 allowed for which the result is the same irrespective of iteration order.
 
-`Intervals` are the second information given to a context. they declare the range of indices for which the statements
+`Intervals` are the second information given to a context. They declare the range of indices for which the statements
 of the respective context are applied. E.g. ``interval(0,1)`` declares that the following context is applied for indices
 in [0,1), i.e. only to `K=0`. The ``interval(1, None)`` represents indices in [1,∞), ``interval(0, -1)`` all indices
 except the last.
 
 .. code:: python
 
+    import gt4py.gtscript as gtscript
+    
     @gtscript.stencil
     def tridiagonal_solver(
         inf: gtscript.Field[np.float64],
@@ -244,14 +271,14 @@ except the last.
 
 
 However, the ``PARALLEL`` and other orders differ in more ways. For parallel regions, we can assume that each statement
-(i.e. each assign) is applied to the full domain, before the next one starts. If an iteration order is specified
+(i.e. each assign) is applied to the full vertical domain, before the next one starts. If an iteration order is specified
 however, all statements are applied to each slice with the same ``K``, one after each other, before moving to ``K+1``.
 
 
 -----------
-Subroutines
+Functions
 -----------
-To reuse code elements and to structure your code, subroutines are a useful tool. They need to be decorated with
+To reuse code elements and to structure your code, functions are a useful tool. They need to be decorated with
 ``@gtscript.function``.
 
 .. code:: python
@@ -299,7 +326,8 @@ the ``return`` statement. That is, in the above example, ``v`` is not modified. 
             x, y, z = ddxyz(v, h)
             lap = x + y + z
 
-
+Functions can be used only for code inside of computation/interval blocks.
+	    
 -------------------------
 Compile-time conditionals
 -------------------------
