@@ -11,6 +11,7 @@ from gt4py.ir.nodes import (
     BinaryOperator,
     BinOpExpr,
     BlockStmt,
+    Cast,
     ComputationBlock,
     FieldDecl,
     FieldRef,
@@ -121,6 +122,9 @@ class DefIRToGTIR(IRNodeVisitor):
             right=self.visit(node.rhs),
             op=self.GT4PY_OP_TO_GTIR_OP[node.op],
         )
+
+    def visit_Cast(self, node: Cast) -> gtir.Cast:
+        return gtir.Cast(dtype=common.DataType(node.data_type.value), expr=self.visit(node.expr))
 
     def visit_FieldRef(self, node: FieldRef):
         return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))

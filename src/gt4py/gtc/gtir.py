@@ -153,6 +153,10 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     pass
 
 
+class Cast(common.Cast[Expr], Expr):
+    pass
+
+
 class Decl(LocNode):  # TODO probably Stmt
     name: SymbolName
     dtype: common.DataType

@@ -351,3 +351,8 @@ class TernaryOp(GenericNode, Generic[ExprT]):
     def kind_propagation(cls, values):
         values["kind"] = compute_kind([values["true_expr"], values["false_expr"]])
         return values
+
+
+class Cast(GenericNode, Generic[ExprT]):
+    dtype: DataType
+    expr: ExprT
