@@ -245,3 +245,12 @@ def test_NativeFuncCall_category():
     Testee(func=NativeFunction.SIN, args=[ExprA()])
     with pytest.raises(ValidationError):
         Testee(func=NativeFunction.SIN, args=[ExprB()])
+
+
+def test_Cast_category():
+    class Testee(ExprA, common.Cast[ExprA]):
+        pass
+
+    Testee(dtype=ARITHMETIC_TYPE, expr=ExprA())
+    with pytest.raises(ValidationError):
+        Testee(dtype=ARITHMETIC_TYPE, expr=ExprB())

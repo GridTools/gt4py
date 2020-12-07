@@ -437,3 +437,8 @@ class NativeFuncCall(GenericNode, Generic[ExprT]):
     def kind_propagation(cls, values):
         values["kind"] = compute_kind(values["args"])
         return values
+
+
+class Cast(GenericNode, Generic[ExprT]):
+    dtype: DataType
+    expr: ExprT
