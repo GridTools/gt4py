@@ -163,7 +163,7 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_Cast(self, node: Cast) -> gtir.Cast:
-        return gtir.Cast(dtype=common.DataType(node.data_type.value), expr=self.visit(node.expr))
+        return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))
 
     def visit_FieldRef(self, node: FieldRef):
         return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))
