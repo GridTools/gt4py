@@ -121,9 +121,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         source_lines = []
 
         # Computations body is split in different vertical regions
-        regions = sorted(regions)
-        if iteration_order == gt_ir.IterationOrder.BACKWARD:
-            regions = reversed(regions)
+        assert sorted(regions, reverse=iteration_order == gt_ir.IterationOrder.BACKWARD) == regions
 
         for bounds, body in regions:
             region_lines = self._make_regional_computation(iteration_order, bounds, body)
@@ -242,12 +240,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
         then_fmt = "({})" if isinstance(node.then_expr, gt_ir.CompositeExpr) else "{}"
         else_fmt = "({})" if isinstance(node.else_expr, gt_ir.CompositeExpr) else "{}"
 
-        source = "vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
+        source = "{np}.where({condition}, {then_expr}, {else_expr})".format(
+            np=self.numpy_prefix,
             condition=self.visit(node.condition),
             then_expr=then_fmt.format(self.visit(node.then_expr)),
             else_expr=else_fmt.format(self.visit(node.else_expr)),
-            dtype=node.data_type.dtype.name,
-            np=self.numpy_prefix,
         )
 
         return source
@@ -271,23 +268,34 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 if target in self.block_info.symbols
                 else stmt.target.data_type
             )
+            # Check if this temporary variable / field already contains written information.
+            # If it does, it needs to be the else expression of the where, otherwise we set the else to nan.
+            # This ensures that we only write defined values.
+            # This check is not relevant for fields as they enter defined
+            is_possible_else = not isinstance(stmt.target, gt_ir.VarRef) or (
+                stmt.target.name in self.var_refs_defined
+            )
 
             sources.append(
-                "{target} = vectorized_ternary_op(condition={condition}, then_expr={then_expr}, else_expr={else_expr}, dtype={np}.{dtype})".format(
+                "{target} = {np}.where({condition}, {then_expr}, {else_expr})".format(
+                    np=self.numpy_prefix,
                     condition=condition,
                     target=target,
                     then_expr=value,
-                    else_expr=target,
-                    dtype=data_type.dtype.name,
-                    np=self.numpy_prefix,
+                    else_expr=target if is_possible_else else "np.nan",
                 )
             )
+
+            if isinstance(stmt.target, gt_ir.VarRef):
+                self.var_refs_defined.add(stmt.target.name)
+
         else:
             stmt_sources = self.visit(stmt)
             if isinstance(stmt_sources, list):
                 sources.extend(stmt_sources)
             else:
                 sources.append(stmt_sources)
+
         return sources
 
     def visit_If(self, node: gt_ir.If) -> List[str]:
@@ -330,25 +338,7 @@ class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
         )
 
     def generate_module_members(self) -> str:
-        source = """
-def vectorized_ternary_op(*, condition, then_expr, else_expr, dtype):
-    return np.choose(
-        condition,
-        [else_expr, then_expr],
-        out=np.empty(
-            np.max(
-                (
-                    np.asanyarray(condition).shape,
-                    np.asanyarray(then_expr).shape,
-                    np.asanyarray(else_expr).shape,
-                ),
-                axis=0,
-            ),
-            dtype=dtype,
-        ),
-    )
-"""
-        return source
+        return ""
 
     def generate_implementation(self) -> str:
         block = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
