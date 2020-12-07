@@ -1,4 +1,4 @@
-from typing import Dict, List, Optiona
+from typing import Dict, List, Optional
 
 from eve.visitors import NodeTranslator
 
@@ -18,11 +18,12 @@ class OirToNpir(NodeTranslator):
         return npir.Computation(
             field_params=[decl.name for decl in node.params if isinstance(decl, oir.FieldDecl)],
             params=[decl.name for decl in node.params],
-            vertical_passes=,
+            vertical_passes=vertical_passes,
             domain_padding=npir.DomainPadding(
                 lower=domain_padding["lower"],
                 upper=domain_padding["upper"],
             ),
         )
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, domain_padding: Optional[Dict[str, List]]
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, domain_padding: Optional[Dict[str, List]]):
+        pass
