@@ -81,6 +81,9 @@ class GTIRToOIR(eve.NodeTranslator):
             false_expr=self.visit(node.false_expr),
         )
 
+    def visit_Cast(self, node: gtir.Cast, **kwargs):
+        return oir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
+
     def visit_FieldDecl(self, node: gtir.FieldDecl, **kwargs):
         return oir.FieldDecl(name=node.name, dtype=node.dtype)
 

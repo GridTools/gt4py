@@ -59,7 +59,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     TernaryOp = as_fmt("({cond} ? {true_expr} : {false_expr})")
 
-    Cast = as_fmt("static_cast<{dtyp}>({expr})")
+    Cast = as_fmt("static_cast<{dtype}>({expr})")
 
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
@@ -68,6 +68,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "gridtools::math::sqrt"
         elif func == NativeFunction.MIN:
             return "gridtools::math::min"
+        elif func == NativeFunction.MAX:
+            return "gridtools::math::max"
         else:
             assert False
 
