@@ -284,3 +284,15 @@ def allow_empty_computation(in_field: gtscript.Field[float], out_field: gtscript
     with computation(PARALLEL), interval(...):
         if __INLINED(DO_SOMETHING):
             out_field = abs(in_field)
+
+
+@gtscript.function
+def average(in_field: gtscript.Field[float]):
+    return (1.0 / 3.0) * (in_field[-1, 0, 0] + in_field + in_field[1, 0, 0])
+
+
+@register
+def double_average_forward(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+    with computation(FORWARD), interval(...):
+        tmp_field = average(in_field)
+        out_field = average(tmp_field)

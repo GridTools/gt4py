@@ -1298,6 +1298,14 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
 
 class ReduceTemporaryStoragesPass(TransformPass):
+    """Demote temporary symbols used within a single multi-stage to 2D fields if the following
+    constraints are satisfied:
+
+    1. The multi-stage iteration order is not parallel.
+    2. There are no offsets in the k-direction.
+    3. All of the accesses are in the same k-interval.
+    """
+
     class ReducibleFieldsCollector(gt_ir.IRNodeVisitor):
         @classmethod
         def apply(cls, node: gt_ir.StencilImplementation) -> Set[str]:
@@ -1308,14 +1316,17 @@ class ReduceTemporaryStoragesPass(TransformPass):
             assert isinstance(node, gt_ir.StencilImplementation)
             self.interval: gt_ir.AxisInterval = None
             self.iteration_order: gt_ir.IterationOrder = None
-            self.reduced_fields: Dict[str, gt_ir.AxisInterval] = {
-                temp_field: None for temp_field in node.temporary_fields
+            self.multi_stage: str = ""
+            self.reduced_fields: Dict[str, Dict[str, Union[str, gt_ir.AxisInterval]]] = {
+                temp_field: dict(multi_stage="", interval=None)
+                for temp_field in node.temporary_fields
             }
             self.visit(node)
             return set(self.reduced_fields.keys())
 
         def visit_MultiStage(self, node: gt_ir.MultiStage) -> None:
             self.iteration_order = node.iteration_order
+            self.multi_stage = node.name
             self.generic_visit(node)
 
         def visit_ApplyBlock(self, node: gt_ir.ApplyBlock) -> None:
@@ -1332,13 +1343,17 @@ class ReduceTemporaryStoragesPass(TransformPass):
                     if offsets[-1] != 0:
                         self.reduced_fields.pop(field_name)
                     else:
-                        interval = self.reduced_fields[field_name]
-                        if interval is not None and interval != self.interval:
+                        interval = self.reduced_fields[field_name]["interval"]
+                        multi_stage = self.reduced_fields[field_name]["multi_stage"]
+                        if (interval is not None and interval != self.interval) or (
+                            multi_stage != "" and multi_stage != self.multi_stage
+                        ):
                             self.reduced_fields.pop(field_name)
                         else:
-                            self.reduced_fields[field_name] = self.interval
+                            self.reduced_fields[field_name]["interval"] = self.interval
+                            self.reduced_fields[field_name]["multi_stage"] = self.multi_stage
 
-    class StorageReducer(gt_ir.IRNodeMapper):
+    class StorageReducer(gt_ir.IRNodeVisitor):
         @classmethod
         def apply(cls, node: gt_ir.StencilImplementation, reduced_fields: Set[str]) -> None:
             instance = cls(reduced_fields)
@@ -1351,23 +1366,17 @@ class ReduceTemporaryStoragesPass(TransformPass):
             assert isinstance(node, gt_ir.StencilImplementation)
             return self.visit(node)
 
-        def visit_StencilImplementation(
-            self, path: tuple, node_name: str, node: gt_ir.StencilImplementation
-        ) -> gt_ir.StencilImplementation:
+        def visit_StencilImplementation(self, node: gt_ir.StencilImplementation) -> None:
             self.iir = node
             for field_name in self.reduced_fields:
                 assert field_name in node.temporary_fields, "Tried to reduce API field to 2D."
-                field_decl = node.fields[field_name]
-                field_decl.axes.pop()
-            return self.generic_visit(path, node_name, node)
+                node.fields[field_name].axes.pop()
+            self.generic_visit(node)
 
-        def visit_FieldRef(
-            self, path: tuple, node_name: str, node: gt_ir.FieldRef
-        ) -> Tuple[bool, Union[gt_ir.FieldRef, gt_ir.VarRef]]:
+        def visit_FieldRef(self, node: gt_ir.FieldRef) -> None:
             if node.name in self.reduced_fields:
                 field_decl = self.iir.fields[node.name]
                 node.offset = {axis: node.offset[axis] for axis in field_decl.axes}
-            return True, node
 
     @classmethod
     def apply(cls, transform_data: TransformData) -> None:
