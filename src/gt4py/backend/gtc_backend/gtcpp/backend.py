@@ -73,7 +73,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                     name=node.name, dtype=self.visit(node.dtype)
                 )
 
-    def visit_ScalarDecl(self, node: gtcpp.ScalarDecl, **kwargs):
+    def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
         if "external_arg" in kwargs:
             if kwargs["external_arg"]:
                 return "{dtype} {name}".format(name=node.name, dtype=self.visit(node.dtype))

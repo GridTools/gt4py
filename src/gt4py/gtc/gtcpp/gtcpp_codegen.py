@@ -89,7 +89,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     ParamArg = as_fmt("{name}")
 
-    Decl = as_fmt("{name}")
+    ApiParamDecl = as_fmt("{name}")
 
     GTStage = as_mako(".stage(${functor}(), ${','.join(args)})")
 

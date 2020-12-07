@@ -4,6 +4,7 @@ import eve
 from devtools import debug  # noqa: F401
 
 from gt4py.gtc import common, oir, utils
+from gt4py.gtc.common import CartesianOffset
 from gt4py.gtc.gtcpp import gtcpp
 from gt4py.gtc.gtcpp.gtcpp import GTParamList
 
@@ -51,16 +52,20 @@ class OIRToGTCpp(eve.NodeTranslator):
         return gtcpp.Literal(value=node.value, dtype=node.dtype)
 
     def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs):
-        return gtcpp.UnaryOp(op=node.op, expr=self.visit(node.expr))
+        return gtcpp.UnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs))
 
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs):
-        return gtcpp.BinaryOp(op=node.op, left=self.visit(node.left), right=self.visit(node.right))
+        return gtcpp.BinaryOp(
+            op=node.op,
+            left=self.visit(node.left, **kwargs),
+            right=self.visit(node.right, **kwargs),
+        )
 
     def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs):
         return gtcpp.TernaryOp(
-            cond=self.visit(node.cond),
-            true_expr=self.visit(node.true_expr),
-            false_expr=self.visit(node.false_expr),
+            cond=self.visit(node.cond, **kwargs),
+            true_expr=self.visit(node.true_expr, **kwargs),
+            false_expr=self.visit(node.false_expr, **kwargs),
         )
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs):
@@ -76,7 +81,15 @@ class OIRToGTCpp(eve.NodeTranslator):
         return gtcpp.AccessorRef(name=node.name, offset=self.visit(node.offset), dtype=node.dtype)
 
     def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs):
-        return gtcpp.ScalarAccess(name=node.name, dtype=node.dtype)
+        assert "stencil_symtable" in kwargs
+        if node.name in kwargs["stencil_symtable"]:
+            symbol = kwargs["stencil_symtable"][node.name]
+            assert isinstance(symbol, oir.ScalarDecl)
+            return gtcpp.AccessorRef(
+                name=symbol.name, offset=CartesianOffset.zero(), dtype=symbol.dtype
+            )
+        else:
+            return gtcpp.ScalarAccess(name=node.name, dtype=node.dtype)
 
     def visit_AxisBound(self, node: oir.AxisBound, *, is_start: bool, **kwargs):
         if node.level == common.LevelMarker.START:
@@ -101,11 +114,15 @@ class OIRToGTCpp(eve.NodeTranslator):
         return utils.ListTuple(*map(utils.flatten_list, zip(*self.visit(node, **kwargs))))
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
-        return gtcpp.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
+        assert "stencil_symtable" in kwargs
+        return gtcpp.AssignStmt(
+            left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
+        )
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, interval, **kwargs):
+        assert "stencil_symtable" in kwargs
         apply_method = gtcpp.GTApplyMethod(
-            interval=self.visit(interval), body=self.visit(node.body)
+            interval=self.visit(interval), body=self.visit(node.body, **kwargs)
         )
         accessors = _extract_accessors(apply_method)
         stage_args = [gtcpp.ParamArg(name=acc.name) for acc in accessors]
@@ -119,7 +136,9 @@ class OIRToGTCpp(eve.NodeTranslator):
         )
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs):
-        functors, stages = self.tuple_visit(node.horizontal_executions, interval=node.interval)
+        functors, stages = self.tuple_visit(
+            node.horizontal_executions, interval=node.interval, **kwargs
+        )
         assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
         temporaries = self.visit(node.declarations)
         caches = []  # TODO
@@ -133,10 +152,12 @@ class OIRToGTCpp(eve.NodeTranslator):
         return gtcpp.FieldDecl(name=node.name, dtype=node.dtype)
 
     def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs):
-        return gtcpp.ScalarDecl(name=node.name, dtype=node.dtype)
+        return gtcpp.GlobalParamDecl(name=node.name, dtype=node.dtype)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
-        functors, temporaries, multi_stages = self.tuple_visit(node.vertical_loops)
+        functors, temporaries, multi_stages = self.tuple_visit(
+            node.vertical_loops, stencil_symtable=node.symtable_, **kwargs
+        )
 
         # TODO think about this pattern, just scanning of used parameters is probably wrong...
         api_fields = set(

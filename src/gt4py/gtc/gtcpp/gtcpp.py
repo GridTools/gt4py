@@ -153,26 +153,26 @@ class ParamArg(LocNode):
     name: Str
 
 
-class Decl(LocNode):
+class ApiParamDecl(LocNode):
     name: SymbolName
     dtype: common.DataType
 
     def __init__(self, *args, **kwargs):
-        if type(self) is Decl:
-            raise TypeError("Trying to instantiate `Decl` abstract class.")
+        if type(self) is ApiParamDecl:
+            raise TypeError("Trying to instantiate `ApiParamDecl` abstract class.")
         super().__init__(*args, **kwargs)
 
 
-class FieldDecl(Decl):
+class FieldDecl(ApiParamDecl):
     # TODO dimensions (or mask?)
     pass
 
 
-class ScalarDecl(Decl):
-    pass
+# class ScalarDecl(Decl):
+#     pass
 
 
-class GlobalParmDecl(Decl):
+class GlobalParamDecl(ApiParamDecl):
     pass
 
 
@@ -202,7 +202,7 @@ class Program(LocNode, SymbolTableTrait):
     name: Str
     # The ParamArg here, doesn't fully work as we need the type for template instantiation.
     # But maybe the module instantiation code is actually generated from a different IR?
-    parameters: List[Decl]
+    parameters: List[ApiParamDecl]
     functors: List[GTFunctor]
     gt_computation: GTComputation
     # control_flow_ast: List[GTComputation]
