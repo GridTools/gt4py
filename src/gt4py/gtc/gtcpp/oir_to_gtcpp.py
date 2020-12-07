@@ -71,6 +71,9 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs):
         return gtcpp.NativeFuncCall(func=node.func, args=self.visit(node.args))
 
+    def visit_Cast(self, node: oir.Cast, **kwargs):
+        return gtcpp.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
+
     def visit_Temporary(self, node: oir.Temporary, **kwargs):
         return gtcpp.Temporary(name=node.name, dtype=node.dtype)
 

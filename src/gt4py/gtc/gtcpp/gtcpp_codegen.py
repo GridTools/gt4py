@@ -59,6 +59,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     TernaryOp = as_fmt("({cond} ? {true_expr} : {false_expr})")
 
+    Cast = as_fmt("static_cast<{dtyp}>({expr})")
+
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
     def visit_NativeFunction(self, func: NativeFunction, **kwargs):
