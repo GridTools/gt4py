@@ -1,4 +1,4 @@
-from typing import Optiona, Dict, List
+from typing import Dict, List, Optiona
 
 from eve.visitors import NodeTranslator
 
