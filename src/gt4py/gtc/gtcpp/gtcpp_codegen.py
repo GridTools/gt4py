@@ -39,9 +39,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     """
     )
 
-    GTLevel = as_fmt(
-        "gridtools::stencil::core::level<{splitter}, {offset}, {offset_limit}>"
-    )  # TODO offset limit
+    GTLevel = as_fmt("gridtools::stencil::core::level<{splitter}, {offset}, {offset_limit}>")
 
     GTInterval = as_fmt("gridtools::stencil::core::interval<{from_level}, {to_level}>")
 
@@ -106,17 +104,11 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         else:
             assert False
 
-    # VarDecl = as_fmt("{vtype} {name} = {init};")
-
-    # VarAccess = as_fmt("{name}")
-
     ParamArg = as_fmt("{name}")
 
     ApiParamDecl = as_fmt("{name}")
 
     GTStage = as_mako(".stage(${functor}(), ${','.join(args)})")
-
-    # IJCache = as_fmt(".ij_cached({name})")
 
     GTMultiStage = as_mako("execute_${ loop_order }()${''.join(caches)}${''.join(stages)}")
 
