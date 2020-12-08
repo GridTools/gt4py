@@ -25,5 +25,12 @@ class OirToNpir(NodeTranslator):
             ),
         )
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, domain_padding: Optional[Dict[str, List]]):
-        pass
+    def visit_VerticalLoop(
+        self, node: oir.VerticalLoop, domain_padding: Optional[Dict[str, List]]
+    ):
+        return npir.VerticalPass(
+            body=[],
+            lower=self.visit(node.interval.start),
+            upper=self.visit(node.interval.end),
+            direction=self.visit(node.loop_order),
+        )

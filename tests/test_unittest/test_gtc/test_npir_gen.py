@@ -122,8 +122,8 @@ def test_vertical_pass_seq() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VerticalPass(
             body=[],
-            lower=npir.NumericalOffset(value=1),
-            upper=npir.NumericalOffset(value=-2),
+            lower=common.AxisBound.from_start(offset=1),
+            upper=common.AxisBound.from_end(offset=2),
             direction=common.LoopOrder.FORWARD,
         )
     )
@@ -140,8 +140,8 @@ def test_vertical_pass_par() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VerticalPass(
             body=[],
-            lower=npir.NumericalOffset(value=0),
-            upper=npir.NumericalOffset(value=0),
+            lower=common.AxisBound.start(),
+            upper=common.AxisBound.end(),
             direction=common.LoopOrder.PARALLEL,
         )
     )
@@ -215,8 +215,8 @@ def test_full_computation_valid(tmp_path) -> None:
             field_params=["f1", "f2", "f3"],
             vertical_passes=[
                 npir.VerticalPass(
-                    lower=npir.NumericalOffset(value=0),
-                    upper=npir.NumericalOffset(value=0),
+                    lower=common.AxisBound.start(),
+                    upper=common.AxisBound.end(),
                     direction=common.LoopOrder.PARALLEL,
                     body=[
                         npir.VectorAssign(
@@ -234,8 +234,8 @@ def test_full_computation_valid(tmp_path) -> None:
                     ],
                 ),
                 npir.VerticalPass(
-                    lower=npir.NumericalOffset(value=1),
-                    upper=npir.NumericalOffset(value=-3),
+                    lower=common.AxisBound.from_start(offset=1),
+                    upper=common.AxisBound.from_end(offset=3),
                     direction=common.LoopOrder.BACKWARD,
                     body=[
                         npir.VectorAssign(
@@ -281,5 +281,7 @@ def test_full_computation_valid(tmp_path) -> None:
     assert (f1[:, :, -1:] == 0).all()
 
     exp_f2 = np.ones((10)) * 3
-    exp_f2[-3:1:-1] = np.cumsum(exp_f2[1:-3])
+    # Remember that reversed ranges still include the first (higher) argument and exclude the
+    # second. Thus range(-4, 0, -1) contains the same indices as range(1, -3).
+    exp_f2[-4:0:-1] = np.cumsum(exp_f2[1:-3])
     assert (f2[3, 3, :] == exp_f2[:]).all()

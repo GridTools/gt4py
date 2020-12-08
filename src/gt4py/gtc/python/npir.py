@@ -85,8 +85,8 @@ class VectorAssign(common.AssignStmt[FieldSlice, VectorExpression], VectorExpres
 
 class VerticalPass(common.LocNode):
     body: List[VectorAssign]
-    lower: NumericalOffset  # TODO: change to AxisBound
-    upper: NumericalOffset  # TODO: change to AxisBound
+    lower: common.AxisBound
+    upper: common.AxisBound
     direction: common.LoopOrder
 
 
