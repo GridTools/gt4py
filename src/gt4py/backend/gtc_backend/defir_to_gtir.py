@@ -24,13 +24,11 @@ from gt4py.ir.nodes import (
     ScalarLiteral,
     StencilDefinition,
     TernaryOpExpr,
-    UnaryOpExpr,
     UnaryOperator,
+    UnaryOpExpr,
     VarDecl,
     VarRef,
 )
-
-from devtools import debug
 
 
 def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:
@@ -154,7 +152,8 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_ComputationBlock(self, node: ComputationBlock) -> List[gtir.VerticalLoop]:
         stmts = []
         temporaries = []
-        for s in node.body.stmts:  # self.visit(node.body):
+        for s in node.body.stmts:
+            # FieldDecl or VarDecls in the body are temporaries
             if isinstance(s, FieldDecl) or isinstance(s, VarDecl):
                 dtype = common.DataType(int(s.data_type.value))
                 if dtype == common.DataType.DEFAULT:
@@ -250,8 +249,7 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_FieldDecl(self, node: FieldDecl):
         # datatype conversion works via same ID
-        dtype = common.DataType(int(node.data_type.value))
-        return gtir.FieldDecl(name=node.name, dtype=dtype)
+        return gtir.FieldDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
 
     def visit_VarDecl(self, node: VarDecl):
         # datatype conversion works via same ID

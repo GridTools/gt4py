@@ -1,21 +1,14 @@
 import re
 from pathlib import Path
 from typing import Pattern, Union
-from gt4py.gtc.common import DataType
 
 import pytest
 import setuptools
 from devtools import debug
 
 from gt4py import config, gt2_src_manager  # TODO must not include gt4py package or ok for test?
-from gt4py.gtc.gtcpp.gtcpp import (
-    GTAccessor,
-    GTApplyMethod,
-    GTExtent,
-    Intent,
-    Program,
-    Literal,
-)
+from gt4py.gtc.common import DataType
+from gt4py.gtc.gtcpp.gtcpp import GTAccessor, GTApplyMethod, GTExtent, Intent, Literal, Program
 from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 

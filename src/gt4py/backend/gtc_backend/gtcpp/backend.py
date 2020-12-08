@@ -1,22 +1,25 @@
-from typing import Any, ClassVar, Dict, Optional, Tuple
-from gt4py.backend import BaseGTBackend, CLIBackendMixin, pyext_builder
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
+
+from eve import codegen
+from eve.codegen import MakoTemplate as as_mako
+
+from gt4py import gt2_src_manager
+from gt4py.backend import BaseGTBackend, CLIBackendMixin
 from gt4py.backend.base import register
 from gt4py.backend.gt_backends import (
     gtcpu_is_compatible_type,
     make_x86_layout_map,
     x86_is_compatible_layout,
 )
-from gt4py import gt2_src_manager
-
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-
 from gt4py.gtc import gtir_to_oir, passes
 from gt4py.gtc.common import DataType
-from gt4py.gtc.gtcpp import oir_to_gtcpp, gtcpp, gtcpp_codegen
-
-from eve import codegen
-from eve.codegen import MakoTemplate as as_mako
+from gt4py.gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gt4py.gtc.passes.gtir_set_dtype import GTIRSetDtype
+
+
+if TYPE_CHECKING:
+    from gt4py.stencil_object import StencilObject
 
 
 class GTCGTExtGenerator:
@@ -29,11 +32,9 @@ class GTCGTExtGenerator:
         self.gt_backend_t = gt_backend_t
         self.options = options
 
-    # TODO here definition IR should be the input
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = passes.FieldsMetadataPass().visit(DefIRToGTIR.apply(definition_ir))
         dtype_deduced = GTIRSetDtype().visit(gtir)
-        # dtype_deduced = resolve_dtype(gtir) # TODO will come in a next PR
         oir = gtir_to_oir.GTIRToOIR().visit(dtype_deduced)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp)
@@ -45,8 +46,6 @@ class GTCGTExtGenerator:
 
 
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):
-    # ParamArg = as_fmt("py::buffer {name}, std::array<gt::unit_t,3> {name}_origin")
-
     def __init__(self):
         self._unique_index = 0
 
@@ -142,7 +141,7 @@ class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=False)
 
-    def generate(self):  # -> Type["StencilObject"]:
+    def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
 
         # Generate the Python binary extension (checking if GridTools sources are installed)

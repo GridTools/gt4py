@@ -1,4 +1,5 @@
 import pytest
+
 from gt4py.gtc.gtcpp import gtcpp_codegen
 from gt4py.gtc.gtcpp.gtcpp import GTLevel
 
