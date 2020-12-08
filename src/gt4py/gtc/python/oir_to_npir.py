@@ -2,7 +2,7 @@ from typing import Dict, List, Optional
 
 from eve.visitors import NodeTranslator
 
-from .. import oir
+from .. import oir, common
 from . import npir
 
 
@@ -26,11 +26,21 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, domain_padding: Optional[Dict[str, List]]
-    ):
+        self, node: oir.VerticalLoop, *, domain_padding: Optional[Dict[str, List]] = None
+    ) -> npir.VerticalPass:
         return npir.VerticalPass(
-            body=[],
+            body=self.visit(node.horizontal_executions, domain_padding=domain_padding),
             lower=self.visit(node.interval.start),
             upper=self.visit(node.interval.end),
             direction=self.visit(node.loop_order),
         )
+
+    def visit_AxisBound(self, node: oir.AxisBound, **kwargs) -> common.AxisBound:
+        return common.AxisBound(
+            level=node.level,
+            offset=node.offset
+        )
+
+    def visit_HorizontalExecution(self, node: oir.HorizontalExecution) -> List[npir.VectorAssign]:
+        pass  # TODO
+
