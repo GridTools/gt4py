@@ -1,4 +1,4 @@
-from typing import Dict, List, Sequence
+from typing import Dict, List, Sequence, Set
 
 import eve
 from devtools import debug  # noqa: F401
@@ -27,13 +27,13 @@ def _extract_accessors(node: eve.Node) -> GTParamList:
         )
     )
 
-    inout_fields: List[str] = (
+    inout_fields: Set[str] = (
         node.iter_tree()
         .if_isinstance(gtcpp.AssignStmt)
         .getattr("left")
         .if_isinstance(gtcpp.AccessorRef)
         .getattr("name")
-        .unique()
+        .to_set()
     )
 
     return [
@@ -124,9 +124,11 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, interval, **kwargs):
         assert "stencil_symtable" in kwargs
-        apply_method = gtcpp.GTApplyMethod(
-            interval=self.visit(interval), body=self.visit(node.body, **kwargs)
-        )
+        body = self.visit(node.body, **kwargs)
+        mask = self.visit(node.mask, **kwargs)
+        if mask:
+            body = [gtcpp.IfStmt(cond=mask, true_branch=gtcpp.BlockStmt(body=body))]
+        apply_method = gtcpp.GTApplyMethod(interval=self.visit(interval), body=body)
         accessors = _extract_accessors(apply_method)
         stage_args = [gtcpp.ParamArg(name=acc.name) for acc in accessors]
         return (

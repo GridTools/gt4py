@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import Literal, Pattern, Union
+from typing import Pattern, Union
 from gt4py.gtc.common import DataType
 
 import pytest
@@ -8,11 +8,24 @@ import setuptools
 from devtools import debug
 
 from gt4py import config, gt2_src_manager  # TODO must not include gt4py package or ok for test?
-from gt4py.gtc.gtcpp.gtcpp import AssignStmt, GTAccessor, GTApplyMethod, GTExtent, Intent, Program
+from gt4py.gtc.gtcpp.gtcpp import (
+    GTAccessor,
+    GTApplyMethod,
+    GTExtent,
+    Intent,
+    Program,
+    Literal,
+)
 from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 
-from .gtcpp_utils import AccessorRefBuilder, GTApplyMethodBuilder, GTFunctorBuilder, ProgramBuilder
+from .gtcpp_utils import (
+    AssignStmtBuilder,
+    GTApplyMethodBuilder,
+    GTFunctorBuilder,
+    IfStmtBuilder,
+    ProgramBuilder,
+)
 
 
 if not gt2_src_manager.has_gt_sources() and not gt2_src_manager.install_gt_sources():
@@ -134,15 +147,14 @@ def _embed_apply_method_in_program(apply_method: GTApplyMethod):
     [
         (GTApplyMethodBuilder().build(), r"apply"),
         (
+            GTApplyMethodBuilder().add_stmt(AssignStmtBuilder("a", "b").build()).build(),
+            r"a.*=.*b",
+        ),
+        (
             GTApplyMethodBuilder()
-            .add_stmt(
-                AssignStmt(
-                    left=AccessorRefBuilder("a").build(),
-                    right=AccessorRefBuilder(name="b").build(),
-                )
-            )
+            .add_stmt(IfStmtBuilder().true_branch(AssignStmtBuilder().build()).build())
             .build(),
-            r"a.*=b.*",
+            r"if",
         ),
     ],
 )

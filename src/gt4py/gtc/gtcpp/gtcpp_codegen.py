@@ -2,7 +2,7 @@ from eve import codegen, Node
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 
-from gt4py.gtc.common import DataType, LoopOrder, NativeFunction
+from gt4py.gtc.common import DataType, LoopOrder, NativeFunction, UnaryOperator
 from gt4py.gtc.gtcpp import gtcpp
 
 # TODO qualify gridtools stuff
@@ -96,6 +96,16 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         else:
             assert False
 
+    def visit_UnaryOperator(self, op: UnaryOperator, **kwargs):
+        if op == UnaryOperator.NOT:
+            return "!"
+        elif op == UnaryOperator.NEG:
+            return "-"
+        elif op == UnaryOperator.POS:
+            return "+"
+        else:
+            assert False
+
     # VarDecl = as_fmt("{vtype} {name} = {init};")
 
     # VarAccess = as_fmt("{name}")
@@ -118,6 +128,16 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         }[looporder]
 
     Temporary = as_fmt("GT_DECLARE_TMP({dtype}, {name});")
+
+    IfStmt = as_mako(
+        """if(${cond}) ${true_branch}
+        %if _this_node.false_branch:
+            else ${false_branch}
+        %endif
+        """
+    )
+
+    BlockStmt = as_mako("{${''.join(body)}}")
 
     GTComputation = as_mako(
         """

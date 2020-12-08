@@ -49,6 +49,10 @@ class AccessorRef(common.FieldAccess, Expr):
     pass
 
 
+class BlockStmt(common.BlockStmt[Stmt], Stmt):
+    pass
+
+
 class AssignStmt(common.AssignStmt[Union[ScalarAccess, AccessorRef], Expr], Stmt):
     # TODO remove duplication of this check
     @validator("left")
@@ -56,6 +60,10 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, AccessorRef], Expr], Stmt
         if isinstance(v, AccessorRef) and (v.offset.i != 0 or v.offset.j != 0):
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
+
+
+class IfStmt(common.IfStmt[Stmt, Expr], Stmt):
+    pass
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):
