@@ -18,7 +18,6 @@ if not gt2_src_manager.has_gt_sources() and not gt2_src_manager.install_gt_sourc
     raise RuntimeError("Missing GridTools sources.")
 
 
-# TODO does this exist in pytest already?
 def match(value: str, regexp: "Union[str, Pattern]") -> "Literal[True]":
     """
     Stolen from `pytest.raises`.
@@ -32,7 +31,6 @@ def match(value: str, regexp: "Union[str, Pattern]") -> "Literal[True]":
     return True
 
 
-# TODO can I get tmp_path automagically here?
 def build_gridtools_test(tmp_path: Path, code: str):
     tmp_src = tmp_path / "test.cpp"
     tmp_src.write_text(code)
@@ -133,7 +131,7 @@ def _embed_apply_method_in_program(apply_method: GTApplyMethod):
 @pytest.mark.parametrize(
     "apply_method,expected_regex",
     [
-        (GTApplyMethodBuilder().build(), r""),
+        (GTApplyMethodBuilder().build(), r"apply"),
         (
             GTApplyMethodBuilder()
             .add_stmt(
@@ -143,7 +141,7 @@ def _embed_apply_method_in_program(apply_method: GTApplyMethod):
                 )
             )
             .build(),
-            r"",
+            r"a.*=b.*",
         ),
     ],
 )
