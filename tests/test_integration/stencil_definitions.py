@@ -30,16 +30,16 @@ REGISTRY = gt_utils.Registry()
 EXTERNALS_REGISTRY = gt_utils.Registry()
 
 
-def register(externals):
-    if callable(externals):
-        func = externals  # wacky hacky!
+def register(externals_or_func):
+    if callable(externals_or_func):
+        func = externals_or_func  # wacky hacky!
         EXTERNALS_REGISTRY.setdefault(func.__name__, {})
         REGISTRY.register(func.__name__, func)
         return func
     else:
 
         def register_inner(arg_inner):
-            EXTERNALS_REGISTRY.register(arg_inner.__name__, externals)
+            EXTERNALS_REGISTRY.register(arg_inner.__name__, externals_or_func)
             REGISTRY.register(arg_inner.__name__, arg_inner)
             return arg_inner
 
@@ -114,7 +114,7 @@ def tridiagonal_solver(inf: Field3D, diag: Field3D, sup: Field3D, rhs: Field3D, 
             out = rhs - sup * out[0, 0, 1]
 
 
-@register(externals={"BET_M": 0.5, "BET_P": 0.5})
+@register(externals_or_func={"BET_M": 0.5, "BET_P": 0.5})
 def vertical_advection_dycore(
     utens_stage: Field3D,
     u_stage: Field3D,
@@ -274,7 +274,7 @@ def multibranch_param_conditional(in_field: Field3D, out_field: Field3D, c: floa
             out_field = in_field
 
 
-@register(externals={"DO_SOMETHING": False})
+@register(externals_or_func={"DO_SOMETHING": False})
 def allow_empty_computation(in_field: Field3D, out_field: Field3D):
     from __externals__ import DO_SOMETHING
 
