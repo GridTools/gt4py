@@ -91,8 +91,8 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
 
 class Cast(common.Cast[Expr], Expr):
     pass
-  
-  
+
+
 class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     pass
 
@@ -113,6 +113,10 @@ class FieldDecl(Decl):
 
 
 class ScalarDecl(Decl):
+    pass
+
+
+class Temporary(FieldDecl):
     pass
 
 
@@ -155,11 +159,6 @@ class HorizontalExecution(LocNode):
 class Interval(LocNode):
     start: AxisBound
     end: AxisBound
-
-
-class Temporary(LocNode):
-    name: SymbolName
-    dtype: common.DataType
 
 
 class VerticalLoop(LocNode):

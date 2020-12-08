@@ -1,3 +1,5 @@
+import eve
+
 from gt4py.gtc import common
 from gt4py.gtc.gtir import FieldAccess, FieldDecl, ParAssignStmt
 from gt4py.gtc.passes.gtir_set_dtype import GTIRSetDtype
@@ -33,7 +35,7 @@ def test_stencil():
         .build()
     )
 
-    result = GTIRSetDtype().visit(testee)
+    result: eve.Node = GTIRSetDtype().visit(testee)
 
     field_accesses = result.iter_tree().if_isinstance(FieldAccess)
     for acc in field_accesses:

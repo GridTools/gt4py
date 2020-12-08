@@ -61,11 +61,6 @@ class Literal(common.Literal, Expr):
     pass
 
 
-class Domain(LocNode):
-    # TODO
-    pass
-
-
 class CartesianOffset(Node):
     i: int
     j: int
@@ -155,8 +150,8 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
 
 class Cast(common.Cast[Expr], Expr):
     pass
-  
-  
+
+
 class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     pass
 

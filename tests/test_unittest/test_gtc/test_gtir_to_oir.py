@@ -1,16 +1,14 @@
 from typing import Type
-from gt4py.gtc.gtir import ScalarIfStmt
 
 import pytest
 from eve import Node
 
 from gt4py.gtc import gtir, gtir_to_oir, oir
 from gt4py.gtc.common import BlockStmt, DataType, ExprKind
+from gt4py.gtc.gtir import ScalarIfStmt
 from gt4py.gtc.gtir_to_oir import GTIRToOIR
 
-
 from . import gtir_utils
-
 from .gtir_utils import FieldAccessBuilder, FieldIfStmtBuilder
 
 
