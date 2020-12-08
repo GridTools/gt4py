@@ -54,7 +54,7 @@ class GTApplyMethodBuilder:
         self._interval = GTIntervalBuilder().build()
         self._body = []
 
-    def add_stmt(self, stmt: Stmt):
+    def add_stmt(self, stmt: Stmt) -> "GTApplyMethodBuilder":
         self._body.append(stmt)
         return self
 
@@ -68,15 +68,17 @@ class GTFunctorBuilder:
         self._applies = []
         self._param_list_accessors = []
 
-    def add_accessors(self, accessors: List[GTAccessor]):
+    def add_accessors(self, accessors: List[GTAccessor]) -> "GTFunctorBuilder":
         self._param_list_accessors.extend(accessors)
         return self
 
-    def add_accessor(self, accessor: GTAccessor):
+    def add_accessor(self, accessor: GTAccessor) -> "GTFunctorBuilder":
         self._param_list_accessors.append(accessor)
         return self
 
-    def add_apply_method(self, apply_method: GTApplyMethod = GTApplyMethodBuilder().build()):
+    def add_apply_method(
+        self, apply_method: GTApplyMethod = GTApplyMethodBuilder().build()
+    ) -> "GTFunctorBuilder":
         self._applies.append(apply_method)
         return self
 
