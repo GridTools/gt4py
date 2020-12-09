@@ -179,3 +179,36 @@ def test_stage_merger_induced_interval_block_reordering(backend):
 
     np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 0:-1], 3)
     np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, -1], 2)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_lower_dimensional_inputs(backend):
+    @gtscript.stencil(backend=backend)
+    def stencil(
+        field_3d: gtscript.Field[np.float_, gtscript.IJK],
+        field_2d: gtscript.Field[np.float_, gtscript.IJ],
+        field_1d: gtscript.Field[np.float_, gtscript.K],
+    ):
+        with computation(PARALLEL), interval(0, 1):
+            field_2d = field_1d + field_3d
+
+        with computation(PARALLEL):
+            with interval(0, 1):
+                tmp = field_2d + field_1d
+                field_3d = tmp[1, 0, 0] + field_1d
+            with interval(1, None):
+                field_3d = tmp[-1, 0, 0]
+
+    full_shape = (6, 6, 3)
+    default_origin = (1, 1, 0)
+    dtype = float
+
+    field_3d = gt_storage.ones(backend, default_origin, full_shape, dtype, mask=None)
+    field_2d = gt_storage.ones(
+        backend, default_origin[:-1], full_shape[:-1], dtype, mask=(True, True, False)
+    )
+    field_1d = gt_storage.zeros(
+        backend, (default_origin[-1],), (full_shape[-1],), dtype, mask=(False, False, True)
+    )
+
+    stencil(field_3d, field_2d, field_1d)
