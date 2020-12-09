@@ -30,17 +30,17 @@ REGISTRY = gt_utils.Registry()
 EXTERNALS_REGISTRY = gt_utils.Registry()
 
 
-def register(externals_or_func):
+def register(externals_or_func, name=None):
     if callable(externals_or_func):
         func = externals_or_func  # wacky hacky!
-        EXTERNALS_REGISTRY.setdefault(func.__name__, {})
-        REGISTRY.register(func.__name__, func)
+        EXTERNALS_REGISTRY.setdefault(name or func.__name__, {})
+        REGISTRY.register(name or func.__name__, func)
         return func
     else:
 
         def register_inner(arg_inner):
-            EXTERNALS_REGISTRY.register(arg_inner.__name__, externals_or_func)
-            REGISTRY.register(arg_inner.__name__, arg_inner)
+            EXTERNALS_REGISTRY.register(name or arg_inner.__name__, externals_or_func)
+            REGISTRY.register(name or arg_inner.__name__, arg_inner)
             return arg_inner
 
         return register_inner
@@ -283,3 +283,49 @@ def allow_empty_computation(in_field: Field3D, out_field: Field3D):
     with computation(PARALLEL), interval(...):
         if __INLINED(DO_SOMETHING):
             out_field = abs(in_field)
+
+
+@register(externals_or_func={"PHYS_TEND": False}, name="unused_optional_field")
+@register(externals_or_func={"PHYS_TEND": True}, name="required_optional_field")
+def optional_field(
+    in_field: Field3D,
+    out_field: Field3D,
+    dyn_tend: Field3D,
+    phys_tend: Field3D = None,
+    *,
+    dt: float,
+):
+    from __externals__ import PHYS_TEND
+
+    with computation(PARALLEL), interval(...):
+        out_field = in_field + dt * dyn_tend
+        if __INLINED(PHYS_TEND):
+            out_field = out_field + dt * phys_tend
+
+
+@register(
+    externals_or_func={"PHYS_TEND_A": False, "PHYS_TEND_B": False}, name="optional_fields_00"
+)
+@register(externals_or_func={"PHYS_TEND_A": False, "PHYS_TEND_B": True}, name="optional_fields_01")
+@register(externals_or_func={"PHYS_TEND_A": True, "PHYS_TEND_B": True}, name="optional_fields_11")
+def optional_fields(
+    in_a: Field3D,
+    in_b: Field3D,
+    out_a: Field3D,
+    out_b: Field3D,
+    dyn_tend_a: Field3D,
+    dyn_tend_b: Field3D,
+    phys_tend_a: Field3D = None,
+    phys_tend_b: Field3D = None,
+    *,
+    dt: float,
+):
+    from __externals__ import PHYS_TEND_A, PHYS_TEND_B
+
+    with computation(PARALLEL), interval(...):
+        out_a = in_a + dt * dyn_tend_a
+        out_b = in_b + dt * dyn_tend_b
+        if __INLINED(PHYS_TEND_A):
+            out_a = out_a + dt * phys_tend_a
+        if __INLINED(PHYS_TEND_B):
+            out_b = out_b + dt * phys_tend_b
