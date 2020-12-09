@@ -401,8 +401,12 @@ cupy.cuda.Device(0).synchronize()
         return ["import cupy"]
 
     def backend_pre_run(self) -> List[str]:
-        field_names = self.args_data["field_info"].keys()
-        return ["{name}.host_to_device()" for name in field_names]
+        field_names = [
+            key
+            for key in self.args_data["field_info"]
+            if self.args_data["field_info"][key] is not None
+        ]
+        return [f"{name}.host_to_device()" for name in field_names]
 
     def generate_post_run(self) -> str:
         output_field_names = [
