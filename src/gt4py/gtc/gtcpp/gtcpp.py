@@ -49,6 +49,10 @@ class AccessorRef(common.FieldAccess, Expr):
     pass
 
 
+class BlockStmt(common.BlockStmt[Stmt], Stmt):
+    pass
+
+
 class AssignStmt(common.AssignStmt[Union[ScalarAccess, AccessorRef], Expr], Stmt):
     # TODO remove duplication of this check
     @validator("left")
@@ -56,6 +60,10 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, AccessorRef], Expr], Stmt
         if isinstance(v, AccessorRef) and (v.offset.i != 0 or v.offset.j != 0):
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
+
+
+class IfStmt(common.IfStmt[Stmt, Expr], Stmt):
+    pass
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):
@@ -67,6 +75,14 @@ class BinaryOp(common.BinaryOp[Expr], Expr):
 
 
 class TernaryOp(common.TernaryOp[Expr], Expr):
+    pass
+
+
+class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
+    pass
+
+
+class Cast(common.Cast[Expr], Expr):
     pass
 
 
@@ -149,6 +165,29 @@ class ParamArg(LocNode):
     name: Str
 
 
+class ApiParamDecl(LocNode):
+    name: SymbolName
+    dtype: common.DataType
+
+    def __init__(self, *args, **kwargs):
+        if type(self) is ApiParamDecl:
+            raise TypeError("Trying to instantiate `ApiParamDecl` abstract class.")
+        super().__init__(*args, **kwargs)
+
+
+class FieldDecl(ApiParamDecl):
+    # TODO dimensions (or mask?)
+    pass
+
+
+# class ScalarDecl(Decl):
+#     pass
+
+
+class GlobalParamDecl(ApiParamDecl):
+    pass
+
+
 class GTStage(LocNode):
     functor: SymbolRef  # symbol ref
     args: List[ParamArg]  # symbol ref to GTComputation params
@@ -175,7 +214,7 @@ class Program(LocNode, SymbolTableTrait):
     name: Str
     # The ParamArg here, doesn't fully work as we need the type for template instantiation.
     # But maybe the module instantiation code is actually generated from a different IR?
-    parameters: List[ParamArg]
+    parameters: List[ApiParamDecl]
     functors: List[GTFunctor]
     gt_computation: GTComputation
     # control_flow_ast: List[GTComputation]

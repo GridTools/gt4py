@@ -1,11 +1,21 @@
-from eve import codegen
+from eve import Node, codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 
-from gt4py.gtc.common import DataType, LoopOrder
+from gt4py.gtc.common import DataType, LoopOrder, NativeFunction, UnaryOperator
+from gt4py.gtc.gtcpp import gtcpp
 
 
 # TODO qualify gridtools stuff
+
+
+def _offset_limit(root: Node):
+    return (
+        root.iter_tree()
+        .if_isinstance(gtcpp.GTLevel)
+        .getattr("offset")
+        .reduce(lambda state, cur: max(state, abs(cur)), init=0)
+    )
 
 
 class GTCppCodegen(codegen.TemplatedGenerator):
@@ -30,9 +40,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     """
     )
 
-    GTLevel = as_fmt(
-        "gridtools::stencil::core::level<{splitter}, {offset}, 2>"
-    )  # TODO offset limit
+    GTLevel = as_fmt("gridtools::stencil::core::level<{splitter}, {offset}, {offset_limit}>")
 
     GTInterval = as_fmt("gridtools::stencil::core::interval<{from_level}, {to_level}>")
 
@@ -49,13 +57,31 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     AccessorRef = as_fmt("eval({name}({offset}))")
 
+    ScalarAccess = as_fmt("{name}")
+
     CartesianOffset = as_fmt("{i}, {j}, {k}")
 
     BinaryOp = as_fmt("({left} {op} {right})")
 
+    UnaryOp = as_fmt("({op}{expr})")
+
     TernaryOp = as_fmt("({cond} ? {true_expr} : {false_expr})")
 
+    Cast = as_fmt("static_cast<{dtype}>({expr})")
+
     Literal = as_mako("static_cast<${dtype}>(${value})")
+
+    def visit_NativeFunction(self, func: NativeFunction, **kwargs):
+        if func == NativeFunction.SQRT:
+            return "gridtools::math::sqrt"
+        elif func == NativeFunction.MIN:
+            return "gridtools::math::min"
+        elif func == NativeFunction.MAX:
+            return "gridtools::math::max"
+        else:
+            assert False
+
+    NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
     def visit_DataType(self, dtype: DataType, **kwargs):
         if dtype == DataType.INT64:
@@ -64,18 +90,26 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "double"
         elif dtype == DataType.FLOAT32:
             return "float"
+        elif dtype == DataType.BOOL:
+            return "bool"
         else:
             assert False
 
-    # VarDecl = as_fmt("{vtype} {name} = {init};")
-
-    # VarAccess = as_fmt("{name}")
+    def visit_UnaryOperator(self, op: UnaryOperator, **kwargs):
+        if op == UnaryOperator.NOT:
+            return "!"
+        elif op == UnaryOperator.NEG:
+            return "-"
+        elif op == UnaryOperator.POS:
+            return "+"
+        else:
+            assert False
 
     ParamArg = as_fmt("{name}")
 
-    GTStage = as_mako(".stage(${functor}(), ${','.join(args)})")
+    ApiParamDecl = as_fmt("{name}")
 
-    # IJCache = as_fmt(".ij_cached({name})")
+    GTStage = as_mako(".stage(${functor}(), ${','.join(args)})")
 
     GTMultiStage = as_mako("execute_${ loop_order }()${''.join(caches)}${''.join(stages)}")
 
@@ -88,11 +122,21 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     Temporary = as_fmt("GT_DECLARE_TMP({dtype}, {name});")
 
+    IfStmt = as_mako(
+        """if(${cond}) ${true_branch}
+        %if _this_node.false_branch:
+            else ${false_branch}
+        %endif
+        """
+    )
+
+    BlockStmt = as_mako("{${''.join(body)}}")
+
     GTComputation = as_mako(
         """
         %if len(multi_stages) > 0:
         {
-            auto grid = make_grid(domain[0], domain[1], domain[2]);
+            auto grid = make_grid(domain[0], domain[1], axis<1, axis_config::offset_limit<${offset_limit}>>{domain[2]});
 
             auto ${ name } = [](${ ','.join('auto ' + p for p in parameters) }) {
 
@@ -132,6 +176,6 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     @classmethod
     def apply(cls, root, **kwargs) -> str:
-        generated_code = super().apply(root, **kwargs)
+        generated_code = super().apply(root, offset_limit=_offset_limit(root), **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code

@@ -58,6 +58,7 @@ def copy_v_loop(copy_assign, interval):
         loop_order=LoopOrder.FORWARD,
         interval=interval,
         body=[copy_assign],
+        temporaries=[],
     )
 
 
@@ -110,6 +111,7 @@ def test_naive_python_avg():
                         ),
                     )
                 ],
+                temporaries=[],
             )
         ],
     )
