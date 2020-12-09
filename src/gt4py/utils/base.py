@@ -29,12 +29,10 @@ import os
 import string
 import sys
 import types
-from typing import Any, Sequence, Tuple, TypeVar
+from typing import Any, Sequence, Tuple
 
 
 NOTHING = object()
-
-T = TypeVar("T")
 
 
 def slugify(value: str, *, replace_spaces=True, valid_symbols="-_.()", invalid_marker=""):
