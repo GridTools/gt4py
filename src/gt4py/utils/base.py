@@ -222,8 +222,7 @@ def filter_mask_expand(seq: Sequence[Any], mask: Sequence[bool], *, default) -> 
 
 def filter_mask_shrink(seq: Sequence[Any], mask: Sequence[bool]) -> Tuple[Any, ...]:
     """
-    Return a tuple with the same shape as mask, with True values replaced by
-    the sequence, and False values replaced by default.
+    Return a reduced-size tuple, with indices where mask[i]=False removed.
 
     Example:
     >>> a = (1, 2, 3)
