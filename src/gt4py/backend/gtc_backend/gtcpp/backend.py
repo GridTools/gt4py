@@ -14,8 +14,7 @@ from gt4py.backend.gt_backends import (
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.gtc import gtir_to_oir, passes
 from gt4py.gtc.common import DataType
-from gt4py.gtc.gtcpp import oir_to_gtcpp, gtcpp, gtcpp_codegen
-
+from gt4py.gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gt4py.gtc.passes.gtir_set_dtype import resolve_dtype
 
 

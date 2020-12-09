@@ -1,9 +1,8 @@
 from eve import NodeTranslator
 
 from gt4py.gtc import gtir
-from gt4py.gtc.common import DataType, ScalarAccess
+from gt4py.gtc.common import DataType
 
-from devtools import debug
 
 # TODO How do we deal with AUTO types?
 # Especially in the dtype propagator, currently AUTO is included in strict type checking.
