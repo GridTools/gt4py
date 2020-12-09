@@ -7,6 +7,7 @@ import numpy as np
 
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_storage
+import gt4py.utils as gt_utils
 from gt4py.definitions import (
     AccessKind,
     Boundary,
@@ -206,14 +207,15 @@ class StencilObject(abc.ABC):
         for name, field in used_field_args.items():
             min_origin = self.field_info[name].boundary.lower_indices
             field_shape = Shape.from_mask(field.shape, field.mask)
-            if origin[name] < min_origin:
+            field_origin = Index.from_mask(origin[name], field.mask)
+            if field_origin < min_origin:
                 raise ValueError(
                     f"Origin for field {name} too small. Must be at least {min_origin}, is {origin[name]}"
                 )
             min_shape = tuple(
                 o + d + h
                 for o, d, h in zip(
-                    origin[name], domain, self.field_info[name].boundary.upper_indices
+                    field_origin, domain, self.field_info[name].boundary.upper_indices
                 )
             )
             if min_shape > field_shape:
@@ -301,7 +303,8 @@ class StencilObject(abc.ABC):
             origin = normalize_origin_mapping(origin)
 
         for name, field in used_field_args.items():
-            origin.setdefault(name, origin["_all_"] if "_all_" in origin else field.default_origin)
+            field_origin = origin["_all_"] if "_all_" in origin else field.default_origin
+            origin.setdefault(name, field_origin.filter_mask(field.mask))
 
         # Domain
         if domain is None:

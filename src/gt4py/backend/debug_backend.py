@@ -112,7 +112,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
     def visit_FieldRef(self, node: gt_ir.FieldRef):
         assert node.name in self.block_info.accessors
         index = []
-        for ax in self.domain.axes_names:
+        for ax in self.impl_node.fields[node.name].axes:
             offset = "{:+d}".format(node.offset[ax]) if ax in node.offset else ""
             index.append("{ax}{offset}".format(ax=ax, offset=offset))
 
@@ -184,6 +184,7 @@ class _Accessor:
         self.origin = origin
 
     def _shift(self, index):
+        index = index if isinstance(index, Iterable) else (index,)
         return tuple(i + offset for i, offset in zip(index, self.origin))
 
     def __getitem__(self, index):
@@ -204,6 +205,7 @@ class _Accessor:
         source = (
             """
 import math
+from collections.abc import Iterable
 """
             + super().generate_imports()
         )
