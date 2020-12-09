@@ -29,9 +29,12 @@ import os
 import string
 import sys
 import types
+from typing import Any, Sequence, Tuple, TypeVar
 
 
 NOTHING = object()
+
+T = TypeVar("T")
 
 
 def slugify(value: str, *, replace_spaces=True, valid_symbols="-_.()", invalid_marker=""):
@@ -201,6 +204,22 @@ def shash(*args, hash_algorithm=None):
 
 def shashed_id(*args, length=10, hash_algorithm=None):
     return shash(*args, hash_algorithm=hash_algorithm)[:length]
+
+
+def filter_mask(seq: Sequence[Any], mask: Sequence[bool], *, default) -> Tuple[Any, ...]:
+    """
+    Return a tuple with the same shape as mask, with True values replaced by
+    the sequence, and False values replaced by default.
+
+    Example:
+    >>> default = 0
+    >>> a = (1, 2)
+    >>> mask = (False, True, False, True)
+    >>> filter_mask(a, mask, default=1)
+    (0, 1, 0, 2)
+    """
+    it = iter(seq)
+    return tuple(it.__next__() if m else default for m in mask)
 
 
 def classmethod_to_function(class_method, instance=None, owner=type(None), remove_cls_arg=False):

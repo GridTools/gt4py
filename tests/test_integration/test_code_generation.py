@@ -211,4 +211,4 @@ def test_lower_dimensional_inputs(backend):
         backend, (default_origin[-1],), (full_shape[-1],), dtype, mask=(False, False, True)
     )
 
-    stencil(field_3d, field_2d, field_1d)
+    stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0))

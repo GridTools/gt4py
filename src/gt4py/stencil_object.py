@@ -133,10 +133,13 @@ class StencilObject(abc.ABC):
             `Shape`: the maximum domain size.
         """
         max_domain = Shape([np.iinfo(np.uintc).max] * self.domain_info.ndims)
-        shapes = {name: Shape(field.shape) for name, field in field_args.items()}
-        for name, shape in shapes.items():
-            upper_boundary = Index(self.field_info[name].boundary.upper_indices)
-            max_domain &= shape - (Index(origin[name]) + upper_boundary)
+        for name, field in field_args.items():
+            field_origin = Index.from_mask(origin[name], field.mask)
+            field_shape = Shape.from_mask(field.shape, field.mask)
+            upper_boundary = Index.from_mask(
+                self.field_info[name].boundary.upper_indices, field.mask
+            )
+            max_domain &= field_shape - (field_origin + upper_boundary)
         return max_domain
 
     def _validate_args(self, used_field_args, used_param_args, domain, origin):
@@ -202,6 +205,7 @@ class StencilObject(abc.ABC):
             )
         for name, field in used_field_args.items():
             min_origin = self.field_info[name].boundary.lower_indices
+            field_shape = Shape.from_mask(field.shape, field.mask)
             if origin[name] < min_origin:
                 raise ValueError(
                     f"Origin for field {name} too small. Must be at least {min_origin}, is {origin[name]}"
@@ -212,7 +216,7 @@ class StencilObject(abc.ABC):
                     origin[name], domain, self.field_info[name].boundary.upper_indices
                 )
             )
-            if min_shape > field.shape:
+            if min_shape > field_shape:
                 raise ValueError(
                     f"Shape of field {name} is {field.shape} but must be at least {min_shape} for given domain and origin."
                 )
