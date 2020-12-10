@@ -85,7 +85,7 @@ class NumericTuple(tuple):
     def from_mask(cls, seq, mask, default=None):
         if default is None:
             default = cls._DEFAULT
-        return cls(gt_utils.filter_mask_expand(seq, mask, default=default))
+        return cls(gt_utils.interpolate_mask(seq, mask, default))
 
     @classmethod
     def from_value(cls, value):
@@ -224,7 +224,7 @@ class NumericTuple(tuple):
         return all(op(a, b) for a, b in zip(self, other))
 
     def filter_mask(self, mask):
-        return type(self)(gt_utils.filter_mask_shrink(self, mask))
+        return type(self)(gt_utils.filter_mask(self, mask))
 
 
 class Index(NumericTuple):
