@@ -954,11 +954,15 @@ class IRMaker(ast.NodeVisitor):
     def visit_Subscript(self, node: ast.Subscript):
         assert isinstance(node.ctx, (ast.Load, ast.Store))
         index = self.visit(node.slice)
+        if isinstance(index, int):
+            index = (index,)
         result = self.visit(node.value)
         if isinstance(result, gt_ir.VarRef):
             result.index = index
         else:
-            result.offset = {axis.name: value for axis, value in zip(self.domain.axes, index)}
+            result.offset = {
+                axis_name: value for axis_name, value in zip(result.offset.keys(), index)
+            }
 
         return result
 

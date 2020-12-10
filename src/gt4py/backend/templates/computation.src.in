@@ -118,7 +118,7 @@ using p_{{ field.name }} = gt::arg<{{ arg_counter + loop.index0 }}, data_store_{
 {%- endfor %}
 {% set arg_counter = arg_counter + arg_fields|length %}
 {% for param in parameters %}
-using p_{{ param.name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_parameter<backend_t, {{ param.dtype }}>>;
+using p_{{ param.name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
 {%- endfor %}
 {% set arg_counter = arg_counter + parameters|length %}
 {% if tmp_fields -%}
