@@ -410,7 +410,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         # Initialize symbols for the generation of references in this stage
         self.stage_symbols = {}
         args = []
-        axis_to_index = {"I": 0, "J": 1, "K": 2}
+
         for accessor in node.accessors:
             self.stage_symbols[accessor.symbol] = accessor
             arg = {"name": accessor.symbol, "access_type": "in", "extent": None}
@@ -419,10 +419,9 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                     "in" if accessor.intent == gt_ir.AccessIntent.READ_ONLY else "inout"
                 )
                 arg["extent"] = gt_utils.flatten(
-                    [
-                        accessor.extent[axis_to_index[axis]]
-                        for axis in self.impl_node.fields[accessor.symbol].axes
-                    ]
+                    gt_utils.filter_from_axes(
+                        accessor.extent, self.impl_node.fields[accessor.symbol].axes
+                    )
                 )
             args.append(arg)
 
