@@ -961,8 +961,9 @@ class IRMaker(ast.NodeVisitor):
         if isinstance(result, gt_ir.VarRef):
             result.index = index
         else:
+            field_axes = self.fields[result.name].axes
             result.offset = {
-                axis.name: value for axis, value in zip(self.domain.axes, gt_utils.listify(index))
+                axis: value for axis, value in zip(field_axes, gt_utils.listify(index))
             }
 
         return result
