@@ -33,6 +33,8 @@
 
 namespace py = ::pybind11;
 
+static constexpr int MAX_DIM = 3;
+
 namespace {
 
 BufferInfo make_buffer_info(py::object& b) {
@@ -43,7 +45,7 @@ BufferInfo make_buffer_info(py::object& b) {
 //    auto strides_tuple = b.attr("strides").cast<std::tuple<int, int, int>>();
 //    std::vector<py_size_t> strides = {std::get<0>(strides_tuple), std::get<1>(strides_tuple), std::get<2>(strides_tuple)};
 //    void* ptr =  reinterpret_cast<void*>(b.attr("data").attr("ptr").cast<std::size_t>());
-    py_size_t ndim = 3;
+    py_size_t ndim = MAX_DIM;
     py::dict __cuda_array_interface__ = b.attr("__cuda_array_interface__").cast<py::dict>();
     auto shape_tuple =  __cuda_array_interface__["shape"].cast<std::tuple<int, int, int>>();
     std::vector<py_size_t> shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple), std::get<2>(shape_tuple)};
@@ -62,7 +64,7 @@ BufferInfo make_buffer_info(py::object& b) {
     return BufferInfo{ndim, shape, strides, ptr};
 }
 
-void run_computation(const std::array<gt::uint_t, 3>& domain,
+void run_computation(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- set comma = joiner(", ") -%}
 {%- for field in arg_fields -%}
                      {{- comma() }}
