@@ -190,12 +190,12 @@ def test_lower_dimensional_inputs(backend):
         field_1d: gtscript.Field[np.float_, gtscript.K],
     ):
         with computation(PARALLEL), interval(0, 1):
-            field_2d = field_1d + field_3d
+            field_2d = field_1d[1] + field_3d[0, 1, 0]
 
         with computation(PARALLEL):
             with interval(0, 1):
-                tmp = field_2d + field_1d
-                field_3d = tmp[1, 0, 0] + field_1d
+                tmp = field_2d[0, 1] + field_1d[1]
+                field_3d = tmp[1, 0, 0] + field_1d[1]
             with interval(1, None):
                 field_3d = tmp[-1, 0, 0]
 
