@@ -61,6 +61,8 @@
 #include <cmath>
 {%- endif %}
 
+static constexpr int MAX_DIM = 3;
+
 namespace {{ stencil_unique_name }} {
 
 namespace {
@@ -84,7 +86,7 @@ static constexpr gt::uint_t halo_size_k = {{ halo_sizes[2] }};
 template <int Id>
 using storage_info_t =
     gt::storage_traits<backend_t>::storage_info_t<
-        Id, 3,
+        Id, MAX_DIM,
         gt::halo<0, 0, 0 /* not used */>>;
 
 template<typename T, int Id>
@@ -153,7 +155,7 @@ gt::halo_descriptor make_halo_descriptor(gt::uint_t compute_domain_shape) {
             compute_domain_shape};
 }
 
-auto make_grid(const std::array<gt::uint_t, 3>& compute_domain_shape) {
+auto make_grid(const std::array<gt::uint_t, MAX_DIM>& compute_domain_shape) {
     return gt::make_grid(make_halo_descriptor(compute_domain_shape[0]),
                          make_halo_descriptor(compute_domain_shape[1]),
                          axis_t(compute_domain_shape[2]));
@@ -162,20 +164,20 @@ auto make_grid(const std::array<gt::uint_t, 3>& compute_domain_shape) {
 
 template<typename T, int Id, int N>
 data_store_t<T, Id> make_data_store(const BufferInfo& bi,
-                                    const std::array<gt::uint_t, 3>& compute_domain_shape,
+                                    const std::array<gt::uint_t, MAX_DIM>& compute_domain_shape,
                                     const std::array<gt::uint_t, N>& origin,
                                     const char* axes)
 {
     // ptr, dims and strides are "outer domain" (i.e., compute domain + halo
     // region). The halo region is only defined through `make_grid` (and
     // currently, in the storage info)
-    gt::array<gt::uint_t, 3> dims{};
-    gt::array<gt::uint_t, 3> strides{};
+    gt::array<gt::uint_t, MAX_DIM> dims{};
+    gt::array<gt::uint_t, MAX_DIM> strides{};
     T* ptr = static_cast<T*>(bi.ptr);
 
-    const std::array<char, 3> all_axes = {'I', 'J', 'K'};
+    const std::array<char, MAX_DIM> all_axes = {'I', 'J', 'K'};
     gt::uint_t curr_stride = 0, curr_origin = 0;
-    for (int i = 0, j = 0; i < 3; ++i) {
+    for (int i = 0, j = 0; i < MAX_DIM; ++i) {
         if (j < N && axes[j] == all_axes[i]) {
             curr_stride = bi.strides[j];
             curr_origin = origin[j];
@@ -207,7 +209,7 @@ gt::global_parameter<{{ param.dtype }}> {{ param.name }}_param = gt::make_global
 
 
 // Run actual computation
-void run(const std::array<gt::uint_t, 3>& domain,
+void run(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- set comma = joiner(", ") %}
 {%- for field in arg_fields -%}
          {{- comma() }}
