@@ -59,13 +59,6 @@ BufferInfo make_buffer_info(py::object& b) {
     void* ptr = static_cast<void*>(buffer_info.ptr);
 {%- endif %}
 
-    // TODO Is this accurate?
-    // if (ndim != 3) {
-    //     throw std::runtime_error("Wrong number of dimensions [" +
-    //                              std::to_string(ndim) +
-    //                              " != " + std::to_string(3) + "]");
-    // }
-
     return BufferInfo{ndim, shape, strides, ptr};
 }
 

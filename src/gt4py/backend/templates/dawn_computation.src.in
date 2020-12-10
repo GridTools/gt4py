@@ -86,11 +86,6 @@ data_store_t make_data_store(const BufferInfo& bi,
                              const std::array<gt::uint_t, 3>& origin)
 {
     static_assert(std::is_same<T, double>::value, "Only double is supported right now");
-    if (bi.ndim != 3) {
-        throw std::runtime_error("Wrong number of dimensions [" +
-                                 std::to_string(bi.ndim) +
-                                 " != " + std::to_string(3) + "]");
-    }
 
     // ptr, dims and strides are "outer domain" (i.e., compute domain + halo
     // region). The halo region is only defined through `make_grid` (and
