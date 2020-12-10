@@ -410,7 +410,6 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         # Initialize symbols for the generation of references in this stage
         self.stage_symbols = {}
         args = []
-
         for accessor in node.accessors:
             self.stage_symbols[accessor.symbol] = accessor
             arg = {"name": accessor.symbol, "access_type": "in", "extent": None}
