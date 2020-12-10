@@ -16,7 +16,7 @@
 
  ---- Template variables ----
 
-    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int, "axes": [str] }]
     - gt_backend: str
     - module_name: str
     - parameters: [{ "name": str, "dtype": str }]
@@ -59,11 +59,12 @@ BufferInfo make_buffer_info(py::object& b) {
     void* ptr = static_cast<void*>(buffer_info.ptr);
 {%- endif %}
 
-    if (ndim != 3) {
-        throw std::runtime_error("Wrong number of dimensions [" +
-                                 std::to_string(ndim) +
-                                 " != " + std::to_string(3) + "]");
-    }
+    // TODO Is this accurate?
+    // if (ndim != 3) {
+    //     throw std::runtime_error("Wrong number of dimensions [" +
+    //                              std::to_string(ndim) +
+    //                              " != " + std::to_string(3) + "]");
+    // }
 
     return BufferInfo{ndim, shape, strides, ptr};
 }
@@ -72,7 +73,7 @@ void run_computation(const std::array<gt::uint_t, 3>& domain,
 {%- set comma = joiner(", ") -%}
 {%- for field in arg_fields -%}
                      {{- comma() }}
-                     py::object {{ field.name }}, const std::array<gt::uint_t, 3>& {{ field.name }}_origin
+                     py::object {{ field.name }}, const std::array<gt::uint_t, {{ field.axes | length }}>& {{ field.name }}_origin
 {%- endfor -%}
 {%- for param in parameters -%}
                      {{- comma() }}

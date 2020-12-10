@@ -16,7 +16,7 @@
 
  ---- Template variables ----
 
-    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int, "axes": [str] }]
     - constants: { name:str : str }
     - gt_backend: str
     - halo_sizes: [int]
@@ -160,16 +160,17 @@ auto make_grid(const std::array<gt::uint_t, 3>& compute_domain_shape) {
 }
 
 
-template<typename T, int Id>
+template<typename T, int Id, int N>
 data_store_t<T, Id> make_data_store(const BufferInfo& bi,
                                     const std::array<gt::uint_t, 3>& compute_domain_shape,
-                                    const std::array<gt::uint_t, 3>& origin)
+                                    const std::array<gt::uint_t, N>& origin,
+                                    const char* axes)
 {
-    if (bi.ndim != 3) {
-        throw std::runtime_error("Wrong number of dimensions [" +
-                                 std::to_string(bi.ndim) +
-                                 " != " + std::to_string(3) + "]");
-    }
+    // if (bi.ndim != 3) {
+    //    throw std::runtime_error("Wrong number of dimensions [" +
+    //                              std::to_string(bi.ndim) +
+    //                              " != " + std::to_string(3) + "]");
+    // }
 
     // ptr, dims and strides are "outer domain" (i.e., compute domain + halo
     // region). The halo region is only defined through `make_grid` (and
@@ -177,10 +178,20 @@ data_store_t<T, Id> make_data_store(const BufferInfo& bi,
     gt::array<gt::uint_t, 3> dims{};
     gt::array<gt::uint_t, 3> strides{};
     T* ptr = static_cast<T*>(bi.ptr);
-    for (int i = 0; i < 3; ++i) {
-        strides[i] = bi.strides[i] / sizeof(T);
-        ptr += strides[i] * origin[i];
-        dims[i] = compute_domain_shape[i]+2*origin[i];
+
+    const std::array<char, 3> all_axes = {'I', 'J', 'K'};
+    gt::uint_t curr_stride = 0, curr_origin = 0;
+    for (int i = 0, j = 0; i < 3; ++i) {
+        if (j < N && axes[j] == all_axes[i]) {
+            curr_stride = bi.strides[j];
+            curr_origin = origin[j];
+            ++j;
+        } else {
+            curr_origin = 0;
+        }
+        strides[i] = curr_stride / sizeof(T);
+        dims[i] = compute_domain_shape[i] + 2 * curr_origin;
+        ptr += strides[i] * curr_origin;
     }
     return data_store_t<T, Id>{storage_info_t<Id>{dims, strides}, ptr,
 {%- if gt_backend == "cuda" %}
@@ -206,7 +217,7 @@ void run(const std::array<gt::uint_t, 3>& domain,
 {%- set comma = joiner(", ") %}
 {%- for field in arg_fields -%}
          {{- comma() }}
-         const BufferInfo& bi_{{ field.name }} {{- comma() -}} const std::array<gt::uint_t, 3>& {{ field.name }}_origin
+         const BufferInfo& bi_{{ field.name }} {{- comma() -}} const std::array<gt::uint_t, {{ field.axes | length }}>& {{ field.name }}_origin
 {%- endfor %}
 {%- for param in parameters %}
          {{- comma() }}
@@ -232,7 +243,7 @@ void run(const std::array<gt::uint_t, 3>& domain,
 #}
     // Initialize data stores from input buffers
 {%- for field in arg_fields %}
-    auto ds_{{ field.name }} = make_data_store<{{ field.dtype }}, {{ field.layout_id }}>(bi_{{ field.name }}, domain, {{ field.name }}_origin);
+    auto ds_{{ field.name }} = make_data_store<{{ field.dtype }}, {{ field.layout_id }}, {{ field.axes | length }}>(bi_{{ field.name }}, domain, {{ field.name }}_origin, "{{ "".join(field.axes) }}");
 {%- endfor %}
 
     // Update global parameters

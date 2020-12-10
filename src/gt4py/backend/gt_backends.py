@@ -54,9 +54,10 @@ def make_x86_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
 def x86_is_compatible_layout(field: "Storage") -> bool:
     stride = 0
     layout_map = make_x86_layout_map(field.mask)
-    if len(field.strides) < len(layout_map):
+    flattened_layout = [index for index in layout_map if index is not None]
+    if len(field.strides) < len(flattened_layout):
         return False
-    for dim in reversed(np.argsort(layout_map)):
+    for dim in reversed(np.argsort(flattened_layout)):
         if field.strides[dim] < stride:
             return False
         stride = field.strides[dim]
@@ -459,6 +460,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 field_attributes = {
                     "name": field_decl.name,
                     "dtype": self._make_cpp_type(field_decl.data_type),
+                    "axes": field_decl.axes,
                 }
                 if field_decl.is_api:
                     if field_decl.layout_id not in storage_ids:
