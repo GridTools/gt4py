@@ -11,6 +11,7 @@ from gt4py.gtc.gtir import (
     FieldDecl,
     FieldIfStmt,
     Interval,
+    Literal,
     ParAssignStmt,
     Stencil,
     Stmt,
@@ -23,6 +24,10 @@ class DummyExpr(Expr):
 
     dtype: DataType = DataType.FLOAT32
     kind: ExprKind = ExprKind.FIELD
+
+
+def make_Literal(value: str, dtype: DataType):
+    return Literal(value=value, dtype=dtype)
 
 
 class FieldAccessBuilder:

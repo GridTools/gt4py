@@ -410,7 +410,7 @@ class TernaryOp(GenericNode, Generic[ExprT]):
 def ternary_op_dtype_propagation(*, strict: bool):
     def _impl(cls, values):
         common_dtype = verify_and_get_common_dtype(
-            cls, [values["true_expr"], values["false_expr"]]
+            cls, [values["true_expr"], values["false_expr"]], strict=strict
         )
         if common_dtype:
             values["dtype"] = common_dtype
