@@ -208,20 +208,22 @@ def verify_condition_is_boolean(parent_node_cls, cond: Expr) -> Expr:
     return cond
 
 
-def verify_and_get_common_dtype(node_cls, values: List[Expr]) -> DataType:
+def verify_and_get_common_dtype(node_cls, values: List[Expr], *, strict: bool = True) -> DataType:
     assert len(values) > 0
     if all([v.dtype for v in values]):
         dtype = values[0].dtype
-        if all([v.dtype == dtype for v in values]):
-            return dtype
-        elif all([v.dtype == DataType.FLOAT64 or v.dtype == DataType.INT64 for v in values]):
-            # TODO remove this is casting INT64 to FLOAT64 we should do this in a pass
-            return DataType.FLOAT64
+        if strict:
+            if all([v.dtype == dtype for v in values]):
+                return dtype
+            else:
+                print([v.dtype for v in values])
+                raise ValueError(
+                    "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
+                    + ", ".join(v.dtype.name for v in values)
+                )
         else:
-            raise ValueError(
-                "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
-                + ", ".join(v.dtype.name for v in values)
-            )
+            # upcasting
+            return max([v.dtype for v in values])
     else:
         return None
 
@@ -348,8 +350,16 @@ class BinaryOp(GenericNode, Generic[ExprT]):
     right: ExprT
 
     @root_validator(pre=True)
-    def dtype_propagation_and_check(cls, values):
-        common_dtype = verify_and_get_common_dtype(cls, [values["left"], values["right"]])
+    def kind_propagation(cls, values):
+        values["kind"] = compute_kind([values["left"], values["right"]])
+        return values
+
+
+def binary_op_dtype_propagation(*, strict: bool):
+    def _impl(cls, values):
+        common_dtype = verify_and_get_common_dtype(
+            cls, [values["left"], values["right"]], strict=strict
+        )
 
         if common_dtype:
             if isinstance(values["op"], ArithmeticOperator):
@@ -369,10 +379,7 @@ class BinaryOp(GenericNode, Generic[ExprT]):
 
         return values
 
-    @root_validator(pre=True)
-    def kind_propagation(cls, values):
-        values["kind"] = compute_kind([values["left"], values["right"]])
-        return values
+    return root_validator(pre=True, allow_reuse=True)(_impl)
 
 
 class TernaryOp(GenericNode, Generic[ExprT]):
@@ -395,7 +402,13 @@ class TernaryOp(GenericNode, Generic[ExprT]):
         return verify_condition_is_boolean(cls, cond)
 
     @root_validator(pre=True)
-    def dtype_propagation_and_check(cls, values):
+    def kind_propagation(cls, values):
+        values["kind"] = compute_kind([values["true_expr"], values["false_expr"]])
+        return values
+
+
+def ternary_op_dtype_propagation(*, strict: bool):
+    def _impl(cls, values):
         common_dtype = verify_and_get_common_dtype(
             cls, [values["true_expr"], values["false_expr"]]
         )
@@ -403,10 +416,7 @@ class TernaryOp(GenericNode, Generic[ExprT]):
             values["dtype"] = common_dtype
         return values
 
-    @root_validator(pre=True)
-    def kind_propagation(cls, values):
-        values["kind"] = compute_kind([values["true_expr"], values["false_expr"]])
-        return values
+    return root_validator(pre=True, allow_reuse=True)(_impl)
 
 
 class Cast(GenericNode, Generic[ExprT]):
@@ -436,14 +446,17 @@ class NativeFuncCall(GenericNode, Generic[ExprT]):
         return values
 
     @root_validator(pre=True)
-    def dtype_propagation_and_check(cls, values):
+    def kind_propagation(cls, values):
+        values["kind"] = compute_kind(values["args"])
+        return values
+
+
+def native_func_call_dtype_propagation(*, strict: bool = True):
+    def _impl(cls, values):
         # assumes all NativeFunction args have a common dtype
-        common_dtype = verify_and_get_common_dtype(cls, values["args"])
+        common_dtype = verify_and_get_common_dtype(cls, values["args"], strict=strict)
         if common_dtype:
             values["dtype"] = common_dtype
         return values
 
-    @root_validator(pre=True)
-    def kind_propagation(cls, values):
-        values["kind"] = compute_kind(values["args"])
-        return values
+    return root_validator(pre=True, allow_reuse=True)(_impl)

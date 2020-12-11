@@ -42,11 +42,15 @@ class UnaryOp(Expr, common.UnaryOp[Expr]):
 
 
 class BinaryOp(Expr, common.BinaryOp[Expr]):
+    dtype_propagation = common.binary_op_dtype_propagation(strict=True)
     pass
 
 
 class TernaryOp(Expr, common.TernaryOp[Expr]):
-    pass
+    _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
+
+
+# TODO test dtype propagation in upcasting mode
 
 
 @pytest.mark.parametrize(
