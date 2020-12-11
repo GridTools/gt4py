@@ -204,11 +204,16 @@ def test_lower_dimensional_inputs(backend):
     dtype = float
 
     field_3d = gt_storage.ones(backend, default_origin, full_shape, dtype, mask=None)
+    assert field_3d.shape == full_shape[:]
+
     field_2d = gt_storage.ones(
         backend, default_origin[:-1], full_shape[:-1], dtype, mask=(True, True, False)
     )
+    assert field_2d.shape == full_shape[:-1]
+
     field_1d = gt_storage.zeros(
         backend, (default_origin[-1],), (full_shape[-1],), dtype, mask=(False, False, True)
     )
+    assert field_1d.shape == (full_shape[-1],)
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0))
