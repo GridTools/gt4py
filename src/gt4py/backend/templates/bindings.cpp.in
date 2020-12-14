@@ -16,7 +16,7 @@
 
  ---- Template variables ----
 
-    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int, "axes": [str] }]
+    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int, "selector": [bool], "naxes": int }]
     - gt_backend: str
     - module_name: str
     - parameters: [{ "name": str, "dtype": str }]
@@ -68,7 +68,7 @@ void run_computation(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- set comma = joiner(", ") -%}
 {%- for field in arg_fields -%}
                      {{- comma() }}
-                     py::object {{ field.name }}, const std::array<gt::uint_t, {{ field.axes | length }}>& {{ field.name }}_origin
+                     py::object {{ field.name }}, const std::array<gt::uint_t, {{ field.naxes }}>& {{ field.name }}_origin
 {%- endfor -%}
 {%- for param in parameters -%}
                      {{- comma() }}
