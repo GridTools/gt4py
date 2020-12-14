@@ -113,10 +113,20 @@ class GTIRToOIR(eve.NodeTranslator):
 
         return decls_and_h_execs
 
-    def visit_ScalarIfStmt(self, node: gtir.ScalarIfStmt, **kwargs):
-        # TODO Not sure if we should use a mask as well or generate an IfStmt with nesting.
-        # Needs discussion
-        raise NotImplementedError()
+    # For now we represent ScalarIf (and FieldIf) both as masks on the HorizontalExecution.
+    # This is not meant to be set in stone...
+    def visit_ScalarIfStmt(self, node: gtir.ScalarIfStmt, *, mask: oir.Expr = None, **kwargs):
+        new_mask = self.visit(node.cond)
+        if mask:
+            new_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=new_mask)
+
+        decls_and_h_execs = ListTuple([], [])
+        decls_and_h_execs += self.visit(node.true_branch.body, mask=new_mask)
+        if node.false_branch:
+            decls_and_h_execs += self.visit(
+                node.false_branch.body, mask=oir.UnaryOp(op=UnaryOperator.NOT, expr=new_mask)
+            )
+        return decls_and_h_execs
 
     def visit_Interval(self, node: gtir.Interval, **kwargs):
         return oir.Interval(
@@ -135,6 +145,9 @@ class GTIRToOIR(eve.NodeTranslator):
         # TODO review this
         for temp in node.temporaries:
             decls.append(oir.Temporary(name=temp.name, dtype=temp.dtype))
+
+        debug(decls)
+        debug(h_execs)
         return oir.VerticalLoop(
             interval=self.visit(node.interval),
             loop_order=node.loop_order,
