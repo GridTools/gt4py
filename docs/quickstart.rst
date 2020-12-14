@@ -75,7 +75,7 @@ and ``field_c``) to be combined:
         for i in range(nx):
             for j in range(ny):
                 for k in range(nz):
-	                  result[i, j, k] = field_a[i, j, k] - (1 - alpha) * (
+	            result[i, j, k] = field_a[i, j, k] - (1 - alpha) * (
                         field_b[i, j, k] - weight * field_c[i, j, k]
                     )
 
@@ -311,7 +311,7 @@ the ``return`` statement. In the above example, ``v`` is not modified. However, 
             x, y, z = ddxyz(v, h)
             lap = x + y + z
 
-Functions can be used only for code inside of computation/interval blocks. There is not overhead attached
+Functions can be used only for code inside of computation/interval blocks. There is no overhead attached
 to function calls since they are inlined in the generated code.
 
 -------------------------

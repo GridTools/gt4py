@@ -29,7 +29,7 @@ Note how similar the GTScript representation is to the mathematical notation:
 |                            A[0, 1, 0] + A[0, -1, 0] )  |                                       |
 +--------------------------------------------------------+---------------------------------------+
 
-By default the generated code uses the `GridTools<https://github.com/GridTools/gridtools>`
+By default the generated code uses the `GridTools <https://github.com/GridTools/gridtools>`_
 C++ library to target typical modern
 multi-core, multi-node and GPU accelerated HPC architectures, however GT4Py can
 be extended to use other frameworks. GridTools is a C++ framework
@@ -61,6 +61,11 @@ Features:
 .. commented_out The :doc:`Quick Start Guide <quickstart>` contains some simple examples
 .. commented_out of how to use GT4Py to define and run your own stencils. It is probably worth
 .. commented_out to take a look there before going into the reference documentation.
+   
+.. toctree::
+   :hidden:
+
+   self
 
 .. toctree::
    :maxdepth: 2
