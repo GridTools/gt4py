@@ -119,6 +119,7 @@ class StencilBuilder:
                     interval=Interval(start=AxisBound.start(), end=AxisBound.end()),
                     loop_order=LoopOrder.FORWARD,
                     body=[],
+                    temporaries=[],
                 )
             )
 

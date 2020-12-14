@@ -1,9 +1,10 @@
-from typing import Dict, List, Sequence
+from typing import Dict, List, Sequence, Set
 
 import eve
 from devtools import debug  # noqa: F401
 
 from gt4py.gtc import common, oir, utils
+from gt4py.gtc.common import CartesianOffset
 from gt4py.gtc.gtcpp import gtcpp
 from gt4py.gtc.gtcpp.gtcpp import GTParamList
 
@@ -26,13 +27,13 @@ def _extract_accessors(node: eve.Node) -> GTParamList:
         )
     )
 
-    inout_fields: List[str] = (
+    inout_fields: Set[str] = (
         node.iter_tree()
         .if_isinstance(gtcpp.AssignStmt)
         .getattr("left")
         .if_isinstance(gtcpp.AccessorRef)
         .getattr("name")
-        .unique()
+        .to_set()
     )
 
     return [
@@ -50,8 +51,28 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_Literal(self, node: oir.Literal, **kwargs):
         return gtcpp.Literal(value=node.value, dtype=node.dtype)
 
+    def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs):
+        return gtcpp.UnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs))
+
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs):
-        return gtcpp.BinaryOp(op=node.op, left=self.visit(node.left), right=self.visit(node.right))
+        return gtcpp.BinaryOp(
+            op=node.op,
+            left=self.visit(node.left, **kwargs),
+            right=self.visit(node.right, **kwargs),
+        )
+
+    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs):
+        return gtcpp.TernaryOp(
+            cond=self.visit(node.cond, **kwargs),
+            true_expr=self.visit(node.true_expr, **kwargs),
+            false_expr=self.visit(node.false_expr, **kwargs),
+        )
+
+    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs):
+        return gtcpp.NativeFuncCall(func=node.func, args=self.visit(node.args))
+
+    def visit_Cast(self, node: oir.Cast, **kwargs):
+        return gtcpp.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 
     def visit_Temporary(self, node: oir.Temporary, **kwargs):
         return gtcpp.Temporary(name=node.name, dtype=node.dtype)
@@ -61,6 +82,17 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs):
         return gtcpp.AccessorRef(name=node.name, offset=self.visit(node.offset), dtype=node.dtype)
+
+    def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs):
+        assert "stencil_symtable" in kwargs
+        if node.name in kwargs["stencil_symtable"]:
+            symbol = kwargs["stencil_symtable"][node.name]
+            assert isinstance(symbol, oir.ScalarDecl)
+            return gtcpp.AccessorRef(
+                name=symbol.name, offset=CartesianOffset.zero(), dtype=symbol.dtype
+            )
+        else:
+            return gtcpp.ScalarAccess(name=node.name, dtype=node.dtype)
 
     def visit_AxisBound(self, node: oir.AxisBound, *, is_start: bool, **kwargs):
         if node.level == common.LevelMarker.START:
@@ -85,12 +117,18 @@ class OIRToGTCpp(eve.NodeTranslator):
         return utils.ListTuple(*map(utils.flatten_list, zip(*self.visit(node, **kwargs))))
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
-        return gtcpp.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
+        assert "stencil_symtable" in kwargs
+        return gtcpp.AssignStmt(
+            left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
+        )
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, interval, **kwargs):
-        apply_method = gtcpp.GTApplyMethod(
-            interval=self.visit(interval), body=self.visit(node.body)
-        )
+        assert "stencil_symtable" in kwargs
+        body = self.visit(node.body, **kwargs)
+        mask = self.visit(node.mask, **kwargs)
+        if mask:
+            body = [gtcpp.IfStmt(cond=mask, true_branch=gtcpp.BlockStmt(body=body))]
+        apply_method = gtcpp.GTApplyMethod(interval=self.visit(interval), body=body)
         accessors = _extract_accessors(apply_method)
         stage_args = [gtcpp.ParamArg(name=acc.name) for acc in accessors]
         return (
@@ -103,7 +141,9 @@ class OIRToGTCpp(eve.NodeTranslator):
         )
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs):
-        functors, stages = self.tuple_visit(node.horizontal_executions, interval=node.interval)
+        functors, stages = self.tuple_visit(
+            node.horizontal_executions, interval=node.interval, **kwargs
+        )
         assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
         temporaries = self.visit(node.declarations)
         caches = []  # TODO
@@ -113,15 +153,22 @@ class OIRToGTCpp(eve.NodeTranslator):
             gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches),
         )
 
-    def visit_Decl(self, node: oir.Decl, **kwargs):
-        return gtcpp.ParamArg(name=node.name)
+    def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs):
+        return gtcpp.FieldDecl(name=node.name, dtype=node.dtype)
+
+    def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs):
+        return gtcpp.GlobalParamDecl(name=node.name, dtype=node.dtype)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
-        functors, temporaries, multi_stages = self.tuple_visit(node.vertical_loops)
-        fields = set(
-            [arg.name for mss in multi_stages for stage in mss.stages for arg in stage.args]
+        functors, temporaries, multi_stages = self.tuple_visit(
+            node.vertical_loops, stencil_symtable=node.symtable_, **kwargs
         )
-        gt_comp_parameters = [gtcpp.ParamArg(name=f) for f in fields]  # TODO
+
+        # TODO think about this pattern, just scanning of used parameters is probably wrong...
+        api_fields = set(
+            [arg.name for mss in multi_stages for stage in mss.stages for arg in stage.args]
+        ) - set(t.name for t in temporaries)
+        gt_comp_parameters = [gtcpp.ParamArg(name=f) for f in api_fields]  # TODO
         gt_computation = gtcpp.GTComputation(
             name=node.name,
             parameters=gt_comp_parameters,

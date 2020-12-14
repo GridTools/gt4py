@@ -1,17 +1,24 @@
 import re
 from pathlib import Path
-from typing import Literal, Pattern, Union
+from typing import Pattern, Union
 
 import pytest
 import setuptools
 from devtools import debug
 
 from gt4py import config, gt2_src_manager  # TODO must not include gt4py package or ok for test?
-from gt4py.gtc.gtcpp.gtcpp import AssignStmt, GTAccessor, GTApplyMethod, GTExtent, Intent, Program
+from gt4py.gtc.common import DataType
+from gt4py.gtc.gtcpp.gtcpp import GTAccessor, GTApplyMethod, GTExtent, Intent, Literal, Program
 from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 
-from .gtcpp_utils import AccessorRefBuilder, GTApplyMethodBuilder, GTFunctorBuilder, ProgramBuilder
+from .gtcpp_utils import (
+    AssignStmtBuilder,
+    GTApplyMethodBuilder,
+    GTFunctorBuilder,
+    IfStmtBuilder,
+    ProgramBuilder,
+)
 
 
 if not gt2_src_manager.has_gt_sources() and not gt2_src_manager.install_gt_sources():
@@ -90,7 +97,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
             .build(),
             r"void\s*apply\(",
         ),
-        (ProgramBuilder("test").add_parameter("my_param").build(), r"my_param"),
+        (ProgramBuilder("test").add_parameter("my_param", DataType.FLOAT64).build(), r"my_param"),
         # TODO the following test is creating invalid IR (we could check by validating symbols)
         # (
         #     ProgramBuilder("test")
@@ -133,15 +140,14 @@ def _embed_apply_method_in_program(apply_method: GTApplyMethod):
     [
         (GTApplyMethodBuilder().build(), r"apply"),
         (
+            GTApplyMethodBuilder().add_stmt(AssignStmtBuilder("a", "b").build()).build(),
+            r"a.*=.*b",
+        ),
+        (
             GTApplyMethodBuilder()
-            .add_stmt(
-                AssignStmt(
-                    left=AccessorRefBuilder("a").build(),
-                    right=AccessorRefBuilder(name="b").build(),
-                )
-            )
+            .add_stmt(IfStmtBuilder().true_branch(AssignStmtBuilder().build()).build())
             .build(),
-            r"a.*=b.*",
+            r"if",
         ),
     ],
 )
@@ -149,7 +155,7 @@ def test_apply_method_compilation_succeeds(tmp_path, apply_method, expected_rege
     # This test could be improved by just compiling the body
     # and introducing fakes for `eval` and `gridtools::accessor`.
     assert isinstance(apply_method, GTApplyMethod)
-    apply_method_code = GTCppCodegen().visit(apply_method)
+    apply_method_code = GTCppCodegen().visit(apply_method, offset_limit=2)
     print(apply_method_code)
     match(apply_method_code, expected_regex)
 

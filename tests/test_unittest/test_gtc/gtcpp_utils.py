@@ -3,6 +3,8 @@ from typing import List
 from gt4py.gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
 from gt4py.gtc.gtcpp.gtcpp import (
     AccessorRef,
+    AssignStmt,
+    FieldDecl,
     GTAccessor,
     GTApplyMethod,
     GTComputation,
@@ -12,6 +14,8 @@ from gt4py.gtc.gtcpp.gtcpp import (
     GTMultiStage,
     GTParamList,
     GTStage,
+    IfStmt,
+    Literal,
     ParamArg,
     Program,
     Stmt,
@@ -39,6 +43,15 @@ class AccessorRefBuilder:
         )
 
 
+class AssignStmtBuilder:
+    def __init__(self, left: str = "left", right: str = "right") -> None:
+        self._left = AccessorRefBuilder(left).build()
+        self._right = AccessorRefBuilder(right).build()
+
+    def build(self) -> AssignStmt:
+        return AssignStmt(left=self._left, right=self._right)
+
+
 class GTIntervalBuilder:
     def __init__(self) -> None:
         self._from_level = GTLevel(splitter=0, offset=1)
@@ -59,6 +72,22 @@ class GTApplyMethodBuilder:
 
     def build(self) -> GTApplyMethod:
         return GTApplyMethod(interval=self._interval, body=self._body)
+
+
+class IfStmtBuilder:
+    def __init__(self) -> None:
+        self._cond = Literal(value="true", dtype=DataType.BOOL)
+        self._true_branch = None
+        self._false_branch = None
+
+    def true_branch(self, stmt: Stmt) -> "IfStmtBuilder":
+        self._true_branch = stmt
+        return self
+
+    def build(self) -> IfStmt:
+        return IfStmt(
+            cond=self._cond, true_branch=self._true_branch, false_branch=self._false_branch
+        )
 
 
 class GTFunctorBuilder:
@@ -133,8 +162,8 @@ class ProgramBuilder:
         self._functors.append(functor)
         return self
 
-    def add_parameter(self, name: str) -> "ProgramBuilder":
-        self._parameters.append(ParamArg(name=name))
+    def add_parameter(self, name: str, dtype: DataType) -> "ProgramBuilder":
+        self._parameters.append(FieldDecl(name=name, dtype=dtype))
         return self
 
     def gt_computation(self, gt_computation: GTComputation) -> "ProgramBuilder":

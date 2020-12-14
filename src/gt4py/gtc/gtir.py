@@ -205,6 +205,7 @@ class Interval(LocNode):
 class VerticalLoop(LocNode):
     interval: Interval
     loop_order: common.LoopOrder
+    temporaries: List[FieldDecl]
     body: List[Stmt]
 
 
@@ -293,8 +294,7 @@ class FieldsMetadataBuilder:
 
 
 class Stencil(LocNode, SymbolTableTrait):
-    # TODO remove `__main__.`` from name and use default SymbolName constraint
-    name: SymbolName.constrained(r"[a-zA-Z_][\w\.]*")
+    name: Str
     # TODO deal with gtscript externals
     params: List[Decl]
     vertical_loops: List[VerticalLoop]

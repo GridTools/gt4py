@@ -30,6 +30,7 @@ def copies_vertical_loop() -> Iterator[gtir.VerticalLoop]:
                 right=gtir.FieldAccess(name="a", offset=gtir.CartesianOffset(i=2, j=1, k=0)),
             ),
         ],
+        temporaries=[],
     )
 
 

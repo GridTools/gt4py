@@ -95,6 +95,7 @@ def test_vertical_loop(naive_codegen, loop_order):
                 right=FieldAccess.centered(name="b"),
             )
         ],
+        temporaries=[],
     )
 
     source_tree = ast_parse(naive_codegen.apply(vertical_loop))

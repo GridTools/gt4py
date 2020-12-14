@@ -13,5 +13,8 @@ class GTIRSetDtype(NodeTranslator):
             name=node.name, offset=node.offset, dtype=symtable[node.name].dtype
         )
 
+    def visit_ScalarAccess(self, node: gtir.ScalarAccess, *, symtable, **kwargs):
+        return gtir.ScalarAccess(name=node.name, dtype=symtable[node.name].dtype)
+
     def visit_Stencil(self, node: gtir.Stencil, **kwargs):
         return self.generic_visit(node, symtable=node.symtable_)

@@ -23,7 +23,7 @@ e.g. stage merging, staged computations to compute-on-the-fly, cache annotations
 
 from typing import List, Optional, Union
 
-from eve import Node, SymbolName
+from eve import Node, Str, SymbolName, SymbolTableTrait
 from pydantic import validator
 
 from gt4py.gtc import common
@@ -169,8 +169,7 @@ class VerticalLoop(LocNode):
     # caches: List[Union[IJCache,KCache]]
 
 
-class Stencil(LocNode):
-    # TODO remove `__main__.`` from name and use default SymbolName constraint
-    name: SymbolName.constrained(r"[a-zA-Z_][\w\.]*")
+class Stencil(LocNode, SymbolTableTrait):
+    name: Str
     params: List[Decl]
     vertical_loops: List[VerticalLoop]

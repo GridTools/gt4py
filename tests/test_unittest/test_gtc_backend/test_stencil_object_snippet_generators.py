@@ -23,7 +23,6 @@ from gt4py.gtc.gtir import (
     FieldsMetadata,
     ParAssignStmt,
     Stencil,
-    VerticalInterval,
     VerticalLoop,
 )
 

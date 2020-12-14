@@ -49,6 +49,7 @@ def test_copy_shift(shift_offset: Tuple[CartesianOffset, FieldBoundary]) -> None
                         right=FieldAccess(name="b", offset=offset),
                     )
                 ],
+                temporaries=[],
             )
         ],
     )

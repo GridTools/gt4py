@@ -2,6 +2,7 @@ from types import MappingProxyType
 from typing import ClassVar, Dict, List, Mapping, Union
 
 from gt4py.gtc import common, gtir
+from gt4py.gtc.common import ExprKind
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
     ArgumentInfo,
@@ -22,6 +23,9 @@ from gt4py.ir.nodes import (
     NativeFunction,
     ScalarLiteral,
     StencilDefinition,
+    TernaryOpExpr,
+    UnaryOperator,
+    UnaryOpExpr,
     VarDecl,
     VarRef,
 )
@@ -75,6 +79,19 @@ class DefIRToGTIR(IRNodeVisitor):
         }
     )
 
+    GT4PY_UNARYOP_TO_GTIR: ClassVar[
+        Mapping[
+            UnaryOperator,
+            common.UnaryOperator,
+        ]
+    ] = MappingProxyType(
+        {
+            UnaryOperator.POS: common.UnaryOperator.POS,
+            UnaryOperator.NEG: common.UnaryOperator.NEG,
+            UnaryOperator.NOT: common.UnaryOperator.NOT,
+        }
+    )
+
     GT4PY_NATIVE_FUNC_TO_GTIR: ClassVar[
         Mapping[
             NativeFunction,
@@ -108,10 +125,14 @@ class DefIRToGTIR(IRNodeVisitor):
     def apply(cls, root, **kwargs):
         return cls().visit(root)
 
+    def __init__(self):
+        self._scalar_params = None
+
     def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
-        vertical_loops = [self.visit(c) for c in node.computations]
         field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
+        self._scalar_params = scalar_params
+        vertical_loops = [self.visit(c) for c in node.computations]
         return gtir.Stencil(
             name=node.name.split(".")[
                 -1
@@ -129,31 +150,52 @@ class DefIRToGTIR(IRNodeVisitor):
         return all_params[node.name]
 
     def visit_ComputationBlock(self, node: ComputationBlock) -> List[gtir.VerticalLoop]:
-        stmts = [s for s in self.visit(node.body)]
+        stmts = []
+        temporaries = []
+        for s in node.body.stmts:
+            # FieldDecl or VarDecls in the body are temporaries
+            if isinstance(s, FieldDecl) or isinstance(s, VarDecl):
+                dtype = common.DataType(int(s.data_type.value))
+                if dtype == common.DataType.DEFAULT:
+                    dtype = common.DataType.FLOAT64  # TODO properly fix
+                temporaries.append(gtir.FieldDecl(name=s.name, dtype=dtype))
+            else:
+                stmts.append(self.visit(s))
         start, end = self.visit(node.interval)
         interval = gtir.Interval(start=start, end=end)
         return gtir.VerticalLoop(
             interval=interval,
             loop_order=self.GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER[node.iteration_order],
             body=stmts,
+            temporaries=temporaries,
         )
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
         return [self.visit(s) for s in node.stmts]
 
     def visit_Assign(self, node: Assign) -> gtir.ParAssignStmt:
-        assert isinstance(node.target, FieldRef)
+        assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
         left = self.visit(node.target)
         return gtir.ParAssignStmt(left=left, right=self.visit(node.value))
 
     def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
         return gtir.Literal(value=str(node.value), dtype=common.DataType(node.data_type.value))
 
+    def visit_UnaryOpExpr(self, node: UnaryOpExpr) -> gtir.UnaryOp:
+        return gtir.UnaryOp(op=self.GT4PY_UNARYOP_TO_GTIR[node.op], expr=self.visit(node.arg))
+
     def visit_BinOpExpr(self, node: BinOpExpr) -> gtir.BinaryOp:
         return gtir.BinaryOp(
             left=self.visit(node.lhs),
             right=self.visit(node.rhs),
             op=self.GT4PY_OP_TO_GTIR_OP[node.op],
+        )
+
+    def visit_TernaryOpExpr(self, node: TernaryOpExpr) -> gtir.TernaryOp:
+        return gtir.TernaryOp(
+            cond=self.visit(node.condition),
+            true_expr=self.visit(node.then_expr),
+            false_expr=self.visit(node.else_expr),
         )
 
     def visit_Cast(self, node: Cast) -> gtir.Cast:
@@ -169,17 +211,32 @@ class DefIRToGTIR(IRNodeVisitor):
         return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))
 
     def visit_If(self, node: If):
-        return gtir.FieldIfStmt(
-            cond=self.visit(node.condition),
-            true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
-            false_branch=gtir.BlockStmt(body=self.visit(node.else_body)),
-        )
+        cond = self.visit(node.condition)
+        if cond.kind == ExprKind.FIELD:
+            return gtir.FieldIfStmt(
+                cond=cond,
+                true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
+                false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
+                if node.else_body
+                else None,
+            )
+        else:
+            return gtir.ScalarIfStmt(
+                cond=cond,
+                true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
+                false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
+                if node.else_body
+                else None,
+            )
 
-    def visit_VarRef(self, node: VarRef):
-        return gtir.ScalarAccess(
-            name=node.name,
-            # TODO index
-        )
+    def visit_VarRef(self, node: VarRef, **kwargs):
+        # TODO seems wrong, but check the DefinitionIR for
+        # test_code_generation.py::test_generation_cpu[native_functions,
+        # there we have a FieldAccess on a VarDecl
+        if node.name in self._scalar_params:
+            return gtir.ScalarAccess(name=node.name)
+        else:
+            return gtir.FieldAccess(name=node.name, offset=gtir.CartesianOffset.zero())
 
     def visit_AxisInterval(self, node: AxisInterval):
         return self.visit(node.start), self.visit(node.end)
