@@ -609,7 +609,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
     def make_args_data(
         definition_ir: gt_ir.StencilDefinition, sir_field_info: Dict[str, Any]
     ) -> Dict[str, Any]:
-        data: Dict[str, Any] = {"field_info": {}, "parameter_info": {}, "unreferenced": {}}
+        data: Dict[str, Any] = {"field_info": {}, "parameter_info": {}, "unreferenced": []}
 
         fields = {item.name: item for item in definition_ir.api_fields}
         parameters = {item.name: item for item in definition_ir.parameters}
