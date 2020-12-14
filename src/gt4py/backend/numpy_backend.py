@@ -14,8 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import copy
 import textwrap
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -23,6 +24,9 @@ from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.utils import text as gt_text
+from gt4py.utils.attrib import Set as SetOf
+from gt4py.utils.attrib import attribkwclass as attribclass
+from gt4py.utils.attrib import attribute
 
 from .python_generator import PythonSourceGenerator
 
@@ -30,6 +34,36 @@ from .python_generator import PythonSourceGenerator
 if TYPE_CHECKING:
     from gt4py.stencil_builder import StencilBuilder
     from gt4py.storage.storage import Storage
+
+
+@attribclass
+class ShapedExpr(gt_ir.Node):
+    axes = attribute(of=SetOf[str])
+    expr = attribute(of=gt_ir.Expr)
+
+
+class NumpyIR(gt_ir.IRNodeMapper):
+    @classmethod
+    def apply(cls, impl_ir: gt_ir.StencilImplementation):
+        new_ir = copy.deepcopy(impl_ir)
+        node = cls(new_ir.fields).visit(new_ir)
+        return node
+
+    def __init__(self, fields: Dict[str, gt_ir.FieldDecl]):
+        self.fields = fields
+
+    def visit_FieldRef(self, path: tuple, node_name: str, node: gt_ir.FieldRef) -> ShapedExpr:
+        return True, ShapedExpr(axes=set(self.fields[node.name].axes), expr=node)
+
+    def visit_Expr(self, path: tuple, node_name: str, node: gt_ir.Expr) -> ShapedExpr:
+        changed, new_node = self.generic_visit(path, node_name, node)
+
+        axes = set()
+        for key, value in gt_ir.nodes.iter_attributes(new_node):
+            if isinstance(value, ShapedExpr):
+                axes |= value.axes
+
+        return True, ShapedExpr(axes=axes, expr=node)
 
 
 class NumPySourceGenerator(PythonSourceGenerator):
@@ -130,6 +164,13 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return source_lines
 
     # ---- Visitor handlers ----
+    def visit_ShapedExpr(self, node: ShapedExpr) -> str:
+        code = self.visit(node.expr)
+        if node.axes != set(self.impl_ir.domain.axes_names):
+            return f"({code}).reshape()"
+        else:
+            return code
+
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
         assert node.name in self.block_info.accessors
 
@@ -140,7 +181,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         parallel_axes_dims = [
             self.impl_node.domain.index(axis)
             for axis in self.impl_node.fields[node.name].axes
-            if axis != "K"
+            if axis != self.domain.sequential_axis.name
         ]
 
         for d, ax in enumerate(self.domain.axes_names):
@@ -353,7 +394,8 @@ class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
 
     def generate_implementation(self) -> str:
         block = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
-        self.source_generator(self.builder.implementation_ir, block)
+        numpy_ir = NumpyIR.apply(self.builder.implementation_ir)
+        self.source_generator(numpy_ir, block)
         if self.builder.options.backend_opts.get("ignore_np_errstate", True):
             source = "with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):\n"
             source += textwrap.indent(block.text, " " * self.TEMPLATE_INDENT_SIZE)
