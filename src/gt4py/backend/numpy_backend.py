@@ -150,7 +150,6 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 upper_extent[d] += idx
 
         index = []
-        print(node.name, parallel_axes_dims)
         for fd, d in enumerate(parallel_axes_dims):
             start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
             size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
@@ -166,7 +165,6 @@ class NumPySourceGenerator(PythonSourceGenerator):
             )
 
         k_ax = self.domain.sequential_axis.name
-        print(node.name, k_ax, self.impl_node.fields[node.name].axes)
         if k_ax in self.impl_node.fields[node.name].axes:
             fd = self.impl_node.fields[node.name].axes.index(k_ax)
             k_offset = node.offset.get(k_ax, 0)
