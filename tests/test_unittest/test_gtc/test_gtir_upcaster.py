@@ -31,15 +31,15 @@ def upcast_BOOL_to_FLOAT():
     return test_input, expected_result
 
 
-# def upcast_in_BinaryOp():
-#     expr_to_upcast = make_Literal("", dtype=DataType.INT64)
-#     test_input = BinaryOp(
-#         op=ArithmeticOperator.ADD,
-#         left=expr_to_upcast,
-#         right=make_Literal("", dtype=DataType.FLOAT64),
-#     )
-#     expected_result = [Cast(dtype=DataType.FLOAT64, expr=expr_to_upcast)]
-#     return test_input, expected_result
+def upcast_INT_TO_FLOAT():
+    expr_to_upcast = make_Literal("", dtype=DataType.INT64)
+    test_input = BinaryOp(
+        op=ArithmeticOperator.ADD,
+        left=expr_to_upcast,
+        right=make_Literal("", dtype=DataType.FLOAT64),
+    )
+    expected_result = [Cast(dtype=DataType.FLOAT64, expr=expr_to_upcast)]
+    return test_input, expected_result
 
 
 @pytest.fixture(params=[upcast_INT_to_FLOAT, upcast_BOOL_to_FLOAT])
