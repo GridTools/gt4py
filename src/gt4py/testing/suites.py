@@ -94,6 +94,8 @@ class SuiteMeta(type):
                 implementation_strategy_factories[name] = implementation_strategy_factory
             elif symbol.kind == "parameter":
                 implementation_strategy_factories[name] = symbol.value_st_factory
+            elif symbol.kind == "none":
+                implementation_strategy_factories[name] = symbol.value_st_factory
 
             else:
                 assert False
@@ -510,6 +512,10 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
                 else:
                     inputs[k] = f
+
+            # remove unused input parameters
+            inputs = {key: value for key, value in inputs.items() if value is not None}
+
             validation_fields = {
                 name: np.array(field, copy=True) for name, field in inputs.items()
             }
@@ -521,12 +527,14 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 name: tuple(
                     nb[0] - g[0] for nb, g in zip(new_boundary, cls.symbols[name].boundary)
                 )
-                for name in implementation.field_info.keys()
+                for name in inputs
+                if name in implementation.field_info
             }
 
             validation_shapes = {
                 name: tuple(d + g[0] + g[1] for d, g in zip(domain, cls.symbols[name].boundary))
-                for name in implementation.field_info.keys()
+                for name in inputs
+                if name in implementation.field_info
             }
 
             validation_field_views = {

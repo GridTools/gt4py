@@ -102,6 +102,11 @@ def parameter(*, one_of=None, in_range=None):
         assert False, "Missing value descriptor"
 
 
+def none():
+    """Define the symbol ``None``."""
+    return _SymbolStrategy(kind="none", boundary=None, value_st_factory=lambda dt: hyp_st.none())
+
+
 # ---- Custom Hypothesis strategies ----
 def scalar_value_st(dtype, min_value, max_value, allow_nan=False):
     """Hypothesis strategy for `dtype` scalar values in range [min_value, max_value]."""

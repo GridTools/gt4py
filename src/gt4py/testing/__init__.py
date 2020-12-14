@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 try:
-    from .input_strategies import field, global_name, parameter
+    from .input_strategies import field, global_name, none, parameter
     from .suites import StencilTestSuite
 except ModuleNotFoundError as e:
     if "pytest" in str(e) or "hypothesis" in str(e):
