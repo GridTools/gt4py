@@ -723,6 +723,22 @@ class TestReducedDimensions:
         assert target_ref.name == "field_3d"
         assert set(target_ref.offset.keys()) == {"I", "J", "K"}
 
+    def test_error_syntax(self, id_version):
+        module = f"TestReducedDimensions_test_error_syntax_{id_version}"
+        externals = {}
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Incorrect offset specification detected"
+        ):
+
+            def definition(
+                field_in: gtscript.Field[np.float_, gtscript.K],
+                field_out: gtscript.Field[np.float_, gtscript.IJK],
+            ):
+                with computation(PARALLEL), interval(...):
+                    field_out = field_in[0, 0, 1]
+
+            compile_definition(definition, "test_syntax", module, externals=externals)
+
 
 class TestImports:
     def test_all_legal_combinations(self, id_version):

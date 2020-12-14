@@ -957,9 +957,14 @@ class IRMaker(ast.NodeVisitor):
             result.index = index
         else:
             field_axes = self.fields[result.name].axes
-            result.offset = {
-                axis: value for axis, value in zip(field_axes, gt_utils.listify(index))
-            }
+            index = gt_utils.listify(index)
+            if len(field_axes) != len(index):
+                axes_str = "(" + ", ".join(field_axes) + ")"
+                raise GTScriptSyntaxError(
+                    f"Incorrect offset specification detected. Found {index}, "
+                    f"but the field has dimensions {axes_str}"
+                )
+            result.offset = {axis: value for axis, value in zip(field_axes, index)}
 
         return result
 
