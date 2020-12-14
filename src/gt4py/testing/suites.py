@@ -162,7 +162,7 @@ class SuiteMeta(type):
         def generation_test_wrapper(self, test):
             @hyp.given(hypothesis_data=test["generation_strategy"]())
             def hyp_wrapper(test_hyp, hypothesis_data):
-                bases[0].test_generation(
+                bases[0]._test_generation(
                     self,
                     test_hyp,
                     {**test_hyp["constants"], **hypothesis_data, **cls_dict["singletons"]},
@@ -184,7 +184,7 @@ class SuiteMeta(type):
         def implementation_test_wrapper(self, test, implementation_strategy):
             @hyp.given(hypothesis_data=implementation_strategy())
             def hyp_wrapper(test_hyp, hypothesis_data):
-                bases[0].test_implementation(self, test_hyp, hypothesis_data)
+                bases[0]._test_implementation(self, test_hyp, hypothesis_data)
 
             hyp_wrapper(test)
 
@@ -206,6 +206,23 @@ class SuiteMeta(type):
     def __new__(cls, cls_name, bases, cls_dict):
         if cls_dict.get("_skip_", False):  # skip metaclass magic
             return super().__new__(cls, cls_name, bases, cls_dict)
+
+        # Grab members inherited from base class
+        required_members = (
+            "domain_range",
+            "symbols",
+            "definition",
+            "validation",
+            "backends",
+            "dtypes",
+        )
+        inherited_members = {
+            key: getattr(bases[0], key)
+            for key in required_members
+            if hasattr(bases[0], key) and key not in cls_dict
+        }
+        cls_dict.update(inherited_members)
+
         # Check class dict
         missing = {
             "domain_range",
@@ -376,7 +393,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
     _skip_ = True  # Avoid processing of this empty test suite
 
-    def test_generation(self, test, externals_dict):
+    def _test_generation(self, test, externals_dict):
         """Test source code generation for all *backends* and *stencil suites*.
 
         The generated implementations are cached in a :class:`utils.ImplementationsDB`
@@ -405,16 +422,18 @@ class StencilTestSuite(metaclass=SuiteMeta):
             assert all(
                 field_info.boundary == cls.global_boundaries[name]
                 for name, field_info in implementation.field_info.items()
+                if field_info is not None
             )
         else:
             assert all(
                 field_info.boundary >= cls.global_boundaries[name]
                 for name, field_info in implementation.field_info.items()
+                if field_info is not None
             )
 
         test["implementations"].append(implementation)
 
-    def test_implementation(self, test, parameters_dict):
+    def _test_implementation(self, test, parameters_dict):
         """Test computed values for implementations generated for all *backends* and *stencil suites*.
 
         The generated implementations are reused from previous tests by means of a
