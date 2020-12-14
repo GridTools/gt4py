@@ -137,6 +137,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
         extent = self.block_info.extent
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
+        parallel_axes_dims = [
+            self.impl_node.domain.index(axis)
+            for axis in self.impl_node.fields[node.name].axes
+            if axis != "K"
+        ]
 
         for d, ax in enumerate(self.domain.axes_names):
             idx = node.offset.get(ax, 0)
@@ -145,43 +150,51 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 upper_extent[d] += idx
 
         index = []
-        for d in range(2):
+        print(node.name, parallel_axes_dims)
+        for fd, d in enumerate(parallel_axes_dims):
             start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
             size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
             size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
             index.append(
-                "{name}{marker}[{d}]{start}: {name}{marker}[{d}] + {size}".format(
+                "{name}{marker}[{fd}]{start}: {name}{marker}[{fd}] + {size}".format(
                     name=node.name,
                     start=start_expr,
                     marker=self.origin_marker,
-                    d=d,
+                    fd=fd,
                     size=size_expr,
                 )
             )
 
         k_ax = self.domain.sequential_axis.name
-        k_offset = node.offset.get(k_ax, 0)
-        if is_parallel:
-            start_expr = self.interval_k_start_name
-            start_expr += " {:+d}".format(k_offset) if k_offset else ""
-            end_expr = self.interval_k_end_name
-            end_expr += " {:+d}".format(k_offset) if k_offset else ""
-            index.append(
-                "{name}{marker}[2] + {start}:{name}{marker}[2] + {stop}".format(
-                    name=node.name, start=start_expr, marker=self.origin_marker, stop=end_expr
+        print(node.name, k_ax, self.impl_node.fields[node.name].axes)
+        if k_ax in self.impl_node.fields[node.name].axes:
+            fd = self.impl_node.fields[node.name].axes.index(k_ax)
+            k_offset = node.offset.get(k_ax, 0)
+            if is_parallel:
+                start_expr = self.interval_k_start_name
+                start_expr += " {:+d}".format(k_offset) if k_offset else ""
+                end_expr = self.interval_k_end_name
+                end_expr += " {:+d}".format(k_offset) if k_offset else ""
+                index.append(
+                    "{name}{marker}[{fd}] + {start}:{name}{marker}[{fd}] + {stop}".format(
+                        name=node.name,
+                        start=start_expr,
+                        marker=self.origin_marker,
+                        stop=end_expr,
+                        fd=fd,
+                    )
                 )
-            )
-        else:
-            idx = "{:+d}".format(k_offset) if k_offset else ""
-            index.append(
-                "{name}{marker}[{d}] + {ax}{idx}".format(
-                    name=node.name,
-                    marker=self.origin_marker,
-                    d=len(self.domain.parallel_axes),
-                    ax=k_ax,
-                    idx=idx,
+            else:
+                idx = "{:+fd}".format(k_offset) if k_offset else ""
+                index.append(
+                    "{name}{marker}[{fd}] + {ax}{idx}".format(
+                        name=node.name,
+                        marker=self.origin_marker,
+                        fd=fd,
+                        ax=k_ax,
+                        idx=idx,
+                    )
                 )
-            )
 
         source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
 
