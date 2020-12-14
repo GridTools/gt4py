@@ -1560,6 +1560,8 @@ class GTScriptParser(ast.NodeVisitor):
                     assert arg_info.default in [gt_ir.Empty, None]
                     data_type = gt_ir.DataType.from_dtype(np.dtype(arg_annotation.dtype))
                     axes = [ax.name for ax in arg_annotation.axes]
+                    if len(axes) == 1 and "K" not in axes:
+                        raise GTScriptDefinitionError
                     fields_decls[arg_info.name] = gt_ir.FieldDecl(
                         name=arg_info.name,
                         data_type=data_type,

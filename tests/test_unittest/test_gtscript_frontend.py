@@ -726,18 +726,34 @@ class TestReducedDimensions:
     def test_error_syntax(self, id_version):
         module = f"TestReducedDimensions_test_error_syntax_{id_version}"
         externals = {}
+
+        def definition(
+            field_in: gtscript.Field[np.float_, gtscript.K],
+            field_out: gtscript.Field[np.float_, gtscript.IJK],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out = field_in[0, 0, 1]
+
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError, match="Incorrect offset specification detected"
         ):
+            compile_definition(definition, "test_error_syntax", module, externals=externals)
 
-            def definition(
-                field_in: gtscript.Field[np.float_, gtscript.K],
-                field_out: gtscript.Field[np.float_, gtscript.IJK],
-            ):
-                with computation(PARALLEL), interval(...):
-                    field_out = field_in[0, 0, 1]
+    def test_error_annotation(self, id_version):
+        module = f"TestReducedDimensions_test_error_annotation_{id_version}"
+        externals = {}
 
-            compile_definition(definition, "test_syntax", module, externals=externals)
+        def definition(
+            field_in: gtscript.Field[np.float_, gtscript.I],
+            field_out: gtscript.Field[np.float_, gtscript.IJK],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out = field_in[1]
+
+        with pytest.raises(
+            gt_frontend.GTScriptDefinitionError, match="Invalid definition of argument"
+        ):
+            compile_definition(definition, "test_error_annotation", module, externals=externals)
 
 
 class TestImports:
