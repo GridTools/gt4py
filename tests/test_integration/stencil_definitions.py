@@ -304,11 +304,15 @@ def optional_field(
 
 
 @register(
-    externals_or_func={"PHYS_TEND_A": False, "PHYS_TEND_B": False}, name="optional_fields_00"
+    externals_or_func={"PHYS_TEND_A": False, "PHYS_TEND_B": False}, name="two_optional_fields_00"
 )
-@register(externals_or_func={"PHYS_TEND_A": False, "PHYS_TEND_B": True}, name="optional_fields_01")
-@register(externals_or_func={"PHYS_TEND_A": True, "PHYS_TEND_B": True}, name="optional_fields_11")
-def optional_fields(
+@register(
+    externals_or_func={"PHYS_TEND_A": False, "PHYS_TEND_B": True}, name="two_optional_fields_01"
+)
+@register(
+    externals_or_func={"PHYS_TEND_A": True, "PHYS_TEND_B": True}, name="two_optional_fields_11"
+)
+def two_optional_fields(
     in_a: Field3D,
     in_b: Field3D,
     out_a: Field3D,
