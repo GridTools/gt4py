@@ -1,23 +1,22 @@
-from typing import Dict, Iterable, List, Union
-from eve import NodeTranslator, Node
+from typing import Dict
+
+from eve import Node, NodeTranslator
 
 from gt4py.gtc import gtir
-
-import itertools
-
-from devtools import debug
-from gt4py.gtc.common import DataType
 from gt4py.gtc.gtir import Expr
+
+
+def _upcast_node(target_dtype, node: Expr):
+    return node if node.dtype == target_dtype else gtir.Cast(dtype=target_dtype, expr=node)
 
 
 def _upcast_nodes(*exprs):
     target_dtype = max([e.dtype for e in exprs])
-    return map(
-        lambda e: e if e.dtype == target_dtype else gtir.Cast(dtype=target_dtype, expr=e), exprs
-    )
+    return tuple(map(lambda e: _upcast_node(target_dtype, e), exprs))
 
 
 def _update_node(node: Node, updated_children: Dict[str, Node]):
+    # create new node only if children changed
     old_children = node.dict(include={*updated_children.keys()})
     if any([old_children[k] != updated_children[k] for k in updated_children.keys()]):
         return node.copy(update=updated_children)
@@ -45,9 +44,12 @@ class _GTIRUpcasting(NodeTranslator):
         )
 
     def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs):
-        args = _upcast_nodes(self.visit(node.args))
-
+        args = [_upcast_nodes(*self.visit(node.args))]
         return _update_node(node, {"args": args})
+
+    def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs):
+        right = _upcast_node(node.left.dtype, self.visit(node.right))
+        return _update_node(node, {"right": right})
 
 
 def upcast(node: gtir.Stencil):
