@@ -12,7 +12,7 @@ def _upcast_node(target_dtype, node: Expr):
 
 def _upcast_nodes(*exprs):
     target_dtype = max([e.dtype for e in exprs])
-    return tuple(map(lambda e: _upcast_node(target_dtype, e), exprs))
+    return map(lambda e: _upcast_node(target_dtype, e), exprs)
 
 
 def _update_node(node: Node, updated_children: Dict[str, Node]):
@@ -44,7 +44,7 @@ class _GTIRUpcasting(NodeTranslator):
         )
 
     def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs):
-        args = [_upcast_nodes(*self.visit(node.args))]
+        args = [*_upcast_nodes(*self.visit(node.args))]
         return _update_node(node, {"args": args})
 
     def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs):
