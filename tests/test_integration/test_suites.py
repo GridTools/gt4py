@@ -20,7 +20,14 @@ import numpy as np
 from gt4py import gtscript
 from gt4py import testing as gt_testing
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
+from ..definitions import (
+    ALL_BACKENDS,
+    CPU_BACKENDS,
+    DAWN_BACKENDS,
+    DAWN_GPU_BACKENDS,
+    GPU_BACKENDS,
+    INTERNAL_BACKENDS,
+)
 from .stencil_definitions import optional_field, two_optional_fields
 
 
@@ -514,7 +521,7 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
 class TestOptionalField(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 32), (1, 32), (1, 32)]
-    backends = CPU_BACKENDS
+    backends = list(set(ALL_BACKENDS) - set(DAWN_GPU_BACKENDS))
     symbols = dict(
         PHYS_TEND=gt_testing.global_name(one_of=(False, True)),
         in_field=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -533,6 +540,7 @@ class TestOptionalField(gt_testing.StencilTestSuite):
 
 
 class TestNotSpecifiedOptionalField(TestOptionalField):
+    backends = list(set(ALL_BACKENDS) - set(DAWN_BACKENDS))
     symbols = TestOptionalField.symbols.copy()
     symbols["PHYS_TEND"] = gt_testing.global_name(one_of=(False,))
     symbols["phys_tend"] = gt_testing.none()
@@ -541,7 +549,7 @@ class TestNotSpecifiedOptionalField(TestOptionalField):
 class TestTwoOptionalFields(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 32), (1, 32), (1, 32)]
-    backends = CPU_BACKENDS
+    backends = list(set(ALL_BACKENDS) - set(DAWN_GPU_BACKENDS))
     symbols = dict(
         PHYS_TEND_A=gt_testing.global_name(one_of=(False, True)),
         PHYS_TEND_B=gt_testing.global_name(one_of=(False, True)),
@@ -582,6 +590,7 @@ class TestTwoOptionalFields(gt_testing.StencilTestSuite):
 
 
 class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
+    backends = list(set(ALL_BACKENDS) - set(DAWN_BACKENDS))
     symbols = TestTwoOptionalFields.symbols.copy()
     symbols["PHYS_TEND_A"] = gt_testing.global_name(one_of=(False,))
     symbols["phys_tend_a"] = gt_testing.none()
