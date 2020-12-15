@@ -31,7 +31,7 @@ from gt4py.gtc.common import LocNode
 
 
 class Expr(common.Expr):
-    dtype: common.DataType
+    dtype: Optional[common.DataType]
 
     # TODO Eve could provide support for making a node abstract
     def __init__(self, *args, **kwargs):

@@ -325,17 +325,20 @@ class UnaryOp(GenericNode, Generic[ExprT]):
     op: UnaryOperator
     expr: ExprT
 
-    @root_validator(pre=True)
+    @root_validator
     def dtype_propagation(cls, values):
-        values["dtype"] = values["expr"].dtype
-        return values
+        try:
+            values["dtype"] = values["expr"].dtype
+            return values
+        except (KeyError):
+            pass
 
     @root_validator(pre=True)
     def kind_propagation(cls, values):
         values["kind"] = values["expr"].kind
         return values
 
-    @root_validator(pre=True)
+    @root_validator
     def op_to_dtype_check(cls, values):
         if values["expr"].dtype:
             if values["op"] == UnaryOperator.NOT:
@@ -394,7 +397,7 @@ def binary_op_dtype_propagation(*, strict: bool):
 
         return values
 
-    return root_validator(pre=True, allow_reuse=True)(_impl)
+    return root_validator(allow_reuse=True)(_impl)
 
 
 class TernaryOp(GenericNode, Generic[ExprT]):
@@ -431,7 +434,7 @@ def ternary_op_dtype_propagation(*, strict: bool):
             values["dtype"] = common_dtype
         return values
 
-    return root_validator(pre=True, allow_reuse=True)(_impl)
+    return root_validator(allow_reuse=True)(_impl)
 
 
 class Cast(GenericNode, Generic[ExprT]):
@@ -450,15 +453,20 @@ class NativeFuncCall(GenericNode, Generic[ExprT]):
     func: NativeFunction
     args: List[ExprT]
 
-    @root_validator(pre=True)
+    @root_validator
     def arity_check(cls, values):
-        if values["func"].arity != len(values["args"]):
-            raise ValueError(
-                "{} accepts {} arguments, {} where passed.".format(
-                    values["func"], values["func"].arity, len(values["args"])
+        try:
+            if values["func"].arity != len(values["args"]):
+                raise ValueError(
+                    "{} accepts {} arguments, {} where passed.".format(
+                        values["func"], values["func"].arity, len(values["args"])
+                    )
                 )
-            )
-        return values
+            return values
+        except (KeyError):
+            # If `args` are of wrong `ExprT`, `values` will not contain `args`.
+            # Note that pydantic will raise an error but, too late (maybe bug?)
+            pass
 
     @root_validator(pre=True)
     def kind_propagation(cls, values):
@@ -474,4 +482,4 @@ def native_func_call_dtype_propagation(*, strict: bool = True):
             values["dtype"] = common_dtype
         return values
 
-    return root_validator(pre=True, allow_reuse=True)(_impl)
+    return root_validator(allow_reuse=True)(_impl)
