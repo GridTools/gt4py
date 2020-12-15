@@ -1,11 +1,10 @@
 from typing import Dict, Tuple
 
-import pytest
-
 from gt4py.gtc import common
 from gt4py.gtc.common import DataType
-from gt4py.gtc.gtir import FieldDecl, Literal, ParAssignStmt, Stencil
+from gt4py.gtc.gtir import FieldDecl, ParAssignStmt, Stencil, Literal
 from gt4py.gtc.passes.gtir_dtype_resolver import _GTIRPropagateDtypeToAccess, resolve_dtype
+import pytest
 
 from .gtir_utils import FieldAccessBuilder, StencilBuilder, VerticalLoopBuilder
 

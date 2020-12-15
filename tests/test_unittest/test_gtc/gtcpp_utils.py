@@ -8,6 +8,7 @@ from gt4py.gtc.gtcpp.gtcpp import (
     GTAccessor,
     GTApplyMethod,
     GTComputation,
+    GTExtent,
     GTFunctor,
     GTInterval,
     GTLevel,
@@ -15,6 +16,7 @@ from gt4py.gtc.gtcpp.gtcpp import (
     GTParamList,
     GTStage,
     IfStmt,
+    Intent,
     Literal,
     ParamArg,
     Program,
@@ -88,6 +90,17 @@ class IfStmtBuilder:
         return IfStmt(
             cond=self._cond, true_branch=self._true_branch, false_branch=self._false_branch
         )
+
+
+class GTAccessorBuilder:
+    def __init__(self, name, id) -> None:
+        self._name = name
+        self._id = id
+        self._intent = Intent.INOUT
+        self._extent = GTExtent.zero()
+
+    def build(self) -> GTAccessor:
+        return GTAccessor(name=self._name, id=self._id, intent=self._intent, extent=self._extent)
 
 
 class GTFunctorBuilder:

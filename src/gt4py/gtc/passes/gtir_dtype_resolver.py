@@ -1,12 +1,14 @@
 from eve import NodeTranslator
 
 from gt4py.gtc import gtir
-from gt4py.gtc.common import DataType
+from gt4py.gtc.common import DataType, GTCPostconditionError
 
 
 class _GTIRResolveAuto(NodeTranslator):
     """
     Replaces AUTO dtype by a concrete dtype.
+
+    Note that currently only temporaries (FieldDecl/FieldAccess) can have AUTO type.
 
     Precondition: All dtype are set (not None)
     Postcondition: All dtypes are concrete (no AUTO)
@@ -41,12 +43,14 @@ class _GTIRResolveAuto(NodeTranslator):
         result = self._GTIRUpdateAutoDecl().visit(result, new_symbols=symtable)
 
         # TODO enable after FieldsMetaData is updated
-        # assert all(
+        # if not all(
         #     result.iter_tree()
         #     .if_hasattr("dtype")
         #     .getattr("dtype")
         #     .map(lambda x: x not in [None, DataType.AUTO, DataType.INVALID, DataType.DEFAULT])
-        # )
+        # ):
+        #     raise GTCPostconditionError(expected="No AUTO, INVALID or DEFAULT dtype in tree.")
+
         return result
 
 
@@ -68,12 +72,14 @@ class _GTIRPropagateDtypeToAccess(NodeTranslator):
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs):
         result: gtir.Stencil = self.generic_visit(node, symtable=node.symtable_)
-        assert all(
+
+        if not all(
             result.iter_tree()
             .if_isinstance(gtir.ScalarAccess, gtir.FieldAccess)
             .getattr("dtype")
             .map(lambda x: x is not None)
-        )
+        ):
+            raise GTCPostconditionError("No None dtype in FieldAccess or ScalarAccess.")
         return result
 
 
