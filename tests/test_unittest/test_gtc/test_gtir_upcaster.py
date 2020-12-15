@@ -42,7 +42,25 @@ def upcast_INT_TO_FLOAT():
     return test_input, expected_result
 
 
-@pytest.fixture(params=[upcast_INT_to_FLOAT, upcast_BOOL_to_FLOAT])
+def upcast_nested_BinaryOp():
+    expr_to_upcast = BinaryOp(
+        op=ArithmeticOperator.ADD,
+        left=make_Literal("", dtype=DataType.FLOAT32),
+        right=make_Literal("", dtype=DataType.FLOAT32),
+    )
+    test_input = BinaryOp(
+        op=ArithmeticOperator.ADD,
+        left=expr_to_upcast,
+        right=make_Literal("", dtype=DataType.FLOAT64),
+    )
+    expected_result = [Cast(dtype=DataType.FLOAT64, expr=expr_to_upcast)]
+    return test_input, expected_result
+
+
+# TODO tests for all node types and nesting with 2 casts
+
+
+@pytest.fixture(params=[upcast_INT_to_FLOAT, upcast_BOOL_to_FLOAT, upcast_nested_BinaryOp])
 def input_and_expected(request):
     return request.param()
 
@@ -61,7 +79,6 @@ def contains_cast_node(cast_node, expr):
 
 def test_upcasted_nodes(input_and_expected):
     expr, expected_cast_nodes = input_and_expected
-    debug(expr)
 
     assert isinstance(expected_cast_nodes, List)
     assert all([isinstance(cast, Cast) for cast in expected_cast_nodes])

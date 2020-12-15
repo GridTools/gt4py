@@ -1,7 +1,15 @@
 from eve import NodeTranslator
 
 from gt4py.gtc import gtir
-from gt4py.gtc.common import LogicalOperator
+
+from devtools import debug
+
+
+def _upcast_nodes(*exprs):
+    target_dtype = max([e.dtype for e in exprs])
+    return map(
+        lambda e: e if e.dtype == target_dtype else gtir.Cast(dtype=target_dtype, expr=e), exprs
+    )
 
 
 class _GTIRUpcasting(NodeTranslator):
@@ -11,28 +19,35 @@ class _GTIRUpcasting(NodeTranslator):
     Postcondition: all dtype transitions are explicit via a `Cast` node
     """
 
-    def visit_Expr(self, node: gtir.Expr, **kwargs):
-        # this default visit() relies on dtype propagation in the `Expr` node validators
-        # needs to be specialized for `Expr`s where node.dtype != children.dtype
-        # (e.g. BinaryOp with ComparisonOperator, where node.dtype=Bool,
-        # but children have other dtype)
-        if (
-            "target_dtype" in kwargs
-            and kwargs["target_dtype"]
-            and kwargs["target_dtype"] != node.dtype
-        ):
-            return gtir.Cast(
-                expr=self.generic_visit(node, target_dtype=node.dtype),
-                dtype=kwargs["target_dtype"],
-            )
-        else:
-            return self.generic_visit(node, target_dtype=node.dtype)
-
     def visit_BinaryOp(self, node: gtir.BinaryOp, **kwargs):
-        target_dtype = max(node.left.dtype, node.right.dtype)
-        if isinstance(node.op, LogicalOperator):
-            target_dtype = None  # don't cast, if they are not both boolean it's an error
-        return self.generic_visit(node, target_dtype=target_dtype)
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+        left, right = _upcast_nodes(left, right)
+
+        if left != node.left or right != node.right:
+            return gtir.BinaryOp(left=left, right=right, op=node.op)
+        else:
+            return node
+
+    def visit_TernaryOp(self, node: gtir.TernaryOp, **kwargs):
+        cond = self.visit(node.cond)
+        true_expr = self.visit(node.true_expr)
+        false_expr = self.visit(node.false_expr)
+        true_expr, false_expr = _upcast_nodes(true_expr, false_expr)
+
+        if true_expr != node.true_expr or false_expr != node.false_expr or cond != node.cond:
+            return gtir.TernaryOp(true_expr=true_expr, false_expr=false_expr, cond=cond)
+        else:
+            return node
+
+    def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs):
+        args = self.visit(node.args)
+        args = _upcast_nodes(args)
+
+        if args != node.args:
+            return gtir.NativeFuncCall(args=args)
+        else:
+            return node
 
 
 def upcast(node: gtir.Stencil):
