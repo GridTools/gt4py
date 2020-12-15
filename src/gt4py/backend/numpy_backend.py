@@ -41,6 +41,9 @@ class ShapedExpr(gt_ir.Node):
     axes = attribute(of=SetOf[str])
     expr = attribute(of=gt_ir.Expr)
 
+    def __getattr__(self, name):
+        return getattr(self.expr, name)
+
 
 class NumpyIR(gt_ir.IRNodeMapper):
     @classmethod
