@@ -227,14 +227,7 @@ class SuiteMeta(type):
         cls_dict.update(inherited_members)
 
         # Check class dict
-        missing = {
-            "domain_range",
-            "symbols",
-            "definition",
-            "validation",
-            "backends",
-            "dtypes",
-        } - cls_dict.keys()
+        missing = set(required_members) - cls_dict.keys()
         if len(missing) > 0:
             raise TypeError(
                 "Missing {missing} required members in '{name}' definition".format(
