@@ -207,6 +207,7 @@ The ``default_origin`` parameter plays two roles:
 #. If when calling the stencil, no other `origin` is specified, this value is where the `iteration domain` begins, i.e.
   the grid point with the lowest index where a value is written.
 
+
 --------------------------
 Computations and Intervals
 --------------------------
