@@ -848,7 +848,8 @@ class IRMaker(ast.NodeVisitor):
         else:
             interval_node = args[0]
 
-        interval = parse_interval_node(interval_node, "K", loc=loc)
+        seq_name = gt_ir.Domain.LatLonGrid().sequential_axis.name
+        interval = parse_interval_node(interval_node, seq_name, loc=loc)
 
         if (
             interval.start.level == gt_ir.LevelMarker.END
@@ -1560,7 +1561,9 @@ class GTScriptParser(ast.NodeVisitor):
                     assert arg_info.default in [gt_ir.Empty, None]
                     data_type = gt_ir.DataType.from_dtype(np.dtype(arg_annotation.dtype))
                     axes = [ax.name for ax in arg_annotation.axes]
-                    if len(axes) == 1 and "K" not in axes:
+                    seq_name = gt_ir.Domain.LatLonGrid().sequential_axis.name
+                    if len(axes) == 1 and seq_name not in axes:
+                        # If there is only a single axis, it cannot be a parallel axis.
                         raise GTScriptDefinitionError
                     fields_decls[arg_info.name] = gt_ir.FieldDecl(
                         name=arg_info.name,
