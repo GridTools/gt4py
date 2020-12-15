@@ -27,12 +27,6 @@ def test_dtype_required():
             r".*must be.* bool.*",
         ),
         (
-            lambda: HorizontalExecution(
-                body=[], mask=DummyExpr(dtype=DataType.BOOL, kind=ExprKind.SCALAR)
-            ),
-            r".*must be.* field.*",
-        ),
-        (
             lambda: AssignStmt(
                 left=FieldAccess(
                     name="foo", dtype=A_ARITHMETIC_TYPE, offset=CartesianOffset(i=1, j=0, k=0)

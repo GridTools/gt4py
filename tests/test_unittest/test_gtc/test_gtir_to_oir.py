@@ -94,7 +94,6 @@ def test_create_mask():
 )
 def test_visit_FieldIfStmt(field_if_stmt):
     # Testing only that lowering doesn't error.
-    # I see no good testing strategy which is robust against changes of the lowering.
     GTIRToOIR().visit(field_if_stmt)
 
 
@@ -103,5 +102,5 @@ def test_visit_ScalarIfStmt():
         cond=gtir_utils.DummyExpr(dtype=DataType.BOOL, kind=ExprKind.SCALAR),
         true_branch=BlockStmt(body=[]),
     )
-    with pytest.raises(NotImplementedError):
-        GTIRToOIR().visit(testee)  # TODO don't forget to add a test
+    # Testing only that lowering doesn't error.
+    GTIRToOIR().visit(testee)
