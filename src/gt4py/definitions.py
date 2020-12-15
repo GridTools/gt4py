@@ -19,6 +19,7 @@ import collections
 import enum
 import numbers
 import operator
+from typing import Mapping
 
 from gt4py import utils as gt_utils
 from gt4py.utils.attrib import Any, AttributeClassLike
@@ -727,7 +728,7 @@ def normalize_origin(origin):
     return origin
 
 
-def normalize_origin_mapping(origin_mapping):
+def normalize_origin_mapping(origin_mapping) -> Mapping[str, Shape]:
     origin_mapping = origin_mapping if origin_mapping is not None else {}
     if isinstance(origin_mapping, collections.abc.Mapping):
         origin_mapping = {
