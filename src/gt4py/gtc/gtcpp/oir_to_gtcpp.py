@@ -111,10 +111,13 @@ class OIRToGTCpp(eve.NodeTranslator):
             to_level=self.visit(node.end, is_start=False),
         )
 
-    def tuple_visit(self, node, **kwargs):
+    def tuple_visit(self, node, *, default, **kwargs):
         """Visits a list node and transforms a list of tuples to a ListTuple."""
         assert isinstance(node, Sequence)
-        return utils.ListTuple(*map(utils.flatten_list, zip(*self.visit(node, **kwargs))))
+        if len(node) > 0:
+            return utils.ListTuple(*map(utils.flatten_list, zip(*self.visit(node, **kwargs))))
+        else:
+            return default
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
         assert "stencil_symtable" in kwargs
@@ -142,7 +145,7 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs):
         functors, stages = self.tuple_visit(
-            node.horizontal_executions, interval=node.interval, **kwargs
+            node.horizontal_executions, interval=node.interval, default=([], []), **kwargs
         )
         assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
         temporaries = self.visit(node.declarations)
@@ -161,7 +164,7 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
         functors, temporaries, multi_stages = self.tuple_visit(
-            node.vertical_loops, stencil_symtable=node.symtable_, **kwargs
+            node.vertical_loops, stencil_symtable=node.symtable_, default=([], [], []), **kwargs
         )
 
         # TODO think about this pattern, just scanning of used parameters is probably wrong...

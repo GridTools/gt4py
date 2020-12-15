@@ -15,12 +15,27 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Generic, List, Optional, TypeVar, Union
+from typing import Any, Generic, List, Optional, TypeVar, Union
 
 from eve import GenericNode, IntEnum, Node, SourceLocation, Str, StrEnum, SymbolTableTrait
+from eve import exceptions as eve_exceptions
 from eve.type_definitions import SymbolRef
 from pydantic import validator
 from pydantic.class_validators import root_validator
+
+
+class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
+    message_template = "GTC pass precondition error: [{info}]"
+
+    def __init__(self, *, expected: str, **kwargs: Any) -> None:
+        super().__init__(expected=expected, **kwargs)
+
+
+class GTCPostconditionError(eve_exceptions.EveError, RuntimeError):
+    message_template = "GTC pass postcondition error: [{info}]"
+
+    def __init__(self, *, expected: str, **kwargs: Any) -> None:
+        super().__init__(expected=expected, **kwargs)
 
 
 class AssignmentKind(StrEnum):
