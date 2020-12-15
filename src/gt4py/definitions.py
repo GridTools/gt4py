@@ -47,6 +47,8 @@ class NumericTuple(tuple):
 
     __slots__ = ()
 
+    _DEFAULT = 0
+
     @classmethod
     def _check_value(cls, value, ndims):
         assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
@@ -78,6 +80,12 @@ class NumericTuple(tuple):
     @classmethod
     def from_k(cls, value, ndims=CartesianSpace.ndims):
         return cls([value] * ndims, ndims=(ndims, ndims))
+
+    @classmethod
+    def from_mask(cls, seq, mask, default=None):
+        if default is None:
+            default = cls._DEFAULT
+        return cls(gt_utils.interpolate_mask(seq, mask, default))
 
     @classmethod
     def from_value(cls, value):
@@ -215,6 +223,9 @@ class NumericTuple(tuple):
 
         return all(op(a, b) for a, b in zip(self, other))
 
+    def filter_mask(self, mask):
+        return type(self)(gt_utils.filter_mask(self, mask))
+
 
 class Index(NumericTuple):
     """Index in a grid (all elements are ints)."""
@@ -232,6 +243,8 @@ class Shape(NumericTuple):
     """Shape of a n-dimensional grid (all elements are int >= 0)."""
 
     __slots__ = ()
+
+    _DEFAULT = 1
 
     @classmethod
     def _check_value(cls, value, ndims):
