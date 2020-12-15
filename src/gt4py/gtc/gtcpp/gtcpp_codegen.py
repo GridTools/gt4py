@@ -134,7 +134,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     GTComputation = as_mako(
         """
-        %if len(multi_stages) > 0:
+        %if len(multi_stages) > 0 and len(parameters) > 0:
         {
             auto grid = make_grid(domain[0], domain[1], axis<1, axis_config::offset_limit<${offset_limit}>>{domain[2]});
 
