@@ -1,10 +1,7 @@
-import re
 from pathlib import Path
-from typing import Pattern, Union
 
 import pytest
 import setuptools
-from devtools import debug
 
 from gt4py import config, gt2_src_manager  # TODO must not include gt4py package or ok for test?
 from gt4py.gtc.common import DataType
@@ -14,8 +11,6 @@ from gt4py.gtc.gtcpp.gtcpp import (
     GTExtent,
     GTStage,
     Intent,
-    Literal,
-    ParamArg,
     Program,
 )
 from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
@@ -23,7 +18,6 @@ from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 
 from .gtcpp_utils import (
     AssignStmtBuilder,
-    GTAccessorBuilder,
     GTApplyMethodBuilder,
     GTComputationBuilder,
     GTFunctorBuilder,
@@ -31,22 +25,11 @@ from .gtcpp_utils import (
     ProgramBuilder,
 )
 
+from .utils import match
+
 
 if not gt2_src_manager.has_gt_sources() and not gt2_src_manager.install_gt_sources():
     raise RuntimeError("Missing GridTools sources.")
-
-
-def match(value: str, regexp: "Union[str, Pattern]") -> "Literal[True]":
-    """
-    Stolen from `pytest.raises`.
-    Check whether the regular expression `regexp` matches `value` using :func:`python:re.search`.
-    If it matches `True` is returned.
-    If it doesn't match an `AssertionError` is raised.
-    """
-    assert re.search(regexp, str(value)), "Pattern {!r} does not match {!r}".format(
-        regexp, str(value)
-    )
-    return True
 
 
 def build_gridtools_test(tmp_path: Path, code: str):
@@ -75,9 +58,8 @@ def build_gridtools_test(tmp_path: Path, code: str):
     )
 
 
-@pytest.mark.parametrize(
-    "gtcpp_program,expected_regex",
-    [
+def make_compilation_input_and_expected():
+    return [
         (ProgramBuilder("test").build(), r"auto test"),
         (
             ProgramBuilder("test").add_functor(GTFunctorBuilder("fun").build()).build(),
@@ -117,8 +99,10 @@ def build_gridtools_test(tmp_path: Path, code: str):
             ).build(),
             r"",
         ),
-    ],
-)
+    ]
+
+
+@pytest.mark.parametrize("gtcpp_program,expected_regex", make_compilation_input_and_expected())
 def test_program_compilation_succeeds(tmp_path, gtcpp_program, expected_regex):
     assert isinstance(gtcpp_program, Program)
     code = GTCppCodegen.apply(gtcpp_program)
