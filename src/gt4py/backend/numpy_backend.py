@@ -52,21 +52,41 @@ class NumpyIR(gt_ir.IRNodeMapper):
     def __init__(self, fields: Dict[str, gt_ir.FieldDecl]):
         self.fields = fields
 
-    def visit_FieldRef(self, path: tuple, node_name: str, node: gt_ir.FieldRef) -> ShapedExpr:
+    def visit_FieldRef(
+        self, path: tuple, node_name: str, node: gt_ir.FieldRef
+    ) -> Tuple[bool, ShapedExpr]:
         return True, ShapedExpr(axes=set(self.fields[node.name].axes), expr=node)
 
-    def visit_Expr(self, path: tuple, node_name: str, node: gt_ir.Expr) -> ShapedExpr:
-        if isinstance(node, gt_ir.Literal):
-            return True, node
+    def visit_VarRef(
+        self, path: tuple, node_name: str, node: gt_ir.FieldRef
+    ) -> Tuple[bool, gt_ir.VarRef]:
+        """VarRefs cannot be shaped."""
+        return True, node
 
-        kept, new_node = self.generic_visit(path, node_name, node)
+    def visit_Literal(
+        self, path: tuple, node_name: str, node: gt_ir.Literal
+    ) -> Tuple[bool, gt_ir.Literal]:
+        """Literals cannot be shaped."""
+        return True, node
+
+    def visit_Expr(self, path: tuple, node_name: str, node: gt_ir.Expr) -> Tuple[bool, gt_ir.Expr]:
+        """Conditionally change the gt_ir.Expr node to a ShapedExpr."""
+        keep_node, new_node = self.generic_visit(path, node_name, node)
+        assert keep_node, "This should not remove nodes"
 
         axes = set()
-        for _, value in gt_ir.nodes.iter_attributes(new_node):
-            if isinstance(value, ShapedExpr):
-                axes |= value.axes
+        shaped_expr_nodes = [
+            value
+            for name, value in gt_ir.nodes.iter_attributes(new_node)
+            if isinstance(value, ShapedExpr)
+        ]
+        for shape_node in shaped_expr_nodes:
+            axes |= shape_node.axes
 
-        return True, ShapedExpr(axes=axes, expr=node)
+        if not axes:
+            return True, new_node
+        else:
+            return True, ShapedExpr(axes=axes, expr=new_node)
 
 
 class NumPySourceGenerator(PythonSourceGenerator):
@@ -186,15 +206,6 @@ class NumPySourceGenerator(PythonSourceGenerator):
             return f"{code}[{view}]"
         else:
             return code
-
-        # if not (node.axes - set(axes)):
-        #     view = ", ".join(
-        #         "{np}.newaxis".format(np=self.numpy_prefix) if axis not in node.axes else ":"
-        #         for axis in self.impl_node.domain.axes_names
-        #     )
-        #     return f"{code}[{view}]"
-        # else:
-        #     return code
 
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
         assert node.name in self.block_info.accessors

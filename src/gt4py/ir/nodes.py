@@ -970,12 +970,11 @@ class IRNodeMapper:
 
         del_items = []
         for key, old_value in items:
-            if old_value:
-                keep_item, new_value = self._visit((*path, node_name), key, old_value)
-                if not keep_item:
-                    del_items.append(key)
-                elif new_value != old_value:
-                    setattr_op(node, key, new_value)
+            keep_item, new_value = self._visit((*path, node_name), key, old_value)
+            if not keep_item:
+                del_items.append(key)
+            elif new_value != old_value:
+                setattr_op(node, key, new_value)
         for key in reversed(del_items):  # reversed, so that keys remain valid in sequences
             delattr_op(node, key)
 
