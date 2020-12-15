@@ -21,6 +21,7 @@ import pytest
 
 import gt4py as gt
 import gt4py.definitions as gt_definitions
+from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.stencil_object import StencilObject
@@ -567,8 +568,15 @@ class StencilTestSuite(metaclass=SuiteMeta):
                         slice(new_boundary[d][0], new_boundary[d][0] + domain[d])
                         for d in range(len(domain))
                     ]
+
+                    if gt_backend.from_name(value.backend).storage_info["device"] == "gpu":
+                        value.synchronize()
+                        value = value.data.get()
+                    else:
+                        value = value.data
+
                     np.testing.assert_allclose(
-                        value.data[domain_slice],
+                        value[domain_slice],
                         expected_value[domain_slice],
                         rtol=RTOL,
                         atol=ATOL,
