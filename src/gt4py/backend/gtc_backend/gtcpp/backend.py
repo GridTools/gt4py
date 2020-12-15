@@ -3,9 +3,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 
+from gt4py import backend as gt_backend
 from gt4py import gt2_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
-from gt4py.backend.base import register
 from gt4py.backend.gt_backends import (
     gtcpu_is_compatible_type,
     make_x86_layout_map,
@@ -121,7 +121,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return formatted_code
 
 
-@register
+@gt_backend.register
 class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
     """GridTools python backend using gtc."""
 
