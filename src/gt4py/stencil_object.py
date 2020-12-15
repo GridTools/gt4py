@@ -135,6 +135,7 @@ class StencilObject(abc.ABC):
         """
         max_domain = Shape([np.iinfo(np.uintc).max] * self.domain_info.ndims)
         for name, field in field_args.items():
+            # Compute max_domain as if all fields were 3D
             field_origin = Index.from_mask(origin[name], field.mask)
             field_shape = Shape.from_mask(field.shape, field.mask)
             upper_boundary = Index.from_mask(
@@ -300,10 +301,11 @@ class StencilObject(abc.ABC):
         if origin is None:
             origin = {}
         else:
+            # This always returns an Index
             origin = normalize_origin_mapping(origin)
 
         for name, field in used_field_args.items():
-            field_origin = origin["_all_"] if "_all_" in origin else Index(field.default_origin)
+            field_origin = origin["_all_"] if "_all_" in origin else field.default_origin
             origin.setdefault(name, field_origin.filter_mask(field.mask))
 
         # Domain

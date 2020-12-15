@@ -19,7 +19,7 @@ import collections
 import enum
 import numbers
 import operator
-from typing import Mapping
+from typing import Mapping, Optional
 
 from gt4py import utils as gt_utils
 from gt4py.utils.attrib import Any, AttributeClassLike
@@ -715,20 +715,20 @@ def normalize_domain(domain):
     return domain
 
 
-def normalize_origin(origin):
+def normalize_origin(origin) -> Optional[Index]:
     if origin is not None:
         origin = tuple(origin)
         if isinstance(origin, numbers.Integral):
-            origin = Shape.from_k(int(origin))
+            origin = Index.from_k(int(origin))
         elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin):
-            origin = Shape.from_value(origin)
+            origin = Index.from_value(origin)
         else:
             raise ValueError("Invalid 'origin' value ({})".format(origin))
 
     return origin
 
 
-def normalize_origin_mapping(origin_mapping) -> Mapping[str, Shape]:
+def normalize_origin_mapping(origin_mapping) -> Mapping[str, Index]:
     origin_mapping = origin_mapping if origin_mapping is not None else {}
     if isinstance(origin_mapping, collections.abc.Mapping):
         origin_mapping = {
