@@ -177,11 +177,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         code = self.visit(node.expr)
 
-        # TODO Cannot be a set! Order matters...
         leftover_axes = [ax for ax in req_axes if ax not in node.axes]
-        print("leftover_axes = ", leftover_axes)
-        print("req_axes = ", req_axes)
-        print("node.axes = ", node.axes)
         if leftover_axes:
             view = ", ".join(
                 "{np}.newaxis".format(np=self.numpy_prefix) if axis not in node.axes else ":"
