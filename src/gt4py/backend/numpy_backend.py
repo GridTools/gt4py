@@ -56,10 +56,13 @@ class NumpyIR(gt_ir.IRNodeMapper):
         return True, ShapedExpr(axes=set(self.fields[node.name].axes), expr=node)
 
     def visit_Expr(self, path: tuple, node_name: str, node: gt_ir.Expr) -> ShapedExpr:
-        changed, new_node = self.generic_visit(path, node_name, node)
+        if isinstance(node, gt_ir.Literal):
+            return True, node
+
+        kept, new_node = self.generic_visit(path, node_name, node)
 
         axes = set()
-        for key, value in gt_ir.nodes.iter_attributes(new_node):
+        for _, value in gt_ir.nodes.iter_attributes(new_node):
             if isinstance(value, ShapedExpr):
                 axes |= value.axes
 
@@ -165,11 +168,37 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
     # ---- Visitor handlers ----
     def visit_ShapedExpr(self, node: ShapedExpr) -> str:
+        is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
+
+        if is_parallel:
+            req_axes = self.impl_node.domain.axes_names
+        else:
+            req_axes = [axis.name for axis in self.impl_node.domain.parallel_axes]
+
         code = self.visit(node.expr)
-        if node.axes != set(self.impl_ir.domain.axes_names):
-            return f"({code}).reshape()"
+
+        # TODO Cannot be a set! Order matters...
+        leftover_axes = [ax for ax in req_axes if ax not in node.axes]
+        print("leftover_axes = ", leftover_axes)
+        print("req_axes = ", req_axes)
+        print("node.axes = ", node.axes)
+        if leftover_axes:
+            view = ", ".join(
+                "{np}.newaxis".format(np=self.numpy_prefix) if axis not in node.axes else ":"
+                for axis in req_axes
+            )
+            return f"{code}[{view}]"
         else:
             return code
+
+        # if not (node.axes - set(axes)):
+        #     view = ", ".join(
+        #         "{np}.newaxis".format(np=self.numpy_prefix) if axis not in node.axes else ":"
+        #         for axis in self.impl_node.domain.axes_names
+        #     )
+        #     return f"{code}[{view}]"
+        # else:
+        #     return code
 
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
         assert node.name in self.block_info.accessors
@@ -224,7 +253,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     )
                 )
             else:
-                idx = "{:+fd}".format(k_offset) if k_offset else ""
+                idx = "{:+d}".format(k_offset) if k_offset else ""
                 index.append(
                     "{name}{marker}[{fd}] + {ax}{idx}".format(
                         name=node.name,
@@ -236,6 +265,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 )
 
         source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
+        if not parallel_axes_dims and not is_parallel:
+            source = f"np.asarray([{source}])"
 
         return source
 

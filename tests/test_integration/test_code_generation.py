@@ -23,6 +23,7 @@ import gt4py as gt
 from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
+from gt4py.gtscript import BACKWARD, FORWARD, PARALLEL, computation, interval
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
@@ -189,10 +190,13 @@ def test_lower_dimensional_inputs(backend):
         field_2d: gtscript.Field[np.float_, gtscript.IJ],
         field_1d: gtscript.Field[np.float_, gtscript.K],
     ):
-        with computation(PARALLEL), interval(0, 1):
-            field_2d = field_1d[1] + field_3d[0, 1, 0]
-
         with computation(PARALLEL):
+            with interval(0, 1):
+                field_2d = field_1d[1] + field_3d[0, 1, 0]
+            with interval(1, None):
+                field_1d = 1.0
+
+        with computation(FORWARD):
             with interval(0, 1):
                 tmp = field_2d[0, 1] + field_1d[1]
                 field_3d = tmp[1, 0, 0] + field_1d[1]
