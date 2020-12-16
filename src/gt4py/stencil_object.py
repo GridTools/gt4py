@@ -118,7 +118,7 @@ class StencilObject(abc.ABC):
         pass
 
     @staticmethod
-    def get_field_mask(field):
+    def _get_field_mask(field):
         return getattr(field, "mask", [True] * len(field.shape))
 
     def _get_max_domain(self, field_args, origin):
@@ -208,7 +208,7 @@ class StencilObject(abc.ABC):
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
         for name, field in used_field_args.items():
-            field_mask = self.get_field_mask(field)
+            field_mask = self._get_field_mask(field)
             min_origin = self.field_info[name].boundary.lower_indices
             field_shape = Shape.from_mask(field.shape, field_mask)
             field_origin = Index.from_mask(origin[name], field_mask)
@@ -308,7 +308,7 @@ class StencilObject(abc.ABC):
             origin = normalize_origin_mapping(origin)
 
         for name, field in used_field_args.items():
-            field_mask = self.get_field_mask(field)
+            field_mask = self._get_field_mask(field)
             field_origin = origin["_all_"] if "_all_" in origin else field.default_origin
             origin.setdefault(name, field_origin.filter_mask(field_mask))
 
