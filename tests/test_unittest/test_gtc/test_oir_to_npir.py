@@ -1,3 +1,5 @@
+import pytest
+
 from gt4py.gtc import common, oir
 from gt4py.gtc.python import npir
 from gt4py.gtc.python.oir_to_npir import OirToNpir
@@ -18,6 +20,11 @@ EMPTY_HORIZONTAL_EXECUTION = oir.HorizontalExecution(
     body=[],
     mask=None,
 )
+
+
+@pytest.fixture(params=[True, False])
+def parallel_k(request):
+    yield request.param
 
 
 def test_stencil_to_computation():
@@ -63,7 +70,7 @@ def test_horizontal_execution_to_vector_assigns():
     assert vector_assigns == []
 
 
-def test_assign_stmt_to_vector_assign():
+def test_assign_stmt_to_vector_assign(parallel_k):
     assign_stmt = oir.AssignStmt(
         left=oir.FieldAccess(
             name="a", offset=common.CartesianOffset.zero(), dtype=common.DataType.FLOAT64
@@ -73,14 +80,14 @@ def test_assign_stmt_to_vector_assign():
         ),
     )
 
-    ctx = OirToNpir.Context().set_parallel_k(value=True)
-    v_assign = OirToNpir().visit(assign_stmt, ctx=ctx)
+    ctx = OirToNpir.Context()
+    v_assign = OirToNpir().visit(assign_stmt, ctx=ctx, parallel_k=parallel_k)
     assert isinstance(v_assign, npir.VectorAssign)
-    assert v_assign.left.k_offset.parallel is True
-    assert v_assign.right.k_offset.parallel is True
+    assert v_assign.left.k_offset.parallel is parallel_k
+    assert v_assign.right.k_offset.parallel is parallel_k
 
 
-def test_field_access_to_field_slice():
+def test_field_access_to_field_slice(parallel_k):
     field_access = oir.FieldAccess(
         name="a",
         offset=common.CartesianOffset(i=-1, j=2, k=0),
@@ -88,21 +95,11 @@ def test_field_access_to_field_slice():
     )
 
     ctx = OirToNpir.Context()
-    # parallel k case
-    parallel_ctx = ctx.set_parallel_k(value=True)
-    parallel_field_slice = OirToNpir().visit(field_access, ctx=parallel_ctx)
-    assert parallel_field_slice.k_offset.parallel is True
+    parallel_field_slice = OirToNpir().visit(field_access, ctx=ctx, parallel_k=parallel_k)
+    assert parallel_field_slice.k_offset.parallel is parallel_k
     assert parallel_field_slice.i_offset.offset.value == -1
-    assert parallel_ctx.domain_padding["lower"][0] == 1
-    assert parallel_ctx.domain_padding["upper"][1] == 2
-
-    # sequential k case
-    sequential_ctx = ctx.set_parallel_k(value=False)
-    sequential_field_slice = OirToNpir().visit(field_access, ctx=sequential_ctx)
-    assert sequential_field_slice.k_offset.parallel is False
-    assert sequential_field_slice.i_offset.offset.value == -1
-    assert parallel_ctx.domain_padding["lower"][0] == 1
-    assert parallel_ctx.domain_padding["upper"][1] == 2
+    assert ctx.domain_padding["lower"][0] == 1
+    assert ctx.domain_padding["upper"][1] == 2
 
     # ctx.domain_padding should be correctly extended when visiting another field access
     OirToNpir().visit(
@@ -111,7 +108,8 @@ def test_field_access_to_field_slice():
             offset=common.CartesianOffset(i=-2, j=-1, k=4),
             dtype=common.DataType.FLOAT64,
         ),
-        ctx=parallel_ctx,
+        ctx=ctx,
+        parallel_k=parallel_k,
     )
     assert ctx.domain_padding["lower"][0] == 2
     assert ctx.domain_padding["lower"][1] == 1
