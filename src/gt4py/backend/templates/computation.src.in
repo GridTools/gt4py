@@ -186,7 +186,7 @@ static constexpr auto {{ name }} = {{ value }};
 struct {{ name }}_func {
     {%- for arg in stage.args %}
     using {{ arg.name }} = gt::{{ arg.access_type }}_accessor<{{ loop.index0 }}
-                {%- if arg.extent is not none %}, gt::extent<{{ arg.extent|join(", ")}}>{% endif -%}>;
+                {%- if arg.extent is not none %}, gt::extent<{{ arg.extent|join(", ") }}>{% endif -%}>;
     {%- endfor %}
 
     using param_list = gt::make_param_list<{{ stage.args|map(attribute='name')|join(", ")}} >;

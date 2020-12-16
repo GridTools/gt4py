@@ -23,7 +23,7 @@ import gt4py as gt
 from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
-from gt4py.gtscript import BACKWARD, FORWARD, PARALLEL, computation, interval
+from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, computation, interval
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
@@ -132,7 +132,6 @@ def test_stencil_without_effect(backend):
 
     def definition2(f_in: gtscript.Field[np.float_]):
         from __externals__ import flag
-        from __gtscript__ import __INLINE
 
         with computation(PARALLEL), interval(...):
             if __INLINED(flag):

@@ -262,7 +262,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
     def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> str:
         assert node.name in self.apply_block_symbols
-        offset = [node.offset.get(name, 0) for name in self.impl_node.fields[node.name].axes]
+        offset = [node.offset.get(name, 0) for name in self.domain.axes_names]
         if not all(i == 0 for i in offset):
             idx = ", ".join(str(i) for i in offset)
         else:

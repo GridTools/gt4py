@@ -133,15 +133,12 @@ class StencilObject(abc.ABC):
         -------
             `Shape`: the maximum domain size.
         """
-        max_domain = Shape([np.iinfo(np.uintc).max] * self.domain_info.ndims)
+        large_val = np.iinfo(np.uintc).max
+        max_domain = Shape([large_val] * self.domain_info.ndims)
         for name, field in field_args.items():
-            # Compute max_domain as if all fields were 3D
-            field_origin = Index.from_mask(origin[name], field.mask)
-            field_shape = Shape.from_mask(field.shape, field.mask)
-            upper_boundary = Index.from_mask(
-                self.field_info[name].boundary.upper_indices, field.mask
-            )
-            max_domain &= field_shape - (field_origin + upper_boundary)
+            upper_boundary = self.field_info[name].boundary.upper_indices.filter_mask(field.mask)
+            field_domain = Shape(field.shape) - (origin[name] + upper_boundary)
+            max_domain &= Shape.from_mask(field_domain, field.mask, default=large_val)
         return max_domain
 
     def _validate_args(self, used_field_args, used_param_args, domain, origin):
