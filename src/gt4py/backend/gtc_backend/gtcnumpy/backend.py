@@ -33,7 +33,9 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         return {"computation.py": NpirGen.apply(self.npir)}
 
     def make_module_source(self) -> str:
-
+        field_info = FieldInfoGenerator.apply(self.gtir)
+        args_data = ArgsData()
+        args_data.field_info = field_info
 
     def _make_gtir(self) -> gtir.Stencil
         gtir = FieldsMetadataPass().visit(DefIRToGTIR.apply(self.builder.definition_ir))
