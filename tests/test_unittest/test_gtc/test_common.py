@@ -11,7 +11,6 @@ from gt4py.gtc.common import (
     IfStmt,
     Literal,
     LogicalOperator,
-    NativeFuncCall,
     NativeFunction,
     Stmt,
     UnaryOperator,
@@ -56,6 +55,10 @@ class BinaryOpUpcasting(Expr, common.BinaryOp[Expr]):
 
 class TernaryOpUpcasting(Expr, common.TernaryOp[Expr]):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=False)
+
+
+class NativeFuncCall(Expr, common.NativeFuncCall[Expr]):
+    _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
 @pytest.mark.parametrize(
