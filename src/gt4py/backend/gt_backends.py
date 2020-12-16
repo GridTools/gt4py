@@ -417,11 +417,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 arg["access_type"] = (
                     "in" if accessor.intent == gt_ir.AccessIntent.READ_ONLY else "inout"
                 )
-                arg["extent"] = gt_utils.flatten(
-                    gt_utils.filter_from_axes(
-                        accessor.extent, self.impl_node.fields[accessor.symbol].axes
-                    )
-                )
+                arg["extent"] = gt_utils.flatten(accessor.extent)
             args.append(arg)
 
         # Create regions and computations

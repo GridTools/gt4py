@@ -391,11 +391,11 @@ class FrameTuple(tuple):
 
     @property
     def lower_indices(self):
-        return Index(*tuple(d[0] for d in self))
+        return NumericTuple(*(d[0] for d in self))
 
     @property
     def upper_indices(self):
-        return Index(*tuple(d[1] for d in self))
+        return NumericTuple(*(d[1] for d in self))
 
     def append(self, point):
         other = self.__class__([(i, i) for i in point])
