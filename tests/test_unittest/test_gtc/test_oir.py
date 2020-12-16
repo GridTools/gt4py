@@ -14,11 +14,6 @@ class DummyExpr(Expr):
     kind: ExprKind = ExprKind.FIELD
 
 
-# def test_dtype_required():
-#     with pytest.raises(ValidationError):
-#         DummyExpr(dtype=None)
-
-
 @pytest.mark.parametrize(
     "invalid_node,expected_regex",
     [

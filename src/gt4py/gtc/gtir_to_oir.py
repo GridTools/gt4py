@@ -102,8 +102,6 @@ class GTIRToOIR(eve.NodeTranslator):
             name=mask_field_decl.name, offset=CartesianOffset.zero(), dtype=mask_field_decl.dtype
         )
         if mask:
-            debug(mask)
-            debug(new_mask)
             new_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=new_mask)
 
         decls_and_h_execs += self.visit(node.true_branch.body, mask=new_mask)
