@@ -5,21 +5,36 @@ from gt4py.gtc.python import npir
 from gt4py.gtc.python.oir_to_npir import OirToNpir
 
 
-EMPTY_VERTICAL_LOOP = oir.VerticalLoop(
-    interval=oir.Interval(
-        start=oir.AxisBound.start(),
-        end=oir.AxisBound.end(),
-    ),
-    horizontal_executions=[],
-    loop_order=common.LoopOrder.PARALLEL,
-    declarations=[],
-)
+class VerticalLoopBuilder:
+    def __init__(self):
+        self._start = oir.AxisBound.start()
+        self._end = oir.AxisBound.end()
+        self._horizontal_executions = []
+        self._loop_order = common.LoopOrder.PARALLEL
+        self._declarations = []
+
+    def build(self):
+        return oir.VerticalLoop(
+            interval=oir.Interval(
+                start=self._start,
+                end=self._end,
+            ),
+            horizontal_executions=self._horizontal_executions,
+            loop_order=self._loop_order,
+            declarations=self._declarations,
+        )
 
 
-EMPTY_HORIZONTAL_EXECUTION = oir.HorizontalExecution(
-    body=[],
-    mask=None,
-)
+class HorizontalExecutionBuilder:
+    def __init__(self):
+        self._body = []
+        self._mask = None
+
+    def build(self):
+        return oir.HorizontalExecution(
+            body=[],
+            mask=None,
+        )
 
 
 @pytest.fixture(params=[True, False])
@@ -40,7 +55,7 @@ def test_stencil_to_computation():
                 dtype=common.DataType.INT32,
             ),
         ],
-        vertical_loops=[EMPTY_VERTICAL_LOOP],
+        vertical_loops=[VerticalLoopBuilder().build()],
     )
     computation = OirToNpir().visit(stencil)
 
@@ -50,22 +65,14 @@ def test_stencil_to_computation():
 
 
 def test_vertical_loop_to_vertical_pass():
-    vertical_loop = oir.VerticalLoop(
-        interval=oir.Interval(
-            start=oir.AxisBound.start(),
-            end=oir.AxisBound.end(),
-        ),
-        horizontal_executions=[],
-        loop_order=common.LoopOrder.PARALLEL,
-        declarations=[],
-    )
+    vertical_loop = VerticalLoopBuilder().build()
     vertical_pass = OirToNpir().visit(vertical_loop)
 
     assert vertical_pass.body == []
 
 
 def test_horizontal_execution_to_vector_assigns():
-    horizontal_execution = EMPTY_HORIZONTAL_EXECUTION
+    horizontal_execution = HorizontalExecutionBuilder().build()
     vector_assigns = OirToNpir().visit(horizontal_execution)
     assert vector_assigns == []
 
