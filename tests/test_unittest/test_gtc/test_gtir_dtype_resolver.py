@@ -1,6 +1,5 @@
-from typing import Dict, Tuple
+from typing import Dict
 
-import pytest
 
 from gt4py.gtc import common
 from gt4py.gtc.common import DataType
@@ -28,8 +27,23 @@ def get_nodes_with_name(stencil: Stencil, name: str):
     return stencil.iter_tree().if_hasattr("name").filter(lambda node: node.name == name).to_list()
 
 
-def propagate_dtype_to_FieldAccess():
-    return (
+def resolve_dtype_and_validate(testee: Stencil, expected_dtypes: Dict[str, common.DataType]):
+    # ensure consistency (input is not already fully resolved)
+    for name, dtype in expected_dtypes.items():
+        nodes = get_nodes_with_name(testee, name)
+        assert len(nodes) > 0
+        assert any([node.dtype is None for node in nodes])
+
+    result: Stencil = resolve_dtype(testee)
+
+    for name, dtype in expected_dtypes.items():
+        nodes = get_nodes_with_name(result, name)
+        assert len(nodes) > 0
+        assert all([node.dtype == dtype for node in nodes])
+
+
+def test_resolve_dtype_to_FieldAccess():
+    testee = (
         StencilBuilder()
         .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE))
         .add_par_assign_stmt(
@@ -38,13 +52,16 @@ def propagate_dtype_to_FieldAccess():
                 right=FieldAccessBuilder("field").dtype(None).build(),
             )
         )
-        .build(),
+        .build()
+    )
+    resolve_dtype_and_validate(
+        testee,
         {"field": A_ARITHMETIC_TYPE},
     )
 
 
-def resolve_AUTO_from_literal_to_temporary():
-    return (
+def test_resolve_AUTO_from_literal_to_temporary():
+    testee = (
         StencilBuilder()
         .add_vertical_loop(
             VerticalLoopBuilder()
@@ -57,13 +74,13 @@ def resolve_AUTO_from_literal_to_temporary():
             )
             .build()
         )
-        .build(),
-        {"tmp": A_ARITHMETIC_TYPE},
+        .build()
     )
+    resolve_dtype_and_validate(testee, {"tmp": A_ARITHMETIC_TYPE})
 
 
-def resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary():
-    return (
+def test_resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary():
+    testee = (
         StencilBuilder()
         .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE))
         .add_vertical_loop(
@@ -77,13 +94,13 @@ def resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary():
             )
             .build()
         )
-        .build(),
-        {"field": A_ARITHMETIC_TYPE, "tmp": A_ARITHMETIC_TYPE},
+        .build()
     )
+    resolve_dtype_and_validate(testee, {"field": A_ARITHMETIC_TYPE, "tmp": A_ARITHMETIC_TYPE})
 
 
-def resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary_to_FieldAccess_to_temporary():
-    return (
+def test_resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary_to_FieldAccess_to_temporary():
+    testee = (
         StencilBuilder()
         .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE))
         .add_vertical_loop(
@@ -104,36 +121,8 @@ def resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary_to_FieldAccess_to_te
             )
             .build()
         )
-        .build(),
-        {"field": A_ARITHMETIC_TYPE, "tmp1": A_ARITHMETIC_TYPE, "tmp2": A_ARITHMETIC_TYPE},
+        .build()
     )
-
-
-@pytest.fixture(
-    params=[
-        propagate_dtype_to_FieldAccess,
-        resolve_AUTO_from_literal_to_temporary,
-        resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary,
-        resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary_to_FieldAccess_to_temporary,
-    ]
-)
-def resolve_dtype_stencil_and_expected_dtypes(request):
-    return request.param()
-
-
-def test_resolved_dtypes(
-    resolve_dtype_stencil_and_expected_dtypes: Tuple[Stencil, Dict[str, common.DataType]]
-):
-    stencil, expected_dtypes = resolve_dtype_stencil_and_expected_dtypes
-    # ensure consistency (input is not already fully resolved)
-    for name, dtype in expected_dtypes.items():
-        nodes = get_nodes_with_name(stencil, name)
-        assert len(nodes) > 0
-        assert any([node.dtype is None for node in nodes])
-
-    result: Stencil = resolve_dtype(stencil)
-
-    for name, dtype in expected_dtypes.items():
-        nodes = get_nodes_with_name(result, name)
-        assert len(nodes) > 0
-        assert all([node.dtype == dtype for node in nodes])
+    resolve_dtype_and_validate(
+        testee, {"field": A_ARITHMETIC_TYPE, "tmp1": A_ARITHMETIC_TYPE, "tmp2": A_ARITHMETIC_TYPE}
+    )
