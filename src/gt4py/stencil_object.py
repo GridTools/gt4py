@@ -140,7 +140,7 @@ class StencilObject(abc.ABC):
         large_val = np.iinfo(np.uintc).max
         max_domain = Shape([large_val] * self.domain_info.ndims)
         for name, field in field_args.items():
-            field_mask = self.get_field_mask(field)
+            field_mask = self._get_field_mask(field)
             upper_boundary = self.field_info[name].boundary.upper_indices.filter_mask(field_mask)
             field_domain = Shape(field.shape) - (origin[name] + upper_boundary)
             max_domain &= Shape.from_mask(field_domain, field_mask, default=large_val)
