@@ -108,9 +108,10 @@ def cuda_layout(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
 def cuda_is_compatible_layout(field: "Storage") -> bool:
     stride = 0
     layout_map = cuda_layout(field.mask)
-    if len(field.strides) < len(layout_map):
+    flattened_layout = [index for index in layout_map if index is not None]
+    if len(field.strides) < len(flattened_layout):
         return False
-    for dim in reversed(np.argsort(layout_map)):
+    for dim in reversed(np.argsort(flattened_layout)):
         if field.strides[dim] < stride:
             return False
         stride = field.strides[dim]

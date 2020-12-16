@@ -135,10 +135,11 @@ class StencilObject(abc.ABC):
         """
         max_domain = Shape([np.iinfo(np.uintc).max] * self.domain_info.ndims)
         for name, field in field_args.items():
-            field_origin = Index.from_mask(origin[name], field.mask)
-            field_shape = Shape.from_mask(field.shape, field.mask)
+            field_mask = field.mask if isinstance(field, gt_storage.Storage) else [True] * 3
+            field_origin = Index.from_mask(origin[name], field_mask)
+            field_shape = Shape.from_mask(field.shape, field_mask)
             upper_boundary = Index.from_mask(
-                self.field_info[name].boundary.upper_indices, field.mask
+                self.field_info[name].boundary.upper_indices, field_mask
             )
             max_domain &= field_shape - (field_origin + upper_boundary)
         return max_domain
@@ -206,8 +207,9 @@ class StencilObject(abc.ABC):
             )
         for name, field in used_field_args.items():
             min_origin = self.field_info[name].boundary.lower_indices
-            field_shape = Shape.from_mask(field.shape, field.mask)
-            field_origin = Index.from_mask(origin[name], field.mask)
+            field_mask = field.mask if isinstance(field, gt_storage.Storage) else [True] * 3
+            field_shape = Shape.from_mask(field.shape, field_mask)
+            field_origin = Index.from_mask(origin[name], field_mask)
             if field_origin < min_origin:
                 raise ValueError(
                     f"Origin for field {name} too small. Must be at least {min_origin}, is {origin[name]}"
@@ -304,7 +306,13 @@ class StencilObject(abc.ABC):
 
         for name, field in used_field_args.items():
             field_origin = origin["_all_"] if "_all_" in origin else field.default_origin
-            origin.setdefault(name, field_origin.filter_mask(field.mask))
+            field_mask = field.mask if isinstance(field, gt_storage.Storage) else [True] * 3
+            origin.setdefault(
+                name,
+                field_origin.filter_mask(field_mask)
+                if isinstance(field_origin, Shape)
+                else field_origin,
+            )
 
         # Domain
         if domain is None:

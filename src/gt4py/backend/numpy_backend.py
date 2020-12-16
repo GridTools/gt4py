@@ -41,6 +41,10 @@ class ShapedExpr(gt_ir.Node):
     axes = attribute(of=SetOf[str])
     expr = attribute(of=gt_ir.Expr)
 
+    @property
+    def data_type(self) -> np.dtype:
+        return self.expr.data_type
+
 
 class NumpyIR(gt_ir.IRNodeMapper):
     @classmethod
@@ -97,6 +101,10 @@ class NumPySourceGenerator(PythonSourceGenerator):
         self.interval_k_start_name = interval_k_start_name
         self.interval_k_end_name = interval_k_end_name
         self.conditions_depth = 0
+
+    def _is_composite_expr(self, node: gt_ir.Node):
+        expr = node.expr if isinstance(node, ShapedExpr) else node
+        return isinstance(expr, gt_ir.CompositeExpr)
 
     def _make_field_origin(self, name: str, origin=None):
         if origin is None:
@@ -178,16 +186,17 @@ class NumPySourceGenerator(PythonSourceGenerator):
         code = self.visit(node.expr)
 
         # TODO Cannot be a set! Order matters...
-        leftover_axes = [ax for ax in req_axes if ax not in node.axes]
-        print("leftover_axes = ", leftover_axes)
-        print("req_axes = ", req_axes)
-        print("node.axes = ", node.axes)
+        leftover_axes = (
+            [ax for ax in req_axes if ax not in node.axes]
+            if len(node.axes) > 0 and node.axes != req_axes
+            else []
+        )
         if leftover_axes:
             view = ", ".join(
                 "{np}.newaxis".format(np=self.numpy_prefix) if axis not in node.axes else ":"
                 for axis in req_axes
             )
-            return f"{code}[{view}]"
+            return f"({code})[{view}]"
         else:
             return code
 
@@ -292,7 +301,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         if node.op is gt_ir.UnaryOperator.NOT:
             source = "np.logical_not({expr})".format(expr=self.visit(node.arg))
         else:
-            fmt = "({})" if isinstance(node.arg, gt_ir.CompositeExpr) else "{}"
+            fmt = "({})" if self._is_composite_expr(node.arg) else "{}"
             source = "{op}{expr}".format(
                 op=self.OP_TO_PYTHON[node.op], expr=fmt.format(self.visit(node.arg))
             )
@@ -309,8 +318,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 lhs=self.visit(node.lhs), rhs=self.visit(node.rhs)
             )
         else:
-            lhs_fmt = "({})" if isinstance(node.lhs, gt_ir.CompositeExpr) else "{}"
-            rhs_fmt = "({})" if isinstance(node.rhs, gt_ir.CompositeExpr) else "{}"
+            lhs_fmt = "({})" if self._is_composite_expr(node.lhs) else "{}"
+            rhs_fmt = "({})" if self._is_composite_expr(node.rhs) else "{}"
             source = "{lhs} {op} {rhs}".format(
                 lhs=lhs_fmt.format(self.visit(node.lhs)),
                 op=self.OP_TO_PYTHON[node.op],
@@ -320,8 +329,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return source
 
     def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr) -> str:
-        then_fmt = "({})" if isinstance(node.then_expr, gt_ir.CompositeExpr) else "{}"
-        else_fmt = "({})" if isinstance(node.else_expr, gt_ir.CompositeExpr) else "{}"
+        then_fmt = "({})" if self._is_composite_expr(node.then_expr) else "{}"
+        else_fmt = "({})" if self._is_composite_expr(node.else_expr) else "{}"
 
         source = "{np}.where({condition}, {then_expr}, {else_expr})".format(
             np=self.numpy_prefix,
@@ -355,8 +364,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
             # If it does, it needs to be the else expression of the where, otherwise we set the else to nan.
             # This ensures that we only write defined values.
             # This check is not relevant for fields as they enter defined
-            is_possible_else = not isinstance(stmt.target, gt_ir.VarRef) or (
-                stmt.target.name in self.var_refs_defined
+            target_expr = stmt.target.expr if isinstance(stmt.target, ShapedExpr) else stmt.target
+            is_possible_else = not isinstance(target_expr, gt_ir.VarRef) or (
+                target_expr.name in self.var_refs_defined
             )
 
             sources.append(
@@ -369,8 +379,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 )
             )
 
-            if isinstance(stmt.target, gt_ir.VarRef):
-                self.var_refs_defined.add(stmt.target.name)
+            if isinstance(target_expr, gt_ir.VarRef):
+                self.var_refs_defined.add(target_expr.name)
 
         else:
             stmt_sources = self.visit(stmt)
