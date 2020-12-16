@@ -6,29 +6,12 @@ import pytest
 from gt4py.gtc import common
 from gt4py.gtc.python import npir, npir_gen
 
+from .npir_utils import FieldSliceBuilder
+
 
 UNDEFINED_DTYPES = {common.DataType.INVALID, common.DataType.AUTO, common.DataType.DEFAULT}
 
 DEFINED_DTYPES: Set[common.DataType] = set(common.DataType) - UNDEFINED_DTYPES  # type: ignore
-
-
-class FieldSliceBuilder:
-    def __init__(self, name: str, *, parallel_k=False):
-        self._name = name
-        self._offsets = [0, 0, 0]
-        self._parallel_k = parallel_k
-
-    def offsets(self, i: int, j: int, k: int):
-        self._offsets = [i, j, k]
-        return self
-
-    def build(self):
-        return npir.FieldSlice(
-            name=self._name,
-            i_offset=npir.AxisOffset.i(self._offsets[0]),
-            j_offset=npir.AxisOffset.j(self._offsets[1]),
-            k_offset=npir.AxisOffset.k(self._offsets[2], parallel=self._parallel_k),
-        )
 
 
 @pytest.fixture(params=DEFINED_DTYPES)
@@ -122,8 +105,8 @@ def test_vertical_pass_seq() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VerticalPass(
             body=[],
-            lower=npir.NumericalOffset(value=1),
-            upper=npir.NumericalOffset(value=-2),
+            lower=common.AxisBound.from_start(offset=1),
+            upper=common.AxisBound.from_end(offset=2),
             direction=common.LoopOrder.FORWARD,
         )
     )
@@ -140,8 +123,8 @@ def test_vertical_pass_par() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VerticalPass(
             body=[],
-            lower=npir.NumericalOffset(value=0),
-            upper=npir.NumericalOffset(value=0),
+            lower=common.AxisBound.start(),
+            upper=common.AxisBound.end(),
             direction=common.LoopOrder.PARALLEL,
         )
     )
@@ -152,6 +135,10 @@ def test_vertical_pass_par() -> None:
         re.MULTILINE,
     )
     assert match
+
+
+## TODO: test_vertical_pass in region DOMAIN_k, DOMAIN_k + 5
+## TODO: test_vertical_pass in region DOMAIN_K-4, DOMAIN_k - 1
 
 
 def test_domain_padding() -> None:
@@ -186,7 +173,7 @@ def test_computation() -> None:
                 lower=(0, 0, 0),
                 upper=(0, 0, 0),
             ),
-            scalar_params=[],
+            params=[],
             field_params=[],
             vertical_passes=[],
         )
@@ -207,12 +194,12 @@ def test_full_computation_valid(tmp_path) -> None:
                 lower=(2, 2, 0),
                 upper=(0, 3, 1),
             ),
-            scalar_params=["s1"],
+            params=["f1", "f2", "f3", "s1"],
             field_params=["f1", "f2", "f3"],
             vertical_passes=[
                 npir.VerticalPass(
-                    lower=npir.NumericalOffset(value=0),
-                    upper=npir.NumericalOffset(value=0),
+                    lower=common.AxisBound.start(),
+                    upper=common.AxisBound.end(),
                     direction=common.LoopOrder.PARALLEL,
                     body=[
                         npir.VectorAssign(
@@ -230,8 +217,8 @@ def test_full_computation_valid(tmp_path) -> None:
                     ],
                 ),
                 npir.VerticalPass(
-                    lower=npir.NumericalOffset(value=1),
-                    upper=npir.NumericalOffset(value=-3),
+                    lower=common.AxisBound.from_start(offset=1),
+                    upper=common.AxisBound.from_end(offset=3),
                     direction=common.LoopOrder.BACKWARD,
                     body=[
                         npir.VectorAssign(
@@ -263,9 +250,9 @@ def test_full_computation_valid(tmp_path) -> None:
     f3 = np.ones_like(f1) * 2
     s1 = 5
     mod.run(
-        f1,
-        f2,
-        f3,
+        f1=f1,
+        f2=f2,
+        f3=f3,
         s1=s1,
         _domain_=(8, 5, 9),
         _origin_={"f1": (2, 2, 0), "f2": (2, 2, 0), "f3": (2, 2, 0)},
@@ -277,5 +264,7 @@ def test_full_computation_valid(tmp_path) -> None:
     assert (f1[:, :, -1:] == 0).all()
 
     exp_f2 = np.ones((10)) * 3
-    exp_f2[-3:1:-1] = np.cumsum(exp_f2[1:-3])
+    # Remember that reversed ranges still include the first (higher) argument and exclude the
+    # second. Thus range(-4, 0, -1) contains the same indices as range(1, -3).
+    exp_f2[-4:0:-1] = np.cumsum(exp_f2[1:-3])
     assert (f2[3, 3, :] == exp_f2[:]).all()

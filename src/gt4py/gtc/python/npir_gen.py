@@ -1,4 +1,5 @@
 import textwrap
+from typing import Tuple
 
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
 
@@ -8,20 +9,25 @@ from gt4py.gtc import common
 __all__ = ["NpirGen"]
 
 
+def op_delta_from_int(value: int) -> Tuple[str, str]:
+    operator = ""
+    delta = value
+    if value == 0:
+        delta = ""
+    elif value < 0:
+        operator = " - "
+        delta = abs(value)
+    else:
+        operator = " + "
+    return operator, delta
+
+
 class NpirGen(TemplatedGenerator):
 
     Literal = FormatTemplate("np.{_this_node.dtype.name.lower()}({value})")
 
     def visit_NumericalOffset(self, node, **kwargs):
-        operator = ""
-        delta = node.value
-        if node.value == 0:
-            delta = ""
-        elif node.value < 0:
-            operator = " - "
-            delta = abs(node.value)
-        else:
-            operator = " + "
+        operator, delta = op_delta_from_int(node.value)
         return self.generic_visit(node, op=operator, delta=delta, **kwargs)
 
     NumericalOffset = FormatTemplate("{op}{delta}")
@@ -44,6 +50,19 @@ class NpirGen(TemplatedGenerator):
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")
 
+    def visit_LevelMarker(self, node, **kwargs):
+        return "K" if node == common.LevelMarker.END else "k"
+
+    def visit_AxisBound(self, node, **kwargs):
+        delta = ""
+        operator = ""
+        if node.offset > 0:
+            operator = " - " if node.level == common.LevelMarker.END else " + "
+            delta = str(node.offset)
+        return self.generic_visit(node, op=operator, delta=delta, **kwargs)
+
+    AxisBound = FormatTemplate("DOMAIN_{level}{op}{delta}")
+
     def visit_VerticalPass(self, node, **kwargs):
         for_loop_line = ""
         body_indent = 0
@@ -51,17 +70,18 @@ class NpirGen(TemplatedGenerator):
             for_loop_line = "\nfor k_ in range(k, K):"
             body_indent = 4
         elif node.direction == common.LoopOrder.BACKWARD:
-            for_loop_line = "\nfor k_ in range(K, k, -1):"
+            for_loop_line = "\nfor k_ in range(K-1, k-1, -1):"
             body_indent = 4
         return self.generic_visit(
             node, for_loop_line=for_loop_line, body_indent=body_indent, **kwargs
         )
 
+    ## TODO: change to use AxisBounds, k can also be derived from DOMAIN_K and so on...
     VerticalPass = JinjaTemplate(
         textwrap.dedent(
             """\
             ## -- begin vertical region --
-            k, K = DOMAIN_k{{ lower }}, DOMAIN_K{{ upper }}{{ for_loop_line }}
+            k, K = {{ lower }}, {{ upper }}{{ for_loop_line }}
             {% for assign in body %}{{ assign | indent(body_indent, first=True) }}
             {% endfor %}## -- end vertical region --
             """
@@ -84,7 +104,7 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_Computation(self, node, **kwargs):
-        signature = [*node.field_params, "*", *node.scalar_params, "_domain_", "_origin_"]
+        signature = ["*", *node.params, "_domain_", "_origin_"]
         data_views = JinjaTemplate(
             textwrap.dedent(
                 """\

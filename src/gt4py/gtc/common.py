@@ -475,3 +475,24 @@ def native_func_call_dtype_propagation(*, strict: bool = True):
         return values
 
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+
+
+class AxisBound(Node):
+    level: LevelMarker
+    offset: int = 0
+
+    @classmethod
+    def from_start(cls, offset: int):
+        return cls(level=LevelMarker.START, offset=offset)
+
+    @classmethod
+    def from_end(cls, offset: int):
+        return cls(level=LevelMarker.END, offset=offset)
+
+    @classmethod
+    def start(cls):
+        return cls.from_start(0)
+
+    @classmethod
+    def end(cls):
+        return cls.from_end(0)
