@@ -85,8 +85,8 @@ class VectorAssign(common.AssignStmt[FieldSlice, VectorExpression], VectorExpres
 
 class VerticalPass(common.LocNode):
     body: List[VectorAssign]
-    lower: NumericalOffset
-    upper: NumericalOffset
+    lower: common.AxisBound
+    upper: common.AxisBound
     direction: common.LoopOrder
 
 
@@ -97,6 +97,6 @@ class DomainPadding(eve.Node):
 
 class Computation(common.LocNode):
     field_params: List[str]
-    scalar_params: List[str]
+    params: List[str]
     vertical_passes: List[VerticalPass]
     domain_padding: DomainPadding
