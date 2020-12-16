@@ -64,9 +64,6 @@ class OirToNpir(NodeTranslator):
             direction=self.visit(node.loop_order, **kwargs),
         )
 
-    def visit_AxisBound(self, node: oir.AxisBound, **kwargs) -> common.AxisBound:
-        return common.AxisBound(level=node.level, offset=node.offset)
-
     def visit_HorizontalExecution(
         self, node: oir.HorizontalExecution, *, ctx: Optional[Context] = None, **kwargs
     ) -> List[npir.VectorAssign]:
