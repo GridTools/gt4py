@@ -6,7 +6,7 @@ from gt4py.backend import REGISTRY as backend_registry
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
-from ..definitions import ALL_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, DAWN_CPU_BACKENDS
 
 
 def stencil_def(
@@ -83,8 +83,9 @@ def test_generate_pre_run(backend_name, mode):
     module_generator.args_data = args_data
     source = module_generator.generate_pre_run()
 
-    if backend_cls.storage_info["device"] == "cpu":
-        assert source == ""
+    if backend_name in CPU_BACKENDS:
+        if backend_name not in DAWN_CPU_BACKENDS:
+            assert source == ""
     else:
         for key in field_info_val[mode]:
             assert f"{key}.host_to_device()" in source
@@ -104,7 +105,7 @@ def test_generate_post_run(backend_name, mode):
     module_generator.args_data = args_data
     source = module_generator.generate_post_run()
 
-    if backend_cls.storage_info["device"] == "cpu":
+    if backend_name in CPU_BACKENDS:
         assert source == ""
     else:
         assert source == "out._set_device_modified()"
