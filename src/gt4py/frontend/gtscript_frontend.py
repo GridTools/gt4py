@@ -1130,7 +1130,8 @@ class IRMaker(ast.NodeVisitor):
         target = []
         if len(node.targets) > 1:
             raise GTScriptSyntaxError(
-                message="Assignment to multiple variables (e.g. var1 = var2 = value) not supported."
+                message="Assignment to multiple variables (e.g. var1 = var2 = value) not supported.",
+                loc=gt_ir.Location.from_ast_node(node),
             )
 
         for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
@@ -1171,6 +1172,12 @@ class IRMaker(ast.NodeVisitor):
                     else:
                         result.append(field_decl)
                     self.fields[field_decl.name] = field_decl
+                else:
+                    if len(self.fields[t.id].axes) == 1:
+                        raise GTScriptSyntaxError(
+                            message="Cannot assign to 1D field.",
+                            loc=gt_ir.Location.from_ast_node(t),
+                        )
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
 

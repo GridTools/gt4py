@@ -755,6 +755,20 @@ class TestReducedDimensions:
         ):
             compile_definition(definition, "test_error_annotation", module, externals=externals)
 
+    def test_error_write_1d(self, id_version):
+        module = f"TestReducedDimensions_test_error_write_1d_{id_version}"
+        externals = {}
+
+        def definition(
+            field_in: gtscript.Field[np.float_, gtscript.IJK],
+            field_out: gtscript.Field[np.float_, gtscript.K],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out = field_in[0, 0, 0]
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Cannot assign to 1D field"):
+            compile_definition(definition, "test_error_annotation", module, externals=externals)
+
 
 class TestImports:
     def test_all_legal_combinations(self, id_version):
