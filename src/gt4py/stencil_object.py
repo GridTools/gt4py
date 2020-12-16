@@ -117,6 +117,10 @@ class StencilObject(abc.ABC):
     def __call__(self, *args, **kwargs):
         pass
 
+    @staticmethod
+    def get_field_mask(field):
+        return getattr(field, "mask", [True] * len(field.shape))
+
     def _get_max_domain(self, field_args, origin):
         """Return the maximum domain size possible
 
@@ -136,9 +140,10 @@ class StencilObject(abc.ABC):
         large_val = np.iinfo(np.uintc).max
         max_domain = Shape([large_val] * self.domain_info.ndims)
         for name, field in field_args.items():
-            upper_boundary = self.field_info[name].boundary.upper_indices.filter_mask(field.mask)
+            field_mask = self.get_field_mask(field)
+            upper_boundary = self.field_info[name].boundary.upper_indices.filter_mask(field_mask)
             field_domain = Shape(field.shape) - (origin[name] + upper_boundary)
-            max_domain &= Shape.from_mask(field_domain, field.mask, default=large_val)
+            max_domain &= Shape.from_mask(field_domain, field_mask, default=large_val)
         return max_domain
 
     def _validate_args(self, used_field_args, used_param_args, domain, origin):
@@ -203,9 +208,10 @@ class StencilObject(abc.ABC):
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
         for name, field in used_field_args.items():
+            field_mask = self.get_field_mask(field)
             min_origin = self.field_info[name].boundary.lower_indices
-            field_shape = Shape.from_mask(field.shape, field.mask)
-            field_origin = Index.from_mask(origin[name], field.mask)
+            field_shape = Shape.from_mask(field.shape, field_mask)
+            field_origin = Index.from_mask(origin[name], field_mask)
             if field_origin < min_origin:
                 raise ValueError(
                     f"Origin for field {name} too small. Must be at least {min_origin}, is {origin[name]}"
@@ -302,8 +308,9 @@ class StencilObject(abc.ABC):
             origin = normalize_origin_mapping(origin)
 
         for name, field in used_field_args.items():
+            field_mask = self.get_field_mask(field)
             field_origin = origin["_all_"] if "_all_" in origin else field.default_origin
-            origin.setdefault(name, field_origin.filter_mask(field.mask))
+            origin.setdefault(name, field_origin.filter_mask(field_mask))
 
         # Domain
         if domain is None:
