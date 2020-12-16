@@ -97,10 +97,6 @@ class NumpyIR(gt_ir.IRNodeMapper):
             return True, final_class(axes=axes, expr=new_node)
 
 
-def is_composite_expr(node: gt_ir.Node) -> bool:
-    return isinstance(node, gt_ir.CompositeExpr) or isinstance(node, ShapedCompositeExpr)
-
-
 class NumPySourceGenerator(PythonSourceGenerator):
     NATIVE_FUNC_TO_PYTHON = {
         gt_ir.NativeFunction.ABS: "np.abs",
@@ -311,7 +307,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         if node.op is gt_ir.UnaryOperator.NOT:
             source = "np.logical_not({expr})".format(expr=self.visit(node.arg))
         else:
-            fmt = "({})" if is_composite_expr(node.arg) else "{}"
+            fmt = "({})" if isinstance(node.arg, gt_ir.CompositeExpr) else "{}"
             source = "{op}{expr}".format(
                 op=self.OP_TO_PYTHON[node.op], expr=fmt.format(self.visit(node.arg))
             )
@@ -328,8 +324,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 lhs=self.visit(node.lhs), rhs=self.visit(node.rhs)
             )
         else:
-            lhs_fmt = "({})" if is_composite_expr(node.lhs) else "{}"
-            rhs_fmt = "({})" if is_composite_expr(node.rhs) else "{}"
+            lhs_fmt = "({})" if isinstance(node.lhs, gt_ir.CompositeExpr) else "{}"
+            rhs_fmt = "({})" if isinstance(node.rhs, gt_ir.CompositeExpr) else "{}"
             source = "{lhs} {op} {rhs}".format(
                 lhs=lhs_fmt.format(self.visit(node.lhs)),
                 op=self.OP_TO_PYTHON[node.op],
@@ -339,8 +335,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return source
 
     def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr) -> str:
-        then_fmt = "({})" if is_composite_expr(node.then_expr) else "{}"
-        else_fmt = "({})" if is_composite_expr(node.else_expr) else "{}"
+        then_fmt = "({})" if isinstance(node.then_expr, gt_ir.CompositeExpr) else "{}"
+        else_fmt = "({})" if isinstance(node.else_expr, gt_ir.CompositeExpr) else "{}"
 
         source = "{np}.where({condition}, {then_expr}, {else_expr})".format(
             np=self.numpy_prefix,
