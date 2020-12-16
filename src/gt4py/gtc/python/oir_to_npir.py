@@ -69,7 +69,7 @@ class OirToNpir(NodeTranslator):
             direction=self.visit(node.loop_order),
         )
 
-    def visit_AxisBound(self, node: oir.AxisBound, **kwargs) -> common.AxisBound:
+    def visit_AxisBound(self, node: oir.AxisBound) -> common.AxisBound:
         return common.AxisBound(level=node.level, offset=node.offset)
 
     def visit_HorizontalExecution(
@@ -92,4 +92,13 @@ class OirToNpir(NodeTranslator):
             i_offset=npir.AxisOffset.i(node.offset.i),
             j_offset=npir.AxisOffset.j(node.offset.j),
             k_offset=npir.AxisOffset.k(node.offset.k, parallel=ctx.parallel_k),
+        )
+
+    def visit_BinaryOp(
+        self, node: oir.BinaryOp, *, ctx: Optional[Context] = None
+    ) -> npir.VectorArithmetic:
+        return npir.VectorArithmetic(
+            op=node.op,
+            left=self.visit(node.left, ctx=ctx),
+            right=self.visit(node.right, ctx=ctx),
         )
