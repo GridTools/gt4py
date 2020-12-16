@@ -145,8 +145,6 @@ class GTIRToOIR(eve.NodeTranslator):
         for temp in node.temporaries:
             decls.append(oir.Temporary(name=temp.name, dtype=temp.dtype))
 
-        debug(decls)
-        debug(h_execs)
         return oir.VerticalLoop(
             interval=self.visit(node.interval),
             loop_order=node.loop_order,
