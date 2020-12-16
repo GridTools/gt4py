@@ -157,7 +157,9 @@ class DefIRToGTIR(IRNodeVisitor):
             if isinstance(s, FieldDecl) or isinstance(s, VarDecl):
                 dtype = common.DataType(int(s.data_type.value))
                 if dtype == common.DataType.DEFAULT:
-                    dtype = common.DataType.FLOAT64  # TODO properly fix
+                    # TODO this will be a frontend choice later
+                    # in non-GTC parts, this is set in the backend
+                    dtype = common.DataType.FLOAT64
                 temporaries.append(gtir.FieldDecl(name=s.name, dtype=dtype))
             else:
                 stmts.append(self.visit(s))

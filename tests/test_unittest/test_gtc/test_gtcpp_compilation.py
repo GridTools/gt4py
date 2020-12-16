@@ -8,13 +8,24 @@ from devtools import debug
 
 from gt4py import config, gt2_src_manager  # TODO must not include gt4py package or ok for test?
 from gt4py.gtc.common import DataType
-from gt4py.gtc.gtcpp.gtcpp import GTAccessor, GTApplyMethod, GTExtent, Intent, Literal, Program
+from gt4py.gtc.gtcpp.gtcpp import (
+    GTAccessor,
+    GTApplyMethod,
+    GTExtent,
+    GTStage,
+    Intent,
+    Literal,
+    ParamArg,
+    Program,
+)
 from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 
 from .gtcpp_utils import (
     AssignStmtBuilder,
+    GTAccessorBuilder,
     GTApplyMethodBuilder,
+    GTComputationBuilder,
     GTFunctorBuilder,
     IfStmtBuilder,
     ProgramBuilder,
@@ -98,22 +109,14 @@ def build_gridtools_test(tmp_path: Path, code: str):
             r"void\s*apply\(",
         ),
         (ProgramBuilder("test").add_parameter("my_param", DataType.FLOAT64).build(), r"my_param"),
-        # TODO the following test is creating invalid IR (we could check by validating symbols)
-        # (
-        #     ProgramBuilder("test")
-        #     .add_parameter("outer_param")
-        #     .add_functor(
-        #         GTFunctorBuilder("fun").add_apply_method().build(),
-        #     )
-        #     .gt_computation(
-        #         GTComputationBuilder("test")
-        #         .add_stage(GTStage(functor="fun", args=[ParamArg(name="stage_arg")]))
-        #         .add_parameter("gt_comp_param")
-        #         .build()
-        #     )
-        #     .build(),
-        #     r"",
-        # ),
+        (
+            ProgramBuilder("test").add_parameter("outer_param", DataType.FLOAT64)
+            # TODO this test needs a functor! make GTCpp validators stricter!
+            .gt_computation(
+                GTComputationBuilder("test").add_stage(GTStage(functor="fun", args=[])).build()
+            ).build(),
+            r"",
+        ),
     ],
 )
 def test_program_compilation_succeeds(tmp_path, gtcpp_program, expected_regex):

@@ -4,14 +4,14 @@ import pytest
 
 from gt4py.gtc.common import DataType, LevelMarker, LoopOrder
 from gt4py.gtc.gtir import (
-    ParAssignStmt,
     AxisBound,
     CartesianOffset,
-    Stencil,
     FieldAccess,
     FieldBoundary,
     FieldDecl,
     Interval,
+    ParAssignStmt,
+    Stencil,
     VerticalLoop,
 )
 from gt4py.gtc.passes import FieldsMetadataPass

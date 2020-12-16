@@ -97,6 +97,8 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
 
+    # TODO validate dtype of lhs and rhs match
+
 
 class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
     """
@@ -141,11 +143,11 @@ class UnaryOp(common.UnaryOp[Expr], Expr):
 
 
 class BinaryOp(common.BinaryOp[Expr], Expr):
-    pass
+    _dtype_validator = common.binary_op_dtype_propagation(strict=False)
 
 
 class TernaryOp(common.TernaryOp[Expr], Expr):
-    pass
+    _dtype_propagation = common.ternary_op_dtype_propagation(strict=False)
 
 
 class Cast(common.Cast[Expr], Expr):
@@ -153,7 +155,7 @@ class Cast(common.Cast[Expr], Expr):
 
 
 class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
-    pass
+    _dtype_propagation = common.native_func_call_dtype_propagation(strict=False)
 
 
 class Decl(LocNode):  # TODO probably Stmt

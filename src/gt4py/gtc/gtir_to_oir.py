@@ -62,7 +62,6 @@ class GTIRToOIR(eve.NodeTranslator):
         return oir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
 
     def visit_ScalarAccess(self, node: gtir.ScalarAccess, **kwargs):
-        debug(node)
         return oir.ScalarAccess(name=node.name, dtype=node.dtype)
 
     def visit_Literal(self, node: gtir.Literal, **kwargs):
