@@ -151,8 +151,6 @@ class HorizontalExecution(LocNode):
         if v:
             if v.dtype != common.DataType.BOOL:
                 raise ValueError("Mask must be a boolean expression.")
-            if v.kind != common.ExprKind.FIELD:
-                raise ValueError("Mask must be a field expression.")
         return v
 
 
