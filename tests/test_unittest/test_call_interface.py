@@ -128,9 +128,9 @@ def test_domain_selection():
     )
     stencil(A, B, C, param=3.0, origin=(0, 0, 0))
 
-    assert np.all(A == 4)
-    assert np.all(B == 7)
-    assert np.all(C == 21)
+    assert np.all(np.asarray(A) == 4)
+    assert np.all(np.asarray(B) == 7)
+    assert np.all(np.asarray(C) == 21)
 
 
 def a_stencil(
@@ -232,7 +232,7 @@ def test_halo_checks(backend):
         backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
     )
     stencil(in_field=in_field, out_field=out_field)
-    assert (out_field[1:-1, 1:-1, :] == 1).all()
+    assert (np.asarray(out_field[1:-1, 1:-1, :]) == 1).all()
 
     # test setting arbitrary, small domain works
     in_field = gt_storage.ones(
@@ -242,7 +242,7 @@ def test_halo_checks(backend):
         backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
     )
     stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(10, 10, 10))
-    assert (out_field[2:12, 2:12, :] == 1).all()
+    assert (np.asarray(out_field[2:12, 2:12, :]) == 1).all()
 
     # test setting domain+origin too large raises
     in_field = gt_storage.ones(
@@ -312,6 +312,7 @@ def test_np_array_int_types():
         origin=np.asarray((2, 2, 0), dtype=np.int64),
         domain=np.asarray((20, 20, 10), dtype=np.int64),
     )
+
 
 @pytest.mark.parametrize("backend", ["debug", "numpy", "gtx86"])
 def test_exec_info(backend):

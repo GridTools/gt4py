@@ -27,7 +27,6 @@ repos:
           setup.py |
           src/gt4py/__gtscript__.py |
           src/gt4py/__init__.py |
-          src/gt4py/definitions.py |
           src/gt4py/gtscript.py |
           src/gt4py/stencil_object.py |
           src/gt4py/analysis/__init__.py |
@@ -95,7 +94,6 @@ repos:
           src/gt4py/ir/utils.py |
           src/gt4py/stencil_object.py |
           src/gt4py/utils/meta.py |
-          tests/definitions.py |
           tests/test_integration/stencil_definitions.py |
           tests/test_integration/test_code_generation.py |
           tests/test_unittest/test_call_interface.py |

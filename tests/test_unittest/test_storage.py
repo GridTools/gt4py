@@ -613,18 +613,31 @@ def test_slices_gpu():
     stor[::2, ::2, ::2] = ref[::2, ::2, ::2] + ref[::2, ::2, ::2]
 
 
-def test_transpose(backend="gtmc"):
+@pytest.mark.parametrize(
+    "backend", ["gtmc", pytest.param("gtcuda", marks=pytest.mark.requires_gpu)]
+)
+def test_transpose(backend):
     default_origin = (1, 1, 1)
     shape = (10, 10, 10)
     array = np.random.randn(*shape)
     stor = gt_store.storage(
         array, default_origin=default_origin, backend=backend, dtype=np.float64
     )
-    transposed = np.transpose(stor, axes=(0, 1, 2))
-    assert transposed.strides == stor.strides
-    assert transposed.is_stencil_view
-    transposed = np.transpose(stor, axes=(2, 1, 0))
-    assert not transposed.is_stencil_view
+    np_view = np.asarray(stor)
+
+    transposed_stor = np.transpose(stor, axes=(0, 1, 2))
+    assert transposed_stor.strides == stor.strides
+    assert transposed_stor.shape == stor.shape
+
+    transposed_stor = np.transpose(stor, axes=(2, 1, 0))
+    transposed_np = np.transpose(np_view, axes=(2, 1, 0))
+    assert transposed_stor.strides == transposed_np.strides
+    assert transposed_stor.shape == transposed_np.shape
+
+    transposed_stor = stor.transpose((2, 1, 0))
+    transposed_np = np_view.transpose((2, 1, 0))
+    assert transposed_stor.strides == transposed_np.strides
+    assert transposed_stor.shape == transposed_np.shape
 
 
 @pytest.mark.parametrize(
@@ -749,6 +762,7 @@ def test_deepcopy_gpu_unmanaged(method, backend="gtcuda"):
     np.testing.assert_equal(stor_copy.view(np.ndarray), stor.view(np.ndarray))
     assert (stor._device_field[...] == stor_copy._device_field[...]).all()
 
+
 @pytest.mark.requires_gpu
 def test_cuda_array_interface():
     storage = gt_store.storage(
@@ -763,56 +777,38 @@ def test_cuda_array_interface():
 
 
 @pytest.mark.requires_gpu
-def test_view_casting():
+def test_managed_view_casting():
+    allocator = cp.cuda.get_allocator()
     cp.cuda.set_allocator(cp.cuda.malloc_managed)
-    gpu_arr = cp.empty((5, 5, 5))
-
     gpu_arr = cp.ones((10, 10, 10))
+    gpu_arr_attrs = cp.cuda.runtime.pointerGetAttributes(gpu_arr.data.ptr)
+    cp.cuda.set_allocator(allocator)
+    assert gpu_arr_attrs.devicePointer == gpu_arr_attrs.hostPointer
+
     cpu_view = gt_storage_utils.cpu_view(gpu_arr)
+    cpu_view_attrs = cp.cuda.runtime.pointerGetAttributes(cpu_view.ctypes.data)
     assert cpu_view.ctypes.data == gpu_arr.data.ptr
     assert cpu_view.strides == gpu_arr.strides
     assert cpu_view.shape == gpu_arr.shape
+    assert cpu_view_attrs.devicePointer == cpu_view_attrs.hostPointer
 
     gpu_view = gt_storage_utils.gpu_view(cpu_view)
+    gpu_view_attrs = cp.cuda.runtime.pointerGetAttributes(gpu_view.data.ptr)
     assert gpu_view.data.ptr == cpu_view.ctypes.data
     assert gpu_view.strides == cpu_view.strides
     assert gpu_view.shape == cpu_view.shape
+    assert gpu_view_attrs.devicePointer == gpu_view_attrs.hostPointer
 
-
-@pytest.mark.requires_gpu
-def test_managed_memory():
-    cp.cuda.set_allocator(cp.cuda.malloc_managed)
-    gpu_arr = cp.empty((5, 5, 5))
-
-    gpu_arr = cp.ones((10, 10, 10))
-    cpu_view = gt_storage_utils.cpu_view(gpu_arr)
+    assert (
+        gpu_view_attrs.devicePointer
+        == gpu_view_attrs.hostPointer
+        == gpu_arr_attrs.devicePointer
+        == gpu_arr_attrs.hostPointer
+        == cpu_view_attrs.devicePointer
+        == cpu_view_attrs.hostPointer
+    )
 
     gpu_arr[0, 0, 0] = 123
     assert cpu_view[0, 0, 0] == 123
     cpu_view[1, 1, 1] = 321
     assert gpu_arr[1, 1, 1] == 321
-
-
-@pytest.mark.requires_gpu
-def test_sum_gpu():
-    i1 = 3
-    i2 = 4
-    jslice = slice(3, 4, None)
-    shape = (5, 5, 5)
-    q1 = gt_store.storage(
-        cp.zeros(shape),
-        backend="gtcuda",
-        dtype=np.float64,
-        default_origin=(0, 0, 0),
-        shape=shape,
-    )
-
-    q2 = gt_store.storage(
-        cp.ones(shape),
-        backend="gtcuda",
-        dtype=np.float64,
-        default_origin=(0, 0, 0),
-        shape=shape,
-    )
-
-    q1[i1 : i2 + 1, jslice, 0] = cp.sum(q2[i1 : i2 + 1, jslice, :], axis=2)
