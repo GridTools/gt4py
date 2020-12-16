@@ -17,10 +17,6 @@ class OirToNpir(NodeTranslator):
         domain_padding: Dict[str, List] = field(
             default_factory=lambda: {"lower": [0, 0, 0], "upper": [0, 0, 0]}
         )
-        parallel_k: Optional[bool] = None
-
-        def set_parallel_k(self, value: bool) -> "OirToNpir.Context":
-            return self.__class__(parallel_k=value, domain_padding=self.domain_padding)
 
         def add_offset(self, axis: int, value: int) -> "OirToNpir.Context":
             if value > 0:
@@ -36,11 +32,9 @@ class OirToNpir(NodeTranslator):
                 self.add_offset(axis_index, value)
             return self
 
-    def visit_Stencil(
-        self, node: oir.Stencil, *, ctx: Optional[Context] = None
-    ) -> npir.Computation:
-        ctx = ctx or self.Context()
-        vertical_passes = [self.visit(vloop, ctx=ctx) for vloop in node.vertical_loops]
+    def visit_Stencil(self, node: oir.Stencil, **kwargs) -> npir.Computation:
+        ctx = self.Context()
+        vertical_passes = [self.visit(vloop, ctx=ctx, **kwargs) for vloop in node.vertical_loops]
 
         return npir.Computation(
             field_params=[decl.name for decl in node.params if isinstance(decl, oir.FieldDecl)],
@@ -53,52 +47,52 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, ctx: Optional[Context] = None
+        self, node: oir.VerticalLoop, *, ctx: Optional[Context] = None, **kwargs
     ) -> npir.VerticalPass:
         ctx = ctx or self.Context()
-        parallel_k = True if node.loop_order == common.LoopOrder.PARALLEL else False
+        kwargs.update(
+            {"parallel_k": True if node.loop_order == common.LoopOrder.PARALLEL else False}
+        )
         v_assigns = [
-            self.visit(h_exec, ctx=ctx.set_parallel_k(parallel_k))
-            for h_exec in node.horizontal_executions
+            self.visit(h_exec, ctx=ctx, **kwargs) for h_exec in node.horizontal_executions
         ]
         body = [i for j in v_assigns for i in j]
         return npir.VerticalPass(
             body=body,
-            lower=self.visit(node.interval.start),
-            upper=self.visit(node.interval.end),
-            direction=self.visit(node.loop_order),
+            lower=self.visit(node.interval.start, **kwargs),
+            upper=self.visit(node.interval.end, **kwargs),
+            direction=self.visit(node.loop_order, **kwargs),
         )
-
-    def visit_AxisBound(self, node: oir.AxisBound) -> common.AxisBound:
-        return common.AxisBound(level=node.level, offset=node.offset)
 
     def visit_HorizontalExecution(
-        self, node: oir.HorizontalExecution, *, ctx: Optional[Context] = None
+        self, node: oir.HorizontalExecution, *, ctx: Optional[Context] = None, **kwargs
     ) -> List[npir.VectorAssign]:
-        return self.visit(node.body, ctx=ctx)
+        return self.visit(node.body, ctx=ctx, **kwargs)
 
     def visit_AssignStmt(
-        self, node: oir.AssignStmt, *, ctx: Optional[Context] = None
+        self, node: oir.AssignStmt, *, ctx: Optional[Context] = None, **kwargs
     ) -> npir.VectorAssign:
         return npir.VectorAssign(
-            left=self.visit(node.left, ctx=ctx),
-            right=self.visit(node.right, ctx=ctx),
+            left=self.visit(node.left, ctx=ctx, **kwargs),
+            right=self.visit(node.right, ctx=ctx, **kwargs),
         )
 
-    def visit_FieldAccess(self, node: oir.FieldAccess, *, ctx: Context) -> npir.FieldSlice:
+    def visit_FieldAccess(
+        self, node: oir.FieldAccess, *, ctx: Context, parallel_k: bool, **kwargs
+    ) -> npir.FieldSlice:
         ctx.add_offsets(node.offset.i, node.offset.j, node.offset.k)
         return npir.FieldSlice(
             name=str(node.name),
             i_offset=npir.AxisOffset.i(node.offset.i),
             j_offset=npir.AxisOffset.j(node.offset.j),
-            k_offset=npir.AxisOffset.k(node.offset.k, parallel=ctx.parallel_k),
+            k_offset=npir.AxisOffset.k(node.offset.k, parallel=parallel_k),
         )
 
     def visit_BinaryOp(
-        self, node: oir.BinaryOp, *, ctx: Optional[Context] = None
+        self, node: oir.BinaryOp, *, ctx: Optional[Context] = None, **kwargs
     ) -> npir.VectorArithmetic:
         return npir.VectorArithmetic(
             op=node.op,
-            left=self.visit(node.left, ctx=ctx),
-            right=self.visit(node.right, ctx=ctx),
+            left=self.visit(node.left, ctx=ctx, **kwargs),
+            right=self.visit(node.right, ctx=ctx, **kwargs),
         )

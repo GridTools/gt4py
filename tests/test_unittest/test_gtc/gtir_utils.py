@@ -8,8 +8,10 @@ from gt4py.gtc.gtir import (
     Decl,
     Expr,
     FieldAccess,
+    FieldDecl,
     FieldIfStmt,
     Interval,
+    Literal,
     ParAssignStmt,
     Stencil,
     Stmt,
@@ -22,6 +24,10 @@ class DummyExpr(Expr):
 
     dtype: DataType = DataType.FLOAT32
     kind: ExprKind = ExprKind.FIELD
+
+
+def make_Literal(value: str, dtype: DataType):
+    return Literal(value=value, dtype=dtype)
 
 
 class FieldAccessBuilder:
@@ -95,6 +101,30 @@ class FieldIfStmtBuilder:
             cond=self._cond,
             true_branch=BlockStmt(body=self._true_branch),
             false_branch=BlockStmt(body=self._false_branch) if self._false_branch else None,
+        )
+
+
+class VerticalLoopBuilder:
+    def __init__(self) -> None:
+        self._interval = Interval(start=AxisBound.start(), end=AxisBound.end())
+        self._loop_order = LoopOrder.PARALLEL
+        self._temporaries = []
+        self._body = []
+
+    def add_temporary(self, name: str, dtype: DataType) -> "VerticalLoopBuilder":
+        self._temporaries.append(FieldDecl(name=name, dtype=dtype))
+        return self
+
+    def add_stmt(self, stmt: Stmt):
+        self._body.append(stmt)
+        return self
+
+    def build(self) -> VerticalLoop:
+        return VerticalLoop(
+            interval=self._interval,
+            loop_order=self._loop_order,
+            temporaries=self._temporaries,
+            body=self._body,
         )
 
 

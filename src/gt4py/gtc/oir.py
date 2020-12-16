@@ -27,7 +27,7 @@ from eve import Node, Str, SymbolName, SymbolTableTrait
 from pydantic import validator
 
 from gt4py.gtc import common
-from gt4py.gtc.common import LocNode
+from gt4py.gtc.common import AxisBound, LocNode
 
 
 class Expr(common.Expr):
@@ -82,11 +82,11 @@ class UnaryOp(common.UnaryOp[Expr], Expr):
 
 
 class BinaryOp(common.BinaryOp[Expr], Expr):
-    pass
+    _dtype_propagation = common.binary_op_dtype_propagation(strict=True)
 
 
 class TernaryOp(common.TernaryOp[Expr], Expr):
-    pass
+    _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
 
 
 class Cast(common.Cast[Expr], Expr):
@@ -94,7 +94,7 @@ class Cast(common.Cast[Expr], Expr):
 
 
 class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
-    pass
+    _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
 class Decl(LocNode):
@@ -120,28 +120,6 @@ class Temporary(FieldDecl):
     pass
 
 
-# TODO move to common or do we need a different representation here?
-class AxisBound(Node):
-    level: common.LevelMarker
-    offset: int = 0
-
-    @classmethod
-    def from_start(cls, offset: int):
-        return cls(level=common.LevelMarker.START, offset=offset)
-
-    @classmethod
-    def from_end(cls, offset: int):
-        return cls(level=common.LevelMarker.END, offset=offset)
-
-    @classmethod
-    def start(cls):
-        return cls.from_start(0)
-
-    @classmethod
-    def end(cls):
-        return cls.from_end(0)
-
-
 class HorizontalExecution(LocNode):
     body: List[Stmt]
     mask: Optional[Expr]
@@ -151,8 +129,6 @@ class HorizontalExecution(LocNode):
         if v:
             if v.dtype != common.DataType.BOOL:
                 raise ValueError("Mask must be a boolean expression.")
-            if v.kind != common.ExprKind.FIELD:
-                raise ValueError("Mask must be a field expression.")
         return v
 
 
