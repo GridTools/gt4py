@@ -50,7 +50,7 @@ BufferInfo make_buffer_info(py::object& b) {
     std::vector<py_size_t> strides;
     if(ndim == 1) {
         auto shape_tuple =  __cuda_array_interface__["shape"].cast<std::tuple<int>>();
-        shape = {std::get<0>(shape_tuple)};q
+        shape = {std::get<0>(shape_tuple)};
         auto strides_tuple = __cuda_array_interface__["strides"].cast<std::tuple<int>>();
         strides = {std::get<0>(strides_tuple)};
     } else if(ndim == 2) {
