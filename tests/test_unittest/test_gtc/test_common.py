@@ -17,9 +17,10 @@ from gt4py.gtc.common import (
     UnaryOperator,
 )
 
-
-ARITHMETIC_TYPE = DataType.FLOAT32
-ANOTHER_ARITHMETIC_TYPE = DataType.INT32
+INT_TYPE = DataType.INT32
+FLOAT_TYPE = DataType.FLOAT32
+ARITHMETIC_TYPE = FLOAT_TYPE
+ANOTHER_ARITHMETIC_TYPE = INT_TYPE
 A_ARITHMETIC_OPERATOR = ArithmeticOperator.ADD
 A_ARITHMETIC_UNARY_OPERATOR = UnaryOperator.POS
 A_LOGICAL_UNARY_OPERATOR = UnaryOperator.NOT
@@ -42,11 +43,19 @@ class UnaryOp(Expr, common.UnaryOp[Expr]):
 
 
 class BinaryOp(Expr, common.BinaryOp[Expr]):
-    pass
+    dtype_propagation = common.binary_op_dtype_propagation(strict=True)
 
 
 class TernaryOp(Expr, common.TernaryOp[Expr]):
-    pass
+    _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
+
+
+class BinaryOpUpcasting(Expr, common.BinaryOp[Expr]):
+    dtype_propagation = common.binary_op_dtype_propagation(strict=False)
+
+
+class TernaryOpUpcasting(Expr, common.TernaryOp[Expr]):
+    _dtype_propagation = common.ternary_op_dtype_propagation(strict=False)
 
 
 @pytest.mark.parametrize(
@@ -61,12 +70,28 @@ class TernaryOp(Expr, common.TernaryOp[Expr]):
             ARITHMETIC_TYPE,
         ),
         (
+            TernaryOpUpcasting(
+                cond=DummyExpr(dtype=DataType.BOOL),
+                true_expr=DummyExpr(dtype=FLOAT_TYPE),
+                false_expr=DummyExpr(dtype=INT_TYPE),
+            ),
+            FLOAT_TYPE,
+        ),
+        (
             BinaryOp(
                 left=DummyExpr(dtype=ARITHMETIC_TYPE),
                 right=DummyExpr(dtype=ARITHMETIC_TYPE),
                 op=ArithmeticOperator.ADD,
             ),
             ARITHMETIC_TYPE,
+        ),
+        (
+            BinaryOpUpcasting(
+                left=DummyExpr(dtype=INT_TYPE),
+                right=DummyExpr(dtype=FLOAT_TYPE),
+                op=ArithmeticOperator.ADD,
+            ),
+            FLOAT_TYPE,
         ),
         (
             BinaryOp(

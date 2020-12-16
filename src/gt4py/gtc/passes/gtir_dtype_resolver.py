@@ -3,8 +3,6 @@ from eve import NodeTranslator
 from gt4py.gtc import gtir
 from gt4py.gtc.common import DataType, GTCPostconditionError
 
-from devtools import debug
-
 
 class _GTIRResolveAuto(NodeTranslator):
     """

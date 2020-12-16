@@ -3,9 +3,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 
+from gt4py import backend as gt_backend
 from gt4py import gt2_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
-from gt4py.backend.base import register
 from gt4py.backend.gt_backends import (
     gtcpu_is_compatible_type,
     make_x86_layout_map,
@@ -16,6 +16,7 @@ from gt4py.gtc import gtir_to_oir, passes
 from gt4py.gtc.common import DataType
 from gt4py.gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gt4py.gtc.passes.gtir_dtype_resolver import resolve_dtype
+from gt4py.gtc.passes.gtir_upcaster import upcast
 
 
 if TYPE_CHECKING:
@@ -35,7 +36,8 @@ class GTCGTExtGenerator:
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = passes.FieldsMetadataPass().visit(DefIRToGTIR.apply(definition_ir))
         dtype_deduced = resolve_dtype(gtir)
-        oir = gtir_to_oir.GTIRToOIR().visit(dtype_deduced)
+        upcasted = upcast(dtype_deduced)
+        oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp)
         bindings = GTCppBindingsCodegen.apply(gtcpp, self.module_name)
@@ -119,7 +121,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return formatted_code
 
 
-@register
+@gt_backend.register
 class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
     """GridTools python backend using gtc."""
 

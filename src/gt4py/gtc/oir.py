@@ -82,11 +82,11 @@ class UnaryOp(common.UnaryOp[Expr], Expr):
 
 
 class BinaryOp(common.BinaryOp[Expr], Expr):
-    pass
+    _dtype_propagation = common.binary_op_dtype_propagation(strict=True)
 
 
 class TernaryOp(common.TernaryOp[Expr], Expr):
-    pass
+    _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
 
 
 class Cast(common.Cast[Expr], Expr):
@@ -94,7 +94,7 @@ class Cast(common.Cast[Expr], Expr):
 
 
 class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
-    pass
+    _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
 class Decl(LocNode):
