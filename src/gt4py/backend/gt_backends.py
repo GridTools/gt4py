@@ -263,7 +263,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
     def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> str:
         assert node.name in self.apply_block_symbols
-        offset = [node.offset.get(name, 0) for name in self.impl_node.fields[node.name].axes]
+        offset = [node.offset.get(name, 0) for name in self.domain.axes_names]
         if not all(i == 0 for i in offset):
             idx = ", ".join(str(i) for i in offset)
         else:
@@ -418,11 +418,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 arg["access_type"] = (
                     "in" if accessor.intent == gt_ir.AccessIntent.READ_ONLY else "inout"
                 )
-                arg["extent"] = gt_utils.flatten(
-                    gt_utils.filter_from_axes(
-                        accessor.extent, self.impl_node.fields[accessor.symbol].axes
-                    )
-                )
+                arg["extent"] = gt_utils.flatten(accessor.extent)
             args.append(arg)
 
         # Create regions and computations

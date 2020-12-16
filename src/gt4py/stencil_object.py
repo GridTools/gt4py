@@ -117,6 +117,10 @@ class StencilObject(abc.ABC):
     def __call__(self, *args, **kwargs):
         pass
 
+    @staticmethod
+    def _get_field_mask(field):
+        return getattr(field, "mask", [True] * len(field.shape))
+
     def _get_max_domain(self, field_args, origin):
         """Return the maximum domain size possible
 
@@ -133,15 +137,13 @@ class StencilObject(abc.ABC):
         -------
             `Shape`: the maximum domain size.
         """
-        max_domain = Shape([np.iinfo(np.uintc).max] * self.domain_info.ndims)
+        large_val = np.iinfo(np.uintc).max
+        max_domain = Shape([large_val] * self.domain_info.ndims)
         for name, field in field_args.items():
-            field_mask = field.mask if isinstance(field, gt_storage.Storage) else [True] * 3
-            field_origin = Index.from_mask(origin[name], field_mask)
-            field_shape = Shape.from_mask(field.shape, field_mask)
-            upper_boundary = Index.from_mask(
-                self.field_info[name].boundary.upper_indices, field_mask
-            )
-            max_domain &= field_shape - (field_origin + upper_boundary)
+            field_mask = self.get_field_mask(field)
+            upper_boundary = self.field_info[name].boundary.upper_indices.filter_mask(field_mask)
+            field_domain = Shape(field.shape) - (origin[name] + upper_boundary)
+            max_domain &= Shape.from_mask(field_domain, field_mask, default=large_val)
         return max_domain
 
     def _validate_args(self, used_field_args, used_param_args, domain, origin):
@@ -206,8 +208,8 @@ class StencilObject(abc.ABC):
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
         for name, field in used_field_args.items():
+            field_mask = self._get_field_mask(field)
             min_origin = self.field_info[name].boundary.lower_indices
-            field_mask = field.mask if isinstance(field, gt_storage.Storage) else [True] * 3
             field_shape = Shape.from_mask(field.shape, field_mask)
             field_origin = Index.from_mask(origin[name], field_mask)
             if field_origin < min_origin:
@@ -302,17 +304,13 @@ class StencilObject(abc.ABC):
         if origin is None:
             origin = {}
         else:
+            # This always returns an Index
             origin = normalize_origin_mapping(origin)
 
         for name, field in used_field_args.items():
+            field_mask = self._get_field_mask(field)
             field_origin = origin["_all_"] if "_all_" in origin else field.default_origin
-            field_mask = field.mask if isinstance(field, gt_storage.Storage) else [True] * 3
-            origin.setdefault(
-                name,
-                field_origin.filter_mask(field_mask)
-                if isinstance(field_origin, Shape)
-                else field_origin,
-            )
+            origin.setdefault(name, field_origin.filter_mask(field_mask))
 
         # Domain
         if domain is None:

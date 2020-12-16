@@ -848,7 +848,8 @@ class IRMaker(ast.NodeVisitor):
         else:
             interval_node = args[0]
 
-        interval = parse_interval_node(interval_node, "K", loc=loc)
+        seq_name = gt_ir.Domain.LatLonGrid().sequential_axis.name
+        interval = parse_interval_node(interval_node, seq_name, loc=loc)
 
         if (
             interval.start.level == gt_ir.LevelMarker.END
@@ -1129,7 +1130,8 @@ class IRMaker(ast.NodeVisitor):
         target = []
         if len(node.targets) > 1:
             raise GTScriptSyntaxError(
-                message="Assignment to multiple variables (e.g. var1 = var2 = value) not supported."
+                message="Assignment to multiple variables (e.g. var1 = var2 = value) not supported.",
+                loc=gt_ir.Location.from_ast_node(node),
             )
 
         for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
@@ -1170,6 +1172,12 @@ class IRMaker(ast.NodeVisitor):
                     else:
                         result.append(field_decl)
                     self.fields[field_decl.name] = field_decl
+                else:
+                    if len(self.fields[t.id].axes) == 1:
+                        raise GTScriptSyntaxError(
+                            message="Cannot assign to 1D field.",
+                            loc=gt_ir.Location.from_ast_node(t),
+                        )
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
 
@@ -1560,7 +1568,9 @@ class GTScriptParser(ast.NodeVisitor):
                     assert arg_info.default in [gt_ir.Empty, None]
                     data_type = gt_ir.DataType.from_dtype(np.dtype(arg_annotation.dtype))
                     axes = [ax.name for ax in arg_annotation.axes]
-                    if len(axes) == 1 and "K" not in axes:
+                    seq_name = gt_ir.Domain.LatLonGrid().sequential_axis.name
+                    if len(axes) == 1 and seq_name not in axes:
+                        # If there is only a single axis, it cannot be a parallel axis.
                         raise GTScriptDefinitionError
                     fields_decls[arg_info.name] = gt_ir.FieldDecl(
                         name=arg_info.name,
