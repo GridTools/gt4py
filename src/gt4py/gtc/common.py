@@ -23,6 +23,8 @@ from eve.type_definitions import SymbolRef
 from pydantic import validator
 from pydantic.class_validators import root_validator
 
+from gt4py.gtc.utils import flatten_list
+
 
 class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
     message_template = "GTC pass precondition error: [{info}]"
@@ -472,6 +474,25 @@ def native_func_call_dtype_propagation(*, strict: bool = True):
         common_dtype = verify_and_get_common_dtype(cls, values["args"], strict=strict)
         if common_dtype:
             values["dtype"] = common_dtype
+        return values
+
+    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+
+
+def validate_dtype_is_set():
+    def _impl(cls, values: dict):
+        dtype_nodes = []
+        for v in flatten_list(values.values()):
+            if isinstance(v, Node):
+                dtype_nodes.extend(v.iter_tree().if_hasattr("dtype"))
+
+        nodes_without_dtype = []
+        for node in dtype_nodes:
+            if not node.dtype:
+                nodes_without_dtype.append(node)
+
+        if len(nodes_without_dtype) > 0:
+            raise ValueError("Nodes without dtype detected {}".format(nodes_without_dtype))
         return values
 
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)

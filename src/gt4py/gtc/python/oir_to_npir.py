@@ -1,6 +1,6 @@
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from dataclasses import dataclass, field
 from eve.visitors import NodeTranslator
 
 from .. import common, oir

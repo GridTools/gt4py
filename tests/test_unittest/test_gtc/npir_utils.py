@@ -18,4 +18,3 @@ class FieldSliceBuilder:
             j_offset=npir.AxisOffset.j(self._offsets[1]),
             k_offset=npir.AxisOffset.k(self._offsets[2], parallel=self._parallel_k),
         )
-

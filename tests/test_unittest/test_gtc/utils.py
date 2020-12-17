@@ -1,5 +1,5 @@
-from typing import Literal, Pattern, Union
 import re
+from typing import Literal, Pattern, Union
 
 
 def match(value: str, regexp: "Union[str, Pattern]") -> "Literal[True]":

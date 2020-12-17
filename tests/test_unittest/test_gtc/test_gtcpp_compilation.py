@@ -5,14 +5,7 @@ import setuptools
 
 from gt4py import config, gt2_src_manager  # TODO must not include gt4py package or ok for test?
 from gt4py.gtc.common import DataType
-from gt4py.gtc.gtcpp.gtcpp import (
-    GTAccessor,
-    GTApplyMethod,
-    GTExtent,
-    GTStage,
-    Intent,
-    Program,
-)
+from gt4py.gtc.gtcpp.gtcpp import GTAccessor, GTApplyMethod, GTExtent, GTStage, Intent, Program
 from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 
@@ -24,7 +17,6 @@ from .gtcpp_utils import (
     IfStmtBuilder,
     ProgramBuilder,
 )
-
 from .utils import match
 
 

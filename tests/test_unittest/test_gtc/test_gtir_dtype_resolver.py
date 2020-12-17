@@ -1,6 +1,5 @@
 from typing import Dict
 
-
 from gt4py.gtc import common
 from gt4py.gtc.common import DataType
 from gt4py.gtc.gtir import FieldDecl, Literal, ParAssignStmt, Stencil

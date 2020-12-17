@@ -218,3 +218,5 @@ class Program(LocNode, SymbolTableTrait):
     functors: List[GTFunctor]
     gt_computation: GTComputation
     # control_flow_ast: List[GTComputation]
+
+    _validate_dtype_is_set = common.validate_dtype_is_set()
