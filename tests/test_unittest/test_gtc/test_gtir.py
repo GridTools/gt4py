@@ -89,34 +89,26 @@ def test_abstract_classes_not_instantiatable(invalid_node):
         invalid_node()
 
 
-@pytest.mark.parametrize(
-    "valid_node",
-    [
-        pytest.param(
-            lambda: ParAssignStmt(
-                left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=0, k=1)).build(),
-                right=DummyExpr(),
-            ),
-            id="vertical offset is allowed in l.h.s. of assignment",
-        )
-    ],
-)
-def test_valid_nodes(valid_node):
-    valid_node()
+def test_can_have_vertical_offset():
+    ParAssignStmt(
+        left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=0, k=1)).build(),
+        right=DummyExpr(),
+    )
 
 
 @pytest.mark.parametrize(
-    "invalid_node,expected_regex",
+    "assign_stmt_with_offset",
     [
-        (
-            lambda: ParAssignStmt(
-                left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0)).build(),
-                right=DummyExpr(),
-            ),
-            r"must not have .*horizontal offset",
-        )
+        lambda: ParAssignStmt(
+            left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0)).build(),
+            right=DummyExpr(),
+        ),
+        lambda: ParAssignStmt(
+            left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=1, k=0)).build(),
+            right=DummyExpr(),
+        ),
     ],
 )
-def test_invalid_nodes(invalid_node, expected_regex):
-    with pytest.raises(ValidationError, match=expected_regex):
-        invalid_node()
+def test_no_horizontal_offset_allowed(assign_stmt_with_offset):
+    with pytest.raises(ValidationError, match=r"must not have .*horizontal offset"):
+        assign_stmt_with_offset()
