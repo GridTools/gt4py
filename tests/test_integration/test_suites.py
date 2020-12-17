@@ -330,67 +330,6 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
         )
 
 
-@gtscript.function
-def fwd_diff_op_xy_varargin(field1, field2=None):
-    from __externals__ import BRANCH
-
-    if __INLINED(BRANCH):
-        dx = field1[1, 0, 0] - field1[0, 0, 0]
-        dy = field2[0, 1, 0] - field2[0, 0, 0]
-        return dx, dy
-    else:
-        return field1[1, 0, 0] - field1[0, 0, 0]
-
-
-class TestHorizontalDiffusionSubroutines3(gt_testing.StencilTestSuite):
-    """Diffusion in a horizontal 2D plane ."""
-
-    dtypes = (np.float_,)
-    domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = CPU_BACKENDS
-    symbols = dict(
-        fwd_diff=gt_testing.global_name(singleton=fwd_diff_op_xy_varargin),
-        BRANCH=gt_testing.global_name(one_of=(False,)),
-        u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (2, 2), (0, 0)]),
-        diffusion=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        weight=gt_testing.parameter(in_range=(0, 0.5)),
-    )
-
-    def definition(u, diffusion, *, weight):
-        """
-        Horizontal diffusion stencil.
-
-        Parameters
-        ----------
-        u : 3D float field, input
-        diffusion : 3D float field, output
-        weight : diffusion coefficient
-        """
-        from __externals__ import BRANCH, fwd_diff
-
-        with computation(PARALLEL), interval(...):
-            laplacian = lap_op(u=u)
-            laplacian2 = lap_op(u=u)
-            if __INLINED(BRANCH):
-                flux_i, flux_j = fwd_diff(field1=laplacian, field2=laplacian2)
-            else:
-                flux_i = fwd_diff(field1=laplacian)
-                flux_j = fwd_diff_op_y(field=laplacian)
-            diffusion = u[0, 0, 0] - weight * (
-                flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0]
-            )
-
-    def validation(u, diffusion, *, weight, domain, origin, **kwargs):
-        laplacian = 4.0 * u[1:-1, 1:-1, :] - (
-            u[2:, 1:-1, :] + u[:-2, 1:-1, :] + u[1:-1, 2:, :] + u[1:-1, :-2, :]
-        )
-        flux_i = laplacian[1:, 1:-1, :] - laplacian[:-1, 1:-1, :]
-        flux_j = laplacian[1:-1, 1:, :] - laplacian[1:-1, :-1, :]
-        diffusion[...] = u[2:-2, 2:-2, :] - weight * (
-            flux_i[1:, :, :] - flux_i[:-1, :, :] + flux_j[:, 1:, :] - flux_j[:, :-1, :]
-        )
-
-
 class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
     """Tests runtime ifs."""
 
