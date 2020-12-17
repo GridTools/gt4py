@@ -80,44 +80,6 @@ def test_copy(copy_computation):
     assert copy_computation.param_names == ["a", "b"]
 
 
-def test_naive_python_copy(copy_computation):
-    assert ast.parse(PythonNaiveCodegen.apply(copy_computation))
-
-
-def test_naive_python_avg():
-    horizontal_avg = Stencil(
-        name="horizontal_avg",
-        params=[
-            FieldDecl(name="a", dtype=DataType.FLOAT32),
-            FieldDecl(name="b", dtype=DataType.FLOAT32),
-        ],
-        vertical_loops=[
-            VerticalLoop(
-                loop_order=LoopOrder.FORWARD,
-                interval=Interval(
-                    start=AxisBound(level=LevelMarker.START, offset=0),
-                    end=AxisBound(level=LevelMarker.END, offset=0),
-                ),
-                body=[
-                    ParAssignStmt(
-                        left=FieldAccess.centered(name="a"),
-                        right=BinaryOp(
-                            left=FieldAccess(
-                                name="b",
-                                offset=CartesianOffset(i=-1, j=0, k=0),
-                            ),
-                            right=FieldAccess(name="b", offset=CartesianOffset(i=1, j=0, k=0)),
-                            op=ArithmeticOperator.ADD,
-                        ),
-                    )
-                ],
-                temporaries=[],
-            )
-        ],
-    )
-    assert ast.parse(PythonNaiveCodegen.apply(horizontal_avg))
-
-
 @pytest.mark.parametrize(
     "invalid_node",
     [Decl, Expr, Stmt],

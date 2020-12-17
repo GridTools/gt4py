@@ -28,77 +28,6 @@ A_FLOAT64_LITERAL = make_Literal("", dtype=DataType.FLOAT64)
 AN_UNIMPORTANT_LITERAL = make_Literal("", dtype=DataType.DEFAULT)
 
 
-def upcast_BinaryOp_BOOL_to_FLOAT():
-    test_input = BinaryOp(op=ArithmeticOperator.ADD, left=A_BOOL_LITERAL, right=A_FLOAT64_LITERAL)
-    expected_result = [Cast(dtype=DataType.FLOAT64, expr=A_BOOL_LITERAL)]
-    return test_input, expected_result
-
-
-def upcast_BinaryOp_INT_to_FLOAT():
-    test_input = BinaryOp(op=ArithmeticOperator.ADD, left=A_INT64_LITERAL, right=A_FLOAT64_LITERAL)
-    expected_result = [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)]
-    return test_input, expected_result
-
-
-def upcast_BinaryOp_nested_casting():
-    outer_expr = BinaryOp(op=ArithmeticOperator.ADD, left=A_BOOL_LITERAL, right=A_INT64_LITERAL)
-    test_input = BinaryOp(op=ArithmeticOperator.ADD, left=outer_expr, right=A_FLOAT64_LITERAL)
-    expected_result = [
-        Cast(dtype=DataType.INT64, expr=A_BOOL_LITERAL),
-        Cast(dtype=DataType.FLOAT64, expr=Placeholder()),
-    ]
-    return test_input, expected_result
-
-
-def upcast_NativeFuncCall():
-    test_input = NativeFuncCall(func=NativeFunction.MAX, args=[A_INT64_LITERAL, A_FLOAT64_LITERAL])
-    expected_result = [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)]
-    return test_input, expected_result
-
-
-def upcast_ParAssignStmt():
-    test_input = ParAssignStmt(
-        left=FieldAccessBuilder("out").dtype(DataType.FLOAT64).build(), right=A_INT64_LITERAL
-    )
-    expected_result = [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)]
-    return test_input, expected_result
-
-
-def upcast_TernaryOp():
-    test_input = TernaryOp(
-        cond=A_BOOL_LITERAL,
-        true_expr=A_INT64_LITERAL,
-        false_expr=A_FLOAT64_LITERAL,
-    )
-    expected_result = [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)]
-    return test_input, expected_result
-
-
-def upcast_in_cond_of_TernaryOp():
-    test_input = TernaryOp(
-        cond=BinaryOp(op=ComparisonOperator.GE, left=A_INT64_LITERAL, right=A_FLOAT64_LITERAL),
-        true_expr=AN_UNIMPORTANT_LITERAL,
-        false_expr=AN_UNIMPORTANT_LITERAL,
-    )
-    expected_result = [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)]
-    return test_input, expected_result
-
-
-@pytest.fixture(
-    params=[
-        upcast_BinaryOp_BOOL_to_FLOAT,
-        upcast_BinaryOp_INT_to_FLOAT,
-        upcast_BinaryOp_nested_casting,
-        upcast_NativeFuncCall,
-        upcast_ParAssignStmt,
-        upcast_TernaryOp,
-        upcast_in_cond_of_TernaryOp,
-    ]
-)
-def input_and_expected(request):
-    return request.param()
-
-
 def contains_cast_node(cast_node, expr):
     # Checks if `expr` contains `cast_node`. If `cast_node` contains `expr=Placeholder()`
     # we skip equality check of `expr` and `cast_node.expr`
@@ -116,8 +45,7 @@ def contains_cast_node(cast_node, expr):
     )
 
 
-def test_upcasted_nodes(input_and_expected):
-    expr, expected_cast_nodes = input_and_expected
+def upcast_and_validate(expr, expected_cast_nodes):
 
     assert isinstance(expected_cast_nodes, List)
     assert all([isinstance(cast, Cast) for cast in expected_cast_nodes])
@@ -127,3 +55,53 @@ def test_upcasted_nodes(input_and_expected):
 
     for cast in expected_cast_nodes:
         assert contains_cast_node(cast, result)
+
+
+def test_upcast_BinaryOp_BOOL_to_FLOAT():
+    testee = BinaryOp(op=ArithmeticOperator.ADD, left=A_BOOL_LITERAL, right=A_FLOAT64_LITERAL)
+    upcast_and_validate(testee, [Cast(dtype=DataType.FLOAT64, expr=A_BOOL_LITERAL)])
+
+
+def test_upcast_BinaryOp_INT_to_FLOAT():
+    testee = BinaryOp(op=ArithmeticOperator.ADD, left=A_INT64_LITERAL, right=A_FLOAT64_LITERAL)
+    upcast_and_validate(testee, [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)])
+
+
+def test_upcast_BinaryOp_nested_casting():
+    outer_expr = BinaryOp(op=ArithmeticOperator.ADD, left=A_BOOL_LITERAL, right=A_INT64_LITERAL)
+    testee = BinaryOp(op=ArithmeticOperator.ADD, left=outer_expr, right=A_FLOAT64_LITERAL)
+    expected = [
+        Cast(dtype=DataType.INT64, expr=A_BOOL_LITERAL),
+        Cast(dtype=DataType.FLOAT64, expr=Placeholder()),
+    ]
+    upcast_and_validate(testee, expected)
+
+
+def test_upcast_NativeFuncCall():
+    testee = NativeFuncCall(func=NativeFunction.MAX, args=[A_INT64_LITERAL, A_FLOAT64_LITERAL])
+    upcast_and_validate(testee, [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)])
+
+
+def test_upcast_ParAssignStmt():
+    testee = ParAssignStmt(
+        left=FieldAccessBuilder("out").dtype(DataType.FLOAT64).build(), right=A_INT64_LITERAL
+    )
+    upcast_and_validate(testee, [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)])
+
+
+def test_upcast_TernaryOp():
+    testee = TernaryOp(
+        cond=A_BOOL_LITERAL,
+        true_expr=A_INT64_LITERAL,
+        false_expr=A_FLOAT64_LITERAL,
+    )
+    upcast_and_validate(testee, [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)])
+
+
+def test_upcast_in_cond_of_TernaryOp():
+    testee = TernaryOp(
+        cond=BinaryOp(op=ComparisonOperator.GE, left=A_INT64_LITERAL, right=A_FLOAT64_LITERAL),
+        true_expr=AN_UNIMPORTANT_LITERAL,
+        false_expr=AN_UNIMPORTANT_LITERAL,
+    )
+    upcast_and_validate(testee, [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)])

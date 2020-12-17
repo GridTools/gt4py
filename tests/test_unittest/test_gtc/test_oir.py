@@ -14,24 +14,16 @@ class DummyExpr(Expr):
     kind: ExprKind = ExprKind.FIELD
 
 
-@pytest.mark.parametrize(
-    "invalid_node,expected_regex",
-    [
-        (
-            lambda: HorizontalExecution(body=[], mask=DummyExpr(dtype=A_ARITHMETIC_TYPE)),
-            r".*must be.* bool.*",
-        ),
-        (
-            lambda: AssignStmt(
-                left=FieldAccess(
-                    name="foo", dtype=A_ARITHMETIC_TYPE, offset=CartesianOffset(i=1, j=0, k=0)
-                ),
-                right=DummyExpr(dtype=A_ARITHMETIC_TYPE),
+def test_no_horizontal_offset_allowed():
+    with pytest.raises(ValidationError, match=r"must not have .*horizontal offset"):
+        AssignStmt(
+            left=FieldAccess(
+                name="foo", dtype=A_ARITHMETIC_TYPE, offset=CartesianOffset(i=1, j=0, k=0)
             ),
-            r"must not have .*horizontal offset",
+            right=DummyExpr(dtype=A_ARITHMETIC_TYPE),
         ),
-    ],
-)
-def test_invalid_nodes(invalid_node, expected_regex):
-    with pytest.raises(ValidationError, match=expected_regex):
-        invalid_node()
+
+
+def test_mask_must_be_bool():
+    with pytest.raises(ValidationError, match=r".*must be.* bool.*"):
+        HorizontalExecution(body=[], mask=DummyExpr(dtype=A_ARITHMETIC_TYPE)),
