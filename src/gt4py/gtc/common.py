@@ -23,6 +23,8 @@ from eve.type_definitions import SymbolRef
 from pydantic import validator
 from pydantic.class_validators import root_validator
 
+from gt4py.gtc.utils import flatten_list
+
 
 class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
     message_template = "GTC pass precondition error: [{info}]"
@@ -325,7 +327,7 @@ class UnaryOp(GenericNode, Generic[ExprT]):
     op: UnaryOperator
     expr: ExprT
 
-    @root_validator(pre=True)
+    @root_validator(skip_on_failure=True)
     def dtype_propagation(cls, values):
         values["dtype"] = values["expr"].dtype
         return values
@@ -335,7 +337,7 @@ class UnaryOp(GenericNode, Generic[ExprT]):
         values["kind"] = values["expr"].kind
         return values
 
-    @root_validator(pre=True)
+    @root_validator(skip_on_failure=True)
     def op_to_dtype_check(cls, values):
         if values["expr"].dtype:
             if values["op"] == UnaryOperator.NOT:
@@ -394,7 +396,7 @@ def binary_op_dtype_propagation(*, strict: bool):
 
         return values
 
-    return root_validator(pre=True, allow_reuse=True)(_impl)
+    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
 
 
 class TernaryOp(GenericNode, Generic[ExprT]):
@@ -431,7 +433,7 @@ def ternary_op_dtype_propagation(*, strict: bool):
             values["dtype"] = common_dtype
         return values
 
-    return root_validator(pre=True, allow_reuse=True)(_impl)
+    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
 
 
 class Cast(GenericNode, Generic[ExprT]):
@@ -450,7 +452,7 @@ class NativeFuncCall(GenericNode, Generic[ExprT]):
     func: NativeFunction
     args: List[ExprT]
 
-    @root_validator(pre=True)
+    @root_validator(skip_on_failure=True)
     def arity_check(cls, values):
         if values["func"].arity != len(values["args"]):
             raise ValueError(
@@ -474,7 +476,26 @@ def native_func_call_dtype_propagation(*, strict: bool = True):
             values["dtype"] = common_dtype
         return values
 
-    return root_validator(pre=True, allow_reuse=True)(_impl)
+    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+
+
+def validate_dtype_is_set():
+    def _impl(cls, values: dict):
+        dtype_nodes = []
+        for v in flatten_list(values.values()):
+            if isinstance(v, Node):
+                dtype_nodes.extend(v.iter_tree().if_hasattr("dtype"))
+
+        nodes_without_dtype = []
+        for node in dtype_nodes:
+            if not node.dtype:
+                nodes_without_dtype.append(node)
+
+        if len(nodes_without_dtype) > 0:
+            raise ValueError("Nodes without dtype detected {}".format(nodes_without_dtype))
+        return values
+
+    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
 
 
 class AxisBound(Node):

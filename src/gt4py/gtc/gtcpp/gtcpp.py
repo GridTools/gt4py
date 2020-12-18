@@ -1,5 +1,5 @@
 import enum
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 from eve import Str, StrEnum, SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
@@ -10,7 +10,7 @@ from gt4py.gtc.common import LocNode
 
 
 class Expr(common.Expr):
-    dtype: common.DataType
+    dtype: Optional[common.DataType]
 
     # TODO Eve could provide support for making a node abstract
     def __init__(self, *args, **kwargs):
@@ -218,3 +218,5 @@ class Program(LocNode, SymbolTableTrait):
     functors: List[GTFunctor]
     gt_computation: GTComputation
     # control_flow_ast: List[GTComputation]
+
+    _validate_dtype_is_set = common.validate_dtype_is_set()

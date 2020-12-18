@@ -1,3 +1,6 @@
+from typing import List, Optional
+
+import eve
 import pytest
 from pydantic import ValidationError
 
@@ -11,11 +14,11 @@ from gt4py.gtc.common import (
     IfStmt,
     Literal,
     LogicalOperator,
-    NativeFuncCall,
     NativeFunction,
     Stmt,
     UnaryOperator,
 )
+
 
 INT_TYPE = DataType.INT32
 FLOAT_TYPE = DataType.FLOAT32
@@ -56,6 +59,10 @@ class BinaryOpUpcasting(Expr, common.BinaryOp[Expr]):
 
 class TernaryOpUpcasting(Expr, common.TernaryOp[Expr]):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=False)
+
+
+class NativeFuncCall(Expr, common.NativeFuncCall[Expr]):
+    _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
 @pytest.mark.parametrize(
@@ -190,6 +197,38 @@ def test_dtype_propagation(node, expected):
 def test_invalid_nodes(invalid_node, expected_regex):
     with pytest.raises(ValidationError, match=expected_regex):
         invalid_node()
+
+
+class DummyNode(eve.Node):
+    dtype: Optional[common.DataType]
+
+
+class RootNode(eve.Node):
+    field1: DummyNode
+    field2: List[DummyNode]
+    _validate_dtype_is_set = common.validate_dtype_is_set()
+
+
+@pytest.mark.parametrize(
+    "tree_with_missing_dtype",
+    [
+        lambda: RootNode(field1=DummyNode(), field2=[]),
+        lambda: RootNode(field1=DummyNode(dtype=FLOAT_TYPE), field2=[DummyNode()]),
+        lambda: RootNode(
+            field1=DummyNode(dtype=FLOAT_TYPE), field2=[DummyNode(dtype=FLOAT_TYPE), DummyNode()]
+        ),
+    ],
+)
+def test_dtype_validator_for_invalid_tree(tree_with_missing_dtype):
+    with pytest.raises(ValidationError, match=r"Nodes without dtype"):
+        tree_with_missing_dtype()
+
+
+def test_dtype_validator_for_valid_tree():
+    RootNode(
+        field1=DummyNode(dtype=FLOAT_TYPE),
+        field2=[DummyNode(dtype=FLOAT_TYPE), DummyNode(dtype=FLOAT_TYPE)],
+    )
 
 
 # For pydantic, nodes are the same (convertible to each other) if all fields are same.

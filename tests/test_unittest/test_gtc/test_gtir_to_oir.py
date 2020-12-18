@@ -71,17 +71,25 @@ def test_create_mask():
     assert right == cond
 
 
-@pytest.mark.parametrize(
-    "field_if_stmt",
-    [
-        # No else
-        FieldIfStmtBuilder().cond(FieldAccessBuilder("cond").dtype(DataType.BOOL).build()).build(),
-        # If and else
+def test_visit_FieldIfStmt():
+    testee = (
         FieldIfStmtBuilder()
         .cond(FieldAccessBuilder("cond").dtype(DataType.BOOL).build())
         .false_branch([])
-        .build(),
-        # Nested ifs
+        .build()
+    )
+    GTIRToOIR().visit(testee)
+
+
+def test_visit_FieldIfStmt_no_else():
+    testee = (
+        FieldIfStmtBuilder().cond(FieldAccessBuilder("cond").dtype(DataType.BOOL).build()).build()
+    )
+    GTIRToOIR().visit(testee)
+
+
+def test_visit_FieldIfStmt_nesting():
+    testee = (
         FieldIfStmtBuilder()
         .cond(FieldAccessBuilder("cond").dtype(DataType.BOOL).build())
         .add_true_stmt(
@@ -89,12 +97,9 @@ def test_create_mask():
             .cond(FieldAccessBuilder("cond2").dtype(DataType.BOOL).build())
             .build()
         )
-        .build(),
-    ],
-)
-def test_visit_FieldIfStmt(field_if_stmt):
-    # Testing only that lowering doesn't error.
-    GTIRToOIR().visit(field_if_stmt)
+        .build()
+    )
+    GTIRToOIR().visit(testee)
 
 
 def test_visit_ScalarIfStmt():
@@ -102,5 +107,4 @@ def test_visit_ScalarIfStmt():
         cond=gtir_utils.DummyExpr(dtype=DataType.BOOL, kind=ExprKind.SCALAR),
         true_branch=BlockStmt(body=[]),
     )
-    # Testing only that lowering doesn't error.
     GTIRToOIR().visit(testee)

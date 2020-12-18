@@ -80,44 +80,6 @@ def test_copy(copy_computation):
     assert copy_computation.param_names == ["a", "b"]
 
 
-def test_naive_python_copy(copy_computation):
-    assert ast.parse(PythonNaiveCodegen.apply(copy_computation))
-
-
-def test_naive_python_avg():
-    horizontal_avg = Stencil(
-        name="horizontal_avg",
-        params=[
-            FieldDecl(name="a", dtype=DataType.FLOAT32),
-            FieldDecl(name="b", dtype=DataType.FLOAT32),
-        ],
-        vertical_loops=[
-            VerticalLoop(
-                loop_order=LoopOrder.FORWARD,
-                interval=Interval(
-                    start=AxisBound(level=LevelMarker.START, offset=0),
-                    end=AxisBound(level=LevelMarker.END, offset=0),
-                ),
-                body=[
-                    ParAssignStmt(
-                        left=FieldAccess.centered(name="a"),
-                        right=BinaryOp(
-                            left=FieldAccess(
-                                name="b",
-                                offset=CartesianOffset(i=-1, j=0, k=0),
-                            ),
-                            right=FieldAccess(name="b", offset=CartesianOffset(i=1, j=0, k=0)),
-                            op=ArithmeticOperator.ADD,
-                        ),
-                    )
-                ],
-                temporaries=[],
-            )
-        ],
-    )
-    assert ast.parse(PythonNaiveCodegen.apply(horizontal_avg))
-
-
 @pytest.mark.parametrize(
     "invalid_node",
     [Decl, Expr, Stmt],
@@ -127,34 +89,26 @@ def test_abstract_classes_not_instantiatable(invalid_node):
         invalid_node()
 
 
-@pytest.mark.parametrize(
-    "valid_node",
-    [
-        pytest.param(
-            lambda: ParAssignStmt(
-                left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=0, k=1)).build(),
-                right=DummyExpr(),
-            ),
-            id="vertical offset is allowed in l.h.s. of assignment",
-        )
-    ],
-)
-def test_valid_nodes(valid_node):
-    valid_node()
+def test_can_have_vertical_offset():
+    ParAssignStmt(
+        left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=0, k=1)).build(),
+        right=DummyExpr(),
+    )
 
 
 @pytest.mark.parametrize(
-    "invalid_node,expected_regex",
+    "assign_stmt_with_offset",
     [
-        (
-            lambda: ParAssignStmt(
-                left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0)).build(),
-                right=DummyExpr(),
-            ),
-            r"must not have .*horizontal offset",
-        )
+        lambda: ParAssignStmt(
+            left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0)).build(),
+            right=DummyExpr(),
+        ),
+        lambda: ParAssignStmt(
+            left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=1, k=0)).build(),
+            right=DummyExpr(),
+        ),
     ],
 )
-def test_invalid_nodes(invalid_node, expected_regex):
-    with pytest.raises(ValidationError, match=expected_regex):
-        invalid_node()
+def test_no_horizontal_offset_allowed(assign_stmt_with_offset):
+    with pytest.raises(ValidationError, match=r"must not have .*horizontal offset"):
+        assign_stmt_with_offset()
