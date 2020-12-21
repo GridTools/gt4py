@@ -283,3 +283,17 @@ def allow_empty_computation(in_field: Field3D, out_field: Field3D):
     with computation(PARALLEL), interval(...):
         if __INLINED(DO_SOMETHING):
             out_field = abs(in_field)
+
+
+@register
+def conditional_temporaries(
+    in_field: gtscript.Field[float], out_field: gtscript.Field[float], m: int
+):
+    with computation(PARALLEL), interval(1, 2):
+        if m == 1:
+            tmp_field = in_field[0, 0, -1] / in_field
+            out_field = 2.0 * tmp_field
+    with computation(FORWARD), interval(2, None):
+        if m == 1:
+            tmp_field = 2.0 * in_field[0, 0, -1]
+            out_field = tmp_field - in_field
