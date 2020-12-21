@@ -1201,27 +1201,27 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
-            self.demotables: Dict[str, str] = {
-                field_name: "" for field_name in node.temporary_fields
+            """Dictionary mapping temporaries to their most recently referenced stage."""
+            self.demotables: Dict[str, Optional[str]] = {
+                temp_field: None for temp_field in node.temporary_fields
             }
             self.visit(node)
             return set(self.demotables.keys())
 
-        def visit_Stage(self, node: gt_ir.Stage) -> None:
-            self.stage_name = node.name
-            self.generic_visit(node)
+        def visit_Stage(self, node: gt_ir.Stage, **kwargs: Any) -> None:
+            kwargs["stage_name"] = node.name
+            self.generic_visit(node, **kwargs)
 
-        def visit_Assign(self, node: gt_ir.Assign) -> None:
-            target_name = node.target.name
-            if target_name in self.demotables:
-                self.demotables[target_name] = self.stage_name
-            self.visit(node.value)
+        def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
+            if node.target.name in self.demotables:
+                self.demotables[node.target.name] = kwargs["stage_name"]
+            self.visit(node.value, **kwargs)
 
-        def visit_FieldRef(self, node: gt_ir.FieldRef) -> None:
+        def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> None:
             field_name = node.name
             if field_name in self.demotables:
-                assert len(self.demotables[field_name]) > 0
-                if self.stage_name != self.demotables[field_name] or any(
+                assert self.demotables[field_name], f"Temporary {field_name} has no stage."
+                if kwargs["stage_name"] != self.demotables[field_name] or any(
                     val != 0 for val in node.offset.values()
                 ):
                     self.demotables.pop(field_name)
