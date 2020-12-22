@@ -220,3 +220,4 @@ class Program(LocNode, SymbolTableTrait):
     # control_flow_ast: List[GTComputation]
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
+    _validate_symbol_refs = common.validate_symbol_refs()

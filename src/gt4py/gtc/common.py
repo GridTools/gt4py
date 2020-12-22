@@ -17,7 +17,16 @@
 import enum
 from typing import Any, Generic, List, Optional, TypeVar, Union
 
-from eve import GenericNode, IntEnum, Node, SourceLocation, Str, StrEnum, SymbolTableTrait
+from eve import (
+    GenericNode,
+    IntEnum,
+    Node,
+    SourceLocation,
+    Str,
+    StrEnum,
+    SymbolTableTrait,
+    concepts,
+)
 from eve import exceptions as eve_exceptions
 from eve.type_definitions import SymbolRef
 from pydantic import validator
@@ -493,6 +502,36 @@ def validate_dtype_is_set():
 
         if len(nodes_without_dtype) > 0:
             raise ValueError("Nodes without dtype detected {}".format(nodes_without_dtype))
+        return values
+
+    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+
+
+def validate_symbol_refs():
+    """Works only, if only the root node has a symbol table"""
+
+    def _impl(cls, values: dict):
+        symrefs = []
+        for v in flatten_list(values.values()):
+            if isinstance(v, Node):
+                for node in v.iter_tree():
+                    if isinstance(node, concepts.BaseNode):
+                        for name, metadata in node.__node_children__.items():
+                            if isinstance(metadata["definition"].type_, type) and issubclass(
+                                metadata["definition"].type_, SymbolRef
+                            ):
+                                symrefs.append(node.__dict__[name])
+
+        assert "symtable_" in values
+        symtable = values["symtable_"]
+        missing_symbols = []
+        for symref in symrefs:
+            if symref not in symtable:
+                missing_symbols.append(symref)
+
+        if len(missing_symbols) > 0:
+            raise ValueError("Symbols {} not found.".format(missing_symbols))
+
         return values
 
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
