@@ -252,7 +252,7 @@ def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3D
 
 @register
 def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3D):
-    with computation(PARALLEL), interval(...):
+    with computation(PARALLEL), interval(0, 2):
         mid_storage = 2
         if in_storage[0, 0, 0] > 0:
             local_var = 4
@@ -260,6 +260,10 @@ def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3
                 mid_storage = 3
             else:
                 mid_storage = 4
+            out_storage[0, 0, 0] = local_var + mid_storage
+    with computation(FORWARD), interval(2, None):
+        if in_storage[0, 0, 0] < 0:
+            local_var = 6
             out_storage[0, 0, 0] = local_var + mid_storage
 
 
@@ -284,16 +288,3 @@ def allow_empty_computation(in_field: Field3D, out_field: Field3D):
         if __INLINED(DO_SOMETHING):
             out_field = abs(in_field)
 
-
-@register
-def conditional_temporaries(
-    in_field: gtscript.Field[float], out_field: gtscript.Field[float], m: int
-):
-    with computation(PARALLEL), interval(1, 2):
-        if m == 1:
-            tmp_field = in_field[0, 0, -1] / in_field
-            out_field = 2.0 * tmp_field
-    with computation(FORWARD), interval(2, None):
-        if m == 1:
-            tmp_field = 2.0 * in_field[0, 0, -1]
-            out_field = tmp_field - in_field

@@ -1201,10 +1201,10 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
-            """Dictionary mapping temporaries to their most recently referenced stage."""
             self.demotables: Dict[str, Optional[str]] = {
                 temp_field: None for temp_field in node.temporary_fields
             }
+            """Dictionary mapping temporaries to their most recently referenced stage."""
             self.visit(node)
             return set(self.demotables.keys())
 
