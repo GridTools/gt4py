@@ -287,4 +287,3 @@ def allow_empty_computation(in_field: Field3D, out_field: Field3D):
     with computation(PARALLEL), interval(...):
         if __INLINED(DO_SOMETHING):
             out_field = abs(in_field)
-
