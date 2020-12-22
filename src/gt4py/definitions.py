@@ -645,6 +645,7 @@ class BuildOptions(AttributeClassLike):
     backend_opts = attribute(of=DictOf[str, Any], factory=dict)
     build_info = attribute(of=dict, optional=True)
     rebuild = attribute(of=bool, default=False)
+    format_source = attribute(of=bool, default=False)
     _impl_opts = attribute(of=DictOf[str, Any], factory=dict)
 
     @property
