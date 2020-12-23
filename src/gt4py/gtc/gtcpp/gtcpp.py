@@ -161,7 +161,7 @@ class GTFunctor(LocNode, SymbolTableTrait):
 
 # A ParamArg is an argument that maps to a parameter of something with the same name.
 # Because all things are called exactly once there is a one-to-one mapping.
-# TODO with symbol table the concept probably doesn't make sense anymore
+# TODO split into Param (SymbolName) and Arg (SymbolRef)
 class ParamArg(LocNode):
     name: Str
 
