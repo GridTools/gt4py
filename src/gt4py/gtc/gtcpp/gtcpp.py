@@ -1,6 +1,7 @@
 import enum
 from typing import List, Optional, Tuple, Union
 
+import eve
 from eve import Str, StrEnum, SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
 from pydantic.class_validators import validator
@@ -164,6 +165,16 @@ class GTFunctor(LocNode, SymbolTableTrait):
 class ParamArg(LocNode):
     name: Str
 
+    class Config(eve.concepts.FrozenModelConfig):
+        pass
+
+    # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
+
 
 class ApiParamDecl(LocNode):
     name: SymbolName
@@ -189,7 +200,7 @@ class GlobalParamDecl(ApiParamDecl):
 
 
 class GTStage(LocNode):
-    functor: SymbolRef  # symbol ref
+    functor: SymbolRef
     args: List[ParamArg]  # symbol ref to GTComputation params
 
 
@@ -203,20 +214,17 @@ class GTMultiStage(LocNode):
     caches: List[Union[IJCache]]
 
 
-class GTComputation(LocNode):
-    name: SymbolName
-    parameters: List[ParamArg]  # ?
+class GTComputationCall(LocNode):
+    arguments: List[ParamArg]  # ?
     temporaries: List[Temporary]
     multi_stages: List[GTMultiStage]  # TODO at least one
 
 
 class Program(LocNode, SymbolTableTrait):
     name: Str
-    # The ParamArg here, doesn't fully work as we need the type for template instantiation.
-    # But maybe the module instantiation code is actually generated from a different IR?
     parameters: List[ApiParamDecl]
     functors: List[GTFunctor]
-    gt_computation: GTComputation
+    gt_computation: GTComputationCall
     # control_flow_ast: List[GTComputation]
 
     _validate_dtype_is_set = common.validate_dtype_is_set()

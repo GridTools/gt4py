@@ -12,8 +12,8 @@ from gt4py.gtc.gtcpp.gtcpp import GTParamList
 
 # TODO between oir and gtcpp we need to group oir.VerticalLoops
 
-# - Each vertical loop is a functor (and a stage)
-# - All vertical loops build a multistage
+# - Each HorizontalExecution is a Functor (and a Stage)
+# - Each VerticalLoop is MultiStage
 
 
 def _extract_accessors(node: eve.Node) -> GTParamList:
@@ -60,11 +60,18 @@ class OIRToGTCpp(eve.NodeTranslator):
     @dataclass
     class GTComputationContext:
         temporaries: List[gtcpp.Temporary] = field(default_factory=list)
+        arguments: Set[gtcpp.ParamArg] = field(default_factory=set)
 
         def add_temporaries(
             self, temporaries: List[gtcpp.Temporary]
         ) -> "OIRToGTCpp.GTComputationContext":
             self.temporaries.extend(temporaries)
+            return self
+
+        def add_arguments(
+            self, arguments: Set[gtcpp.ParamArg]
+        ) -> "OIRToGTCpp.GTComputationContext":
+            self.arguments.update(arguments)
             return self
 
     def visit_Literal(self, node: oir.Literal, **kwargs):
@@ -137,7 +144,13 @@ class OIRToGTCpp(eve.NodeTranslator):
         )
 
     def visit_HorizontalExecution(
-        self, node: oir.HorizontalExecution, *, prog_ctx: ProgramContext, interval, **kwargs
+        self,
+        node: oir.HorizontalExecution,
+        *,
+        prog_ctx: ProgramContext,
+        comp_ctx: GTComputationContext,
+        interval,
+        **kwargs,
     ):
         assert "stencil_symtable" in kwargs
         body = self.visit(node.body, **kwargs)
@@ -147,6 +160,15 @@ class OIRToGTCpp(eve.NodeTranslator):
         apply_method = gtcpp.GTApplyMethod(interval=self.visit(interval), body=body)
         accessors = _extract_accessors(apply_method)
         stage_args = [gtcpp.ParamArg(name=acc.name) for acc in accessors]
+
+        comp_ctx.add_arguments(
+            [
+                param_arg
+                for param_arg in stage_args
+                if param_arg.name not in [tmp.name for tmp in comp_ctx.temporaries]
+            ]
+        )
+
         prog_ctx.add_functor(
             gtcpp.GTFunctor(
                 name=node.id_,
@@ -164,14 +186,16 @@ class OIRToGTCpp(eve.NodeTranslator):
         comp_ctx: GTComputationContext,
         **kwargs,
     ):
+        assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
+        comp_ctx.add_temporaries(self.visit(node.declarations))
+        # the following visit assumes that temporaries are already available in comp_ctx
         stages = self.visit(
             node.horizontal_executions,
             interval=node.interval,
             default=([], []),
+            comp_ctx=comp_ctx,
             **kwargs,
         )
-        assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
-        comp_ctx.add_temporaries(self.visit(node.declarations))
         caches = []  # TODO
         return gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches)
 
@@ -192,14 +216,8 @@ class OIRToGTCpp(eve.NodeTranslator):
             **kwargs,
         )
 
-        # TODO think about this pattern, just scanning of used parameters is probably wrong...
-        api_fields = set(
-            [arg.name for mss in multi_stages for stage in mss.stages for arg in stage.args]
-        ) - set(t.name for t in comp_ctx.temporaries)
-        gt_comp_parameters = [gtcpp.ParamArg(name=f) for f in api_fields]  # TODO
-        gt_computation = gtcpp.GTComputation(
-            name=node.name,
-            parameters=gt_comp_parameters,
+        gt_computation = gtcpp.GTComputationCall(
+            arguments=comp_ctx.arguments,
             temporaries=comp_ctx.temporaries,
             multi_stages=multi_stages,
         )

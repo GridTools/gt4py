@@ -12,7 +12,7 @@ from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 from .gtcpp_utils import (
     AssignStmtBuilder,
     GTApplyMethodBuilder,
-    GTComputationBuilder,
+    GTComputationCallBuilder,
     GTFunctorBuilder,
     IfStmtBuilder,
     ProgramBuilder,
@@ -87,7 +87,7 @@ def make_compilation_input_and_expected():
             ProgramBuilder("test").add_parameter("outer_param", DataType.FLOAT64)
             # TODO this test needs a functor! make GTCpp validators stricter!
             .gt_computation(
-                GTComputationBuilder("test").add_stage(GTStage(functor="fun", args=[])).build()
+                GTComputationCallBuilder().add_stage(GTStage(functor="fun", args=[])).build()
             ).build(),
             r"",
         ),

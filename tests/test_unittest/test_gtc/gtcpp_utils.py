@@ -7,7 +7,7 @@ from gt4py.gtc.gtcpp.gtcpp import (
     FieldDecl,
     GTAccessor,
     GTApplyMethod,
-    GTComputation,
+    GTComputationCall,
     GTExtent,
     GTFunctor,
     GTInterval,
@@ -131,14 +131,13 @@ class GTFunctorBuilder:
         )
 
 
-class GTComputationBuilder:
-    def __init__(self, name) -> None:
-        self._name = name
-        self._parameters = []
+class GTComputationCallBuilder:
+    def __init__(self) -> None:
+        self._arguments = []
         self._temporaries = []
         self._multi_stages = []
 
-    def add_stage(self, stage: GTStage) -> "GTComputationBuilder":
+    def add_stage(self, stage: GTStage) -> "GTComputationCallBuilder":
         if len(self._multi_stages) == 0:
             self._multi_stages.append(
                 GTMultiStage(loop_order=LoopOrder.PARALLEL, stages=[], caches=[])
@@ -151,14 +150,13 @@ class GTComputationBuilder:
         )
         return self
 
-    def add_parameter(self, name: str) -> "GTComputationBuilder":
-        self._parameters.append(ParamArg(name=name))
+    def add_argument(self, name: str) -> "GTComputationCallBuilder":
+        self._arguments.append(ParamArg(name=name))
         return self
 
-    def build(self) -> GTComputation:
-        return GTComputation(
-            name=self._name,
-            parameters=self._parameters,
+    def build(self) -> GTComputationCall:
+        return GTComputationCall(
+            arguments=self._arguments,
             temporaries=self._temporaries,
             multi_stages=self._multi_stages,
         )
@@ -169,7 +167,7 @@ class ProgramBuilder:
         self._name = name
         self._parameters = []
         self._functors = []
-        self._gt_computation = GTComputationBuilder(name).build()
+        self._gt_computation = GTComputationCallBuilder().build()
 
     def add_functor(self, functor: GTFunctor) -> "ProgramBuilder":
         self._functors.append(functor)
@@ -179,7 +177,7 @@ class ProgramBuilder:
         self._parameters.append(FieldDecl(name=name, dtype=dtype))
         return self
 
-    def gt_computation(self, gt_computation: GTComputation) -> "ProgramBuilder":
+    def gt_computation(self, gt_computation: GTComputationCall) -> "ProgramBuilder":
         self._gt_computation = gt_computation
         return self
 
