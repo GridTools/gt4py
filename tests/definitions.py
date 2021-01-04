@@ -31,7 +31,7 @@ import gt4py.utils as gt_utils
 
 ALL_BACKENDS = list(gt_backend.REGISTRY.keys())
 if cp is None:
-    # neglect gpu backends
+    # Skip gpu backends
     ALL_BACKENDS = [
         name for name in ALL_BACKENDS if gt_backend.from_name(name).storage_info["device"] != "gpu"
     ]
