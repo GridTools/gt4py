@@ -53,8 +53,8 @@ class FieldAccessBuilder:
 
 class ParAssignStmtBuilder:
     def __init__(self, left_name=None, right_name=None) -> None:
-        self._left = FieldAccessBuilder(left_name) if left_name else None
-        self._right = FieldAccessBuilder(right_name) if right_name else None
+        self._left = FieldAccessBuilder(left_name).build() if left_name else None
+        self._right = FieldAccessBuilder(right_name).build() if right_name else None
 
     def left(self, left: FieldAccess) -> "ParAssignStmtBuilder":
         self._left = left

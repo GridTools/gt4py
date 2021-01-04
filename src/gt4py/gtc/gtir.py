@@ -284,3 +284,5 @@ class Stencil(LocNode, SymbolTableTrait):
     @property
     def param_names(self) -> List:
         return [p.name for p in self.params]
+
+    _validate_symbol_refs = common.validate_symbol_refs()
