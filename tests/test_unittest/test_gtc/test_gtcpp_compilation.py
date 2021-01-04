@@ -5,7 +5,15 @@ import setuptools
 
 from gt4py import config, gt2_src_manager  # TODO must not include gt4py package or ok for test?
 from gt4py.gtc.common import DataType
-from gt4py.gtc.gtcpp.gtcpp import GTAccessor, GTApplyMethod, GTExtent, GTStage, Intent, Program
+from gt4py.gtc.gtcpp.gtcpp import (
+    Arg,
+    GTAccessor,
+    GTApplyMethod,
+    GTExtent,
+    GTStage,
+    Intent,
+    Program,
+)
 from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 
@@ -87,8 +95,25 @@ def make_compilation_input_and_expected():
             ProgramBuilder("test").add_parameter("outer_param", DataType.FLOAT64)
             # TODO this test needs a functor! make GTCpp validators stricter!
             .gt_computation(
-                GTComputationCallBuilder().add_stage(GTStage(functor="fun", args=[])).build()
+                GTComputationCallBuilder()
+                .add_stage(GTStage(functor="fun", args=[Arg(name="outer_param")]))
+                .build()
             ).build(),
+            r"",
+        ),
+        (
+            ProgramBuilder("test")
+            .add_parameter("outer_param", DataType.FLOAT64)
+            .add_functor(
+                GTFunctorBuilder("fun").add_apply_method().build(),
+            )
+            .gt_computation(
+                GTComputationCallBuilder()
+                .add_stage(GTStage(functor="fun", args=[Arg(name="outer_param")]))
+                .add_argument(name="outer_param")  # "Arg(name="outer_param")])
+                .build()
+            )
+            .build(),
             r"",
         ),
     ]

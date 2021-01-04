@@ -176,6 +176,34 @@ class ParamArg(LocNode):
         return self.name == other.name
 
 
+class Param(LocNode):
+    name: SymbolName
+
+    class Config(eve.concepts.FrozenModelConfig):
+        pass
+
+    # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+
+class Arg(LocNode):
+    name: SymbolRef
+
+    class Config(eve.concepts.FrozenModelConfig):
+        pass
+
+    # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+
 class ApiParamDecl(LocNode):
     name: SymbolName
     dtype: common.DataType
@@ -203,6 +231,12 @@ class GTStage(LocNode):
     functor: SymbolRef
     args: List[ParamArg]  # symbol ref to GTComputation params
 
+    @validator("args")
+    def at_least_one_argument(cls, v):
+        if len(v) == 0:
+            raise ValueError("A GTStage needs at least one argument.")
+        return v
+
 
 class IJCache(LocNode):
     name: Str  # symbol ref to GTComputation params or temporaries
@@ -215,7 +249,8 @@ class GTMultiStage(LocNode):
 
 
 class GTComputationCall(LocNode):
-    arguments: List[ParamArg]  # ?
+    # arguments: List[ParamArg]
+    arguments: List[Arg]  # TODO
     temporaries: List[Temporary]
     multi_stages: List[GTMultiStage]  # TODO at least one
 

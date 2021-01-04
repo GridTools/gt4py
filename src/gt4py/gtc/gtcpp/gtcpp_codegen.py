@@ -105,7 +105,9 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         else:
             assert False
 
-    ParamArg = as_fmt("{name}")
+    ParamArg = as_fmt("{name}")  # TODO remove
+    Arg = as_fmt("{name}")
+    # Param = as_fmt("{name}")
 
     ApiParamDecl = as_fmt("{name}")
 
