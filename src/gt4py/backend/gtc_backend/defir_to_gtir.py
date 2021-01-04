@@ -54,12 +54,7 @@ class DefIRToGTIR(IRNodeVisitor):
         {LevelMarker.START: common.LevelMarker.START, LevelMarker.END: common.LevelMarker.END}
     )
 
-    GT4PY_OP_TO_GTIR_OP: ClassVar[
-        Mapping[
-            BinaryOperator,
-            Union[common.ArithmeticOperator, common.LogicalOperator, common.ComparisonOperator],
-        ]
-    ] = MappingProxyType(
+    GT4PY_OP_TO_GTIR_OP: ClassVar[Mapping[BinaryOperator, str]] = MappingProxyType(
         {
             # arithmetic
             BinaryOperator.ADD: common.ArithmeticOperator.ADD,
@@ -79,12 +74,7 @@ class DefIRToGTIR(IRNodeVisitor):
         }
     )
 
-    GT4PY_UNARYOP_TO_GTIR: ClassVar[
-        Mapping[
-            UnaryOperator,
-            common.UnaryOperator,
-        ]
-    ] = MappingProxyType(
+    GT4PY_UNARYOP_TO_GTIR: ClassVar[Mapping[UnaryOperator, str]] = MappingProxyType(
         {
             UnaryOperator.POS: common.UnaryOperator.POS,
             UnaryOperator.NEG: common.UnaryOperator.NEG,
@@ -92,12 +82,7 @@ class DefIRToGTIR(IRNodeVisitor):
         }
     )
 
-    GT4PY_NATIVE_FUNC_TO_GTIR: ClassVar[
-        Mapping[
-            NativeFunction,
-            common.NativeFunction,
-        ]
-    ] = MappingProxyType(
+    GT4PY_NATIVE_FUNC_TO_GTIR: ClassVar[Mapping[NativeFunction, str]] = MappingProxyType(
         {
             NativeFunction.ABS: common.NativeFunction.ABS,
             NativeFunction.MIN: common.NativeFunction.MIN,

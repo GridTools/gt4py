@@ -1,7 +1,7 @@
-from dataclasses import dataclass, field
 from typing import Dict, List, Set
 
 import eve
+from dataclasses import dataclass, field
 from devtools import debug  # noqa: F401
 
 from gt4py.gtc import common, oir

@@ -225,7 +225,9 @@ def verify_condition_is_boolean(parent_node_cls, cond: Expr) -> Expr:
     return cond
 
 
-def verify_and_get_common_dtype(node_cls, values: List[Expr], *, strict: bool = True) -> DataType:
+def verify_and_get_common_dtype(
+    node_cls, values: List[Expr], *, strict: bool = True
+) -> Optional[DataType]:
     assert len(values) > 0
     if all([v.dtype for v in values]):
         dtype = values[0].dtype
@@ -447,8 +449,6 @@ class Cast(GenericNode, Generic[ExprT]):
 
 
 class NativeFuncCall(GenericNode, Generic[ExprT]):
-    """"""
-
     func: NativeFunction
     args: List[ExprT]
 
