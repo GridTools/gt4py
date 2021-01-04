@@ -210,28 +210,28 @@ class SuiteMeta(type):
         if cls_dict.get("_skip_", False):  # skip metaclass magic
             return super().__new__(cls, cls_name, bases, cls_dict)
 
-        # Grab members inherited from base class
-        required_members = (
+        # Grab members inherited from base classes
+        required_members = {
             "domain_range",
             "symbols",
             "definition",
             "validation",
             "backends",
             "dtypes",
-        )
-        inherited_members = {
-            key: getattr(bases[0], key)
-            for key in required_members
-            if hasattr(bases[0], key) and key not in cls_dict
         }
-        cls_dict.update(inherited_members)
+        missing_members = required_members - cls_dict.keys()
+        for key in missing_members:
+            for base in bases:
+                if hasattr(base, key):
+                    cls_dict[key] = getattr(base, key)
+                    break
 
         # Check class dict
-        missing = set(required_members) - cls_dict.keys()
-        if len(missing) > 0:
+        missing_members = required_members - cls_dict.keys()
+        if len(missing_members) > 0:
             raise TypeError(
                 "Missing {missing} required members in '{name}' definition".format(
-                    missing=missing, name=cls_name
+                    missing=missing_members, name=cls_name
                 )
             )
 
