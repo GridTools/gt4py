@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import eve
 import pytest
@@ -237,11 +237,15 @@ class SymbolRefChildNode(eve.Node):
 
 class SymbolChildNode(eve.Node):
     name: eve.SymbolName
+    clearly_a_symbol = ""  # prevent pydantic conversion
+
+
+class AnotherSymbolTable(eve.Node, eve.SymbolTableTrait):
+    nodes: List[Union[SymbolRefChildNode, SymbolChildNode]]
 
 
 class SymbolTableRootNode(eve.Node, eve.SymbolTableTrait):
-    symbol_nodes: List[SymbolChildNode]
-    symbol_ref_nodes: List[SymbolRefChildNode]
+    nodes: List[Union[SymbolRefChildNode, SymbolChildNode, AnotherSymbolTable]]
 
     _validate_symbol_refs = common.validate_symbol_refs()
 
@@ -249,12 +253,19 @@ class SymbolTableRootNode(eve.Node, eve.SymbolTableTrait):
 @pytest.mark.parametrize(
     "tree_with_missing_symbol",
     [
+        lambda: SymbolTableRootNode(nodes=[SymbolRefChildNode(name="foo")]),
         lambda: SymbolTableRootNode(
-            symbol_nodes=[], symbol_ref_nodes=[SymbolRefChildNode(name="foo")]
+            nodes=[
+                SymbolChildNode(name="foo"),
+                SymbolRefChildNode(name="foo"),
+                SymbolRefChildNode(name="foo2"),
+            ],
         ),
         lambda: SymbolTableRootNode(
-            symbol_nodes=[SymbolChildNode(name="foo")],
-            symbol_ref_nodes=[SymbolRefChildNode(name="foo"), SymbolRefChildNode(name="foo2")],
+            nodes=[
+                AnotherSymbolTable(nodes=[SymbolChildNode(name="inner_scope")]),
+                SymbolRefChildNode(name="inner_scope"),
+            ]
         ),
     ],
 )
@@ -265,13 +276,28 @@ def test_symbolref_validation_for_invalid_tree(tree_with_missing_symbol):
 
 def test_symbolref_validation_for_valid_tree():
     SymbolTableRootNode(
-        symbol_nodes=[SymbolChildNode(name="foo")],
-        symbol_ref_nodes=[SymbolRefChildNode(name="foo")],
+        nodes=[SymbolChildNode(name="foo"), SymbolRefChildNode(name="foo")],
+    )
+    SymbolTableRootNode(
+        nodes=[
+            SymbolChildNode(name="foo"),
+            SymbolRefChildNode(name="foo"),
+            SymbolRefChildNode(name="foo"),
+        ],
     ),
     SymbolTableRootNode(
-        symbol_nodes=[SymbolChildNode(name="foo")],
-        symbol_ref_nodes=[SymbolRefChildNode(name="foo"), SymbolRefChildNode(name="foo")],
-    ),
+        nodes=[
+            SymbolChildNode(name="outer_scope"),
+            AnotherSymbolTable(nodes=[SymbolRefChildNode(name="outer_scope")]),
+        ]
+    )
+    SymbolTableRootNode(
+        nodes=[
+            AnotherSymbolTable(
+                nodes=[SymbolChildNode(name="inner_scope"), SymbolRefChildNode(name="inner_scope")]
+            )
+        ]
+    )
 
 
 # For pydantic, nodes are the same (convertible to each other) if all fields are same.

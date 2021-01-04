@@ -15,17 +15,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, Generic, List, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 
 from eve import (
     GenericNode,
     IntEnum,
     Node,
+    NodeVisitor,
     SourceLocation,
     Str,
     StrEnum,
     SymbolTableTrait,
-    concepts,
 )
 from eve import exceptions as eve_exceptions
 from eve.type_definitions import SymbolRef
@@ -511,23 +511,31 @@ def validate_symbol_refs():
     """Works only, if only the root node has a symbol table"""
 
     def _impl(cls, values: dict):
-        symrefs = []
-        for v in flatten_list(values.values()):
-            if isinstance(v, Node):
-                for node in v.iter_tree():
-                    if isinstance(node, concepts.BaseNode):
-                        for name, metadata in node.__node_children__.items():
-                            if isinstance(metadata["definition"].type_, type) and issubclass(
-                                metadata["definition"].type_, SymbolRef
-                            ):
-                                symrefs.append(node.__dict__[name])
+        class SymtableValidator(NodeVisitor):
+            def __init__(self):
+                self.missing_symbols = []
 
-        assert "symtable_" in values
-        symtable = values["symtable_"]
+            def visit_Node(self, node: Node, *, symtable: Dict[str, Any], **kwargs):
+                for name, metadata in node.__node_children__.items():
+                    if isinstance(metadata["definition"].type_, type) and issubclass(
+                        metadata["definition"].type_, SymbolRef
+                    ):
+                        if getattr(node, name) not in symtable:
+                            self.missing_symbols.append(getattr(node, name))
+
+                if hasattr(node, "symtable_"):
+                    symtable = {**symtable, **node.symtable_}
+                self.generic_visit(node, symtable=symtable, **kwargs)
+
+            @classmethod
+            def apply(cls, node: Node, *, symtable: Dict[str, Any]) -> List[str]:
+                instance = cls()
+                instance.visit(node, symtable=symtable)
+                return instance.missing_symbols
+
         missing_symbols = []
-        for symref in symrefs:
-            if symref not in symtable:
-                missing_symbols.append(symref)
+        for v in values.values():
+            missing_symbols.extend(SymtableValidator.apply(v, symtable=values["symtable_"]))
 
         if len(missing_symbols) > 0:
             raise ValueError("Symbols {} not found.".format(missing_symbols))
