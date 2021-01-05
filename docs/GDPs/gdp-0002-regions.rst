@@ -165,10 +165,10 @@ Implementation
 The implementation on the GT4Py involves adding:
 
 1. Correctly parse ``with horizontal()`` in the frontend, and add ability for IRs to represent this computation
-3. Add parsing tests
-4. Add code generation support
-5. Code generation tests
-7. Create at least one demo that incorporates this feature
+2. Add parsing tests
+3. Add code generation support
+4. Code generation tests
+5. Create at least one demo that incorporates this feature
 
 
 FV3 Example
