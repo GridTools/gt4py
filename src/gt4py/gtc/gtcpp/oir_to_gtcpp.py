@@ -63,7 +63,7 @@ class OIRToGTCpp(eve.NodeTranslator):
     @dataclass
     class GTComputationContext:
         temporaries: List[gtcpp.Temporary] = field(default_factory=list)
-        arguments: Set[gtcpp.ParamArg] = field(default_factory=set)
+        arguments: Set[gtcpp.Arg] = field(default_factory=set)
 
         def add_temporaries(
             self, temporaries: List[gtcpp.Temporary]
@@ -71,9 +71,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             self.temporaries.extend(temporaries)
             return self
 
-        def add_arguments(
-            self, arguments: Set[gtcpp.ParamArg]
-        ) -> "OIRToGTCpp.GTComputationContext":
+        def add_arguments(self, arguments: Set[gtcpp.Arg]) -> "OIRToGTCpp.GTComputationContext":
             self.arguments.update(arguments)
             return self
 
@@ -162,7 +160,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             body = [gtcpp.IfStmt(cond=mask, true_branch=gtcpp.BlockStmt(body=body))]
         apply_method = gtcpp.GTApplyMethod(interval=self.visit(interval), body=body)
         accessors = _extract_accessors(apply_method)
-        stage_args = [gtcpp.ParamArg(name=acc.name) for acc in accessors]
+        stage_args = [gtcpp.Arg(name=acc.name) for acc in accessors]
 
         comp_ctx.add_arguments(
             [

@@ -3,6 +3,7 @@ from typing import List
 from gt4py.gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
 from gt4py.gtc.gtcpp.gtcpp import (
     AccessorRef,
+    Arg,
     AssignStmt,
     FieldDecl,
     GTAccessor,
@@ -18,7 +19,6 @@ from gt4py.gtc.gtcpp.gtcpp import (
     IfStmt,
     Intent,
     Literal,
-    ParamArg,
     Program,
     Stmt,
 )
@@ -151,7 +151,7 @@ class GTComputationCallBuilder:
         return self
 
     def add_argument(self, name: str) -> "GTComputationCallBuilder":
-        self._arguments.append(ParamArg(name=name))
+        self._arguments.append(Arg(name=name))
         return self
 
     def build(self) -> GTComputationCall:
