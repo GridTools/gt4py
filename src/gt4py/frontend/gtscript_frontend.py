@@ -361,38 +361,34 @@ class ValueInliner(ast.NodeTransformer):
         return node
 
 
-class ReturnReplacer(ast.NodeTransformer):
+class ReturnReplacer(gt_utils.meta.ASTTransformPass):
     @classmethod
-    def apply(cls, ast_object, target_node):
-        replacer = cls(target_node)
-        replacer(ast_object)
+    def apply(cls, ast_object: ast.AST, target_node: ast.AST) -> None:
+        """Ensure that there is only a single return statement (can still return a tuple)."""
+        ret_count = sum(isinstance(node, ast.Return) for node in ast.walk(ast_object))
+        if ret_count != 1:
+            raise GTScriptSyntaxError("GTScript Functions should have a single return statement")
+        cls().visit(ast_object, target_node=target_node)
 
-    def __init__(self, target_node):
-        self.target_node = target_node
+    @staticmethod
+    def _get_num_values(node: ast.AST) -> int:
+        return len(node.elts) if isinstance(node, ast.Tuple) else 1
 
-    def __call__(self, ast_object):
-        self.visit(ast_object)
-
-    def visit_Return(self, node: ast.Return):
-        if isinstance(node.value, ast.Tuple):
-            rhs_length = len(node.value.elts)
-        else:
-            rhs_length = 1
-
-        if isinstance(self.target_node, ast.Tuple):
-            lhs_length = len(self.target_node.elts)
-        else:
-            lhs_length = 1
+    def visit_Return(self, node: ast.Return, *, target_node: ast.AST) -> ast.Assign:
+        rhs_length = self._get_num_values(node.value)
+        lhs_length = self._get_num_values(target_node)
 
         if lhs_length == rhs_length:
             return ast.Assign(
-                targets=[self.target_node],
+                targets=[target_node],
                 value=node.value,
                 lineno=node.lineno,
                 col_offset=node.col_offset,
             )
         else:
-            return ast.Raise(lineno=node.lineno, col_offset=node.col_offset)
+            raise GTScriptSyntaxError(
+                "Number of returns values does not match arguments on left side"
+            )
 
 
 class CallInliner(ast.NodeTransformer):
@@ -464,7 +460,10 @@ class CallInliner(ast.NodeTransformer):
         if call_name in gtscript.MATH_BUILTINS:
             node.args = [self.visit(arg) for arg in node.args]
             return node
-        elif any(isinstance(arg, ast.Call) for arg in node.args):
+        elif any(
+            isinstance(arg, ast.Call) and arg.func.id not in gtscript.MATH_BUILTINS
+            for arg in node.args
+        ):
             raise GTScriptSyntaxError(
                 "Function calls are not supported in arguments to function calls",
                 loc=gt_ir.Location.from_ast_node(node),
@@ -1465,6 +1464,18 @@ class GTScriptParser(ast.NodeVisitor):
         resolved_imports = {**imported}
         resolved_values_list = list(nonlocals.items())
 
+        # Resolve function-like imports
+        func_externals = {
+            key: value
+            for key, value in itertools.chain(context.items(), resolved_values_list)
+            if isinstance(value, types.FunctionType)
+        }
+        for name, value in func_externals.items():
+            if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
+                GTScriptParser.annotate_definition(value)
+            for imported_name, imported_value in value._gtscript_["imported"].items():
+                resolved_imports[imported_name] = imported_value
+
         # Collect all imported and inlined values recursively through all the external symbols
         while resolved_imports or resolved_values_list:
             new_imports = {}
@@ -1667,7 +1678,7 @@ class GTScriptFrontend(gt_frontend.Frontend):
 
     @classmethod
     def get_stencil_id(cls, qualified_name, definition, externals, options_id):
-        cls.prepare_stencil_definition(definition, externals)
+        cls.prepare_stencil_definition(definition, externals or {})
         fingerprint = {
             "__main__": definition._gtscript_["canonical_ast"],
             "docstring": inspect.getdoc(definition),

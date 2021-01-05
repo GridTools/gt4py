@@ -14,5 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from .input_strategies import field, global_name, parameter
-from .suites import StencilTestSuite
+try:
+    from .input_strategies import field, global_name, parameter
+    from .suites import StencilTestSuite
+except ModuleNotFoundError as e:
+    if "pytest" in str(e) or "hypothesis" in str(e):
+        raise RuntimeError(
+            "Missing 'testing' extra dependencies. Reinstall GT4Py as 'gt4py[testing]'"
+        ) from e
+    else:
+        raise e

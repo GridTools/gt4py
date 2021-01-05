@@ -175,6 +175,64 @@ class TestInlinedExternals:
         stmt = def_ir.computations[0].body.stmts[0]
         assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
 
+    def test_function_import(self, id_version):
+        module = f"TestInlinedExternals_test_recursive_imports_{id_version}"
+
+        def some_function():
+            from __externals__ import const
+
+            return const
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from __externals__ import some_call
+
+            with computation(PARALLEL), interval(...):
+                inout_field = some_call()
+
+        stencil_id, def_ir = compile_definition(
+            definition_func,
+            "test_recursive_imports",
+            module,
+            externals={"some_call": some_function, "const": GLOBAL_CONSTANT},
+        )
+        assert set(def_ir.externals.keys()) == {
+            "some_call",
+            "const",
+        }
+
+    def test_recursive_imports(self, id_version):
+        module = f"TestInlinedExternals_test_recursive_imports_{id_version}"
+
+        def func_nest2():
+            from __externals__ import const
+
+            return const
+
+        def func_nest1():
+            from __externals__ import other
+
+            return other() + func_nest2()
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from __externals__ import some_call
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func_nest1() + some_call()
+
+        stencil_id, def_ir = compile_definition(
+            definition_func,
+            "test_recursive_imports",
+            module,
+            externals={"some_call": func_nest1, "other": func_nest2, "const": GLOBAL_CONSTANT},
+        )
+        assert set(def_ir.externals.keys()) == {
+            "some_call",
+            "const",
+            "other",
+            "func_nest1",
+            "tests.test_unittest.test_gtscript_frontend.func_nest1.func_nest2",
+        }
+
     def test_decorated_freeze(self):
         A = 0
 
@@ -495,6 +553,91 @@ class TestExternalsWithSubroutines:
             compile_definition(
                 definition_func, "test_no_nested_function_calls", module, externals=externals
             )
+
+
+class TestFunctionReturn:
+    def test_no_return(self, id_version):
+        @gtscript.function
+        def _test_no_return(arg):
+            arg = 1
+
+        def definition_func(phi: gtscript.Field[np.float64]):
+            from __externals__ import test
+
+            with computation(PARALLEL), interval(...):
+                phi = test(phi)
+
+        module = f"TestFunctionReturn_test_no_return_{id_version}"
+        externals = {"test": _test_no_return}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="should have a single return statement"
+        ):
+            compile_definition(definition_func, "test_no_return", module, externals=externals)
+
+    def test_number_return_args(self, id_version):
+        @gtscript.function
+        def _test_return_args(arg):
+            return 1, 2
+
+        def definition_func(phi: gtscript.Field[np.float64]):
+            from __externals__ import test
+
+            with computation(PARALLEL), interval(...):
+                phi = test(phi)
+
+        module = f"TestFunctionReturn_test_number_return_args_{id_version}"
+        externals = {"test": _test_return_args}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Number of returns values does not match arguments on left side",
+        ):
+            compile_definition(
+                definition_func, "test_number_return_args", module, externals=externals
+            )
+
+    def test_multiple_return(self, id_version):
+        @gtscript.function
+        def _test_multiple_return(arg):
+            return 1
+            return 2
+
+        def definition_func(phi: gtscript.Field[np.float64]):
+            from __externals__ import test
+
+            with computation(PARALLEL), interval(...):
+                phi = test(phi)
+
+        module = f"TestFunctionReturn_test_multiple_return_{id_version}"
+        externals = {"test": _test_multiple_return}
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="should have a single return statement"
+        ):
+            compile_definition(
+                definition_func, "test_multiple_return", module, externals=externals
+            )
+
+    def test_conditional_return(self, id_version):
+        @gtscript.function
+        def _test_conditional_return(arg):
+            if arg > 1:
+                tmp = 1
+            else:
+                tmp = 2
+            return tmp
+
+        def definition_func(phi: gtscript.Field[np.float64]):
+            from __externals__ import test
+
+            with computation(PARALLEL), interval(...):
+                phi = test(phi)
+
+        module = f"TestFunctionReturn_test_conditional_return_{id_version}"
+        externals = {"test": _test_conditional_return}
+
+        compile_definition(definition_func, "test_conditional_return", module, externals=externals)
 
 
 class TestCompileTimeAssertions:
