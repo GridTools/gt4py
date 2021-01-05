@@ -7,7 +7,7 @@ GDP 2 — Specializations Near Boundaries
 :Type: Feature
 :Created: 21-04-2020
 :Discussion PR: `https://github.com/GridTools/gt4py/pull/24 <discussion_pr>`_
-:Implementation: `https://github.com/GridTools/gt4py/pull/36 <impl_pr>`_
+:Implementation: `https://github.com/GridTools/gt4py/pull/234 <impl_pr>`_
 
 
 Abstract
