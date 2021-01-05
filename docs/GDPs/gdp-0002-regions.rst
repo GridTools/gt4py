@@ -63,7 +63,7 @@ To illustrate the need for such a feature, consider a snippet of the model that 
         if grid.east_edge:
             x_edge_ub(ut, ub, dt5=dt5, origin=(grid.local_iend, grid.local_jstart, 0), domain=domain_x_edge)
 
-The specific feature that we are proposing is the addition of a ``with parallel()`` context that specifies the horizontal iteration space (over parallel axes) using ``region`` objects.
+The specific feature that we are proposing is the addition of a ``with horizontal()`` context that specifies the horizontal iteration space (over parallel axes) using ``region`` objects.
 The ``region`` object's ``__getitem__`` method uses `splitters` to select a region of the stencil computational domain in the parallel ``I`` and ``J`` axes.
 
 Using this specification, the example is transformed into:
@@ -80,9 +80,9 @@ Using this specification, the example is transformed into:
         from __externals__ import istart, iend, jstart, jend
         with computation(PARALLEL), interval(...):
             ub = dt5 * (uc[0, -1, 0] + uc - (vc[-1, 0, 0] + vc) * cosa) * rsina
-            with parallel(region[istart, :], region[iend, :]):
+            with horizontal(region[istart, :], region[iend, :]):
                 ub = dt5 * (ut[0, -1, 0] + ut)
-            with parallel(region[:, jstart], region[:, jend]):
+            with horizontal(region[:, jstart], region[:, jend]):
                 ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
 
 Notice that distributed domain decomposition works with this feature - if the external has the value ``None``, then any ``region`` objects using this in its slices ignores it.
@@ -93,7 +93,7 @@ This greatly reduces the complexity of the code and consolidates operations on `
 Usage and Impact
 ----------------
 
-This is an optional feature, but will be the only way so far to specialize computation at points in the horizontal iteration space.
+This is an optional feature, but will be the accepted approach to specialize computation at points in the horizontal iteration space.
 
 
 Backward Compatibility
@@ -105,29 +105,58 @@ This GDP aims to be fully backward-compatible.
 Detailed Description
 --------------------
 
-As introduced above, we propose adding a new ``with parallel()`` context that specializes the stencil on a region of the horizontal axes bounds using ``region`` objects, which pass information to GT4Py about the horizontal iteration space through the indexing operator, similar to numpy arrays.
-
-``region`` objects use Axis Offsets like ``I[0]``.
+As introduced above, we propose adding a new ``with horizontal()`` context that specializes the stencil on a region of the horizontal axes bounds using ``region`` objects, which pass information to GT4Py about the horizontal iteration space through the indexing operator, similar to numpy arrays.
 
 
 Axis Offsets
 ++++++++++++
 
-The way to specify axis extents in GT4Py is to index into the axes ``I``, ``J``, ``K``.
+Regions computation is specified using `Axis Offsets`, which are defined in GT4Py by subscripting the axes (``I``, ``J``, and ``K``).
 These can be indexed, which returns the specific indices within a stencil relative to the compute origin. For example: ``I[0]`` is the first compute point, ``I[1]`` the second, and finally ``I[-1]`` is the last point in the stencil compute domain along the ``I`` axis.
-This concept is critical for specifying regional computation.
 
-Externals may be such Axis Offsets, and can be used in region indexing.
+Stencil computation in the horizontal axes behaves differently than in the vertical because statements execute over an index space that may extend beyond the limits defined in the stencil compute domain.
+Such ``extents`` cannot be represented by merely subscripting axes, since for example ``I[-1]`` referes to the last compute domain index along the ``I`` axis, not the point before the beginning of it.
+Axis Offsets therefore interally hold another offset, which can be set by adding or subtracting from the subscript.
+For example ``I[0] - 2`` is itself an Axis Offsets that refers to 2 points before the start of the compute domain.
+
+Axis Offsets may be assigned to variables in Python and/or used as externals in GT4Py in order to define ``region``.
 If the external variable is set to ``None``, then any regions using that external are ignored.
 
 Region Specification
 ++++++++++++++++++++
 
-When ``region`` objects are indexed, they pass information about the intended horizontal iteration space to GT4Py. This is easily explained through a few examples:
+``region`` is a keyword in GT4Py that, when subscripted using slices of axis offsets, defines the restricted computation.
+These form the arguments to ``with horizontal()``.
 
-1. ``region[I[0], :]``: This specifies a restriction to the first compute point on the ``I`` axis, and no restriction in the ``J`` axis.
+As an example, ``region[I[0], :]`` specifies a restriction to the first compute point on the ``I`` axis, and no restriction in the ``J`` axis.
+``I[0]`` is a single point, so when converted to a slice is still the single point.
+The ``J`` axis simply has ``:``, which is an unrestricted slice, which GT4Py interprets as an unrestricted axis (behaves normally).
 
-2. ``region[I[0]-1, :]``: This specifies a restriction to the first compute point outside the compute domain in the ``I`` axis, and no restriction in the ``J`` axis. Code will only be created for the region if another statement consumes the field indices set in the region.
+The previous example introduced a key element of regional computation: There must not only be a way of specifying axis offsets outside the compute domain, but slices that extend to infinity in each direction (or alternatively, unrestricted endpoints of axes).
+GTScript interprets an unrestricted start or stop element as extending to infinity (or, unrestricted).
+
+Examples of this are shown in the image below.
+The blue line shows the compute domain along the ``I`` axis, and two examples of region axis slices are shown in red.
+
+.. image:: _static/gdp-0002/axis_offsets.svg
+
+Execution
++++++++++
+
+Another key feature to remember when using regions is that these should be thought of as specifying specialized computation at points.
+These are therefore not guaranteed to execute, except where inside the compute domain.
+The statements inside a block with ``region[:I[0]-1, :]`` will only execute where the outputs from that block are necessary to compute something else with an extent.
+For example, the following will execute
+
+.. code:: python
+
+    with computation(PARALLEL), interval(...):
+        with horizontal(region[I[0]-1, :]):
+            field_in = 0.0
+        field_out = field_in[-1, 0, 0] + field_in[0, 0, 0]
+
+since the ``field_in`` value at ``I[0]-1`` is being consumed to compute a value of an output field inside the compute domain.
+If this used ``I[0]-2``, the code would be ignored.
 
 
 Implementation
@@ -135,16 +164,11 @@ Implementation
 
 The implementation on the GT4Py involves adding:
 
-1. The ``with parallel()`` context parsing to the AST visitor in IRMaker_
-2. The reduced iteration space to the `internal IR`_
-3. Region parsing tests
-4. Backend support for the IR features and ensure correct code generation
+1. Correctly parse ``with horizontal()`` in the frontend, and add ability for IRs to represent this computation
+3. Add parsing tests
+4. Add code generation support
 5. Code generation tests
-6. Application domain arguments to stencil calls
-7. A few end to end tests
-
-.. _IRMaker: https://github.com/GridTools/gt4py/blob/master/src/gt4py/frontend/gtscript_frontend.py#L454
-.. _internal IR: https://github.com/GridTools/gt4py/blob/master/src/gt4py/ir/nodes.py
+7. Create at least one demo that incorporates this feature
 
 
 FV3 Example
