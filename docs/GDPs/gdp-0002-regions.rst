@@ -162,7 +162,7 @@ If this used ``I[0]-2``, the code would be ignored.
 Implementation
 --------------
 
-The implementation on the GT4Py involves adding:
+The implementation in GT4Py involves
 
 1. Correctly parse ``with horizontal()`` in the frontend, and add ability for IRs to represent this computation
 2. Add parsing tests
@@ -248,24 +248,24 @@ FV3 Example
 
 .. code-block:: python
 
-    @gtscript.stencil
+    @gtscript.stencil(...)
     def divergence_corner(...):
         from __externals__ import istart, iend, jstart, jend
         with computation(PARALLEL), interval(...):
             uf = (u - 0.25*(va[0, -1, 0] + va)*(cos_sg4[0, -1, 0] + cos_sg2))  \
                                       *dyc*0.5*(sin_sg4[0, -1, 0] + sin_sg2)
-            with parallel(region[:, jstart], region[:, jend)):
+            with horizontal(region[:, jstart], region[:, jend)):
                 uf = u*dyc*0.5*(sin_sg4[0, -1, 0] + sin_sg2)
 
             vf = (v - 0.25*(ua[-1, 0, 0] + ua)*(cos_sg3[-1, 0, 0] + cos_sg1))  \
                                       *dxc*0.5*(sin_sg3[-1, 0, 0] + sin_sg1)
-            with parallel(region[istart, :], region[iend, :]):
+            with horizontal(region[istart, :], region[iend, :]):
                 vf = v*dxc*0.5*(sin_sg3[-1, 0, 0] + sin_sg1)
 
             divg_d = rarea_c * (vf[0, -1, 0] - vf + uf[-1, 0, 0] - uf)
-            with parallel(region[istart, jstart], region[istart, jend]):
+            with horizontal(region[istart, jstart], region[istart, jend]):
                 divg_d = rarea_c * (-vf[0, 0, 0] + uf[-1, 0, 0] - uf)
-            with parallel(region[iend, jstart], region[iend, jend]):
+            with horizontal(region[iend, jstart], region[iend, jend]):
                 divg_d = rarea_c * (vf[0, -1, 0] + uf[-1, 0, 0] - uf)
 
 
