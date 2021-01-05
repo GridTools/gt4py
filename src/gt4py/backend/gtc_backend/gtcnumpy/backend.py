@@ -1,20 +1,36 @@
-from dataclasses import dataclass, asdict
-from typing import List, Optional, cast
+import numbers
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Union, cast
 
 from gt4py.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
+from gt4py.backend.debug_backend import (
+    debug_is_compatible_layout,
+    debug_is_compatible_type,
+    debug_layout,
+)
+from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
+from gt4py.backend.gtc_backend.stencil_object_snippet_generators import (
+    DomainInfoGenerator,
+    FieldInfoGenerator,
+    ParameterInfoGenerator,
+)
 from gt4py.gtc import gtir
 from gt4py.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.gtc.passes.fields_metadata_pass import FieldsMetadataPass
-from gt4py.gtc.passes.gtir_set_dtype import GTIRSetDtype
+from gt4py.gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gt4py.gtc.python import npir
 from gt4py.gtc.python.npir_gen import NpirGen
 from gt4py.gtc.python.oir_to_npir import OirToNpir
+from gt4py.utils import text
+
+
+if TYPE_CHECKING:
+    from gt4py.stencil_builder import StencilBuilder
 
 
 class GTCModuleGenerator(BaseModuleGenerator):
-
-    def __call__(self, builder: Optional["StencilBuilder"] = None, **kwargs: Any) -> str:
-        return gt_utils.text.format_source(
+    # type ignore reason: signature differs from super().__call__ on purpose.
+    def __call__(self, builder: Optional["StencilBuilder"] = None, **kwargs: Any) -> str:  # type: ignore # noqa
+        return text.format_source(
             self.template.render(
                 imports=self.generate_imports(),
                 module_members=self.generate_module_members(),
@@ -37,9 +53,9 @@ class GTCModuleGenerator(BaseModuleGenerator):
         )
 
     def generate_imports(self) -> str:
-        return "\n".join(super().generate_imports().splitlines().extend(
-            ["import numpy", "import computation"]
-        ))
+        return "\n".join(
+            [*super().generate_imports().splitlines(), "import numpy", "import computation"]
+        )
 
     def generate_module_members(self) -> str:
         return self.generate_module_members()
@@ -57,7 +73,7 @@ class GTCModuleGenerator(BaseModuleGenerator):
         if self.builder.definition_ir.sources is None:
             return {}
         return {
-            key: gt_utils.text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
+            key: text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
             for key, value in self.builder.definition_ir.sources
         }
 
@@ -71,7 +87,7 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return ParameterInfoGenerator(self.backend.gtir)
 
     def generate_gt_constants(self) -> Dict[str, str]:
-        if not definition_ir.externals:
+        if not self.builder.definition_ir.externals:
             return {}
         return {
             name: repr(value)
@@ -90,17 +106,16 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return self.backend.npir.field_params
 
     def generate_param_names(self) -> List[str]:
-        return self.backend.gtir.params
+        return [param.name for param in self.backend.gtir.params]
 
     def generate_implementation(self) -> str:
         params = ["{name}={name}" for name in self.backend.gtir.params]
-        params.extend(["_domain_=_domain_", "_origin_=_origin_])
+        params.extend(["_domain_=_domain_", "_origin_=_origin_"])
         return f"computation.run({', '.join(params)})"
 
     @property
-    def backend(self) -> GTCNumpyBackend:
-            return cast(GTCNumpyBackend, self.builder.backend)
-
+    def backend(self) -> "GTCNumpyBackend":
+        return cast(GTCNumpyBackend, self.builder.backend)
 
 
 @register
@@ -121,29 +136,28 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
     GTIR_KEY = "gtc:gtir"
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
-        computation_name = f"computation.py"
+        computation_name = "computation.py"
         return {computation_name: NpirGen.apply(self.npir)}
 
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
         super().generate_bindings(language_name)
         return {self.builder.module_path.name: self.make_module_source()}
 
-    def make_module_source(self) -> str:
+    # type ignore reason: signature differs from super on purpose
+    def make_module_source(self) -> str:  # type: ignore
         return self.MODULE_GENERATOR_CLASS(self.builder)()
 
-    def _make_gtir(self) -> gtir.Stencil
+    def _make_gtir(self) -> gtir.Stencil:
         gtir = FieldsMetadataPass().visit(DefIRToGTIR.apply(self.builder.definition_ir))
-        return GTIRSetDtype().visit(gtir)
+        return resolve_dtype(gtir)
 
-    def _make_npir(self) -> npir.Computation
-        gtir = FieldsMetadataPass().visit(DefIRToGTIR.apply(self.builder.definition_ir))
-        type_deduced_gtir = GTIRSetDtype().visit(gtir)
-        oir = GTIRToOIR().visit(dtype_deduced)
+    def _make_npir(self) -> npir.Computation:
+        oir = GTIRToOIR().visit(self.gtir)
         return OirToNpir().visit(oir)
 
     @property
     def gtir(self) -> gtir.Stencil:
-        key = GTIR_KEY
+        key = self.GTIR_KEY
         if not self.builder.backend_data[key]:
             self.builder.with_backend_data({key: self._make_gtir()})
         return self.builder.backend_data[key]
