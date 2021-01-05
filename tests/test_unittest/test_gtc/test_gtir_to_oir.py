@@ -32,7 +32,10 @@ def test_visit_ParAssignStmt():
         left=FieldAccessBuilder(out_name).build(), right=FieldAccessBuilder(in_name).build()
     )
 
-    result_decls, result_horizontal_executions = GTIRToOIR().visit(testee)
+    ctx = GTIRToOIR.Context()
+    GTIRToOIR().visit(testee, ctx=ctx)
+    result_decls = ctx.decls
+    result_horizontal_executions = ctx.horizontal_executions
 
     assert len(result_decls) == 1
     assert isinstance(result_decls[0], oir.Temporary)
@@ -56,7 +59,9 @@ def test_visit_ParAssignStmt():
 def test_create_mask():
     mask_name = "mask"
     cond = DummyExpr(dtype=DataType.BOOL)
-    result_decl, result_assign = gtir_to_oir._create_mask(mask_name, cond)
+    ctx = GTIRToOIR.Context()
+    result_decl = gtir_to_oir._create_mask(ctx, mask_name, cond)
+    result_assign = ctx.horizontal_executions[0]
 
     assert isinstance(result_decl, oir.Temporary)
     assert result_decl.name == mask_name
@@ -78,14 +83,14 @@ def test_visit_FieldIfStmt():
         .false_branch([])
         .build()
     )
-    GTIRToOIR().visit(testee)
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
 
 def test_visit_FieldIfStmt_no_else():
     testee = (
         FieldIfStmtBuilder().cond(FieldAccessBuilder("cond").dtype(DataType.BOOL).build()).build()
     )
-    GTIRToOIR().visit(testee)
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
 
 def test_visit_FieldIfStmt_nesting():
@@ -99,7 +104,7 @@ def test_visit_FieldIfStmt_nesting():
         )
         .build()
     )
-    GTIRToOIR().visit(testee)
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
 
 def test_visit_ScalarIfStmt():
@@ -107,4 +112,4 @@ def test_visit_ScalarIfStmt():
         cond=gtir_utils.DummyExpr(dtype=DataType.BOOL, kind=ExprKind.SCALAR),
         true_branch=BlockStmt(body=[]),
     )
-    GTIRToOIR().visit(testee)
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())

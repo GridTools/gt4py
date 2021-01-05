@@ -1,15 +1,16 @@
-from typing import List, Sequence, Tuple
+from dataclasses import dataclass, field
+from typing import List
 
-import eve  # noqa: F401
-from devtools import debug
+from eve import NodeTranslator
 
 from gt4py.gtc import gtir, oir
 from gt4py.gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
-from gt4py.gtc.utils import ListTuple, flatten_list
 
 
-def _create_mask(name: str, cond: oir.Expr) -> Tuple:
+def _create_mask(ctx: "GTIRToOIR.Context", name: str, cond: oir.Expr) -> oir.Temporary:
     mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL)
+    ctx.add_decl(mask_field_decl)
+
     fill_mask_field = oir.HorizontalExecution(
         body=[
             oir.AssignStmt(
@@ -22,40 +23,64 @@ def _create_mask(name: str, cond: oir.Expr) -> Tuple:
             )
         ]
     )
-    return mask_field_decl, fill_mask_field
+    ctx.add_horizontal_execution(fill_mask_field)
+    return mask_field_decl
 
 
-class GTIRToOIR(eve.NodeTranslator):
+class GTIRToOIR(NodeTranslator):
+    @dataclass
+    class Context:
+        """
+        Context for Stmts.
+
+        `Stmt` nodes create `Temporary`s and `HorizontalExecution`s.
+        All visit()-methods for `Stmt`s have no return value,
+        they attach their result to the Context object.
+        """
+
+        decls: List = field(default_factory=list)
+        horizontal_executions: List = field(default_factory=list)
+
+        def add_decl(self, decl) -> "GTIRToOIR.Context":
+            self.decls.append(decl)
+            return self
+
+        def add_horizontal_execution(self, horizontal_execution) -> "GTIRToOIR.Context":
+            self.horizontal_executions.append(horizontal_execution)
+            return self
+
     def visit_ParAssignStmt(
-        self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, **kwargs
-    ) -> Tuple[List[oir.Temporary], List[oir.AssignStmt]]:
+        self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs
+    ):
         tmp = oir.Temporary(name="tmp_" + node.left.name + "_" + node.id_, dtype=node.left.dtype)
-        return ListTuple(
-            [tmp],
-            [
-                oir.HorizontalExecution(
-                    body=[
-                        oir.AssignStmt(
-                            left=oir.FieldAccess(
-                                name=tmp.name, offset=CartesianOffset.zero(), dtype=tmp.dtype
-                            ),
-                            right=self.visit(node.right),
-                        )
-                    ],
-                    mask=mask,
-                ),
-                oir.HorizontalExecution(
-                    body=[
-                        oir.AssignStmt(
-                            left=self.visit(node.left),
-                            right=oir.FieldAccess(
-                                name=tmp.name, offset=CartesianOffset.zero(), dtype=tmp.dtype
-                            ),
-                        )
-                    ],
-                    mask=mask,
-                ),
-            ],
+
+        ctx.add_decl(tmp)
+
+        ctx.add_horizontal_execution(
+            oir.HorizontalExecution(
+                body=[
+                    oir.AssignStmt(
+                        left=oir.FieldAccess(
+                            name=tmp.name, offset=CartesianOffset.zero(), dtype=tmp.dtype
+                        ),
+                        right=self.visit(node.right),
+                    )
+                ],
+                mask=mask,
+            )
+        )
+        ctx.add_horizontal_execution(
+            oir.HorizontalExecution(
+                body=[
+                    oir.AssignStmt(
+                        left=self.visit(node.left),
+                        right=oir.FieldAccess(
+                            name=tmp.name, offset=CartesianOffset.zero(), dtype=tmp.dtype
+                        ),
+                    )
+                ],
+                mask=mask,
+            ),
         )
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs):
@@ -94,38 +119,40 @@ class GTIRToOIR(eve.NodeTranslator):
             func=node.func, args=self.visit(node.args), dtype=node.dtype, kind=node.kind
         )
 
-    def visit_FieldIfStmt(self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, **kwargs):
-        mask_field_decl, fill_mask_h_exec = _create_mask("mask_" + node.id_, self.visit(node.cond))
-        decls_and_h_execs = ListTuple([mask_field_decl], [fill_mask_h_exec])
-
+    def visit_FieldIfStmt(
+        self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs
+    ):
+        mask_field_decl = _create_mask(ctx, "mask_" + node.id_, self.visit(node.cond))
         new_mask = oir.FieldAccess(
             name=mask_field_decl.name, offset=CartesianOffset.zero(), dtype=mask_field_decl.dtype
         )
         if mask:
             new_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=new_mask)
 
-        decls_and_h_execs += self.visit(node.true_branch.body, mask=new_mask)
+        self.visit(node.true_branch.body, mask=new_mask, ctx=ctx)
         if node.false_branch:
-            decls_and_h_execs += self.visit(
-                node.false_branch.body, mask=oir.UnaryOp(op=UnaryOperator.NOT, expr=new_mask)
+            self.visit(
+                node.false_branch.body,
+                mask=oir.UnaryOp(op=UnaryOperator.NOT, expr=new_mask),
+                ctx=ctx,
             )
-
-        return decls_and_h_execs
 
     # For now we represent ScalarIf (and FieldIf) both as masks on the HorizontalExecution.
     # This is not meant to be set in stone...
-    def visit_ScalarIfStmt(self, node: gtir.ScalarIfStmt, *, mask: oir.Expr = None, **kwargs):
+    def visit_ScalarIfStmt(
+        self, node: gtir.ScalarIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs
+    ):
         new_mask = self.visit(node.cond)
         if mask:
             new_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=new_mask)
 
-        decls_and_h_execs = ListTuple([], [])
-        decls_and_h_execs += self.visit(node.true_branch.body, mask=new_mask)
+        self.visit(node.true_branch.body, mask=new_mask, ctx=ctx)
         if node.false_branch:
-            decls_and_h_execs += self.visit(
-                node.false_branch.body, mask=oir.UnaryOp(op=UnaryOperator.NOT, expr=new_mask)
+            self.visit(
+                node.false_branch.body,
+                mask=oir.UnaryOp(op=UnaryOperator.NOT, expr=new_mask),
+                ctx=ctx,
             )
-        return decls_and_h_execs
 
     def visit_Interval(self, node: gtir.Interval, **kwargs):
         return oir.Interval(
@@ -133,23 +160,19 @@ class GTIRToOIR(eve.NodeTranslator):
             end=self.visit(node.end),
         )
 
-    def tuple_visit(self, node, **kwargs):
-        """Visits a list node and transforms a list of tuples to a ListTuple."""
-        assert isinstance(node, Sequence)
-        return ListTuple(*map(flatten_list, zip(*self.visit(node, **kwargs))))
-
     def visit_VerticalLoop(self, node: gtir.VerticalLoop, **kwargs):
-        decls, h_execs = self.tuple_visit(node.body)
+        ctx = self.Context()
+        self.visit(node.body, ctx=ctx)
 
         # TODO review this
         for temp in node.temporaries:
-            decls.append(oir.Temporary(name=temp.name, dtype=temp.dtype))
+            ctx.add_decl(oir.Temporary(name=temp.name, dtype=temp.dtype))
 
         return oir.VerticalLoop(
             interval=self.visit(node.interval),
             loop_order=node.loop_order,
-            declarations=decls,
-            horizontal_executions=h_execs,
+            declarations=ctx.decls,
+            horizontal_executions=ctx.horizontal_executions,
         )
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs):
