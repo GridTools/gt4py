@@ -7,7 +7,6 @@ from pydantic.error_wrappers import ValidationError
 from gt4py.gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
 from gt4py.gtc.gtir import (
     AxisBound,
-    BinaryOp,
     CartesianOffset,
     Decl,
     Expr,
@@ -19,7 +18,6 @@ from gt4py.gtc.gtir import (
     Stmt,
     VerticalLoop,
 )
-from gt4py.gtc.python.python_naive_codegen import PythonNaiveCodegen
 
 from .gtir_utils import DummyExpr, FieldAccessBuilder
 
