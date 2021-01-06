@@ -568,10 +568,15 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         """
         pass
 
-    def make_extension(self, *, uses_cuda: bool = False) -> Tuple[str, str]:
+    def make_extension(
+        self, *, gt_version: int = 1, ir: Any = None, uses_cuda: bool = False
+    ) -> Tuple[str, str]:
+        if not ir:
+            # in the GTC backend, `ir` is the definition_ir
+            ir = self.builder.implementation_ir
         # Generate source
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
-            gt_pyext_sources: Dict[str, Any] = self.make_extension_sources()
+            gt_pyext_sources: Dict[str, Any] = self.make_extension_sources(ir=ir)
             gt_pyext_sources = {**gt_pyext_sources["computation"], **gt_pyext_sources["bindings"]}
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
@@ -587,13 +592,14 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
                 debug_mode=self.builder.options.backend_opts.get("debug_mode", False),
                 add_profile_info=self.builder.options.backend_opts.get("add_profile_info", False),
                 uses_cuda=uses_cuda,
+                gt_version=gt_version,
             ),
         )
 
         result = self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
         return result
 
-    def make_extension_sources(self) -> Dict[str, Dict[str, str]]:
+    def make_extension_sources(self, *, ir) -> Dict[str, Dict[str, str]]:
         """Generate the source for the stencil independently from use case."""
         if "computation_src" in self.builder.backend_data:
             return self.builder.backend_data["computation_src"]
@@ -608,7 +614,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         gt_pyext_generator = self.PYEXT_GENERATOR_CLASS(
             class_name, module_name, self.GT_BACKEND_T, self.builder.options
         )
-        gt_pyext_sources = gt_pyext_generator(self.builder.implementation_ir)
+        gt_pyext_sources = gt_pyext_generator(ir)
         final_ext = ".cu" if self.languages and self.languages["computation"] == "cuda" else ".cpp"
         comp_src = gt_pyext_sources["computation"]
         for key in [k for k in comp_src.keys() if k.endswith(".src")]:
