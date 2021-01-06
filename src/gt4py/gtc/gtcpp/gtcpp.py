@@ -3,7 +3,6 @@ from typing import List, Optional, Tuple, Union
 
 import eve
 from eve import Str, StrEnum, SymbolName, SymbolTableTrait
-from eve.traits import RootSymbolTableTrait
 from eve.type_definitions import SymbolRef
 from pydantic.class_validators import validator
 
