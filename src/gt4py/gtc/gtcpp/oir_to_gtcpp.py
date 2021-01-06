@@ -1,9 +1,10 @@
-from typing import Dict, List, Sequence, Set
+from dataclasses import dataclass, field
+from typing import Dict, List, Set
 
 import eve
 from devtools import debug  # noqa: F401
 
-from gt4py.gtc import common, oir, utils
+from gt4py.gtc import common, oir
 from gt4py.gtc.common import CartesianOffset
 from gt4py.gtc.gtcpp import gtcpp
 from gt4py.gtc.gtcpp.gtcpp import GTParamList
@@ -48,6 +49,24 @@ def _extract_accessors(node: eve.Node) -> GTParamList:
 
 
 class OIRToGTCpp(eve.NodeTranslator):
+    @dataclass
+    class ProgramContext:
+        functors: List[gtcpp.GTFunctor] = field(default_factory=list)
+
+        def add_functor(self, functor: gtcpp.GTFunctor) -> "OIRToGTCpp.ProgramContext":
+            self.functors.append(functor)
+            return self
+
+    @dataclass
+    class GTComputationContext:
+        temporaries: List[gtcpp.Temporary] = field(default_factory=list)
+
+        def add_temporaries(
+            self, temporaries: List[gtcpp.Temporary]
+        ) -> "OIRToGTCpp.GTComputationContext":
+            self.temporaries.extend(temporaries)
+            return self
+
     def visit_Literal(self, node: oir.Literal, **kwargs):
         return gtcpp.Literal(value=node.value, dtype=node.dtype)
 
@@ -111,21 +130,15 @@ class OIRToGTCpp(eve.NodeTranslator):
             to_level=self.visit(node.end, is_start=False),
         )
 
-    def tuple_visit(self, node, *, default, **kwargs):
-        """Visits a list node and transforms a list of tuples to a ListTuple."""
-        assert isinstance(node, Sequence)
-        if len(node) > 0:
-            return utils.ListTuple(*map(utils.flatten_list, zip(*self.visit(node, **kwargs))))
-        else:
-            return default
-
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
         assert "stencil_symtable" in kwargs
         return gtcpp.AssignStmt(
             left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
-    def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, interval, **kwargs):
+    def visit_HorizontalExecution(
+        self, node: oir.HorizontalExecution, *, prog_ctx: ProgramContext, interval, **kwargs
+    ):
         assert "stencil_symtable" in kwargs
         body = self.visit(node.body, **kwargs)
         mask = self.visit(node.mask, **kwargs)
@@ -134,27 +147,33 @@ class OIRToGTCpp(eve.NodeTranslator):
         apply_method = gtcpp.GTApplyMethod(interval=self.visit(interval), body=body)
         accessors = _extract_accessors(apply_method)
         stage_args = [gtcpp.ParamArg(name=acc.name) for acc in accessors]
-        return (
+        prog_ctx.add_functor(
             gtcpp.GTFunctor(
                 name=node.id_,
                 applies=[apply_method],
                 param_list=GTParamList(accessors=accessors),
-            ),
-            gtcpp.GTStage(functor=node.id_, args=stage_args),
-        )
+            )
+        ),
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs):
-        functors, stages = self.tuple_visit(
-            node.horizontal_executions, interval=node.interval, default=([], []), **kwargs
+        return gtcpp.GTStage(functor=node.id_, args=stage_args)
+
+    def visit_VerticalLoop(
+        self,
+        node: oir.VerticalLoop,
+        *,
+        comp_ctx: GTComputationContext,
+        **kwargs,
+    ):
+        stages = self.visit(
+            node.horizontal_executions,
+            interval=node.interval,
+            default=([], []),
+            **kwargs,
         )
         assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
-        temporaries = self.visit(node.declarations)
+        comp_ctx.add_temporaries(self.visit(node.declarations))
         caches = []  # TODO
-        return (
-            functors,
-            temporaries,
-            gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches),
-        )
+        return gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs):
         return gtcpp.FieldDecl(name=node.name, dtype=node.dtype)
@@ -163,22 +182,31 @@ class OIRToGTCpp(eve.NodeTranslator):
         return gtcpp.GlobalParamDecl(name=node.name, dtype=node.dtype)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
-        functors, temporaries, multi_stages = self.tuple_visit(
-            node.vertical_loops, stencil_symtable=node.symtable_, default=([], [], []), **kwargs
+        prog_ctx = self.ProgramContext()
+        comp_ctx = self.GTComputationContext()
+        multi_stages = self.visit(
+            node.vertical_loops,
+            stencil_symtable=node.symtable_,
+            prog_ctx=prog_ctx,
+            comp_ctx=comp_ctx,
+            **kwargs,
         )
 
         # TODO think about this pattern, just scanning of used parameters is probably wrong...
         api_fields = set(
             [arg.name for mss in multi_stages for stage in mss.stages for arg in stage.args]
-        ) - set(t.name for t in temporaries)
+        ) - set(t.name for t in comp_ctx.temporaries)
         gt_comp_parameters = [gtcpp.ParamArg(name=f) for f in api_fields]  # TODO
         gt_computation = gtcpp.GTComputation(
             name=node.name,
             parameters=gt_comp_parameters,
-            temporaries=temporaries,
+            temporaries=comp_ctx.temporaries,
             multi_stages=multi_stages,
         )
         parameters = self.visit(node.params)
         return gtcpp.Program(
-            name=node.name, parameters=parameters, functors=functors, gt_computation=gt_computation
+            name=node.name,
+            parameters=parameters,
+            functors=prog_ctx.functors,
+            gt_computation=gt_computation,
         )
