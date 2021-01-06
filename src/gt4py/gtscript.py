@@ -124,7 +124,7 @@ def stencil(
     externals=None,
     name=None,
     rebuild=False,
-    format_source=False,
+    format_source=True,
     **kwargs,
 ):
     """Generate an implementation of the stencil definition with the specified backend.
