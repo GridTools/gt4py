@@ -611,7 +611,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
     def make_args_data(
         definition_ir: gt_ir.StencilDefinition, sir_field_info: Dict[str, Any]
     ) -> Dict[str, Any]:
-        data: Dict[str, Any] = {"field_info": {}, "parameter_info": {}, "unreferenced": {}}
+        data: Dict[str, Any] = {"field_info": {}, "parameter_info": {}, "unreferenced": set()}
 
         fields = {item.name: item for item in definition_ir.api_fields}
         parameters = {item.name: item for item in definition_ir.parameters}
@@ -621,7 +621,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
                 access = sir_field_info[arg.name]["access"]
                 if access is None:
                     access = gt_definitions.AccessKind.READ_ONLY
-                    data["unreferenced"].append(arg.name)
+                    data["unreferenced"].add(arg.name)
                 extent = sir_field_info[arg.name]["extent"]
                 boundary = gt_definitions.Boundary([(-pair[0], pair[1]) for pair in extent])
                 data["field_info"][arg.name] = gt_definitions.FieldInfo(
