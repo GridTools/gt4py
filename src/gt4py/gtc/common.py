@@ -523,7 +523,7 @@ def validate_symbol_refs():
                         if getattr(node, name) not in symtable:
                             self.missing_symbols.append(getattr(node, name))
 
-                if hasattr(node, "symtable_"):
+                if isinstance(node, SymbolTableTrait):
                     symtable = {**symtable, **node.symtable_}
                 self.generic_visit(node, symtable=symtable, **kwargs)
 
