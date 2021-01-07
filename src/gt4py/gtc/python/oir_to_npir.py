@@ -96,3 +96,6 @@ class OirToNpir(NodeTranslator):
             left=self.visit(node.left, ctx=ctx, **kwargs),
             right=self.visit(node.right, ctx=ctx, **kwargs),
         )
+
+    def visit_NativeFuncCall(self, node: oir.NativeFuncCall) -> npir.NativeFuncCall:
+        return npir.NativeFuncCall(func=node.func, args=node.args)
