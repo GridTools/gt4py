@@ -16,6 +16,7 @@ class Expr(common.Expr):
 
 class Literal(common.Literal, Expr):
     kind = cast(common.ExprKind, common.ExprKind.SCALAR)
+    dtype: common.DataType
 
     @validator("dtype")
     def is_defined(cls, dtype):
@@ -100,3 +101,7 @@ class Computation(common.LocNode):
     params: List[str]
     vertical_passes: List[VerticalPass]
     domain_padding: DomainPadding
+
+
+class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
+    _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)

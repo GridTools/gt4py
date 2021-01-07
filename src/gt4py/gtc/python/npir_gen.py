@@ -11,12 +11,12 @@ __all__ = ["NpirGen"]
 
 def op_delta_from_int(value: int) -> Tuple[str, str]:
     operator = ""
-    delta = value
+    delta = str(value)
     if value == 0:
         delta = ""
     elif value < 0:
         operator = " - "
-        delta = abs(value)
+        delta = str(abs(value))
     else:
         operator = " + "
     return operator, delta
@@ -76,7 +76,6 @@ class NpirGen(TemplatedGenerator):
             node, for_loop_line=for_loop_line, body_indent=body_indent, **kwargs
         )
 
-    ## TODO: change to use AxisBounds, k can also be derived from DOMAIN_K and so on...
     VerticalPass = JinjaTemplate(
         textwrap.dedent(
             """\
@@ -134,3 +133,5 @@ class NpirGen(TemplatedGenerator):
             """
         )
     )
+
+    NativeFunctionCall = FormatTemplate("{func}({', '.join(arg for arg in args)})")
