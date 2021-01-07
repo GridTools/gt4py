@@ -18,7 +18,7 @@ It also has a limited ability to compute on sub-regions of the horizontal iterat
 Using these offsets and limits the stencil's iteration relative to fields' origins.
 This feature however requires that separate stencils are written for boundaries, limiting the possibilities for backend optimization and adding complexity to the application.
 
-Here we propose a feature to push such regional computation around boundaries into the stencil and in the process add an feature capable of expressing stencil computation on global boundaries of domain-decomposed iterations spaces.
+Here we propose a feature to push such regional computation around boundaries into the stencil and in the process add a feature capable of expressing stencil computation on global boundaries of domain-decomposed iterations spaces.
 This additionally has the benefit of locating stencil-specific boundary calculation adjacent to the main stencil code, resulting in a friendlier interface and fewer opportunities for errors.
 
 Motivation and Scope
@@ -64,7 +64,7 @@ To illustrate the need for such a feature, consider a snippet of the model that 
             x_edge_ub(ut, ub, dt5=dt5, origin=(grid.local_iend, grid.local_jstart, 0), domain=domain_x_edge)
 
 The specific feature that we are proposing is the addition of a ``with horizontal()`` context that specifies the horizontal iteration space (over parallel axes) using ``region`` objects.
-The ``region`` object's ``__getitem__`` method uses `splitters` to select a region of the stencil computational domain in the parallel ``I`` and ``J`` axes.
+The arguments of ``region`` object's ``__getitem__`` method use `axis offsets` to define a subregion of the stencil computational domain in the parallel ``I`` and ``J`` axes.
 
 Using this specification, the example is transformed into:
 
