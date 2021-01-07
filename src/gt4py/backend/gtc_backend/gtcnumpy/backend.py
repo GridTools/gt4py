@@ -158,13 +158,13 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
     @property
     def gtir(self) -> gtir.Stencil:
         key = self.GTIR_KEY
-        if not self.builder.backend_data[key]:
+        if key not in self.builder.backend_data:
             self.builder.with_backend_data({key: self._make_gtir()})
         return self.builder.backend_data[key]
 
     @property
     def npir(self) -> npir.Computation:
         key = "gtcnumpy:npir"
-        if not self.builder.backend_data[key]:
+        if key not in self.builder.backend_data:
             self.builder.with_backend_data({key: self._make_npir()})
         return self.builder.backend_data[key]
