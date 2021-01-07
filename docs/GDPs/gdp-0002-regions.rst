@@ -85,7 +85,7 @@ Using this specification, the example is transformed into:
             with horizontal(region[:, jstart], region[:, jend]):
                 ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
 
-Notice that distributed domain decomposition works with this feature - if the external has the value ``None``, then any ``region`` objects using this in its slices ignores it.
+Notice that distributed domain decomposition works with this feature - ``region`` objects containing externals with a ``None`` value in its slices will be ignored.
 
 This greatly reduces the complexity of the code and consolidates operations on ``ub`` - it is now immediately clear what the stencil is filling into ``ub`` everywhere.
 
@@ -116,8 +116,8 @@ These can be indexed, which returns the specific indices within a stencil relati
 
 Stencil computation in the horizontal axes behaves differently than in the vertical because statements execute over an index space that may extend beyond the limits defined in the stencil compute domain.
 Such ``extents`` cannot be represented by merely subscripting axes, since for example ``I[-1]`` referes to the last compute domain index along the ``I`` axis, not the point before the beginning of it.
-Axis Offsets therefore interally hold another offset, which can be set by adding or subtracting from the subscript.
-For example ``I[0] - 2`` is itself an Axis Offsets that refers to 2 points before the start of the compute domain.
+Axis Offsets therefore internally hold an offset which is added or subtracted from the indexed point in the axis.
+For example ``I[0] - 2`` is itself an Axis Offset that refers to 2 points before the start of the compute domain in ``I``.
 
 Axis Offsets may be assigned to variables in Python and/or used as externals in GT4Py in order to define ``region``.
 If the external variable is set to ``None``, then any regions using that external are ignored.
