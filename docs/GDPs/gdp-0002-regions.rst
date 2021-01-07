@@ -119,7 +119,7 @@ Such ``extents`` cannot be represented by merely subscripting axes, since for ex
 Axis Offsets therefore internally hold an offset which is added or subtracted from the indexed point in the axis.
 For example ``I[0] - 2`` is itself an Axis Offset that refers to 2 points before the start of the compute domain in ``I``.
 
-Axis Offsets may be assigned to variables in Python and/or used as externals in GT4Py in order to define ``region``.
+Axis Offsets may be manipulated in Python or in a stencil and can be used as externals in GT4Py to be used in ``region`` subscripts.
 If the external variable is set to ``None``, then any regions using that external are ignored.
 
 Region Specification
@@ -134,6 +134,16 @@ The ``J`` axis simply has ``:``, which is an unrestricted slice, which GT4Py int
 
 The previous example introduced a key element of regional computation: There must not only be a way of specifying axis offsets outside the compute domain, but slices that extend to infinity in each direction (or alternatively, unrestricted endpoints of axes).
 GTScript interprets an unrestricted start or stop element as extending to infinity (or, unrestricted).
+This is useful in the case when writing a stencil and requiring that an edge condition be made without knowing how far the statements needs to be extended.
+For example:
+
+.. code-block:: python
+
+    with computation(PARALLEL), interval(...):
+        with horizontal(region[:I[0], :]):
+            u = 0
+
+This will set ``u=0`` in all extended computation points to the left of the compute domain.
 
 Examples of this are shown in the image below.
 The blue line shows the compute domain along the ``I`` axis, and two examples of region axis slices are shown in red.
@@ -247,6 +257,11 @@ FV3 Example
     end do
 
 .. code-block:: python
+
+    istart = I[0] if grid.west_edge else None
+    jstart = J[0] if grid.south_edge else None
+    iend = I[-1] if grid.east_edge else None
+    jend = J[-1] if grid.north_edge else None
 
     @gtscript.stencil(...)
     def divergence_corner(...):
