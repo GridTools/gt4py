@@ -58,7 +58,7 @@ class GTCModuleGenerator(BaseModuleGenerator):
         )
 
     def generate_module_members(self) -> str:
-        return self.generate_module_members()
+        return super().generate_module_members()
 
     def generate_class_name(self) -> str:
         return self.builder.class_name
