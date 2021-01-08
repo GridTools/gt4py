@@ -130,7 +130,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
     """GridTools python backend using gtc."""
 
-    name = "gtc:gt"
+    name = "gtc:gt:cpu_ifirst"
 
     GT_BACKEND_T = "x86"
     options: ClassVar[Dict[str, Any]] = {}
