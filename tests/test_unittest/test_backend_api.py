@@ -9,8 +9,10 @@ from gt4py.stencil_builder import StencilBuilder
     params=[
         pytest.param(
             name,
+            # TODO gtc backends require definition ir as input
             marks=pytest.mark.skipif(
-                name.startswith("dawn"), reason="dawn backends not yet supported"
+                name.startswith("dawn:") or name.startswith("gtc:"),
+                reason="dawn and gtc backends not yet supported",
             ),
         )
         for name in gt4py.backend.REGISTRY.keys()
