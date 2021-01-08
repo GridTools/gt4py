@@ -12,6 +12,8 @@ from gt4py.ir.nodes import (
     BinaryOperator,
     BinOpExpr,
     BlockStmt,
+    Builtin,
+    BuiltinLiteral,
     Cast,
     ComputationBlock,
     FieldDecl,
@@ -106,6 +108,13 @@ class DefIRToGTIR(IRNodeVisitor):
         }
     )
 
+    GT4PY_BUILTIN_TO_GTIR: ClassVar[Mapping[Builtin, int]] = MappingProxyType(
+        {
+            Builtin.TRUE: common.BuiltInLiteral.TRUE,
+            Builtin.FALSE: common.BuiltInLiteral.FALSE,
+        }
+    )
+
     @classmethod
     def apply(cls, root, **kwargs):
         return cls().visit(root)
@@ -134,7 +143,7 @@ class DefIRToGTIR(IRNodeVisitor):
     ) -> Union[gtir.Decl]:
         return all_params[node.name]
 
-    def visit_ComputationBlock(self, node: ComputationBlock) -> List[gtir.VerticalLoop]:
+    def visit_ComputationBlock(self, node: ComputationBlock) -> gtir.VerticalLoop:
         stmts = []
         temporaries = []
         for s in node.body.stmts:
@@ -184,6 +193,13 @@ class DefIRToGTIR(IRNodeVisitor):
             true_expr=self.visit(node.then_expr),
             false_expr=self.visit(node.else_expr),
         )
+
+    def visit_BuiltinLiteral(self, node: BuiltinLiteral) -> gtir.Literal:
+        # currently deals only with boolean literals
+        if node.value in self.GT4PY_BUILTIN_TO_GTIR.keys():
+            return gtir.Literal(
+                value=self.GT4PY_BUILTIN_TO_GTIR[node.value], dtype=common.DataType.BOOL
+            )
 
     def visit_Cast(self, node: Cast) -> gtir.Cast:
         return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))

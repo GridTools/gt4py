@@ -2,7 +2,7 @@ from eve import Node, codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 
-from gt4py.gtc.common import DataType, LoopOrder, NativeFunction, UnaryOperator
+from gt4py.gtc.common import BuiltInLiteral, DataType, LoopOrder, NativeFunction, UnaryOperator
 from gt4py.gtc.gtcpp import gtcpp
 
 
@@ -68,6 +68,14 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     TernaryOp = as_fmt("({cond} ? {true_expr} : {false_expr})")
 
     Cast = as_fmt("static_cast<{dtype}>({expr})")
+
+    def visit_BuiltInLiteral(self, builtin: BuiltInLiteral, **kwargs):
+        if builtin == BuiltInLiteral.TRUE:
+            return "true"
+        elif builtin == BuiltInLiteral.FALSE:
+            return "false"
+        else:
+            assert False
 
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
