@@ -15,9 +15,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, Generic, List, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 
-from eve import GenericNode, IntEnum, Node, SourceLocation, Str, StrEnum, SymbolTableTrait
+from eve import (
+    GenericNode,
+    IntEnum,
+    Node,
+    NodeVisitor,
+    SourceLocation,
+    Str,
+    StrEnum,
+    SymbolTableTrait,
+)
 from eve import exceptions as eve_exceptions
 from eve.type_definitions import SymbolRef
 from pydantic import validator
@@ -493,6 +502,44 @@ def validate_dtype_is_set():
 
         if len(nodes_without_dtype) > 0:
             raise ValueError("Nodes without dtype detected {}".format(nodes_without_dtype))
+        return values
+
+    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+
+
+def validate_symbol_refs():
+    """Works only, if only the root node has a symbol table"""
+
+    def _impl(cls, values: dict):
+        class SymtableValidator(NodeVisitor):
+            def __init__(self):
+                self.missing_symbols = []
+
+            def visit_Node(self, node: Node, *, symtable: Dict[str, Any], **kwargs):
+                for name, metadata in node.__node_children__.items():
+                    if isinstance(metadata["definition"].type_, type) and issubclass(
+                        metadata["definition"].type_, SymbolRef
+                    ):
+                        if getattr(node, name) not in symtable:
+                            self.missing_symbols.append(getattr(node, name))
+
+                if isinstance(node, SymbolTableTrait):
+                    symtable = {**symtable, **node.symtable_}
+                self.generic_visit(node, symtable=symtable, **kwargs)
+
+            @classmethod
+            def apply(cls, node: Node, *, symtable: Dict[str, Any]) -> List[str]:
+                instance = cls()
+                instance.visit(node, symtable=symtable)
+                return instance.missing_symbols
+
+        missing_symbols = []
+        for v in values.values():
+            missing_symbols.extend(SymtableValidator.apply(v, symtable=values["symtable_"]))
+
+        if len(missing_symbols) > 0:
+            raise ValueError("Symbols {} not found.".format(missing_symbols))
+
         return values
 
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)

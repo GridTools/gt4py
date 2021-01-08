@@ -1,5 +1,3 @@
-import ast
-
 import pytest
 from eve import SourceLocation
 from pydantic.error_wrappers import ValidationError
@@ -19,7 +17,7 @@ from gt4py.gtc.gtir import (
     VerticalLoop,
 )
 
-from .gtir_utils import DummyExpr, FieldAccessBuilder
+from .gtir_utils import DummyExpr, FieldAccessBuilder, ParAssignStmtBuilder, StencilBuilder
 
 
 ARITHMETIC_TYPE = DataType.FLOAT32
@@ -110,3 +108,10 @@ def test_can_have_vertical_offset():
 def test_no_horizontal_offset_allowed(assign_stmt_with_offset):
     with pytest.raises(ValidationError, match=r"must not have .*horizontal offset"):
         assign_stmt_with_offset()
+
+
+def test_symbolref_without_decl():
+    with pytest.raises(ValidationError, match=r"Symbols.*not found"):
+        StencilBuilder().add_par_assign_stmt(
+            ParAssignStmtBuilder("out_field", "in_field").build()
+        ).build()

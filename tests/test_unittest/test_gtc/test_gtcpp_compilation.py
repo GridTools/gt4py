@@ -84,11 +84,13 @@ def make_compilation_input_and_expected():
         ),
         (ProgramBuilder("test").add_parameter("my_param", DataType.FLOAT64).build(), r"my_param"),
         (
-            ProgramBuilder("test").add_parameter("outer_param", DataType.FLOAT64)
-            # TODO this test needs a functor! make GTCpp validators stricter!
+            ProgramBuilder("test")
+            .add_parameter("outer_param", DataType.FLOAT64)
+            .add_functor(GTFunctorBuilder("fun").build())
             .gt_computation(
                 GTComputationBuilder("test").add_stage(GTStage(functor="fun", args=[])).build()
-            ).build(),
+            )
+            .build(),
             r"",
         ),
     ]

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import eve
 import pytest
@@ -203,7 +203,7 @@ class DummyNode(eve.Node):
     dtype: Optional[common.DataType]
 
 
-class RootNode(eve.Node):
+class DtypeRootNode(eve.Node):
     field1: DummyNode
     field2: List[DummyNode]
     _validate_dtype_is_set = common.validate_dtype_is_set()
@@ -212,9 +212,9 @@ class RootNode(eve.Node):
 @pytest.mark.parametrize(
     "tree_with_missing_dtype",
     [
-        lambda: RootNode(field1=DummyNode(), field2=[]),
-        lambda: RootNode(field1=DummyNode(dtype=FLOAT_TYPE), field2=[DummyNode()]),
-        lambda: RootNode(
+        lambda: DtypeRootNode(field1=DummyNode(), field2=[]),
+        lambda: DtypeRootNode(field1=DummyNode(dtype=FLOAT_TYPE), field2=[DummyNode()]),
+        lambda: DtypeRootNode(
             field1=DummyNode(dtype=FLOAT_TYPE), field2=[DummyNode(dtype=FLOAT_TYPE), DummyNode()]
         ),
     ],
@@ -225,9 +225,78 @@ def test_dtype_validator_for_invalid_tree(tree_with_missing_dtype):
 
 
 def test_dtype_validator_for_valid_tree():
-    RootNode(
+    DtypeRootNode(
         field1=DummyNode(dtype=FLOAT_TYPE),
         field2=[DummyNode(dtype=FLOAT_TYPE), DummyNode(dtype=FLOAT_TYPE)],
+    )
+
+
+class SymbolRefChildNode(eve.Node):
+    name: eve.SymbolRef
+
+
+class SymbolChildNode(eve.Node):
+    name: eve.SymbolName
+    clearly_a_symbol = ""  # prevent pydantic conversion
+
+
+class AnotherSymbolTable(eve.Node, eve.SymbolTableTrait):
+    nodes: List[Union[SymbolRefChildNode, SymbolChildNode]]
+
+
+class SymbolTableRootNode(eve.Node, eve.SymbolTableTrait):
+    nodes: List[Union[SymbolRefChildNode, SymbolChildNode, AnotherSymbolTable]]
+
+    _validate_symbol_refs = common.validate_symbol_refs()
+
+
+@pytest.mark.parametrize(
+    "tree_with_missing_symbol",
+    [
+        lambda: SymbolTableRootNode(nodes=[SymbolRefChildNode(name="foo")]),
+        lambda: SymbolTableRootNode(
+            nodes=[
+                SymbolChildNode(name="foo"),
+                SymbolRefChildNode(name="foo"),
+                SymbolRefChildNode(name="foo2"),
+            ],
+        ),
+        lambda: SymbolTableRootNode(
+            nodes=[
+                AnotherSymbolTable(nodes=[SymbolChildNode(name="inner_scope")]),
+                SymbolRefChildNode(name="inner_scope"),
+            ]
+        ),
+    ],
+)
+def test_symbolref_validation_for_invalid_tree(tree_with_missing_symbol):
+    with pytest.raises(ValidationError, match=r"Symbols.*not found"):
+        tree_with_missing_symbol()
+
+
+def test_symbolref_validation_for_valid_tree():
+    SymbolTableRootNode(
+        nodes=[SymbolChildNode(name="foo"), SymbolRefChildNode(name="foo")],
+    )
+    SymbolTableRootNode(
+        nodes=[
+            SymbolChildNode(name="foo"),
+            SymbolRefChildNode(name="foo"),
+            SymbolRefChildNode(name="foo"),
+        ],
+    ),
+    SymbolTableRootNode(
+        nodes=[
+            SymbolChildNode(name="outer_scope"),
+            AnotherSymbolTable(nodes=[SymbolRefChildNode(name="outer_scope")]),
+        ]
+    )
+    SymbolTableRootNode(
+        nodes=[
+            AnotherSymbolTable(
+                nodes=[SymbolChildNode(name="inner_scope"), SymbolRefChildNode(name="inner_scope")]
+            )
+        ]
     )
 
 
