@@ -1,6 +1,7 @@
 import enum
 from typing import List, Optional, Tuple, Union
 
+import eve
 from eve import Str, StrEnum, SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
 from pydantic.class_validators import validator
@@ -158,11 +159,32 @@ class GTFunctor(LocNode, SymbolTableTrait):
     param_list: GTParamList
 
 
-# A ParamArg is an argument that maps to a parameter of something with the same name.
-# Because all things are called exactly once there is a one-to-one mapping.
-# TODO with symbol table the concept probably doesn't make sense anymore
-class ParamArg(LocNode):
-    name: Str
+class Param(LocNode):
+    name: SymbolName
+
+    class Config(eve.concepts.FrozenModelConfig):
+        pass
+
+    # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+
+class Arg(LocNode):
+    name: SymbolRef
+
+    class Config(eve.concepts.FrozenModelConfig):
+        pass
+
+    # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
 
 
 class ApiParamDecl(LocNode):
@@ -189,12 +211,20 @@ class GlobalParamDecl(ApiParamDecl):
 
 
 class GTStage(LocNode):
-    functor: SymbolRef  # symbol ref
-    args: List[ParamArg]  # symbol ref to GTComputation params
+    functor: SymbolRef
+    # `args` are SymbolRefs to GTComputation `arguments` (interpreted as paremters)
+    # or `temporaries`
+    args: List[Arg]
+
+    @validator("args")
+    def at_least_one_argument(cls, v):
+        if len(v) == 0:
+            raise ValueError("A GTStage needs at least one argument.")
+        return v
 
 
 class IJCache(LocNode):
-    name: Str  # symbol ref to GTComputation params or temporaries
+    name: SymbolRef  # symbol ref to GTComputation params or temporaries
 
 
 class GTMultiStage(LocNode):
@@ -203,20 +233,23 @@ class GTMultiStage(LocNode):
     caches: List[Union[IJCache]]
 
 
-class GTComputation(LocNode):
-    name: SymbolName
-    parameters: List[ParamArg]  # ?
+class GTComputationCall(LocNode, SymbolTableTrait):
+    # In the generated C++ code `arguments` represent both the arguments in the call to `run`
+    # and the parameters of the function object.
+    # We could represent this closer to the C++ code by splitting call and definition of the
+    # function object.
+    arguments: List[Arg]
     temporaries: List[Temporary]
     multi_stages: List[GTMultiStage]  # TODO at least one
 
 
 class Program(LocNode, SymbolTableTrait):
     name: Str
-    # The ParamArg here, doesn't fully work as we need the type for template instantiation.
-    # But maybe the module instantiation code is actually generated from a different IR?
-    parameters: List[ApiParamDecl]
+    parameters: List[
+        ApiParamDecl
+    ]  # TODO in the current implementation these symbols can be accessed by the functor body
     functors: List[GTFunctor]
-    gt_computation: GTComputation
+    gt_computation: GTComputationCall
     # control_flow_ast: List[GTComputation]
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
