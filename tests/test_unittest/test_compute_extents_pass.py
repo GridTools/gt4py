@@ -162,3 +162,33 @@ def test_remove_interval(
 
     transform_data = compute_extents_pass(transform_data)
     assert len(transform_data.blocks[0].ij_blocks) == 0
+
+
+def test_end_interval_extent(
+    compute_extents_pass: AnalysisPass,
+    ijk_domain: Domain,
+) -> None:
+    transform_data = (
+        TDefinition(name="ij_extended", domain=ijk_domain, fields=["out", "in"])
+        .add_blocks(
+            # fill in region
+            TComputationBlock(order=IterationOrder.PARALLEL)
+            .add_statements(
+                TAssign("out", "in", (1, 0, 0)),
+            )
+            .with_parallel_interval(
+                AxisInterval(
+                    start=AxisBound(level=LevelMarker.END, offset=-1),
+                    end=AxisBound(level=LevelMarker.END, offset=0),
+                ),
+                None,
+            ),
+        )
+        .build_transform()
+    )
+
+    transform_data = compute_extents_pass(transform_data)
+    assert transform_data.implementation_ir.fields_extents["in"][0] == (0, 1)
+    assert transform_data.blocks[0].ij_blocks[0].inputs["in"][0] == (0, 1)
+    assert transform_data.blocks[0].inputs["in"][0] == (0, 1)
+    assert len(transform_data.blocks[0].ij_blocks) == 0
