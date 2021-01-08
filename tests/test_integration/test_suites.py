@@ -352,7 +352,7 @@ class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
 
         with computation(PARALLEL), interval(...):
 
-            if 1:
+            if True:
                 outfield = 1
             else:
                 outfield = 2
@@ -375,7 +375,7 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
 
         with computation(PARALLEL), interval(...):
             if (outfield and outfield) or (not outfield and not outfield):
-                if 0:
+                if False:
                     outfield = 1
                 else:
                     outfield = 2
