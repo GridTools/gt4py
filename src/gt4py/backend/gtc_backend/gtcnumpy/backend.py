@@ -82,7 +82,6 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return DomainInfoGenerator.apply(self.backend.gtir)
 
     def generate_gt_field_info(self) -> str:
-        print(FieldInfoGenerator.apply(self.backend.gtir))
         return FieldInfoGenerator.apply(self.backend.gtir)
 
     def generate_gt_parameter_info(self) -> str:
