@@ -72,9 +72,13 @@ class OirToNpir(NodeTranslator):
     def visit_AssignStmt(
         self, node: oir.AssignStmt, *, ctx: Optional[Context] = None, **kwargs
     ) -> npir.VectorAssign:
+        right = self.visit(node.right, ctx=ctx, **kwargs)
+        # a literal as rhs of an assignment will be broadcast to the lhs field slice size
+        if isinstance(right, npir.Literal):
+            right = npir.BroadCastLiteral(literal=right)
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, **kwargs),
-            right=self.visit(node.right, ctx=ctx, **kwargs),
+            right=right,
         )
 
     def visit_FieldAccess(
@@ -99,3 +103,6 @@ class OirToNpir(NodeTranslator):
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall) -> npir.NativeFuncCall:
         return npir.NativeFuncCall(func=node.func, args=node.args)
+
+    def visit_Literal(self, node: oir.Literal, **kwargs) -> npir.Literal:
+        return npir.Literal(value=node.value, dtype=node.dtype)

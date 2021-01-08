@@ -68,6 +68,10 @@ class VectorExpression(Expr):
         super().__init__(*args, **kwargs)
 
 
+class BroadCastLiteral(VectorExpression):
+    literal: Literal
+
+
 class FieldSlice(VectorExpression):
     name: str
     i_offset: AxisOffset

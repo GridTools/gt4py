@@ -20,7 +20,7 @@ class _Accessor:
 
 class FieldInfoGenerator(TemplatedGenerator):
 
-    Computation = FormatTemplate("{fields_metadata}")
+    Stencil = FormatTemplate("{fields_metadata}")
 
     FieldsMetadata = MakoTemplate("{${', '.join(metas.values())}}")
 
@@ -37,25 +37,23 @@ class FieldInfoGenerator(TemplatedGenerator):
 
 class ParameterInfoGenerator(TemplatedGenerator):
 
-    Computation = FormatTemplate("{{}}")
+    Stencil = FormatTemplate("{{}}")
 
 
 class ComputationCallGenerator(TemplatedGenerator):
 
-    Computation = MakoTemplate("computation.run(${', '.join(params)}, _domain_)")
+    Stencil = MakoTemplate("computation.run(${', '.join(params)}, _domain_)")
 
     FieldDecl = FormatTemplate("{name}")
 
 
 class RunBodyGenerator(TemplatedGenerator):
 
-    Computation = JinjaTemplate("{{ '\\n'.join(params) }}")
+    Stencil = JinjaTemplate("{{ '\\n'.join(params) }}")
 
     FieldDecl = FormatTemplate("{name}_at = _Accessor({name}, _origin_['{name}'])")
 
 
 class DomainInfoGenerator(TemplatedGenerator):
 
-    Computation = FormatTemplate(
-        "DomainInfo(parallel_axes=('I', 'J'), sequential_axis='K', ndims=3)"
-    )
+    Stencil = FormatTemplate("DomainInfo(parallel_axes=('I', 'J'), sequential_axis='K', ndims=3)")

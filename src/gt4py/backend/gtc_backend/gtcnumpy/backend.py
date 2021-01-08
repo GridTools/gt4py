@@ -42,6 +42,7 @@ class GTCModuleGenerator(BaseModuleGenerator):
                 gt_parameter_info=self.generate_gt_parameter_info(),
                 gt_constants=self.generate_gt_constants(),
                 gt_options=self.generate_gt_options(),
+                gt_field_info=self.generate_gt_field_info(),
                 stencil_signature=self.generate_signature(),
                 field_names=self.generate_field_names(),
                 param_names=self.generate_param_names(),
@@ -78,13 +79,14 @@ class GTCModuleGenerator(BaseModuleGenerator):
         }
 
     def generate_gt_domain_info(self) -> str:
-        return DomainInfoGenerator(self.backend.gtir)
+        return DomainInfoGenerator.apply(self.backend.gtir)
 
     def generate_gt_field_info(self) -> str:
-        return FieldInfoGenerator(self.backend.gtir)
+        print(FieldInfoGenerator.apply(self.backend.gtir))
+        return FieldInfoGenerator.apply(self.backend.gtir)
 
     def generate_gt_parameter_info(self) -> str:
-        return ParameterInfoGenerator(self.backend.gtir)
+        return ParameterInfoGenerator.apply(self.backend.gtir)
 
     def generate_gt_constants(self) -> Dict[str, str]:
         if not self.builder.definition_ir.externals:
