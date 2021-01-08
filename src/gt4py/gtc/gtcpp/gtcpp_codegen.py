@@ -105,7 +105,9 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         else:
             assert False
 
-    ParamArg = as_fmt("{name}")
+    Arg = as_fmt("{name}")
+
+    Param = as_fmt("{name}")
 
     ApiParamDecl = as_fmt("{name}")
 
@@ -132,19 +134,22 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     BlockStmt = as_mako("{${''.join(body)}}")
 
-    GTComputation = as_mako(
+    def visit_GTComputationCall(self, node: gtcpp.GTComputationCall, **kwargs):
+        return self.generic_visit(node, computation_name=node.id_, **kwargs)
+
+    GTComputationCall = as_mako(
         """
-        %if len(multi_stages) > 0 and len(parameters) > 0:
+        %if len(multi_stages) > 0 and len(arguments) > 0:
         {
             auto grid = make_grid(domain[0], domain[1], axis<1, axis_config::offset_limit<${offset_limit}>>{domain[2]});
 
-            auto ${ name } = [](${ ','.join('auto ' + p for p in parameters) }) {
+            auto ${ computation_name } = [](${ ','.join('auto ' + a for a in arguments) }) {
 
                 ${ '\\n'.join(temporaries) }
                 return multi_pass(${ ','.join(multi_stages) });
             };
 
-            run(${name}, cpu_ifirst<>{} /* TODO */, grid, ${','.join(parameters)});
+            run(${computation_name}, cpu_ifirst<>{} /* TODO */, grid, ${','.join(arguments)});
         }
         %endif
         """

@@ -5,14 +5,22 @@ import setuptools
 
 from gt4py import config, gt2_src_manager  # TODO must not include gt4py package or ok for test?
 from gt4py.gtc.common import DataType
-from gt4py.gtc.gtcpp.gtcpp import GTAccessor, GTApplyMethod, GTExtent, GTStage, Intent, Program
+from gt4py.gtc.gtcpp.gtcpp import (
+    Arg,
+    GTAccessor,
+    GTApplyMethod,
+    GTExtent,
+    GTStage,
+    Intent,
+    Program,
+)
 from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 
 from .gtcpp_utils import (
     AssignStmtBuilder,
     GTApplyMethodBuilder,
-    GTComputationBuilder,
+    GTComputationCallBuilder,
     GTFunctorBuilder,
     IfStmtBuilder,
     ProgramBuilder,
@@ -33,7 +41,6 @@ def build_gridtools_test(tmp_path: Path, code: str):
         [str(tmp_src.absolute())],
         include_dirs=[config.GT2_INCLUDE_PATH],
         language="c++",
-        # extra_compile_args=["-Wno-unknown-pragmas"],
     )
     args = [
         "build_ext",
@@ -86,9 +93,14 @@ def make_compilation_input_and_expected():
         (
             ProgramBuilder("test")
             .add_parameter("outer_param", DataType.FLOAT64)
-            .add_functor(GTFunctorBuilder("fun").build())
+            .add_functor(
+                GTFunctorBuilder("fun").add_apply_method().build(),
+            )
             .gt_computation(
-                GTComputationBuilder("test").add_stage(GTStage(functor="fun", args=[])).build()
+                GTComputationCallBuilder()
+                .add_stage(GTStage(functor="fun", args=[Arg(name="outer_param")]))
+                .add_argument(name="outer_param")
+                .build()
             )
             .build(),
             r"",

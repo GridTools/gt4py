@@ -2,12 +2,8 @@ from gt4py.gtc import common
 from gt4py.gtc.gtir import FieldDecl, ScalarDecl
 from gt4py.gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 
-from .gtir_utils import (
-    ParAssignStmtBuilder,
-    StencilBuilder,
-)
+from .gtir_utils import ParAssignStmtBuilder, StencilBuilder
 
-from devtools import debug
 
 A_ARITHMETIC_TYPE = common.DataType.FLOAT32
 

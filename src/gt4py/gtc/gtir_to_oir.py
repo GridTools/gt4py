@@ -1,6 +1,6 @@
-from dataclasses import dataclass, field
 from typing import List
 
+from dataclasses import dataclass, field
 from eve import NodeTranslator
 
 from gt4py.gtc import gtir, oir
