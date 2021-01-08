@@ -42,7 +42,10 @@ class ParameterInfoGenerator(TemplatedGenerator):
 
 class ComputationCallGenerator(TemplatedGenerator):
 
-    Stencil = MakoTemplate("computation.run(${', '.join(params)}, _domain_)")
+    Stencil = MakoTemplate(
+        "computation.run("
+        "${', '.join(f'{p}={p}' for p in params)}, _domain_=_domain_, _origin_=_origin_)"
+    )
 
     FieldDecl = FormatTemplate("{name}")
 
