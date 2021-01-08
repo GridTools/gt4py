@@ -212,7 +212,7 @@ class GlobalParamDecl(ApiParamDecl):
 
 class GTStage(LocNode):
     functor: SymbolRef
-    # `args` are SymbolRefs to GTComputation `arguments` (interpreted as paremters)
+    # `args` are SymbolRefs to GTComputation `arguments` (interpreted as parameters)
     # or `temporaries`
     args: List[Arg]
 
@@ -247,10 +247,9 @@ class Program(LocNode, SymbolTableTrait):
     name: Str
     parameters: List[
         ApiParamDecl
-    ]  # TODO in the current implementation these symbols can be accessed by the functor body
+    ]  # in the current implementation these symbols can be accessed by the functor body
     functors: List[GTFunctor]
-    gt_computation: GTComputationCall
-    # control_flow_ast: List[GTComputation]
+    gt_computation: GTComputationCall  # here could be the CtrlFlow region
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()
