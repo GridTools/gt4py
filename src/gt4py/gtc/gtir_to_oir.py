@@ -123,17 +123,23 @@ class GTIRToOIR(NodeTranslator):
         self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs
     ):
         mask_field_decl = _create_mask(ctx, "mask_" + node.id_, self.visit(node.cond))
-        new_mask = oir.FieldAccess(
+        current_mask = oir.FieldAccess(
             name=mask_field_decl.name, offset=CartesianOffset.zero(), dtype=mask_field_decl.dtype
         )
+        combined_mask = current_mask
         if mask:
-            new_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=new_mask)
+            combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
+        self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx)
 
-        self.visit(node.true_branch.body, mask=new_mask, ctx=ctx)
         if node.false_branch:
+            combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
+            if mask:
+                combined_mask = oir.BinaryOp(
+                    op=LogicalOperator.AND, left=mask, right=combined_mask
+                )
             self.visit(
                 node.false_branch.body,
-                mask=oir.UnaryOp(op=UnaryOperator.NOT, expr=new_mask),
+                mask=combined_mask,
                 ctx=ctx,
             )
 
@@ -142,15 +148,21 @@ class GTIRToOIR(NodeTranslator):
     def visit_ScalarIfStmt(
         self, node: gtir.ScalarIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs
     ):
-        new_mask = self.visit(node.cond)
+        current_mask = self.visit(node.cond)
+        combined_mask = current_mask
         if mask:
-            new_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=new_mask)
+            combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=current_mask)
 
-        self.visit(node.true_branch.body, mask=new_mask, ctx=ctx)
+        self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx)
         if node.false_branch:
+            combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
+            if mask:
+                combined_mask = oir.BinaryOp(
+                    op=LogicalOperator.AND, left=mask, right=combined_mask
+                )
             self.visit(
                 node.false_branch.body,
-                mask=oir.UnaryOp(op=UnaryOperator.NOT, expr=new_mask),
+                mask=combined_mask,
                 ctx=ctx,
             )
 
