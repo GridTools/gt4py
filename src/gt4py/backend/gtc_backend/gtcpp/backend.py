@@ -16,6 +16,7 @@ from gt4py.gtc import gtir_to_oir, passes
 from gt4py.gtc.common import DataType
 from gt4py.gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gt4py.gtc.passes.gtir_dtype_resolver import resolve_dtype
+from gt4py.gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gt4py.gtc.passes.gtir_upcaster import upcast
 
 
@@ -35,7 +36,8 @@ class GTCGTExtGenerator:
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = passes.FieldsMetadataPass().visit(DefIRToGTIR.apply(definition_ir))
-        dtype_deduced = resolve_dtype(gtir)
+        gtir_without_unused_params = prune_unused_parameters(gtir)
+        dtype_deduced = resolve_dtype(gtir_without_unused_params)
         upcasted = upcast(dtype_deduced)
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
@@ -106,11 +108,14 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         #include "computation.hpp"
         namespace gt = gridtools;
         namespace py = ::pybind11;
+        %if len(entry_params) > 0:
         PYBIND11_MODULE(${module_name}, m) {
             m.def("run_computation", [](std::array<gt::uint_t, 3> domain,
-            ${','.join(entry_params)},  py::object exec_info){
+            ${','.join(entry_params)},
+            py::object exec_info){
                 ${name}(domain)(${','.join(sid_params)});
             }, "Runs the given computation");}
+        %endif
         """
     )
 
