@@ -14,7 +14,7 @@ class OirToNpir(NodeTranslator):
     class Context:
         """Context for a HorizontalExecution."""
 
-        symbol_table: Dict[str, Any] = {}
+        symbol_table: Dict[str, Any] = field(default_factory=lambda: {})
 
         domain_padding: Dict[str, List] = field(
             default_factory=lambda: {"lower": [0, 0, 0], "upper": [0, 0, 0]}
