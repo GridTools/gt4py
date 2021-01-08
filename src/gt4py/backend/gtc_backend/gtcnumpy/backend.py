@@ -1,5 +1,5 @@
 import numbers
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Type, Union, cast
 
 from gt4py.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
 from gt4py.backend.debug_backend import (
@@ -25,6 +25,7 @@ from gt4py.utils import text
 
 if TYPE_CHECKING:
     from gt4py.stencil_builder import StencilBuilder
+    from gt4py.stencil_object import StencilObject
 
 
 class GTCModuleGenerator(BaseModuleGenerator):
@@ -45,17 +46,24 @@ class GTCModuleGenerator(BaseModuleGenerator):
                 gt_field_info=self.generate_gt_field_info(),
                 stencil_signature=self.generate_signature(),
                 field_names=self.generate_field_names(),
-                param_names=self.generate_param_names(),
+                param_names=[],
                 pre_run=self.generate_pre_run(),
                 post_run=self.generate_post_run(),
-                impelentation=self.generate_implementation(),
+                implementation=self.generate_implementation(),
             ),
             line_length=self.SOURCE_LINE_LENGTH,
         )
 
     def generate_imports(self) -> str:
         return "\n".join(
-            [*super().generate_imports().splitlines(), "import numpy", "import computation"]
+            [
+                *super().generate_imports().splitlines(),
+                "import sys",
+                "import pathlib",
+                "sys.path.append(str(pathlib.Path(__file__).parent))",
+                "import numpy",
+                "import computation",
+            ]
         )
 
     def generate_module_members(self) -> str:
@@ -110,7 +118,7 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return [param.name for param in self.backend.gtir.params]
 
     def generate_implementation(self) -> str:
-        params = ["{name}={name}" for name in self.backend.gtir.params]
+        params = [f"{p.name}={p.name}" for p in self.backend.gtir.params]
         params.extend(["_domain_=_domain_", "_origin_=_origin_"])
         return f"computation.run({', '.join(params)})"
 
@@ -143,6 +151,17 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
         super().generate_bindings(language_name)
         return {self.builder.module_path.name: self.make_module_source()}
+
+    def generate(self) -> Type["StencilObject"]:
+        self.check_options(self.builder.options)
+        src_dir = self.builder.module_path.parent
+        computation_src = list(self.generate_computation().items())
+        if not self.builder.options._impl_opts.get("disable-code-generation", False):
+            src_dir.mkdir(parents=True, exist_ok=True)
+            for filename, src in computation_src:
+                src_path = src_dir / filename
+                src_path.write_text(src)
+        return self.make_module()
 
     # type ignore reason: signature differs from super on purpose
     def make_module_source(self) -> str:  # type: ignore
