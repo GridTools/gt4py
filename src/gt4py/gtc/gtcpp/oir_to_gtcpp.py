@@ -51,9 +51,6 @@ def _extract_accessors(node: eve.Node) -> GTParamList:
 class OIRToGTCpp(eve.NodeTranslator):
     @dataclass
     class ProgramContext:
-        # TODO this is part of the new symboltable, so it seems we want to build up the
-        # new symbol table anyway during the pass as we need to transport in these
-        # examples the symbols to the location where they are defined.
         functors: List[gtcpp.GTFunctor] = field(default_factory=list)
 
         def add_functor(self, functor: gtcpp.GTFunctor) -> "OIRToGTCpp.ProgramContext":
@@ -166,7 +163,6 @@ class OIRToGTCpp(eve.NodeTranslator):
             [
                 param_arg
                 for param_arg in stage_args
-                # TODO the following is a lookup of temporaries in the new "symbol table"
                 if param_arg.name not in [tmp.name for tmp in comp_ctx.temporaries]
             ]
         )

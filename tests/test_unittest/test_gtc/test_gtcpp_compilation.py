@@ -41,7 +41,6 @@ def build_gridtools_test(tmp_path: Path, code: str):
         [str(tmp_src.absolute())],
         include_dirs=[config.GT2_INCLUDE_PATH],
         language="c++",
-        # extra_compile_args=["-Wno-unknown-pragmas"],
     )
     args = [
         "build_ext",
@@ -100,7 +99,7 @@ def make_compilation_input_and_expected():
             .gt_computation(
                 GTComputationCallBuilder()
                 .add_stage(GTStage(functor="fun", args=[Arg(name="outer_param")]))
-                .add_argument(name="outer_param")  # "Arg(name="outer_param")])
+                .add_argument(name="outer_param")
                 .build()
             )
             .build(),
