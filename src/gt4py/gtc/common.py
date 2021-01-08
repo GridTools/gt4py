@@ -124,12 +124,15 @@ class LoopOrder(IntEnum):
     BACKWARD = 2
 
 
+# TODO StrEnum?
 @enum.unique
 class BuiltInLiteral(IntEnum):
     MAX_VALUE = 0
     MIN_VALUE = 1
     ZERO = 2
     ONE = 3
+    TRUE = 4
+    FALSE = 5
 
 
 @enum.unique
