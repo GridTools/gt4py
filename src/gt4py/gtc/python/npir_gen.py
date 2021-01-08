@@ -46,6 +46,8 @@ class NpirGen(TemplatedGenerator):
 
     FieldSlice = FormatTemplate("{name}_[{i_offset}, {j_offset}, {k_offset}]")
 
+    VectorTemp = FormatTemplate("{name}")
+
     VectorAssign = FormatTemplate("{left} = {right}")
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")

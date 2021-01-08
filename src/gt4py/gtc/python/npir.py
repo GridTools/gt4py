@@ -72,19 +72,27 @@ class BroadCastLiteral(VectorExpression):
     literal: Literal
 
 
-class FieldSlice(VectorExpression):
+class VectorLValue(common.LocNode):
+    pass
+
+
+class FieldSlice(VectorExpression, VectorLValue):
     name: str
     i_offset: AxisOffset
     j_offset: AxisOffset
     k_offset: AxisOffset
 
 
+class VectorTemp(VectorExpression, VectorLValue):
+    name: common.SymbolRef
+
+
 class VectorArithmetic(common.BinaryOp[VectorExpression], VectorExpression):
     pass
 
 
-class VectorAssign(common.AssignStmt[FieldSlice, VectorExpression], VectorExpression):
-    left: FieldSlice
+class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpression):
+    left: VectorLValue
     right: VectorExpression
 
 

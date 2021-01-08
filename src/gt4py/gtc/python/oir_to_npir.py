@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from dataclasses import dataclass, field
 from eve.visitors import NodeTranslator
@@ -13,6 +13,8 @@ class OirToNpir(NodeTranslator):
     @dataclass
     class Context:
         """Context for a HorizontalExecution."""
+
+        symbol_table: Dict[str, Any] = {}
 
         domain_padding: Dict[str, List] = field(
             default_factory=lambda: {"lower": [0, 0, 0], "upper": [0, 0, 0]}
@@ -33,7 +35,7 @@ class OirToNpir(NodeTranslator):
             return self
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs) -> npir.Computation:
-        ctx = self.Context()
+        ctx = self.Context(symbol_table=node.symtable_)
         vertical_passes = [self.visit(vloop, ctx=ctx, **kwargs) for vloop in node.vertical_loops]
 
         return npir.Computation(
@@ -83,7 +85,9 @@ class OirToNpir(NodeTranslator):
 
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, ctx: Context, parallel_k: bool, **kwargs
-    ) -> npir.FieldSlice:
+    ) -> Union[npir.FieldSlice, npir.VectorTemp]:
+        if isinstance(ctx.symbol_table[node.name], oir.Temporary):
+            return npir.VectorTemp(name=node.name)
         ctx.add_offsets(node.offset.i, node.offset.j, node.offset.k)
         return npir.FieldSlice(
             name=str(node.name),
