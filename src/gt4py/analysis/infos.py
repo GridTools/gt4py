@@ -19,6 +19,8 @@
 
 import abc
 
+import numpy as np
+
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.definitions import BuildOptions, CartesianSpace, Extent, NumericTuple
@@ -69,22 +71,18 @@ class IntervalInfo:
     Interval specification: (start_level, start_offset), (end_level, end_offset)
     End is not included.
 
-    For the parallel axes, the following level values are used:
-        * -2: Relative to the end of the extended parallel domain in the stage (beginning)
-        * -1: Relative to the end of the extended parallel domain in the stage (end)
-        *  0: Relative to the beginning of the output computational domain
-        *  1: Relative to the first point outside the compute domain
-
     Parameters
     ----------
     start : `tuple` of `int`
         Start level and offset (included).
-    end : `tuple` of
-        `int` End level and offset (not included).
+    end : `tuple` of `int`
+        End level and offset (not included).
     """
 
     start = attribute(of=TupleOf[int, int])
     end = attribute(of=TupleOf[int, int])
+
+    MAX_INT = np.iinfo(np.int32).max
 
     def as_tuple(self, k_interval_sizes: list) -> NumericTuple:
         start = sum(k_interval_sizes[: self.start[0]]) + self.start[1]

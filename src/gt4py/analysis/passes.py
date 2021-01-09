@@ -364,17 +364,22 @@ class InitInfoPass(TransformPass):
             self,
             parallel_interval: List[gt_ir.AxisInterval],
         ) -> List[IntervalInfo]:
-            def _make_level_info(info: gt_ir.AxisBound, extend_value: int):
+            def _make_level_info(info: gt_ir.AxisBound):
+                level = 0 if info.level == gt_ir.LevelMarker.START else 1
                 if info.extend:
-                    level = extend_value
+                    offset = (
+                        -IntervalInfo.MAX_INT
+                        if info.level == gt_ir.LevelMarker.START
+                        else IntervalInfo.MAX_INT
+                    )
                 else:
-                    level = 0 if info.level == gt_ir.LevelMarker.START else 1
-                return (level, info.offset)
+                    offset = info.offset
+                return (level, offset)
 
             parallel_interval_info = [
                 IntervalInfo(
-                    start=_make_level_info(axis_interval.start, -2),
-                    end=_make_level_info(axis_interval.end, -1),
+                    start=_make_level_info(axis_interval.start),
+                    end=_make_level_info(axis_interval.end),
                 )
                 for axis_interval in parallel_interval
             ]
@@ -413,7 +418,8 @@ class InitInfoPass(TransformPass):
                 if not group_outputs.isdisjoint(stmt_inputs_with_ij_offset):
                     if parallel_interval:
                         raise Exception(
-                            "Cannot read with an offset after writing to a symbol in a restricted compute block"
+                            "Cannot read with an offset after writing to a symbol "
+                            "in a restricted compute block"
                         )
 
                     assert interval_block.stmts
@@ -426,12 +432,7 @@ class InitInfoPass(TransformPass):
                     interval_block = IntervalBlockInfo(self.data.id_generator.new, interval)
                     group_outputs = set()
 
-                # If inside a parallel region, zero the extents at this point. They
-                # are calculated in the ComputeExtentPass when the extent of the
-                # IJBlock is known.
-                if parallel_interval:
-                    stmt_info.inputs = {name: Extent.zeros() for name in stmt_info.inputs}
-
+                # if inside a parallel region, these extents are not really valid
                 interval_block.stmts.append(stmt_info)
                 interval_block.outputs |= stmt_info.outputs
                 for name, extent in stmt_info.inputs.items():
@@ -714,9 +715,9 @@ class StageMergingWrapper:
             return False
 
         # Check if the two stages have the same parallel interval
-        if gt_utils.tuplize(self.parallel_interval) != gt_utils.tuplize(
-            candidate.parallel_interval
-        ):
+        this_parallel_interval = gt_utils.tuplize(self.parallel_interval)
+        cand_parallel_interval = gt_utils.tuplize(candidate.parallel_interval)
+        if this_parallel_interval != cand_parallel_interval:
             return False
 
         # Check that there is not overlap between stage intervals and that
@@ -913,6 +914,45 @@ class MergeBlocksPass(TransformPass):
         transform_data.blocks = merged_blocks
 
 
+def overlap_with_extent(
+    interval: IntervalInfo, axis_extent: Tuple[int, int]
+) -> Optional[Tuple[int, int]]:
+    """Return a tuple of the distances to the edge of the compute domain, if overlapping."""
+    if interval.start[0] == 0:
+        start_diff = axis_extent[0] - interval.start[1]
+    else:
+        start_diff = None
+
+    if interval.end[0] == 1:
+        end_diff = axis_extent[1] - interval.end[1]
+    else:
+        end_diff = None
+
+    if start_diff is not None and start_diff > 0 and end_diff is None:
+        if interval.end[1] <= axis_extent[0]:
+            return None
+    elif end_diff is not None and end_diff < 0 and start_diff is None:
+        if interval.start[1] > axis_extent[1]:
+            return None
+
+    start_diff = min(start_diff, 0) if start_diff is not None else -IntervalInfo.MAX_INT
+    end_diff = max(end_diff, 0) if end_diff is not None else IntervalInfo.MAX_INT
+    return (start_diff, end_diff)
+
+
+def compute_extent_diff(ij_block: IJBlockInfo, seq_axis: int) -> Optional[Extent]:
+    if ij_block.parallel_interval is None:
+        return Extent.zeros()[:seq_axis]
+    diffs = []
+    for iinfo, ij_extent in zip(ij_block.parallel_interval, ij_block.compute_extent):
+        diff = overlap_with_extent(iinfo, ij_extent)
+        if not diff:
+            return None
+        else:
+            diffs.append(diff)
+    return Extent(diffs)
+
+
 class ComputeExtentsPass(TransformPass):
     """Loop over blocks backwards and accumulate extents.
 
@@ -928,72 +968,6 @@ class ComputeExtentsPass(TransformPass):
     def defaults(self) -> Dict[str, Any]:
         return self._DEFAULT_OPTIONS
 
-    @staticmethod
-    def _inside_interval(point: Tuple[int, int], interval: IntervalInfo, subtract=0):
-        if interval.start[0] < 0 or point[0] == -2:
-            start_overlaps = True
-        else:
-            if point[0] == interval.start[0]:
-                start_overlaps = interval.start[1] <= point[1] - subtract
-            else:
-                start_overlaps = False
-        if interval.end[0] < 0 or point[0] == -1:
-            end_overlaps = True
-        else:
-            if point[0] == interval.end[0]:
-                end_overlaps = interval.end[1] > point[1] - subtract
-            else:
-                end_overlaps = False
-        return start_overlaps or end_overlaps
-
-    def compute_extents_parallel_interval(
-        self, ij_block, int_block
-    ) -> Tuple[bool, Dict[str, Extent]]:
-        """Re-compute the (now correct) block extents."""
-        block_inputs = {name: [[0, 0] for i in range(self.seq_axis)] for name in ij_block.inputs}
-        stmt_info = make_statement_info(
-            self.data, gt_ir.BlockStmt(stmts=[stmt.stmt for stmt in int_block.stmts])
-        )
-
-        inside_interval = True
-        for i, (iinfo, ij_extent) in enumerate(
-            zip(
-                ij_block.parallel_interval,
-                ij_block.compute_extent[: self.seq_axis],
-            )
-        ):
-            ij_info = IntervalInfo(start=(0, ij_extent[0]), end=(1, ij_extent[1]))
-            if self._inside_interval(iinfo.start, ij_info) or self._inside_interval(
-                iinfo.end, ij_info, subtract=1
-            ):
-                for name, extent in stmt_info.inputs.items():
-                    axis_extent = extent[i]
-                    input_extent_axis = block_inputs[name][i]
-                    if iinfo.start[0] < 0:
-                        input_extent_axis[0] = min(input_extent_axis[0], axis_extent[0])
-                    elif iinfo.start[0] == 0:
-                        input_extent_axis[0] = min(
-                            input_extent_axis[0],
-                            min(
-                                max(iinfo.start[1], ij_info.start[1]) + axis_extent[0],
-                                ij_extent[0],
-                            ),
-                        )
-
-                    if iinfo.end[0] < 0:
-                        input_extent_axis[1] = min(input_extent_axis[1], axis_extent[1])
-                    elif iinfo.end[0] == 1:
-                        input_extent_axis[1] = max(
-                            input_extent_axis[1],
-                            max(
-                                min(iinfo.end[1], ij_info.start[1]) + axis_extent[1],
-                                ij_extent[1],
-                            ),
-                        )
-            else:
-                inside_interval = False
-        return inside_interval, block_inputs
-
     def __init__(self, transform_data: TransformData):
         self.data = transform_data
         self.seq_axis = self.data.definition_ir.domain.index(
@@ -1001,48 +975,57 @@ class ComputeExtentsPass(TransformPass):
         )
 
     @classmethod
-    def apply(cls, transform_data: TransformData):
-        instance = cls(transform_data)
+    def apply(cls, transform_data: TransformData) -> None:
+        seq_axis = transform_data.definition_ir.domain.index(
+            transform_data.definition_ir.domain.sequential_axis
+        )
         access_extents = {}
         for name in transform_data.symbols:
             access_extents[name] = Extent.zeros()
 
         blocks = transform_data.blocks
         for dom_block in reversed(blocks):
-            remove_blocks = []
             for ij_block in reversed(dom_block.ij_blocks):
                 ij_block.compute_extent = Extent.zeros()
+
+                # Accumulate extents so far (future dependencies)
                 for name in ij_block.outputs:
                     ij_block.compute_extent |= access_extents[name]
 
-                any_inside = False
+                # Get the diffs of the input extents from the actual extents
+                diffs = compute_extent_diff(ij_block, seq_axis)
+
+                if diffs is None:
+                    continue
+
                 for int_block in ij_block.interval_blocks:
-                    if ij_block.parallel_interval:
-                        inside_interval, block_inputs = instance.compute_extents_parallel_interval(
-                            ij_block, int_block
-                        )
-                        if inside_interval:
-                            any_inside = True
-                    else:
-                        block_inputs = int_block.inputs
+                    for name, extent in int_block.inputs.items():
+                        horiz_extent = Extent(extent[:seq_axis]) - diffs
+                        extent = Extent(list(horiz_extent) + [(0, 0)])  # exclude sequential axis
+                        accumulated_extent = ij_block.compute_extent + extent
+                        access_extents[name] |= accumulated_extent
 
-                    for name, extent in block_inputs.items():
-                        extent = Extent(
-                            list(extent[: instance.seq_axis]) + [(0, 0)]
-                        )  # exclude sequential axis
-                        if ij_block.parallel_interval:
-                            access_extents[name] |= extent
-                        else:
-                            access_extents[name] |= ij_block.compute_extent + extent
-                if ij_block.parallel_interval and not any_inside:
-                    remove_blocks.append(ij_block)
-
-            for block in remove_blocks:
-                dom_block.ij_blocks.remove(block)
-
-        instance.data.implementation_ir.fields_extents = {
+        transform_data.implementation_ir.fields_extents = {
             name: Extent(extent) for name, extent in access_extents.items()
         }
+
+
+class RemoveUnreachedBlocksPass(TransformPass):
+    """Remove unused IJBlockInfos.
+
+    This happens because they have a parallel interval and are not executed."""
+
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        seq_axis = transform_data.definition_ir.domain.index(
+            transform_data.definition_ir.domain.sequential_axis
+        )
+        for dom_block in transform_data.blocks:
+            dom_block.ij_blocks = [
+                block
+                for block in dom_block.ij_blocks
+                if compute_extent_diff(block, seq_axis) is not None
+            ]
 
 
 class DataTypePass(TransformPass):
@@ -1361,15 +1344,17 @@ class BuildIIRPass(TransformPass):
 
         parallel_interval = []
         for interval in intervals:
+            extend_start = interval.start[1] == -IntervalInfo.MAX_INT
+            extend_end = interval.end[1] == IntervalInfo.MAX_INT
             start = gt_ir.AxisBound(
-                level=gt_ir.LevelMarker.START if interval.start[0] <= 0 else gt_ir.LevelMarker.END,
-                offset=interval.start[1],
-                extend=(interval.start[0] < 0),
+                level=gt_ir.LevelMarker.START if interval.start[0] == 0 else gt_ir.LevelMarker.END,
+                offset=interval.start[1] if not extend_start else 0,
+                extend=extend_start,
             )
             end = gt_ir.AxisBound(
-                level=gt_ir.LevelMarker.START if interval.end[0] <= 0 else gt_ir.LevelMarker.END,
-                offset=interval.end[1],
-                extend=(interval.end[0] < 0),
+                level=gt_ir.LevelMarker.START if interval.end[0] == 0 else gt_ir.LevelMarker.END,
+                offset=interval.end[1] if not extend_end else 0,
+                extend=extend_end,
             )
             parallel_interval.append(gt_ir.AxisInterval(start=start, end=end))
 

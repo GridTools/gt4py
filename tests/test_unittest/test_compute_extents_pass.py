@@ -1,7 +1,41 @@
+from gt4py.analysis.infos import IntervalInfo
+from gt4py.analysis.passes import ComputeExtentsPass
 from gt4py.ir.nodes import AxisBound, AxisInterval, Domain, IterationOrder, LevelMarker
 
 from ..analysis_setup import AnalysisPass
 from ..definition_setup import TAssign, TComputationBlock, TDefinition
+
+
+def test_intervalinfo_overlap():
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(0, -1), end=(0, 2)), (0, 2)
+    )
+    assert overlap == (0, IntervalInfo.MAX_INT)
+
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(0, -1), end=(1, 0)), (0, 2)
+    )
+    assert overlap == (0, 2)
+
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(0, -3), end=(0, -1)), (0, 0)
+    )
+    assert overlap is None
+
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(1, -3), end=(1, 0)), (0, 1)
+    )
+    assert overlap == (-IntervalInfo.MAX_INT, 1)
+
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(1, -1), end=(1, 0)), (0, 0)
+    )
+    assert overlap == (-IntervalInfo.MAX_INT, 0)
+
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(0, 2), end=(0, 3)), (0, 0)
+    )
+    assert overlap == (-2, IntervalInfo.MAX_INT)
 
 
 def test_simple(
@@ -191,4 +225,3 @@ def test_end_interval_extent(
     assert transform_data.implementation_ir.fields_extents["in"][0] == (0, 1)
     assert transform_data.blocks[0].ij_blocks[0].inputs["in"][0] == (0, 1)
     assert transform_data.blocks[0].inputs["in"][0] == (0, 1)
-    assert len(transform_data.blocks[0].ij_blocks) == 0
