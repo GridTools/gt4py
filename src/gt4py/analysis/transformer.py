@@ -32,6 +32,7 @@ from .passes import (
     InitInfoPass,
     MergeBlocksPass,
     NormalizeBlocksPass,
+    RemoveUnreachedBlocksPass,
 )
 
 
@@ -94,6 +95,9 @@ class IRTransformer:
 
         # Compute stage extents
         ComputeExtentsPass.apply(self.transform_data)
+
+        # Remove unreached stage blocks (IJBlockInfos)
+        RemoveUnreachedBlocksPass.apply(self.transform_data)
 
         # Merge compatible blocks
         MergeBlocksPass.apply(self.transform_data)

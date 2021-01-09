@@ -1,7 +1,41 @@
+from gt4py.analysis.infos import IntervalInfo
+from gt4py.analysis.passes import ComputeExtentsPass
 from gt4py.ir.nodes import AxisBound, AxisInterval, Domain, IterationOrder, LevelMarker
 
 from ..analysis_setup import AnalysisPass
 from ..definition_setup import TAssign, TComputationBlock, TDefinition
+
+
+def test_intervalinfo_overlap():
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(0, -1), end=(0, 2)), (0, 2)
+    )
+    assert overlap == (0, IntervalInfo.MAX_INT)
+
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(0, -1), end=(1, 0)), (0, 2)
+    )
+    assert overlap == (0, 2)
+
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(0, -3), end=(0, -1)), (0, 0)
+    )
+    assert overlap is None
+
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(1, -3), end=(1, 0)), (0, 1)
+    )
+    assert overlap == (-IntervalInfo.MAX_INT, 1)
+
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(1, -1), end=(1, 0)), (0, 0)
+    )
+    assert overlap == (-IntervalInfo.MAX_INT, 0)
+
+    overlap = ComputeExtentsPass.overlap_with_extent(
+        IntervalInfo(start=(0, 2), end=(0, 3)), (0, 0)
+    )
+    assert overlap == (-2, IntervalInfo.MAX_INT)
 
 
 def test_simple(
@@ -162,3 +196,32 @@ def test_remove_interval(
 
     transform_data = compute_extents_pass(transform_data)
     assert len(transform_data.blocks[0].ij_blocks) == 0
+
+
+def test_end_interval_extent(
+    compute_extents_pass: AnalysisPass,
+    ijk_domain: Domain,
+) -> None:
+    transform_data = (
+        TDefinition(name="ij_extended", domain=ijk_domain, fields=["out", "in"])
+        .add_blocks(
+            # fill in region
+            TComputationBlock(order=IterationOrder.PARALLEL)
+            .add_statements(
+                TAssign("out", "in", (1, 0, 0)),
+            )
+            .with_parallel_interval(
+                AxisInterval(
+                    start=AxisBound(level=LevelMarker.END, offset=-1),
+                    end=AxisBound(level=LevelMarker.END, offset=0),
+                ),
+                None,
+            ),
+        )
+        .build_transform()
+    )
+
+    transform_data = compute_extents_pass(transform_data)
+    assert transform_data.implementation_ir.fields_extents["in"][0] == (0, 1)
+    assert transform_data.blocks[0].ij_blocks[0].inputs["in"][0] == (0, 1)
+    assert transform_data.blocks[0].inputs["in"][0] == (0, 1)
