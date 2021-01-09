@@ -1,5 +1,5 @@
 from gt4py.analysis.infos import IntervalInfo
-from gt4py.analysis.passes import overlap_with_extent
+from gt4py.analysis.passes import compute_extent_diff, overlap_with_extent
 from gt4py.ir.nodes import AxisBound, AxisInterval, Domain, IterationOrder, LevelMarker
 
 from ..analysis_setup import AnalysisPass
@@ -159,7 +159,7 @@ def test_write_consume_parallel_interval(
     )
 
 
-def test_remove_interval(
+def test_interval_removable(
     compute_extents_pass: AnalysisPass,
     ijk_domain: Domain,
 ) -> None:
@@ -183,7 +183,8 @@ def test_remove_interval(
     )
 
     transform_data = compute_extents_pass(transform_data)
-    assert len(transform_data.blocks[0].ij_blocks) == 0
+    diff = compute_extent_diff(transform_data.blocks[0].ij_blocks[0], 2)
+    assert not diff
 
 
 def test_end_interval_extent(
