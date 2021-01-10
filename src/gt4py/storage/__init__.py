@@ -16,5 +16,18 @@
 
 """GridTools storages classes."""
 
-
-from .definitions import Storage, storage, as_storage, empty, ones, zeros, Storage
+from .default_parameters import register_storage_defaults, StorageDefaults
+from .definitions import Storage
+from .creation_routines import (
+    storage,
+    as_storage,
+    empty,
+    empty_like,
+    full,
+    full_like,
+    ones,
+    ones_like,
+    zeros,
+    zeros_like,
+    Storage,
+)

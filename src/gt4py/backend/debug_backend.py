@@ -22,6 +22,7 @@ from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.utils import text as gt_text
+from gt4py.storage import StorageDefaults
 
 from .python_generator import PythonSourceGenerator
 
@@ -220,21 +221,15 @@ def debug_is_compatible_layout(field):
     return sum(field.shape) > 0
 
 
-
-
-
 @gt_backend.register
 class DebugBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):
     """Pure Python backend, unoptimized for debugging."""
 
     name = "debug"
     options = {}
-    storage_info = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": debug_layout,
-        "is_compatible_layout": debug_is_compatible_layout,
-    }
+    compute_device = "cpu"
+    assert_specified_layout = False
+    storage_defaults = StorageDefaults()
 
     languages = {"computation": "python", "bindings": []}
 

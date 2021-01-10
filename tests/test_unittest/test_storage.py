@@ -14,7 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import collections
 import itertools
+import random
 
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
@@ -27,11 +29,313 @@ try:
 except ImportError:
     pass
 
+import gt4py
+
 # import gt4py.storage as gt_storage
 import gt4py.backend as gt_backend
+import gt4py.ir as gt_ir
 import gt4py.storage as gt_store
 import gt4py.storage.utils as gt_storage_utils
 import gt4py.utils as gt_utils
+from ..definitions import CPU_BACKENDS
+
+
+def generate_data_and_device_data():
+    def make_pytest_param(*, validator, test_label, requires_gpu=False, **params):
+        test_label = test_label + ", " + ("copy" if params.get("copy", True) else "no copy")
+        if requires_gpu:
+            marks = [
+                pytest.mark.requires_gpu,
+                pytest.mark.skipif(cp is None, reason="CuPy not imported."),
+            ]
+            return pytest.param(params, validator, marks=marks, id=test_label)
+        else:
+            return pytest.param(params, validator, id=test_label)
+
+    for copy in [True, False]:
+        # data np
+        test_label = "data np"
+        data = np.ones((3, 3))
+
+        def validate(params, data=data, copy=copy):
+            assert params["device"] == "cpu"
+            assert params["managed"] == False
+            np.testing.assert_equal(params["data"], data)
+            assert params["data"].ctypes.data == data.ctypes.data
+            assert params["device_data"] is None
+            assert params["copy"] == copy
+
+        yield make_pytest_param(
+            data=data, copy=copy, validator=validate, requires_gpu=False, test_label=test_label
+        )
+
+        # data np, device_data cp
+        test_label = "data np, device_data cp"
+        data = np.ones((3, 3))
+        device_data = (cp or np).ones((3, 3))
+
+        def validate(params, data=data, device_data=device_data, copy=copy):
+            assert params["device"] == "gpu"
+            assert params["managed"] == False
+            np.testing.assert_equal(params["data"], data)
+            assert params["data"].ctypes.data == data.ctypes.data
+            assert cp.all(params["device_data"] == device_data)
+            assert params["device_data"].data.ptr == device_data.data.ptr
+            assert params["copy"] == copy
+
+        yield make_pytest_param(
+            data=data,
+            device_data=device_data,
+            copy=copy,
+            validator=validate,
+            requires_gpu=True,
+            test_label=test_label,
+        )
+
+        # data cp
+        test_label = "data cp"
+        data = (cp or np).ones((3, 3))
+
+        def validate(params, data=data, copy=copy):
+            assert params["device"] == "gpu"
+            assert params["managed"] == False
+            assert params["data"] is None
+            assert cp.all(params["device_data"] == data)
+            assert params["device_data"].data.ptr == data.data.ptr
+            assert params["copy"] == copy
+
+        yield make_pytest_param(
+            data=data, copy=copy, validator=validate, requires_gpu=True, test_label=test_label
+        )
+
+        # device_data cp
+        test_label = "device_data cp"
+        device_data = (cp or np).ones((3, 3))
+
+        def validate(params, data=data, device_data=device_data, copy=copy):
+            assert params["device"] == "gpu"
+            assert params["managed"] == False
+            assert params["data"] is None
+            assert cp.all(params["device_data"] == device_data)
+            assert params["device_data"].data.ptr == device_data.data.ptr
+            assert params["copy"] == copy
+
+        yield make_pytest_param(
+            device_data=device_data,
+            copy=copy,
+            validator=validate,
+            requires_gpu=True,
+            test_label=test_label,
+        )
+
+        # data cp, cuda managed,
+        test_label = "data cp, cuda managed"
+        data = get_cp_empty_managed((3, 3))
+
+        def validate(params, data=data, copy=copy):
+            assert params["device"] == "gpu"
+            assert params["managed"] == "cuda"
+
+            assert isinstance(params["data"], np.ndarray)
+            assert params["data"].ctypes.data == data.data.ptr
+
+            assert isinstance(params["device_data"], cp.ndarray)
+            assert params["device_data"].data.ptr == data.data.ptr
+
+            assert params["copy"] == copy
+
+        yield make_pytest_param(
+            data=data,
+            copy=copy,
+            validator=validate,
+            requires_gpu=True,
+            test_label=test_label,
+        )
+        # data np, cuda managed,
+        test_label = "data np, cuda managed"
+        data = gt4py.storage.utils._cpu_view(get_cp_empty_managed((3, 3)))
+
+        def validate(params, data=data, copy=copy):
+            assert params["device"] == "gpu"
+            assert params["managed"] == "cuda"
+
+            assert isinstance(params["data"], np.ndarray)
+            assert params["data"].ctypes.data == data.ctypes.data
+
+            assert isinstance(params["device_data"], cp.ndarray)
+            assert params["device_data"].data.ptr == data.ctypes.data
+
+            assert params["copy"] == copy
+
+        yield make_pytest_param(
+            data=data, copy=copy, validator=validate, requires_gpu=True, test_label=test_label
+        )
+
+        # device_data cp, cuda managed,
+        test_label = "device_data cp, cuda managed"
+        device_data = get_cp_empty_managed((3, 3))
+
+        def validate(params, device_data=device_data, copy=copy):
+            assert params["device"] == "gpu"
+            assert params["managed"] == "cuda"
+
+            assert isinstance(params["data"], np.ndarray)
+            assert params["data"].ctypes.data == device_data.data.ptr
+
+            assert isinstance(params["device_data"], cp.ndarray)
+            assert params["device_data"].data.ptr == device_data.data.ptr
+
+            assert params["copy"] == copy
+
+        yield make_pytest_param(
+            device_data=device_data,
+            copy=copy,
+            validator=validate,
+            requires_gpu=True,
+            test_label=test_label,
+        )
+
+        # data CPU Storage,
+        test_label = "data CPU Storage"
+        try:
+            data = gt_store.empty((3, 3))
+        except:
+            yield pytest.param(
+                None, None, marks=pytest.mark.skip("Failed to construct test case."), id=test_label
+            )
+        else:
+            assert isinstance(data, gt_store.definitions.CPUStorage)
+
+            def validate(params, data=data, copy=copy):
+                assert params["device"] == "cpu"
+                assert params["managed"] == False
+                assert params["device_data"] is None
+                assert isinstance(params["data"], np.ndarray)
+                assert np.all(params["data"] == np.asarray(data))
+                assert params["data"].ctypes.data == data._field.ctypes.data
+                assert params["copy"] == copy
+
+            yield make_pytest_param(
+                data=data, copy=copy, validator=validate, requires_gpu=False, test_label=test_label
+            )
+
+        # data GPU-only Storage,
+        test_label = "data GPU-only Storage"
+        try:
+            data = gt_store.empty((3, 3), device="gpu", managed=False)
+
+        except:
+            yield pytest.param(
+                None, None, marks=pytest.mark.skip("Failed to construct test case."), id=test_label
+            )
+        else:
+            assert isinstance(data, gt_store.definitions.GPUStorage)
+
+            def validate(params, data=data, copy=copy):
+                assert params["device"] == "gpu"
+                assert params["managed"] == False
+                assert params["data"] is None
+                assert isinstance(params["device_data"], cp.ndarray)
+                assert cp.all(params["device_data"] == cp.asarray(data))
+                assert params["device_data"].data.ptr == data._device_field.data.ptr
+                assert params["copy"] == copy
+
+            yield make_pytest_param(
+                data=data, copy=copy, validator=validate, requires_gpu=False, test_label=test_label
+            )
+
+        # device_data GPU-only Storage,
+        test_label = "device_data GPU-only Storage"
+        try:
+            device_data = gt_store.empty((3, 3), device="gpu", managed=False)
+        except:
+            yield pytest.param(
+                None, None, marks=pytest.mark.skip("Failed to construct test case."), id=test_label
+            )
+        else:
+            assert isinstance(device_data, gt_store.definitions.GPUStorage)
+
+            def validate(params, device_data=device_data, copy=copy):
+                assert params["device"] == "gpu"
+                assert params["managed"] == False
+                assert params["data"] is None
+                assert isinstance(params["device_data"], cp.ndarray)
+                assert cp.all(params["device_data"] == cp.asarray(device_data))
+                assert params["device_data"].data.ptr == device_data._device_field.data.ptr
+                assert params["copy"] == copy
+
+            yield make_pytest_param(
+                device_data=device_data,
+                copy=copy,
+                validator=validate,
+                requires_gpu=False,
+                test_label=test_label,
+            )
+
+        # data Storage, gt4py-managed
+        test_label = "data Storage, gt4py-managed"
+        try:
+            data = gt_store.empty((3, 3), device="gpu", managed="gt4py")
+        except:
+            yield pytest.param(
+                None, None, marks=pytest.mark.skip("Failed to construct test case."), id=test_label
+            )
+        else:
+            assert isinstance(device_data, gt_store.definitions.GPUStorage)
+
+            def validate(params, data=data, copy=copy):
+                assert params["device"] == "gpu"
+                assert params["managed"] == "gt4py"
+
+                assert isinstance(params["data"], np.ndarray)
+                assert params["data"].ctypes.data == data._field.ctypes.data
+
+                assert isinstance(params["device_data"], cp.ndarray)
+                assert params["device_data"].data.ptr == data._device_field.data.ptr
+
+                assert params["copy"] == copy
+                if copy:
+                    params["sync_state"] is not data.sync_state
+                    params["sync_state"] == data.sync_state
+                else:
+                    params["sync_state"] is data.sync_state
+
+            yield make_pytest_param(
+                data=data, copy=copy, validator=validate, requires_gpu=False, test_label=test_label
+            )
+
+        # data Storage, cuda managed
+        test_label = "data Storage, cuda managed"
+        try:
+            data = gt_store.empty((3, 3), device="gpu", managed="cuda")
+        except:
+            yield pytest.param(
+                None, None, marks=pytest.mark.skip("Failed to construct test case."), id=test_label
+            )
+        else:
+            assert isinstance(data, gt4py.storage.definitions.CudaManagedGPUStorage)
+
+            def validate(params, data=data, copy=copy):
+                assert params["device"] == "gpu"
+                assert params["managed"] == "cuda"
+
+                assert isinstance(params["data"], np.ndarray)
+                assert params["data"].ctypes.data == data._field.ctypes.data
+
+                assert isinstance(params["device_data"], cp.ndarray)
+                assert params["device_data"].data.ptr == data._field.ctypes.data
+
+                assert params["copy"] == copy
+                assert params["sync_state"] is None
+
+            yield make_pytest_param(
+                data=data, copy=copy, validator=validate, requires_gpu=False, test_label=test_label
+            )
+
+    reason = "To Implement: tests with __gt_array_interface__"
+    yield pytest.param(None, None, marks=pytest.mark.skip(reason), id=reason)
+    # Support this?
+    # data np (managed), device data cp (managed, same)
 
 
 # ---- Hypothesis strategies ----
@@ -40,311 +344,227 @@ def allocation_strategy(draw):
     dtype = np.dtype(
         draw(
             hyp_st.one_of(
-                list(
-                    hyp_st.just(d)
-                    for d in [
-                        np.int8,
-                        np.int16,
-                        np.int32,
-                        np.int64,
-                        np.uint8,
-                        np.uint16,
-                        np.uint32,
-                        np.uint64,
-                        np.float16,
-                        np.float32,
-                        np.float64,
-                    ]
-                )
+                list(hyp_st.just(d) for d in gt4py.ir.nodes.DataType.NUMPY_TO_NATIVE_TYPE)
             )
         )
     )
-    alignment = draw(hyp_st.integers(min_value=1, max_value=64)) * dtype.itemsize
-    dimension = draw(hyp_st.integers(min_value=1, max_value=4))
+    alignment_size = (
+        draw(hyp_st.one_of(hyp_st.just(1), hyp_st.just(17), hyp_st.just(32))) * dtype.itemsize
+    )
+    ndim = draw(hyp_st.integers(min_value=0, max_value=5))
 
-    shape_strats = []
-    default_origin_strats = []
-
-    for i in range(dimension):
-        shape_strats = shape_strats + [hyp_st.integers(min_value=1, max_value=64)]
+    shape_strats = [hyp_st.integers(min_value=0, max_value=10) for _ in range(ndim)]
     shape = draw(hyp_st.tuples(*shape_strats))
-    for i in range(dimension):
-        default_origin_strats = default_origin_strats + [
-            hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1))
+
+    aligned_index_strats = []
+    for i in range(ndim):
+        aligned_index_strats = aligned_index_strats + [
+            hyp_st.integers(min_value=0, max_value=max(0, min(5, shape[i] - 1)))
         ]
-    default_origin = draw(hyp_st.tuples(*default_origin_strats))
-    layout_order = draw(hyp_st.permutations(tuple(range(dimension))))
+    aligned_index = draw(hyp_st.tuples(*aligned_index_strats))
+    layout = draw(hyp_st.permutations(tuple(range(ndim))))
     return dict(
         dtype=dtype,
-        alignment=alignment,
+        alignment_size=alignment_size,
         shape=shape,
-        default_origin=default_origin,
-        layout_order=layout_order,
+        aligned_index=aligned_index,
+        layout=layout,
     )
 
 
-@hyp_st.composite
-def mask_strategy(draw):
-    dimension = draw(hyp_st.integers(min_value=0, max_value=4))
+@pytest.fixture
+def cp_empty_managed_fixture():
+    allocator = cp.cuda.get_allocator()
+    cp.cuda.set_allocator(cp.cuda.malloc_managed)
+    yield cp.empty
+    cp.cuda.set_allocator(allocator)
 
-    mask_strats = []
-    shape_strats = []
-    default_origin_strats = []
 
-    for i in range(dimension):
-        shape_strats = shape_strats + [hyp_st.integers(min_value=1, max_value=64)]
-        mask_strats = mask_strats + [hyp_st.booleans()]
-    shape = draw(hyp_st.tuples(*shape_strats))
-    for i in range(dimension):
-        default_origin_strats = default_origin_strats + [
-            hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1))
-        ]
-    default_origin = draw(hyp_st.tuples(*default_origin_strats))
-    mask = draw(
-        hyp_st.one_of(
-            hyp_st.just(None),
-            hyp_st.tuples(*mask_strats),
-            hyp_st.permutations(
-                ([True] * dimension) + ([False] * draw(hyp_st.integers(min_value=0, max_value=10)))
-            ),
-        )
-    )
-    return dict(shape=shape, default_origin=default_origin, mask=mask)
+def get_cp_empty_managed(*args, **kwargs):
+    if cp is None:
+        return
+    allocator = cp.cuda.get_allocator()
+    cp.cuda.set_allocator(cp.cuda.malloc_managed)
+    try:
+        res = cp.empty(*args, **kwargs)
+    finally:
+        cp.cuda.set_allocator(allocator)
+    return res
+
+
+@pytest.mark.requires_gpu
+@hyp.given(param_dict=allocation_strategy())
+def test_managed_viewcasting(param_dict, cp_empty_managed_fixture):
+    shape = param_dict["shape"]
+
+    gpu_arr = cp_empty_managed_fixture(shape)
+    cpu_view = gt_storage_utils._cpu_view(gpu_arr)
+    gpu_view = gt_storage_utils._gpu_view(cpu_view)
+
+    assert not cpu_view is gpu_arr
+    assert not cpu_view is gpu_view
+    assert not gpu_view is gpu_arr
+
+    assert isinstance(gpu_arr, cp.ndarray)
+    assert isinstance(cpu_view, np.ndarray)
+    assert isinstance(gpu_view, cp.ndarray)
+
+    if 0 not in shape:
+        assert gt_storage_utils.get_ptr(cpu_view) == gt_storage_utils.get_ptr(gpu_arr)
+    assert cpu_view.strides == gpu_arr.strides
+    assert cpu_view.shape == gpu_arr.shape
+    assert cpu_view.dtype == gpu_arr.dtype
+
+    if 0 not in shape:
+        assert gt_storage_utils.get_ptr(gpu_view) == gt_storage_utils.get_ptr(gpu_arr)
+    assert gpu_view.strides == gpu_arr.strides
+    assert gpu_view.shape == gpu_arr.shape
+    assert gpu_view.dtype == gpu_arr.dtype
+
+    cpu_view[...] = 123.0
+    assert cp.all(gpu_arr == 123.0)
+    assert cp.all(gpu_view == 123.0)
+
+    gpu_arr[...] = 321.0
+    cp.cuda.Device(0).synchronize()
+    assert np.all(cpu_view == 321.0)
+    assert cp.all(gpu_view == 321.0)
+
+    gpu_view[...] = 123.0
+    cp.cuda.Device(0).synchronize()
+    assert np.all(cpu_view == 123.0)
+    assert cp.all(gpu_arr == 123.0)
 
 
 # ---- Tests ----
-@hyp.given(param_dict=allocation_strategy())
-def test_allocate_cpu(param_dict):
-    alignment_bytes = param_dict["alignment"]
-    dtype = param_dict["dtype"]
-    default_origin = param_dict["default_origin"]
-    shape = param_dict["shape"]
-    layout_map = param_dict["layout_order"]
+class TestLowLevelAllocationRoutines:
+    def run_test_allocate(self, param_dict, allocate_function):
+        aligned_index = param_dict["aligned_index"]
+        alignment_size = param_dict["alignment_size"]
+        dtype = param_dict["dtype"]
+        layout = param_dict["layout"]
+        shape = param_dict["shape"]
+        ndim = len(shape)
 
-    raw_buffer, field = gt_storage_utils.allocate_cpu(
-        default_origin, shape, layout_map, dtype, alignment_bytes
+        buffers = allocate_function(aligned_index, shape, layout, dtype, alignment_size)
+
+        # in case of gt4py managed, there are two pairs
+        for raw_buffer, field in zip(buffers[::2], buffers[1::2]):
+            # check that memory of field is contained in raw_buffer
+
+            if 0 not in shape:
+                assert gt_storage_utils.get_ptr(field) >= gt_storage_utils.get_ptr(raw_buffer)
+            assert (
+                0 in shape
+                or ndim == 0
+                or gt_storage_utils.get_ptr(field[-1:])
+                <= gt_storage_utils.get_ptr(raw_buffer[-1:])
+            )
+
+            # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
+
+            if ndim > 0 and all(s > 0 for s in shape):
+                for i in range(100):
+                    slices = []
+                    for hidx in range(ndim):
+                        if hidx == np.argmax(layout):
+                            slices = slices + [slice(aligned_index[hidx], None)]
+                        else:
+                            slices = slices + [slice(random.randint(0, shape[hidx]), None)]
+                    assert gt_storage_utils.get_ptr(field[tuple(slices)]) % alignment_size == 0
+
+            # check that writing does not give errors, e.g. because of going out of bounds
+            if ndim > 0 and all(s > 0 for s in shape):
+                slices = []
+                for hidx in range(ndim):
+                    slices = slices + [0]
+                field[tuple(slices)] = 1
+
+                slices = []
+                for hidx in range(ndim):
+                    slices = slices + [aligned_index[hidx]]
+                field[tuple(slices)] = 1
+
+                slices = []
+                for hidx in range(ndim):
+                    slices = slices + [shape[hidx] - 1]
+                field[tuple(slices)] = 1
+
+                slices = []
+                for hidx in range(ndim):
+                    slices = slices + [shape[hidx]]
+                with pytest.raises(IndexError):
+                    field[tuple(slices)] = 1
+
+            # check if shape is properly set
+            assert field.shape == shape
+            assert field.dtype == np.dtype(dtype)
+
+        return buffers
+
+    @hyp.given(param_dict=allocation_strategy())
+    def test_allocate_cpu(self, param_dict):
+        raw_buffer, field = self.run_test_allocate(
+            param_dict, allocate_function=gt_storage_utils.allocate_cpu
+        )
+        assert isinstance(raw_buffer, np.ndarray)
+        assert isinstance(field, np.ndarray)
+
+    @pytest.mark.requires_gpu
+    @hyp.given(param_dict=allocation_strategy())
+    def test_allocate_gpu_only(self, param_dict):
+        raw_buffer, field = self.run_test_allocate(
+            param_dict, allocate_function=gt_storage_utils.allocate_gpu_only
+        )
+        assert isinstance(raw_buffer, cp.ndarray)
+        assert isinstance(field, cp.ndarray)
+
+    @pytest.mark.requires_gpu
+    @hyp.given(param_dict=allocation_strategy())
+    def test_allocate_cuda_managed(self, param_dict):
+        raw_buffer, field = self.run_test_allocate(
+            param_dict, allocate_function=gt_storage_utils.allocate_gpu_cuda_managed
+        )
+        assert isinstance(raw_buffer, cp.ndarray)
+        assert isinstance(field, np.ndarray)
+
+    @pytest.mark.requires_gpu
+    @hyp.given(param_dict=allocation_strategy())
+    def test_allocate_gt4py_managed(self, param_dict):
+        raw_buffer, field, raw_device_buffer, device_field = self.run_test_allocate(
+            param_dict, allocate_function=gt_storage_utils.allocate_gpu_gt4py_managed
+        )
+        assert isinstance(raw_buffer, np.ndarray)
+        assert isinstance(field, np.ndarray)
+        assert isinstance(raw_device_buffer, cp.ndarray)
+        assert isinstance(device_field, cp.ndarray)
+
+
+class TestNormalizeHalo:
+    @pytest.mark.parametrize(
+        ["halo_in", "halo_ref"],
+        [
+            ([1, 2, 3], ((1, 1), (2, 2), (3, 3))),
+            ([1, (2, 2), 3], ((1, 1), (2, 2), (3, 3))),
+            (None, None),
+            ([], ()),
+            ((1,), ((1, 1),)),
+        ],
     )
+    def test_normalize_halo(self, halo_in, halo_ref):
+        halo_out = gt_storage_utils.normalize_halo(halo_in)
+        assert halo_out is None or gt_utils.is_iterable_of(
+            halo_out, iterable_class=tuple, item_class=tuple
+        )
+        assert halo_out == halo_ref
 
-    # check that field is a view of raw_buffer
-    assert field.base is raw_buffer
-
-    # check that memory of field is contained in raw_buffer
-    assert (
-        field.ctypes.data >= raw_buffer.ctypes.data
-        and field[-1:].ctypes.data <= raw_buffer[-1:].ctypes.data
+    @pytest.mark.parametrize(
+        ["halo_in", "exc_type"], [("1", TypeError), (1, TypeError), ((-1,), ValueError)]
     )
-
-    # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
-    import random
-
-    for i in range(100):
-        slices = []
-        for hidx in range(len(shape)):
-            if hidx == np.argmax(layout_map):
-                slices = slices + [slice(default_origin[hidx], None)]
-            else:
-                slices = slices + [slice(random.randint(0, shape[hidx]), None)]
-        assert field[tuple(slices)].ctypes.data % alignment_bytes == 0
-
-    # check that writing does not give errors, e.g. because of going out of bounds
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [0]
-    field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [default_origin[hidx]]
-    field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [shape[hidx] - 1]
-    field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [shape[hidx]]
-    try:
-        field[tuple(slices)] = 1
-    except IndexError:
-        pass
-    else:
-        assert False
-
-    # check if shape is properly set
-    assert field.shape == shape
-
-
-@pytest.mark.requires_gpu
-@hyp.given(param_dict=allocation_strategy())
-def test_allocate_gpu(param_dict):
-    alignment_bytes = param_dict["alignment"]
-    dtype = param_dict["dtype"]
-    default_origin = param_dict["default_origin"]
-    shape = param_dict["shape"]
-    layout_map = param_dict["layout_order"]
-
-    raw_buffer, field = gt_storage_utils.allocate_gpu(
-        default_origin, shape, layout_map, dtype, alignment_bytes
-    )
-
-    # check that memory of field is contained in raw_buffer
-    assert (
-        field.ctypes.data >= raw_buffer.data.ptr
-        and field[-1:].ctypes.data <= raw_buffer[-1:].data.ptr
-    )
-
-    # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
-    import random
-
-    for i in range(100):
-        slices = []
-        for hidx in range(len(shape)):
-            if hidx == np.argmax(layout_map):
-                slices = slices + [slice(default_origin[hidx], None)]
-            else:
-                slices = slices + [slice(random.randint(0, shape[hidx]), None)]
-        assert field[tuple(slices)].ctypes.data % alignment_bytes == 0
-
-    # check that writing does not give errors, e.g. because of going out of bounds
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [0]
-    field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [default_origin[hidx]]
-    field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [shape[hidx] - 1]
-    field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [shape[hidx]]
-    try:
-        field[tuple(slices)] = 1
-    except IndexError:
-        pass
-    else:
-        assert False
-
-    # check if shape is properly set
-    assert field.shape == shape
-
-
-@pytest.mark.requires_gpu
-@hyp.given(param_dict=allocation_strategy())
-def test_allocate_gpu_unmanaged(param_dict):
-    alignment_bytes = param_dict["alignment"]
-    dtype = param_dict["dtype"]
-    default_origin = param_dict["default_origin"]
-    shape = param_dict["shape"]
-    layout_map = param_dict["layout_order"]
-    raw_buffer, field, device_raw_buffer, device_field = gt_storage_utils.allocate_gpu_unmanaged(
-        default_origin, shape, layout_map, dtype, alignment_bytes
-    )
-
-    # check that field is a view of raw_buffer
-    assert field.base is raw_buffer
-    assert (
-        field.ctypes.data >= raw_buffer.ctypes.data
-        and field[-1:].ctypes.data <= raw_buffer[-1:].ctypes.data
-    )
-
-    # assert (device_field.base is device_raw_buffer) # as_strided actually returns an ndarray where base=None??
-    # instead check that the memory of field is contained in raws buffer:
-    assert (
-        device_field.data.ptr >= device_raw_buffer.data.ptr
-        and device_field[-1:].data.ptr <= device_raw_buffer[-1:].data.ptr
-    )
-
-    # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
-    import random
-
-    for i in range(100):
-        slices = []
-        for hidx in range(len(shape)):
-            if hidx == np.argmax(layout_map):
-                slices = slices + [slice(default_origin[hidx], None)]
-            else:
-                slices = slices + [slice(random.randint(0, shape[hidx]), None)]
-        assert field[tuple(slices)].ctypes.data % alignment_bytes == 0
-        assert device_field[tuple(slices)].data.ptr % alignment_bytes == 0
-
-    # check that writing does not give errors, e.g. because of going out of bounds
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [0]
-    field[tuple(slices)] = 1
-    device_field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [default_origin[hidx]]
-    field[tuple(slices)] = 1
-    device_field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [shape[hidx] - 1]
-    field[tuple(slices)] = 1
-    device_field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [shape[hidx]]
-    try:
-        field[tuple(slices)] = 1
-    except IndexError:
-        pass
-    else:
-        assert False
-    try:
-        device_field[tuple(slices)] = 1
-    except IndexError:
-        pass
-    else:
-        assert False
-
-    # check if shape is properly set
-    assert field.shape == shape
-    assert device_field.shape == shape
-
-
-def test_normalize_default_origin():
-    from gt4py.storage.utils import normalize_shape
-
-    assert normalize_shape(None) is None
-    assert gt_utils.is_iterable_of(
-        gt_storage_utils.normalize_default_origin([1, 2, 3]), iterable_class=tuple, item_class=int
-    )
-
-    # test that exceptions are raised for invalid inputs.
-    try:
-        gt_storage_utils.normalize_default_origin("1")
-    except TypeError:
-        pass
-    else:
-        assert False
-
-    try:
-        gt_storage_utils.normalize_default_origin(1)
-    except TypeError:
-        pass
-    else:
-        assert False
-
-    try:
-        gt_storage_utils.normalize_default_origin((-1,))
-    except ValueError:
-        pass
-    else:
-        assert False
+    def test_normalize_halo_raises(self, halo_in, exc_type):
+        # test that exceptions are raised for invalid inputs.
+        with pytest.raises(exc_type):
+            gt_storage_utils.normalize_halo(halo_in)
 
 
 def test_normalize_shape():
@@ -355,145 +575,158 @@ def test_normalize_shape():
         normalize_shape([1, 2, 3]), iterable_class=tuple, item_class=int
     )
 
-    # test that exceptions are raised for invalid inputs.
-    try:
+    with pytest.raises(TypeError):
         normalize_shape("1")
-    except TypeError:
-        pass
-    else:
-        assert False
 
-    try:
+    with pytest.raises(TypeError):
         normalize_shape(1)
-    except TypeError:
-        pass
-    else:
-        assert False
 
-    try:
+    with pytest.raises(ValueError):
         normalize_shape((0,))
-    except ValueError:
-        pass
-    else:
-        assert False
 
 
-@pytest.mark.parametrize(
-    ["alloc_fun", "backend"],
-    itertools.product(
+class TestConstructionEndToEnd:
+    @pytest.mark.parametrize(
+        "alloc_fun",
         [
             gt_store.empty,
             gt_store.ones,
             gt_store.zeros,
-            lambda dtype, default_origin, shape, backend: gt_store.storage(
-                np.empty(shape, dtype=dtype),
-                backend=backend,
-                shape=shape,
-                dtype=dtype,
-                default_origin=default_origin,
-            ),
+            lambda shape, *args, **kwargs: gt_store.full(shape, 3.0, *args, **kwargs),
         ],
-        [
-            name
-            for name in gt_backend.REGISTRY.names
-            if gt_backend.from_name(name).storage_info["device"] == "cpu"
-        ],
-    ),
-)
-def test_cpu_constructor(alloc_fun, backend):
-    stor = alloc_fun(dtype=np.float64, default_origin=(1, 2, 3), shape=(2, 4, 6), backend=backend)
-    assert stor.default_origin == (1, 2, 3)
-    assert stor.shape == (2, 4, 6)
-    assert isinstance(stor, gt_store.Storage)
-
-
-@pytest.mark.requires_gpu
-@pytest.mark.parametrize(
-    ["alloc_fun", "backend"],
-    itertools.product(
-        [
-            gt_store.empty,
-            gt_store.ones,
-            gt_store.zeros,
-            lambda dtype, default_origin, shape, backend: gt_store.storage(
-                np.empty(shape, dtype=dtype),
-                backend=backend,
-                shape=shape,
-                dtype=dtype,
-                default_origin=default_origin,
-            ),
-        ],
-        [
-            name
-            for name in gt_backend.REGISTRY.names
-            if gt_backend.from_name(name).storage_info["device"] == "gpu"
-        ],
-    ),
-)
-def test_gpu_constructor(alloc_fun, backend):
-    stor = alloc_fun(dtype=np.float64, default_origin=(1, 2, 3), shape=(2, 4, 6), backend=backend)
-    assert stor.default_origin == (1, 2, 3)
-    assert stor.shape == (2, 4, 6)
-    assert isinstance(stor, gt_store.Storage)
-
-
-@hyp.given(param_dict=mask_strategy())
-def test_masked_storage_cpu(param_dict):
-    mask = param_dict["mask"]
-    default_origin = param_dict["default_origin"]
-    shape = param_dict["shape"]
-
-    # no assert when all is defined in descriptor, no grid_group
-    store = gt_store.empty(
-        dtype=np.float64, default_origin=default_origin, shape=shape, mask=mask, backend="gtx86"
     )
-    assert sum(store.mask) == store.ndim
-    assert sum(store.mask) == len(store.shape)
+    class TestConstructionFromParameters:
+        def run_test(self, alloc_fun, device, managed):
+            stor = alloc_fun(
+                device=device, managed=managed, dtype=np.float32, halo=(1, 2, 3), shape=(2, 4, 6)
+            )
+            assert stor.halo == ((1, 1), (2, 2), (3, 3))
+            assert stor.shape == (2, 4, 6)
+            assert stor.dtype == np.float32
+            assert isinstance(stor, gt_store.Storage)
+            return stor
 
+        def test_cpu(self, alloc_fun):
+            res = self.run_test(alloc_fun, None, False)
+            assert isinstance(res, gt4py.storage.definitions.CPUStorage)
 
-@pytest.mark.requires_gpu
-@hyp.given(param_dict=mask_strategy())
-def test_masked_storage_gpu(param_dict):
-    mask = param_dict["mask"]
-    default_origin = param_dict["default_origin"]
-    shape = param_dict["shape"]
+        def test_gpu_only(self, alloc_fun):
+            res = self.run_test(alloc_fun, "gpu", False)
+            assert isinstance(res, gt4py.storage.definitions.GPUStorage)
 
-    # no assert when all is defined in descriptor, no grid_group
-    store = gt_store.empty(
-        dtype=np.float64, default_origin=default_origin, shape=shape, mask=mask, backend="gtcuda"
+        def test_gpu_cuda_managed(self, alloc_fun):
+            res = self.run_test(alloc_fun, "gpu", "cuda")
+            assert isinstance(res, gt4py.storage.definitions.CudaManagedGPUStorage)
+
+        def test_gpu_gt4py_managed(self, alloc_fun):
+            res = self.run_test(alloc_fun, "gpu", "gt4py")
+            assert isinstance(res, gt4py.storage.definitions.ExplicitlyManagedGPUStorage)
+
+    @pytest.mark.parametrize(
+        ["alloc_fun", "kwargs"],
+        [
+            (gt_store.empty_like, {}),
+            (gt_store.ones_like, {}),
+            (gt_store.zeros_like, {}),
+            (lambda data, *args, **kwargs: gt_store.full_like(data, 3.0, *args, **kwargs), {}),
+            (gt_store.storage, {}),
+        ],
     )
-    assert sum(store.mask) == store.ndim
-    assert sum(store.mask) == len(store.data.shape)
+    class TestConstructionFromTemplate:
+        def run_test(self, alloc_fun, data):
+            stor = alloc_fun(data=data)
+            assert stor.shape == data.shape
+            assert stor.dtype == data.dtype
+            assert stor.halo == data.halo
+
+            assert isinstance(stor, gt_store.Storage)
+            return stor
+
+        def test_cpu(self, alloc_fun, kwargs):
+            if "shape" not in kwargs:
+                kwargs["shape"] = (2, 4, 6)
+            data = gt_store.empty(device=None, managed=False, **kwargs)
+            res = self.run_test(alloc_fun, data)
+            assert isinstance(res, gt4py.storage.definitions.CPUStorage)
+
+        def test_gpu_only(self, alloc_fun, kwargs):
+            if "shape" not in kwargs:
+                kwargs["shape"] = (2, 4, 6)
+            data = gt_store.empty(device="gpu", managed=False, **kwargs)
+            res = self.run_test(alloc_fun, data)
+            assert isinstance(res, gt4py.storage.definitions.GPUStorage)
+
+        def test_gpu_cuda_managed(self, alloc_fun, kwargs):
+            if "shape" not in kwargs:
+                kwargs["shape"] = (2, 4, 6)
+            data = gt_store.empty(device="gpu", managed="cuda", **kwargs)
+            res = self.run_test(alloc_fun, data)
+            assert isinstance(res, gt4py.storage.definitions.CudaManagedGPUStorage)
+
+        def test_gpu_gt4py_managed(self, alloc_fun, kwargs):
+            if "shape" not in kwargs:
+                kwargs["shape"] = (2, 4, 6)
+            data = gt_store.empty(device="gpu", managed="gt4py", **kwargs)
+            res = self.run_test(alloc_fun, data)
+            assert isinstance(res, gt4py.storage.definitions.ExplicitlyManagedGPUStorage)
 
 
-def test_masked_storage_asserts():
-    default_origin = (1, 1, 1)
-    shape = (2, 2, 2)
+#
+# @hyp.given(param_dict=mask_strategy())
+# def test_masked_storage_cpu(param_dict):
+#     mask = param_dict["mask"]
+#     default_origin = param_dict["default_origin"]
+#     shape = param_dict["shape"]
+#
+#     # no assert when all is defined in descriptor, no grid_group
+#     store = gt_store.empty(
+#         dtype=np.float64, default_origin=default_origin, shape=shape, mask=mask, backend="gtx86"
+#     )
+#     assert sum(store.mask) == store.ndim
+#     assert sum(store.mask) == len(store.shape)
 
-    mask = ()
-    try:
-        gt_store.empty(
-            dtype=np.float64,
-            default_origin=default_origin,
-            shape=shape,
-            mask=mask,
-            backend="gtx86",
-        )
-    except ValueError:
-        pass
-    except Exception as e:
-        raise e
-    else:
-        assert False
+#
+# @pytest.mark.requires_gpu
+# @hyp.given(param_dict=mask_strategy())
+# def test_masked_storage_gpu(param_dict):
+#     mask = param_dict["mask"]
+#     default_origin = param_dict["default_origin"]
+#     shape = param_dict["shape"]
+#
+#     # no assert when all is defined in descriptor, no grid_group
+#     store = gt_store.empty(
+#         dtype=np.float64, default_origin=default_origin, shape=shape, mask=mask, backend="gtcuda"
+#     )
+#     assert sum(store.mask) == store.ndim
+#     assert sum(store.mask) == len(store.data.shape)
+#
+#
+# def test_masked_storage_asserts():
+#     default_origin = (1, 1, 1)
+#     shape = (2, 2, 2)
+#
+#     mask = ()
+#     try:
+#         gt_store.empty(
+#             dtype=np.float64,
+#             default_origin=default_origin,
+#             shape=shape,
+#             mask=mask,
+#             backend="gtx86",
+#         )
+#     except ValueError:
+#         pass
+#     except Exception as e:
+#         raise e
+#     else:
+#         assert False
 
 
 def run_test_slices(backend):
-    default_origin = (1, 1, 1)
+    halo = (1, 1, 1)
     shape = (10, 10, 10)
     array = np.random.randn(*shape)
-    stor = gt_store.storage(
-        array, backend=backend, dtype=np.float64, default_origin=default_origin, shape=shape
-    )
+    stor = gt_store.storage(array, defaults=backend, dtype=np.float64, halo=halo)
     sliced = stor[::2, ::2, ::2]
     assert (np.asarray(sliced) == array[::2, ::2, ::2]).all()
     sliced[...] = array[::2, ::2, ::2]
@@ -614,15 +847,13 @@ def test_slices_gpu():
 
 
 @pytest.mark.parametrize(
-    "backend", ["gtmc", pytest.param("gtcuda", marks=pytest.mark.requires_gpu)]
+    "defaults", ["gtmc", pytest.param("gtcuda", marks=pytest.mark.requires_gpu)]
 )
-def test_transpose(backend):
-    default_origin = (1, 1, 1)
+def test_transpose(defaults):
+    halo = (1, 1, 1)
     shape = (10, 10, 10)
     array = np.random.randn(*shape)
-    stor = gt_store.storage(
-        array, default_origin=default_origin, backend=backend, dtype=np.float64
-    )
+    stor = gt_store.storage(array, halo=halo, defaults=defaults, dtype=np.float64)
     np_view = np.asarray(stor)
 
     transposed_stor = np.transpose(stor, axes=(0, 1, 2))
@@ -640,175 +871,567 @@ def test_transpose(backend):
     assert transposed_stor.shape == transposed_np.shape
 
 
-@pytest.mark.parametrize(
-    ["backend", "method"],
-    itertools.product(
-        [
-            name
-            for name in gt_backend.REGISTRY.names
-            if gt_backend.from_name(name).storage_info["device"] == "cpu"
-        ],
-        ["deepcopy", "copy_method"],
-    ),
-)
-def test_copy_cpu(method, backend):
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    stor = gt_store.storage(
-        np.random.randn(*shape), default_origin=default_origin, backend=backend
-    )
-
-    import copy
-
-    if method == "deepcopy":
-        stor_copy = copy.deepcopy(stor)
-    elif method == "copy_method":
-        stor_copy = stor.copy()
-    else:
-        raise ValueError(f"Test not implemented for copying using '{method}'")
-
-    assert stor is not stor_copy
-    assert stor._raw_buffer.ctypes.data != stor_copy._raw_buffer.ctypes.data
-    if stor._raw_buffer.ctypes.data < stor_copy._raw_buffer.ctypes.data:
-        assert (
-            stor._raw_buffer.ctypes.data + len(stor._raw_buffer)
-            <= stor_copy._raw_buffer.ctypes.data
-        )
-    else:
-        assert (
-            stor._raw_buffer.ctypes.data + len(stor._raw_buffer)
-            >= stor_copy._raw_buffer.ctypes.data
-        )
-    np.testing.assert_equal(np.asarray(stor_copy), np.asarray(stor))
-
-
-@pytest.mark.requires_gpu
 @pytest.mark.parametrize("method", ["deepcopy", "copy_method"])
-def test_copy_gpu(method, backend="gtcuda"):
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    stor = gt_store.storage(
-        np.random.randn(*shape),
-        default_origin=default_origin,
-        backend=backend,
-        managed_memory=True,
-    )
+class TestCopy:
+    @staticmethod
+    def assert_not_same_memory_field(stor, stor_copy):
+        endslice = tuple(slice(-1, None, None) for s in stor.shape)
 
-    import copy
+        assert stor is not stor_copy
+        assert stor._field.ctypes.data != stor_copy._field.ctypes.data
+        if stor._field.ctypes.data < stor_copy._field.ctypes.data:
+            assert stor._field[endslice].ctypes.data < stor_copy._field.ctypes.data
+        else:
+            assert stor_copy._field[endslice].ctypes.data < stor._field.ctypes.data
 
-    if method == "deepcopy":
-        stor_copy = copy.deepcopy(stor)
-    elif method == "copy_method":
-        stor_copy = stor.copy()
-    else:
-        raise ValueError(f"Test not implemented for copying using '{method}'")
+    @staticmethod
+    def assert_not_same_memory_device_field(stor, stor_copy):
+        endslice = tuple(slice(-1, None, None) for s in stor.shape)
+        assert stor is not stor_copy
+        assert stor._device_field.data.ptr != stor_copy._device_field.data.ptr
+        if stor._device_field.data.ptr < stor_copy._device_field.data.ptr:
+            assert stor._device_field[endslice].data.ptr < stor_copy._device_field.data.ptr
+        else:
+            assert stor_copy._device_field[endslice].data.ptr < stor._device_field.data.ptr
 
-    assert stor is not stor_copy
-    assert stor._raw_buffer.data.ptr != stor_copy._raw_buffer.data.ptr
-    if stor._raw_buffer.data.ptr < stor_copy._raw_buffer.data.ptr:
-        assert stor._raw_buffer.data.ptr + len(stor._raw_buffer) <= stor_copy._raw_buffer.data.ptr
-    else:
-        assert stor._raw_buffer.data.ptr + len(stor._raw_buffer) >= stor_copy._raw_buffer.data.ptr
-    np.testing.assert_equal(stor_copy.view(np.ndarray), stor.view(np.ndarray))
+    def test_copy_cpu(self, method):
+        halo = (1, 1, 1)
+        shape = (10, 10, 10)
+        stor = gt_store.storage(np.random.randn(*shape), halo=halo, device="cpu")
+        import copy
 
+        if method == "deepcopy":
+            stor_copy = copy.deepcopy(stor)
+        elif method == "copy_method":
+            stor_copy = stor.copy()
+        else:
+            raise ValueError(f"Test not implemented for copying using '{method}'")
 
-@pytest.mark.requires_gpu
-@pytest.mark.parametrize("method", ["deepcopy", "copy_method"])
-def test_deepcopy_gpu_unmanaged(method, backend="gtcuda"):
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    stor = gt_store.storage(
-        np.random.randn(*shape),
-        default_origin=default_origin,
-        backend=backend,
-        managed_memory=False,
-    )
+        self.assert_not_same_memory_field(stor, stor_copy)
+        np.testing.assert_equal(np.asarray(stor_copy), np.asarray(stor))
 
-    import copy
-
-    if method == "deepcopy":
-        stor_copy = copy.deepcopy(stor)
-    elif method == "copy_method":
-        stor_copy = stor.copy()
-    else:
-        raise ValueError(f"Test not implemented for copying using '{method}'")
-
-    assert stor is not stor_copy
-    assert stor._sync_state is not stor_copy._sync_state
-    assert stor._raw_buffer.ctypes.data != stor_copy._raw_buffer.ctypes.data
-    if stor._raw_buffer.ctypes.data < stor_copy._raw_buffer.ctypes.data:
-        assert (
-            stor._raw_buffer.ctypes.data + len(stor._raw_buffer)
-            <= stor_copy._raw_buffer.ctypes.data
-        )
-    else:
-        assert (
-            stor._raw_buffer.ctypes.data + len(stor._raw_buffer)
-            >= stor_copy._raw_buffer.ctypes.data
+    @pytest.mark.requires_gpu
+    def test_copy_gpu_only(self, method):
+        halo = (1, 1, 1)
+        shape = (10, 10, 10)
+        stor = gt_store.storage(
+            np.random.randn(*shape),
+            halo=halo,
+            device="gpu",
+            managed=False,
         )
 
-    assert stor._device_raw_buffer.data.ptr != stor_copy._device_raw_buffer.data.ptr
-    if stor._device_raw_buffer.data.ptr < stor_copy._device_raw_buffer.data.ptr:
-        assert (
-            stor._device_raw_buffer.data.ptr + len(stor._device_raw_buffer)
-            <= stor_copy._device_raw_buffer.data.ptr
-        )
-    else:
-        assert (
-            stor._device_raw_buffer.data.ptr + len(stor._device_raw_buffer)
-            >= stor_copy._device_raw_buffer.data.ptr
+        import copy
+
+        if method == "deepcopy":
+            stor_copy = copy.deepcopy(stor)
+        elif method == "copy_method":
+            stor_copy = stor.copy()
+        else:
+            raise ValueError(f"Test not implemented for copying using '{method}'")
+
+        self.assert_not_same_memory_device_field(stor, stor_copy)
+        cp.testing.assert_array_equal(cp.asarray(stor_copy), cp.asarray(stor))
+
+    @pytest.mark.requires_gpu
+    def test_copy_gt4py_managed(self, method):
+        halo = (1, 1)
+        shape = (3, 3)
+        data = np.random.randn(*shape)
+        stor = gt_store.storage(
+            data,
+            halo=halo,
+            device="gpu",
+            managed="gt4py",
         )
 
-    np.testing.assert_equal(stor_copy.view(np.ndarray), stor.view(np.ndarray))
-    assert (stor._device_field[...] == stor_copy._device_field[...]).all()
+        import copy
+
+        if method == "deepcopy":
+            stor_copy = copy.deepcopy(stor)
+        elif method == "copy_method":
+            stor_copy = stor.copy()
+        else:
+            raise ValueError(f"Test not implemented for copying using '{method}'")
+        self.assert_not_same_memory_field(stor, stor_copy)
+        self.assert_not_same_memory_device_field(stor, stor_copy)
+
+        assert stor.sync_state is not stor_copy.sync_state
+
+        stor.device_to_host()
+        stor_copy.device_to_host()
+        np.testing.assert_equal(np.asarray(stor_copy), np.asarray(stor))
+
+        stor.host_to_device()
+        stor_copy.host_to_device()
+        cp.testing.assert_array_equal(cp.asarray(stor_copy), cp.asarray(stor))
+
+    @pytest.mark.requires_gpu
+    def test_copy_cuda_managed(self, method):
+        halo = (1, 1, 1)
+        shape = (10, 10, 10)
+        stor = gt_store.storage(np.random.randn(*shape), halo=halo, device="gpu", managed="cuda")
+
+        import copy
+
+        if method == "deepcopy":
+            stor_copy = copy.deepcopy(stor)
+        elif method == "copy_method":
+            stor_copy = stor.copy()
+        else:
+            raise ValueError(f"Test not implemented for copying using '{method}'")
+
+        self.assert_not_same_memory_field(stor, stor_copy)
+
+        np.testing.assert_equal(np.asarray(stor_copy), np.asarray(stor))
 
 
 @pytest.mark.requires_gpu
 def test_cuda_array_interface():
-    storage = gt_store.storage(
-        cp.random.randn(5, 5, 5),
-        backend="gtcuda",
-        dtype=np.float64,
-        default_origin=(1, 1, 1),
-        shape=(5, 5, 5),
-    )
+    data = cp.random.randn(5, 5, 5)
+    storage = gt_store.storage(data, defaults="gtcuda", dtype=np.float64)
     cupy_array = cp.array(storage)
-    assert (cupy_array == storage).all()
+    assert (cupy_array == data).all()
+
+    data = np.random.randn(5, 5, 5)
+    storage = gt_store.storage(data, defaults="gtcuda", dtype=np.float64)
+    cupy_array = cp.array(storage)
+    assert (cupy_array == data).all()
+
+    data = cp.random.randn(5, 5, 5)
+    storage = gt_store.storage(data, defaults="gtcuda", dtype=np.float64)
+    cupy_array = cp.array(storage)
+    assert (cupy_array == data).all()
+
+    data = np.random.randn(5, 5, 5)
+    storage = gt_store.storage(data, defaults="gtcuda", dtype=np.float64)
+    cupy_array = cp.array(storage)
+    assert (cupy_array == data).all()
 
 
-@pytest.mark.requires_gpu
-def test_managed_view_casting():
-    allocator = cp.cuda.get_allocator()
-    cp.cuda.set_allocator(cp.cuda.malloc_managed)
-    gpu_arr = cp.ones((10, 10, 10))
-    gpu_arr_attrs = cp.cuda.runtime.pointerGetAttributes(gpu_arr.data.ptr)
-    cp.cuda.set_allocator(allocator)
-    assert gpu_arr_attrs.devicePointer == gpu_arr_attrs.hostPointer
+class TestParameterLookupAndNormalizeValid:
+    """The GDP-3 (Duck Storages) states:
+        The values of parameters which are not explicitly defined by the user will be inferred from the
+        first alternative source where the parameter is defined in the following search order:
 
-    cpu_view = gt_storage_utils.cpu_view(gpu_arr)
-    cpu_view_attrs = cp.cuda.runtime.pointerGetAttributes(cpu_view.ctypes.data)
-    assert cpu_view.ctypes.data == gpu_arr.data.ptr
-    assert cpu_view.strides == gpu_arr.strides
-    assert cpu_view.shape == gpu_arr.shape
-    assert cpu_view_attrs.devicePointer == cpu_view_attrs.hostPointer
+        1. The provided :code:`defaults` parameter set.
+        2. The provided :code:`data` or :code:`device_data` parameters.
+        3. A fallback default value specified above. The only case where this is not available is
+           :code:`shape`, in which case an exception is raised.
 
-    gpu_view = gt_storage_utils.gpu_view(cpu_view)
-    gpu_view_attrs = cp.cuda.runtime.pointerGetAttributes(gpu_view.data.ptr)
-    assert gpu_view.data.ptr == cpu_view.ctypes.data
-    assert gpu_view.strides == cpu_view.strides
-    assert gpu_view.shape == cpu_view.shape
-    assert gpu_view_attrs.devicePointer == gpu_view_attrs.hostPointer
+    The tests in this class should test that this lookup order is implemented correctly
+    by the `parameter_lookup_and_normalize` utility for all parameters.
 
-    assert (
-        gpu_view_attrs.devicePointer
-        == gpu_view_attrs.hostPointer
-        == gpu_arr_attrs.devicePointer
-        == gpu_arr_attrs.hostPointer
-        == cpu_view_attrs.devicePointer
-        == cpu_view_attrs.hostPointer
+    string parameters of pattern "ref:key" indicate that the result is the same instance as the
+    key "key" in input_params
+
+    Tests with the name according to the pattern test_normalize_* check that the resulting value
+    is of the right type and canonical form
+
+    Tests with the name according to the pattern test_lookup* check that the resulting value
+    is right according to the lookup order (i.e. the order specified at the beginning of this
+    docstring).
+    """
+
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [
+            ({"copy": False, "shape": [1, np.int32(2), 3]}, {"shape": (1, 2, 3)}),
+            ({"copy": True, "data": 3.0, "shape": (1, 2, 3)}, {"shape": (1, 2, 3), "data": 3.0}),
+            ({"copy": True, "data": np.ones((1, 2, 3))}, {"shape": (1, 2, 3), "data": "ref:data"}),
+            ({"copy": False, "template": np.ones((1, 2, 3))}, {"shape": (1, 2, 3), "data": None}),
+        ],
     )
+    def test_lookup_shape(self, input_params, resolved_params):
+        self.run_test_lookup_normalize(input_params, resolved_params)
 
-    gpu_arr[0, 0, 0] = 123
-    assert cpu_view[0, 0, 0] == 123
-    cpu_view[1, 1, 1] = 321
-    assert gpu_arr[1, 1, 1] == 321
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [({"copy": False, "shape": [1, np.int32(2), 3]}, {"shape": (1, 2, 3)})],
+    )
+    def test_normalize_shape(self, input_params, resolved_params):
+        self.run_test_lookup_normalize(input_params, resolved_params)
+
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [
+            ({"copy": False, "shape": (1, 2, 3)}, {"dtype": np.dtype("float64")}),
+            (
+                {"copy": False, "shape": (1, 2, 3), "dtype": np.dtype("int64")},
+                {"dtype": np.dtype("int64")},
+            ),
+            (
+                {"copy": False, "data": np.ones((1, 2, 3), dtype=np.float32)},
+                {"dtype": np.dtype("float32")},
+            ),
+            (
+                {
+                    "copy": True,
+                    "data": np.ones((1, 2, 3), dtype=np.float32),
+                    "template": np.ones((1, 2, 3), dtype=np.int32),
+                },
+                {"dtype": np.dtype("int32")},
+            ),
+            (
+                {"copy": False, "template": np.ones((1, 2, 3), dtype=np.int32)},
+                {"dtype": np.dtype("int32")},
+            ),
+        ],
+    )
+    def test_lookup_dtype(self, input_params, resolved_params):
+        self.run_test_lookup_normalize(input_params, resolved_params)
+
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [
+            ({"copy": False, "shape": (1, 2, 3), "dtype": float}, {"dtype": np.dtype("float64")}),
+            ({"copy": False, "shape": (1, 2, 3), "dtype": np.int32}, {"dtype": np.dtype("int32")}),
+            ({"copy": False, "shape": (1, 2, 3), "dtype": "b1"}, {"dtype": np.dtype("bool")}),
+            (
+                {"copy": False, "shape": (1, 2, 3), "dtype": gt_ir.DataType.FLOAT32},
+                {"dtype": np.dtype("float32")},
+            ),
+            pytest.param(
+                {"copy": False, "shape": (1, 2, 3), "dtype": (cp or np).float32},
+                {"dtype": np.dtype("float32")},
+                marks=[
+                    pytest.mark.requires_gpu,
+                    pytest.mark.skipif(cp is None, reason="CuPy not imported."),
+                ],
+            ),
+        ],
+    )
+    def test_normalize_dtype(self, input_params, resolved_params):
+        self.run_test_lookup_normalize(input_params, resolved_params)
+
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [
+            # test parameter group: aligned index and halo
+            # test default halo
+            (
+                {"copy": False, "shape": (4, 4, 4, 3), "aligned_index": (2, 2, 2, 1)},
+                {"aligned_index": (2, 2, 2, 1), "halo": ((0, 0), (0, 0), (0, 0), (0, 0))},
+            ),
+            # test default aligned_index
+            (
+                {"copy": False, "shape": (4, 4), "halo": ((2, 1), (2, 2))},
+                {"aligned_index": (2, 2), "halo": ((2, 1), (2, 2))},
+            ),
+            # test if both aligned_index and halo are explicitly set, those values are used.
+            (
+                {
+                    "copy": False,
+                    "shape": (4, 4),
+                    "halo": ((2, 1), (0, 2)),
+                    "aligned_index": (0, 1),
+                },
+                {"aligned_index": (0, 1), "halo": ((2, 1), (0, 2))},
+            ),
+            # test defaults if neither aligned_index nor halo are set
+            (
+                {"copy": False, "shape": (4, 4)},
+                {"aligned_index": (0, 0), "halo": ((0, 0), (0, 0))},
+            ),
+        ],
+    )
+    def test_lookup_aligned_index_and_halo(self, input_params, resolved_params):
+        self.run_test_lookup_normalize(input_params, resolved_params)
+
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [
+            (
+                {"copy": False, "shape": (4, 4), "aligned_index": [2, np.int32(2)]},
+                {"aligned_index": (2, 2)},
+            )
+        ],
+    )
+    def test_normalize_aligned_index(self, input_params, resolved_params):
+        self.run_test_lookup_normalize(input_params, resolved_params)
+
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [
+            ({"copy": False, "shape": (4, 4), "alignment_size": 7}, {"alignment_size": 7}),
+            (
+                {"copy": False, "shape": (4, 4), "defaults": "gtmc", "alignment_size": 7},
+                {"alignment_size": 7},
+            ),
+            ({"copy": False, "shape": (4, 4), "defaults": "gtmc"}, {"alignment_size": 8}),
+        ],
+    )
+    def test_normalize_alignment_size(self, input_params, resolved_params):
+        self.run_test_lookup_normalize(input_params, resolved_params)
+
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [
+            (
+                {"copy": False, "shape": (4, 4), "aligned_index": [2, np.int32(2)]},
+                {"aligned_index": (2, 2)},
+            )
+        ],
+    )
+    def test_normalize_aligned_index(self, input_params, resolved_params):
+        self.run_test_lookup_normalize(input_params, resolved_params)
+
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [
+            ({"copy": False, "shape": (4, 4, 5), "layout": (0, 1, 2)}, {"layout": (0, 1, 2)}),
+            (
+                {"copy": False, "shape": (4, 5, 7), "defaults": "F", "dims": "IJK"},
+                {"layout": (2, 1, 0)},
+            ),
+            (
+                {
+                    "copy": False,
+                    "shape": (4, 4, 5, 7),
+                    "defaults": "F",
+                    "dims": ["10", "J", "K", "I"],
+                },
+                {"layout": (3, 2, 1, 0)},
+            ),
+            (
+                {"copy": False, "shape": (4, 4, 5, 7), "defaults": "gtcuda", "dims": "IJK0"},
+                {"layout": (3, 2, 1, 0)},
+            ),
+            (
+                {
+                    "copy": False,
+                    "shape": (4, 4, 5, 7),
+                    "defaults": "gtcuda",
+                    "dims": ["10", "J", "K", "I"],
+                },
+                {"layout": (0, 2, 1, 3)},
+            ),
+            (
+                {"copy": False, "shape": (4, 4, 5), "layout": lambda dims: (0, 1, 2)},
+                {"layout": (0, 1, 2)},
+            ),
+        ],
+    )
+    def test_lookup_layout(self, input_params, resolved_params):
+        self.run_test_lookup_normalize(input_params, resolved_params)
+
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [
+            (
+                {"copy": False, "shape": (4, 4, 5), "layout": [0, np.int32(1), 2]},
+                {"layout": (0, 1, 2)},
+            ),
+            (
+                {"copy": False, "shape": (4, 4, 5), "layout": lambda ndim: [0, np.int32(1), 2]},
+                {"layout": (0, 1, 2)},
+            ),
+            ({"copy": False, "shape": (4, 4, 5), "defaults": "gtx86"}, {"layout": (0, 1, 2)}),
+        ],
+    )
+    def test_normalize_layout(self, input_params, resolved_params):  # callable x tuple > tuple
+        self.run_test_lookup_normalize(input_params, resolved_params)
+
+    @pytest.mark.parametrize(["input_params", "validator"], iter(generate_data_and_device_data()))
+    def test_lookup_data_device_data(self, input_params, validator):
+        res_params = self.run_lookup_normalize(input_params)
+        validator(res_params)
+
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [
+            (
+                {"copy": False, "data": np.ones((3, 3, 3))},
+                {"managed": False},
+            ),
+            pytest.param(
+                {"copy": False, "data": (cp or np).ones((3, 3, 3))},
+                {"managed": False},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            pytest.param(
+                {"copy": False, "data": get_cp_empty_managed((3, 3, 3))},
+                {"managed": "cuda"},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            pytest.param(
+                {"copy": False, "managed": False, "data": cp.empty((3, 3, 3))},
+                {"managed": False},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            pytest.param(
+                {"copy": False, "managed": "cuda", "data": get_cp_empty_managed((3, 3, 3))},
+                {"managed": "cuda"},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            ({"copy": True, "managed": False, "data": np.empty((3, 3, 3))}, {"managed": False}),
+            pytest.param(
+                {"copy": True, "managed": False, "data": cp.empty((3, 3, 3))},
+                {"managed": False},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            pytest.param(
+                {"copy": True, "managed": False, "data": get_cp_empty_managed((3, 3, 3))},
+                {"managed": False},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            ({"copy": True, "managed": "cuda", "data": np.empty((3, 3, 3))}, {"managed": "cuda"}),
+            pytest.param(
+                {"copy": True, "managed": "cuda", "data": cp.empty((3, 3, 3))},
+                {"managed": "cuda"},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            pytest.param(
+                {"copy": True, "managed": "cuda", "data": get_cp_empty_managed((3, 3, 3))},
+                {"managed": "cuda"},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            (
+                {"copy": True, "managed": "gt4py", "data": np.empty((3, 3, 3))},
+                {"managed": "gt4py"},
+            ),
+            pytest.param(
+                {"copy": True, "managed": "gt4py", "data": cp.empty((3, 3, 3))},
+                {"managed": "gt4py"},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            pytest.param(
+                {"copy": True, "managed": "gt4py", "data": get_cp_empty_managed((3, 3, 3))},
+                {"managed": "gt4py"},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            pytest.param(
+                {"copy": False, "data": gt_store.empty((3, 3, 3), device="cpu", managed=False)},
+                {"managed": False},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            pytest.param(
+                {"copy": False, "data": gt_store.empty((3, 3, 3), device="gpu", managed=False)},
+                {"managed": False},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            pytest.param(
+                {"copy": False, "data": gt_store.empty((3, 3, 3), device="gpu", managed="gt4py")},
+                {"managed": "gt4py"},
+                marks=[pytest.mark.requires_gpu],
+            ),
+            pytest.param(
+                {"copy": False, "data": gt_store.empty((3, 3, 3), device="gpu", managed="cuda")},
+                {"managed": "cuda"},
+                marks=[pytest.mark.requires_gpu],
+            ),
+        ],
+    )
+    def test_lookup_managed(self, input_params, resolved_params):
+        self.run_test_lookup_normalize(input_params, resolved_params)
+
+    @pytest.mark.parametrize(
+        ["input_params", "resolved_params"],
+        [
+            ({"copy": False, "shape": (4, 4, 5)}, {"device": "cpu"}),
+            ({"copy": False, "shape": (4, 4, 5), "device": "gpu"}, {"device": "gpu"}),
+            ({"copy": False, "shape": (4, 4, 5), "defaults": "debug"}, {"device": "cpu"}),
+            ({"copy": False, "shape": (4, 4, 5), "defaults": "gtcuda"}, {"device": "gpu"}),
+            (
+                {"copy": False, "shape": (4, 4, 5), "defaults": "gtcuda", "device": "cpu"},
+                {"device": "cpu"},
+            ),
+            ({"copy": False, "shape": (4, 4, 5), "data": np.ones((4, 4, 5))}, {"device": "cpu"}),
+            pytest.param(
+                {
+                    "copy": False,
+                    "shape": (4, 4, 5),
+                    "data": (cp or np).ones((4, 4, 5)),
+                    "device": "cpu",
+                },
+                {"device": "cpu"},
+                marks=[
+                    pytest.mark.requires_gpu,
+                    pytest.mark.skipif(cp is None, reason="CuPy not imported."),
+                ],
+            ),
+            pytest.param(
+                {"copy": False, "shape": (4, 4, 5), "data": (cp or np).ones((4, 4, 5))},
+                {"device": "gpu"},
+                marks=[
+                    pytest.mark.requires_gpu,
+                    pytest.mark.skipif(cp is None, reason="CuPy not imported."),
+                ],
+            ),
+            pytest.param(
+                {"copy": False, "shape": (4, 4, 5), "device_data": (cp or np).ones((4, 4, 5))},
+                {"device": "gpu"},
+                marks=[
+                    pytest.mark.requires_gpu,
+                    pytest.mark.skipif(cp is None, reason="CuPy not imported."),
+                ],
+            ),
+        ],
+    )
+    def test_lookup_device(
+        self, input_params, resolved_params
+    ):  # defaults, explicit, data, global default,
+        self.run_test_lookup_normalize(input_params, resolved_params)
+
+    def run_lookup_normalize(self, input_params):
+
+        params = {
+            "aligned_index": None,  #
+            "alignment_size": None,  #
+            "data": None,  #
+            "defaults": None,  #
+            "device": None,
+            "device_data": None,  #
+            "dtype": None,  #
+            "dims": None,
+            "halo": None,  # ... if template is storage
+            "layout": None,
+            "managed": None,
+            "shape": None,
+            "sync_state": None,
+            "template": None,
+        }
+        use_params = dict(params)
+        use_params.update(**input_params)
+
+        res_params = gt_storage_utils.parameter_lookup_and_normalize(**use_params)
+
+        res_keys = [
+            "aligned_index",
+            "alignment_size",
+            "copy",
+            "data",
+            "device",
+            "device_data",
+            "dtype",
+            "halo",
+            "layout",
+            "managed",
+            "shape",
+            "sync_state",
+        ]
+        assert len(res_params) == len(res_keys)
+        for key in res_keys:
+            assert key in res_params
+
+        return res_params
+
+    def run_test_lookup_normalize(self, input_params, resolved_params):
+        res_params = self.run_lookup_normalize(input_params)
+
+        solution_params = dict(resolved_params)
+        for key, value in dict(solution_params).items():
+            if isinstance(value, str) and value.startswith("ref:"):
+                solution_params[key] = input_params[value[4:]]
+
+        for key, value in solution_params.items():
+
+            assert np.all(res_params[key] == value), f"Wrong value for parameter '{key}'."
+            assert type(res_params[key]) is type(value), f"Wrong type for parameter '{key}'."
+            if isinstance(res_params[key], collections.Iterable):
+                assert all(
+                    type(v1) is type(v2) for v1, v2 in zip(res_params[key], value)
+                ), f"Wrong type for parameter '{key}'."
+
+            if "ref:" + key in resolved_params:
+                assert res_params[key] is input_params[key]

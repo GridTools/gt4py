@@ -24,7 +24,7 @@ import gt4py.utils as gt_utils
 
 ALL_BACKENDS = list(gt_backend.REGISTRY.keys())
 CPU_BACKENDS = [
-    name for name in ALL_BACKENDS if gt_backend.from_name(name).storage_info["device"] == "cpu"
+    name for name in ALL_BACKENDS if gt_backend.from_name(name).storage_defaults.device is None
 ]
 GPU_BACKENDS = list(set(ALL_BACKENDS) - set(CPU_BACKENDS))
 INTERNAL_BACKENDS = ["debug", "numpy"] + [name for name in ALL_BACKENDS if name.startswith("gt")]

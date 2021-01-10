@@ -16,6 +16,7 @@
 
 import numpy as np
 
+from typing import Any, Optional, Tuple, Union, Sequence
 
 try:
     import cupy as cp
@@ -24,115 +25,16 @@ except ImportError:
 
 import gt4py
 from gt4py import backend as gt_backend
-
-from . import utils as storage_utils
-
-
-def empty(backend, default_origin, shape, dtype, mask=None, *, managed_memory=False):
-
-    return Storage(
-        shape=shape,
-        dtype=dtype,
-        backend=backend,
-        default_origin=default_origin,
-        mask=mask,
-        managed_memory=managed_memory,
-    )
+from gt4py import storage as gt_store
 
 
-def ones(backend, default_origin, shape, dtype, mask=None, *, managed_memory=False):
-    storage = empty(
-        shape=shape,
-        dtype=dtype,
-        backend=backend,
-        default_origin=default_origin,
-        mask=mask,
-        managed_memory=managed_memory,
-    )
-    storage[...] = 1
-    return storage
+class SyncState:
+    SYNC_CLEAN = 0
+    SYNC_HOST_DIRTY = 1
+    SYNC_DEVICE_DIRTY = 2
 
-
-def zeros(backend, default_origin, shape, dtype, mask=None, *, managed_memory=False):
-    storage = empty(
-        shape=shape,
-        dtype=dtype,
-        backend=backend,
-        default_origin=default_origin,
-        mask=mask,
-        managed_memory=managed_memory,
-    )
-    storage[...] = 0
-    return storage
-
-
-def as_storage(*args, **kwargs):
-    return storage(*args, copy=False, **kwargs)
-
-
-def storage(
-    data=None,
-    backend=None,
-    default_origin=None,
-    shape=None,
-    dtype=None,
-    mask=None,
-    *,
-    copy=True,
-    managed_memory=False,
-):
-    if not copy:
-        assert isinstance(data, Storage)
-        assert default_origin is None
-        default_origin = data.default_origin
-        assert shape is None
-        shape = data.shape
-        assert dtype is None
-        dtype = data.dtype
-        assert mask is None
-        mask = data.mask
-        assert not managed_memory
-        managed_memory = isinstance(data, gt4py.storage.definitions.CudaManagedGPUStorage)
-
-        return Storage(
-            data=data,
-            copy=False,
-            shape=shape,
-            dtype=dtype,
-            backend=backend,
-            default_origin=default_origin,
-            mask=mask,
-            managed_memory=managed_memory,
-        )
-
-    else:
-        is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
-        xp = cp if is_cupy_array else np
-        if shape is None:
-            shape = xp.asarray(data).shape
-        if dtype is None:
-            dtype = xp.asarray(data).dtype
-
-        storage = empty(
-            shape=shape,
-            dtype=dtype,
-            backend=backend,
-            default_origin=default_origin,
-            mask=mask,
-            managed_memory=managed_memory,
-        )
-        if is_cupy_array:
-            if isinstance(storage, CudaManagedGPUStorage) or isinstance(
-                storage, ExplicitlyManagedGPUStorage
-            ):
-                tmp = storage_utils.gpu_view(storage)
-                tmp[...] = data
-            else:
-                storage[...] = cp.asnumpy(data)
-        else:
-            storage[...] = data
-
-        return storage
+    def __init__(self):
+        self.state = self.SYNC_CLEAN
 
 
 class Storage:
@@ -147,85 +49,61 @@ class Storage:
 
     def __new__(
         cls,
-        shape,
-        dtype,
-        backend,
-        default_origin,
-        mask=None,
-        managed_memory=False,
-        data=None,
-        copy=True,
+        *,
+        aligned_index: Optional[Sequence[int]],
+        alignment_size: Optional[int],
+        data: Any,
+        copy: bool,
+        defaults: Optional[str],
+        device: Optional[str],
+        device_data: Any = None,
+        dims: Optional[Sequence[str]],
+        dtype: Any,
+        halo: Optional[Sequence[Union[int, Tuple[int, int]]]],
+        layout: Optional[Sequence[int]],
+        managed: Optional[Union[bool, str]],
+        shape: Optional[Sequence[int]] = None,
+        sync_state: SyncState = None,
+        template: Any,
     ):
-        """
-        Storage constructor, not intended to be called directly by user.
+        params = gt_store.utils.parameter_lookup_and_normalize(
+            aligned_index=aligned_index,
+            alignment_size=alignment_size,
+            copy=copy,
+            data=data,
+            defaults=defaults,
+            device=device,
+            device_data=device_data,
+            dims=dims,
+            dtype=dtype,
+            halo=halo,
+            layout=layout,
+            managed=managed,
+            shape=shape,
+            sync_state=sync_state,
+            template=template,
+        )
 
-        Parameters
-        ----------
-        shape: tuple of ints
-            the shape of the storage
-
-        dtype: data type compatible with numpy dtypes
-            supported are the floating point and integer dtypes of numpy
-
-        backend: string, backend identifier
-            Currently possible: debug, numpy, gtx86, gtmc, gtcuda
-
-        default_origin: tuple of ints
-            determines the point to which the storage memory address is aligned.
-            for performance, this should be the coordinates of the most common origin
-            at call time.
-            when calling a stencil and no origin is specified, the default_origin is used.
-
-        mask: list of booleans
-            False entries indicate that the corresponding dimension is masked, i.e. the storage
-            has reduced dimension and reading and writing from offsets along this axis acces the
-            same element.
-        """
-        if copy:
-            if mask is None:
-                mask = [True] * len(shape)
-            default_origin = storage_utils.normalize_default_origin(default_origin, mask)
-            shape = storage_utils.normalize_shape(shape, mask)
-
-            if backend not in gt_backend.REGISTRY:
-                ValueError("Backend must be in {}.".format(gt_backend.REGISTRY))
-
-            alignment = gt_backend.from_name(backend).storage_info["alignment"]
-            layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)
-
-            if gt_backend.from_name(backend).storage_info["device"] == "gpu":
-                if managed_memory:
-                    storage_t = CudaManagedGPUStorage
-                else:
-                    storage_t = ExplicitlyManagedGPUStorage
+        # 7) determine storage type
+        if params["device"] == "gpu":
+            if params["managed"] == "cuda":
+                storage_t = CudaManagedGPUStorage
+                kwargs = {}
+            elif params["managed"] == "gt4py":
+                storage_t = ExplicitlyManagedGPUStorage
+                kwargs = {}
             else:
-                storage_t = CPUStorage
-            obj = storage_t.__new__(
-                storage_t,
-                backend,
-                np.dtype(dtype),
-                default_origin,
-                shape,
-                alignment,
-                layout_map,
-                data,
-                copy,
-            )
+                storage_t = GPUStorage
+                kwargs = {}
         else:
-            assert isinstance(data, gt4py.storage.Storage)
-            storage_t = type(data)
-            obj = storage_t.__new__(
-                storage_t, None, np.dtype(dtype), default_origin, shape, None, None, data, copy
-            )
+            storage_t = CPUStorage
+            kwargs = {}
 
-        obj._backend = backend
-        obj._mask = mask
-        obj._shape = shape
-        obj.default_origin = default_origin
-        obj._dtype = np.dtype(dtype)
-        obj._check_data()
-
-        return obj
+        self = storage_t._new(**params)
+        self._shape = params["shape"]
+        self._dtype = params["dtype"]
+        self._halo = params["halo"]
+        return self
 
     @property
     def shape(self):
@@ -259,6 +137,13 @@ class Storage:
     def size(self):
         return int(np.prod(self.shape))
 
+    def transpose(self, *axes):
+        res: Storage = gt_store.as_storage(self)
+        res._shape = tuple(self._shape[i] for i in axes)
+        res._halo = tuple(self._halo[i] for i in axes)
+        res._transpose(*axes)
+        return res
+
     def __deepcopy__(self, memo={}):
         return self.copy()
 
@@ -282,9 +167,7 @@ class Storage:
             return self._forward_getitem_scalar(key)
 
     def copy(self):
-        return storage(
-            data=self,
-        )
+        return gt4py.storage.storage(data=self)
 
     def synchronize(self):
         pass
@@ -298,62 +181,137 @@ class Storage:
     def __iconcat__(self, other):
         raise NotImplementedError("Concatenation of Storages is not supported")
 
+    @property
+    def halo(self):
+        return self._halo
+
+    @halo.setter
+    def halo(self, value):
+        if value is None:
+            raise TypeError("Halo can not be None.")
+        self._halo = gt_store.utils.normalize_halo(value)
+
 
 class CudaManagedGPUStorage(Storage):
+    device = "gpu"
+
+    @classmethod
+    def _new(
+        cls,
+        *,
+        shape,
+        dtype,
+        data=None,
+        device_data=None,
+        aligned_index=None,
+        alignment_size=None,
+        layout=None,
+        copy=False,
+        halo,
+        **kwargs,
+    ):
+
+        if data is None or copy:
+            device_memory, field = gt_store.utils.allocate_gpu_cuda_managed(
+                aligned_index,
+                shape,
+                layout,
+                dtype,
+                alignment_size * np.dtype(dtype).itemsize,
+            )
+        else:
+            assert isinstance(data, np.ndarray)
+            assert isinstance(device_data, cp.ndarray)
+            field = data
+            device_memory = device_data
+
+        self = super(Storage, cls).__new__(
+            CudaManagedGPUStorage,
+        )
+        self._field = field
+        self._device_memory = device_memory
+
+        if copy:
+            if device_data is not None:
+                gpu_view = cp.asarray(self)
+                gpu_view[...] = device_data
+                cp.cuda.Device(0).synchronize()
+            else:
+                self._field[...] = data
+
+        return self
+
+    @property
+    def __array_interface__(self):
+        array_interface = self._field.__array_interface__
+        return array_interface
+
     @property
     def __cuda_array_interface__(self):
-        array_interface = self.__array_interface__
+        array_interface = self._field.__array_interface__
         array_interface["version"] = 2
         array_interface["strides"] = self.strides
         array_interface.pop("offset", None)
         return array_interface
 
-    def copy(self):
-        res = super().copy()
-        res.gpu_view[...] = self.gpu_view
-        cp.cuda.Device(0).synchronize()
-        return res
+    @property
+    def __gt_data_interface__(self):
+        return {"cpu": self.__array_interface__, "gpu": self.__cuda_array_interface__}
 
     def __setitem__(self, key, value):
         if hasattr(value, "__cuda_array_interface__"):
-            gpu_view = storage_utils.gpu_view(self)
+            gpu_view = gt_store.utils.gpu_view(self)
             gpu_view[key] = cp.asarray(value.data)
             cp.cuda.Device(0).synchronize()
             return value
         else:
             return super().__setitem__(key, value)
 
+    @property
+    def strides(self):
+        return self._field.strides
+
 
 class CPUStorage(Storage):
+    device = "cpu"
+
     @property
     def _ptr(self):
         return self._ndarray.ctypes.data
 
-    def __new__(cls, backend, dtype, default_origin, shape, alignment, layout_map, data, copy):
-        if copy:
-            (raw_buffer, field) = storage_utils.allocate_cpu(
-                default_origin, shape, layout_map, dtype, alignment * dtype.itemsize
-            )
-        else:
-            assert isinstance(data, CPUStorage)
-            raw_buffer, field = data._raw_buffer, data._field
+    @classmethod
+    def _new(
+        cls,
+        *,
+        shape,
+        dtype,
+        data=None,
+        aligned_index=None,
+        alignment_size=None,
+        layout=None,
+        copy=False,
+        halo,
+        **kwargs,
+    ):
         self = super(Storage, cls).__new__(
             CPUStorage,
         )
-        self._raw_buffer = raw_buffer
-        self._field = field
-        self.default_origin = default_origin
-        return self
 
-    def _check_data(self):
-        # check that memory of field is within raw_buffer and that field is a view of raw_buffer
-        if (
-            not self._field.ctypes.data >= self._raw_buffer.ctypes.data
-            and self._field.ctypes.data + self.itemsize * (self.size - 1)
-            <= self._raw_buffer[-1:].ctypes.data
-            and self._field.base is not self._raw_buffer
-        ):
-            raise Exception("The buffers are in an inconsistent state.")
+        self._field = data
+        if data is None or copy:
+            _, self._field = gt_store.utils.allocate_cpu(
+                aligned_index,
+                shape,
+                layout,
+                dtype,
+                alignment_size * np.dtype(dtype).itemsize,
+            )
+        else:
+            self._field = np.asarray(data)
+
+        if copy:
+            self._field[...] = data
+        return self
 
     @property
     def data(self):
@@ -362,11 +320,6 @@ class CPUStorage(Storage):
     @property
     def strides(self):
         return self._field.strides
-
-    def copy(self):
-        res = super().copy()
-        res[...] = self
-        return res
 
     def _forward_setitem(self, key, value):
         self._field.__setitem__(key, value)
@@ -381,58 +334,157 @@ class CPUStorage(Storage):
     def __array_interface__(self):
         return self._field.__array_interface__
 
-    def transpose(self, *axes):
-        res: ExplicitlyManagedGPUStorage = as_storage(self)
-        res._field = res._field.transpose(*axes)
-        return res
+    @property
+    def __gt_data_interface__(self):
+        return {"cpu": self.__array_interface__}
+
+    def _transpose(self, *axes):
+        self._field = self._field.transpose(*axes)
+
+
+class GPUStorage(Storage):
+    device = "gpu"
+
+    @property
+    def _ptr(self):
+        return self._device_field.data.ptr
+
+    @classmethod
+    def _new(
+        cls,
+        *,
+        shape,
+        dtype,
+        data=None,
+        device_data=None,
+        aligned_index=None,
+        alignment_size=None,
+        layout=None,
+        copy=False,
+        halo,
+        **kwargs,
+    ):
+        self = super(Storage, cls).__new__(
+            GPUStorage,
+        )
+
+        if device_data is None or copy:
+            _, self._device_field = gt_store.utils.allocate_gpu_only(
+                aligned_index,
+                shape,
+                layout,
+                dtype,
+                alignment_size * np.dtype(dtype).itemsize,
+            )
+        else:
+            self._device_field = np.asarray(device_data)
+
+        if copy:
+            if device_data is not None:
+                self._device_field[...] = device_data
+            elif isinstance(data, np.ndarray):
+                self._device_field.set(data)
+            else:
+                self._device_field[...] = data
+
+        return self
+
+    @property
+    def device_data(self):
+        return self._device_field.data
+
+    @property
+    def strides(self):
+        return self._device_field.strides
+
+    def _forward_setitem(self, key, value):
+        self._device_field.__setitem__(key, value)
+
+    def _forward_getitem_slice(self, key):
+        self._device_field = self._device_field.__getitem__(key)
+
+    def _forward_getitem_scalar(self, key):
+        return self._device_field.__getitem__(key)
+
+    @property
+    def __gt_data_interface__(self):
+        return {"gpu": self.__cuda_array_interface__}
+
+    @property
+    def __cuda_array_interface__(self):
+        return self._device_field.__cuda_array_interface__
+
+    def _transpose(self, *axes):
+        self._device_field = self._device_field.transpose(*axes)
 
 
 class ExplicitlyManagedGPUStorage(Storage):
-    class SyncState:
-        SYNC_CLEAN = 0
-        SYNC_HOST_DIRTY = 1
-        SYNC_DEVICE_DIRTY = 2
+    device = "gpu"
 
-        def __init__(self):
-            self.state = self.SYNC_CLEAN
-
-    def __init__(self, *args, **kwargs):
-        self._sync_state = self.SyncState()
-
-    def copy(self):
-        res = super().copy()
-        res._sync_state = self.SyncState()
-        res._sync_state.state = self._sync_state.state
-        res[...] = self
-        res._device_field[...] = self._device_field
-        return res
-
-    def __new__(cls, backend, dtype, default_origin, shape, alignment, layout_map, data, copy):
-        if copy:
-            (
-                raw_buffer,
-                field,
-                device_raw_buffer,
-                device_field,
-            ) = storage_utils.allocate_gpu_unmanaged(
-                default_origin, shape, layout_map, dtype, alignment * dtype.itemsize
+    @classmethod
+    def _new(
+        cls,
+        *,
+        shape,
+        dtype,
+        data=None,
+        aligned_index=None,
+        alignment_size=None,
+        layout=None,
+        copy=False,
+        device_data=None,
+        halo,
+        sync_state,
+        **kwargs,
+    ):
+        if data is None or copy:
+            _, field = gt_store.utils.allocate_cpu(
+                aligned_index,
+                shape,
+                layout,
+                dtype,
+                alignment_size * np.dtype(dtype).itemsize,
             )
         else:
-            assert isinstance(data, ExplicitlyManagedGPUStorage)
-            (raw_buffer, field, device_raw_buffer, device_field,) = (
-                data._raw_buffer,
-                data._field,
-                data._device_raw_buffer,
-                data._device_field,
+            assert isinstance(data, np.ndarray)
+            field = data
+        if device_data is None or copy:
+            _, device_field = gt_store.utils.allocate_gpu_only(
+                aligned_index,
+                shape,
+                layout,
+                dtype,
+                alignment_size * np.dtype(dtype).itemsize,
             )
+        else:
+            assert isinstance(device_data, cp.ndarray)
+            device_field = device_data
         self = super(Storage, cls).__new__(
             ExplicitlyManagedGPUStorage,
         )
-        self._raw_buffer = raw_buffer
         self._field = field
-        self._device_raw_buffer = device_raw_buffer
         self._device_field = device_field
-        self.default_origin = default_origin
+        if sync_state is None:
+            self._sync_state = SyncState()
+        else:
+            self._sync_state = sync_state
+
+        if copy:
+            if sync_state is None:
+                if device_data is not None:
+                    self._device_field[...] = device_data
+                elif isinstance(data, np.ndarray):
+                    self._device_field.set(data)
+                else:
+                    self._device_field[...] = data
+                self._set_device_modified()
+            else:
+                if sync_state.state != SyncState.SYNC_HOST_DIRTY:
+                    self._device_field[...] = device_data
+                    self._set_device_modified()
+                else:
+                    self._field[...] = data
+                    self._set_host_modified()
         return self
 
     @property
@@ -457,33 +509,33 @@ class ExplicitlyManagedGPUStorage(Storage):
     def host_to_device(self, force=False):
         if force or self._is_host_modified:
             self._set_clean()
-            self._device_raw_buffer.set(self._raw_buffer)
+            self._device_field.set(self._field)
 
     def device_to_host(self, force=False):
         if force or self._is_device_modified:
             self._set_clean()
-            self._device_raw_buffer.get(out=self._raw_buffer)
+            self._device_field.get(out=self._field)
 
     @property
     def _is_clean(self):
-        return self._sync_state.state == self.SyncState.SYNC_CLEAN
+        return self._sync_state.state == SyncState.SYNC_CLEAN
 
     @property
     def _is_host_modified(self):
-        return self._sync_state.state == self.SyncState.SYNC_HOST_DIRTY
+        return self._sync_state.state == SyncState.SYNC_HOST_DIRTY
 
     @property
     def _is_device_modified(self):
-        return self._sync_state.state == self.SyncState.SYNC_DEVICE_DIRTY
+        return self._sync_state.state == SyncState.SYNC_DEVICE_DIRTY
 
     def _set_clean(self):
-        self._sync_state.state = self.SyncState.SYNC_CLEAN
+        self._sync_state.state = SyncState.SYNC_CLEAN
 
     def _set_host_modified(self):
-        self._sync_state.state = self.SyncState.SYNC_HOST_DIRTY
+        self._sync_state.state = SyncState.SYNC_HOST_DIRTY
 
     def _set_device_modified(self):
-        self._sync_state.state = self.SyncState.SYNC_DEVICE_DIRTY
+        self._sync_state.state = SyncState.SYNC_DEVICE_DIRTY
 
     def _forward_getitem_slice(self, key):
         self._field = self._field.__getitem__(key)
@@ -529,38 +581,15 @@ class ExplicitlyManagedGPUStorage(Storage):
 
     @property
     def sync_state(self):
-        return self._sync_state.state
+        return self._sync_state
 
     @property
     def _ptr(self):
         return self.data.ptr
 
-    def _check_data(self):
-
-        # check that memory of field is within raw_buffer
-        if (
-            not self._field.ctypes.data >= self._raw_buffer.ctypes.data
-            and self._field.ctypes.data + self.itemsize * (self.size - 1)
-            <= self._raw_buffer[-1:].ctypes.data
-            and self._field.base is not self._raw_buffer
-        ):
-            raise Exception("The buffers are in an inconsistent state.")
-
-        # check that memory of field is within raw_buffer
-        if (
-            not self._device_field.data.ptr >= self._device_raw_buffer.data.ptr
-            and self._device_field.data.ptr + self.itemsize * (self.size - 1)
-            <= self._device_raw_buffer[-1:].data.ptr
-        ):
-            raise Exception("The buffers are in an inconsistent state.")
-
-    def transpose(self, *axes):
-        res: ExplicitlyManagedGPUStorage = as_storage(self)
-        res._field = res._field.transpose(*axes)
-        res._device_field = cp.lib.stride_tricks.as_strided(
-            res._device_raw_buffer, shape=res._field.shape, strides=res._field.strides
-        )
-        return res
+    def _transpose(self, *axes):
+        self._field = self._field.transpose(*axes)
+        self._device_field = self._device_field.transpose(*axes)
 
     @property
     def __cuda_array_interface__(self):
@@ -573,3 +602,15 @@ class ExplicitlyManagedGPUStorage(Storage):
     def __array_interface__(self):
         self.device_to_host()
         return self._field.__array_interface__
+
+    @property
+    def __gt_data_interface__(self):
+        array_interface = self._field.__array_interface__
+        array_interface["acquire"] = self.device_to_host()
+        array_interface["touch"] = self._set_host_modified()
+
+        cuda_array_interface = self._device_field.__cuda_array_interface__
+        cuda_array_interface["acquire"] = self.host_to_device()
+        cuda_array_interface["touch"] = self._set_device_modified()
+
+        return {"cpu": array_interface, "gpu": cuda_array_interface}

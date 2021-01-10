@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional,
 
 import jinja2
 
+import gt4py
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
@@ -42,18 +43,28 @@ def from_name(name: str) -> Type["Backend"]:
     return REGISTRY.get(name, None)
 
 
-def register(backend_cls: Type["Backend"]) -> None:
+def register(backend_cls):
     assert issubclass(backend_cls, Backend) and backend_cls.name is not None
 
-    if isinstance(backend_cls.name, str):
-        return REGISTRY.register(backend_cls.name, backend_cls)
-
-    else:
+    if not isinstance(backend_cls.name, str):
         raise ValueError(
             "Invalid 'name' attribute ('{name}') in backend class '{cls}'".format(
                 name=backend_cls.name, cls=backend_cls
             )
         )
+
+    if isinstance(backend_cls.storage_defaults, gt4py.storage.default_parameters.StorageDefaults):
+        gt4py.storage.register_storage_defaults(
+            name=backend_cls.name, defaults=backend_cls.storage_defaults
+        )
+    else:
+        raise ValueError(
+            "Invalid 'storage_defaults' attribute in backend class '{cls}'".format(
+                name=backend_cls.name, cls=backend_cls
+            )
+        )
+
+    return REGISTRY.register(backend_cls.name, backend_cls)
 
 
 class Backend(abc.ABC):
@@ -643,7 +654,7 @@ pyext_module = gt_utils.make_module_from_file(
         api_fields = set(field.name for field in definition_ir.api_fields)
         for arg in definition_ir.api_signature:
             if arg.name not in self.args_data["unreferenced"]:
-                if from_name(self.backend_name).storage_info['device']=="cpu":
+                if from_name(self.backend_name).storage_info["device"] == "cpu":
                     args.append(f"np.asarray({arg.name})")
                 else:
                     args.append(arg.name)
