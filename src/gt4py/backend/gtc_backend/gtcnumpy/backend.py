@@ -17,6 +17,7 @@ from gt4py.gtc import gtir
 from gt4py.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.gtc.passes.fields_metadata_pass import FieldsMetadataPass
 from gt4py.gtc.passes.gtir_dtype_resolver import resolve_dtype
+from gt4py.gtc.passes.gtir_upcaster import upcast
 from gt4py.gtc.python import npir
 from gt4py.gtc.python.npir_gen import NpirGen
 from gt4py.gtc.python.oir_to_npir import OirToNpir
@@ -169,7 +170,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
 
     def _make_gtir(self) -> gtir.Stencil:
         gtir = FieldsMetadataPass().visit(DefIRToGTIR.apply(self.builder.definition_ir))
-        return resolve_dtype(gtir)
+        return upcast(resolve_dtype(gtir))
 
     def _make_npir(self) -> npir.Computation:
         oir = GTIRToOIR().visit(self.gtir)
