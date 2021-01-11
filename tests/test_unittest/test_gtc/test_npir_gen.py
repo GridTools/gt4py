@@ -21,10 +21,12 @@ def defined_dtype(request) -> Iterator[common.DataType]:
 
 @pytest.fixture()
 def other_dtype(defined_dtype) -> Iterator[Optional[common.DataType]]:
+    other = None
     for dtype in DEFINED_DTYPES:
         if dtype != defined_dtype:
-            yield dtype
-    yield None
+            other = dtype
+            break
+    yield other
 
 
 def test_literal(defined_dtype: common.DataType) -> None:
