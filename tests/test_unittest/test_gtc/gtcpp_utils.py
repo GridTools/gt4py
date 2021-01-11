@@ -3,6 +3,7 @@ from typing import List
 from gt4py.gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
 from gt4py.gtc.gtcpp.gtcpp import (
     AccessorRef,
+    ApiParamDecl,
     Arg,
     AssignStmt,
     FieldDecl,
@@ -21,6 +22,7 @@ from gt4py.gtc.gtcpp.gtcpp import (
     Literal,
     Program,
     Stmt,
+    Temporary,
 )
 
 
@@ -66,7 +68,7 @@ class GTIntervalBuilder:
 class GTApplyMethodBuilder:
     def __init__(self) -> None:
         self._interval = GTIntervalBuilder().build()
-        self._body = []
+        self._body: List[Stmt] = []
 
     def add_stmt(self, stmt: Stmt) -> "GTApplyMethodBuilder":
         self._body.append(stmt)
@@ -106,8 +108,8 @@ class GTAccessorBuilder:
 class GTFunctorBuilder:
     def __init__(self, name) -> None:
         self._name = name
-        self._applies = []
-        self._param_list_accessors = []
+        self._applies: List[GTApplyMethod] = []
+        self._param_list_accessors: List[GTAccessor] = []
 
     def add_accessors(self, accessors: List[GTAccessor]) -> "GTFunctorBuilder":
         self._param_list_accessors.extend(accessors)
@@ -133,9 +135,9 @@ class GTFunctorBuilder:
 
 class GTComputationCallBuilder:
     def __init__(self) -> None:
-        self._arguments = []
-        self._temporaries = []
-        self._multi_stages = []
+        self._arguments: List[Arg] = []
+        self._temporaries: List[Temporary] = []
+        self._multi_stages: List[GTMultiStage] = []
 
     def add_stage(self, stage: GTStage) -> "GTComputationCallBuilder":
         if len(self._multi_stages) == 0:
@@ -165,8 +167,8 @@ class GTComputationCallBuilder:
 class ProgramBuilder:
     def __init__(self, name) -> None:
         self._name = name
-        self._parameters = []
-        self._functors = []
+        self._parameters: List[ApiParamDecl] = []
+        self._functors: List[GTFunctor] = []
         self._gt_computation = GTComputationCallBuilder().build()
 
     def add_functor(self, functor: GTFunctor) -> "ProgramBuilder":

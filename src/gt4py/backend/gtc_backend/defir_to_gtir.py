@@ -194,12 +194,13 @@ class DefIRToGTIR(IRNodeVisitor):
             false_expr=self.visit(node.else_expr),
         )
 
-    def visit_BuiltinLiteral(self, node: BuiltinLiteral) -> gtir.Literal:
+    def visit_BuiltinLiteral(self, node: BuiltinLiteral) -> gtir.Literal:  # type: ignore[return]
         # currently deals only with boolean literals
         if node.value in self.GT4PY_BUILTIN_TO_GTIR.keys():
             return gtir.Literal(
                 value=self.GT4PY_BUILTIN_TO_GTIR[node.value], dtype=common.DataType.BOOL
             )
+        assert f"BuiltIn.{node.value} not implemented in lowering"
 
     def visit_Cast(self, node: Cast) -> gtir.Cast:
         return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))

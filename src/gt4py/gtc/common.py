@@ -247,7 +247,6 @@ def verify_and_get_common_dtype(
             if all([v.dtype == dtype for v in values]):
                 return dtype
             else:
-                print([v.dtype for v in values])
                 raise ValueError(
                     "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
                     + ", ".join(v.dtype.name for v in values)

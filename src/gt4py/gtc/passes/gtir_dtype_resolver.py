@@ -79,7 +79,7 @@ class _GTIRPropagateDtypeToAccess(NodeTranslator):
             .getattr("dtype")
             .map(lambda x: x is not None)
         ):
-            raise GTCPostconditionError("No None dtype in FieldAccess or ScalarAccess.")
+            raise GTCPostconditionError(expected="No None dtype in FieldAccess or ScalarAccess.")
         return result
 
 
