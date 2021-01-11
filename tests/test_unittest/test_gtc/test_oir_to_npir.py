@@ -122,3 +122,21 @@ def test_field_access_to_field_slice(parallel_k):
     assert ctx.domain_padding["lower"][1] == 1
     assert ctx.domain_padding["upper"][1] == 2
     assert ctx.domain_padding["upper"][2] == 4
+
+
+def test_literal():
+    gtir_literal = oir.Literal(value="42", dtype=common.DataType.INT32)
+    npir_literal = OirToNpir().visit(gtir_literal)
+    assert gtir_literal.dtype == npir_literal.dtype
+    assert gtir_literal.kind == npir_literal.kind
+    assert gtir_literal.value == npir_literal.value
+
+
+def test_cast():
+    itof = oir.Cast(
+        dtype=common.DataType.FLOAT64,
+        expr=oir.Literal(value="42", dtype=common.DataType.INT32)
+    )
+    result = OirToNpir().visit(itof)
+    assert result.dtype == itof.dtype
+    assert result.expr.value == "42"

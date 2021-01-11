@@ -89,7 +89,7 @@ class OirToNpir(NodeTranslator):
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, ctx: Context, parallel_k: bool, **kwargs
     ) -> Union[npir.FieldSlice, npir.VectorTemp]:
-        if isinstance(ctx.symbol_table[node.name], oir.Temporary):
+        if isinstance(ctx.symbol_table.get(node.name, None), oir.Temporary):
             return npir.VectorTemp(name=node.name)
         ctx.add_offsets(node.offset.i, node.offset.j, node.offset.k)
         return npir.FieldSlice(
