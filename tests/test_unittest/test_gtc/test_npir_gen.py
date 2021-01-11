@@ -37,6 +37,16 @@ def test_literal(defined_dtype: common.DataType) -> None:
     assert match.groups()[0] == defined_dtype.name.lower()
 
 
+def test_broadcast_literal(defined_dtype: common.DataType) -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.BroadCastLiteral(literal=npir.Literal(dtype=defined_dtype, value="42"))
+    )
+    print(result)
+    match = re.match(r"np.(\w*?)\(42\)", result)
+    assert match
+    assert match.groups()[0] == defined_dtype.name.lower()
+
+
 def test_cast(defined_dtype: common.DataType, other_dtype: common.DataType) -> None:
     result = npir_gen.NpirGen().visit(
         npir.Cast(dtype=other_dtype, expr=npir.Literal(dtype=defined_dtype, value="42"))

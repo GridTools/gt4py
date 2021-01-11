@@ -144,9 +144,12 @@ def test_binary_op_to_vector_arithmetic():
     assert isinstance(result.right, npir.BroadCastLiteral)
 
 
-def test_literal():
+@pytest.mark.parametrize("broadcast", [True, False])
+def test_literal(broadcast):
     gtir_literal = oir.Literal(value="42", dtype=common.DataType.INT32)
-    npir_literal = OirToNpir().visit(gtir_literal)
+    result = OirToNpir().visit(gtir_literal, broadcast=broadcast)
+    assert isinstance(result, npir.BroadCastLiteral if broadcast else npir.Literal)
+    npir_literal = result.literal if broadcast else result
     assert gtir_literal.dtype == npir_literal.dtype
     assert gtir_literal.kind == npir_literal.kind
     assert gtir_literal.value == npir_literal.value

@@ -98,10 +98,11 @@ class OirToNpir(NodeTranslator):
     def visit_BinaryOp(
         self, node: oir.BinaryOp, *, ctx: Optional[Context] = None, **kwargs
     ) -> npir.VectorArithmetic:
+        kwargs["broadcast"] = True
         return npir.VectorArithmetic(
             op=node.op,
-            left=self.visit(node.left, ctx=ctx, broadcast=True, **kwargs),
-            right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),
+            left=self.visit(node.left, ctx=ctx, **kwargs),
+            right=self.visit(node.right, ctx=ctx, **kwargs),
         )
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall) -> npir.NativeFuncCall:
