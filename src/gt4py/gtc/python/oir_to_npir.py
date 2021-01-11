@@ -84,7 +84,7 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_Cast(self, node: oir.Cast, *, ctx: Optional[Context] = None, **kwargs) -> npir.Cast:
-        return npir.Cast(dtype=node.dtype, expr=node.expr)
+        return npir.Cast(dtype=self.visit(node.dtype), expr=self.visit(node.expr))
 
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, ctx: Context, parallel_k: bool, **kwargs
