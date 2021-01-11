@@ -10,7 +10,7 @@ from gt4py.gtc.gtcpp import gtcpp
 from gt4py.gtc.gtcpp.gtcpp import GTParamList, IJCache
 
 
-# TODO between oir and gtcpp we need to group oir.VerticalLoops
+# TODO(havogt) between oir and gtcpp we need to group oir.VerticalLoops
 
 # - Each HorizontalExecution is a Functor (and a Stage)
 # - Each VerticalLoop is MultiStage

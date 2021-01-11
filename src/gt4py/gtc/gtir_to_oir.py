@@ -176,7 +176,7 @@ class GTIRToOIR(NodeTranslator):
         ctx = self.Context()
         self.visit(node.body, ctx=ctx)
 
-        # TODO review this
+        # should temporaries live at this level?
         for temp in node.temporaries:
             ctx.add_decl(oir.Temporary(name=temp.name, dtype=temp.dtype))
 

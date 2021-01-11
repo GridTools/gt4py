@@ -177,7 +177,7 @@ class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
         pyext_module_name: Optional[str]
         pyext_file_path: Optional[str]
 
-        # TODO add bypass if computation has no effect
+        # TODO(havogt) add bypass if computation has no effect
         pyext_module_name, pyext_file_path = self.generate_extension()
 
         # Generate and return the Python wrapper class

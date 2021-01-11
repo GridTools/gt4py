@@ -184,7 +184,7 @@ class Interval(LocNode):
     end: AxisBound
 
 
-# TODO should vertical loop open a scope
+# TODO(havogt) should vertical loop open a scope?
 class VerticalLoop(LocNode):
     interval: Interval
     loop_order: common.LoopOrder
@@ -194,7 +194,7 @@ class VerticalLoop(LocNode):
 
 class Stencil(LocNode, SymbolTableTrait):
     name: Str
-    # TODO deal with gtscript externals
+    # TODO(havogt) deal with gtscript externals
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
 

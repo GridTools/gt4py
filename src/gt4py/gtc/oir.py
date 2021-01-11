@@ -68,11 +68,11 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
         return v
 
 
-# TODO
+# TODO(havogt) consider introducing BlockStmt
 # class BlockStmt(common.BlockStmt[Stmt], Stmt):
 #     pass
 
-# TODO
+# TODO(havogt) should we have an IfStmt or is masking the final solution?
 # class IfStmt(common.IfStmt[List[Stmt], Expr], Stmt):  # TODO replace List[Stmt] by BlockStmt?
 #     pass
 
@@ -108,7 +108,7 @@ class Decl(LocNode):
 
 
 class FieldDecl(Decl):
-    # TODO dimensions (or mask?)
+    # TODO dimensions
     pass
 
 

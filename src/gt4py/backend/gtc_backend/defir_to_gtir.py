@@ -236,9 +236,10 @@ class DefIRToGTIR(IRNodeVisitor):
             )
 
     def visit_VarRef(self, node: VarRef, **kwargs):
-        # TODO seems wrong, but check the DefinitionIR for
+        # TODO(havogt) seems wrong, but check the DefinitionIR for
         # test_code_generation.py::test_generation_cpu[native_functions,
         # there we have a FieldAccess on a VarDecl
+        # Probably the frontend needs to be fixed.
         if node.name in self._scalar_params:
             return gtir.ScalarAccess(name=node.name)
         else:
@@ -248,7 +249,7 @@ class DefIRToGTIR(IRNodeVisitor):
         return self.visit(node.start), self.visit(node.end)
 
     def visit_AxisBound(self, node: AxisBound):
-        # TODO support VarRef
+        # TODO(havogt) add support VarRef
         return gtir.AxisBound(
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
         )

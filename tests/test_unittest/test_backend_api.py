@@ -5,19 +5,7 @@ from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
 
-@pytest.fixture(
-    params=[
-        pytest.param(
-            name,
-            # TODO gtc backends require definition ir as input
-            # marks=pytest.mark.skipif(
-            #     name.startswith("dawn:") or name.startswith("gtc:"),
-            #     reason="dawn and gtc backends not yet supported",
-            # ),
-        )
-        for name in gt4py.backend.REGISTRY.keys()
-    ]
-)
+@pytest.fixture(params=[name for name in gt4py.backend.REGISTRY.keys()])
 def backend(request):
     """Parametrize by backend name."""
     yield gt4py.backend.from_name(request.param)
@@ -53,7 +41,7 @@ def test_generate_computation(backend, tmp_path):
         and ("computation.cpp" in result["init_1_src"] or "computation.cu" in result["init_1_src"])
         and "bindings.cpp" not in result["init_1_src"]
     )
-    # TODO(havogt) remove if gtc:gt produces a cpp-file for computation
+    # TODO(havogt) remove once gtc:gt produces a cpp-file for computation
     gtc_result = (
         backend.name.startswith("gtc:gt")
         and "computation.hpp" in result["init_1_src"]

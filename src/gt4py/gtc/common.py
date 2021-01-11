@@ -266,7 +266,8 @@ def compute_kind(values: List[Expr]) -> ExprKind:
 
 
 class Literal(Node):
-    # TODO when coming from python AST we know more than just the string representation, I suppose
+    # TODO(havogt) reconsider if `str` is a good representation for value,
+    # maybe it should be Union[float,int,str] etc?
     value: Union[BuiltInLiteral, Str]
     dtype: DataType
     kind: ExprKind = cast(
@@ -376,7 +377,7 @@ class BinaryOp(GenericNode, Generic[ExprT]):
     - type propagation (taking `operator` type into account).
     """
 
-    # TODO parametrize on op?
+    # consider parametrizing on op
     op: Union[ArithmeticOperator, ComparisonOperator, LogicalOperator]
     left: ExprT
     right: ExprT
@@ -424,7 +425,7 @@ class TernaryOp(GenericNode, Generic[ExprT]):
     - type propagation.
     """
 
-    # TODO parametrize cond expr separately?
+    # consider parametrizing cond type and expr separately
     cond: ExprT
     true_expr: ExprT
     false_expr: ExprT

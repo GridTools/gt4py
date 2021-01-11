@@ -19,7 +19,7 @@ def clirunner():
     params=[
         pytest.param(
             name,
-            # TODO gtc backends require definition ir as input
+            # gtc backends require definition ir as input, for now we skip the tests
             marks=pytest.mark.skipif(
                 name.startswith("dawn:") or name.startswith("gtc:"),
                 reason="gtc backends not yet supported",

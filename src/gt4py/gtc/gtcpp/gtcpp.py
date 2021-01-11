@@ -198,10 +198,11 @@ class ApiParamDecl(LocNode):
 
 
 class FieldDecl(ApiParamDecl):
-    # TODO dimensions (or mask?)
+    # TODO dimensions
     pass
 
 
+# TODO(havogt) this will be required once we can demote Temporaries to Scalars
 # class ScalarDecl(Decl):
 #     pass
 
