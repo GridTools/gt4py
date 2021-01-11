@@ -24,6 +24,10 @@ class VerticalLoopBuilder:
             declarations=self._declarations,
         )
 
+    def add_horizontal_execution(self, h_exec: oir.HorizontalExecution) -> "VerticalLoopBuilder":
+        self._horizontal_executions.append(h_exec)
+        return self
+
 
 class HorizontalExecutionBuilder:
     def __init__(self):
@@ -35,6 +39,10 @@ class HorizontalExecutionBuilder:
             body=[],
             mask=None,
         )
+
+    def add_assign(self, assign: oir.AssignStmt) -> "HorizontalExecutionBuilder":
+        self._body.append(assign)
+        return self
 
 
 @pytest.fixture(params=[True, False])
@@ -124,6 +132,18 @@ def test_field_access_to_field_slice(parallel_k):
     assert ctx.domain_padding["upper"][2] == 4
 
 
+def test_binary_op_to_vector_arithmetic():
+    binop = oir.BinaryOp(
+        op=common.ArithmeticOperator.ADD,
+        left=oir.Literal(dtype=common.DataType.INT32, value="2"),
+        right=oir.Literal(dtype=common.DataType.INT32, value="2"),
+    )
+    result = OirToNpir().visit(binop)
+    assert isinstance(result, npir.VectorArithmetic)
+    assert isinstance(result.left, npir.BroadCastLiteral)
+    assert isinstance(result.right, npir.BroadCastLiteral)
+
+
 def test_literal():
     gtir_literal = oir.Literal(value="42", dtype=common.DataType.INT32)
     npir_literal = OirToNpir().visit(gtir_literal)
@@ -134,9 +154,57 @@ def test_literal():
 
 def test_cast():
     itof = oir.Cast(
-        dtype=common.DataType.FLOAT64,
-        expr=oir.Literal(value="42", dtype=common.DataType.INT32)
+        dtype=common.DataType.FLOAT64, expr=oir.Literal(value="42", dtype=common.DataType.INT32)
     )
     result = OirToNpir().visit(itof)
     assert result.dtype == itof.dtype
     assert result.expr.value == "42"
+
+
+def test_copy_plus_one():
+    copy_plus_one = oir.Stencil(
+        name="copy_plus_one",
+        params=[
+            oir.FieldDecl(
+                name="a",
+                dtype=common.DataType.FLOAT64,
+            ),
+            oir.FieldDecl(
+                name="b",
+                dtype=common.DataType.FLOAT64,
+            ),
+        ],
+        vertical_loops=[
+            VerticalLoopBuilder()
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_assign(
+                    oir.AssignStmt(
+                        left=oir.FieldAccess(
+                            name="b",
+                            offset=common.CartesianOffset.zero(),
+                            dtype=common.DataType.FLOAT64,
+                        ),
+                        right=oir.BinaryOp(
+                            op=common.ArithmeticOperator.ADD,
+                            left=oir.FieldAccess(
+                                name="a",
+                                offset=common.CartesianOffset.zero(),
+                                dtype=common.DataType.FLOAT64,
+                            ),
+                            right=oir.Cast(
+                                dtype=common.DataType.FLOAT64,
+                                expr=oir.Literal(
+                                    value="1",
+                                    dtype=common.DataType.INT32,
+                                ),
+                            ),
+                        ),
+                    )
+                )
+                .build()
+            )
+            .build()
+        ],
+    )
+    OirToNpir().visit(copy_plus_one)

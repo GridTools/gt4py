@@ -1,5 +1,5 @@
 import re
-from typing import Iterator, Set
+from typing import Iterator, Optional, Set
 
 import pytest
 
@@ -20,11 +20,11 @@ def defined_dtype(request) -> Iterator[common.DataType]:
 
 
 @pytest.fixture()
-def other_dtype(defined_dtype) -> Iterator[common.DataType]:
+def other_dtype(defined_dtype) -> Iterator[Optional[common.DataType]]:
     for dtype in DEFINED_DTYPES:
         if dtype != defined_dtype:
-            return dtype
-    return None
+            yield dtype
+    yield None
 
 
 def test_literal(defined_dtype: common.DataType) -> None:
@@ -36,7 +36,9 @@ def test_literal(defined_dtype: common.DataType) -> None:
 
 
 def test_cast(defined_dtype: common.DataType, other_dtype: common.DataType) -> None:
-    result = npir_gen.NpirGen().visit(npir.Cast(dtype=other_dtype, expr=npir.Literal(dtype=defined_dtype, value="42")))
+    result = npir_gen.NpirGen().visit(
+        npir.Cast(dtype=other_dtype, expr=npir.Literal(dtype=defined_dtype, value="42"))
+    )
     print(result)
     match = re.match(r"np.(\w*?)\(np.(\w*)\(42\)", result)
     assert match
@@ -154,8 +156,40 @@ def test_vertical_pass_par() -> None:
     assert match
 
 
-## TODO: test_vertical_pass in region DOMAIN_k, DOMAIN_k + 5
-## TODO: test_vertical_pass in region DOMAIN_K-4, DOMAIN_k - 1
+def test_verticall_pass_start_start_forward() -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.VerticalPass(
+            body=[],
+            lower=common.AxisBound.start(),
+            upper=common.AxisBound.from_start(offset=5),
+            direction=common.LoopOrder.FORWARD,
+        )
+    )
+    print(result)
+    match = re.match(
+        r"(#.*?\n)?k, K = DOMAIN_k, DOMAIN_k \+ 5\nfor k_ in range\(k, K\):\n",
+        result,
+        re.MULTILINE,
+    )
+    assert match
+
+
+def test_verticall_pass_end_end_backward() -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.VerticalPass(
+            body=[],
+            lower=common.AxisBound.from_end(offset=4),
+            upper=common.AxisBound.from_end(offset=1),
+            direction=common.LoopOrder.BACKWARD,
+        )
+    )
+    print(result)
+    match = re.match(
+        r"(#.*?\n)?k, K = DOMAIN_K \- 4, DOMAIN_K \- 1\nfor k_ in range\(K-1, k-1, -1\):\n",
+        result,
+        re.MULTILINE,
+    )
+    assert match
 
 
 def test_domain_padding() -> None:

@@ -74,13 +74,9 @@ class OirToNpir(NodeTranslator):
     def visit_AssignStmt(
         self, node: oir.AssignStmt, *, ctx: Optional[Context] = None, **kwargs
     ) -> npir.VectorAssign:
-        right = self.visit(node.right, ctx=ctx, **kwargs)
-        # a literal as rhs of an assignment will be broadcast to the lhs field slice size
-        if isinstance(right, npir.Literal):
-            right = npir.BroadCastLiteral(literal=right)
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, **kwargs),
-            right=right,
+            right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),
         )
 
     def visit_Cast(self, node: oir.Cast, *, ctx: Optional[Context] = None, **kwargs) -> npir.Cast:
@@ -104,12 +100,17 @@ class OirToNpir(NodeTranslator):
     ) -> npir.VectorArithmetic:
         return npir.VectorArithmetic(
             op=node.op,
-            left=self.visit(node.left, ctx=ctx, **kwargs),
-            right=self.visit(node.right, ctx=ctx, **kwargs),
+            left=self.visit(node.left, ctx=ctx, broadcast=True, **kwargs),
+            right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),
         )
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall) -> npir.NativeFuncCall:
         return npir.NativeFuncCall(func=node.func, args=node.args)
 
-    def visit_Literal(self, node: oir.Literal, **kwargs) -> npir.Literal:
-        return npir.Literal(value=node.value, dtype=node.dtype)
+    def visit_Literal(
+        self, node: oir.Literal, *, broadcast: bool = False, **kwargs
+    ) -> npir.Literal:
+        literal = npir.Literal(value=node.value, dtype=node.dtype)
+        if broadcast:
+            return npir.BroadCastLiteral(literal=literal)
+        return literal
