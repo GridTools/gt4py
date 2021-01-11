@@ -211,7 +211,7 @@ The ``default_origin`` parameter plays two roles:
 Computations and Intervals
 --------------------------
 
-`Computations` and `interval` determined the iteration space and schedule in the vertical direction.
+`Computations` and `interval` determine the iteration space and schedule in the vertical direction.
 The `computation` context determines in which order the vertical
 dimension is iterated over. ``FORWARD`` specifies an iteration from low to high index, while ``BACKWARD`` is an
 iteration from high to low index. For contexts declared ``PARALLEL``, no order is assumed and only computations
