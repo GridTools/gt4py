@@ -26,6 +26,8 @@ class NpirGen(TemplatedGenerator):
 
     Literal = FormatTemplate("np.{_this_node.dtype.name.lower()}({value})")
 
+    Cast = FormatTemplate("np.{_this_node.dtype.name.lower()}({expr})")
+
     def visit_NumericalOffset(self, node, **kwargs):
         operator, delta = op_delta_from_int(node.value)
         return self.generic_visit(node, op=operator, delta=delta, **kwargs)

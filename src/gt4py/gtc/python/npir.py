@@ -26,6 +26,11 @@ class Literal(common.Literal, Expr):
         return dtype
 
 
+class Cast(common.Cast[Expr], Expr):
+    dtype: common.DataType
+    pass
+
+
 class NumericalOffset(eve.Node):
     value: int
 

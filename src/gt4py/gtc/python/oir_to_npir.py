@@ -83,6 +83,9 @@ class OirToNpir(NodeTranslator):
             right=right,
         )
 
+    def visit_Cast(self, node: oir.Cast, *, ctx: Optional[Context] = None, **kwargs) -> npir.Cast:
+        return npir.Cast(dtype=node.dtype, expr=node.expr)
+
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, ctx: Context, parallel_k: bool, **kwargs
     ) -> Union[npir.FieldSlice, npir.VectorTemp]:
