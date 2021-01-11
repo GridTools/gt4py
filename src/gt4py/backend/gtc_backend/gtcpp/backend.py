@@ -35,7 +35,7 @@ class GTCGTExtGenerator:
         self.options = options
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = passes.FieldsMetadataPass().visit(DefIRToGTIR.apply(definition_ir))
+        gtir = DefIRToGTIR.apply(definition_ir)
         gtir_without_unused_params = prune_unused_parameters(gtir)
         dtype_deduced = resolve_dtype(gtir_without_unused_params)
         upcasted = upcast(dtype_deduced)

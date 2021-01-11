@@ -192,96 +192,11 @@ class VerticalLoop(LocNode):
     body: List[Stmt]
 
 
-@enum.unique
-class AccessKind(IntEnum):
-    READ_ONLY = 0
-    READ_WRITE = 1
-    # TODO add WRITE_ONLY using flag enums
-
-
-class FieldBoundary(Node):
-    i: Tuple[int, int]
-    j: Tuple[int, int]
-    k: Tuple[int, int]
-
-    def to_dict(self):
-        return {"i": self.i, "j": self.j, "k": self.k}
-
-
-class FieldBoundaryAccumulator:
-    def __init__(self):
-        self.bounds = {
-            "i": {"lower": 0, "upper": 0},
-            "j": {"lower": 0, "upper": 0},
-            "k": {"lower": 0, "upper": 0},
-        }
-
-    def update_from_offset(self, offset: CartesianOffset):
-        for idx, values in self.bounds.items():
-            offset_at_idx = offset.to_dict()[idx]
-            sign, end = (-1, "lower") if offset_at_idx < 0 else (1, "upper")
-            values[end] = max(sign * offset_at_idx, values[end])
-
-    def to_boundary(self):
-        return FieldBoundary(**{k: (v["lower"], v["upper"]) for k, v in self.bounds.items()})
-
-
-class FieldMetadata(Node):
-    name: Str
-    access: AccessKind
-    boundary: FieldBoundary
-    dtype: common.DataType
-
-
-class FieldMetadataBuilder:
-    def __init__(self) -> None:
-        self._name: Optional[Str] = None
-        self._access: int = AccessKind.READ_WRITE
-        self._dtype: Optional[int] = None
-        self.boundary = FieldBoundaryAccumulator()
-
-    def name(self, name: str) -> "FieldMetadataBuilder":
-        self._name = name
-        return self
-
-    def access(self, access: int) -> "FieldMetadataBuilder":
-        self._access = access
-        return self
-
-    def dtype(self, dtype: int) -> "FieldMetadataBuilder":
-        self._dtype = dtype
-        return self
-
-    def build(self):
-        return FieldMetadata(
-            name=self._name,
-            access=self._access,
-            boundary=self.boundary.to_boundary(),
-            dtype=self._dtype,
-        )
-
-
-class FieldsMetadata(Node):
-    metas: Dict[Str, FieldMetadata] = {}
-
-
-class FieldsMetadataBuilder:
-    def __init__(self) -> None:
-        self.metas: Dict[str, FieldMetadataBuilder] = {}
-
-    def get_or_create(self, node: Union[FieldAccess, FieldDecl]) -> FieldMetadataBuilder:
-        return self.metas.setdefault(node.name, FieldMetadataBuilder().name(node.name))
-
-    def build(self) -> FieldsMetadata:
-        return FieldsMetadata(metas={k: v.build() for k, v in self.metas.items()})
-
-
 class Stencil(LocNode, SymbolTableTrait):
     name: Str
     # TODO deal with gtscript externals
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
-    fields_metadata: Optional[FieldsMetadata]
 
     @property
     def param_names(self) -> List:
