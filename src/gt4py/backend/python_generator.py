@@ -50,6 +50,12 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         gt_ir.NativeFunction.TRUNC: "math.trunc",
     }
 
+    BUILTIN_TO_PYTHON = {
+        gt_ir.Builtin.NONE: "None",
+        gt_ir.Builtin.FALSE: "False",
+        gt_ir.Builtin.TRUE: "True",
+    }
+
     def __init__(
         self,
         *,
@@ -137,6 +143,9 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
     def visit_Cast(self, node: gt_ir.Cast):
         return self.visit(node.expr)
+
+    def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral):
+        return self.BUILTIN_TO_PYTHON[node.value]
 
     def visit_Decl(self, node: gt_ir.Decl):
         raise NotImplementedError()

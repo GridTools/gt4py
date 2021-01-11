@@ -203,6 +203,12 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         gt_ir.NativeFunction.TRUNC: "trunc",
     }
 
+    BUILTIN_TO_CPP = {
+        gt_ir.Builtin.NONE: "nullptr",  # really?
+        gt_ir.Builtin.FALSE: "false",
+        gt_ir.Builtin.TRUE: "true",
+    }
+
     def __init__(self, class_name, module_name, gt_backend_t, options):
         self.class_name = class_name
         self.module_name = module_name
@@ -315,6 +321,9 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         expr = self.visit(node.expr)
         dtype = self.DATA_TYPE_TO_CPP[node.dtype]
         return f"static_cast<{dtype}>({expr})"
+
+    def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral) -> str:
+        return self.BUILTIN_TO_CPP[node.value]
 
     def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall) -> str:
         call = self.NATIVE_FUNC_TO_CPP[node.func]
