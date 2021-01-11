@@ -51,7 +51,7 @@ Finally, the last step to install the required GridTools C++ sources:
 Introduction
 ------------
 
-In GT4Py, grid computations such as stencils are defined in a donain-specific language (DSL) called GTScript.
+In GT4Py, grid computations such as stencils are defined in a domain-specific language (DSL) called GTScript.
 GTScript is syntactically a subset of Python, but has different semantics. Computations defined in this DSL are
 translated by the GT4Py toolchain into code in Python based on `NumPy <http://www.numpy.org/>`_ or C++/CUDA based on
 the `GridTools <http://gridtools.github.io/>`_ library. To be able to achieve full performance with GridTools, data has
@@ -162,7 +162,7 @@ regular function call receiving the definition function:
 
     another_example_gtmc = gtscript.stencil(backend="gtmc", definition=stencil_example)
 
-The generated code is written to and compiled in a local '.gt-cache' folder. Subsequent
+The generated code is written to and compiled in a local '.gt_cache' folder. Subsequent
 invocations will check whether a recent version of the stencil already exists in the cache.
 
 --------
