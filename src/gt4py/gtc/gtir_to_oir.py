@@ -33,8 +33,8 @@ class GTIRToOIR(NodeTranslator):
         """
         Context for Stmts.
 
-        `Stmt` nodes create `Temporary`s and `HorizontalExecution`s.
-        All visit()-methods for `Stmt`s have no return value,
+        `Stmt` nodes create `Temporary` nodes and `HorizontalExecution` nodes.
+        All visit()-methods for `Stmt` have no return value,
         they attach their result to the Context object.
         """
 

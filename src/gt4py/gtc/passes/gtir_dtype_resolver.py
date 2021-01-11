@@ -15,7 +15,7 @@ class _GTIRResolveAuto(NodeTranslator):
     """
 
     class _GTIRUpdateAutoDecl(NodeTranslator):
-        """Updates FieldDecls with resolved types"""
+        """Updates FieldDecls with resolved types."""
 
         def visit_FieldDecl(self, node: gtir.FieldDecl, new_symbols, **kwargs):
             if node.dtype == DataType.AUTO:
@@ -56,7 +56,7 @@ class _GTIRResolveAuto(NodeTranslator):
 
 class _GTIRPropagateDtypeToAccess(NodeTranslator):
     """
-    Propagates dtype from Decl to Access
+    Propagates dtype from Decl to Access.
 
     Precondition: Decls have dtype (not None), can be AUTO or DEFAULT
     Postcondition: All dtypes of Access are not None

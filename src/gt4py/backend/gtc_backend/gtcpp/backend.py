@@ -76,7 +76,8 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                     name=node.name
                 )
             else:
-                return "gt::sid::shift_sid_origin(gt::as_sid<{dtype}, 3, std::integral_constant<int, {unique_index}>>({name}), {name}_origin)".format(
+                return """gt::sid::shift_sid_origin(gt::as_sid<{dtype}, 3,
+                    std::integral_constant<int, {unique_index}>>({name}), {name}_origin)""".format(
                     name=node.name, dtype=self.visit(node.dtype), unique_index=self.unique_index()
                 )
 
@@ -117,7 +118,9 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                 if (!exec_info.is(py::none()))
                 {
                     auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_start_time"] = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+                    exec_info_dict["run_cpp_start_time"] = static_cast<double>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
                 }
 
                 ${name}(domain)(${','.join(sid_params)});
@@ -125,7 +128,9 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                 if (!exec_info.is(py::none()))
                 {
                     auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_end_time"] = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
+                    exec_info_dict["run_cpp_end_time"] = static_cast<double>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
                 }
 
             }, "Runs the given computation");}
@@ -157,7 +162,7 @@ class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
     }
     languages = {"computation": "c++", "bindings": ["python"]}
 
-    PYEXT_GENERATOR_CLASS = GTCGTExtGenerator
+    PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=False)

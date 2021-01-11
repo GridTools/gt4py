@@ -1,6 +1,5 @@
 from typing import Type
 
-import pytest
 from eve import Node
 
 from gt4py.gtc import gtir, gtir_to_oir, oir

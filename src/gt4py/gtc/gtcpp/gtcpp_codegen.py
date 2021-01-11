@@ -149,7 +149,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         """
         %if len(multi_stages) > 0 and len(arguments) > 0:
         {
-            auto grid = make_grid(domain[0], domain[1], axis<1, axis_config::offset_limit<${offset_limit}>>{domain[2]});
+            auto grid = make_grid(domain[0], domain[1], axis<1,
+                axis_config::offset_limit<${offset_limit}>>{domain[2]});
 
             auto ${ computation_name } = [](${ ','.join('auto ' + a for a in arguments) }) {
 

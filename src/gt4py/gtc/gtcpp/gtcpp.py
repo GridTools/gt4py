@@ -38,15 +38,15 @@ class VarDecl(Stmt):
     dtype: common.DataType
 
 
-class Literal(common.Literal, Expr):
+class Literal(common.Literal, Expr):  # type: ignore
     pass
 
 
-class ScalarAccess(common.ScalarAccess, Expr):
+class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class AccessorRef(common.FieldAccess, Expr):
+class AccessorRef(common.FieldAccess, Expr):  # type: ignore
     pass
 
 
@@ -83,7 +83,7 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
-class Cast(common.Cast[Expr], Expr):
+class Cast(common.Cast[Expr], Expr):  # type: ignore
     pass
 
 

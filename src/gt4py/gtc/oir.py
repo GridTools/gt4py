@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-Optimizable Intermediate Representation (working title)
+Optimizable Intermediate Representation (working title).
 
 OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
@@ -48,15 +48,15 @@ class Stmt(common.Stmt):
         super().__init__(*args, **kwargs)
 
 
-class Literal(common.Literal, Expr):
+class Literal(common.Literal, Expr):  # type: ignore
     pass
 
 
-class ScalarAccess(common.ScalarAccess, Expr):
+class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class FieldAccess(common.FieldAccess, Expr):
+class FieldAccess(common.FieldAccess, Expr):  # type: ignore
     pass
 
 
@@ -89,7 +89,7 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
 
 
-class Cast(common.Cast[Expr], Expr):
+class Cast(common.Cast[Expr], Expr):  # type: ignore
     pass
 
 
@@ -142,7 +142,6 @@ class VerticalLoop(LocNode):
     horizontal_executions: List[HorizontalExecution]
     loop_order: common.LoopOrder
     declarations: List[Temporary]
-    # caches: List[Union[IJCache,KCache]]
 
 
 class Stencil(LocNode, SymbolTableTrait):

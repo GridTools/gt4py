@@ -1,5 +1,5 @@
 from types import MappingProxyType
-from typing import ClassVar, Dict, List, Mapping, Union
+from typing import ClassVar, Dict, List, Mapping, Union, cast
 
 from gt4py.gtc import common, gtir
 from gt4py.gtc.common import ExprKind
@@ -153,7 +153,9 @@ class DefIRToGTIR(IRNodeVisitor):
                 if dtype == common.DataType.DEFAULT:
                     # TODO this will be a frontend choice later
                     # in non-GTC parts, this is set in the backend
-                    dtype = common.DataType.FLOAT64
+                    dtype = cast(
+                        common.DataType, common.DataType.FLOAT64
+                    )  # see https://github.com/GridTools/gtc/issues/100
                 temporaries.append(gtir.FieldDecl(name=s.name, dtype=dtype))
             else:
                 stmts.append(self.visit(s))

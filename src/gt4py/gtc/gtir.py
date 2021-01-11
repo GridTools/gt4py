@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-GridTools Intermediate Representation
+GridTools Intermediate Representation.
 
 GTIR represents a computation with the semantics of the
 `GTScript parallel model <https://github.com/GridTools/concepts/wiki/GTScript-Parallel-model>`.
@@ -57,7 +57,7 @@ class BlockStmt(common.BlockStmt[Stmt], Stmt):
     pass
 
 
-class Literal(common.Literal, Expr):
+class Literal(common.Literal, Expr):  # type: ignore
     pass
 
 
@@ -74,11 +74,11 @@ class CartesianOffset(Node):
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
-class ScalarAccess(common.ScalarAccess, Expr):
+class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class FieldAccess(common.FieldAccess, Expr):
+class FieldAccess(common.FieldAccess, Expr):  # type: ignore
     pass
 
 
@@ -109,10 +109,12 @@ class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
       to the same rules as statements outside of branches.
 
     The following restriction applies:
+
     - Inside the if and else blocks the same field cannot be written to
       and read with an offset in the parallel axes (order does not matter).
 
-    See `parallel model <https://github.com/GridTools/concepts/wiki/GTScript-Parallel-model#conditionals-on-field-expressions>`
+    See `parallel model
+    <https://github.com/GridTools/concepts/wiki/GTScript-Parallel-model#conditionals-on-field-expressions>`
     """
 
     @validator("cond")
@@ -150,7 +152,7 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=False)
 
 
-class Cast(common.Cast[Expr], Expr):
+class Cast(common.Cast[Expr], Expr):  # type: ignore
     pass
 
 

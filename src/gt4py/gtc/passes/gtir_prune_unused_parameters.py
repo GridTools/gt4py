@@ -3,7 +3,7 @@ from gt4py.gtc import gtir
 
 def prune_unused_parameters(node: gtir.Stencil):
     """
-    Removes unused parameters from the gtir signature.
+    Remove unused parameters from the gtir signature.
 
     (Maybe this pass should go into a later stage. If you need to touch this pass,
     e.g. when the definition_ir gets removed, consider moving it to a more appropriate

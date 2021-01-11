@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, List, Optional, TypeVar, Union, cast
 
 from eve import (
     GenericNode,
@@ -39,14 +39,14 @@ class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
     message_template = "GTC pass precondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
-        super().__init__(expected=expected, **kwargs)
+        super().__init__(expected=expected, **kwargs)  # type: ignore
 
 
 class GTCPostconditionError(eve_exceptions.EveError, RuntimeError):
     message_template = "GTC pass postcondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
-        super().__init__(expected=expected, **kwargs)
+        super().__init__(expected=expected, **kwargs)  # type: ignore
 
 
 class AssignmentKind(StrEnum):
@@ -249,27 +249,29 @@ def verify_and_get_common_dtype(
             else:
                 raise ValueError(
                     "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
-                    + ", ".join(v.dtype.name for v in values)
+                    + ", ".join(v.dtype.name for v in cast(List[DataType], values))
                 )
         else:
-            # upcasting
-            return max([v.dtype for v in values])
+            # upcasting (note that `typing.cast` has nothing to do with upcasting...)
+            return max(cast(List[DataType], [v.dtype for v in values]))
     else:
         return None
 
 
 def compute_kind(values: List[Expr]) -> ExprKind:
     if any([v.kind == ExprKind.FIELD for v in values]):
-        return ExprKind.FIELD
+        return cast(ExprKind, ExprKind.FIELD)  # see https://github.com/GridTools/gtc/issues/100
     else:
-        return ExprKind.SCALAR
+        return cast(ExprKind, ExprKind.SCALAR)  # see https://github.com/GridTools/gtc/issues/100
 
 
 class Literal(Node):
     # TODO when coming from python AST we know more than just the string representation, I suppose
     value: Union[BuiltInLiteral, Str]
     dtype: DataType
-    kind = ExprKind.SCALAR
+    kind: ExprKind = cast(
+        ExprKind, ExprKind.SCALAR
+    )  # cast shouldn't be required, see https://github.com/GridTools/gtc/issues/100
 
 
 StmtT = TypeVar("StmtT")
@@ -510,7 +512,7 @@ def validate_dtype_is_set():
 
 
 def validate_symbol_refs():
-    """Works only, if only the root node has a symbol table"""
+    """Works only, if only the root node has a symbol table."""
 
     def _impl(cls, values: dict):
         class SymtableValidator(NodeVisitor):
