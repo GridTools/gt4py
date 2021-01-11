@@ -45,7 +45,7 @@ class GTCGTExtGenerator:
         bindings = GTCppBindingsCodegen.apply(gtcpp, self.module_name)
         return {
             "computation": {"computation.hpp": implementation},
-            "bindings": {"bindings.cc": bindings},
+            "bindings": {"bindings.cpp": bindings},
         }
 
 

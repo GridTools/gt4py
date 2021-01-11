@@ -10,10 +10,10 @@ from gt4py.stencil_builder import StencilBuilder
         pytest.param(
             name,
             # TODO gtc backends require definition ir as input
-            marks=pytest.mark.skipif(
-                name.startswith("dawn:") or name.startswith("gtc:"),
-                reason="dawn and gtc backends not yet supported",
-            ),
+            # marks=pytest.mark.skipif(
+            #     name.startswith("dawn:") or name.startswith("gtc:"),
+            #     reason="dawn and gtc backends not yet supported",
+            # ),
         )
         for name in gt4py.backend.REGISTRY.keys()
     ]
@@ -37,7 +37,10 @@ def test_generate_computation(backend, tmp_path):
     builder = StencilBuilder(init_1, backend=backend).with_caching(
         "nocaching", output_path=tmp_path / __name__ / "generate_computation"
     )
-    result = builder.backend.generate_computation()
+    if backend.name.startswith("gtc:"):
+        result = builder.backend.generate_computation(ir=builder.definition_ir)
+    else:
+        result = builder.backend.generate_computation()
 
     # python backends only generate one module
     py_result = backend.languages["computation"] == "python" and "init_1.py" in result
@@ -50,7 +53,13 @@ def test_generate_computation(backend, tmp_path):
         and ("computation.cpp" in result["init_1_src"] or "computation.cu" in result["init_1_src"])
         and "bindings.cpp" not in result["init_1_src"]
     )
-    assert py_result or gt_result
+    # TODO(havogt) remove if gtc:gt produces a cpp-file for computation
+    gtc_result = (
+        backend.name.startswith("gtc:gt")
+        and "computation.hpp" in result["init_1_src"]
+        and "bindings.cpp" not in result["init_1_src"]
+    )
+    assert py_result or gt_result or gtc_result
 
 
 def test_generate_bindings(backend, tmp_path):
@@ -64,6 +73,9 @@ def test_generate_bindings(backend, tmp_path):
             result = builder.backend.generate_bindings("python")
     else:
         # assumption: only gt backends support python bindings
-        result = builder.backend.generate_bindings("python")
+        if backend.name.startswith("gtc:"):
+            result = builder.backend.generate_bindings("python", ir=builder.definition_ir)
+        else:
+            result = builder.backend.generate_bindings("python")
         assert "init_1_src" in result
         assert "bindings.cpp" in result["init_1_src"]
