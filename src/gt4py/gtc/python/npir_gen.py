@@ -130,6 +130,9 @@ class NpirGen(TemplatedGenerator):
     Computation = JinjaTemplate(
         textwrap.dedent(
             """\
+            import numpy as np
+
+
             def run({{ signature }}):
                 {{ domain_padding | indent(4) }}
                 {{ data_views | indent(4) }}
