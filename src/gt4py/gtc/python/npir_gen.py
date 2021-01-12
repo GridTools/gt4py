@@ -26,7 +26,7 @@ class NpirGen(TemplatedGenerator):
 
     Literal = FormatTemplate("np.{_this_node.dtype.name.lower()}({value})")
 
-    BroadCastLiteral = FormatTemplate("{literal}")
+    BroadCast = FormatTemplate("{expr}")
 
     Cast = FormatTemplate("np.{_this_node.dtype.name.lower()}({expr})")
 

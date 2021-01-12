@@ -73,8 +73,8 @@ class VectorExpression(Expr):
         super().__init__(*args, **kwargs)
 
 
-class BroadCastLiteral(VectorExpression):
-    literal: Literal
+class BroadCast(VectorExpression):
+    expr: Expr
 
 
 class VectorLValue(common.LocNode):

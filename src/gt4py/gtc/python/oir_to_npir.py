@@ -53,7 +53,9 @@ class OirToNpir(NodeTranslator):
     ) -> npir.VerticalPass:
         ctx = ctx or self.Context()
         kwargs.update(
-            {"parallel_k": True if node.loop_order == common.LoopOrder.PARALLEL else False}
+            {
+                "parallel_k": True if node.loop_order == common.LoopOrder.PARALLEL else False,
+            }
         )
         v_assigns = [
             self.visit(h_exec, ctx=ctx, **kwargs) for h_exec in node.horizontal_executions
@@ -61,9 +63,9 @@ class OirToNpir(NodeTranslator):
         body = [i for j in v_assigns for i in j]
         return npir.VerticalPass(
             body=body,
-            lower=self.visit(node.interval.start, **kwargs),
-            upper=self.visit(node.interval.end, **kwargs),
-            direction=self.visit(node.loop_order, **kwargs),
+            lower=self.visit(node.interval.start, ctx=ctx, **kwargs),
+            upper=self.visit(node.interval.end, ctx=ctx, **kwargs),
+            direction=self.visit(node.loop_order, ctx=ctx, **kwargs),
         )
 
     def visit_HorizontalExecution(
@@ -79,8 +81,16 @@ class OirToNpir(NodeTranslator):
             right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),
         )
 
-    def visit_Cast(self, node: oir.Cast, *, ctx: Optional[Context] = None, **kwargs) -> npir.Cast:
-        return npir.Cast(dtype=self.visit(node.dtype), expr=self.visit(node.expr))
+    def visit_Cast(
+        self, node: oir.Cast, *, ctx: Optional[Context] = None, broadcast=False, **kwargs
+    ) -> Union[npir.Cast, npir.BroadCast]:
+        cast = npir.Cast(
+            dtype=self.visit(node.dtype, ctx=ctx, **kwargs),
+            expr=self.visit(node.expr, ctx=ctx, broadcast=False, **kwargs),
+        )
+        if broadcast:
+            return npir.BroadCast(expr=cast, dtype=node.dtype)
+        return cast
 
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, ctx: Context, parallel_k: bool, **kwargs
@@ -105,13 +115,13 @@ class OirToNpir(NodeTranslator):
             right=self.visit(node.right, ctx=ctx, **kwargs),
         )
 
-    def visit_NativeFuncCall(self, node: oir.NativeFuncCall) -> npir.NativeFuncCall:
+    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs) -> npir.NativeFuncCall:
         return npir.NativeFuncCall(func=node.func, args=node.args)
 
     def visit_Literal(
         self, node: oir.Literal, *, broadcast: bool = False, **kwargs
-    ) -> npir.Literal:
+    ) -> Union[npir.Literal, npir.BroadCast]:
         literal = npir.Literal(value=node.value, dtype=node.dtype)
         if broadcast:
-            return npir.BroadCastLiteral(literal=literal)
+            return npir.BroadCast(expr=literal, dtype=node.dtype)
         return literal

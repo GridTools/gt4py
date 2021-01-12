@@ -140,28 +140,38 @@ def test_binary_op_to_vector_arithmetic():
     )
     result = OirToNpir().visit(binop)
     assert isinstance(result, npir.VectorArithmetic)
-    assert isinstance(result.left, npir.BroadCastLiteral)
-    assert isinstance(result.right, npir.BroadCastLiteral)
+    assert isinstance(result.left, npir.BroadCast)
+    assert isinstance(result.right, npir.BroadCast)
 
 
 @pytest.mark.parametrize("broadcast", [True, False])
 def test_literal(broadcast):
     gtir_literal = oir.Literal(value="42", dtype=common.DataType.INT32)
     result = OirToNpir().visit(gtir_literal, broadcast=broadcast)
-    assert isinstance(result, npir.BroadCastLiteral if broadcast else npir.Literal)
-    npir_literal = result.literal if broadcast else result
+    npir_literal = result
+    if broadcast:
+        assert isinstance(result, npir.BroadCast)
+        assert isinstance(result, npir.VectorExpression)
+        npir_literal = result.expr
     assert gtir_literal.dtype == npir_literal.dtype
     assert gtir_literal.kind == npir_literal.kind
     assert gtir_literal.value == npir_literal.value
 
 
-def test_cast():
+@pytest.mark.parametrize("broadcast", [True, False])
+def test_cast(broadcast):
     itof = oir.Cast(
         dtype=common.DataType.FLOAT64, expr=oir.Literal(value="42", dtype=common.DataType.INT32)
     )
-    result = OirToNpir().visit(itof)
-    assert result.dtype == itof.dtype
-    assert result.expr.value == "42"
+    result = OirToNpir().visit(itof, broadcast=broadcast)
+    assert isinstance(result, npir.BroadCast if broadcast else npir.Cast)
+    cast = result
+    if broadcast:
+        assert isinstance(result, npir.BroadCast)
+        assert isinstance(result, npir.VectorExpression)
+        cast = result.expr
+    assert cast.dtype == itof.dtype
+    assert cast.expr.value == "42"
 
 
 def test_copy_plus_one():

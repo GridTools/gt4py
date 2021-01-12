@@ -39,7 +39,7 @@ def test_literal(defined_dtype: common.DataType) -> None:
 
 def test_broadcast_literal(defined_dtype: common.DataType) -> None:
     result = npir_gen.NpirGen().visit(
-        npir.BroadCastLiteral(literal=npir.Literal(dtype=defined_dtype, value="42"))
+        npir.BroadCast(expr=npir.Literal(dtype=defined_dtype, value="42"))
     )
     print(result)
     match = re.match(r"np.(\w*?)\(42\)", result)
