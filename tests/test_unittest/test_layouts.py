@@ -16,7 +16,7 @@
 
 import pytest
 
-from gt4py.backend.gt_backends import gtmc_layout, gtx86_layout, gtcuda_layout
+from gt4py.backend.gt_backends import gtcuda_layout, gtmc_layout, gtx86_layout
 
 
 @pytest.mark.parametrize(

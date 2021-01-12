@@ -37,6 +37,7 @@ import gt4py.ir as gt_ir
 import gt4py.storage as gt_store
 import gt4py.storage.utils as gt_storage_utils
 import gt4py.utils as gt_utils
+
 from ..definitions import CPU_BACKENDS
 
 
@@ -722,151 +723,50 @@ class TestConstructionEndToEnd:
 #         assert False
 
 
-def run_test_slices(backend):
+@pytest.mark.parametrize(
+    ["device", "managed"], [("cpu", False), ("gpu", False), ("gpu", "cuda"), ("gpu", "gt4py")]
+)
+def test_slices(device, managed):
     halo = (1, 1, 1)
     shape = (10, 10, 10)
-    array = np.random.randn(*shape)
-    stor = gt_store.storage(array, defaults=backend, dtype=np.float64, halo=halo)
+    xp = np if device == "cpu" else cp
+    array = xp.random.randn(*shape)
+    stor = gt_store.storage(array, device=device, managed=managed, halo=halo)
     sliced = stor[::2, ::2, ::2]
-    assert (np.asarray(sliced) == array[::2, ::2, ::2]).all()
+    assert (xp.asarray(sliced) == array[::2, ::2, ::2]).all()
     sliced[...] = array[::2, ::2, ::2]
-
-
-def test_slices_cpu():
-    run_test_slices(backend="gtmc")
-
-
-@pytest.mark.requires_gpu
-def test_slices_gpu():
-    run_test_slices(backend="gtcuda")
-
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.storage(
-        array, backend="gtcuda", dtype=np.float64, default_origin=default_origin, shape=shape
-    )
-    sliced = stor[::2, ::2, ::2]
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    sliced[...] = array[::2, ::2, ::2]
-
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.storage(
-        array, backend="gtcuda", dtype=np.float64, default_origin=default_origin, shape=shape
-    )
-    ref = gt_store.storage(
-        array, backend="gtcuda", dtype=np.float64, default_origin=default_origin, shape=shape
-    )
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
-
-    import copy  # isort:skip
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.storage(
-        array, backend="gtcuda", dtype=np.float64, default_origin=default_origin, shape=shape
-    )
-    ref = copy.deepcopy(stor)
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
-
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.storage(
-        array,
-        backend="gtcuda",
-        dtype=np.float64,
-        default_origin=default_origin,
-        shape=shape,
-        managed_memory=True,
-    )
-    ref = gt_store.storage(
-        array,
-        backend="gtcuda",
-        dtype=np.float64,
-        default_origin=default_origin,
-        shape=shape,
-        managed_memory=True,
-    )
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
-
-    import copy  # isort:skip
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.storage(
-        array,
-        backend="gtcuda",
-        dtype=np.float64,
-        default_origin=default_origin,
-        shape=shape,
-        managed_memory=True,
-    )
-    ref = copy.deepcopy(stor)
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
-
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.storage(
-        array,
-        backend="gtcuda",
-        dtype=np.float64,
-        default_origin=default_origin,
-        shape=shape,
-        managed_memory=False,
-    )
-    ref = gt_store.storage(
-        array,
-        backend="gtcuda",
-        dtype=np.float64,
-        default_origin=default_origin,
-        shape=shape,
-        managed_memory=False,
-    )
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    stor[::2, ::2, ::2] = ref[::2, ::2, ::2] + ref[::2, ::2, ::2]
 
 
 @pytest.mark.parametrize(
-    "defaults", ["gtmc", pytest.param("gtcuda", marks=pytest.mark.requires_gpu)]
+    ["device", "managed"], [("cpu", False), ("gpu", False), ("gpu", "cuda"), ("gpu", "gt4py")]
 )
-def test_transpose(defaults):
+@pytest.mark.parametrize("layout", [(0, 1, 2), (2, 1, 0), (2, 0, 1)])
+def test_transpose(device, managed, layout):
+    print(layout)
     halo = (1, 1, 1)
     shape = (10, 10, 10)
     array = np.random.randn(*shape)
-    stor = gt_store.storage(array, halo=halo, defaults=defaults, dtype=np.float64)
-    np_view = np.asarray(stor)
+    stor = gt_store.storage(array, device=device, managed=managed, layout=layout, halo=halo)
 
-    transposed_stor = np.transpose(stor, axes=(0, 1, 2))
+    xp = cp if stor.device == "gpu" else np
+    ndarray_view = xp.asarray(stor)
+
+    transposed_stor = xp.transpose(stor, axes=(0, 1, 2))
     assert transposed_stor.strides == stor.strides
     assert transposed_stor.shape == stor.shape
 
-    transposed_stor = np.transpose(stor, axes=(2, 1, 0))
-    transposed_np = np.transpose(np_view, axes=(2, 1, 0))
+    transposed_stor = xp.transpose(stor, axes=(2, 1, 0))
+    transposed_np = xp.transpose(ndarray_view, axes=(2, 1, 0))
     assert transposed_stor.strides == transposed_np.strides
     assert transposed_stor.shape == transposed_np.shape
 
+    transposed_np = ndarray_view.transpose(2, 1, 0)
+    transposed_stor = stor.transpose(2, 1, 0)
+    assert transposed_stor.strides == transposed_np.strides
+    assert transposed_stor.shape == transposed_np.shape
+
+    transposed_np = ndarray_view.transpose((2, 1, 0))
     transposed_stor = stor.transpose((2, 1, 0))
-    transposed_np = np_view.transpose((2, 1, 0))
     assert transposed_stor.strides == transposed_np.strides
     assert transposed_stor.shape == transposed_np.shape
 
@@ -987,24 +887,10 @@ class TestCopy:
 
 
 @pytest.mark.requires_gpu
-def test_cuda_array_interface():
+@pytest.mark.parametrize("managed", [False, "cuda", "gt4py"])
+def test_cuda_array_interface(managed):
     data = cp.random.randn(5, 5, 5)
-    storage = gt_store.storage(data, defaults="gtcuda", dtype=np.float64)
-    cupy_array = cp.array(storage)
-    assert (cupy_array == data).all()
-
-    data = np.random.randn(5, 5, 5)
-    storage = gt_store.storage(data, defaults="gtcuda", dtype=np.float64)
-    cupy_array = cp.array(storage)
-    assert (cupy_array == data).all()
-
-    data = cp.random.randn(5, 5, 5)
-    storage = gt_store.storage(data, defaults="gtcuda", dtype=np.float64)
-    cupy_array = cp.array(storage)
-    assert (cupy_array == data).all()
-
-    data = np.random.randn(5, 5, 5)
-    storage = gt_store.storage(data, defaults="gtcuda", dtype=np.float64)
+    storage = gt_store.storage(data, device="gpu", managed=managed)
     cupy_array = cp.array(storage)
     assert (cupy_array == data).all()
 

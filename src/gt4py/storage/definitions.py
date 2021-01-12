@@ -14,9 +14,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Any, Optional, Sequence, Tuple, Union
+
+from numbers import Integral
 import numpy as np
 
-from typing import Any, Optional, Tuple, Union, Sequence
 
 try:
     import cupy as cp
@@ -139,9 +141,12 @@ class Storage:
 
     def transpose(self, *axes):
         res: Storage = gt_store.as_storage(self)
+        res._transpose(*axes)
+        if len(axes) == 1 or gt4py.utils.is_iterable_of(axes[0], item_class=Integral):
+            axes = axes[0]
         res._shape = tuple(self._shape[i] for i in axes)
         res._halo = tuple(self._halo[i] for i in axes)
-        res._transpose(*axes)
+
         return res
 
     def __deepcopy__(self, memo={}):
@@ -161,7 +166,10 @@ class Storage:
         if any(isinstance(k, slice) for k in key):
             res = gt4py.storage.as_storage(self)
             res._forward_getitem_slice(key)
-            res._shape = res._field.shape
+            if hasattr(res, "_field"):
+                res._shape = res._field.shape
+            else:
+                res._shape = res._device_field.shape
             return res
         else:
             return self._forward_getitem_scalar(key)
@@ -258,18 +266,24 @@ class CudaManagedGPUStorage(Storage):
     def __gt_data_interface__(self):
         return {"cpu": self.__array_interface__, "gpu": self.__cuda_array_interface__}
 
-    def __setitem__(self, key, value):
-        if hasattr(value, "__cuda_array_interface__"):
-            gpu_view = gt_store.utils.gpu_view(self)
-            gpu_view[key] = cp.asarray(value.data)
-            cp.cuda.Device(0).synchronize()
-            return value
-        else:
-            return super().__setitem__(key, value)
-
     @property
     def strides(self):
         return self._field.strides
+
+    def _forward_setitem(self, key, value):
+        if hasattr(value, "__cuda_array_interface__"):
+            gpu_view = cp.asarray(self)
+            res = gpu_view.__setitem__(key, value)
+            cp.cuda.Device(0).synchronize()
+            return res
+        else:
+            return self._field.__setitem__(key, value)
+
+    def _forward_getitem_slice(self, key):
+        self._field = self._field.__getitem__(key)
+
+    def _transpose(self, *axes):
+        self._field = self._field.transpose(*axes)
 
 
 class CPUStorage(Storage):
@@ -377,15 +391,15 @@ class GPUStorage(Storage):
                 alignment_size * np.dtype(dtype).itemsize,
             )
         else:
-            self._device_field = np.asarray(device_data)
+            self._device_field = device_data
 
         if copy:
             if device_data is not None:
                 self._device_field[...] = device_data
-            elif isinstance(data, np.ndarray):
+            elif isinstance(data, np.ndarray) and gt4py.storage.utils._is_contiguous(data):
                 self._device_field.set(data)
             else:
-                self._device_field[...] = data
+                self._device_field[...] = cp.asarray(data)
 
         return self
 
@@ -473,10 +487,10 @@ class ExplicitlyManagedGPUStorage(Storage):
             if sync_state is None:
                 if device_data is not None:
                     self._device_field[...] = device_data
-                elif isinstance(data, np.ndarray):
+                elif isinstance(data, np.ndarray) and gt4py.storage.utils._is_contiguous(data):
                     self._device_field.set(data)
                 else:
-                    self._device_field[...] = data
+                    self._device_field[...] = cp.asarray(data)
                 self._set_device_modified()
             else:
                 if sync_state.state != SyncState.SYNC_HOST_DIRTY:
@@ -509,12 +523,18 @@ class ExplicitlyManagedGPUStorage(Storage):
     def host_to_device(self, force=False):
         if force or self._is_host_modified:
             self._set_clean()
-            self._device_field.set(self._field)
+            if gt4py.storage.utils._is_contiguous(self._device_field):
+                self._device_field.set(self._field)
+            else:
+                self._device_field[...] = cp.asarray(self._field)
 
     def device_to_host(self, force=False):
         if force or self._is_device_modified:
             self._set_clean()
-            self._device_field.get(out=self._field)
+            if gt4py.storage.utils._is_contiguous(self._field):
+                self._device_field.get(out=self._field)
+            else:
+                self._field[...] = cp.asnumpy(self._device_field)
 
     @property
     def _is_clean(self):

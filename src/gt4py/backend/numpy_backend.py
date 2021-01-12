@@ -22,8 +22,8 @@ import numpy as np
 from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
-from gt4py.utils import text as gt_text
 from gt4py.storage import StorageDefaults
+from gt4py.utils import text as gt_text
 
 from .python_generator import PythonSourceGenerator
 

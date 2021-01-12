@@ -28,8 +28,8 @@ from gt4py import definitions as gt_definitions
 from gt4py import gt_src_manager
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
-from gt4py.utils import text as gt_text
 from gt4py.storage import StorageDefaults
+from gt4py.utils import text as gt_text
 
 from . import pyext_builder
 

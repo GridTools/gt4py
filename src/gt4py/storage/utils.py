@@ -17,10 +17,13 @@
 import math
 import numbers
 from types import SimpleNamespace
+
 import numpy as np
+
 import gt4py.utils as gt_util
 from gt4py import backend as gt_backend
 from gt4py import storage as gt_store
+
 
 try:
     import cupy as cp
@@ -182,18 +185,18 @@ def allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate
 
 
 import collections
-from typing import Any, Optional, Union, Sequence, Tuple
-import gt4py.utils as gt_utils
-import gt4py.ir as gt_ir
-from gt4py.storage.default_parameters import get_default_parameters
+from typing import Any, Optional, Sequence, Tuple, Union
 
+import gt4py.ir as gt_ir
+import gt4py.utils as gt_utils
+from gt4py.storage.default_parameters import get_default_parameters
 from gt4py.storage.definitions import (
-    Storage,
-    ExplicitlyManagedGPUStorage,
-    CudaManagedGPUStorage,
     CPUStorage,
+    CudaManagedGPUStorage,
+    ExplicitlyManagedGPUStorage,
+    Storage,
+    SyncState,
 )
-from gt4py.storage.definitions import SyncState
 
 
 def has_cpu_buffer(data):
@@ -295,139 +298,18 @@ def normalize_data_and_device_data(data, device_data, device, managed, copy):
     if isinstance(data, numbers.Number):
         if device_data is not None:
             raise ValueError("If data is a scalar, device_data must not be provided")
-        return None, data, None
+        return data, None
 
     cpu_buffer, gpu_buffer = get_buffers(data, device_data)
 
-    # if managed == "cuda":
-    if data is not None:
-        template = data
-    else:
-        template = device_data
-    return template, cpu_buffer, gpu_buffer
+    return cpu_buffer, gpu_buffer
 
 
-# def normalize_data_and_device_data(data, device_data, device, copy):
-#     if isinstance(data, numbers.Number):
-#         if device_data is not None:
-#             raise ValueError("If data is a scalar, device_data must not be provided")
-#         return data, None
-#
-#     if data is None:
-#         new_data = None
-#     elif isinstance(data, CPUStorage):
-#         new_data = data
-#     elif hasattr(data, "__gt_data_interface__") and None in data.__gt_data_interface__:
-#         try:
-#             np.asarray(SimpleNamespace(__array_interface__=data.__gt_data_interface__[None]))
-#         except:
-#             raise ValueError("'data' not understood as array")
-#         new_data = data
-#     elif hasattr(data, "__gt_data_interface__") and None not in device_data.__gt_data_interface__:
-#         raise ValueError("'data' not understood as array")
-#     else:
-#         try:
-#             np.asarray(data)
-#         except:
-#             new_data = None
-#         else:
-#             new_data = data
-#
-#     ##
-#     new_device_data = as_gpu_buffer(device_data)
-#     if new_device_data is None:
-#         if device=="gpu":
-#             try:
-#                 new_device_data = as_gpu_buffer(data)
-#             except:
-#                 new_data = as_cpu_buffer(data)
-#         else:
-#             device="cpu"
-#             new_data = as_cpu_buffer(data)
-#
-#     if device==
-#
-#     ##
-#
-#     if device != "cpu":
-#         if device_data is None:
-#             new_device_data = None
-#         elif isinstance(device_data, Storage) and device_data.device == "gpu":
-#             new_device_data = device_data
-#         elif (
-#             hasattr(device_data, "__gt_data_interface__")
-#             and "gpu" in device_data.__gt_data_interface__
-#         ):
-#             try:
-#                 cp.asarray(
-#                     SimpleNamespace(
-#                         __cuda_array_interface__=device_data.__gt_data_interface__["gpu"]
-#                     )
-#                 )
-#             except:
-#                 raise ValueError("'device_data' not understood as gpu array")
-#             new_device_data = device_data
-#         elif (
-#             hasattr(device_data, "__gt_data_interface__")
-#             and "gpu" not in device_data.__gt_data_interface__
-#         ):
-#             raise ValueError("'device_data' not understood as gpu array")
-#         else:
-#             try:
-#                 cp.asarray(
-#                     cp.asarray(
-#                         SimpleNamespace(
-#                             __cuda_array_interface__=device_data.__cuda_array_interface__
-#                         )
-#                     )
-#                 )
-#             except:
-#                 raise ValueError("'device_data' not understood as gpu array")
-#             new_device_data = device_data
-#
-#         if new_device_data is None and data is not None:
-#             if isinstance(data, Storage) and not isinstance(data, CPUStorage):
-#                 new_device_data = data
-#             elif hasattr(data, "__gt_data_interface__") and "gpu" in data.__gt_data_interface__:
-#                 try:
-#                     cp.asarray(
-#                         SimpleNamespace(__cuda_array_interface__=data.__gt_data_interface__["gpu"])
-#                     )
-#                 except:
-#                     raise ValueError("'data' not understood as gpu array")
-#                 new_device_data = data
-#             elif (
-#                 hasattr(data, "__gt_data_interface__") and "gpu" not in data.__gt_data_interface__
-#             ):
-#                 raise ValueError("'device_data' not understood as gpu array")
-#             else:
-#                 try:
-#                     cp.asarray(
-#                         cp.asarray(
-#                             SimpleNamespace(__cuda_array_interface__=data.__cuda_array_interface__)
-#                         )
-#                     )
-#                 except:
-#                     if device == "gpu":
-#                         raise ValueError("'device_data' not understood as gpu array")
-#                 else:
-#                     new_device_data = data
-#
-#
-#     else:
-#         if device_data is not None:
-#             raise ValueError("No 'device_data' can be provided if 'device' is \"cpu\".")
-#         new_device_data = None
-#
-#
-#     if isinstance(new_data, gt_store.definitions.GPUStorage):
-#         new_data = None
-#     elif isinstance(new_data, Storage):
-#         new_data = new_data._field
-#
-#     if isinstance(new_device_data, Storage):
-#         new_device_data = new_device_data._device_field
-#     return new_data, new_device_data
+def _is_contiguous(data):
+    all(
+        (st % data.itemsize) == 0 and (st // data.itemsize) == sh
+        for st, sh in zip(data.strides, data.shape)
+    )
 
 
 def parameter_lookup_and_normalize(
@@ -544,9 +426,14 @@ def parameter_lookup_and_normalize(
     if device is None and defaults is not None and defaults.device is not None:
         device = defaults.device
 
-    template, data, device_data = normalize_data_and_device_data(
-        data, device_data, device, managed, copy
-    )
+    if template is None:
+        if data is not None and not isinstance(data, numbers.Number):
+            template = data
+        else:
+            template = device_data
+
+    data, device_data = normalize_data_and_device_data(data, device_data, device, managed, copy)
+
     if device is None:
         if device_data is not None:
             device = "gpu"
