@@ -43,15 +43,9 @@ def stencil(
 
 
 def test_origin_selection():
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
-    B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
-    )
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
+    A = gt_storage.ones(defaults="gtmc", dtype=np.float64, shape=(3, 3, 3), halo=(0, 0, 0))
+    B = gt_storage.ones(defaults="gtx86", dtype=np.float64, shape=(3, 3, 3), halo=(2, 2, 2))
+    C = gt_storage.ones(defaults="numpy", dtype=np.float32, shape=(3, 3, 3), halo=(0, 1, 0))
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
     assert A[1, 1, 1] == 4
@@ -61,15 +55,9 @@ def test_origin_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
-    B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
-    )
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
+    A = gt_storage.ones(defaults="gtmc", dtype=np.float64, shape=(3, 3, 3), halo=(0, 0, 0))
+    B = gt_storage.ones(defaults="gtx86", dtype=np.float64, shape=(3, 3, 3), halo=(2, 2, 2))
+    C = gt_storage.ones(defaults="numpy", dtype=np.float32, shape=(3, 3, 3), halo=(0, 1, 0))
     stencil(A, B, C, param=3.0, origin={"_all_": (1, 1, 1), "field1": (2, 2, 2)}, domain=(1, 1, 1))
 
     assert A[2, 2, 2] == 4
@@ -79,15 +67,9 @@ def test_origin_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
-    B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
-    )
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
+    A = gt_storage.ones(defaults="gtmc", dtype=np.float64, shape=(3, 3, 3), halo=(0, 0, 0))
+    B = gt_storage.ones(defaults="gtx86", dtype=np.float64, shape=(3, 3, 3), halo=(2, 2, 2))
+    C = gt_storage.ones(defaults="numpy", dtype=np.float32, shape=(3, 3, 3), halo=(0, 1, 0))
     stencil(A, B, C, param=3.0, origin={"field1": (2, 2, 2)}, domain=(1, 1, 1))
 
     assert A[2, 2, 2] == 4
@@ -99,15 +81,9 @@ def test_origin_selection():
 
 
 def test_domain_selection():
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
-    B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
-    )
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
+    A = gt_storage.ones(defaults="gtmc", dtype=np.float64, shape=(3, 3, 3), halo=(0, 0, 0))
+    B = gt_storage.ones(defaults="gtx86", dtype=np.float64, shape=(3, 3, 3), halo=(2, 2, 2))
+    C = gt_storage.ones(defaults="numpy", dtype=np.float32, shape=(3, 3, 3), halo=(0, 1, 0))
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
     assert A[1, 1, 1] == 4
@@ -117,15 +93,9 @@ def test_domain_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
-    B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
-    )
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
+    A = gt_storage.ones(defaults="gtmc", dtype=np.float64, shape=(3, 3, 3), halo=(0, 0, 0))
+    B = gt_storage.ones(defaults="gtx86", dtype=np.float64, shape=(3, 3, 3), halo=(2, 2, 2))
+    C = gt_storage.ones(defaults="numpy", dtype=np.float32, shape=(3, 3, 3), halo=(0, 1, 0))
     stencil(A, B, C, param=3.0, origin=(0, 0, 0))
 
     assert np.all(np.asarray(A) == 4)
@@ -169,15 +139,9 @@ def test_default_arguments(backend):
         backend=backend, definition=a_stencil, externals={"BRANCH": False}, rebuild=True
     )
 
-    arg1 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
-    arg2 = gt_storage.zeros(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
-    arg3 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
+    arg1 = gt_storage.ones(defaults=backend, dtype=np.float64, shape=(3, 3, 3), halo=(0, 0, 0))
+    arg2 = gt_storage.zeros(defaults=backend, dtype=np.float64, shape=(3, 3, 3), halo=(0, 0, 0))
+    arg3 = gt_storage.ones(defaults=backend, dtype=np.float64, shape=(3, 3, 3), halo=(0, 0, 0))
     tmp = np.asarray(arg3)
     tmp *= 2
 
@@ -194,15 +158,9 @@ def test_default_arguments(backend):
     else:
         assert False
 
-    arg1 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
-    arg2 = gt_storage.zeros(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
-    arg3 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
+    arg1 = gt_storage.ones(defaults=backend, dtype=np.float64, shape=(3, 3, 3), halo=(0, 0, 0))
+    arg2 = gt_storage.zeros(defaults=backend, dtype=np.float64, shape=(3, 3, 3), halo=(0, 0, 0))
+    arg3 = gt_storage.ones(defaults=backend, dtype=np.float64, shape=(3, 3, 3), halo=(0, 0, 0))
     tmp = np.asarray(arg3)
     tmp *= 2
 
@@ -226,40 +184,40 @@ def test_halo_checks(backend):
 
     # test default works
     in_field = gt_storage.ones(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        defaults=backend, shape=(22, 22, 10), halo=(1, 1, 0), dtype=np.float64
     )
     out_field = gt_storage.zeros(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        defaults=backend, shape=(22, 22, 10), halo=(1, 1, 0), dtype=np.float64
     )
     stencil(in_field=in_field, out_field=out_field)
     assert (np.asarray(out_field[1:-1, 1:-1, :]) == 1).all()
 
     # test setting arbitrary, small domain works
     in_field = gt_storage.ones(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        defaults=backend, shape=(22, 22, 10), halo=(1, 1, 0), dtype=np.float64
     )
     out_field = gt_storage.zeros(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        defaults=backend, shape=(22, 22, 10), halo=(1, 1, 0), dtype=np.float64
     )
     stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(10, 10, 10))
     assert (np.asarray(out_field[2:12, 2:12, :]) == 1).all()
 
     # test setting domain+origin too large raises
     in_field = gt_storage.ones(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        defaults=backend, shape=(22, 22, 10), halo=(1, 1, 0), dtype=np.float64
     )
     out_field = gt_storage.zeros(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        defaults=backend, shape=(22, 22, 10), halo=(1, 1, 0), dtype=np.float64
     )
     with pytest.raises(ValueError):
         stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
 
     # test 2*origin+domain does not raise if still fits (c.f. previous bug in c++ check.)
     in_field = gt_storage.ones(
-        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+        defaults=backend, shape=(23, 23, 10), halo=(1, 1, 0), dtype=np.float64
     )
     out_field = gt_storage.zeros(
-        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+        defaults=backend, shape=(23, 23, 10), halo=(1, 1, 0), dtype=np.float64
     )
     stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
 
@@ -270,15 +228,15 @@ def test_np_int_types():
 
     # test numpy int types are accepted
     in_field = gt_storage.ones(
-        backend=backend,
+        defaults=backend,
         shape=(np.int8(23), np.int16(23), np.int32(10)),
-        default_origin=(np.int64(1), int(1), 0),
+        halo=(np.int64(1), int(1), 0),
         dtype=np.float64,
     )
     out_field = gt_storage.zeros(
-        backend=backend,
+        defaults=backend,
         shape=(np.int8(23), np.int16(23), np.int32(10)),
-        default_origin=(np.int64(1), int(1), 0),
+        halo=(np.int64(1), int(1), 0),
         dtype=np.float64,
     )
     stencil(
@@ -295,15 +253,15 @@ def test_np_array_int_types():
 
     # test numpy int types are accepted
     in_field = gt_storage.ones(
-        backend=backend,
+        defaults=backend,
         shape=np.asarray((23, 23, 10), dtype=np.int64),
-        default_origin=np.asarray((1, 1, 0), dtype=np.int64),
+        halo=np.asarray((1, 1, 0), dtype=np.int64),
         dtype=np.float64,
     )
     out_field = gt_storage.zeros(
-        backend=backend,
+        defaults=backend,
         shape=np.asarray((23, 23, 10), dtype=np.int64),
-        default_origin=np.asarray((1, 1, 0), dtype=np.int64),
+        halo=np.asarray((1, 1, 0), dtype=np.int64),
         dtype=np.float64,
     )
     stencil(
@@ -322,13 +280,13 @@ def test_exec_info(backend):
     exec_info = {}
     # test numpy int types are accepted
     in_field = gt_storage.ones(
-        backend=backend,
+        defaults=backend,
         shape=(np.int8(23), np.int16(23), np.int32(10)),
-        default_origin=(1, 1, 0),
+        halo=(1, 1, 0),
         dtype=np.float64,
     )
     out_field = gt_storage.zeros(
-        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+        defaults=backend, shape=(23, 23, 10), halo=(1, 1, 0), dtype=np.float64
     )
     stencil(
         in_field=in_field,

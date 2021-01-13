@@ -29,33 +29,7 @@ from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
 
-@pytest.mark.parametrize(
-    ["name", "backend"], itertools.product(stencil_definitions.names, CPU_BACKENDS)
-)
-def test_generation_cpu(name, backend):
-    stencil_definition = stencil_definitions[name]
-    externals = externals_registry[name]
-    stencil = gtscript.stencil(backend, stencil_definition, externals=externals, rebuild=True)
-    args = {}
-    for k, v in stencil_definition.__annotations__.items():
-        if isinstance(v, gtscript._FieldDescriptor):
-            args[k] = gt_storage.ones(
-                dtype=v.dtype,
-                mask=gtscript.mask_from_axes(v.axes),
-                backend=backend,
-                shape=(23, 23, 23),
-                default_origin=(10, 10, 10),
-            )
-        else:
-            args[k] = v(1.5)
-    stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3))
-
-
-@pytest.mark.requires_gpu
-@pytest.mark.parametrize(
-    ["name", "backend"], itertools.product(stencil_definitions.names, GPU_BACKENDS)
-)
-def test_generation_gpu(name, backend):
+def run_test_generation(name, backend):
     stencil_definition = stencil_definitions[name]
     externals = externals_registry[name]
     stencil = gtscript.stencil(backend, stencil_definition, externals=externals)
@@ -64,14 +38,29 @@ def test_generation_gpu(name, backend):
         if isinstance(v, gtscript._FieldDescriptor):
             args[k] = gt_storage.ones(
                 dtype=v.dtype,
-                mask=gtscript.mask_from_axes(v.axes),
-                backend=backend,
+                dims=[a.name for a in v.axes],
+                defaults=backend,
                 shape=(23, 23, 23),
-                default_origin=(10, 10, 10),
+                halo=(10, 10, 10),
             )
         else:
             args[k] = v(1.5)
     stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3))
+
+
+@pytest.mark.parametrize(
+    ["name", "backend"], itertools.product(stencil_definitions.names, CPU_BACKENDS)
+)
+def test_generation_cpu(name, backend):
+    run_test_generation(name, backend)
+
+
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize(
+    ["name", "backend"], itertools.product(stencil_definitions.names, GPU_BACKENDS)
+)
+def test_generation_gpu(name, backend):
+    run_test_generation(name, backend)
 
 
 @pytest.mark.requires_gpu
@@ -100,9 +89,9 @@ def test_ignore_np_errstate():
     def setup_and_run(backend, **kwargs):
         field_a = gt_storage.zeros(
             dtype=np.float_,
-            backend=backend,
+            defaults=backend,
             shape=(3, 3, 1),
-            default_origin=(0, 0, 0),
+            halo=(0, 0, 0),
         )
 
         @gtscript.stencil(backend=backend, **kwargs)
@@ -141,7 +130,7 @@ def test_stencil_without_effect(backend):
     stencil2 = gtscript.stencil(backend, definition2, externals={"flag": False})
 
     field_in = gt_storage.ones(
-        dtype=np.float_, backend=backend, shape=(23, 23, 23), default_origin=(0, 0, 0)
+        dtype=np.float_, defaults=backend, shape=(23, 23, 23), halo=(0, 0, 0)
     )
 
     # test with explicit domain specified
@@ -156,10 +145,10 @@ def test_stencil_without_effect(backend):
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_stage_merger_induced_interval_block_reordering(backend):
     field_in = gt_storage.ones(
-        dtype=np.float_, backend=backend, shape=(23, 23, 23), default_origin=(0, 0, 0)
+        dtype=np.float_, defaults=backend, shape=(23, 23, 23), halo=(0, 0, 0)
     )
     field_out = gt_storage.zeros(
-        dtype=np.float_, backend=backend, shape=(23, 23, 23), default_origin=(0, 0, 0)
+        dtype=np.float_, defaults=backend, shape=(23, 23, 23), halo=(0, 0, 0)
     )
 
     @gtscript.stencil(backend=backend)

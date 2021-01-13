@@ -499,9 +499,8 @@ class StencilTestSuite(metaclass=SuiteMeta):
                     inputs[k] = gt_storage.storage(
                         patched_f,
                         dtype=test["definition"].__annotations__[k],
-                        shape=patched_f.shape,
-                        default_origin=patched_origin,
-                        backend=test["backend"],
+                        halo=patched_origin,
+                        defaults=test["backend"],
                     )
 
                 else:
@@ -561,12 +560,11 @@ class StencilTestSuite(metaclass=SuiteMeta):
                         slice(new_boundary[d][0], new_boundary[d][0] + domain[d])
                         for d in range(len(domain))
                     ]
-
-                    if gt_backend.from_name(value.backend).storage_info["device"] == "gpu":
-                        value.synchronize()
-                        value = value.data.get()
+                    value.synchronize()
+                    if cp is not None:
+                        value = cp.asnumpy(value)
                     else:
-                        value = value.data
+                        value = np.asarray(value)
 
                     np.testing.assert_allclose(
                         np.asarray(value)[domain_slice],

@@ -2,7 +2,7 @@ from gt4py import backend as gt_backend
 
 
 class StorageDefaults:
-    def __init__(self, *, device=None, alignment_size=None, layout=None):
+    def __init__(self, *, device="cpu", alignment_size=None, layout=None):
         self.alignment_size = alignment_size
         self.layout = layout
         self.device = device

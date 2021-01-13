@@ -33,11 +33,11 @@ ALL_BACKENDS = list(gt_backend.REGISTRY.keys())
 if cp is None:
     # Skip gpu backends
     ALL_BACKENDS = [
-        name for name in ALL_BACKENDS if gt_backend.from_name(name).storage_info["device"] != "gpu"
+        name for name in ALL_BACKENDS if gt_backend.from_name(name).compute_device != "gpu"
     ]
 
 CPU_BACKENDS = [
-    name for name in ALL_BACKENDS if gt_backend.from_name(name).storage_defaults.device is None
+    name for name in ALL_BACKENDS if gt_backend.from_name(name).compute_device == "cpu"
 ]
 GPU_BACKENDS = list(set(ALL_BACKENDS) - set(CPU_BACKENDS))
 INTERNAL_BACKENDS = ["debug", "numpy"] + [name for name in ALL_BACKENDS if name.startswith("gt")]

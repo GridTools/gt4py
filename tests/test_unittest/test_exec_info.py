@@ -74,32 +74,32 @@ class TestExecInfo:
 
         self.in_phi = gt_storage.storage(
             data.draw(st_arrays(dtype=float, shape=shape)),
-            backend=backend,
-            default_origin=(0, 0, 0),
+            defaults=backend,
+            halo=(0, 0, 0),
             dtype=float,
         )
         self.in_u = gt_storage.storage(
             data.draw(st_arrays(dtype=float, shape=shape)),
-            backend=backend,
-            default_origin=(0, 0, 0),
+            defaults=backend,
+            halo=(0, 0, 0),
             dtype=float,
         )
         self.in_v = gt_storage.storage(
             data.draw(st_arrays(dtype=float, shape=shape)),
-            backend=backend,
-            default_origin=(0, 0, 0),
+            defaults=backend,
+            halo=(0, 0, 0),
             dtype=float,
         )
         self.tmp_phi = gt_storage.storage(
             data.draw(st_arrays(dtype=float, shape=shape)),
-            backend=backend,
-            default_origin=(1, 1, 0),
+            defaults=backend,
+            halo=(1, 1, 0),
             dtype=float,
         )
         self.out_phi = gt_storage.storage(
             data.draw(st_arrays(dtype=float, shape=shape)),
-            backend=backend,
-            default_origin=(3, 3, 0),
+            defaults=backend,
+            halo=(3, 3, 0),
             dtype=float,
         )
         self.alpha = 1 / 32

@@ -423,6 +423,12 @@ def parameter_lookup_and_normalize(
     if isinstance(defaults, str):
         defaults = get_default_parameters(defaults)
     # 2a) if template is storage, use those parameters
+    if device is None and template is not None:
+        if has_gpu_buffer(template):
+            device = "gpu"
+        elif has_cpu_buffer(template):
+            device = "cpu"
+
     if device is None and defaults is not None and defaults.device is not None:
         device = defaults.device
 

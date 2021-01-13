@@ -116,16 +116,8 @@ class Storage:
         return len(self._shape)
 
     @property
-    def backend(self):
-        return self._backend
-
-    @property
     def mask(self):
         return self._mask
-
-    @property
-    def layout_map(self):
-        return gt_backend.from_name(self.backend).storage_info["layout_map"](self.mask)
 
     @property
     def dtype(self):
@@ -184,6 +176,15 @@ class Storage:
         pass
 
     def device_to_host(self, force=False):
+        pass
+
+    def _set_device_modified(self):
+        pass
+
+    def _set_host_modified(self):
+        pass
+
+    def _set_clean(self):
         pass
 
     def __iconcat__(self, other):

@@ -7,6 +7,8 @@ import numpy as np
 
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_storage
+import gt4py.storage.utils as gt_storage_utils
+
 from gt4py.definitions import (
     AccessKind,
     Boundary,
@@ -153,10 +155,13 @@ class StencilObject(abc.ABC):
 
         # assert compatibility of fields with stencil
         for name, field in used_field_args.items():
-            if not gt_backend.from_name(self.backend).storage_info["is_compatible_layout"](field):
-                raise ValueError(
-                    f"The layout of the field {name} is not compatible with the backend."
-                )
+            if gt_backend.from_name(self.backend).assert_specified_layout:
+                if not gt_storage_utils.is_compatible_layout(
+                    field, gt_backend.from_name(self.backend).storage_defaults.layout("IJK")
+                ):
+                    raise ValueError(
+                        f"The layout of the field {name} is not compatible with the backend."
+                    )
 
             if not field.dtype == self.field_info[name].dtype:
                 raise TypeError(
@@ -282,7 +287,9 @@ class StencilObject(abc.ABC):
             origin = normalize_origin_mapping(origin)
 
         for name, field in used_field_args.items():
-            origin.setdefault(name, origin["_all_"] if "_all_" in origin else field.default_origin)
+            origin.setdefault(
+                name, origin["_all_"] if "_all_" in origin else tuple(h for h, _ in field.halo)
+            )
 
         # Domain
         if domain is None:
