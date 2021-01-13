@@ -74,8 +74,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "true"
         elif builtin == BuiltInLiteral.FALSE:
             return "false"
-        else:
-            assert False
+        raise NotImplementedError("Not implemented BuiltInLiteral encountered.")
 
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
@@ -86,8 +85,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "gridtools::math::min"
         elif func == NativeFunction.MAX:
             return "gridtools::math::max"
-        else:
-            assert False
+        raise NotImplementedError("Not implemented NativeFunction encountered.")
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
@@ -100,8 +98,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "float"
         elif dtype == DataType.BOOL:
             return "bool"
-        else:
-            assert False
+        raise NotImplementedError("Not implemented NativeFunction encountered.")
 
     def visit_UnaryOperator(self, op: UnaryOperator, **kwargs):
         if op == UnaryOperator.NOT:
@@ -110,8 +107,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "-"
         elif op == UnaryOperator.POS:
             return "+"
-        else:
-            assert False
+        raise NotImplementedError("Not implemented UnaryOperator encountered.")
 
     Arg = as_fmt("{name}")
 

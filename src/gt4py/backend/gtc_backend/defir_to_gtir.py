@@ -1,5 +1,4 @@
-from types import MappingProxyType
-from typing import ClassVar, Dict, List, Mapping, Union, cast
+from typing import Dict, List, Union, cast
 
 from gt4py.gtc import common, gtir
 from gt4py.gtc.common import ExprKind
@@ -42,78 +41,67 @@ def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:
 
 class DefIRToGTIR(IRNodeVisitor):
 
-    GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER: ClassVar[
-        Mapping[IterationOrder, int]
-    ] = MappingProxyType(
-        {
-            IterationOrder.BACKWARD: common.LoopOrder.BACKWARD,
-            IterationOrder.PARALLEL: common.LoopOrder.PARALLEL,
-            IterationOrder.FORWARD: common.LoopOrder.FORWARD,
-        }
-    )
+    GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER = {
+        IterationOrder.BACKWARD: common.LoopOrder.BACKWARD,
+        IterationOrder.PARALLEL: common.LoopOrder.PARALLEL,
+        IterationOrder.FORWARD: common.LoopOrder.FORWARD,
+    }
 
-    GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER: ClassVar[Mapping[LevelMarker, str]] = MappingProxyType(
-        {LevelMarker.START: common.LevelMarker.START, LevelMarker.END: common.LevelMarker.END}
-    )
+    GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER = {
+        LevelMarker.START: common.LevelMarker.START,
+        LevelMarker.END: common.LevelMarker.END,
+    }
 
-    GT4PY_OP_TO_GTIR_OP: ClassVar[Mapping[BinaryOperator, str]] = MappingProxyType(
-        {
-            # arithmetic
-            BinaryOperator.ADD: common.ArithmeticOperator.ADD,
-            BinaryOperator.SUB: common.ArithmeticOperator.SUB,
-            BinaryOperator.MUL: common.ArithmeticOperator.MUL,
-            BinaryOperator.DIV: common.ArithmeticOperator.DIV,
-            # logical
-            BinaryOperator.AND: common.LogicalOperator.AND,
-            BinaryOperator.OR: common.LogicalOperator.OR,
-            # comparison
-            BinaryOperator.EQ: common.ComparisonOperator.EQ,
-            BinaryOperator.NE: common.ComparisonOperator.NE,
-            BinaryOperator.LT: common.ComparisonOperator.LT,
-            BinaryOperator.LE: common.ComparisonOperator.LE,
-            BinaryOperator.GT: common.ComparisonOperator.GT,
-            BinaryOperator.GE: common.ComparisonOperator.GE,
-        }
-    )
+    GT4PY_OP_TO_GTIR_OP = {
+        # arithmetic
+        BinaryOperator.ADD: common.ArithmeticOperator.ADD,
+        BinaryOperator.SUB: common.ArithmeticOperator.SUB,
+        BinaryOperator.MUL: common.ArithmeticOperator.MUL,
+        BinaryOperator.DIV: common.ArithmeticOperator.DIV,
+        # logical
+        BinaryOperator.AND: common.LogicalOperator.AND,
+        BinaryOperator.OR: common.LogicalOperator.OR,
+        # comparison
+        BinaryOperator.EQ: common.ComparisonOperator.EQ,
+        BinaryOperator.NE: common.ComparisonOperator.NE,
+        BinaryOperator.LT: common.ComparisonOperator.LT,
+        BinaryOperator.LE: common.ComparisonOperator.LE,
+        BinaryOperator.GT: common.ComparisonOperator.GT,
+        BinaryOperator.GE: common.ComparisonOperator.GE,
+    }
 
-    GT4PY_UNARYOP_TO_GTIR: ClassVar[Mapping[UnaryOperator, str]] = MappingProxyType(
-        {
-            UnaryOperator.POS: common.UnaryOperator.POS,
-            UnaryOperator.NEG: common.UnaryOperator.NEG,
-            UnaryOperator.NOT: common.UnaryOperator.NOT,
-        }
-    )
+    GT4PY_UNARYOP_TO_GTIR = {
+        UnaryOperator.POS: common.UnaryOperator.POS,
+        UnaryOperator.NEG: common.UnaryOperator.NEG,
+        UnaryOperator.NOT: common.UnaryOperator.NOT,
+    }
 
-    GT4PY_NATIVE_FUNC_TO_GTIR: ClassVar[Mapping[NativeFunction, str]] = MappingProxyType(
-        {
-            NativeFunction.ABS: common.NativeFunction.ABS,
-            NativeFunction.MIN: common.NativeFunction.MIN,
-            NativeFunction.MAX: common.NativeFunction.MAX,
-            NativeFunction.MOD: common.NativeFunction.MOD,
-            NativeFunction.SIN: common.NativeFunction.SIN,
-            NativeFunction.COS: common.NativeFunction.COS,
-            NativeFunction.TAN: common.NativeFunction.TAN,
-            NativeFunction.ARCSIN: common.NativeFunction.ARCSIN,
-            NativeFunction.ARCCOS: common.NativeFunction.ARCCOS,
-            NativeFunction.ARCTAN: common.NativeFunction.ARCTAN,
-            NativeFunction.SQRT: common.NativeFunction.SQRT,
-            NativeFunction.EXP: common.NativeFunction.EXP,
-            NativeFunction.LOG: common.NativeFunction.LOG,
-            NativeFunction.ISFINITE: common.NativeFunction.ISFINITE,
-            NativeFunction.ISINF: common.NativeFunction.ISINF,
-            NativeFunction.ISNAN: common.NativeFunction.ISNAN,
-            NativeFunction.FLOOR: common.NativeFunction.FLOOR,
-            NativeFunction.CEIL: common.NativeFunction.CEIL,
-            NativeFunction.TRUNC: common.NativeFunction.TRUNC,
-        }
-    )
+    GT4PY_NATIVE_FUNC_TO_GTIR = {
+        NativeFunction.ABS: common.NativeFunction.ABS,
+        NativeFunction.MIN: common.NativeFunction.MIN,
+        NativeFunction.MAX: common.NativeFunction.MAX,
+        NativeFunction.MOD: common.NativeFunction.MOD,
+        NativeFunction.SIN: common.NativeFunction.SIN,
+        NativeFunction.COS: common.NativeFunction.COS,
+        NativeFunction.TAN: common.NativeFunction.TAN,
+        NativeFunction.ARCSIN: common.NativeFunction.ARCSIN,
+        NativeFunction.ARCCOS: common.NativeFunction.ARCCOS,
+        NativeFunction.ARCTAN: common.NativeFunction.ARCTAN,
+        NativeFunction.SQRT: common.NativeFunction.SQRT,
+        NativeFunction.EXP: common.NativeFunction.EXP,
+        NativeFunction.LOG: common.NativeFunction.LOG,
+        NativeFunction.ISFINITE: common.NativeFunction.ISFINITE,
+        NativeFunction.ISINF: common.NativeFunction.ISINF,
+        NativeFunction.ISNAN: common.NativeFunction.ISNAN,
+        NativeFunction.FLOOR: common.NativeFunction.FLOOR,
+        NativeFunction.CEIL: common.NativeFunction.CEIL,
+        NativeFunction.TRUNC: common.NativeFunction.TRUNC,
+    }
 
-    GT4PY_BUILTIN_TO_GTIR: ClassVar[Mapping[Builtin, int]] = MappingProxyType(
-        {
-            Builtin.TRUE: common.BuiltInLiteral.TRUE,
-            Builtin.FALSE: common.BuiltInLiteral.FALSE,
-        }
-    )
+    GT4PY_BUILTIN_TO_GTIR = {
+        Builtin.TRUE: common.BuiltInLiteral.TRUE,
+        Builtin.FALSE: common.BuiltInLiteral.FALSE,
+    }
 
     @classmethod
     def apply(cls, root, **kwargs):
@@ -202,7 +190,7 @@ class DefIRToGTIR(IRNodeVisitor):
             return gtir.Literal(
                 value=self.GT4PY_BUILTIN_TO_GTIR[node.value], dtype=common.DataType.BOOL
             )
-        assert f"BuiltIn.{node.value} not implemented in lowering"
+        raise NotImplementedError(f"BuiltIn.{node.value} not implemented in lowering")
 
     def visit_Cast(self, node: Cast) -> gtir.Cast:
         return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))
