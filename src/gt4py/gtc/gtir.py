@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-GridTools Intermediate Representation
+GridTools Intermediate Representation.
 
 GTIR represents a computation with the semantics of the
 `GTScript parallel model <https://github.com/GridTools/concepts/wiki/GTScript-Parallel-model>`.
@@ -27,10 +27,9 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-import enum
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List
 
-from eve import IntEnum, Node, Str, SymbolName, SymbolTableTrait
+from eve import Node, Str, SymbolName, SymbolTableTrait
 from pydantic import validator
 
 from gt4py.gtc import common
@@ -57,7 +56,7 @@ class BlockStmt(common.BlockStmt[Stmt], Stmt):
     pass
 
 
-class Literal(common.Literal, Expr):
+class Literal(common.Literal, Expr):  # type: ignore
     pass
 
 
@@ -74,11 +73,11 @@ class CartesianOffset(Node):
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
-class ScalarAccess(common.ScalarAccess, Expr):
+class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class FieldAccess(common.FieldAccess, Expr):
+class FieldAccess(common.FieldAccess, Expr):  # type: ignore
     pass
 
 
@@ -109,10 +108,12 @@ class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
       to the same rules as statements outside of branches.
 
     The following restriction applies:
+
     - Inside the if and else blocks the same field cannot be written to
       and read with an offset in the parallel axes (order does not matter).
 
-    See `parallel model <https://github.com/GridTools/concepts/wiki/GTScript-Parallel-model#conditionals-on-field-expressions>`
+    See `parallel model
+    <https://github.com/GridTools/concepts/wiki/GTScript-Parallel-model#conditionals-on-field-expressions>`
     """
 
     @validator("cond")
@@ -150,7 +151,7 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=False)
 
 
-class Cast(common.Cast[Expr], Expr):
+class Cast(common.Cast[Expr], Expr):  # type: ignore
     pass
 
 
@@ -182,7 +183,7 @@ class Interval(LocNode):
     end: AxisBound
 
 
-# TODO should vertical loop open a scope
+# TODO(havogt) should vertical loop open a scope?
 class VerticalLoop(LocNode):
     interval: Interval
     loop_order: common.LoopOrder
@@ -190,96 +191,11 @@ class VerticalLoop(LocNode):
     body: List[Stmt]
 
 
-@enum.unique
-class AccessKind(IntEnum):
-    READ_ONLY = 0
-    READ_WRITE = 1
-    # TODO add WRITE_ONLY using flag enums
-
-
-class FieldBoundary(Node):
-    i: Tuple[int, int]
-    j: Tuple[int, int]
-    k: Tuple[int, int]
-
-    def to_dict(self):
-        return {"i": self.i, "j": self.j, "k": self.k}
-
-
-class FieldBoundaryAccumulator:
-    def __init__(self):
-        self.bounds = {
-            "i": {"lower": 0, "upper": 0},
-            "j": {"lower": 0, "upper": 0},
-            "k": {"lower": 0, "upper": 0},
-        }
-
-    def update_from_offset(self, offset: CartesianOffset):
-        for idx, values in self.bounds.items():
-            offset_at_idx = offset.to_dict()[idx]
-            sign, end = (-1, "lower") if offset_at_idx < 0 else (1, "upper")
-            values[end] = max(sign * offset_at_idx, values[end])
-
-    def to_boundary(self):
-        return FieldBoundary(**{k: (v["lower"], v["upper"]) for k, v in self.bounds.items()})
-
-
-class FieldMetadata(Node):
-    name: Str
-    access: AccessKind
-    boundary: FieldBoundary
-    dtype: common.DataType
-
-
-class FieldMetadataBuilder:
-    def __init__(self) -> None:
-        self._name: Optional[Str] = None
-        self._access: int = AccessKind.READ_WRITE
-        self._dtype: Optional[int] = None
-        self.boundary = FieldBoundaryAccumulator()
-
-    def name(self, name: str) -> "FieldMetadataBuilder":
-        self._name = name
-        return self
-
-    def access(self, access: int) -> "FieldMetadataBuilder":
-        self._access = access
-        return self
-
-    def dtype(self, dtype: int) -> "FieldMetadataBuilder":
-        self._dtype = dtype
-        return self
-
-    def build(self):
-        return FieldMetadata(
-            name=self._name,
-            access=self._access,
-            boundary=self.boundary.to_boundary(),
-            dtype=self._dtype,
-        )
-
-
-class FieldsMetadata(Node):
-    metas: Dict[Str, FieldMetadata] = {}
-
-
-class FieldsMetadataBuilder:
-    def __init__(self) -> None:
-        self.metas: Dict[str, FieldMetadataBuilder] = {}
-
-    def get_or_create(self, node: Union[FieldAccess, FieldDecl]) -> FieldMetadataBuilder:
-        return self.metas.setdefault(node.name, FieldMetadataBuilder().name(node.name))
-
-    def build(self) -> FieldsMetadata:
-        return FieldsMetadata(metas={k: v.build() for k, v in self.metas.items()})
-
-
 class Stencil(LocNode, SymbolTableTrait):
     name: Str
-    # TODO deal with gtscript externals
+    # TODO(havogt) deal with gtscript externals
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
-    fields_metadata: Optional[FieldsMetadata]
 
     @property
     def param_names(self) -> List:

@@ -53,8 +53,8 @@ def test_computation_block(defir_to_gtir):
         .add_statements(TAssign("a", "b", (0, 0, 0)))
         .build()
     )
-    stencil = defir_to_gtir.visit_ComputationBlock(block)
-    assert isinstance(stencil, gtir.Stencil)
+    vertical_loop = defir_to_gtir.visit_ComputationBlock(block)
+    assert isinstance(vertical_loop, gtir.VerticalLoop)
 
 
 def test_block_stmt(defir_to_gtir):
@@ -66,7 +66,7 @@ def test_block_stmt(defir_to_gtir):
 def test_assign(defir_to_gtir):
     assign = TAssign("a", "b", (0, 0, 0)).build()
     assign_stmt = defir_to_gtir.visit_Assign(assign)
-    assert isinstance(assign_stmt, gtir.AssignStmt)
+    assert isinstance(assign_stmt, gtir.ParAssignStmt)
 
 
 def test_scalar_literal(defir_to_gtir):

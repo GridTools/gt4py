@@ -1,9 +1,11 @@
 import re
-from typing import Literal, Pattern, Union
+from typing import Pattern, Union
 
 
-def match(value: str, regexp: "Union[str, Pattern]") -> "Literal[True]":
+def match(value: str, regexp: "Union[str, Pattern]") -> bool:
     """
+    Check that `regex` pattern matches `value`.
+
     Stolen from `pytest.raises`.
     Check whether the regular expression `regexp` matches `value` using :func:`python:re.search`.
     If it matches `True` is returned.

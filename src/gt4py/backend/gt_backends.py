@@ -556,16 +556,22 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             pyext_file_path=pyext_file_path,
         )
 
-    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
+    def generate_computation(self, *, ir: Any = None) -> Dict[str, Union[str, Dict]]:
+        if not ir:
+            ir = self.builder.implementation_ir
         dir_name = f"{self.builder.options.name}_src"
-        src_files = self.make_extension_sources()
+        src_files = self.make_extension_sources(ir=ir)
         return {dir_name: src_files["computation"]}
 
-    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
+    def generate_bindings(
+        self, language_name: str, *, ir: Any = None
+    ) -> Dict[str, Union[str, Dict]]:
+        if not ir:
+            ir = self.builder.implementation_ir
         if language_name != "python":
             return super().generate_bindings(language_name)
         dir_name = f"{self.builder.options.name}_src"
-        src_files = self.make_extension_sources()
+        src_files = self.make_extension_sources(ir=ir)
         return {dir_name: src_files["bindings"]}
 
     @abc.abstractmethod

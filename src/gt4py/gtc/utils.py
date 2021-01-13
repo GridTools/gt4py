@@ -23,7 +23,6 @@ class ListTuple(collections.abc.Sequence):
 
     Examples
     --------
-
     ListTuple([1,2],[3,4,5]) + ListTuple([6,7],[8]) == ListTuple([1,2,6,7], [3,4,5,8])
 
     ListTuple([1,2], [3,4,5]) + [ListTuple([6], [7]), [ListTuple([8],[9])]]

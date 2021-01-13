@@ -2,7 +2,7 @@ from eve import Node, codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 
-from gt4py.gtc.common import DataType, LoopOrder, NativeFunction, UnaryOperator
+from gt4py.gtc.common import BuiltInLiteral, DataType, LoopOrder, NativeFunction, UnaryOperator
 from gt4py.gtc.gtcpp import gtcpp
 
 
@@ -69,6 +69,13 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     Cast = as_fmt("static_cast<{dtype}>({expr})")
 
+    def visit_BuiltInLiteral(self, builtin: BuiltInLiteral, **kwargs):
+        if builtin == BuiltInLiteral.TRUE:
+            return "true"
+        elif builtin == BuiltInLiteral.FALSE:
+            return "false"
+        raise NotImplementedError("Not implemented BuiltInLiteral encountered.")
+
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
     def visit_NativeFunction(self, func: NativeFunction, **kwargs):
@@ -78,8 +85,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "gridtools::math::min"
         elif func == NativeFunction.MAX:
             return "gridtools::math::max"
-        else:
-            assert False
+        raise NotImplementedError("Not implemented NativeFunction encountered.")
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
@@ -92,8 +98,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "float"
         elif dtype == DataType.BOOL:
             return "bool"
-        else:
-            assert False
+        raise NotImplementedError("Not implemented NativeFunction encountered.")
 
     def visit_UnaryOperator(self, op: UnaryOperator, **kwargs):
         if op == UnaryOperator.NOT:
@@ -102,8 +107,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "-"
         elif op == UnaryOperator.POS:
             return "+"
-        else:
-            assert False
+        raise NotImplementedError("Not implemented UnaryOperator encountered.")
 
     Arg = as_fmt("{name}")
 
@@ -141,7 +145,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         """
         %if len(multi_stages) > 0 and len(arguments) > 0:
         {
-            auto grid = make_grid(domain[0], domain[1], axis<1, axis_config::offset_limit<${offset_limit}>>{domain[2]});
+            auto grid = make_grid(domain[0], domain[1], axis<1,
+                axis_config::offset_limit<${offset_limit}>>{domain[2]});
 
             auto ${ computation_name } = [](${ ','.join('auto ' + a for a in arguments) }) {
 

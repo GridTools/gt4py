@@ -374,7 +374,7 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
     def definition(outfield):
 
         with computation(PARALLEL), interval(...):
-            if (outfield and outfield) or (not outfield and not outfield):
+            if (outfield > 0 and outfield > 0) or (not outfield > 0 and not outfield > 0):
                 if False:
                     outfield = 1
                 else:

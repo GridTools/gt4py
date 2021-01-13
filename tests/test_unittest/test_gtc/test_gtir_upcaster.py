@@ -1,7 +1,5 @@
 from typing import List
 
-import pytest
-
 from gt4py.gtc.common import (
     ArithmeticOperator,
     ComparisonOperator,
@@ -16,7 +14,7 @@ from .gtir_utils import FieldAccessBuilder, make_Literal
 
 
 class Placeholder(Expr):
-    """Used as placeholder for an expression in comparison"""
+    """Used as placeholder for an expression in comparison."""
 
     kind = ExprKind.SCALAR  # unused
     dtype = DataType.AUTO  # unused

@@ -15,7 +15,19 @@ def clirunner():
     yield CliRunner()
 
 
-@pytest.fixture(params=list(backend.REGISTRY.keys()) + ["nocli"])
+@pytest.fixture(
+    params=[
+        pytest.param(
+            name,
+            # gtc backends require definition ir as input, for now we skip the tests
+            marks=pytest.mark.skipif(
+                name.startswith("dawn:") or name.startswith("gtc:"),
+                reason="gtc backends not yet supported",
+            ),
+        )
+        for name in list(backend.REGISTRY.keys()) + ["nocli"]
+    ],
+)
 def backend_name(request, nocli_backend):
     """Parametrize by backend name."""
     yield request.param
@@ -72,6 +84,7 @@ BACKEND_ROW_PATTERN_BY_NAME = {
     "gtx86": r"^\s*gtx86\s*c\+\+\s*python\s*Yes",
     "gtmc": r"^\s*gtmc\s*c\+\+\s*python\s*Yes",
     "gtcuda": r"^\s*gtcuda\s*cuda\s*python\s*Yes",
+    "gtc:gt:cpu_ifirst": r"^\s*gtc:gt:cpu_ifirst\s*c\+\+\s*python\s*Yes",
     "dawn:gtx86": r"^\s*dawn:gtx86\s*c\+\+\s*python\s*No",
     "dawn:gtmc": r"^\s*dawn:gtmc\s*c\+\+\s*python\s*No",
     "dawn:gtcuda": r"^\s*dawn:gtcuda\s*cuda\s*python\s*No",

@@ -38,15 +38,15 @@ class VarDecl(Stmt):
     dtype: common.DataType
 
 
-class Literal(common.Literal, Expr):
+class Literal(common.Literal, Expr):  # type: ignore
     pass
 
 
-class ScalarAccess(common.ScalarAccess, Expr):
+class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class AccessorRef(common.FieldAccess, Expr):
+class AccessorRef(common.FieldAccess, Expr):  # type: ignore
     pass
 
 
@@ -83,7 +83,7 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
-class Cast(common.Cast[Expr], Expr):
+class Cast(common.Cast[Expr], Expr):  # type: ignore
     pass
 
 
@@ -198,10 +198,11 @@ class ApiParamDecl(LocNode):
 
 
 class FieldDecl(ApiParamDecl):
-    # TODO dimensions (or mask?)
+    # TODO dimensions
     pass
 
 
+# TODO(havogt) this will be required once we can demote Temporaries to Scalars
 # class ScalarDecl(Decl):
 #     pass
 
@@ -212,7 +213,7 @@ class GlobalParamDecl(ApiParamDecl):
 
 class GTStage(LocNode):
     functor: SymbolRef
-    # `args` are SymbolRefs to GTComputation `arguments` (interpreted as paremters)
+    # `args` are SymbolRefs to GTComputation `arguments` (interpreted as parameters)
     # or `temporaries`
     args: List[Arg]
 
@@ -247,10 +248,9 @@ class Program(LocNode, SymbolTableTrait):
     name: Str
     parameters: List[
         ApiParamDecl
-    ]  # TODO in the current implementation these symbols can be accessed by the functor body
+    ]  # in the current implementation these symbols can be accessed by the functor body
     functors: List[GTFunctor]
-    gt_computation: GTComputationCall
-    # control_flow_ast: List[GTComputation]
+    gt_computation: GTComputationCall  # here could be the CtrlFlow region
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()

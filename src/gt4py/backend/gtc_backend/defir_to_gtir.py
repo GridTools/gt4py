@@ -1,5 +1,4 @@
-from types import MappingProxyType
-from typing import ClassVar, Dict, List, Mapping, Union
+from typing import Dict, List, Union, cast
 
 from gt4py.gtc import common, gtir
 from gt4py.gtc.common import ExprKind
@@ -12,6 +11,8 @@ from gt4py.ir.nodes import (
     BinaryOperator,
     BinOpExpr,
     BlockStmt,
+    Builtin,
+    BuiltinLiteral,
     Cast,
     ComputationBlock,
     FieldDecl,
@@ -40,71 +41,67 @@ def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:
 
 class DefIRToGTIR(IRNodeVisitor):
 
-    GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER: ClassVar[
-        Mapping[IterationOrder, int]
-    ] = MappingProxyType(
-        {
-            IterationOrder.BACKWARD: common.LoopOrder.BACKWARD,
-            IterationOrder.PARALLEL: common.LoopOrder.PARALLEL,
-            IterationOrder.FORWARD: common.LoopOrder.FORWARD,
-        }
-    )
+    GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER = {
+        IterationOrder.BACKWARD: common.LoopOrder.BACKWARD,
+        IterationOrder.PARALLEL: common.LoopOrder.PARALLEL,
+        IterationOrder.FORWARD: common.LoopOrder.FORWARD,
+    }
 
-    GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER: ClassVar[Mapping[LevelMarker, str]] = MappingProxyType(
-        {LevelMarker.START: common.LevelMarker.START, LevelMarker.END: common.LevelMarker.END}
-    )
+    GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER = {
+        LevelMarker.START: common.LevelMarker.START,
+        LevelMarker.END: common.LevelMarker.END,
+    }
 
-    GT4PY_OP_TO_GTIR_OP: ClassVar[Mapping[BinaryOperator, str]] = MappingProxyType(
-        {
-            # arithmetic
-            BinaryOperator.ADD: common.ArithmeticOperator.ADD,
-            BinaryOperator.SUB: common.ArithmeticOperator.SUB,
-            BinaryOperator.MUL: common.ArithmeticOperator.MUL,
-            BinaryOperator.DIV: common.ArithmeticOperator.DIV,
-            # logical
-            BinaryOperator.AND: common.LogicalOperator.AND,
-            BinaryOperator.OR: common.LogicalOperator.OR,
-            # comparison
-            BinaryOperator.EQ: common.ComparisonOperator.EQ,
-            BinaryOperator.NE: common.ComparisonOperator.NE,
-            BinaryOperator.LT: common.ComparisonOperator.LT,
-            BinaryOperator.LE: common.ComparisonOperator.LE,
-            BinaryOperator.GT: common.ComparisonOperator.GT,
-            BinaryOperator.GE: common.ComparisonOperator.GE,
-        }
-    )
+    GT4PY_OP_TO_GTIR_OP = {
+        # arithmetic
+        BinaryOperator.ADD: common.ArithmeticOperator.ADD,
+        BinaryOperator.SUB: common.ArithmeticOperator.SUB,
+        BinaryOperator.MUL: common.ArithmeticOperator.MUL,
+        BinaryOperator.DIV: common.ArithmeticOperator.DIV,
+        # logical
+        BinaryOperator.AND: common.LogicalOperator.AND,
+        BinaryOperator.OR: common.LogicalOperator.OR,
+        # comparison
+        BinaryOperator.EQ: common.ComparisonOperator.EQ,
+        BinaryOperator.NE: common.ComparisonOperator.NE,
+        BinaryOperator.LT: common.ComparisonOperator.LT,
+        BinaryOperator.LE: common.ComparisonOperator.LE,
+        BinaryOperator.GT: common.ComparisonOperator.GT,
+        BinaryOperator.GE: common.ComparisonOperator.GE,
+    }
 
-    GT4PY_UNARYOP_TO_GTIR: ClassVar[Mapping[UnaryOperator, str]] = MappingProxyType(
-        {
-            UnaryOperator.POS: common.UnaryOperator.POS,
-            UnaryOperator.NEG: common.UnaryOperator.NEG,
-            UnaryOperator.NOT: common.UnaryOperator.NOT,
-        }
-    )
+    GT4PY_UNARYOP_TO_GTIR = {
+        UnaryOperator.POS: common.UnaryOperator.POS,
+        UnaryOperator.NEG: common.UnaryOperator.NEG,
+        UnaryOperator.NOT: common.UnaryOperator.NOT,
+    }
 
-    GT4PY_NATIVE_FUNC_TO_GTIR: ClassVar[Mapping[NativeFunction, str]] = MappingProxyType(
-        {
-            NativeFunction.ABS: common.NativeFunction.ABS,
-            NativeFunction.MIN: common.NativeFunction.MIN,
-            NativeFunction.MAX: common.NativeFunction.MAX,
-            NativeFunction.MOD: common.NativeFunction.MOD,
-            NativeFunction.SIN: common.NativeFunction.SIN,
-            NativeFunction.COS: common.NativeFunction.COS,
-            NativeFunction.TAN: common.NativeFunction.TAN,
-            NativeFunction.ARCSIN: common.NativeFunction.ARCSIN,
-            NativeFunction.ARCCOS: common.NativeFunction.ARCCOS,
-            NativeFunction.ARCTAN: common.NativeFunction.ARCTAN,
-            NativeFunction.SQRT: common.NativeFunction.SQRT,
-            NativeFunction.EXP: common.NativeFunction.EXP,
-            NativeFunction.LOG: common.NativeFunction.LOG,
-            NativeFunction.ISFINITE: common.NativeFunction.ISFINITE,
-            NativeFunction.ISINF: common.NativeFunction.ISINF,
-            NativeFunction.ISNAN: common.NativeFunction.ISNAN,
-            NativeFunction.FLOOR: common.NativeFunction.FLOOR,
-            NativeFunction.CEIL: common.NativeFunction.CEIL,
-            NativeFunction.TRUNC: common.NativeFunction.TRUNC,
-        }
-    )
+    GT4PY_NATIVE_FUNC_TO_GTIR = {
+        NativeFunction.ABS: common.NativeFunction.ABS,
+        NativeFunction.MIN: common.NativeFunction.MIN,
+        NativeFunction.MAX: common.NativeFunction.MAX,
+        NativeFunction.MOD: common.NativeFunction.MOD,
+        NativeFunction.SIN: common.NativeFunction.SIN,
+        NativeFunction.COS: common.NativeFunction.COS,
+        NativeFunction.TAN: common.NativeFunction.TAN,
+        NativeFunction.ARCSIN: common.NativeFunction.ARCSIN,
+        NativeFunction.ARCCOS: common.NativeFunction.ARCCOS,
+        NativeFunction.ARCTAN: common.NativeFunction.ARCTAN,
+        NativeFunction.SQRT: common.NativeFunction.SQRT,
+        NativeFunction.EXP: common.NativeFunction.EXP,
+        NativeFunction.LOG: common.NativeFunction.LOG,
+        NativeFunction.ISFINITE: common.NativeFunction.ISFINITE,
+        NativeFunction.ISINF: common.NativeFunction.ISINF,
+        NativeFunction.ISNAN: common.NativeFunction.ISNAN,
+        NativeFunction.FLOOR: common.NativeFunction.FLOOR,
+        NativeFunction.CEIL: common.NativeFunction.CEIL,
+        NativeFunction.TRUNC: common.NativeFunction.TRUNC,
+    }
+
+    GT4PY_BUILTIN_TO_GTIR = {
+        Builtin.TRUE: common.BuiltInLiteral.TRUE,
+        Builtin.FALSE: common.BuiltInLiteral.FALSE,
+    }
 
     @classmethod
     def apply(cls, root, **kwargs):
@@ -134,7 +131,7 @@ class DefIRToGTIR(IRNodeVisitor):
     ) -> Union[gtir.Decl]:
         return all_params[node.name]
 
-    def visit_ComputationBlock(self, node: ComputationBlock) -> List[gtir.VerticalLoop]:
+    def visit_ComputationBlock(self, node: ComputationBlock) -> gtir.VerticalLoop:
         stmts = []
         temporaries = []
         for s in node.body.stmts:
@@ -144,7 +141,9 @@ class DefIRToGTIR(IRNodeVisitor):
                 if dtype == common.DataType.DEFAULT:
                     # TODO this will be a frontend choice later
                     # in non-GTC parts, this is set in the backend
-                    dtype = common.DataType.FLOAT64
+                    dtype = cast(
+                        common.DataType, common.DataType.FLOAT64
+                    )  # see https://github.com/GridTools/gtc/issues/100
                 temporaries.append(gtir.FieldDecl(name=s.name, dtype=dtype))
             else:
                 stmts.append(self.visit(s))
@@ -185,6 +184,14 @@ class DefIRToGTIR(IRNodeVisitor):
             false_expr=self.visit(node.else_expr),
         )
 
+    def visit_BuiltinLiteral(self, node: BuiltinLiteral) -> gtir.Literal:  # type: ignore[return]
+        # currently deals only with boolean literals
+        if node.value in self.GT4PY_BUILTIN_TO_GTIR.keys():
+            return gtir.Literal(
+                value=self.GT4PY_BUILTIN_TO_GTIR[node.value], dtype=common.DataType.BOOL
+            )
+        raise NotImplementedError(f"BuiltIn.{node.value} not implemented in lowering")
+
     def visit_Cast(self, node: Cast) -> gtir.Cast:
         return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))
 
@@ -217,9 +224,10 @@ class DefIRToGTIR(IRNodeVisitor):
             )
 
     def visit_VarRef(self, node: VarRef, **kwargs):
-        # TODO seems wrong, but check the DefinitionIR for
+        # TODO(havogt) seems wrong, but check the DefinitionIR for
         # test_code_generation.py::test_generation_cpu[native_functions,
         # there we have a FieldAccess on a VarDecl
+        # Probably the frontend needs to be fixed.
         if node.name in self._scalar_params:
             return gtir.ScalarAccess(name=node.name)
         else:
@@ -229,7 +237,7 @@ class DefIRToGTIR(IRNodeVisitor):
         return self.visit(node.start), self.visit(node.end)
 
     def visit_AxisBound(self, node: AxisBound):
-        # TODO support VarRef
+        # TODO(havogt) add support VarRef
         return gtir.AxisBound(
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
         )

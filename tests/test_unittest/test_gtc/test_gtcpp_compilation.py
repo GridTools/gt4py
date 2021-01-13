@@ -3,7 +3,10 @@ from pathlib import Path
 import pytest
 import setuptools
 
-from gt4py import config, gt2_src_manager  # TODO must not include gt4py package or ok for test?
+from gt4py import (  # TODO(havogt) this is a depedency from gtc tests to gt4py, ok?
+    config,
+    gt2_src_manager,
+)
 from gt4py.gtc.common import DataType
 from gt4py.gtc.gtcpp.gtcpp import (
     Arg,

@@ -26,7 +26,8 @@ def _update_node(node: Node, updated_children: Dict[str, Node]):
 
 class _GTIRUpcasting(NodeTranslator):
     """
-    Introduces Cast nodes (upcasting) for expr involving different datatypes
+    Introduces Cast nodes (upcasting) for expr involving different datatypes.
+
     Precondition: all dtypes are resolved (no `None`, `Auto`, `Default`)
     Postcondition: all dtype transitions are explicit via a `Cast` node
     """

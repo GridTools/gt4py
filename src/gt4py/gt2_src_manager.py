@@ -70,7 +70,7 @@ def remove_gt_sources():
 
 def has_gt_sources():
     return os.path.isfile(
-        os.path.join(gt_config.GT_INCLUDE_PATH, "gridtools", "common", "defs.hpp")
+        os.path.join(gt_config.GT2_INCLUDE_PATH, "gridtools", "common", "defs.hpp")
     )
 
 

@@ -1,4 +1,4 @@
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Union
 
 import eve
 from dataclasses import dataclass, field
@@ -7,10 +7,10 @@ from devtools import debug  # noqa: F401
 from gt4py.gtc import common, oir
 from gt4py.gtc.common import CartesianOffset
 from gt4py.gtc.gtcpp import gtcpp
-from gt4py.gtc.gtcpp.gtcpp import GTParamList
+from gt4py.gtc.gtcpp.gtcpp import GTParamList, IJCache
 
 
-# TODO between oir and gtcpp we need to group oir.VerticalLoops
+# TODO(havogt) between oir and gtcpp we need to group oir.VerticalLoops
 
 # - Each HorizontalExecution is a Functor (and a Stage)
 # - Each VerticalLoop is MultiStage
@@ -160,11 +160,11 @@ class OIRToGTCpp(eve.NodeTranslator):
         stage_args = [gtcpp.Arg(name=acc.name) for acc in accessors]
 
         comp_ctx.add_arguments(
-            [
+            {
                 param_arg
                 for param_arg in stage_args
                 if param_arg.name not in [tmp.name for tmp in comp_ctx.temporaries]
-            ]
+            }
         )
 
         prog_ctx.add_functor(
@@ -194,7 +194,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             comp_ctx=comp_ctx,
             **kwargs,
         )
-        caches = []  # TODO
+        caches: List[Union[IJCache]] = []  # TODO
         return gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs):

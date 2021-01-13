@@ -15,7 +15,7 @@ class _GTIRResolveAuto(NodeTranslator):
     """
 
     class _GTIRUpdateAutoDecl(NodeTranslator):
-        """Updates FieldDecls with resolved types"""
+        """Updates FieldDecls with resolved types."""
 
         def visit_FieldDecl(self, node: gtir.FieldDecl, new_symbols, **kwargs):
             if node.dtype == DataType.AUTO:
@@ -42,21 +42,20 @@ class _GTIRResolveAuto(NodeTranslator):
         result = self.generic_visit(node, symtable=symtable)
         result = self._GTIRUpdateAutoDecl().visit(result, new_symbols=symtable)
 
-        # TODO enable after FieldsMetaData is updated
-        # if not all(
-        #     result.iter_tree()
-        #     .if_hasattr("dtype")
-        #     .getattr("dtype")
-        #     .map(lambda x: x not in [None, DataType.AUTO, DataType.INVALID, DataType.DEFAULT])
-        # ):
-        #     raise GTCPostconditionError(expected="No AUTO, INVALID or DEFAULT dtype in tree.")
+        if not all(
+            result.iter_tree()
+            .if_hasattr("dtype")
+            .getattr("dtype")
+            .map(lambda x: x not in [None, DataType.AUTO, DataType.INVALID, DataType.DEFAULT])
+        ):
+            raise GTCPostconditionError(expected="No AUTO, INVALID or DEFAULT dtype in tree.")
 
         return result
 
 
 class _GTIRPropagateDtypeToAccess(NodeTranslator):
     """
-    Propagates dtype from Decl to Access
+    Propagates dtype from Decl to Access.
 
     Precondition: Decls have dtype (not None), can be AUTO or DEFAULT
     Postcondition: All dtypes of Access are not None
@@ -79,7 +78,7 @@ class _GTIRPropagateDtypeToAccess(NodeTranslator):
             .getattr("dtype")
             .map(lambda x: x is not None)
         ):
-            raise GTCPostconditionError("No None dtype in FieldAccess or ScalarAccess.")
+            raise GTCPostconditionError(expected="No None dtype in FieldAccess or ScalarAccess.")
         return result
 
 

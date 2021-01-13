@@ -12,7 +12,7 @@ from gt4py.backend.gt_backends import (
     x86_is_compatible_layout,
 )
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gt4py.gtc import gtir_to_oir, passes
+from gt4py.gtc import gtir_to_oir
 from gt4py.gtc.common import DataType
 from gt4py.gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gt4py.gtc.passes.gtir_dtype_resolver import resolve_dtype
@@ -35,7 +35,7 @@ class GTCGTExtGenerator:
         self.options = options
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = passes.FieldsMetadataPass().visit(DefIRToGTIR.apply(definition_ir))
+        gtir = DefIRToGTIR.apply(definition_ir)
         gtir_without_unused_params = prune_unused_parameters(gtir)
         dtype_deduced = resolve_dtype(gtir_without_unused_params)
         upcasted = upcast(dtype_deduced)
@@ -45,7 +45,7 @@ class GTCGTExtGenerator:
         bindings = GTCppBindingsCodegen.apply(gtcpp, self.module_name)
         return {
             "computation": {"computation.hpp": implementation},
-            "bindings": {"bindings.cc": bindings},
+            "bindings": {"bindings.cpp": bindings},
         }
 
 
@@ -76,7 +76,8 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                     name=node.name
                 )
             else:
-                return "gt::sid::shift_sid_origin(gt::as_sid<{dtype}, 3, std::integral_constant<int, {unique_index}>>({name}), {name}_origin)".format(
+                return """gt::sid::shift_sid_origin(gt::as_sid<{dtype}, 3,
+                    std::integral_constant<int, {unique_index}>>({name}), {name}_origin)""".format(
                     name=node.name, dtype=self.visit(node.dtype), unique_index=self.unique_index()
                 )
 
@@ -100,6 +101,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 
     Program = as_mako(
         """
+        #include <chrono>
         #include <pybind11/pybind11.h>
         #include <pybind11/stl.h>
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
@@ -113,7 +115,24 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             m.def("run_computation", [](std::array<gt::uint_t, 3> domain,
             ${','.join(entry_params)},
             py::object exec_info){
+                if (!exec_info.is(py::none()))
+                {
+                    auto exec_info_dict = exec_info.cast<py::dict>();
+                    exec_info_dict["run_cpp_start_time"] = static_cast<double>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+                }
+
                 ${name}(domain)(${','.join(sid_params)});
+
+                if (!exec_info.is(py::none()))
+                {
+                    auto exec_info_dict = exec_info.cast<py::dict>();
+                    exec_info_dict["run_cpp_end_time"] = static_cast<double>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
+                }
+
             }, "Runs the given computation");}
         %endif
         """
@@ -130,7 +149,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
     """GridTools python backend using gtc."""
 
-    name = "gtc:gt"
+    name = "gtc:gt:cpu_ifirst"
 
     GT_BACKEND_T = "x86"
     options: ClassVar[Dict[str, Any]] = {}
@@ -143,7 +162,7 @@ class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
     }
     languages = {"computation": "c++", "bindings": ["python"]}
 
-    PYEXT_GENERATOR_CLASS = GTCGTExtGenerator
+    PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=False)
@@ -158,7 +177,7 @@ class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
         pyext_module_name: Optional[str]
         pyext_file_path: Optional[str]
 
-        # TODO add bypass if computation has no effect
+        # TODO(havogt) add bypass if computation has no effect
         pyext_module_name, pyext_file_path = self.generate_extension()
 
         # Generate and return the Python wrapper class

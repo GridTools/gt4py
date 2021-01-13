@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, List, Optional, TypeVar, Union, cast
 
 from eve import (
     GenericNode,
@@ -39,14 +39,14 @@ class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
     message_template = "GTC pass precondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
-        super().__init__(expected=expected, **kwargs)
+        super().__init__(expected=expected, **kwargs)  # type: ignore
 
 
 class GTCPostconditionError(eve_exceptions.EveError, RuntimeError):
     message_template = "GTC pass postcondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
-        super().__init__(expected=expected, **kwargs)
+        super().__init__(expected=expected, **kwargs)  # type: ignore
 
 
 class AssignmentKind(StrEnum):
@@ -124,12 +124,15 @@ class LoopOrder(IntEnum):
     BACKWARD = 2
 
 
+# TODO StrEnum?
 @enum.unique
 class BuiltInLiteral(IntEnum):
     MAX_VALUE = 0
     MIN_VALUE = 1
     ZERO = 2
     ONE = 3
+    TRUE = 4
+    FALSE = 5
 
 
 @enum.unique
@@ -244,30 +247,32 @@ def verify_and_get_common_dtype(
             if all([v.dtype == dtype for v in values]):
                 return dtype
             else:
-                print([v.dtype for v in values])
                 raise ValueError(
                     "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
-                    + ", ".join(v.dtype.name for v in values)
+                    + ", ".join(v.dtype.name for v in cast(List[DataType], values))
                 )
         else:
-            # upcasting
-            return max([v.dtype for v in values])
+            # upcasting (note that `typing.cast` has nothing to do with upcasting...)
+            return max(cast(List[DataType], [v.dtype for v in values]))
     else:
         return None
 
 
 def compute_kind(values: List[Expr]) -> ExprKind:
     if any([v.kind == ExprKind.FIELD for v in values]):
-        return ExprKind.FIELD
+        return cast(ExprKind, ExprKind.FIELD)  # see https://github.com/GridTools/gtc/issues/100
     else:
-        return ExprKind.SCALAR
+        return cast(ExprKind, ExprKind.SCALAR)  # see https://github.com/GridTools/gtc/issues/100
 
 
 class Literal(Node):
-    # TODO when coming from python AST we know more than just the string representation, I suppose
+    # TODO(havogt) reconsider if `str` is a good representation for value,
+    # maybe it should be Union[float,int,str] etc?
     value: Union[BuiltInLiteral, Str]
     dtype: DataType
-    kind = ExprKind.SCALAR
+    kind: ExprKind = cast(
+        ExprKind, ExprKind.SCALAR
+    )  # cast shouldn't be required, see https://github.com/GridTools/gtc/issues/100
 
 
 StmtT = TypeVar("StmtT")
@@ -372,7 +377,7 @@ class BinaryOp(GenericNode, Generic[ExprT]):
     - type propagation (taking `operator` type into account).
     """
 
-    # TODO parametrize on op?
+    # consider parametrizing on op
     op: Union[ArithmeticOperator, ComparisonOperator, LogicalOperator]
     left: ExprT
     right: ExprT
@@ -420,7 +425,7 @@ class TernaryOp(GenericNode, Generic[ExprT]):
     - type propagation.
     """
 
-    # TODO parametrize cond expr separately?
+    # consider parametrizing cond type and expr separately
     cond: ExprT
     true_expr: ExprT
     false_expr: ExprT
@@ -508,7 +513,7 @@ def validate_dtype_is_set():
 
 
 def validate_symbol_refs():
-    """Works only, if only the root node has a symbol table"""
+    """Works only, if only the root node has a symbol table."""
 
     def _impl(cls, values: dict):
         class SymtableValidator(NodeVisitor):

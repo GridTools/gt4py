@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from gt4py.gtc.common import DataType, ExprKind, LoopOrder
 from gt4py.gtc.gtir import (
@@ -71,8 +71,8 @@ class ParAssignStmtBuilder:
 class FieldIfStmtBuilder:
     def __init__(self) -> None:
         self._cond = None
-        self._true_branch = []
-        self._false_branch = None
+        self._true_branch: List[Stmt] = []
+        self._false_branch: Optional[List[Stmt]] = None
 
     def cond(self, cond: Expr) -> "FieldIfStmtBuilder":
         self._cond = cond
@@ -135,7 +135,7 @@ class StencilBuilder:
         self._vertical_loops = []
 
     def add_param(self, param: Decl) -> "StencilBuilder":
-        self._params.append(param),
+        self._params.append(param)
         return self
 
     def add_vertical_loop(self, vertical_loop: VerticalLoop) -> "StencilBuilder":
