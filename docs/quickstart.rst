@@ -342,13 +342,14 @@ For example, the previous definition could be modified in the following way:
         alpha: np.float64,
         weight: np.float64 = 2.0,
     ):
-        with computation(PARALLEL), interval(...):
-            if __INLINED(USE_ALPHA):
+        if __INLINED(USE_ALPHA):
+            with computation(PARALLEL), interval(...):
                 result = field_a[0, 0, 0] - (1. - alpha) * (
                     field_b[0, 0, 0] - weight * field_c[0, 0, 0]
                 )
-            else:
-                result = field_a[0, 0, 0] - (field_b[0, 0, 0] - weight * field_c[0, 0, 0])
+        else:
+            with computation(FORWARD), interval(...):
+                result = field_a[0, 0, 0] - (field_b[0, 0, -1] - weight * field_c[0, 0, 0])
 
 
 The ``__INLINED()`` call is used to force the compile-time evaluation of ``USE_ALPHA``, which is an external symbol
