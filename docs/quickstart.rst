@@ -375,13 +375,14 @@ In this case, the symbol must be imported from ``__externals__`` in the body of 
     ):
         from __externals__ import USE_ALPHA
 
-        with computation(PARALLEL), interval(...):
-            if __INLINED(USE_ALPHA):
+        if __INLINED(USE_ALPHA):
+            with computation(PARALLEL), interval(...):
                 result = field_a[0, 0, 0] - (1. - alpha) * (
                     field_b[0, 0, 0] - weight * field_c[0, 0, 0]
                 )
-            else:
-                result = field_a[0, 0, 0] - (field_b[0, 0, 0] - weight * field_c[0, 0, 0])
+        else:
+            with computation(FORWARD), interval(...):
+                result = field_a[0, 0, 0] - (field_b[0, 0, -1] - weight * field_c[0, 0, 0])
 
 
 ------------
