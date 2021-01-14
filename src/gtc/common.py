@@ -32,7 +32,7 @@ from eve.type_definitions import SymbolRef
 from pydantic import validator
 from pydantic.class_validators import root_validator
 
-from gt4py.gtc.utils import flatten_list
+from gtc.utils import flatten_list
 
 
 class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):

@@ -3,8 +3,8 @@ from typing import List
 from dataclasses import dataclass, field
 from eve import NodeTranslator
 
-from gt4py.gtc import gtir, oir
-from gt4py.gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
+from gtc import gtir, oir
+from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 
 
 def _create_mask(ctx: "GTIRToOIR.Context", name: str, cond: oir.Expr) -> oir.Temporary:

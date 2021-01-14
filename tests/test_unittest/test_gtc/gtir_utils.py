@@ -1,7 +1,7 @@
 from typing import List, Optional
 
-from gt4py.gtc.common import DataType, ExprKind, LoopOrder
-from gt4py.gtc.gtir import (
+from gtc.common import DataType, ExprKind, LoopOrder
+from gtc.gtir import (
     AxisBound,
     BlockStmt,
     CartesianOffset,

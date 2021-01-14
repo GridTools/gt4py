@@ -1,7 +1,7 @@
 from eve import NodeTranslator
 
-from gt4py.gtc import gtir
-from gt4py.gtc.common import DataType, GTCPostconditionError
+from gtc import gtir
+from gtc.common import DataType, GTCPostconditionError
 
 
 class _GTIRResolveAuto(NodeTranslator):

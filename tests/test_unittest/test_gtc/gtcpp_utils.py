@@ -1,7 +1,7 @@
 from typing import List
 
-from gt4py.gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
-from gt4py.gtc.gtcpp.gtcpp import (
+from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
+from gtc.gtcpp.gtcpp import (
     AccessorRef,
     ApiParamDecl,
     Arg,

@@ -2,8 +2,8 @@ from typing import Dict
 
 from eve import Node, NodeTranslator
 
-from gt4py.gtc import gtir
-from gt4py.gtc.gtir import Expr
+from gtc import gtir
+from gtc.gtir import Expr
 
 
 def _upcast_node(target_dtype, node: Expr):

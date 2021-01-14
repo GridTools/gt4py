@@ -1,14 +1,8 @@
 from typing import List
 
-from gt4py.gtc.common import (
-    ArithmeticOperator,
-    ComparisonOperator,
-    DataType,
-    ExprKind,
-    NativeFunction,
-)
-from gt4py.gtc.gtir import BinaryOp, Cast, Expr, NativeFuncCall, ParAssignStmt, TernaryOp
-from gt4py.gtc.passes.gtir_upcaster import _GTIRUpcasting
+from gtc.common import ArithmeticOperator, ComparisonOperator, DataType, ExprKind, NativeFunction
+from gtc.gtir import BinaryOp, Cast, Expr, NativeFuncCall, ParAssignStmt, TernaryOp
+from gtc.passes.gtir_upcaster import _GTIRUpcasting
 
 from .gtir_utils import FieldAccessBuilder, make_Literal
 

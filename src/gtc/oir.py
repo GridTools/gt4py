@@ -26,8 +26,8 @@ from typing import List, Optional, Union
 from eve import Str, SymbolName, SymbolTableTrait
 from pydantic import validator
 
-from gt4py.gtc import common
-from gt4py.gtc.common import AxisBound, LocNode
+from gtc import common
+from gtc.common import AxisBound, LocNode
 
 
 class Expr(common.Expr):

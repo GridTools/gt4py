@@ -1,6 +1,6 @@
 import pytest
 
-from gt4py.gtc.utils import ListTuple
+from gtc.utils import ListTuple
 
 
 @pytest.mark.parametrize(

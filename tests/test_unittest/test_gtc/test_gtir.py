@@ -2,8 +2,8 @@ import pytest
 from eve import SourceLocation
 from pydantic.error_wrappers import ValidationError
 
-from gt4py.gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
-from gt4py.gtc.gtir import (
+from gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
+from gtc.gtir import (
     AxisBound,
     CartesianOffset,
     Decl,

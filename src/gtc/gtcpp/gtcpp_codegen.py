@@ -2,8 +2,8 @@ from eve import Node, codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 
-from gt4py.gtc.common import BuiltInLiteral, DataType, LoopOrder, NativeFunction, UnaryOperator
-from gt4py.gtc.gtcpp import gtcpp
+from gtc.common import BuiltInLiteral, DataType, LoopOrder, NativeFunction, UnaryOperator
+from gtc.gtcpp import gtcpp
 
 
 # TODO qualify gridtools stuff

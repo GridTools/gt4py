@@ -6,8 +6,8 @@ from eve import Str, StrEnum, SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
 from pydantic.class_validators import validator
 
-from gt4py.gtc import common
-from gt4py.gtc.common import LocNode
+from gtc import common
+from gtc.common import LocNode
 
 
 class Expr(common.Expr):

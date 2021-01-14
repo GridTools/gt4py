@@ -4,10 +4,10 @@ import eve
 from dataclasses import dataclass, field
 from devtools import debug  # noqa: F401
 
-from gt4py.gtc import common, oir
-from gt4py.gtc.common import CartesianOffset
-from gt4py.gtc.gtcpp import gtcpp
-from gt4py.gtc.gtcpp.gtcpp import GTParamList, IJCache
+from gtc import common, oir
+from gtc.common import CartesianOffset
+from gtc.gtcpp import gtcpp
+from gtc.gtcpp.gtcpp import GTParamList, IJCache
 
 
 # TODO(havogt) between oir and gtcpp we need to group oir.VerticalLoops

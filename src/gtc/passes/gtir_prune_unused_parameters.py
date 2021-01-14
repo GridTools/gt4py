@@ -1,4 +1,4 @@
-from gt4py.gtc import gtir
+from gtc import gtir
 
 
 def prune_unused_parameters(node: gtir.Stencil):

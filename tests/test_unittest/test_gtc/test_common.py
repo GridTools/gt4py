@@ -4,8 +4,8 @@ import eve
 import pytest
 from pydantic import ValidationError
 
-from gt4py.gtc import common
-from gt4py.gtc.common import (
+from gtc import common
+from gtc.common import (
     ArithmeticOperator,
     ComparisonOperator,
     DataType,

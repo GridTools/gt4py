@@ -12,12 +12,12 @@ from gt4py.backend.gt_backends import (
     x86_is_compatible_layout,
 )
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gt4py.gtc import gtir_to_oir
-from gt4py.gtc.common import DataType
-from gt4py.gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
-from gt4py.gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gt4py.gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-from gt4py.gtc.passes.gtir_upcaster import upcast
+from gtc import gtir_to_oir
+from gtc.common import DataType
+from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
+from gtc.passes.gtir_dtype_resolver import resolve_dtype
+from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
+from gtc.passes.gtir_upcaster import upcast
 
 
 if TYPE_CHECKING:
