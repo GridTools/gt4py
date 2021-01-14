@@ -18,8 +18,16 @@
 
 
 from packaging.version import parse
+from pkg_resources import DistributionNotFound, get_distribution
 
-from ._version import __version__
 
+try:
+    from gt4py import __version__
+    __versioninfo__ = parse(__version__)
 
-__versioninfo__ = parse(__version__)
+except Exception:
+    __version__ = "unknown"
+    __versioninfo__ = None
+
+finally:
+    del parse
