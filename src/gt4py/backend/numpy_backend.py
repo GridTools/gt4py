@@ -306,11 +306,6 @@ class NumPySourceGenerator(PythonSourceGenerator):
             target = self.visit(stmt.target)
             value = self.visit(stmt.value)
 
-            data_type = (
-                self.block_info.symbols[target].data_type
-                if target in self.block_info.symbols
-                else stmt.target.data_type
-            )
             # Check if this temporary variable / field already contains written information.
             # If it does, it needs to be the else expression of the where, otherwise we set the else to nan.
             # This ensures that we only write defined values.

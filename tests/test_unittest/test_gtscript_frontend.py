@@ -1104,9 +1104,14 @@ class TestParallelIntervals:
         parallel_interval = def_ir.computations[0].parallel_interval
 
         assert parallel_interval is not None
-        assert parallel_interval[0].start.level == gt_ir.LevelMarker.START
+        assert (
+            parallel_interval[0].start.level
+            == parallel_interval[0].end.level
+            == gt_ir.LevelMarker.START
+        )
         assert parallel_interval[0].start.offset == 0
         assert parallel_interval[0].start.extend == False
+
         assert parallel_interval[0].end.offset == 1
         assert parallel_interval[0].end.extend == False
 
@@ -1130,54 +1135,20 @@ class TestParallelIntervals:
 
         assert len(def_ir.computations) == 3
         assert def_ir.computations[0].parallel_interval is None
+
         assert def_ir.computations[1].parallel_interval is not None
+
         assert def_ir.computations[2].parallel_interval is not None
+        assert def_ir.computations[2].parallel_interval[0].start.level == gt_ir.LevelMarker.END
+        assert def_ir.computations[2].parallel_interval[0].start.offset == -1
 
-    def test_remove(self):
-        def definition_func(field: gtscript.Field[float]):
-            from __externals__ import ext
-
-            with computation(PARALLEL), interval(...):
-                field = 0
-                with parallel(region[ext, :]):
-                    field = 1
-                with parallel(region[I[-1], :]):
-                    field = -1
-
-        module = f"TestParallelIntervals_remove_{id_version}"
-        externals = {"ext": None}
-        stencil_id, def_ir = compile_definition(
-            definition_func, "test_remove", module, externals=externals
-        )
-
-        assert len(def_ir.computations) == 2
-
-    def test_remove_split(self):
-        def definition_func(field: gtscript.Field[float]):
-            from __externals__ import ext, other
-
-            with computation(PARALLEL), interval(...):
-                field = 0
-                with parallel(region[ext, other]):
-                    field = 1
-                with parallel(region[I[-1], other]):
-                    field = -1
-
-        module = f"TestParallelIntervals_remove_split_{id_version}"
-        externals = {"ext": None, "other": 1}
-        stencil_id, def_ir = compile_definition(
-            definition_func, "test_remove_split", module, externals=externals
-        )
-
-        assert len(def_ir.computations) == 2
-
-    def test_inside_func_ext(self):
+    def test_func_and_externals(self):
         def func(field):
             from __externals__ import ext, other
 
-            with parallel(region[ext, other]):
+            with parallel(region[ext : I[0], :]):
                 field = 1
-            with parallel(region[I[-1], other]):
+            with parallel(region[I[-1], :]):
                 field = -1
             return field
 
@@ -1185,10 +1156,9 @@ class TestParallelIntervals:
             with computation(PARALLEL), interval(...):
                 field = func(field)
 
-        module = f"TestParallelIntervals_inside_func_ext_{id_version}"
-        externals = {"ext": None, "other": 1}
+        module = f"TestParallelIntervals_func_and_externals_{id_version}"
+        externals = {"ext": I[0] - np.iinfo(np.int32).max, "other": 1}
         stencil_id, def_ir = compile_definition(
-            definition_func, "test_inside_func_ext", module, externals=externals
+            definition_func, "test_func_and_externals", module, externals=externals
         )
-
-        assert len(def_ir.computations) == 3
+        assert len(def_ir.computations) == 4

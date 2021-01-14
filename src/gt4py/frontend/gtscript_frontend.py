@@ -184,13 +184,20 @@ class AxisIntervalParser(ast.NodeVisitor):
         else:
             slice_node = cls.single_index_slice(node)
 
+        # abs(offset) > LARGE_NUM corresponds to infinite extension
+        LARGE_NUM = 1000000
+
         if slice_node.lower is not None:
             start = parser.visit(slice_node.lower)
+            if start.offset < -LARGE_NUM:
+                start = gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0, extend=True)
         else:
             start = gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0, extend=True)
 
         if slice_node.upper is not None:
             end = parser.visit(slice_node.upper)
+            if end.offset > LARGE_NUM:
+                end = gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, extend=True)
         else:
             end = gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, extend=True)
 
@@ -336,7 +343,7 @@ class ValueInliner(ast.NodeTransformer):
         qualified_name = gt_meta.get_qualified_name_from_node(name_or_attr_node)
         if qualified_name in self.context:
             value = self.context[qualified_name]
-            if value is None or isinstance(value, bool):
+            if isinstance(value, bool):
                 new_node = ast.NameConstant(value=value)
             elif isinstance(value, numbers.Number):
                 new_node = ast.Num(n=value)
