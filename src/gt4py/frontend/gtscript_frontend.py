@@ -920,7 +920,7 @@ class IRMaker(ast.NodeVisitor):
                     interval = self._visit_interval_node(item, loc)
                 elif (
                     isinstance(item.context_expr, ast.Call)
-                    and item.context_expr.func.id == "parallel"
+                    and item.context_expr.func.id == "horizontal"
                 ):
                     assert parallel_intervals == [None]
                     parallel_intervals = self._extract_regions(item.context_expr)
