@@ -143,27 +143,27 @@ class NumericTuple(tuple):
 
     def __lt__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.lt)
+        return self._compare(self._broadcast(other), operator.lt, any)
 
     def __le__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.le)
+        return self._compare(self._broadcast(other), operator.le, any)
 
     def __eq__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.eq)
+        return self._compare(self._broadcast(other), operator.eq, all)
 
     def __ne__(self, other):
         """Element-wise comparison."""
-        return not self._compare(self._broadcast(other), operator.eq)
+        return not self._compare(self._broadcast(other), operator.eq, all)
 
     def __gt__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.gt)
+        return self._compare(self._broadcast(other), operator.gt, any)
 
     def __ge__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.ge)
+        return self._compare(self._broadcast(other), operator.ge, any)
 
     def __repr__(self):
         return "{cls_name}({value})".format(
@@ -209,11 +209,11 @@ class NumericTuple(tuple):
 
         return value
 
-    def _compare(self, other, op):
+    def _compare(self, other, op, reduction_op):
         if len(self) != len(other):  # or not isinstance(other, type(self))
             raise ValueError("Incompatible instance '{obj}'".format(obj=other))
 
-        return all(op(a, b) for a, b in zip(self, other))
+        return reduction_op(op(a, b) for a, b in zip(self, other))
 
 
 class Index(NumericTuple):
@@ -329,27 +329,27 @@ class FrameTuple(tuple):
 
     def __lt__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.lt)
+        return self._compare(self._broadcast(other), operator.lt, reduction_op=any)
 
     def __le__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.le)
+        return self._compare(self._broadcast(other), operator.le, reduction_op=any)
 
     def __eq__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.eq)
+        return self._compare(self._broadcast(other), operator.eq, reduction_op=all)
 
     def __ne__(self, other):
         """Element-wise comparison."""
-        return not self._compare(self._broadcast(other), operator.eq)
+        return not self._compare(self._broadcast(other), operator.eq, reduction_op=all)
 
     def __gt__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.gt)
+        return self._compare(self._broadcast(other), operator.gt, reduction_op=any)
 
     def __ge__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.ge)
+        return self._compare(self._broadcast(other), operator.ge, reduction_op=any)
 
     def __repr__(self):
         return "{cls_name}({value})".format(
@@ -414,12 +414,14 @@ class FrameTuple(tuple):
     def _reduce(self, reduce_func, out_type=tuple):
         return out_type([reduce_func(d[0], d[1]) for d in self])
 
-    def _compare(self, other, left_op, right_op=None):
+    def _compare(self, other, left_op, right_op=None, reduction_op=all):
         if len(self) != len(other):  # or not isinstance(other, Frame)
             raise ValueError("Incompatible instance '{obj}'".format(obj=other))
 
         right_op = right_op or left_op
-        return all(left_op(a[0], b[0]) and right_op(a[1], b[1]) for a, b in zip(self, other))
+        return reduction_op(
+            left_op(a[0], b[0]) and right_op(a[1], b[1]) for a, b in zip(self, other)
+        )
 
     def _broadcast(self, value):
         if isinstance(value, int):
