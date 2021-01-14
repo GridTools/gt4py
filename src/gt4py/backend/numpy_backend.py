@@ -206,7 +206,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         code = self.visit(node.expr)
 
         leftover_axes = [ax for ax in req_axes if ax not in node.axes]
-        if leftover_axes:
+        if leftover_axes and not isinstance(node, ShapedCompositeExpr):
             view = ", ".join(
                 "{np}.newaxis".format(np=self.numpy_prefix) if axis not in node.axes else ":"
                 for axis in req_axes
