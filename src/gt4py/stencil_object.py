@@ -209,20 +209,17 @@ class StencilObject(abc.ABC):
             )
         for name, field in used_field_args.items():
             field_mask = self._get_field_mask(field)
-            min_origin = self.field_info[name].boundary.lower_indices
-            field_shape = Shape.from_mask(field.shape, field_mask)
-            field_origin = Index.from_mask(origin[name], field_mask)
-            if field_origin < min_origin:
+            min_origin = self.field_info[name].boundary.lower_indices.filter_mask(field_mask)
+            restricted_domain = domain.filter_mask(field_mask)
+            upper_indices = self.field_info[name].boundary.upper_indices.filter_mask(field_mask)
+            if origin[name] < min_origin:
                 raise ValueError(
                     f"Origin for field {name} too small. Must be at least {min_origin}, is {origin[name]}"
                 )
             min_shape = tuple(
-                o + d + h
-                for o, d, h in zip(
-                    field_origin, domain, self.field_info[name].boundary.upper_indices
-                )
+                o + d + h for o, d, h in zip(origin[name], restricted_domain, upper_indices)
             )
-            if min_shape > field_shape:
+            if min_shape > field.shape:
                 raise ValueError(
                     f"Shape of field {name} is {field.shape} but must be at least {min_shape} for given domain and origin."
                 )
