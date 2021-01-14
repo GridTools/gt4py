@@ -72,7 +72,7 @@ builtins = {
     "externals",
     "computation",
     "interval",
-    "parallel",
+    "horizontal",
     "region",
     "__gtscript__",
     "__externals__",
@@ -516,7 +516,7 @@ def interval(*args):
     pass
 
 
-def parallel(*args):
+def horizontal(*args):
     """Define a block of code that is restricted to a set of regions in the parallel axes."""
     pass
 
