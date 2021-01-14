@@ -158,6 +158,9 @@ def stencil(
             Force rebuild of the :class:`gt4py.StencilObject` even if it is
             found in the cache. (`False` by default).
 
+        format_source : `bool`, optional
+            Format generated Python code using black (`True` by default).
+
         **kwargs: `dict`, optional
             Extra backend-specific options. Check the specific backend
             documentation for further information.
