@@ -142,12 +142,20 @@ class NumericTuple(tuple):
         return self._apply(other, max)
 
     def __lt__(self, other):
-        """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.lt, any)
+        """No element can be greater, but if any element is smaller, return True."""
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: -1 if a < b else (1 if a > b else 0),
+            lambda items: any(i < 0 for i in items) and not any(i > 0 for i in items),
+        )
 
     def __le__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.le, any)
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: -1 if a < b else (1 if a > b else 0),
+            lambda items: all(i <= 0 for i in items),
+        )
 
     def __eq__(self, other):
         """Element-wise comparison."""
@@ -158,12 +166,20 @@ class NumericTuple(tuple):
         return not self._compare(self._broadcast(other), operator.eq, all)
 
     def __gt__(self, other):
-        """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.gt, any)
+        """No element can be smaller, but if any element is larger, return True."""
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: 1 if a > b else (-1 if a < b else 0),
+            lambda items: any(i > 0 for i in items) and not any(i < 0 for i in items),
+        )
 
     def __ge__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.ge, any)
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: 1 if a > b else (-1 if a < b else 0),
+            lambda items: all(i >= 0 for i in items),
+        )
 
     def __repr__(self):
         return "{cls_name}({value})".format(
@@ -329,27 +345,27 @@ class FrameTuple(tuple):
 
     def __lt__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.lt, reduction_op=any)
+        return self._compare(self._broadcast(other), operator.lt)
 
     def __le__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.le, reduction_op=any)
+        return self._compare(self._broadcast(other), operator.le)
 
     def __eq__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.eq, reduction_op=all)
+        return self._compare(self._broadcast(other), operator.eq)
 
     def __ne__(self, other):
         """Element-wise comparison."""
-        return not self._compare(self._broadcast(other), operator.eq, reduction_op=all)
+        return not self._compare(self._broadcast(other), operator.eq)
 
     def __gt__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.gt, reduction_op=any)
+        return self._compare(self._broadcast(other), operator.gt)
 
     def __ge__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.ge, reduction_op=any)
+        return self._compare(self._broadcast(other), operator.ge)
 
     def __repr__(self):
         return "{cls_name}({value})".format(
@@ -414,14 +430,12 @@ class FrameTuple(tuple):
     def _reduce(self, reduce_func, out_type=tuple):
         return out_type([reduce_func(d[0], d[1]) for d in self])
 
-    def _compare(self, other, left_op, right_op=None, reduction_op=all):
+    def _compare(self, other, left_op, right_op=None):
         if len(self) != len(other):  # or not isinstance(other, Frame)
             raise ValueError("Incompatible instance '{obj}'".format(obj=other))
 
         right_op = right_op or left_op
-        return reduction_op(
-            left_op(a[0], b[0]) and right_op(a[1], b[1]) for a, b in zip(self, other)
-        )
+        return all(left_op(a[0], b[0]) and right_op(a[1], b[1]) for a, b in zip(self, other))
 
     def _broadcast(self, value):
         if isinstance(value, int):
