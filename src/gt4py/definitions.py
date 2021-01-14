@@ -642,6 +642,7 @@ class BuildOptions(AttributeClassLike):
 
     name = attribute(of=str)
     module = attribute(of=str)
+    format_source = attribute(of=bool, default=True)
     backend_opts = attribute(of=DictOf[str, Any], factory=dict)
     build_info = attribute(of=dict, optional=True)
     rebuild = attribute(of=bool, default=False)
@@ -655,7 +656,7 @@ class BuildOptions(AttributeClassLike):
     @property
     def shashed_id(self):
         result = gt_utils.shashed_id(
-            self.name, self.module, *tuple(sorted(self.backend_opts.items()))
+            self.name, self.module, self.format_source, *tuple(sorted(self.backend_opts.items()))
         )
 
         return result
