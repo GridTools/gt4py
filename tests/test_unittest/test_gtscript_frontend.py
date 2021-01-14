@@ -25,7 +25,7 @@ import gt4py.ir as gt_ir
 import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
-from gt4py.gtscript import __INLINED, PARALLEL, I, computation, interval, parallel, region
+from gt4py.gtscript import __INLINED, PARALLEL, I, computation, horizontal, interval, region
 
 from ..definitions import id_version
 
@@ -1092,7 +1092,7 @@ class TestAnnotations:
 class TestParallelIntervals:
     def test_simple(self):
         def definition_func(field: gtscript.Field[float]):
-            with computation(PARALLEL), interval(...), parallel(region[I[0], :]):
+            with computation(PARALLEL), interval(...), horizontal(region[I[0], :]):
                 field = 0
 
         module = f"TestParallelIntervals_simple_{id_version}"
@@ -1122,9 +1122,9 @@ class TestParallelIntervals:
         def definition_func(field: gtscript.Field[float]):
             with computation(PARALLEL), interval(...):
                 field = 0
-                with parallel(region[I[0], :]):
+                with horizontal(region[I[0], :]):
                     field = 1
-                with parallel(region[I[-1], :]):
+                with horizontal(region[I[-1], :]):
                     field = -1
 
         module = f"TestParallelIntervals_multiple_{id_version}"
@@ -1146,9 +1146,9 @@ class TestParallelIntervals:
         def func(field):
             from __externals__ import ext, other
 
-            with parallel(region[ext : I[0], :]):
+            with horizontal(region[ext : I[0], :]):
                 field = 1
-            with parallel(region[I[-1], :]):
+            with horizontal(region[I[-1], :]):
                 field = -1
             return field
 
