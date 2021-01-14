@@ -184,13 +184,20 @@ class AxisIntervalParser(ast.NodeVisitor):
         else:
             slice_node = cls.single_index_slice(node)
 
+        # abs(offset) > LARGE_NUM corresponds to infinite extension
+        LARGE_NUM = 1000000
+
         if slice_node.lower is not None:
             start = parser.visit(slice_node.lower)
+            if start.offset < -LARGE_NUM:
+                start = gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0, extend=True)
         else:
             start = gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0, extend=True)
 
         if slice_node.upper is not None:
             end = parser.visit(slice_node.upper)
+            if end.offset > LARGE_NUM:
+                end = gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, extend=True)
         else:
             end = gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, extend=True)
 
@@ -336,7 +343,7 @@ class ValueInliner(ast.NodeTransformer):
         qualified_name = gt_meta.get_qualified_name_from_node(name_or_attr_node)
         if qualified_name in self.context:
             value = self.context[qualified_name]
-            if value is None or isinstance(value, bool):
+            if isinstance(value, bool):
                 new_node = ast.NameConstant(value=value)
             elif isinstance(value, numbers.Number):
                 new_node = ast.Num(n=value)
@@ -362,38 +369,34 @@ class ValueInliner(ast.NodeTransformer):
         return node
 
 
-class ReturnReplacer(ast.NodeTransformer):
+class ReturnReplacer(gt_utils.meta.ASTTransformPass):
     @classmethod
-    def apply(cls, ast_object, target_node):
-        replacer = cls(target_node)
-        replacer(ast_object)
+    def apply(cls, ast_object: ast.AST, target_node: ast.AST) -> None:
+        """Ensure that there is only a single return statement (can still return a tuple)."""
+        ret_count = sum(isinstance(node, ast.Return) for node in ast.walk(ast_object))
+        if ret_count != 1:
+            raise GTScriptSyntaxError("GTScript Functions should have a single return statement")
+        cls().visit(ast_object, target_node=target_node)
 
-    def __init__(self, target_node):
-        self.target_node = target_node
+    @staticmethod
+    def _get_num_values(node: ast.AST) -> int:
+        return len(node.elts) if isinstance(node, ast.Tuple) else 1
 
-    def __call__(self, ast_object):
-        self.visit(ast_object)
-
-    def visit_Return(self, node: ast.Return):
-        if isinstance(node.value, ast.Tuple):
-            rhs_length = len(node.value.elts)
-        else:
-            rhs_length = 1
-
-        if isinstance(self.target_node, ast.Tuple):
-            lhs_length = len(self.target_node.elts)
-        else:
-            lhs_length = 1
+    def visit_Return(self, node: ast.Return, *, target_node: ast.AST) -> ast.Assign:
+        rhs_length = self._get_num_values(node.value)
+        lhs_length = self._get_num_values(target_node)
 
         if lhs_length == rhs_length:
             return ast.Assign(
-                targets=[self.target_node],
+                targets=[target_node],
                 value=node.value,
                 lineno=node.lineno,
                 col_offset=node.col_offset,
             )
         else:
-            return ast.Raise(lineno=node.lineno, col_offset=node.col_offset)
+            raise GTScriptSyntaxError(
+                "Number of returns values does not match arguments on left side"
+            )
 
 
 class CallInliner(ast.NodeTransformer):
@@ -1571,7 +1574,9 @@ class GTScriptParser(ast.NodeVisitor):
 
         # Resolve function-like imports
         func_externals = {
-            key: value for key, value in context.items() if isinstance(value, types.FunctionType)
+            key: value
+            for key, value in itertools.chain(context.items(), resolved_values_list)
+            if isinstance(value, types.FunctionType)
         }
         for name, value in func_externals.items():
             if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
