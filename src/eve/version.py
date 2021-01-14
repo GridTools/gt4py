@@ -19,7 +19,14 @@
 
 from packaging.version import parse
 
-from ._version import __version__
 
+try:
+    from gt4py import __version__
+    __versioninfo__ = parse(__version__)
 
-__versioninfo__ = parse(__version__)
+except Exception:
+    __version__ = "unknown"
+    __versioninfo__ = None
+
+finally:
+    del parse
