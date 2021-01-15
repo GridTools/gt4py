@@ -31,7 +31,8 @@ if TYPE_CHECKING:
 
 class GTCModuleGenerator(BaseModuleGenerator):
     # type ignore reason: signature differs from super().__call__ on purpose.
-    def __call__(self, builder: Optional["StencilBuilder"] = None, **kwargs: Any) -> str:  # type: ignore # noqa
+    def __call__(self, args_data, builder: Optional["StencilBuilder"] = None, **kwargs: Any) -> str:  # type: ignore # noqa
+        self.args_data = args_data
         return text.format_source(
             self.template.render(
                 imports=self.generate_imports(),
