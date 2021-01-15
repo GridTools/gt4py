@@ -91,7 +91,11 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return DomainInfoGenerator.apply(self.backend.gtir)
 
     def generate_gt_field_info(self) -> str:
-        return FieldInfoGenerator.apply(self.backend.gtir)
+        # infos = [
+        #    f"'{name}': FieldInfo(access=AccessKind.{READ_WRITE}, boundary=
+        # ]
+        # return FieldInfoGenerator.apply(self.backend.gtir)
+        return self.args_data["field_info"]
 
     def generate_gt_parameter_info(self) -> str:
         return ParameterInfoGenerator.apply(self.backend.gtir)
@@ -166,7 +170,8 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
 
     # type ignore reason: signature differs from super on purpose
     def make_module_source(self) -> str:  # type: ignore
-        return self.MODULE_GENERATOR_CLASS(self.builder)()
+        args_data = self.make_args_data_from_iir(self.builder.implementation_ir)
+        return self.MODULE_GENERATOR_CLASS(self.builder)(args_data)
 
     def _make_gtir(self) -> gtir.Stencil:
         gtir = FieldsMetadataPass().visit(DefIRToGTIR.apply(self.builder.definition_ir))
