@@ -143,4 +143,11 @@ class NpirGen(TemplatedGenerator):
         )
     )
 
+    def visit_NativeFunction(self, node, **kwargs):
+        if node == common.NativeFunction.MIN:
+            return "minimum"
+        elif node == common.NativeFunction.MAX:
+            return "maximum"
+        return self.generic_visit(node, **kwargs)
+
     NativeFuncCall = FormatTemplate("np.{func}({', '.join(arg for arg in args)})")

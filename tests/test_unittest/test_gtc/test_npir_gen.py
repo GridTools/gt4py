@@ -99,11 +99,14 @@ def test_field_slice_parallel_k() -> None:
 def test_native_function() -> None:
     result = npir_gen.NpirGen().visit(
         npir.NativeFuncCall(
-            func=common.NativeFunction.SIN,
-            args=[FieldSliceBuilder("a", parallel_k=True).offsets(0, 0, 0).build()],
+            func=common.NativeFunction.MIN,
+            args=[
+                FieldSliceBuilder("a", parallel_k=True).offsets(0, 0, 0).build(),
+                FieldSliceBuilder("b", parallel_k=True).offsets(0, 0, 0).build(),
+            ],
         )
     )
-    assert result == "np.sin(a_[i:I, j:J, k:K])"
+    assert result == "np.minimum(a_[i:I, j:J, k:K], b_[i:I, j:J, k:K])"
 
 
 def test_vector_assign() -> None:
