@@ -68,7 +68,7 @@ class VectorExpression(Expr):
     kind = cast(common.ExprKind, common.ExprKind.FIELD)
 
     def __init__(self, *args, **kwargs):
-        if type(self) is Expr:
+        if type(self) is VectorExpression:
             raise TypeError("Cannot instantiate abstract VectorExpression type of numpy IR")
         super().__init__(*args, **kwargs)
 

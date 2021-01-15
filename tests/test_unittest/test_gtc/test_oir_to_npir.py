@@ -172,3 +172,18 @@ def test_cast(broadcast):
         cast = result.expr
     assert cast.dtype == itof.dtype
     assert cast.expr.value == "42"
+
+
+def test_native_func_call():
+    oir_node = oir.NativeFuncCall(
+        func=common.NativeFunction.SQRT,
+        args=[
+            oir.FieldAccess(
+                name="a",
+                offset=common.CartesianOffset.zero(),
+                dtype=common.DataType.FLOAT64,
+            ),
+        ],
+    )
+    result = OirToNpir().visit(oir_node, parallel_k=True, ctx=OirToNpir.Context())
+    assert isinstance(result, npir.VectorExpression)

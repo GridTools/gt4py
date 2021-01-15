@@ -116,7 +116,11 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs) -> npir.NativeFuncCall:
-        return npir.NativeFuncCall(func=node.func, args=node.args)
+        kwargs["broadcast"] = True
+        return npir.NativeFuncCall(
+            func=self.visit(node.func, **kwargs),
+            args=self.visit(node.args, **kwargs),
+        )
 
     def visit_Literal(
         self, node: oir.Literal, *, broadcast: bool = False, **kwargs
