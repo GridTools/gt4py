@@ -96,6 +96,16 @@ def test_field_slice_parallel_k() -> None:
     assert result == "another_field_[i:I, j:J, (k - 3):(K - 3)]"
 
 
+def test_native_function() -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.NativeFuncCall(
+            func=common.NativeFunction.SIN,
+            args=[FieldSliceBuilder("a", parallel_k=True).offsets(0, 0, 0).build()],
+        )
+    )
+    assert result == "np.sin(a_[i:I, j:J, k:K])"
+
+
 def test_vector_assign() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VectorAssign(
@@ -243,7 +253,12 @@ def test_computation() -> None:
     )
     print(result)
     match = re.match(
-        (r"def run\(\*, _domain_, _origin_\):\n" r"\n?" r"(    .*?\n)*"),
+        (
+            r"import numpy as np\n\n\n"
+            r"def run\(\*, _domain_, _origin_\):\n"
+            r"\n?"
+            r"(    .*?\n)*"
+        ),
         result,
         re.MULTILINE,
     )

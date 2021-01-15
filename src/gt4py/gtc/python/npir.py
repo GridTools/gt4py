@@ -120,5 +120,5 @@ class Computation(common.LocNode):
     domain_padding: DomainPadding
 
 
-class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
+class NativeFuncCall(common.NativeFuncCall[Expr], VectorExpression):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)

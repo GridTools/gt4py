@@ -143,4 +143,4 @@ class NpirGen(TemplatedGenerator):
         )
     )
 
-    NativeFunctionCall = FormatTemplate("{func}({', '.join(arg for arg in args)})")
+    NativeFuncCall = FormatTemplate("np.{func}({', '.join(arg for arg in args)})")
