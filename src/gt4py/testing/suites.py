@@ -181,7 +181,19 @@ class SuiteMeta(type):
             hyp_wrapper(test)
 
         cls_dict["test_generation"] = pytest.mark.parametrize(
-            "test", [test for test in cls_dict["tests"] if test["suite"] == cls_name]
+            "test",
+            [
+                pytest.param(
+                    test,
+                    marks=(
+                        [pytest.mark.requires_gpu]
+                        if gt_backend.from_name(test["backend"]).compute_device == "gpu"
+                        else ()
+                    ),
+                )
+                for test in cls_dict["tests"]
+                if test["suite"] == cls_name
+            ],
         )(generation_test_wrapper)
 
     def parametrize_implementation_tests(cls_name, bases, cls_dict):

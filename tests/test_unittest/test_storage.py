@@ -27,7 +27,7 @@ import pytest
 try:
     import cupy as cp
 except ImportError:
-    pass
+    cp = None
 
 import gt4py
 
@@ -158,7 +158,7 @@ def generate_data_and_device_data():
         )
         # data np, cuda managed,
         test_label = "data np, cuda managed"
-        data = gt4py.storage.utils._cpu_view(get_cp_empty_managed((3, 3)))
+        data = gt4py.storage.utils._cpu_view(get_cp_empty_managed((3, 3))) if cp else None
 
         def validate(params, data=data, copy=copy):
             assert params["device"] == "gpu"
@@ -614,14 +614,17 @@ class TestConstructionEndToEnd:
             res = self.run_test(alloc_fun, None, False)
             assert isinstance(res, gt4py.storage.definitions.CPUStorage)
 
+        @pytest.mark.requires_gpu
         def test_gpu_only(self, alloc_fun):
             res = self.run_test(alloc_fun, "gpu", False)
             assert isinstance(res, gt4py.storage.definitions.GPUStorage)
 
+        @pytest.mark.requires_gpu
         def test_gpu_cuda_managed(self, alloc_fun):
             res = self.run_test(alloc_fun, "gpu", "cuda")
             assert isinstance(res, gt4py.storage.definitions.CudaManagedGPUStorage)
 
+        @pytest.mark.requires_gpu
         def test_gpu_gt4py_managed(self, alloc_fun):
             res = self.run_test(alloc_fun, "gpu", "gt4py")
             assert isinstance(res, gt4py.storage.definitions.ExplicitlyManagedGPUStorage)
@@ -653,6 +656,7 @@ class TestConstructionEndToEnd:
             res = self.run_test(alloc_fun, data)
             assert isinstance(res, gt4py.storage.definitions.CPUStorage)
 
+        @pytest.mark.requires_gpu
         def test_gpu_only(self, alloc_fun, kwargs):
             if "shape" not in kwargs:
                 kwargs["shape"] = (2, 4, 6)
@@ -660,6 +664,7 @@ class TestConstructionEndToEnd:
             res = self.run_test(alloc_fun, data)
             assert isinstance(res, gt4py.storage.definitions.GPUStorage)
 
+        @pytest.mark.requires_gpu
         def test_gpu_cuda_managed(self, alloc_fun, kwargs):
             if "shape" not in kwargs:
                 kwargs["shape"] = (2, 4, 6)
@@ -667,6 +672,7 @@ class TestConstructionEndToEnd:
             res = self.run_test(alloc_fun, data)
             assert isinstance(res, gt4py.storage.definitions.CudaManagedGPUStorage)
 
+        @pytest.mark.requires_gpu
         def test_gpu_gt4py_managed(self, alloc_fun, kwargs):
             if "shape" not in kwargs:
                 kwargs["shape"] = (2, 4, 6)
@@ -727,7 +733,13 @@ class TestConstructionEndToEnd:
 
 
 @pytest.mark.parametrize(
-    ["device", "managed"], [("cpu", False), ("gpu", False), ("gpu", "cuda"), ("gpu", "gt4py")]
+    ["device", "managed"],
+    [
+        ("cpu", False),
+        pytest.param("gpu", False, marks=[pytest.mark.requires_gpu]),
+        pytest.param("gpu", "cuda", marks=[pytest.mark.requires_gpu]),
+        pytest.param("gpu", "gt4py", marks=[pytest.mark.requires_gpu]),
+    ],
 )
 def test_slices(device, managed):
     halo = (1, 1, 1)
@@ -741,7 +753,13 @@ def test_slices(device, managed):
 
 
 @pytest.mark.parametrize(
-    ["device", "managed"], [("cpu", False), ("gpu", False), ("gpu", "cuda"), ("gpu", "gt4py")]
+    ["device", "managed"],
+    [
+        ("cpu", False),
+        pytest.param("gpu", False, marks=[pytest.mark.requires_gpu]),
+        pytest.param("gpu", "cuda", marks=[pytest.mark.requires_gpu]),
+        pytest.param("gpu", "gt4py", marks=[pytest.mark.requires_gpu]),
+    ],
 )
 @pytest.mark.parametrize("layout", [(0, 1, 2), (2, 1, 0), (2, 0, 1)])
 def test_transpose(device, managed, layout):
@@ -1144,7 +1162,7 @@ class TestParameterLookupAndNormalizeValid:
                 marks=[pytest.mark.requires_gpu],
             ),
             pytest.param(
-                {"copy": False, "managed": False, "data": cp.empty((3, 3, 3))},
+                {"copy": False, "managed": False, "data": (cp or np).empty((3, 3, 3))},
                 {"managed": False},
                 marks=[pytest.mark.requires_gpu],
             ),
@@ -1155,7 +1173,7 @@ class TestParameterLookupAndNormalizeValid:
             ),
             ({"copy": True, "managed": False, "data": np.empty((3, 3, 3))}, {"managed": False}),
             pytest.param(
-                {"copy": True, "managed": False, "data": cp.empty((3, 3, 3))},
+                {"copy": True, "managed": False, "data": (cp or np).empty((3, 3, 3))},
                 {"managed": False},
                 marks=[pytest.mark.requires_gpu],
             ),
@@ -1166,7 +1184,7 @@ class TestParameterLookupAndNormalizeValid:
             ),
             ({"copy": True, "managed": "cuda", "data": np.empty((3, 3, 3))}, {"managed": "cuda"}),
             pytest.param(
-                {"copy": True, "managed": "cuda", "data": cp.empty((3, 3, 3))},
+                {"copy": True, "managed": "cuda", "data": (cp or np).empty((3, 3, 3))},
                 {"managed": "cuda"},
                 marks=[pytest.mark.requires_gpu],
             ),
@@ -1180,7 +1198,7 @@ class TestParameterLookupAndNormalizeValid:
                 {"managed": "gt4py"},
             ),
             pytest.param(
-                {"copy": True, "managed": "gt4py", "data": cp.empty((3, 3, 3))},
+                {"copy": True, "managed": "gt4py", "data": (cp or np).empty((3, 3, 3))},
                 {"managed": "gt4py"},
                 marks=[pytest.mark.requires_gpu],
             ),
@@ -1190,22 +1208,38 @@ class TestParameterLookupAndNormalizeValid:
                 marks=[pytest.mark.requires_gpu],
             ),
             pytest.param(
-                {"copy": False, "data": gt_store.empty((3, 3, 3), device="cpu", managed=False)},
+                {
+                    "copy": False,
+                    "data": gt_store.empty((3, 3, 3), device="cpu", managed=False) if cp else None,
+                },
                 {"managed": False},
                 marks=[pytest.mark.requires_gpu],
             ),
             pytest.param(
-                {"copy": False, "data": gt_store.empty((3, 3, 3), device="gpu", managed=False)},
+                {
+                    "copy": False,
+                    "data": gt_store.empty((3, 3, 3), device="gpu", managed=False) if cp else None,
+                },
                 {"managed": False},
                 marks=[pytest.mark.requires_gpu],
             ),
             pytest.param(
-                {"copy": False, "data": gt_store.empty((3, 3, 3), device="gpu", managed="gt4py")},
+                {
+                    "copy": False,
+                    "data": gt_store.empty((3, 3, 3), device="gpu", managed="gt4py")
+                    if cp
+                    else None,
+                },
                 {"managed": "gt4py"},
                 marks=[pytest.mark.requires_gpu],
             ),
             pytest.param(
-                {"copy": False, "data": gt_store.empty((3, 3, 3), device="gpu", managed="cuda")},
+                {
+                    "copy": False,
+                    "data": gt_store.empty((3, 3, 3), device="gpu", managed="cuda")
+                    if cp
+                    else None,
+                },
                 {"managed": "cuda"},
                 marks=[pytest.mark.requires_gpu],
             ),

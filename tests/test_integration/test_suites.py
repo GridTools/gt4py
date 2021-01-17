@@ -521,8 +521,7 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
 class TestOptionalField(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 32), (1, 32), (1, 32)]
-    # backends = list(set(ALL_BACKENDS) - set(DAWN_GPU_BACKENDS))
-    backends = ["gtcuda"]
+    backends = list(set(ALL_BACKENDS) - set(DAWN_GPU_BACKENDS))
     symbols = dict(
         PHYS_TEND=gt_testing.global_name(one_of=(False, True)),
         in_field=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
