@@ -200,6 +200,17 @@ class Storage:
             raise TypeError("Halo can not be None.")
         self._halo = gt_store.utils.normalize_halo(value)
 
+    def to_numpy(self):
+        if self.device == "cpu":
+            return np.array(self, copy=True)
+        else:
+            return cp.asnumpy(self)
+
+    def to_cupy(self):
+        if cupy is None:
+            raise BufferError("Not possible to convert to CuPy, since CuPy could not be imported.")
+        return cp.array(self, copy=True)
+
 
 class CudaManagedGPUStorage(Storage):
     device = "gpu"
@@ -286,6 +297,12 @@ class CudaManagedGPUStorage(Storage):
     def _transpose(self, *axes):
         self._field = self._field.transpose(*axes)
 
+    def as_numpy(self):
+        raise np.asarray(self)
+
+    def as_cupy(self):
+        raise cp.asarray(self)
+
 
 class CPUStorage(Storage):
     device = "cpu"
@@ -355,6 +372,9 @@ class CPUStorage(Storage):
 
     def _transpose(self, *axes):
         self._field = self._field.transpose(*axes)
+
+    def as_numpy(self):
+        raise np.asarray(self)
 
 
 class GPUStorage(Storage):
@@ -431,6 +451,9 @@ class GPUStorage(Storage):
 
     def _transpose(self, *axes):
         self._device_field = self._device_field.transpose(*axes)
+
+    def as_cupy(self):
+        return cp.asarray(self)
 
 
 class ExplicitlyManagedGPUStorage(Storage):
@@ -635,3 +658,9 @@ class ExplicitlyManagedGPUStorage(Storage):
         cuda_array_interface["touch"] = self._set_device_modified()
 
         return {"cpu": array_interface, "gpu": cuda_array_interface}
+
+    def as_numpy(self):
+        raise np.asarray(self)
+
+    def as_cupy(self):
+        raise cp.asarray(self)

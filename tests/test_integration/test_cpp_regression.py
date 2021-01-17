@@ -104,8 +104,9 @@ def run_horizontal_diffusion(backend, id_version, domain):
         arg_fields[k].device_to_host(
             force=True
         )  # directly called `run`, therefore storages are not marked modified
+
         np.testing.assert_allclose(
-            np.asarray(arg_fields[k]), np.asarray(validate_fields[k + "_reference"])
+            arg_fields[k].to_numpy(), validate_fields[k + "_reference"].to_numpy()
         )
 
 
@@ -152,11 +153,12 @@ def run_tridiagonal_solver(backend, id_version, domain):
     )
 
     for k in validate_field_names:
+        print(type(arg_fields[k]))
         arg_fields[k].device_to_host(
             force=True
         )  # directly called `run`, therefore storages are not marked modified
         np.testing.assert_allclose(
-            np.asarray(arg_fields[k]), np.asarray(validate_fields[k + "_reference"])
+            arg_fields[k].to_numpy(), validate_fields[k + "_reference"].to_numpy()
         )
 
 
@@ -197,7 +199,7 @@ def run_vertical_advection_dycore(backend, id_version, domain):
         "vertical_advection_dycore", backend, id_version=id_version, rebuild=False
     )
     for k in arg_fields:
-        if hasattr(arg_fields[k], 'host_to_device'):
+        if hasattr(arg_fields[k], "host_to_device"):
             arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
@@ -214,7 +216,7 @@ def run_vertical_advection_dycore(backend, id_version, domain):
             force=True
         )  # directly called `run`, therefore storages are not marked modified
         np.testing.assert_allclose(
-            np.asarray(arg_fields[k]), np.asarray(validate_fields[k + "_reference"])
+            arg_fields[k].to_numpy(), validate_fields[k + "_reference"].to_numpy()
         )
 
 
@@ -259,7 +261,7 @@ def run_large_k_interval(backend, id_version, domain):
             force=True
         )  # directly called `run`, therefore storages are not marked modified
         np.testing.assert_allclose(
-            np.asarray(arg_fields[k]), np.asarray(validate_fields[k + "_reference"])
+            arg_fields[k].to_numpy(), validate_fields[k + "_reference"].to_numpy()
         )
 
 

@@ -422,7 +422,19 @@ def parameter_lookup_and_normalize(
             raise ValueError('\'managed\' must be in ["cuda", "gt4py", False]')
     if isinstance(defaults, str):
         defaults = get_default_parameters(defaults)
-    # 2a) if template is storage, use those parameters
+
+    # 2a) fill in default parameters.
+    if defaults is not None:
+        if isinstance(defaults, str):
+            defaults = get_default_parameters(defaults)
+        if device is None:
+            device = defaults.device
+        if alignment_size is None:
+            alignment_size = defaults.alignment_size
+        if layout is None:
+            layout = defaults.layout
+
+    # 2b) if template is storage, use those parameters
     if device is None and template is not None:
         if has_gpu_buffer(template):
             device = "gpu"
@@ -475,16 +487,6 @@ def parameter_lookup_and_normalize(
                 managed = False
             elif cp is not None and is_cuda_managed(template):
                 managed = "cuda"
-    # 2b) fill in default parameters.
-    if defaults is not None:
-        if isinstance(defaults, str):
-            defaults = get_default_parameters(defaults)
-        if device is None:
-            device = defaults.device
-        if alignment_size is None:
-            alignment_size = defaults.alignment_size
-        if layout is None:
-            layout = defaults.layout
 
     # 4) fill in missing parameters from given data/device_data
     if shape is None:

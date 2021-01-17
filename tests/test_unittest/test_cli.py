@@ -63,7 +63,7 @@ def nocli_backend(scope="module"):
     """Temporarily register the nocli backend."""
     backend.register(NonCliBackend)
     yield
-    backend.REGISTRY.pop("nocli")
+    backend.remove(NonCliBackend.name)
 
 
 BACKEND_ROW_PATTERN_BY_NAME = {

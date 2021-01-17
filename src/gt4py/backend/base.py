@@ -28,6 +28,7 @@ import gt4py
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
+from gt4py.storage.default_parameters import StorageDefaults
 
 from . import pyext_builder
 
@@ -67,6 +68,11 @@ def register(backend_cls):
     return REGISTRY.register(backend_cls.name, backend_cls)
 
 
+def remove(backend_key):
+    REGISTRY.pop(backend_key)
+    gt4py.storage.default_parameters.REGISTRY.pop(backend_key)
+
+
 class Backend(abc.ABC):
 
     #: Backend name
@@ -80,14 +86,11 @@ class Backend(abc.ABC):
     #:    - type
     options: ClassVar[Dict[str, Any]]
 
-    #: Backend-specific storage parametrization:
-    #:
-    #:  - "alignment": in bytes
-    #:  - "device": "cpu" | "gpu"
-    #:  - "layout_map": callback converting a mask to a layout
-    #:  - "is_compatible_layout": callback checking if a storage has compatible layout
-    #:  - "is_compatible_type": callback checking if storage has compatible type
-    storage_info: ClassVar[Dict[str, Any]]
+    #: the processing unit where the generated code will run, one of , "cpu" or "gpu"
+    compute_device: ClassVar[str] = "cpu"
+
+    #: Backend-specific default storage parametrization
+    storage_defaults: ClassVar[StorageDefaults] = StorageDefaults()
 
     #: Language support:
     #:

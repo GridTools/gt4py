@@ -38,6 +38,10 @@ import gt4py.storage as gt_store
 import gt4py.storage.utils as gt_storage_utils
 import gt4py.utils as gt_utils
 
+from ..definitions import GPU_BACKENDS, INTERNAL_BACKENDS
+
+INTERNAL_GPU_BACKENDS = list(set(GPU_BACKENDS) & set(INTERNAL_BACKENDS))
+
 from ..definitions import CPU_BACKENDS
 
 
@@ -374,10 +378,10 @@ def allocation_strategy(draw):
 
 
 @pytest.fixture
-def cp_empty_managed_fixture():
+def cp_managed_fixture():
     allocator = cp.cuda.get_allocator()
     cp.cuda.set_allocator(cp.cuda.malloc_managed)
-    yield cp.empty
+    yield
     cp.cuda.set_allocator(allocator)
 
 
@@ -394,11 +398,10 @@ def get_cp_empty_managed(*args, **kwargs):
 
 
 @pytest.mark.requires_gpu
-@hyp.given(param_dict=allocation_strategy())
-def test_managed_viewcasting(param_dict, cp_empty_managed_fixture):
-    shape = param_dict["shape"]
+@pytest.mark.parametrize("shape", [(), (0, 1), (3, 3, 3)])
+def test_managed_viewcasting(shape, cp_managed_fixture):
 
-    gpu_arr = cp_empty_managed_fixture(shape)
+    gpu_arr = cp.empty(shape)
     cpu_view = gt_storage_utils._cpu_view(gpu_arr)
     gpu_view = gt_storage_utils._gpu_view(cpu_view)
 
@@ -1252,6 +1255,42 @@ class TestParameterLookupAndNormalizeValid:
                     pytest.mark.skipif(cp is None, reason="CuPy not imported."),
                 ],
             ),
+            *[
+                pytest.param(
+                    {"copy": False, "shape": (4, 4, 5), "defaults": name},
+                    {"device": "gpu"},
+                    marks=[
+                        pytest.mark.requires_gpu,
+                        pytest.mark.skipif(cp is None, reason="CuPy not imported."),
+                    ],
+                )
+                for name in INTERNAL_GPU_BACKENDS
+                if gt_backend.from_name(name).compute_device == "gpu"
+            ],
+            *[
+                pytest.param(
+                    {"data": np.ones((4, 4, 5)), "copy": False, "defaults": name},
+                    {"device": "gpu"},
+                    marks=[
+                        pytest.mark.requires_gpu,
+                        pytest.mark.skipif(cp is None, reason="CuPy not imported."),
+                    ],
+                )
+                for name in INTERNAL_GPU_BACKENDS
+                if gt_backend.from_name(name).compute_device == "gpu"
+            ],
+            *[
+                pytest.param(
+                    {"template": np.ones((4, 4, 5)), "copy": False, "defaults": name},
+                    {"device": "gpu"},
+                    marks=[
+                        pytest.mark.requires_gpu,
+                        pytest.mark.skipif(cp is None, reason="CuPy not imported."),
+                    ],
+                )
+                for name in INTERNAL_GPU_BACKENDS
+                if gt_backend.from_name(name).compute_device == "gpu"
+            ],
         ],
     )
     def test_lookup_device(

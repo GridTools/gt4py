@@ -29,6 +29,8 @@
 #include <pybind11/stl.h>
 
 #include <vector>
+#include <sstream>
+#include <string>
 #include <chrono>
 
 namespace py = ::pybind11;
@@ -47,7 +49,21 @@ BufferInfo make_buffer_info(py::object& b) {
     py::dict __cuda_array_interface__ = b.attr("__cuda_array_interface__").cast<py::dict>();
     auto shape_tuple =  __cuda_array_interface__["shape"].cast<std::tuple<int, int, int>>();
     std::vector<py_size_t> shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple), std::get<2>(shape_tuple)};
-    auto strides_tuple = __cuda_array_interface__["strides"].cast<std::tuple<int, int, int>>();
+    auto py_strides = __cuda_array_interface__["strides"];
+    std::tuple<int, int, int> strides_tuple;
+    if (py_strides.is_none()) {
+        std::string typestr = __cuda_array_interface__["typestr"].cast<std::string>();
+        typestr.erase(0,2);
+        std::stringstream sstream(typestr);
+        int itemsize;
+        sstream >> itemsize;
+        strides_tuple = std::tuple<int, int, int>();
+        std::get<2>(strides_tuple) = itemsize;
+        std::get<1>(strides_tuple) = std::get<2>(strides_tuple)*std::get<2>(shape_tuple);
+        std::get<0>(strides_tuple) = std::get<1>(strides_tuple)*std::get<1>(shape_tuple);
+    } else {
+        strides_tuple = py_strides.cast<std::tuple<int, int, int>>();
+    }
     std::vector<py_size_t> strides = {std::get<0>(strides_tuple), std::get<1>(strides_tuple), std::get<2>(strides_tuple)};
     void* ptr =  reinterpret_cast<void*>(std::get<0>(__cuda_array_interface__["data"].cast<std::tuple<std::size_t, bool>>()));
 {%- else %}

@@ -19,6 +19,13 @@ from itertools import count, product
 
 import pytest
 
+import numpy as np
+
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
 import gt4py as gt
 import gt4py.definitions as gt_definitions
 from gt4py import backend as gt_backend
@@ -510,7 +517,8 @@ class StencilTestSuite(metaclass=SuiteMeta):
             inputs = {key: value for key, value in inputs.items() if value is not None}
 
             validation_fields = {
-                name: np.array(field, copy=True) for name, field in inputs.items()
+                name: field.to_numpy() if name in implementation.field_info else np.asarray(field)
+                for name, field in inputs.items()
             }
 
             implementation(**inputs, origin=patched_origin, exec_info=exec_info)
