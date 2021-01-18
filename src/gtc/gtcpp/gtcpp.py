@@ -185,7 +185,7 @@ class GTFunctor(LocNode, SymbolTableTrait):
 class Param(LocNode):
     name: SymbolName
 
-    class Config(eve.concepts.FrozenModelConfig):
+    class Config(eve.concepts.FrozenModel.Config):
         pass
 
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
@@ -199,7 +199,7 @@ class Param(LocNode):
 class Arg(LocNode):
     name: SymbolRef
 
-    class Config(eve.concepts.FrozenModelConfig):
+    class Config(eve.concepts.FrozenModel.Config):
         pass
 
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40

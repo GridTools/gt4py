@@ -103,22 +103,14 @@ out_field = functools.partial(field, kind=FieldKind.OUTPUT)
 
 
 # -- Models --
-class BaseModelConfig:
-    extra = "forbid"
-
-
-class FrozenModelConfig(BaseModelConfig):
-    allow_mutation = False
-
-
 class Model(pydantic.BaseModel):
-    class Config(BaseModelConfig):
-        pass
+    class Config:
+        extra = "forbid"
 
 
 class FrozenModel(pydantic.BaseModel):
-    class Config(FrozenModelConfig):
-        pass
+    class Config:
+        allow_mutation = False
 
 
 # -- Nodes --
@@ -235,7 +227,7 @@ class BaseNode(pydantic.BaseModel, metaclass=NodeMetaclass):
 
     iter_tree = iter_tree_pre
 
-    class Config(BaseModelConfig):
+    class Config(Model.Config):
         pass
 
 
@@ -252,7 +244,7 @@ class Node(BaseNode):
 class FrozenNode(Node):
     """Default public name for an inmutable base node class."""
 
-    class Config(FrozenModelConfig):
+    class Config(FrozenModel.Config):
         pass
 
 
