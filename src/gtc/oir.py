@@ -67,6 +67,8 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
 
+    _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
+
 
 # TODO(havogt) consider introducing BlockStmt
 # class BlockStmt(common.BlockStmt[Stmt], Stmt):

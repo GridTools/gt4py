@@ -96,7 +96,7 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
 
-    # TODO validate dtype of lhs and rhs match
+    _dtype_validation = common.assign_stmt_dtype_validation(strict=False)
 
 
 class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):

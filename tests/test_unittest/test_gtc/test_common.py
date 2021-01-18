@@ -65,6 +65,10 @@ class NativeFuncCall(Expr, common.NativeFuncCall[Expr]):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
+class AssignStmt(Stmt, common.AssignStmt[DummyExpr, Expr]):
+    _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
+
+
 @pytest.mark.parametrize(
     "node,expected",
     [
@@ -191,6 +195,13 @@ def test_dtype_propagation(node, expected):
         (
             lambda: NativeFuncCall(func=NativeFunction.SIN, args=[DummyExpr(), DummyExpr()]),
             r"accepts 1 arg.* 2.*passed",
+        ),
+        (
+            lambda: AssignStmt(
+                left=DummyExpr(dtype=ARITHMETIC_TYPE),
+                right=DummyExpr(dtype=ANOTHER_ARITHMETIC_TYPE),
+            ),
+            r"Type mismatch",
         ),
     ],
 )

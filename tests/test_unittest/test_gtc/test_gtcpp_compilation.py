@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import setuptools
 
-from gt4py import (  # TODO(havogt) this is a depedency from gtc tests to gt4py, ok?
+from gt4py import (  # TODO(havogt) this is a dependency from gtc tests to gt4py, ok?
     config,
     gt2_src_manager,
 )

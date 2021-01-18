@@ -116,23 +116,22 @@ class DataType(IntEnum):
 
 
 @enum.unique
-class LoopOrder(IntEnum):
+class LoopOrder(StrEnum):
     """Loop order identifier."""
 
-    PARALLEL = 0
-    FORWARD = 1
-    BACKWARD = 2
+    PARALLEL = "parallel"
+    FORWARD = "forward"
+    BACKWARD = "backward"
 
 
-# TODO StrEnum?
 @enum.unique
-class BuiltInLiteral(IntEnum):
-    MAX_VALUE = 0
-    MIN_VALUE = 1
-    ZERO = 2
-    ONE = 3
-    TRUE = 4
-    FALSE = 5
+class BuiltInLiteral(StrEnum):
+    MAX_VALUE = "max"
+    MIN_VALUE = "min"
+    ZERO = "zero"
+    ONE = "one"
+    TRUE = "true"
+    FALSE = "false"
 
 
 @enum.unique
@@ -331,6 +330,14 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT]):
 class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
     left: TargetT
     right: ExprT
+
+
+def assign_stmt_dtype_validation(*, strict: bool):
+    def _impl(cls, values):
+        verify_and_get_common_dtype(cls, [values["left"], values["right"]], strict=strict)
+        return values
+
+    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
 
 
 class UnaryOp(GenericNode, Generic[ExprT]):
