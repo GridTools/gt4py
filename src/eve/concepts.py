@@ -128,7 +128,8 @@ _EVE_NODE_IMPL_SUFFIX = "_"
 AnyNode = TypeVar("AnyNode", bound="BaseNode")
 ValueNode = Union[bool, bytes, int, float, str, IntEnum, StrEnum]
 LeafNode = Union[AnyNode, ValueNode]
-TreeNode = Union[AnyNode, Union[List[LeafNode], Dict[Any, LeafNode], Set[LeafNode]]]
+CollectionNode = Union[List[LeafNode], Dict[Any, LeafNode], Set[LeafNode]]
+TreeNode = Union[AnyNode, CollectionNode]
 
 
 class NodeMetaclass(pydantic.main.ModelMetaclass):
