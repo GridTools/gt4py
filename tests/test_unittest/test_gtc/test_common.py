@@ -1,9 +1,9 @@
 from typing import List, Optional, Union
 
-import eve
 import pytest
 from pydantic import ValidationError
 
+import eve
 from gtc import common
 from gtc.common import (
     ArithmeticOperator,

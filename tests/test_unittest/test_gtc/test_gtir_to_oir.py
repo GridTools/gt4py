@@ -1,7 +1,6 @@
 from typing import Type
 
 from eve import Node
-
 from gtc import gtir, gtir_to_oir, oir
 from gtc.common import BlockStmt, DataType, ExprKind
 from gtc.gtir import ScalarIfStmt

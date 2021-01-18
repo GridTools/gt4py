@@ -84,7 +84,6 @@ def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any],
         False
 
     """
-
     types: Tuple[Type, ...] = tuple()
     if isinstance(type_info, type):
         types = (type_info,)
@@ -148,7 +147,6 @@ def attrgetter_(*names: str, default: Any = NOTHING) -> Callable[[Any], Any]:
         (1.0, 2.0, nan)
 
     """
-
     if any(not isinstance(name, str) for name in names):
         raise TypeError(f"Attribute names must be strings (provided: {names})")
 
@@ -258,7 +256,6 @@ def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
             Defaults to :class:`xxhash.xxh64`.
 
     """
-
     if hash_algorithm is None:
         hash_algorithm = xxhash.xxh64()
     elif isinstance(hash_algorithm, str):
@@ -385,7 +382,6 @@ class UIDGenerator:
     @classmethod
     def random_id(cls, *, prefix: Optional[str] = None, width: int = 8) -> str:
         """Generate a random globally unique id."""
-
         if width is not None and width <= 4:
             raise ValueError(f"Width must be a positive number > 4 ({width} provided).")
         u = uuid.uuid4()
@@ -395,7 +391,6 @@ class UIDGenerator:
     @classmethod
     def sequential_id(cls, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
         """Generate a sequential unique id (for the current session)."""
-
         if width is not None and width < 1:
             raise ValueError(f"Width must be a positive number ({width} provided).")
         count = next(cls.__counter)
@@ -433,7 +428,6 @@ def as_xiter(iterator_func: Callable[..., Iterator[T]]) -> Callable[..., XIterat
 
 def xiter(iterable: Iterable[T]) -> XIterator[T]:
     """Create an XIterator from any iterable (like ``iter()``)."""
-
     if isinstance(iterable, collections.abc.Iterator):
         it = iterable
     elif isinstance(iterable, collections.abc.Iterable):
@@ -737,7 +731,10 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(itertools.chain(self.iterator, *iterators))
 
     def diff(
-        self, *others: Iterable, default: Any = NOTHING, key: Union[NOTHING, Callable] = NOTHING,
+        self,
+        *others: Iterable,
+        default: Any = NOTHING,
+        key: Union[NOTHING, Callable] = NOTHING,
     ) -> XIterator[Tuple[T, S]]:
         """Diff iterators (equivalent to ``toolz.itertoolz.diff(self, *others)``).
 
@@ -1003,10 +1000,13 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         ...
 
     def groupby(
-        self, key: Union[str, List[Any], Callable[[T], Any]], *attr_keys: str, as_dict: bool = False
+        self,
+        key: Union[str, List[Any], Callable[[T], Any]],
+        *attr_keys: str,
+        as_dict: bool = False,
     ) -> Union[XIterator[Tuple[Any, List[T]]], Dict]:
-        """Group a sequence by a given key (more or less equivalent to ``toolz.itertoolz.groupby(key, self)``
-        with some caveats).
+        """Group a sequence by a given key (more or less equivalent to
+        ``toolz.itertoolz.groupby(key, self)`` with some caveats).
 
         The `key` argument is used in the following way:
 
@@ -1014,7 +1014,8 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
               to compute an actual `key` value for each item in the sequence.
             - if `key` is a ``str`` or (multiple ``str`` args) they will be used as
               attributes names (:func:`operator.attrgetter`).
-            - if `key` is a ``list`` of values, they will be used as index values for :func:`operator.itemgetter`.
+            - if `key` is a ``list`` of values, they will be used as index values
+              for :func:`operator.itemgetter`.
 
         Keyword Arguments:
             as_dict: if `True`, it will return the groups ``dict`` instead of an :class:`XIterator`
@@ -1157,7 +1158,6 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         with some caveats).
 
         The `key` argument is used in the following way:
-
             - if `key` is a callable, it will be passed directly to :func:`toolz.itertoolz.reduceby`
               to compute an actual `key` value for each item in the sequence.
             - if `key` is a ``str`` or (multiple ``str`` args) they will be used as

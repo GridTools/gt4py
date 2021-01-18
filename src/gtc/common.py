@@ -17,6 +17,9 @@
 import enum
 from typing import Any, Dict, Generic, List, Optional, TypeVar, Union, cast
 
+from pydantic import validator
+from pydantic.class_validators import root_validator
+
 from eve import (
     GenericNode,
     IntEnum,
@@ -29,9 +32,6 @@ from eve import (
 )
 from eve import exceptions as eve_exceptions
 from eve.type_definitions import SymbolRef
-from pydantic import validator
-from pydantic.class_validators import root_validator
-
 from gtc.utils import flatten_list
 
 
@@ -249,7 +249,7 @@ def verify_and_get_common_dtype(
             else:
                 raise ValueError(
                     "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
-                    + ", ".join(v.dtype.name for v in cast(List[DataType], values))
+                    + ", ".join(v.dtype.name for v in cast(List[Expr], values))
                 )
         else:
             # upcasting (note that `typing.cast` has nothing to do with upcasting...)
@@ -495,7 +495,7 @@ def native_func_call_dtype_propagation(*, strict: bool = True):
 
 def validate_dtype_is_set():
     def _impl(cls, values: dict):
-        dtype_nodes = []
+        dtype_nodes: List[Node] = []
         for v in flatten_list(values.values()):
             if isinstance(v, Node):
                 dtype_nodes.extend(v.iter_tree().if_hasattr("dtype"))

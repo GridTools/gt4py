@@ -1,5 +1,4 @@
 from eve import NodeTranslator
-
 from gtc import gtir
 from gtc.common import DataType, GTCPostconditionError
 

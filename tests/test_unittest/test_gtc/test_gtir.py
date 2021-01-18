@@ -1,7 +1,7 @@
 import pytest
-from eve import SourceLocation
 from pydantic.error_wrappers import ValidationError
 
+from eve import SourceLocation
 from gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
 from gtc.gtir import (
     AxisBound,

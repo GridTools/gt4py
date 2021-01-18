@@ -47,7 +47,6 @@ def generic_iter_children(
             Defaults to `False`.
 
     """
-
     children_iterator: Iterable[Union[Any, Tuple[KeyValue, Any]]] = iter(())
     if isinstance(node, concepts.Node):
         children_iterator = node.iter_children() if with_keys else node.iter_children_values()
@@ -79,7 +78,6 @@ def iter_tree_pre(
             Defaults to `False`.
 
     """
-
     if with_keys:
         yield __key__, node
         for key, child in generic_iter_children(node, with_keys=True):
@@ -153,6 +151,7 @@ def iter_tree(
 
     Args:
         traversal_order: Tree nodes traversal order.
+
         with_keys: Return tuples of (key, object) values where keys are
             the reference to the object node in the parent.
             Defaults to `False`.

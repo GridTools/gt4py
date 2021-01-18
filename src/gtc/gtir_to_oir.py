@@ -1,8 +1,7 @@
+from dataclasses import dataclass, field
 from typing import List
 
-from dataclasses import dataclass, field
 from eve import NodeTranslator
-
 from gtc import gtir, oir
 from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 
@@ -52,7 +51,7 @@ class GTIRToOIR(NodeTranslator):
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs
     ):
-        tmp = oir.Temporary(name="tmp_" + node.left.name + "_" + node.id_, dtype=node.left.dtype)
+        tmp = oir.Temporary(name=f"tmp_{node.left.name}_{node.id_}", dtype=node.left.dtype)
 
         ctx.add_decl(tmp)
 

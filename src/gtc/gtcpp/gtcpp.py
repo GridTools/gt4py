@@ -1,11 +1,11 @@
 import enum
 from typing import List, Optional, Tuple, Union
 
+from pydantic.class_validators import validator
+
 import eve
 from eve import Str, StrEnum, SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
-from pydantic.class_validators import validator
-
 from gtc import common
 from gtc.common import LocNode
 

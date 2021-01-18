@@ -359,7 +359,8 @@ class Template(Protocol):
 
         Args:
             mapping: A mapping whose keys match the template placeholders.
-            **kwargs: Placeholder values provided as keyword arguments (they will
+
+            ``**kwargs``: Placeholder values provided as keyword arguments (they will
                 take precedence over ``mapping`` values for duplicated keys.
 
         Returns:
@@ -385,7 +386,7 @@ class Template(Protocol):
         """Render the template.
 
         Args:
-            **kwargs: Placeholder values provided as keyword arguments.
+            ``**kwargs``: Placeholder values provided as keyword arguments.
 
         Returns:
             The rendered string.
@@ -624,7 +625,9 @@ class TemplatedGenerator(NodeVisitor):
             {
                 key: value
                 for key, value in cls.__dict__.items()
-                if isinstance(value, Template) and not key.startswith("_") and not key.endswith("_")
+                if isinstance(value, Template)
+                and not key.startswith("_")
+                and not key.endswith("_")
             }
         )
 
@@ -638,8 +641,7 @@ class TemplatedGenerator(NodeVisitor):
             root: An IR node.
             node_templates (optiona): see :class:`NodeDumper`.
             dump_function (optiona): see :class:`NodeDumper`.
-            **kwargs (optional): custom extra parameters forwarded to
-                `visit_NODE_TYPE_NAME()`.
+            ``**kwargs`` (optional): custom extra parameters forwarded to `visit_NODE_TYPE_NAME()`.
 
         Returns:
             String (or collection of strings) with the dumped version of the root IR node.

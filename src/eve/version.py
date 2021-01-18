@@ -20,6 +20,7 @@
 from packaging.version import parse
 from pkg_resources import DistributionNotFound, get_distribution
 
+
 try:
     __version__ = get_distribution("gt4py").version
     __versioninfo__ = parse(__version__)

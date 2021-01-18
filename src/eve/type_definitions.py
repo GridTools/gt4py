@@ -48,7 +48,8 @@ from .typingx import Any, Callable, Generator, Type, Union
 NOTHING = boltons.typeutils.make_sentinel(name="NOTHING", var_name="NOTHING")
 
 
-#: Typing definitions for `__get_validators__()` methods (defined but not exported in `pydantic.typing`)
+#: Typing definitions for `__get_validators__()` methods
+# (defined but not exported in `pydantic.typing`)
 PydanticCallableGenerator = Generator[Callable[..., Any], None, None]
 
 
@@ -93,7 +94,7 @@ class IntEnum(enum.IntEnum):
 
 
 class StrEnum(str, enum.Enum):
-    """Basic :class:`enum.Enum` subclass with strict type validation and supporting string operations."""
+    """:class:`enum.Enum` subclass with strict type validation and supporting string operations."""
 
     @classmethod
     def __get_validators__(cls) -> PydanticCallableGenerator:
@@ -133,7 +134,6 @@ class SymbolName(ConstrainedStr):
     @functools.lru_cache(maxsize=None)
     def constrained(pattern: Union[str, re.Pattern]) -> Type[SymbolName]:
         """Create a new SymbolName subclass using the provided string as validation RE."""
-
         if isinstance(pattern, re.Pattern):
             regex = pattern
             pattern = pattern.pattern

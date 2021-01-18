@@ -23,9 +23,9 @@ e.g. stage merging, staged computations to compute-on-the-fly, cache annotations
 
 from typing import List, Optional, Union
 
-from eve import Str, SymbolName, SymbolTableTrait
 from pydantic import validator
 
+from eve import Str, SymbolName, SymbolTableTrait
 from gtc import common
 from gtc.common import AxisBound, LocNode
 

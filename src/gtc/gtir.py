@@ -29,9 +29,9 @@ Analysis is required to generate valid code (complying with the parallel model)
 
 from typing import List
 
-from eve import Node, Str, SymbolName, SymbolTableTrait
 from pydantic import validator
 
+from eve import Node, Str, SymbolName, SymbolTableTrait
 from gtc import common
 from gtc.common import AxisBound, LocNode
 

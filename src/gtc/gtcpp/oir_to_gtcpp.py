@@ -1,9 +1,9 @@
+from dataclasses import dataclass, field
 from typing import Dict, List, Set, Union
 
-import eve
-from dataclasses import dataclass, field
 from devtools import debug  # noqa: F401
 
+import eve
 from gtc import common, oir
 from gtc.common import CartesianOffset
 from gtc.gtcpp import gtcpp

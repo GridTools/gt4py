@@ -1,7 +1,6 @@
 from typing import Dict
 
 from eve import Node, NodeTranslator
-
 from gtc import gtir
 from gtc.gtir import Expr
 

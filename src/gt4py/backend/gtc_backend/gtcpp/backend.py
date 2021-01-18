@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
-
 from gt4py import backend as gt_backend
 from gt4py import gt2_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
@@ -51,7 +50,7 @@ class GTCGTExtGenerator:
 
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     def __init__(self):
-        self._unique_index = 0
+        self._unique_index: int = 0
 
     def unique_index(self) -> int:
         self._unique_index += 1

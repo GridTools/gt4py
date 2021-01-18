@@ -22,6 +22,7 @@ __license__ = "GPLv3+"
 
 from pkg_resources import DistributionNotFound, get_distribution
 
+
 try:
     __version__ = get_distribution(__name__).version
 except DistributionNotFound:
@@ -53,5 +54,3 @@ from .definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterI
 from .stencil_object import StencilObject
 
 # isort: on
-
-
