@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, ClassVar, Dict, Generic, List, Optional, TypeVar, Union, cast
+from typing import Any, ClassVar, Dict, Generic, List, Optional, Type, TypeVar, Union, cast
 
 from pydantic import validator
 from pydantic.class_validators import root_validator
@@ -239,22 +239,23 @@ def verify_condition_is_boolean(parent_node_cls, cond: Expr) -> Expr:
 
 
 def verify_and_get_common_dtype(
-    node_cls, values: List[Expr], *, strict: bool = True
+    node_cls: Type[Node], values: List[Expr], *, strict: bool = True
 ) -> Optional[DataType]:
     assert len(values) > 0
-    if all([v.dtype for v in values]):
-        dtype = values[0].dtype
+    if all(v.dtype is not None for v in values):
+        dtypes = [v.dtype for v in values if v.dtype is not None]
+        dtype = dtypes[0]
         if strict:
-            if all([v.dtype == dtype for v in values]):
+            if all(dt == dtype for dt in dtypes):
                 return dtype
             else:
                 raise ValueError(
                     "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
-                    + ", ".join(v.dtype.name for v in cast(List[Expr], values))
+                    + ", ".join(dt.name for dt in dtypes)
                 )
         else:
-            # upcasting (note that `typing.cast` has nothing to do with upcasting...)
-            return max(cast(List[DataType], [v.dtype for v in values]))
+            # upcasting
+            return max(dt for dt in dtypes)
     else:
         return None
 
