@@ -263,7 +263,7 @@ def verify_and_get_common_dtype(
 
 
 def compute_kind(values: List[Expr]) -> ExprKind:
-    if any([v.kind == ExprKind.FIELD for v in values]):
+    if any(v.kind == ExprKind.FIELD for v in values):
         return cast(ExprKind, ExprKind.FIELD)  # see https://github.com/GridTools/gtc/issues/100
     else:
         return cast(ExprKind, ExprKind.SCALAR)  # see https://github.com/GridTools/gtc/issues/100

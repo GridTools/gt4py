@@ -64,7 +64,7 @@ class _GTIRUpcasting(NodeTranslator):
         )
 
     def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs: Any) -> gtir.NativeFuncCall:
-        args = [_upcast_nodes(arg) for arg in self.visit(node.args)]
+        args = [*_upcast_nodes(*self.visit(node.args))]
         return _update_node(node, {"args": args})
 
     def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> gtir.ParAssignStmt:
