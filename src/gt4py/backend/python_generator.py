@@ -270,6 +270,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         self.block_info.accessors = {accessor.symbol for accessor in node.accessors}
         self.block_info.iteration_order = iteration_order
         self.block_info.extent = node.compute_extent
+        self.var_refs_defined.clear()
 
         # Create regions and computations
         regions = []
