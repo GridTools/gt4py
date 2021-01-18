@@ -121,7 +121,7 @@ def format_python_source(
     string_normalization: bool = True,
 ) -> str:
     """Format Python source code using black formatter."""
-    target_versions = target_versions or f"{sys.version_info.major}{sys.version_info.minor}"
+    target_versions = target_versions or {f"{sys.version_info.major}{sys.version_info.minor}"}
     target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in target_versions)
 
     formatted_source = black.format_str(
@@ -405,11 +405,11 @@ class BaseTemplate(Template):
         self.definition_loc = None
         frame = inspect.currentframe()
         try:
-            if frame is not None:
+            if frame is not None and frame.f_back is not None and frame.f_back.f_back is not None:
                 (filename, lineno, _, _, _) = inspect.getframeinfo(frame.f_back.f_back)
                 self.definition_loc = (filename, lineno)
         except Exception:
-            self.definition_loc = None
+            pass
         finally:
             del frame
 
@@ -688,7 +688,7 @@ class TemplatedGenerator(NodeVisitor):
     def get_template(self, node: TreeNode) -> Tuple[Optional[Template], Optional[str]]:
         """Get a template for a node instance (see class documentation)."""
         template: Optional[Template] = None
-        template_key: Optional[str] = None
+        template_key = None
         if isinstance(node, Node):
             for node_class in node.__class__.__mro__:
                 template_key = node_class.__name__

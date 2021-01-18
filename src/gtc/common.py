@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, Dict, Generic, List, Optional, TypeVar, Union, cast
+from typing import Any, ClassVar, Dict, Generic, List, Optional, TypeVar, Union, cast
 
 from pydantic import validator
 from pydantic.class_validators import root_validator
@@ -159,6 +159,8 @@ class NativeFunction(StrEnum):
     FLOOR = "floor"
     CEIL = "ceil"
     TRUNC = "trunc"
+
+    IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
 
     @property
     def arity(self):

@@ -16,18 +16,20 @@
 
 """Version specification."""
 
+from typing import Optional, Union
 
-from packaging.version import parse
+from packaging.version import LegacyVersion, Version, parse
 from pkg_resources import DistributionNotFound, get_distribution
 
+
+__version__: str = "unknown"
+__versioninfo__: Optional[Union[LegacyVersion, Version]] = None
 
 try:
     __version__ = get_distribution("gt4py").version
     __versioninfo__ = parse(__version__)
-
 except DistributionNotFound:
-    __version__ = "unknown"
-    __versioninfo__ = None
+    pass
 
 finally:
-    del DistributionNotFound, get_distribution, parse
+    del DistributionNotFound, LegacyVersion, Version, get_distribution, parse

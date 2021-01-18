@@ -47,7 +47,6 @@ from .traits import SymbolTableTrait
 from .type_definitions import (
     NOTHING,
     Bool,
-    Bytes,
     Enum,
     Float,
     Int,
@@ -59,10 +58,6 @@ from .type_definitions import (
     SourceLocation,
     Str,
     StrEnum,
-    StrictBool,
-    StrictFloat,
-    StrictInt,
-    StrictStr,
     SymbolName,
     SymbolRef,
 )
