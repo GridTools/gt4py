@@ -463,7 +463,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return next(self.iterator)
 
     def map(self, func: AnyCallable) -> XIterator[Any]:  # noqa  # A003: shadowing a python builtin
-        """Apply a callable to every iterator element (equivalent to ``map(func, self)``).
+        """Apply a callable to every iterator element.
+
+        Equivalent to ``map(func, self)``.
 
         For detailed information check :func:`map` reference.
 
@@ -503,7 +505,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
     def filter(  # noqa  # A003: shadowing a python builtin
         self, func: Callable[..., bool]
     ) -> XIterator[T]:
-        """Filter elements with callables (equivalent to ``filter(func, self)``).
+        """Filter elements with callables.
+
+        Equivalent to ``filter(func, self)``.
 
         For detailed information check :func:`filter` reference.
 
@@ -526,8 +530,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(filter(func, self.iterator))
 
     def if_isinstance(self, *types: Type) -> XIterator[T]:
-        """Filter elements using :func:`isinstance` checks (equivalent to
-        ``xiter(item for item in self if isinstance(item, types))``).
+        """Filter elements using :func:`isinstance` checks.
+
+        Equivalent to ``xiter(item for item in self if isinstance(item, types))``.
 
         Examples:
             >>> it = xiter([1, '2', 3.3, [4, 5], {6, 7}])
@@ -538,8 +543,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(filter(isinstancechecker([*types]), self.iterator))
 
     def if_not_isinstance(self, *types: Type) -> XIterator[T]:
-        """Filter elements using negated :func:`isinstance` checks (equivalent to
-        ``xiter(item for item in self if not isinstance(item, types))``).
+        """Filter elements using negated :func:`isinstance` checks.
+
+        Equivalent to ``xiter(item for item in self if not isinstance(item, types))``.
 
         Examples:
             >>> it = xiter([1, '2', 3.3, [4, 5], {6, 7}])
@@ -552,8 +558,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         )
 
     def if_is(self, obj: Any) -> XIterator[T]:
-        """Filter elements using :func:`operator.is_` checks (equivalent to
-        ``xiter(item for item in self if item is obj)``).
+        """Filter elements using :func:`operator.is_` checks.
+
+        Equivalent to ``xiter(item for item in self if item is obj)``.
 
         Examples:
             >>> it = xiter([1, None, 1, 123456789, None, 123456789])
@@ -572,8 +579,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(filter(lambda x: operator.is_(x, obj), self.iterator))
 
     def if_is_not(self, obj: Any) -> XIterator[T]:
-        """Filter elements using negated  :func:`operator.is_` checks (equivalent to
-        ``xiter(item for item in self if item is not obj)``).
+        """Filter elements using negated  :func:`operator.is_` checks.
+
+        Equivalent to ``xiter(item for item in self if item is not obj)``.
 
         Examples:
             >>> it = xiter([1, None, 1, 123456789, None, 123456789])
@@ -592,8 +600,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(filter(lambda x: not operator.is_(x, obj), self.iterator))
 
     def if_in(self, collection: Collection[T]) -> XIterator[T]:
-        """Filter elements using :func:`operator.contains` checks (equivalent to
-        ``xiter(item for item in self if item in collection)``).
+        """Filter elements using :func:`operator.contains` checks.
+
+        Equivalent to ``xiter(item for item in self if item in collection)``.
 
         Examples:
             >>> it = xiter(range(8))
@@ -604,8 +613,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(filter(lambda x: operator.contains(collection, x), self.iterator))
 
     def if_not_in(self, collection: Collection[T]) -> XIterator[T]:
-        """Filter elements using negated :func:`operator.contains` checks (equivalent to
-        ``xiter(item for item in self if item not in collection)``).
+        """Filter elements using negated :func:`operator.contains` checks.
+
+        Equivalent to ``xiter(item for item in self if item not in collection)``.
 
         Examples:
             >>> it = xiter(range(8))
@@ -616,8 +626,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(filter(lambda x: not operator.contains(collection, x), self.iterator))
 
     def if_contains(self, *values: Any) -> XIterator[T]:
-        """Filter elements using :func:`operator.contains` checks (equivalent to
-        ``xiter(item for item in self if all(v in item for v in values))``).
+        """Filter elements using :func:`operator.contains` checks.
+
+        Equivalent to ``xiter(item for item in self if all(v in item for v in values))``.
 
         Examples:
             >>> it = xiter([None, (0, 1, 2), "a", (1, 2, 3), (2, 3, 4), "b"])
@@ -639,7 +650,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(filter((lambda x: _contains(x, values)), self.iterator))
 
     def if_hasattr(self, *names: str) -> XIterator[T]:
-        """Filter elements using :func:`hasattr` checks (equivalent to ``filter(attrchecker(names), self)``).
+        """Filter elements using :func:`hasattr` checks.
+
+        Equivalent to ``filter(attrchecker(names), self)``.
 
         Examples:
             >>> it = xiter([1, '2', 3.3, [4, 5], {6, 7}])
@@ -656,7 +669,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
     def getattr(  # noqa  # A003: shadowing a python builtin
         self, *names: str, default: Any = NOTHING
     ) -> XIterator[Any]:
-        """Get provided attributes from each item in a sequence (equivalent to ``map(attrgetter_(*names, default=default), self)``).
+        """Get provided attributes from each item in a sequence.
+
+        Equivalent to ``map(attrgetter_(*names, default=default), self)``.
 
         Keyword Arguments:
             default: returned value if the item does not contain an attribute
@@ -679,7 +694,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(map(attrgetter_(*names, default=default), self.iterator))
 
     def getitem(self, *indices: Union[int, str], default: Any = NOTHING) -> XIterator[Any]:
-        """Get provided indices data from each item in a sequence (equivalent to ``toolz.itertoolz.pluck(indices, self)``).
+        """Get provided indices data from each item in a sequence.
+
+        Equivalent to ``toolz.itertoolz.pluck(indices, self)``.
 
         Keyword Arguments:
             default: returned value if the item does not contain an `index`
@@ -712,7 +729,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
             return XIterator(toolz.itertoolz.pluck(ind, self.iterator, default))
 
     def chain(self, *others: Iterable) -> XIterator[Union[T, S]]:
-        """Chain iterators (equivalent to ``itertools.chain(self, *others)``).
+        """Chain iterators.
+
+        Equivalent to ``itertools.chain(self, *others)``.
 
         For detailed information check :func:`itertools.chain` reference.
 
@@ -735,7 +754,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         default: Any = NOTHING,
         key: Union[NOTHING, Callable] = NOTHING,
     ) -> XIterator[Tuple[T, S]]:
-        """Diff iterators (equivalent to ``toolz.itertoolz.diff(self, *others)``).
+        """Diff iterators.
+
+        Equivalent to ``toolz.itertoolz.diff(self, *others)``.
 
         Keyword Arguments:
             default: returned value for missing items.
@@ -777,7 +798,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
     def product(
         self, other: Union[Iterable[S], int]
     ) -> Union[XIterator[Tuple[T, S]], XIterator[Tuple[T, T]]]:
-        """Product of iterators (equivalent to ``itertools.product(it_a, it_b)``).
+        """Product of iterators.
+
+        Equivalent to ``itertools.product(it_a, it_b)``.
 
         For detailed information check :func:`itertools.product` reference.
 
@@ -807,9 +830,10 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
     def partition(
         self, n: int, *, exact: bool = False, fill: Any = NOTHING
     ) -> XIterator[Tuple[T, ...]]:
-        """Partition iterator into tuples of length `n` (``exact=True``) or at most `n`
-        (``exact=False``). Equivalent to ``toolz.itertoolz.partition(n, self)`` or
-        ``toolz.itertoolz.partition_all(n, self)``).
+        """Partition iterator into tuples of length `n` (``exact=True``) or at most `n` (``exact=False``).
+
+        Equivalent to ``toolz.itertoolz.partition(n, self)`` or
+        ``toolz.itertoolz.partition_all(n, self)``.
 
         For detailed information check :func:`toolz.itertoolz.partition` and
         :func:`toolz.itertoolz.partition_all` reference.
@@ -848,7 +872,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(iterator)
 
     def take_nth(self, n: int) -> XIterator[T]:
-        """Take every nth item in sequence (equivalent to ``toolz.itertoolz.take_nth(n, self)``).
+        """Take every nth item in sequence.
+
+        Equivalent to ``toolz.itertoolz.take_nth(n, self)``.
 
         For detailed information check :func:`toolz.itertoolz.take_nth` reference.
 
@@ -865,7 +891,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
     def zip(  # noqa  # A003: shadowing a python builtin
         self, *others: Iterable, fill: Any = NOTHING
     ) -> XIterator[Tuple[T, S]]:
-        """Zip iterators (equivalent to ``zip(self, *others)`` or ``itertools.zip_longest(self, *others, fillvalue=fill)``).
+        """Zip iterators.
+
+        Equivalent to ``zip(self, *others)`` or ``itertools.zip_longest(self, *others, fillvalue=fill)``.
 
         Keyword Arguments:
             fill: value used to fill the result for sequences with fewer items.
@@ -894,7 +922,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
             return XIterator(itertools.zip_longest(self.iterator, *iterators, fillvalue=fill))
 
     def unzip(self) -> XIterator[Tuple[Any, ...]]:
-        """Unzip iterator (equivalent to ``zip(*self)``).
+        """Unzip iterator.
+
+        Equivalent to ``zip(*self)``.
 
         For detailed information check :func:`zip` reference.
 
@@ -917,7 +947,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
     def islice(
         self, __start_or_stop: int, __stop_or_nothing: Union[int, NOTHING] = NOTHING, step: int = 1
     ) -> XIterator[T]:
-        """Select elements from an iterable (equivalent to ``itertools.islice(iterator, start, stop, step)``).
+        """Select elements from an iterable.
+
+        Equivalent to ``itertools.islice(iterator, start, stop, step)``.
 
         For detailed information check :func:`itertools.islice` reference.
 
@@ -944,8 +976,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(itertools.islice(self.iterator, start, stop, step))
 
     def select(self, selectors: Iterable[bool]) -> XIterator[T]:
-        """Return only the elements which have a corresponding element in selectors that evaluates to True
-        (equivalent to ``itertools.compress(self, selectors)``).
+        """Return only the elements which have a corresponding element in selectors that evaluates to True.
+
+        Equivalent to ``itertools.compress(self, selectors)``.
 
         For detailed information check :func:`itertools.compress` reference.
 
@@ -960,7 +993,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(itertools.compress(self.iterator, selectors))
 
     def unique(self, *, key: Union[NOTHING, Callable] = NOTHING) -> XIterator[T]:
-        """Return only unique elements of a sequence (equivalent to ``toolz.itertoolz.unique(self)``).
+        """Return only unique elements of a sequence.
+
+        Equivalent to ``toolz.itertoolz.unique(self)``.
 
         Keyword Arguments:
             key: callable computing the key to use per item in the sequence.
@@ -1004,8 +1039,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         *attr_keys: str,
         as_dict: bool = False,
     ) -> Union[XIterator[Tuple[Any, List[T]]], Dict]:
-        """Group a sequence by a given key (more or less equivalent to
-        ``toolz.itertoolz.groupby(key, self)`` with some caveats).
+        """Group a sequence by a given key.
+
+        More or less equivalent to ``toolz.itertoolz.groupby(key, self)`` with some caveats.
 
         The `key` argument is used in the following way:
 
@@ -1068,7 +1104,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
     def accumulate(
         self, func: Callable[[Any, T], Any] = operator.add, *, init: Any = None
     ) -> XIterator:
-        """Reduce an iterator using a callable (equivalent to ``itertools.accumulate(self, func, init)``).
+        """Reduce an iterator using a callable.
+
+        Equivalent to ``itertools.accumulate(self, func, init)``.
 
         Keyword Arguments:
             init: initial value for the accumulation.
@@ -1092,7 +1130,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return XIterator(itertools.accumulate(self.iterator, func, initial=init))
 
     def reduce(self, bin_op_func: Callable[[Any, T], Any], *, init: Any = None) -> Any:
-        """Reduce an iterator using a callable (equivalent to ``functools.reduce(bin_op_func, self, init)``).
+        """Reduce an iterator using a callable.
+
+        Equivalent to ``functools.reduce(bin_op_func, self, init)``.
 
         Keyword Arguments:
             init: initial value for the reduction.
@@ -1152,9 +1192,10 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         init: Any = NOTHING,
         as_dict: bool = False,
     ) -> Union[XIterator[Tuple[Any, Any]], Dict]:
-        """Group a sequence by a given key and simultaneously perform a reduction inside the groups
-        more or less equivalent to ``toolz.itertoolz.reduceby(key, bin_op_func, self, init)``
-        with some caveats).
+        """Group a sequence by a given key and simultaneously perform a reduction inside the groups.
+
+        More or less equivalent to ``toolz.itertoolz.reduceby(key, bin_op_func, self, init)``
+        with some caveats.
 
         The `key` argument is used in the following way:
 
@@ -1200,7 +1241,6 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
             [(5, 4), (3, 2), (7, 3)]
 
         """  # noqa: RST203  # sphinx.napoleon conventions confuses RST validator
-
         if (not callable(key) and not isinstance(key, (int, str, list))) or not all(
             isinstance(i, str) for i in attr_keys
         ):
@@ -1220,7 +1260,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return groups if as_dict else xiter(groups.items())
 
     def to_list(self) -> List[T]:
-        """Expand iterator into a ``list`` (equivalent to ``list(self)``).
+        """Expand iterator into a ``list``.
+
+        Equivalent to ``list(self)``.
 
         Examples:
             >>> it = xiter(range(5))
@@ -1231,7 +1273,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         return list(self.iterator)
 
     def to_set(self) -> Set[T]:
-        """Expand iterator into a ``set`` (equivalent to ``set(self)``).
+        """Expand iterator into a ``set``.
+
+        Equivalent to ``set(self)``.
 
         Examples:
             >>> it = xiter([1, 2, 3, 1, 3, -1])

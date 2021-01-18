@@ -98,7 +98,7 @@ class TemplateRenderingError(exceptions.EveRuntimeError):
 
 
 def register_formatter(language: str) -> Callable[[SourceFormatter], SourceFormatter]:
-    """Decorator to register source code formatters for specific languages."""
+    """Register source code formatters for specific languages (decorator)."""
 
     def _decorator(formatter: SourceFormatter) -> SourceFormatter:
         if language in SOURCE_FORMATTERS:
@@ -121,7 +121,6 @@ def format_python_source(
     string_normalization: bool = True,
 ) -> str:
     """Format Python source code using black formatter."""
-
     target_versions = target_versions or f"{sys.version_info.major}{sys.version_info.minor}"
     target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in target_versions)
 
@@ -149,7 +148,6 @@ if _CLANG_FORMAT_AVAILABLE:
         sort_includes: bool = False,
     ) -> str:
         """Format C++ source code using clang-format."""
-
         args = ["clang-format"]
         if style:
             args.append(f"--style={style}")
@@ -167,7 +165,6 @@ if _CLANG_FORMAT_AVAILABLE:
 
 def format_source(language: str, source: str, *, skip_errors: bool = True, **kwargs: Any) -> str:
     """Format source code if a formatter exists for the specific language."""
-
     formatter = SOURCE_FORMATTERS.get(language, None)
     try:
         if formatter:
@@ -710,7 +707,6 @@ class TemplatedGenerator(NodeVisitor):
         **kwargs: Any,
     ) -> str:
         """Render a template using node instance data (see class documentation)."""
-
         return template.render(
             **transformed_children,
             **transformed_impl_fields,
