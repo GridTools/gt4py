@@ -17,7 +17,7 @@
 from gtc import gtir
 
 
-def prune_unused_parameters(node: gtir.Stencil):
+def prune_unused_parameters(node: gtir.Stencil) -> gtir.Stencil:
     """
     Remove unused parameters from the gtir signature.
 

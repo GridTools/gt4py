@@ -27,7 +27,7 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-from typing import List
+from typing import Any, Dict, List
 
 from pydantic import validator
 
@@ -38,7 +38,7 @@ from gtc.common import AxisBound, LocNode
 
 class Expr(common.Expr):
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Expr:
             raise TypeError("Trying to instantiate `Expr` abstract class.")
         super().__init__(*args, **kwargs)
@@ -46,7 +46,7 @@ class Expr(common.Expr):
 
 class Stmt(common.Stmt):
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Stmt:
             raise TypeError("Trying to instantiate `Stmt` abstract class.")
         super().__init__(*args, **kwargs)
@@ -66,10 +66,10 @@ class CartesianOffset(Node):
     k: int
 
     @classmethod
-    def zero(cls):
+    def zero(cls) -> "CartesianOffset":
         return cls(i=0, j=0, k=0)
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.k}
 
 

@@ -162,7 +162,7 @@ class NativeFunction(StrEnum):
     IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
 
     @property
-    def arity(self):
+    def arity(self) -> int:
         return type(self).IR_OP_TO_NUM_ARGS[self]
 
 
@@ -218,7 +218,7 @@ class Expr(LocNode):
     kind: ExprKind
 
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         if type(self) is Expr:
             raise TypeError("Trying to instantiate `Expr` abstract class.")
         super().__init__(*args, **kwargs)
@@ -226,13 +226,13 @@ class Expr(LocNode):
 
 class Stmt(LocNode):
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         if type(self) is Stmt:
             raise TypeError("Trying to instantiate `Stmt` abstract class.")
         super().__init__(*args, **kwargs)
 
 
-def verify_condition_is_boolean(parent_node_cls, cond: Expr) -> Expr:
+def verify_condition_is_boolean(parent_node_cls: Node, cond: Expr) -> Expr:
     if cond.dtype and cond.dtype is not DataType.BOOL:
         raise ValueError("Condition in `{}` must be boolean.".format(parent_node_cls.__name__))
     return cond
@@ -524,7 +524,7 @@ def validate_symbol_refs():
 
     def _impl(cls, values: dict):
         class SymtableValidator(NodeVisitor):
-            def __init__(self):
+            def __init__(self) -> None:
                 self.missing_symbols = []
 
             def visit_Node(self, node: Node, *, symtable: Dict[str, Any], **kwargs):

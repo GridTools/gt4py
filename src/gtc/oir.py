@@ -21,7 +21,7 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 from pydantic import validator
 
@@ -34,7 +34,7 @@ class Expr(common.Expr):
     dtype: Optional[common.DataType]
 
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Expr:
             raise TypeError("Trying to instantiate `Expr` abstract class.")
         super().__init__(*args, **kwargs)
@@ -42,7 +42,7 @@ class Expr(common.Expr):
 
 class Stmt(common.Stmt):
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Stmt:
             raise TypeError("Trying to instantiate `Stmt` abstract class.")
         super().__init__(*args, **kwargs)
@@ -62,7 +62,9 @@ class FieldAccess(common.FieldAccess, Expr):  # type: ignore
 
 class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt):
     @validator("left")
-    def no_horizontal_offset_in_assignment(cls, v):
+    def no_horizontal_offset_in_assignment(
+        cls, v: Union[ScalarAccess, FieldAccess]
+    ) -> Union[ScalarAccess, FieldAccess]:
         if isinstance(v, FieldAccess) and (v.offset.i != 0 or v.offset.j != 0):
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
@@ -103,7 +105,7 @@ class Decl(LocNode):
     name: SymbolName
     dtype: common.DataType
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         if type(self) is Decl:
             raise TypeError("Trying to instantiate `Decl` abstract class.")
         super().__init__(*args, **kwargs)
