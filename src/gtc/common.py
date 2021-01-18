@@ -332,6 +332,14 @@ class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
     right: ExprT
 
 
+def assign_stmt_dtype_validation(*, strict: bool):
+    def _impl(cls, values):
+        verify_and_get_common_dtype(cls, [values["left"], values["right"]], strict=strict)
+        return values
+
+    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+
+
 class UnaryOp(GenericNode, Generic[ExprT]):
     """
     Generic unary operation with type propagation.

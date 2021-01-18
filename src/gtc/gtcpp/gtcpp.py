@@ -55,12 +55,13 @@ class BlockStmt(common.BlockStmt[Stmt], Stmt):
 
 
 class AssignStmt(common.AssignStmt[Union[ScalarAccess, AccessorRef], Expr], Stmt):
-    # TODO remove duplication of this check
     @validator("left")
     def no_horizontal_offset_in_assignment(cls, v):
         if isinstance(v, AccessorRef) and (v.offset.i != 0 or v.offset.j != 0):
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
+
+    _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
 class IfStmt(common.IfStmt[Stmt, Expr], Stmt):
