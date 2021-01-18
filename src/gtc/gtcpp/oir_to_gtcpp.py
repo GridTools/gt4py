@@ -10,7 +10,7 @@ from gtc.gtcpp import gtcpp
 from gtc.gtcpp.gtcpp import GTParamList, IJCache
 
 
-# TODO(havogt) between oir and gtcpp we need to group oir.VerticalLoops
+# TODO(havogt) between oir and gtcpp we should consider grouping oir.VerticalLoops
 
 # - Each HorizontalExecution is a Functor (and a Stage)
 # - Each VerticalLoop is MultiStage
@@ -194,7 +194,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             comp_ctx=comp_ctx,
             **kwargs,
         )
-        caches: List[Union[IJCache]] = []  # TODO
+        caches: List[Union[IJCache]] = []  # TODO(havogt): caches are not implemented
         return gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs):

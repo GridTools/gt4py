@@ -5,9 +5,6 @@ from gtc.common import BuiltInLiteral, DataType, LoopOrder, NativeFunction, Unar
 from gtc.gtcpp import gtcpp
 
 
-# TODO qualify gridtools stuff
-
-
 def _offset_limit(root: Node):
     return (
         root.iter_tree()

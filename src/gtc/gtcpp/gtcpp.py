@@ -103,7 +103,12 @@ class GTGrid(LocNode):
 class GTLevel(LocNode):
     splitter: int
     offset: int
-    # TODO validator offset != 0
+
+    @validator("offset")
+    def offset_must_not_be_zero(cls, v):
+        if v == 0:
+            raise ValueError("GridTools level offset must be != 0")
+        return v
 
 
 class GTInterval(LocNode):
@@ -230,7 +235,7 @@ class IJCache(LocNode):
 
 class GTMultiStage(LocNode):
     loop_order: common.LoopOrder
-    stages: List[GTStage]  # TODO at least one
+    stages: List[GTStage]
     caches: List[Union[IJCache]]
 
 
@@ -241,7 +246,7 @@ class GTComputationCall(LocNode, SymbolTableTrait):
     # function object.
     arguments: List[Arg]
     temporaries: List[Temporary]
-    multi_stages: List[GTMultiStage]  # TODO at least one
+    multi_stages: List[GTMultiStage]
 
 
 class Program(LocNode, SymbolTableTrait):
