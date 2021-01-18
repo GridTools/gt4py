@@ -540,9 +540,10 @@ class BaseModuleGenerator(abc.ABC):
             post_run=self.generate_post_run(),
             implementation=self.generate_implementation(),
         )
-        module_source = gt_utils.text.format_source(
-            module_source, line_length=self.SOURCE_LINE_LENGTH
-        )
+        if options["format_source"]:
+            module_source = gt_utils.text.format_source(
+                module_source, line_length=self.SOURCE_LINE_LENGTH
+            )
 
         return module_source
 

@@ -86,3 +86,27 @@ def test_demote_locals_two_intervals_ij_offsets(
     )
     transform_data = demote_locals_pass(transform_data)
     assert transform_data.implementation_ir.temporary_fields == ["tmp"]
+
+
+def test_do_not_demote_self_assign(
+    demote_locals_pass: AnalysisPass,
+    ijk_domain: Domain,
+) -> None:
+    transform_data = (
+        TDefinition(name="self_assignment", domain=ijk_domain, fields=["out", "input"])
+        .add_blocks(
+            TComputationBlock(order=IterationOrder.PARALLEL).add_statements(
+                TAssign("tmp", "input", (0, 0, 0)),
+            ),
+            TComputationBlock(order=IterationOrder.FORWARD).add_statements(
+                TAssign("out", "input", (0, 0, 0)),
+            ),
+            TComputationBlock(order=IterationOrder.PARALLEL).add_statements(
+                TAssign("tmp", "tmp", (0, 0, 0)),
+                TAssign("out", "tmp", (0, 0, 0)),
+            ),
+        )
+        .build_transform()
+    )
+    transform_data = demote_locals_pass(transform_data)
+    assert transform_data.implementation_ir.temporary_fields == ["tmp"]
