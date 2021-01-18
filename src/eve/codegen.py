@@ -36,7 +36,7 @@ import jinja2
 from mako import template as mako_tpl
 
 from . import exceptions, utils
-from .concepts import Node, TreeNode
+from .concepts import CollectionNode, LeafNode, Node, TreeNode
 from .typingx import (
     Any,
     Callable,
@@ -627,6 +627,16 @@ class TemplatedGenerator(NodeVisitor):
         )
 
         cls.__templates__ = types.MappingProxyType(templates)
+
+    @typing.overload
+    @classmethod
+    def apply(cls, root: LeafNode, **kwargs: Any) -> str:
+        ...
+
+    @typing.overload
+    @classmethod
+    def apply(cls, root: CollectionNode, **kwargs: Any) -> Collection[str]:
+        ...
 
     @classmethod
     def apply(cls, root: TreeNode, **kwargs: Any) -> Union[str, Collection[str]]:

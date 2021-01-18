@@ -197,7 +197,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     )
 
     @classmethod
-    def apply(cls, root, **kwargs) -> str:
+    def apply(cls, root: gtcpp.Program, **kwargs) -> str:
         generated_code = super().apply(root, offset_limit=_offset_limit(root), **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
