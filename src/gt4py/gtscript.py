@@ -122,6 +122,7 @@ def stencil(
     build_info=None,
     dtypes=None,
     externals=None,
+    format_source=True,
     name=None,
     rebuild=False,
     **kwargs,
@@ -147,6 +148,9 @@ def stencil(
 
         externals: `dict`, optional
             Specify values for otherwise unbound symbols.
+
+        format_source : `bool`, optional
+            Format generated sources when possible (`True` by default).
 
         name : `str`, optional
             The fully qualified name of the generated :class:`StencilObject`.
@@ -186,6 +190,8 @@ def stencil(
         raise ValueError(f"Invalid 'dtypes' dictionary ('{dtypes}')")
     if externals is not None and not isinstance(externals, dict):
         raise ValueError(f"Invalid 'externals' dictionary ('{externals}')")
+    if not isinstance(format_source, bool):
+        raise ValueError(f"Invalid 'format_source' bool value ('{name}')")
     if name is not None and not isinstance(name, str):
         raise ValueError(f"Invalid 'name' string ('{name}')")
     if not isinstance(rebuild, bool):
@@ -213,6 +219,7 @@ def stencil(
     build_options = gt_definitions.BuildOptions(
         name=name,
         module=module,
+        format_source=format_source,
         rebuild=rebuild,
         backend_opts=kwargs,
         build_info=build_info,
