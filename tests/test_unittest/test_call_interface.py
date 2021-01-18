@@ -17,6 +17,13 @@
 import numpy as np
 import pytest
 
+
+try:
+    import xarray
+except ModuleNotFoundError:
+    xarray = None
+
+
 import gt4py.backend as gt_backend
 import gt4py.gtscript as gtscript
 import gt4py.storage as gt_storage
@@ -26,6 +33,7 @@ from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BAC
 
 
 INTERNAL_CPU_BACKENDS = list(set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
+INTERNAL_GPU_BACKENDS = list(set(GPU_BACKENDS) & set(INTERNAL_BACKENDS))
 
 
 @gtscript.stencil(backend="numpy")
@@ -278,3 +286,89 @@ def test_exec_info(backend):
         assert "run_cpp_start_time" in exec_info
         assert "run_cpp_end_time" in exec_info
         assert exec_info["run_cpp_end_time"] > exec_info["run_cpp_start_time"]
+
+
+@pytest.mark.parametrize(
+    "backend",
+    INTERNAL_CPU_BACKENDS
+    + [pytest.param(b, marks=[pytest.mark.requires_gpu]) for b in INTERNAL_GPU_BACKENDS],
+)
+class TestNonStorageArguments:
+
+    stencils = {}
+
+    def stencil(self, backend):
+        if backend in self.stencils:
+            return self.stencils[backend]
+
+        @gtscript.stencil(backend=backend)
+        def stencil(field: gtscript.Field[np.float64]):
+            with computation(PARALLEL), interval(...):
+                field = 3.0
+
+        self.stencils[backend] = stencil
+        return stencil
+
+    def test_array_interface(self, backend):
+        storage = gt_storage.ones((3, 3, 3), defaults=backend, device="cpu", managed=False)
+        assert isinstance(storage, gt_storage.definitions.CPUStorage)
+
+        stencil = self.stencil(backend)
+        stencil(storage._field)
+
+        np.testing.assert_equal(storage.to_numpy(), 3.0)
+
+    @pytest.mark.requires_gpu
+    def test_cuda_array_interface(self, backend):
+        storage = gt_storage.ones((3, 3, 3), defaults=backend, device="gpu", managed=False)
+        assert isinstance(storage, gt_storage.definitions.GPUStorage)
+
+        stencil = self.stencil(backend)
+        stencil(storage._device_field)
+
+        np.testing.assert_equal(storage.to_numpy(), 3.0)
+
+    @pytest.mark.parametrize(
+        "field_class",
+        [
+            "custom",
+            pytest.param(
+                "xarray",
+                marks=[
+                    pytest.mark.skip(reason="Not implemented"),
+                ],
+            ),
+        ],
+    )
+    @pytest.mark.parametrize(
+        ["device", "managed"],
+        [
+            ("cpu", False),
+            pytest.param("gpu", False, marks=[pytest.mark.requires_gpu]),
+            pytest.param("gpu", "cuda", marks=[pytest.mark.requires_gpu]),
+            pytest.param("gpu", "gt4py", marks=[pytest.mark.requires_gpu]),
+        ],
+    )
+    def test_gt_data_interface(self, backend, field_class, device, managed):
+        storage = gt_storage.ones((3, 3, 3), defaults=backend)
+
+        if field_class == "xarray":
+            raise NotImplementedError
+        elif field_class == "custom":
+
+            class Wrapper:
+                def __init__(self, storage):
+                    self._storage = storage
+
+                @property
+                def __gt_data_interface__(self):
+                    return self._storage.__gt_data_interface__
+
+            field = Wrapper(storage)
+        else:
+            raise ValueError("Bad test parametrization.")
+
+        stencil = self.stencil(backend)
+        stencil(field)
+
+        np.testing.assert_equal(storage.to_numpy(), 3.0)

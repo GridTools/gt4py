@@ -211,6 +211,31 @@ class Storage:
             raise BufferError("Not possible to convert to CuPy, since CuPy could not be imported.")
         return cp.array(self, copy=True)
 
+    @property
+    def __gt_data_interface__(self):
+        res = dict()
+
+        if hasattr(self, "_field"):
+            array_interface = self._field.__array_interface__
+            array_interface["acquire"] = self.device_to_host
+            array_interface["touch"] = self._set_host_modified
+            res["cpu"] = array_interface
+
+        if hasattr(self, "_device_field"):
+            cuda_array_interface = self._device_field.__cuda_array_interface__
+            cuda_array_interface["acquire"] = self.host_to_device
+            cuda_array_interface["touch"] = self._set_device_modified
+            res["gpu"] = cuda_array_interface
+        elif hasattr(self, "__cuda_array_interface__"):
+            cuda_array_interface = self.__cuda_array_interface__
+            cuda_array_interface["acquire"] = self.host_to_device
+            cuda_array_interface["touch"] = self._set_device_modified
+            res["gpu"] = cuda_array_interface
+
+        for k, v in res.items():
+            v["halo"] = self._halo
+        return res
+
 
 class CudaManagedGPUStorage(Storage):
     device = "gpu"
@@ -273,10 +298,6 @@ class CudaManagedGPUStorage(Storage):
         array_interface["strides"] = self.strides
         array_interface.pop("offset", None)
         return array_interface
-
-    @property
-    def __gt_data_interface__(self):
-        return {"cpu": self.__array_interface__, "gpu": self.__cuda_array_interface__}
 
     @property
     def strides(self):
@@ -366,10 +387,6 @@ class CPUStorage(Storage):
     def __array_interface__(self):
         return self._field.__array_interface__
 
-    @property
-    def __gt_data_interface__(self):
-        return {"cpu": self.__array_interface__}
-
     def _transpose(self, *axes):
         self._field = self._field.transpose(*axes)
 
@@ -440,10 +457,6 @@ class GPUStorage(Storage):
 
     def _forward_getitem_scalar(self, key):
         return self._device_field.__getitem__(key)
-
-    @property
-    def __gt_data_interface__(self):
-        return {"gpu": self.__cuda_array_interface__}
 
     @property
     def __cuda_array_interface__(self):
@@ -646,18 +659,6 @@ class ExplicitlyManagedGPUStorage(Storage):
     def __array_interface__(self):
         self.device_to_host()
         return self._field.__array_interface__
-
-    @property
-    def __gt_data_interface__(self):
-        array_interface = self._field.__array_interface__
-        array_interface["acquire"] = self.device_to_host()
-        array_interface["touch"] = self._set_host_modified()
-
-        cuda_array_interface = self._device_field.__cuda_array_interface__
-        cuda_array_interface["acquire"] = self.host_to_device()
-        cuda_array_interface["touch"] = self._set_device_modified()
-
-        return {"cpu": array_interface, "gpu": cuda_array_interface}
 
     def as_numpy(self):
         raise np.asarray(self)

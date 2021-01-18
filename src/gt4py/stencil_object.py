@@ -1,10 +1,18 @@
 import abc
 import time
+from types import SimpleNamespace
 from typing import Callable, Optional
 
 import numpy as np
 
+
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
 import gt4py.backend as gt_backend
+import gt4py.ir as gt_ir
+import gt4py.storage as gt_storage
 import gt4py.storage.utils as gt_storage_utils
 from gt4py.definitions import Index, Shape, normalize_domain, normalize_origin_mapping
 
@@ -103,13 +111,13 @@ class StencilObject(abc.ABC):
     def __call__(self, *args, **kwargs):
         pass
 
-    def _get_max_domain(self, field_args, origin):
+    def _get_max_domain(self, array_interfaces, origin):
         """Return the maximum domain size possible.
 
         Parameters
         ----------
-            field_args: `dict`
-                Mapping from field names to actually passed data arrays.
+            array_interfaces: `dict`
+                Mapping from field names to actually passed data arrays' array interfaces.
 
             origin: `{'field_name': [int * ndims]}`
                 The origin for each field.
@@ -120,13 +128,13 @@ class StencilObject(abc.ABC):
             `Shape`: the maximum domain size.
         """
         max_domain = Shape([np.iinfo(np.uintc).max] * self.domain_info.ndims)
-        shapes = {name: Shape(field.shape) for name, field in field_args.items()}
+        shapes = {name: Shape(interface["shape"]) for name, interface in array_interfaces.items()}
         for name, shape in shapes.items():
             upper_boundary = Index(self.field_info[name].boundary.upper_indices)
             max_domain &= shape - (Index(origin[name]) + upper_boundary)
         return max_domain
 
-    def _validate_args(self, used_field_args, used_param_args, domain, origin):
+    def _validate_args(self, array_interfaces, used_param_args, domain, origin):
         """Validate input arguments to _call_run.
 
         Raises
@@ -138,21 +146,25 @@ class StencilObject(abc.ABC):
                 If an incorrect field or parameter data type is passed.
         """
         # assert compatibility of fields with stencil
-        for name, field in used_field_args.items():
+        for name, interface in array_interfaces.items():
             if gt_backend.from_name(self.backend).assert_specified_layout:
                 if not gt_storage_utils.is_compatible_layout(
-                    field, gt_backend.from_name(self.backend).storage_defaults.layout("IJK")
+                    interface["strides"],
+                    interface["shape"],
+                    gt_backend.from_name(self.backend).storage_defaults.layout("IJK"),
                 ):
                     raise ValueError(
-                        f"The layout of the field {name} is not compatible with the backend."
+                        f"The layout of the field '{name}' is not compatible with the backend."
                     )
 
-            if not field.dtype == self.field_info[name].dtype:
+            if (
+                not gt_ir.DataType.from_dtype(np.dtype(interface["typestr"]))
+                == self.field_info[name].dtype
+            ):
                 raise TypeError(
-                    f"The dtype of field '{name}' is '{field.dtype}' instead of "
-                    f"'{self.field_info[name].dtype}'"
+                    f"The dtype of field '{name}' is '{np.dtype(interface['typestr'])}' instead "
+                    f"of '{self.field_info[name].dtype}'"
                 )
-            # ToDo: check if mask is correct: need mask info in stencil object.
 
         # assert compatibility of parameters with stencil
         for name, parameter in used_param_args.items():
@@ -162,7 +174,7 @@ class StencilObject(abc.ABC):
                     f"'{self.parameter_info[name].dtype}'"
                 )
 
-        assert isinstance(used_field_args, dict) and isinstance(used_param_args, dict)
+        assert isinstance(array_interfaces, dict) and isinstance(used_param_args, dict)
 
         if len(domain) != self.domain_info.ndims:
             raise ValueError(f"Invalid 'domain' value '{domain}'")
@@ -171,12 +183,12 @@ class StencilObject(abc.ABC):
         if not domain > Shape.zeros(self.domain_info.ndims):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")
 
-        max_domain = self._get_max_domain(used_field_args, origin)
+        max_domain = self._get_max_domain(array_interfaces, origin)
         if not domain <= max_domain:
             raise ValueError(
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
-        for name, field in used_field_args.items():
+        for name, interface in array_interfaces.items():
             min_origin = self.field_info[name].boundary.lower_indices
             if origin[name] < min_origin:
                 raise ValueError(
@@ -189,10 +201,10 @@ class StencilObject(abc.ABC):
                     origin[name], domain, self.field_info[name].boundary.upper_indices
                 )
             )
-            if min_shape > field.shape:
+            if min_shape > interface["shape"]:
                 raise ValueError(
-                    f"Shape of field {name} is {field.shape} but must be at least {min_shape} for "
-                    "given domain and origin."
+                    f"Shape of field {name} is {interface['shape']} but must be at least "
+                    f"{min_shape} for given domain and origin."
                 )
 
     def _call_run(
@@ -248,12 +260,45 @@ class StencilObject(abc.ABC):
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
 
+        backend_cls = gt_backend.from_name(self.backend)
+        compute_device = backend_cls.compute_device
+        other_device = "cpu" if compute_device == "gpu" else "gpu"
+
         # Collect used arguments and parameters
         used_field_args = {
             name: field
             for name, field in field_args.items()
             if self.field_info.get(name, None) is not None
         }
+
+        gt_data_interfaces = dict()
+        array_interfaces = dict()
+        for name, field in used_field_args.items():
+            if hasattr(field, "__gt_data_interface__"):
+                gt_data_interfaces[name] = field.__gt_data_interface__
+            else:
+                data_interface = dict()
+                if gt_storage_utils.has_cpu_buffer(field):
+                    data_interface["cpu"] = gt_storage_utils.as_np_array(field).__array_interface__
+                if gt_storage_utils.has_gpu_buffer(field):
+                    data_interface["gpu"] = gt_storage_utils.as_cp_array(
+                        field
+                    ).__cuda_array_interface__
+                if len(data_interface) == 0:
+                    raise ValueError("Field '{name}' not understood as buffer.")
+                gt_data_interfaces[name] = data_interface
+
+            if compute_device in gt_data_interfaces[name]:
+                array_interface = gt_data_interfaces[name][compute_device]
+            elif other_device in gt_data_interfaces[name]:
+                array_interface = gt_data_interfaces[name][other_device]
+            else:
+                raise ValueError(
+                    f"__gt_data_interface__ of field '{name}' does not contain 'cpu' "
+                    "or 'gpu' key."
+                )
+            array_interfaces[name] = array_interface
+
         for name, field_info in self.field_info.items():
             if field_info is not None and used_field_args[name] is None:
                 raise ValueError(f"Field '{name}' is None.")
@@ -273,14 +318,22 @@ class StencilObject(abc.ABC):
         else:
             origin = normalize_origin_mapping(origin)
 
-        for name, field in used_field_args.items():
+        for name, interface in array_interfaces.items():
             origin.setdefault(
-                name, origin["_all_"] if "_all_" in origin else tuple(h for h, _ in field.halo)
+                name,
+                origin["_all_"]
+                if "_all_" in origin
+                else tuple(
+                    h
+                    for h, _ in interface.get(
+                        "halo", ((0, 0),) * len(self.field_info[name].boundary)
+                    )
+                ),
             )
 
         # Domain
         if domain is None:
-            domain = self._get_max_domain(used_field_args, origin)
+            domain = self._get_max_domain(array_interfaces, origin)
             if any(axis_bound == np.iinfo(np.uintc).max for axis_bound in domain):
                 raise ValueError(
                     "Compute domain could not be deduced. Specifiy the domain explicitly or "
@@ -290,11 +343,69 @@ class StencilObject(abc.ABC):
             domain = normalize_domain(domain)
 
         if validate_args:
-            self._validate_args(used_field_args, used_param_args, domain, origin)
+            self._validate_args(array_interfaces, used_param_args, domain, origin)
 
+        buffers = dict()
+        for name in field_args.keys():
+            if name not in used_field_args:
+                buffers[name] = None
+            else:
+                if compute_device in gt_data_interfaces[name]:
+                    acquire = array_interfaces[name].get("acquire", None)
+                    if acquire is not None:
+                        acquire()
+                    if compute_device == "gpu":
+                        buffers[name] = gt_storage_utils.as_cp_array(
+                            SimpleNamespace(__cuda_array_interface__=array_interfaces[name])
+                        )
+                    else:
+                        buffers[name] = gt_storage_utils.as_np_array(
+                            SimpleNamespace(__array_interface__=array_interfaces[name])
+                        )
+                else:
+                    acquire = array_interfaces[name].get("acquire", None)
+                    if acquire is not None:
+                        acquire()
+                    if compute_device == "gpu":
+                        buffers[name] = gt_storage.storage(
+                            np.asarray(
+                                SimpleNamespace(__array_interface__=array_interfaces[name])
+                            ),
+                            defaults=self.backend,
+                            managed=False,
+                        )._device_field
+
+                    else:
+                        buffers[name] = gt_storage.storage(
+                            cp.asarray(
+                                SimpleNamespace(__cuda_array_interface__=array_interfaces[name])
+                            ),
+                            defaults=self.backend,
+                            managed=False,
+                        )._field
         self.run(
-            _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
+            _domain_=domain, _origin_=origin, exec_info=exec_info, **buffers, **parameter_args
         )
+        for name in used_field_args.keys():
+            if compute_device not in gt_data_interfaces[name]:
+
+                if compute_device == "gpu":
+                    np.asarray(SimpleNamespace(__array_interface__=array_interfaces[name]))[
+                        ...
+                    ] = cp.asnumpy(buffers[name])
+                else:
+                    cp.asarray(SimpleNamespace(__cuda_array_interface__=array_interfaces[name]))[
+                        ...
+                    ] = cp.asarray(buffers[name])
+            from gt4py.definitions import AccessKind
+
+            if self.field_info[name].access == AccessKind.READ_WRITE:
+                touch = array_interfaces[name].get("touch", None)
+                if touch is not None:
+                    touch()
+            release = array_interfaces[name].get("release", None)
+            if release is not None:
+                release()
 
         if exec_info is not None:
             exec_info["call_run_end_time"] = time.perf_counter()

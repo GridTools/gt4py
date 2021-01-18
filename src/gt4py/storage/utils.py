@@ -611,12 +611,18 @@ def _cpu_view(gpu_array):
     return np.asarray(SimpleNamespace(__array_interface__=array_interface))
 
 
-def is_compatible_layout(field, layout_map):
+def is_compatible_layout(strides, shape, layout_map):
+    if strides is None:
+        strides = [1] * len(shape)
+        stride = 1
+        for i, s in reversed(list(enumerate(shape))):
+            strides[i] = stride
+            stride = stride * shape[i]
     stride = 0
-    if len(field.strides) < len(layout_map):
+    if len(strides) < len(layout_map):
         return False
     for dim in reversed(np.argsort(layout_map)):
-        if field.strides[dim] < stride:
+        if strides[dim] < stride:
             return False
-        stride = field.strides[dim]
+        stride = strides[dim]
     return True
