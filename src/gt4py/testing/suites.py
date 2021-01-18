@@ -17,9 +17,9 @@
 import sys
 from itertools import count, product
 
+import numpy as np
 import pytest
 
-import numpy as np
 
 try:
     import cupy as cp

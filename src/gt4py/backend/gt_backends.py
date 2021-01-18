@@ -21,7 +21,6 @@ import os
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import jinja2
-import numpy as np
 
 from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
@@ -36,7 +35,6 @@ from . import pyext_builder
 
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
-    from gt4py.storage.definitions import Storage
 
 
 def gtx86_layout(dims: Sequence[str] = "IJK") -> Tuple[int, ...]:
@@ -47,21 +45,18 @@ def gtx86_layout(dims: Sequence[str] = "IJK") -> Tuple[int, ...]:
 
     n_data_dims = sum(ax not in "IJK" for ax in dims)
     sorted_layout = list(range(len(dims)))
-    sorted_layout = iter(sorted_layout[n_data_dims:] + sorted_layout[:n_data_dims])
+    sorted_layout_iter = iter(sorted_layout[n_data_dims:] + sorted_layout[:n_data_dims])
 
-    res = [None] * len(dims)
+    res = [-1] * len(dims)
 
     for d in sorted_dims:
-        res[dims.index(d)] = next(sorted_layout)
-    assert None not in res
+        res[dims.index(d)] = next(sorted_layout_iter)
+    assert -1 not in res
 
-    return tuple(res)
+    return tuple(int(r) for r in res)
 
 
 def gtmc_layout(dims: Sequence[str] = "IJK") -> Tuple[int, ...]:
-    # ijk_mask = [ax in dims for ax in "IJK"]
-    # datadim_mask = [str(ax) in dims for ax in range(len(`))
-    # ctr = reversed(range(len(dims)))
 
     sorted_dims = sorted(ax for ax in "IJK" if ax in dims) + sorted(
         ax for ax in dims if ax.isdecimal()
@@ -71,33 +66,29 @@ def gtmc_layout(dims: Sequence[str] = "IJK") -> Tuple[int, ...]:
         tmp = sorted_layout[sorted_dims.index("K")]
         sorted_layout[sorted_dims.index("K")] = sorted_layout[sorted_dims.index("J")]
         sorted_layout[sorted_dims.index("J")] = tmp
-    sorted_layout = iter(sorted_layout)
+    sorted_layout_iter = iter(sorted_layout)
 
-    res = [None] * len(dims)
+    res = [-1] * len(dims)
 
     for d in sorted_dims:
-        res[dims.index(d)] = next(sorted_layout)
-    assert None not in res
+        res[dims.index(d)] = next(sorted_layout_iter)
+    assert -1 not in res
 
-    return tuple(res)
+    return tuple(int(r) for r in res)
 
 
 def gtcuda_layout(dims: Sequence[str] = "IJK") -> Tuple[int, ...]:
-    # ijk_mask = [ax in dims for ax in "IJK"]
-    # datadim_mask = [str(ax) in dims for ax in range(len(`))
-    # ctr = reversed(range(len(dims)))
 
     sorted_dims = sorted(ax for ax in "IJK" if ax in dims) + sorted(
         ax for ax in dims if ax.isdecimal()
     )
     sorted_layout = iter(reversed(range(len(dims))))
-    res = [None] * len(dims)
+    res = [-1] * len(dims)
 
     for d in sorted_dims:
         res[dims.index(d)] = next(sorted_layout)
-    assert None not in res
-
-    return tuple(res)
+    assert -1 not in res
+    return tuple(int(r) for r in res)
 
 
 class _MaxKOffsetExtractor(gt_ir.IRNodeVisitor):

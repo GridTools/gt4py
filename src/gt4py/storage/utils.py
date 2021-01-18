@@ -14,15 +14,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import collections
 import math
 import numbers
 from types import SimpleNamespace
+from typing import Any, Callable, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
 import gt4py.utils as gt_util
-from gt4py import backend as gt_backend
-from gt4py import storage as gt_store
 
 
 try:
@@ -31,13 +31,23 @@ try:
 except ImportError:
     cp = None
 
+import gt4py.ir as gt_ir
+import gt4py.utils as gt_utils
+from gt4py.storage.default_parameters import get_default_parameters
+from gt4py.storage.definitions import (
+    CudaManagedGPUStorage,
+    ExplicitlyManagedGPUStorage,
+    Storage,
+    SyncState,
+)
+
 
 def idx_from_order(order):
     return list(np.argsort(order))
 
 
 def check_mask(mask):
-    if not gt_util.is_iterable_of(mask, bool) and not mask is None:
+    if not gt_util.is_iterable_of(mask, bool) and mask is not None:
         raise TypeError("Mask must be an iterable of booleans.")
 
 
@@ -73,17 +83,17 @@ def is_cuda_managed(data):
     else:
         try:
             tmp_array = np.asarray(data)
-        except:
+        except Exception:
             return False
         else:
             try:
                 attrs = cp.cuda.runtime.pointerGetAttributes(tmp_array.ctypes.data)
                 return attrs.devicePointer == attrs.hostPointer and attrs.devicePointer != 0
-            except:
+            except Exception:
                 return False
 
 
-def normalize_halo(halo):
+def normalize_halo(halo) -> Optional[Tuple[Tuple[int, int], ...]]:
     if halo is None:
         return None
 
@@ -178,25 +188,12 @@ def allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate
 
     alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
     field = _reshape(
-        array[alignment_offset : alignment_offset + padded_size], strides, padded_shape
+        array[alignment_offset : alignment_offset + padded_size],  # noqa: E203
+        strides,
+        padded_shape,
     )
     field = field[tuple(slice(0, s, None) for s in shape)]
     return raw_buffer, field
-
-
-import collections
-from typing import Any, Optional, Sequence, Tuple, Union
-
-import gt4py.ir as gt_ir
-import gt4py.utils as gt_utils
-from gt4py.storage.default_parameters import get_default_parameters
-from gt4py.storage.definitions import (
-    CPUStorage,
-    CudaManagedGPUStorage,
-    ExplicitlyManagedGPUStorage,
-    Storage,
-    SyncState,
-)
 
 
 def has_cpu_buffer(data):
@@ -207,12 +204,12 @@ def has_cpu_buffer(data):
     else:
         try:
             np.asarray(data)
-        except:
+        except Exception:
             try:
                 tmp_array = cp.asarray(data)
                 attrs = cp.cuda.runtime.pointerGetAttributes(tmp_array.data.ptr)
                 return attrs.hostPointer == attrs.devicePointer
-            except:
+            except Exception:
                 return False
         else:
             return True
@@ -226,10 +223,10 @@ def has_gpu_buffer(data):
     else:
         try:
             cp.asarray(SimpleNamespace(__cuda_array_interface__=data.__cuda_array_interface__))
-        except:
+        except Exception:
             try:
                 cp.asarray(SimpleNamespace(__cuda_array_interface__=data.__array_interface__))
-            except:
+            except Exception:
                 return False
             else:
                 return True
@@ -248,7 +245,7 @@ def as_np_array(data):
     else:
         try:
             return np.asarray(data)
-        except:
+        except Exception:
             return np.asarray(SimpleNamespace(__array_interface__=data.__cuda_array_interface__))
 
 
@@ -268,7 +265,7 @@ def as_cp_array(data):
             return cp.asarray(
                 SimpleNamespace(__cuda_array_interface__=data.__cuda_array_interface__)
             )
-        except:
+        except Exception:
             # in case of managed storage, this doesn't raise
             return cp.asarray(SimpleNamespace(__cuda_array_interface__=data.__array_interface__))
 
@@ -324,39 +321,38 @@ def parameter_lookup_and_normalize(
     device_data: Any = None,
     dtype: Any,
     halo: Optional[Sequence[Union[int, Tuple[int, int]]]],
-    layout: Optional[Sequence[int]],
+    layout: Optional[Union[Callable, Sequence[int]]],
     managed: Optional[Union[bool, str]],
     shape: Optional[Sequence[int]] = None,
     sync_state: SyncState = None,
     template: Any,
 ):
-    # 1) for each parameter assert that type and value is valid
     if data is not None:
 
         if not isinstance(data, Storage) and not hasattr(data, "__gt_data_interface__"):
             try:
                 np.asarray(data)
-            except:
+            except Exception:
                 try:
                     cp.asarray(data)
-                except:
+                except Exception:
                     raise TypeError("'data' not understood as array")
 
     if device_data is not None:
         if not isinstance(device_data, Storage) and not hasattr(data, "__gt_data_interface__"):
             try:
                 cp.asarray(device_data)
-            except:
+            except Exception:
                 raise TypeError("'device_data' not understood as gpu array")
 
     if template is not None:
         if not isinstance(template, Storage) and not hasattr(template, "__gt_data_interface__"):
             try:
-                np.asarray(template)
-            except:
+                tmp_array = np.asarray(template)
+                assert "O" not in tmp_array.dtype.str
+            except Exception:
                 if not hasattr(template, "__cuda_array_interface__"):
                     raise TypeError("'template' not understood as array")
-
     if shape is not None:
         if not gt_utils.is_iterable_of(shape, numbers.Integral):
             raise TypeError("'shape' must be an iterable of integers")
@@ -369,7 +365,7 @@ def parameter_lookup_and_normalize(
 
         if not isinstance(defaults, str):
             raise TypeError("'defaults' must be a string")
-        elif not defaults in default_parameter_registry:
+        elif defaults not in default_parameter_registry:
             raise ValueError(f"'defaults' must be in {list(default_parameter_registry.keys())}")
 
     if dtype is not None:
@@ -378,7 +374,7 @@ def parameter_lookup_and_normalize(
         else:
             try:
                 dtype = np.dtype(dtype)
-            except:
+            except Exception:
                 raise TypeError("'dtype' not understood ")
 
     if dims is not None:
@@ -387,7 +383,7 @@ def parameter_lookup_and_normalize(
         ) or not len(set(str(a) for a in dims)) == len(dims):
             raise TypeError("'axes' must be a sequence of unique characters or integers")
         for a in dims:
-            if not str(a).isdecimal() and not a in ["I", "J", "K"]:
+            if not str(a).isdecimal() and a not in ["I", "J", "K"]:
                 raise ValueError(
                     f"'axes' must only contain integers or " f"characters in {['I', 'J', 'K']}"
                 )
@@ -408,7 +404,7 @@ def parameter_lookup_and_normalize(
             layout, numbers.Integral, iterable_class=collections.abc.Sequence
         ) and not callable(layout):
             raise TypeError(
-                f"'layout_map' must either be a sequence of integers"
+                "'layout_map' must either be a sequence of integers"
                 " or a callable returning such a sequence when given 'dims'"
             )
 
@@ -418,31 +414,26 @@ def parameter_lookup_and_normalize(
     if managed is not None:
         if not isinstance(managed, str) and managed is not False:
             raise TypeError("'managed' must be a string or 'False'")
-        elif not managed in ["cuda", "gt4py", False]:
+        elif managed not in ["cuda", "gt4py", False]:
             raise ValueError('\'managed\' must be in ["cuda", "gt4py", False]')
-    if isinstance(defaults, str):
-        defaults = get_default_parameters(defaults)
 
-    # 2a) fill in default parameters.
-    if defaults is not None:
-        if isinstance(defaults, str):
-            defaults = get_default_parameters(defaults)
+    default_parameters = get_default_parameters(defaults) if defaults is not None else None
+    if default_parameters is not None:
         if device is None:
-            device = defaults.device
+            device = default_parameters.device
         if alignment_size is None:
-            alignment_size = defaults.alignment_size
+            alignment_size = default_parameters.alignment_size
         if layout is None:
-            layout = defaults.layout
+            layout = default_parameters.layout
 
-    # 2b) if template is storage, use those parameters
     if device is None and template is not None:
         if has_gpu_buffer(template):
             device = "gpu"
         elif has_cpu_buffer(template):
             device = "cpu"
 
-    if device is None and defaults is not None and defaults.device is not None:
-        device = defaults.device
+    if device is None and default_parameters is not None and default_parameters.device is not None:
+        device = default_parameters.device
 
     if template is None:
         if data is not None and not isinstance(data, numbers.Number):
@@ -474,7 +465,6 @@ def parameter_lookup_and_normalize(
             ):
                 device = "gpu"
 
-    # 2b) if data is given, infer some more params
     if template is not None:
         if dtype is None:
             dtype = template.dtype
@@ -488,7 +478,6 @@ def parameter_lookup_and_normalize(
             elif cp is not None and is_cuda_managed(template):
                 managed = "cuda"
 
-    # 4) fill in missing parameters from given data/device_data
     if shape is None:
         if template is not None:
             shape = template.shape
@@ -508,16 +497,12 @@ def parameter_lookup_and_normalize(
     else:
         raise TypeError("not enough information to determine the number of dimensions")
 
-    halo = normalize_halo(halo if halo is not None else (0,) * ndim)
+    normalized_halo = normalize_halo(halo)
+    if normalized_halo is None:
+        normalized_halo = ((0, 0),) * ndim
     if aligned_index is None:
-        aligned_index = tuple(int(h[0]) for h in halo)
+        aligned_index = tuple(int(h[0]) for h in normalized_halo)
     aligned_index = tuple(int(a) for a in aligned_index)
-
-    # if layout is None:
-    #     if isinstance(data, Storage):
-    #         layout = layout_from_strides(template.strides)
-    #     elif isinstance(device_data, Storage):
-    #         layout = layout_from_strides(device_data.strides)
 
     if layout is not None:
         if not gt_utils.is_iterable_of(
@@ -531,43 +516,31 @@ def parameter_lookup_and_normalize(
                 raise TypeError(
                     f"'layout_map' did not return an iterable of integers for ndim={ndim}"
                 )
+        assert isinstance(layout, collections.abc.Sequence)
+        tmp_layout: Sequence[int] = layout
         if (
-            not all(item >= 0 for item in layout)
-            or not all(item < len(layout) for item in layout)
-            or not len(set(layout)) == len(layout)
+            not all(item >= 0 for item in tmp_layout)
+            or not all(item < len(tmp_layout) for item in tmp_layout)
+            or not len(set(tmp_layout)) == len(tmp_layout)
         ):
             raise ValueError(
-                f"elements of layout map must be a permutation of (0, ..., len(layout_map))"
+                "elements of layout map must be a permutation of (0, ..., len(layout_map))"
             )
-        layout = tuple(int(l) for l in layout)
-
-    # 5a) assert consistency of parameters
-
-    # if mask is not None:
-    #     if len(shape) == len(mask):
-    #         shape = tuple(s for s, m in zip(shape, mask) if m)
-    # 5b) if not copy: assert consistency with given buffer
-
-    # 6) assert info is provided for all required parameters
-
-    # 7) fill in missing parameters where a default is available
+        normalized_layout = tuple(int(p) for p in tmp_layout)
+    else:
+        normalized_layout = tuple(range(ndim))
     assert isinstance(ndim, int) and ndim >= 0
 
-    if layout is None:
-        layout = tuple(range(ndim))
     if alignment_size is None:
         alignment_size = 1
     if aligned_index is None:
         aligned_index = ndim * (0,)
-    if halo is None:
-        halo = ndim * ((0, 0),)
     if dtype is None:
         dtype = np.dtype("float64")
     if managed is None:
         managed = False
 
     assert gt_utils.is_iterable_of(shape, item_class=int, iterable_class=tuple)
-    # assert gt_utils.is_iterable_of(mask, item_class=bool, iterable_class=tuple)
 
     return dict(
         aligned_index=aligned_index,
@@ -577,8 +550,8 @@ def parameter_lookup_and_normalize(
         device=device,
         device_data=device_data,
         dtype=dtype,
-        halo=halo,
-        layout=layout,
+        halo=normalized_halo,
+        layout=normalized_layout,
         managed=managed,
         shape=shape,
         sync_state=sync_state,
@@ -619,31 +592,6 @@ def allocate_gpu_gt4py_managed(aligned_index, shape, layout_map, dtype, alignmen
     return (*cpu_buffers, *gpu_buffers)
 
 
-def raise_broadcast_error(*args, setitem_target=None):
-    from .definitions import Storage
-
-    if setitem_target is None:
-        errstr = "operands could not be broadcast together with shapes [masks] {input_str}"
-    else:
-        errstr = "could not broadcast input array from shape {input_str} into shape [mask] {target_str}}"
-    input_shapestrs = []
-    for a in args:
-        sstr = str(a.shape)
-        if isinstance(a, Storage):
-            sstr += str(a.mask)
-        input_shapestrs.append(sstr)
-
-    if setitem_target is None:
-        raise ValueError(errstr.format(input_str=" ".join(input_shapestrs)))
-    else:
-        assert len(input_shapestrs) == 1
-        assert isinstance(setitem_target, Storage)
-        target_shapestr = str(setitem_target.shape) + str(setitem_target.mask)
-        raise ValueError(
-            errstr.format(input_str=" ".join(input_shapestrs), output_str=target_shapestr)
-        )
-
-
 def _gpu_view(cpu_array):
     if 0 in cpu_array.shape:
         res = cp.asarray(cpu_array)
@@ -663,16 +611,6 @@ def _cpu_view(gpu_array):
     return np.asarray(SimpleNamespace(__array_interface__=array_interface))
 
 
-def asarray(array_like):
-    try:
-        return np.asarray(array_like)
-    except:
-        try:
-            cp.asarray(array_like)
-        except:
-            raise ValueError("asarray failed")
-
-
 def is_compatible_layout(field, layout_map):
     stride = 0
     if len(field.strides) < len(layout_map):
@@ -682,7 +620,3 @@ def is_compatible_layout(field, layout_map):
             return False
         stride = field.strides[dim]
     return True
-
-
-# def layout_from_strides(strides):
-#     return tuple(int(idx) for idx in np.argsort(strides))

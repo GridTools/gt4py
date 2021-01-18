@@ -17,7 +17,6 @@
 """GridTools storages classes."""
 
 from .creation_routines import (
-    Storage,
     as_storage,
     empty,
     empty_like,

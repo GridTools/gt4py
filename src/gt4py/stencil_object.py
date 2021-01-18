@@ -1,25 +1,12 @@
 import abc
-import sys
 import time
-import warnings
+from typing import Callable, Optional
 
 import numpy as np
 
 import gt4py.backend as gt_backend
-import gt4py.storage as gt_storage
 import gt4py.storage.utils as gt_storage_utils
-
-from gt4py.definitions import (
-    AccessKind,
-    Boundary,
-    DomainInfo,
-    FieldInfo,
-    Index,
-    ParameterInfo,
-    Shape,
-    normalize_domain,
-    normalize_origin_mapping,
-)
+from gt4py.definitions import Index, Shape, normalize_domain, normalize_origin_mapping
 
 
 class StencilObject(abc.ABC):
@@ -56,7 +43,6 @@ class StencilObject(abc.ABC):
 {source}
         """.format(
             name=self.options["module"] + "." + self.options["name"],
-            version=self._gt_id_,
             backend=self.backend,
             fields=self.field_info,
             params=self.parameter_info,
@@ -71,9 +57,8 @@ class StencilObject(abc.ABC):
         return int.from_bytes(type(self)._gt_id_.encode(), byteorder="little")
 
     # Those attributes are added to the class at loading time:
-    #
-    #   _gt_id_ (stencil_id.version)
-    #   definition_func
+    _gt_id_: Optional[str] = None
+    definition_func: Optional[Callable] = None
 
     @property
     @abc.abstractmethod
@@ -119,7 +104,7 @@ class StencilObject(abc.ABC):
         pass
 
     def _get_max_domain(self, field_args, origin):
-        """Return the maximum domain size possible
+        """Return the maximum domain size possible.
 
         Parameters
         ----------
@@ -152,7 +137,6 @@ class StencilObject(abc.ABC):
             TypeError
                 If an incorrect field or parameter data type is passed.
         """
-
         # assert compatibility of fields with stencil
         for name, field in used_field_args.items():
             if gt_backend.from_name(self.backend).assert_specified_layout:
@@ -165,7 +149,8 @@ class StencilObject(abc.ABC):
 
             if not field.dtype == self.field_info[name].dtype:
                 raise TypeError(
-                    f"The dtype of field '{name}' is '{field.dtype}' instead of '{self.field_info[name].dtype}'"
+                    f"The dtype of field '{name}' is '{field.dtype}' instead of "
+                    f"'{self.field_info[name].dtype}'"
                 )
             # ToDo: check if mask is correct: need mask info in stencil object.
 
@@ -173,7 +158,8 @@ class StencilObject(abc.ABC):
         for name, parameter in used_param_args.items():
             if not type(parameter) == self.parameter_info[name].dtype:
                 raise TypeError(
-                    f"The type of parameter '{name}' is '{type(parameter)}' instead of '{self.parameter_info[name].dtype}'"
+                    f"The type of parameter '{name}' is '{type(parameter)}' instead of "
+                    f"'{self.parameter_info[name].dtype}'"
                 )
 
         assert isinstance(used_field_args, dict) and isinstance(used_param_args, dict)
@@ -194,7 +180,8 @@ class StencilObject(abc.ABC):
             min_origin = self.field_info[name].boundary.lower_indices
             if origin[name] < min_origin:
                 raise ValueError(
-                    f"Origin for field {name} too small. Must be at least {min_origin}, is {origin[name]}"
+                    f"Origin for field {name} too small. Must be at least {min_origin}, is "
+                    f"{origin[name]}"
                 )
             min_shape = tuple(
                 o + d + h
@@ -204,7 +191,8 @@ class StencilObject(abc.ABC):
             )
             if min_shape > field.shape:
                 raise ValueError(
-                    f"Shape of field {name} is {field.shape} but must be at least {min_shape} for given domain and origin."
+                    f"Shape of field {name} is {field.shape} but must be at least {min_shape} for "
+                    "given domain and origin."
                 )
 
     def _call_run(
@@ -257,7 +245,6 @@ class StencilObject(abc.ABC):
             ValueError
                 If invalid data or inconsistent options are specified.
         """
-
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
 
@@ -296,7 +283,8 @@ class StencilObject(abc.ABC):
             domain = self._get_max_domain(used_field_args, origin)
             if any(axis_bound == np.iinfo(np.uintc).max for axis_bound in domain):
                 raise ValueError(
-                    f"Compute domain could not be deduced. Specifiy the domain explicitly or ensure you reference at least one field."
+                    "Compute domain could not be deduced. Specifiy the domain explicitly or "
+                    "ensure you reference at least one field."
                 )
         else:
             domain = normalize_domain(domain)

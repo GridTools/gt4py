@@ -59,11 +59,7 @@ def register(backend_cls):
             name=backend_cls.name, defaults=backend_cls.storage_defaults
         )
     else:
-        raise ValueError(
-            "Invalid 'storage_defaults' attribute in backend class '{cls}'".format(
-                name=backend_cls.name, cls=backend_cls
-            )
-        )
+        raise ValueError(f"Invalid 'storage_defaults' attribute in backend class '{backend_cls}'")
 
     return REGISTRY.register(backend_cls.name, backend_cls)
 

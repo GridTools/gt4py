@@ -1,6 +1,3 @@
-from gt4py import backend as gt_backend
-
-
 class StorageDefaults:
     def __init__(self, *, device="cpu", alignment_size=None, layout=None):
         self.alignment_size = alignment_size
@@ -27,7 +24,7 @@ def register_storage_defaults(name, defaults):
     REGISTRY[name] = defaults
 
 
-def get_default_parameters(key):
+def get_default_parameters(key) -> StorageDefaults:
     if key not in REGISTRY:
         raise ValueError(f"no default parameters known for 'key' \"{key}\"")
     return REGISTRY[key]

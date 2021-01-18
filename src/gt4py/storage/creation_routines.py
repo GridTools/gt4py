@@ -1,5 +1,3 @@
-import abc
-import collections
 import numbers
 
 
@@ -7,17 +5,10 @@ try:
     import cupy as cp
 except ImportError:
     cp = None
-from numbers import Number
 from typing import Any, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from gt4py import backend as gt_backend
-from gt4py import ir as gt_ir
-from gt4py import utils as gt_utils
-
-from . import utils as storage_utils
-from .default_parameters import get_default_parameters
 from .definitions import Storage, SyncState
 
 
@@ -206,7 +197,7 @@ def zeros_like(
 
 def full(
     shape: Sequence[int],
-    fill_value: Number,
+    fill_value: Union[float, numbers.Number],
     dtype=np.float64,
     *,
     aligned_index: Optional[Sequence[int]] = None,
@@ -238,7 +229,7 @@ def full(
 
 def full_like(
     data: Storage,
-    fill_value: Number,
+    fill_value: Union[float, numbers.Number],
     dtype=np.float64,
     *,
     aligned_index: Optional[Sequence[int]] = None,

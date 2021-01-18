@@ -15,7 +15,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import collections
-import itertools
 import random
 
 import hypothesis as hyp
@@ -30,8 +29,6 @@ except ImportError:
     cp = None
 
 import gt4py
-
-# import gt4py.storage as gt_storage
 import gt4py.backend as gt_backend
 import gt4py.ir as gt_ir
 import gt4py.storage as gt_store
@@ -40,9 +37,8 @@ import gt4py.utils as gt_utils
 
 from ..definitions import GPU_BACKENDS, INTERNAL_BACKENDS
 
-INTERNAL_GPU_BACKENDS = list(set(GPU_BACKENDS) & set(INTERNAL_BACKENDS))
 
-from ..definitions import CPU_BACKENDS
+INTERNAL_GPU_BACKENDS = list(set(GPU_BACKENDS) & set(INTERNAL_BACKENDS))
 
 
 def generate_data_and_device_data():
@@ -62,9 +58,9 @@ def generate_data_and_device_data():
         test_label = "data np"
         data = np.ones((3, 3))
 
-        def validate(params, data=data, copy=copy):
+        def validate(params, data=data, device_data=None, copy=copy):
             assert params["device"] == "cpu"
-            assert params["managed"] == False
+            assert params["managed"] is False
             np.testing.assert_equal(params["data"], data)
             assert params["data"].ctypes.data == data.ctypes.data
             assert params["device_data"] is None
@@ -81,7 +77,7 @@ def generate_data_and_device_data():
 
         def validate(params, data=data, device_data=device_data, copy=copy):
             assert params["device"] == "gpu"
-            assert params["managed"] == False
+            assert params["managed"] is False
             np.testing.assert_equal(params["data"], data)
             assert params["data"].ctypes.data == data.ctypes.data
             assert cp.all(params["device_data"] == device_data)
@@ -101,9 +97,9 @@ def generate_data_and_device_data():
         test_label = "data cp"
         data = (cp or np).ones((3, 3))
 
-        def validate(params, data=data, copy=copy):
+        def validate(params, data=data, device_data=None, copy=copy):
             assert params["device"] == "gpu"
-            assert params["managed"] == False
+            assert params["managed"] is False
             assert params["data"] is None
             assert cp.all(params["device_data"] == data)
             assert params["device_data"].data.ptr == data.data.ptr
@@ -119,7 +115,7 @@ def generate_data_and_device_data():
 
         def validate(params, data=data, device_data=device_data, copy=copy):
             assert params["device"] == "gpu"
-            assert params["managed"] == False
+            assert params["managed"] is False
             assert params["data"] is None
             assert cp.all(params["device_data"] == device_data)
             assert params["device_data"].data.ptr == device_data.data.ptr
@@ -137,7 +133,7 @@ def generate_data_and_device_data():
         test_label = "data cp, cuda managed"
         data = get_cp_empty_managed((3, 3))
 
-        def validate(params, data=data, copy=copy):
+        def validate(params, data=data, device_data=None, copy=copy):
             assert params["device"] == "gpu"
             assert params["managed"] == "cuda"
 
@@ -160,7 +156,7 @@ def generate_data_and_device_data():
         test_label = "data np, cuda managed"
         data = gt4py.storage.utils._cpu_view(get_cp_empty_managed((3, 3))) if cp else None
 
-        def validate(params, data=data, copy=copy):
+        def validate(params, data=data, device_data=None, copy=copy):
             assert params["device"] == "gpu"
             assert params["managed"] == "cuda"
 
@@ -180,7 +176,7 @@ def generate_data_and_device_data():
         test_label = "device_data cp, cuda managed"
         device_data = get_cp_empty_managed((3, 3))
 
-        def validate(params, device_data=device_data, copy=copy):
+        def validate(params, data=None, device_data=device_data, copy=copy):
             assert params["device"] == "gpu"
             assert params["managed"] == "cuda"
 
@@ -204,16 +200,16 @@ def generate_data_and_device_data():
         test_label = "data CPU Storage"
         try:
             data = gt_store.empty((3, 3))
-        except:
+        except Exception:
             yield pytest.param(
                 None, None, marks=pytest.mark.skip("Failed to construct test case."), id=test_label
             )
         else:
             assert isinstance(data, gt_store.definitions.CPUStorage)
 
-            def validate(params, data=data, copy=copy):
+            def validate(params, data=data, device_data=None, copy=copy):
                 assert params["device"] == "cpu"
-                assert params["managed"] == False
+                assert params["managed"] is False
                 assert params["device_data"] is None
                 assert isinstance(params["data"], np.ndarray)
                 assert np.all(params["data"] == np.asarray(data))
@@ -229,16 +225,16 @@ def generate_data_and_device_data():
         try:
             data = gt_store.empty((3, 3), device="gpu", managed=False)
 
-        except:
+        except Exception:
             yield pytest.param(
                 None, None, marks=pytest.mark.skip("Failed to construct test case."), id=test_label
             )
         else:
             assert isinstance(data, gt_store.definitions.GPUStorage)
 
-            def validate(params, data=data, copy=copy):
+            def validate(params, data=data, device_data=None, copy=copy):
                 assert params["device"] == "gpu"
-                assert params["managed"] == False
+                assert params["managed"] is False
                 assert params["data"] is None
                 assert isinstance(params["device_data"], cp.ndarray)
                 assert cp.all(params["device_data"] == cp.asarray(data))
@@ -253,16 +249,16 @@ def generate_data_and_device_data():
         test_label = "device_data GPU-only Storage"
         try:
             device_data = gt_store.empty((3, 3), device="gpu", managed=False)
-        except:
+        except Exception:
             yield pytest.param(
                 None, None, marks=pytest.mark.skip("Failed to construct test case."), id=test_label
             )
         else:
             assert isinstance(device_data, gt_store.definitions.GPUStorage)
 
-            def validate(params, device_data=device_data, copy=copy):
+            def validate(params, data=None, device_data=device_data, copy=copy):
                 assert params["device"] == "gpu"
-                assert params["managed"] == False
+                assert params["managed"] is False
                 assert params["data"] is None
                 assert isinstance(params["device_data"], cp.ndarray)
                 assert cp.all(params["device_data"] == cp.asarray(device_data))
@@ -281,14 +277,14 @@ def generate_data_and_device_data():
         test_label = "data Storage, gt4py-managed"
         try:
             data = gt_store.empty((3, 3), device="gpu", managed="gt4py")
-        except:
+        except Exception:
             yield pytest.param(
                 None, None, marks=pytest.mark.skip("Failed to construct test case."), id=test_label
             )
         else:
             assert isinstance(device_data, gt_store.definitions.GPUStorage)
 
-            def validate(params, data=data, copy=copy):
+            def validate(params, data=data, device_data=None, copy=copy):
                 assert params["device"] == "gpu"
                 assert params["managed"] == "gt4py"
 
@@ -313,14 +309,14 @@ def generate_data_and_device_data():
         test_label = "data Storage, cuda managed"
         try:
             data = gt_store.empty((3, 3), device="gpu", managed="cuda")
-        except:
+        except Exception:
             yield pytest.param(
                 None, None, marks=pytest.mark.skip("Failed to construct test case."), id=test_label
             )
         else:
             assert isinstance(data, gt4py.storage.definitions.CudaManagedGPUStorage)
 
-            def validate(params, data=data, copy=copy):
+            def validate(params, data=data, device_data=None, copy=copy):
                 assert params["device"] == "gpu"
                 assert params["managed"] == "cuda"
 
@@ -339,8 +335,6 @@ def generate_data_and_device_data():
 
     reason = "To Implement: tests with __gt_array_interface__"
     yield pytest.param(None, None, marks=pytest.mark.skip(reason), id=reason)
-    # Support this?
-    # data np (managed), device data cp (managed, same)
 
 
 # ---- Hypothesis strategies ----
@@ -405,9 +399,9 @@ def test_managed_viewcasting(shape, cp_managed_fixture):
     cpu_view = gt_storage_utils._cpu_view(gpu_arr)
     gpu_view = gt_storage_utils._gpu_view(cpu_view)
 
-    assert not cpu_view is gpu_arr
-    assert not cpu_view is gpu_view
-    assert not gpu_view is gpu_arr
+    assert cpu_view is not gpu_arr
+    assert cpu_view is not gpu_view
+    assert gpu_view is not gpu_arr
 
     assert isinstance(gpu_arr, cp.ndarray)
     assert isinstance(cpu_view, np.ndarray)
@@ -465,7 +459,8 @@ class TestLowLevelAllocationRoutines:
                 <= gt_storage_utils.get_ptr(raw_buffer[-1:])
             )
 
-            # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
+            # check if the first compute-domain point in the last dimension is aligned for 100
+            # random "columns"
 
             if ndim > 0 and all(s > 0 for s in shape):
                 for i in range(100):
@@ -681,57 +676,6 @@ class TestConstructionEndToEnd:
             assert isinstance(res, gt4py.storage.definitions.ExplicitlyManagedGPUStorage)
 
 
-#
-# @hyp.given(param_dict=mask_strategy())
-# def test_masked_storage_cpu(param_dict):
-#     mask = param_dict["mask"]
-#     default_origin = param_dict["default_origin"]
-#     shape = param_dict["shape"]
-#
-#     # no assert when all is defined in descriptor, no grid_group
-#     store = gt_store.empty(
-#         dtype=np.float64, default_origin=default_origin, shape=shape, mask=mask, backend="gtx86"
-#     )
-#     assert sum(store.mask) == store.ndim
-#     assert sum(store.mask) == len(store.shape)
-
-#
-# @pytest.mark.requires_gpu
-# @hyp.given(param_dict=mask_strategy())
-# def test_masked_storage_gpu(param_dict):
-#     mask = param_dict["mask"]
-#     default_origin = param_dict["default_origin"]
-#     shape = param_dict["shape"]
-#
-#     # no assert when all is defined in descriptor, no grid_group
-#     store = gt_store.empty(
-#         dtype=np.float64, default_origin=default_origin, shape=shape, mask=mask, backend="gtcuda"
-#     )
-#     assert sum(store.mask) == store.ndim
-#     assert sum(store.mask) == len(store.data.shape)
-#
-#
-# def test_masked_storage_asserts():
-#     default_origin = (1, 1, 1)
-#     shape = (2, 2, 2)
-#
-#     mask = ()
-#     try:
-#         gt_store.empty(
-#             dtype=np.float64,
-#             default_origin=default_origin,
-#             shape=shape,
-#             mask=mask,
-#             backend="gtx86",
-#         )
-#     except ValueError:
-#         pass
-#     except Exception as e:
-#         raise e
-#     else:
-#         assert False
-
-
 @pytest.mark.parametrize(
     ["device", "managed"],
     [
@@ -917,9 +861,11 @@ def test_cuda_array_interface(managed):
 
 
 class TestParameterLookupAndNormalizeValid:
-    """The GDP-3 (Duck Storages) states:
-        The values of parameters which are not explicitly defined by the user will be inferred from the
-        first alternative source where the parameter is defined in the following search order:
+    """Tests storage construction parameter lookup routine.
+
+    The GDP-3 (Duck Storages) states:
+        The values of parameters which are not explicitly defined by the user will be inferred from
+        the first alternative source where the parameter is defined in the following search order:
 
         1. The provided :code:`defaults` parameter set.
         2. The provided :code:`data` or :code:`device_data` parameters.
@@ -1069,18 +1015,6 @@ class TestParameterLookupAndNormalizeValid:
         ],
     )
     def test_normalize_alignment_size(self, input_params, resolved_params):
-        self.run_test_lookup_normalize(input_params, resolved_params)
-
-    @pytest.mark.parametrize(
-        ["input_params", "resolved_params"],
-        [
-            (
-                {"copy": False, "shape": (4, 4), "aligned_index": [2, np.int32(2)]},
-                {"aligned_index": (2, 2)},
-            )
-        ],
-    )
-    def test_normalize_aligned_index(self, input_params, resolved_params):
         self.run_test_lookup_normalize(input_params, resolved_params)
 
     @pytest.mark.parametrize(

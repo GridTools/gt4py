@@ -14,9 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Optional, Sequence, Tuple, Union
-
 from numbers import Integral
+from typing import Any, Optional, Sequence, Tuple, Type, Union
+
 import numpy as np
 
 
@@ -26,7 +26,6 @@ except ImportError:
     cp = None
 
 import gt4py
-from gt4py import backend as gt_backend
 from gt4py import storage as gt_store
 
 
@@ -87,19 +86,16 @@ class Storage:
         )
 
         # 7) determine storage type
+        storage_t: Type[Storage]
         if params["device"] == "gpu":
             if params["managed"] == "cuda":
                 storage_t = CudaManagedGPUStorage
-                kwargs = {}
             elif params["managed"] == "gt4py":
                 storage_t = ExplicitlyManagedGPUStorage
-                kwargs = {}
             else:
                 storage_t = GPUStorage
-                kwargs = {}
         else:
             storage_t = CPUStorage
-            kwargs = {}
 
         self = storage_t._new(**params)
         self._shape = params["shape"]
@@ -166,6 +162,10 @@ class Storage:
         else:
             return self._forward_getitem_scalar(key)
 
+    @classmethod
+    def _new(cls, *args, **kwargs):
+        raise NotImplementedError("_new of base class not implemented")
+
     def copy(self):
         return gt4py.storage.storage(data=self)
 
@@ -207,7 +207,7 @@ class Storage:
             return cp.asnumpy(self)
 
     def to_cupy(self):
-        if cupy is None:
+        if cp is None:
             raise BufferError("Not possible to convert to CuPy, since CuPy could not be imported.")
         return cp.array(self, copy=True)
 

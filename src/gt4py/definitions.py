@@ -23,15 +23,13 @@ import operator
 from gt4py import utils as gt_utils
 from gt4py.utils.attrib import Any, AttributeClassLike
 from gt4py.utils.attrib import Dict as DictOf
-from gt4py.utils.attrib import List as ListOf
-from gt4py.utils.attrib import Tuple as TupleOf
 from gt4py.utils.attrib import attribclass, attribkwclass, attribute
 
 
 class CartesianSpace:
     @enum.unique
     class Axis(enum.Enum):
-        I = 0
+        I = 0  # noqa: E741
         J = 1
         K = 2
 
@@ -62,7 +60,7 @@ class NumericTuple(tuple):
 
         try:
             cls._check_value(value, ndims)
-        except Exception as e:
+        except Exception:
             return False
         else:
             return True
@@ -130,7 +128,7 @@ class NumericTuple(tuple):
         return self._apply(self._broadcast(other), operator.mul)
 
     def __floordiv__(self, other):
-        """"Element-wise integer division."""
+        """Element-wise integer division."""
         return self._apply(self._broadcast(other), operator.floordiv)
 
     def __and__(self, other):
@@ -263,7 +261,7 @@ class FrameTuple(tuple):
 
         try:
             cls._check_value(value, ndims)
-        except Exception as e:
+        except Exception:
             return False
         else:
             return True
@@ -312,7 +310,6 @@ class FrameTuple(tuple):
 
     def __add__(self, other):
         """Element-wise addition."""
-        # return self._apply(other, lambda a, b: a + b)
         return self._apply(self._broadcast(other), lambda a, b: a + b)
 
     def __sub__(self, other):
@@ -470,8 +467,7 @@ class Boundary(FrameTuple):
 
 
 class Extent(FrameTuple):
-    """Stencil support: region defined by the smallest and the largest offsets in
-     a stencil pattern computation.
+    """Stencil support: region defined by the largest offsets.
 
     Size of boundary regions are expressed as minimum and maximum relative offsets related
     to the computation position. For example the frame for a stencil accessing 3 elements
@@ -573,8 +569,7 @@ class Extent(FrameTuple):
 
 
 class CenteredExtent(Extent):
-    """Stencil support: region defined by the largest negative offset (or zero) and
-    the largest positive offset (or zero) in a stencil pattern computation.
+    """Stencil support: region defined by the largest offsets.
 
     Size of boundary regions are expressed as minimum and maximum relative offsets related
     to the computation position. For example the frame for a stencil accessing 3 elements
