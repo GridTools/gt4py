@@ -15,11 +15,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Set, Union
+from typing import List, Set, Tuple, Union
 
 from devtools import debug  # noqa: F401
 
 import eve
+from eve.utils import XIterator
 from gtc import common, oir
 from gtc.common import CartesianOffset
 from gtc.gtcpp import gtcpp
@@ -33,7 +34,7 @@ from gtc.gtcpp.gtcpp import GTParamList, IJCache
 
 
 def _extract_accessors(node: eve.Node) -> GTParamList:
-    extents: Dict[str, gtcpp.GTExtent] = (
+    extents: XIterator[Tuple[str, gtcpp.GTExtent]] = (
         node.iter_tree()
         .if_isinstance(gtcpp.AccessorRef)
         .reduceby(
