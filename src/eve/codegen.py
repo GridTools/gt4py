@@ -2,7 +2,7 @@
 #
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -98,7 +98,7 @@ class TemplateRenderingError(exceptions.EveRuntimeError):
 
 
 def register_formatter(language: str) -> Callable[[SourceFormatter], SourceFormatter]:
-    """Decorator to register source code formatters for specific languages."""
+    """Register source code formatters for specific languages (decorator)."""
 
     def _decorator(formatter: SourceFormatter) -> SourceFormatter:
         if language in SOURCE_FORMATTERS:
@@ -121,8 +121,7 @@ def format_python_source(
     string_normalization: bool = True,
 ) -> str:
     """Format Python source code using black formatter."""
-
-    target_versions = target_versions or f"{sys.version_info.major}{sys.version_info.minor}"
+    target_versions = target_versions or {f"{sys.version_info.major}{sys.version_info.minor}"}
     target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in target_versions)
 
     formatted_source = black.format_str(
@@ -149,7 +148,6 @@ if _CLANG_FORMAT_AVAILABLE:
         sort_includes: bool = False,
     ) -> str:
         """Format C++ source code using clang-format."""
-
         args = ["clang-format"]
         if style:
             args.append(f"--style={style}")
@@ -167,7 +165,6 @@ if _CLANG_FORMAT_AVAILABLE:
 
 def format_source(language: str, source: str, *, skip_errors: bool = True, **kwargs: Any) -> str:
     """Format source code if a formatter exists for the specific language."""
-
     formatter = SOURCE_FORMATTERS.get(language, None)
     try:
         if formatter:
@@ -408,11 +405,11 @@ class BaseTemplate(Template):
         self.definition_loc = None
         frame = inspect.currentframe()
         try:
-            if frame is not None:
+            if frame is not None and frame.f_back is not None and frame.f_back.f_back is not None:
                 (filename, lineno, _, _, _) = inspect.getframeinfo(frame.f_back.f_back)
                 self.definition_loc = (filename, lineno)
         except Exception:
-            self.definition_loc = None
+            pass
         finally:
             del frame
 
@@ -625,9 +622,7 @@ class TemplatedGenerator(NodeVisitor):
             {
                 key: value
                 for key, value in cls.__dict__.items()
-                if isinstance(value, Template)
-                and not key.startswith("_")
-                and not key.endswith("_")
+                if isinstance(value, Template) and not key.startswith("_") and not key.endswith("_")
             }
         )
 
@@ -693,7 +688,7 @@ class TemplatedGenerator(NodeVisitor):
     def get_template(self, node: TreeNode) -> Tuple[Optional[Template], Optional[str]]:
         """Get a template for a node instance (see class documentation)."""
         template: Optional[Template] = None
-        template_key: Optional[str] = None
+        template_key = None
         if isinstance(node, Node):
             for node_class in node.__class__.__mro__:
                 template_key = node_class.__name__
@@ -712,7 +707,6 @@ class TemplatedGenerator(NodeVisitor):
         **kwargs: Any,
     ) -> str:
         """Render a template using node instance data (see class documentation)."""
-
         return template.render(
             **transformed_children,
             **transformed_impl_fields,

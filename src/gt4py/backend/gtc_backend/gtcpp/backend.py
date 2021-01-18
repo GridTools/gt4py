@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
 
 from eve import codegen
@@ -66,7 +67,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         elif dtype == DataType.BOOL:
             return "bool"
         else:
-            assert False
+            raise AssertionError(f"Invalid DataType value: {dtype}")
 
     def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
         if "external_arg" in kwargs:

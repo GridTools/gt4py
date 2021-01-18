@@ -1,3 +1,19 @@
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from dataclasses import dataclass, field
 from typing import List
 
@@ -133,9 +149,7 @@ class GTIRToOIR(NodeTranslator):
         if node.false_branch:
             combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
             if mask:
-                combined_mask = oir.BinaryOp(
-                    op=LogicalOperator.AND, left=mask, right=combined_mask
-                )
+                combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
             self.visit(
                 node.false_branch.body,
                 mask=combined_mask,
@@ -156,9 +170,7 @@ class GTIRToOIR(NodeTranslator):
         if node.false_branch:
             combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
             if mask:
-                combined_mask = oir.BinaryOp(
-                    op=LogicalOperator.AND, left=mask, right=combined_mask
-                )
+                combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
             self.visit(
                 node.false_branch.body,
                 mask=combined_mask,

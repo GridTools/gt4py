@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -62,9 +62,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
-    def make_temporary_field(
-        self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent
-    ):
+    def make_temporary_field(self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent):
         source_lines = super().make_temporary_field(name, dtype, extent)
         source_lines.extend(self._make_field_accessor(name, extent.to_boundary().lower_indices))
 

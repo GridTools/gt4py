@@ -1,6 +1,14 @@
 default_language_version:
     python: python3.8
 repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.5.0
+    hooks:
+    - id: check-json
+    - id: check-toml
+    - id: check-yaml
+    - id: fix-encoding-pragma
+
 -   repo: https://github.com/psf/black
     rev: 20.8b1
     hooks:
@@ -21,7 +29,16 @@ repos:
     rev: 3.8.4
     hooks:
     - id: flake8
-      additional_dependencies: ["flake8-mutable", "flake8-docstrings", "flake8-rst-docstrings", "pygments", "flake8-eradicate", "flake8-debugger"]
+      additional_dependencies:
+      - darglint
+      - flake8-bugbear
+      - flake8-builtins
+      - flake8-debugger
+      - flake8-docstrings
+      - flake8-eradicate
+      - flake8-mutable
+      - flake8-rst-docstrings
+      - pygments
       exclude: >
           (?x)^(
           setup.py |

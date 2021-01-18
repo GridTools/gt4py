@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
+# GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, Dict, Generic, List, Optional, TypeVar, Union, cast
+from typing import Any, ClassVar, Dict, Generic, List, Optional, TypeVar, Union, cast
 
 from pydantic import validator
 from pydantic.class_validators import root_validator
@@ -158,6 +158,8 @@ class NativeFunction(StrEnum):
     FLOOR = "floor"
     CEIL = "ceil"
     TRUNC = "trunc"
+
+    IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
 
     @property
     def arity(self):
@@ -406,9 +408,7 @@ def binary_op_dtype_propagation(*, strict: bool):
                 if common_dtype is not DataType.BOOL:
                     values["dtype"] = common_dtype
                 else:
-                    raise ValueError(
-                        "Boolean expression is not allowed with arithmetic operation."
-                    )
+                    raise ValueError("Boolean expression is not allowed with arithmetic operation.")
             elif isinstance(values["op"], LogicalOperator):
                 if common_dtype is DataType.BOOL:
                     values["dtype"] = DataType.BOOL

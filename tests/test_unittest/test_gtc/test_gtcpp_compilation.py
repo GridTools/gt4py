@@ -1,3 +1,19 @@
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from pathlib import Path
 
 import pytest
@@ -147,6 +163,4 @@ def test_apply_method_compilation_succeeds(tmp_path, apply_method, expected_rege
     print(apply_method_code)
     match(apply_method_code, expected_regex)
 
-    build_gridtools_test(
-        tmp_path, GTCppCodegen.apply(_embed_apply_method_in_program(apply_method))
-    )
+    build_gridtools_test(tmp_path, GTCppCodegen.apply(_embed_apply_method_in_program(apply_method)))

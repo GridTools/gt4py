@@ -2,7 +2,7 @@
 #
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -27,17 +27,11 @@ import boltons.typeutils
 import pydantic
 import xxhash
 from boltons.typeutils import classproperty  # noqa: F401
-from pydantic import (  # noqa: F401
-    NegativeFloat,
-    NegativeInt,
-    PositiveFloat,
-    PositiveInt,
-    StrictBool,
-    StrictFloat,
-    StrictInt,
-    StrictStr,
-    validator,
-)
+from pydantic import NegativeFloat, NegativeInt, PositiveFloat, PositiveInt  # noqa
+from pydantic import StrictBool as Bool  # noqa: F401
+from pydantic import StrictFloat as Float  # noqa: F401
+from pydantic import StrictInt as Int  # noqa: F401
+from pydantic import StrictStr as Str  # noqa: F401
 from pydantic.types import ConstrainedStr
 
 from .typingx import Any, Callable, Generator, Type, Union
@@ -51,18 +45,6 @@ NOTHING = boltons.typeutils.make_sentinel(name="NOTHING", var_name="NOTHING")
 #: Typing definitions for `__get_validators__()` methods
 # (defined but not exported in `pydantic.typing`)
 PydanticCallableGenerator = Generator[Callable[..., Any], None, None]
-
-
-#: :class:`bool subclass for strict field definition
-Bool = StrictBool  # noqa: F401
-#: :class:`bytes subclass for strict field definition
-Bytes = bytes  # noqa: F401
-#: :class:`float` subclass for strict field definition
-Float = StrictFloat  # noqa: F401
-#: :class:`int` subclass for strict field definition
-Int = StrictInt  # noqa: F401
-#: :class:`str` subclass for strict field definition
-Str = StrictStr  # noqa: F401
 
 
 class Enum(enum.Enum):
