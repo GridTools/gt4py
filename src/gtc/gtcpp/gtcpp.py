@@ -1,13 +1,30 @@
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+
 import enum
 from typing import List, Optional, Tuple, Union
+
+from pydantic.class_validators import validator
 
 import eve
 from eve import Str, StrEnum, SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
-from pydantic.class_validators import validator
-
-from gt4py.gtc import common
-from gt4py.gtc.common import LocNode
+from gtc import common
+from gtc.common import LocNode
 
 
 class Expr(common.Expr):
@@ -55,12 +72,13 @@ class BlockStmt(common.BlockStmt[Stmt], Stmt):
 
 
 class AssignStmt(common.AssignStmt[Union[ScalarAccess, AccessorRef], Expr], Stmt):
-    # TODO remove duplication of this check
     @validator("left")
     def no_horizontal_offset_in_assignment(cls, v):
         if isinstance(v, AccessorRef) and (v.offset.i != 0 or v.offset.j != 0):
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
+
+    _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
 class IfStmt(common.IfStmt[Stmt, Expr], Stmt):
@@ -103,7 +121,12 @@ class GTGrid(LocNode):
 class GTLevel(LocNode):
     splitter: int
     offset: int
-    # TODO validator offset != 0
+
+    @validator("offset")
+    def offset_must_not_be_zero(cls, v):
+        if v == 0:
+            raise ValueError("GridTools level offset must be != 0")
+        return v
 
 
 class GTInterval(LocNode):
@@ -144,7 +167,7 @@ class GTExtent(LocNode):
 
 class GTAccessor(LocNode):
     name: SymbolName
-    id: int
+    id: int  # noqa: A003  # shadowing python builtin
     intent: Intent
     extent: GTExtent
 
@@ -162,7 +185,7 @@ class GTFunctor(LocNode, SymbolTableTrait):
 class Param(LocNode):
     name: SymbolName
 
-    class Config(eve.concepts.FrozenModelConfig):
+    class Config(eve.concepts.FrozenModel.Config):
         pass
 
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
@@ -176,7 +199,7 @@ class Param(LocNode):
 class Arg(LocNode):
     name: SymbolRef
 
-    class Config(eve.concepts.FrozenModelConfig):
+    class Config(eve.concepts.FrozenModel.Config):
         pass
 
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
@@ -230,7 +253,7 @@ class IJCache(LocNode):
 
 class GTMultiStage(LocNode):
     loop_order: common.LoopOrder
-    stages: List[GTStage]  # TODO at least one
+    stages: List[GTStage]
     caches: List[Union[IJCache]]
 
 
@@ -241,7 +264,7 @@ class GTComputationCall(LocNode, SymbolTableTrait):
     # function object.
     arguments: List[Arg]
     temporaries: List[Temporary]
-    multi_stages: List[GTMultiStage]  # TODO at least one
+    multi_stages: List[GTMultiStage]
 
 
 class Program(LocNode, SymbolTableTrait):

@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -240,9 +240,7 @@ class SuiteMeta(type):
         backends = cls_dict["backends"]
 
         # Create testing strategies
-        assert isinstance(
-            cls_dict["symbols"], collections.abc.Mapping
-        ), "Invalid 'symbols' mapping"
+        assert isinstance(cls_dict["symbols"], collections.abc.Mapping), "Invalid 'symbols' mapping"
 
         # Check domain and ndims
         assert 1 <= len(domain_range) <= 3 and all(
@@ -510,17 +508,13 @@ class StencilTestSuite(metaclass=SuiteMeta):
             # remove unused input parameters
             inputs = {key: value for key, value in inputs.items() if value is not None}
 
-            validation_fields = {
-                name: np.array(field, copy=True) for name, field in inputs.items()
-            }
+            validation_fields = {name: np.array(field, copy=True) for name, field in inputs.items()}
 
             implementation(**inputs, origin=patched_origin, exec_info=exec_info)
             domain = exec_info["domain"]
 
             validation_origins = {
-                name: tuple(
-                    nb[0] - g[0] for nb, g in zip(new_boundary, cls.symbols[name].boundary)
-                )
+                name: tuple(nb[0] - g[0] for nb, g in zip(new_boundary, cls.symbols[name].boundary))
                 for name in inputs
                 if name in implementation.field_info
             }

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
+# GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -27,18 +27,18 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-from typing import List
+from typing import Any, Dict, List
 
-from eve import Node, Str, SymbolName, SymbolTableTrait
 from pydantic import validator
 
-from gt4py.gtc import common
-from gt4py.gtc.common import AxisBound, LocNode
+from eve import Node, Str, SymbolName, SymbolTableTrait
+from gtc import common
+from gtc.common import AxisBound, LocNode
 
 
 class Expr(common.Expr):
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Expr:
             raise TypeError("Trying to instantiate `Expr` abstract class.")
         super().__init__(*args, **kwargs)
@@ -46,7 +46,7 @@ class Expr(common.Expr):
 
 class Stmt(common.Stmt):
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Stmt:
             raise TypeError("Trying to instantiate `Stmt` abstract class.")
         super().__init__(*args, **kwargs)
@@ -66,10 +66,10 @@ class CartesianOffset(Node):
     k: int
 
     @classmethod
-    def zero(cls):
+    def zero(cls) -> "CartesianOffset":
         return cls(i=0, j=0, k=0)
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
@@ -91,12 +91,12 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
     """
 
     @validator("left")
-    def no_horizontal_offset_in_assignment(cls, v):
+    def no_horizontal_offset_in_assignment(cls, v: Expr) -> Expr:
         if v.offset.i != 0 or v.offset.j != 0:
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
 
-    # TODO validate dtype of lhs and rhs match
+    _dtype_validation = common.assign_stmt_dtype_validation(strict=False)
 
 
 class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
@@ -117,7 +117,7 @@ class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
     """
 
     @validator("cond")
-    def verify_scalar_condition(cls, cond):
+    def verify_scalar_condition(cls, cond: Expr) -> Expr:
         if cond.kind != common.ExprKind.FIELD:
             raise ValueError("Condition is not a field expression")
         return cond
@@ -133,7 +133,7 @@ class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
     """
 
     @validator("cond")
-    def verify_scalar_condition(cls, cond):
+    def verify_scalar_condition(cls, cond: Expr) -> Expr:
         if cond.kind != common.ExprKind.SCALAR:
             raise ValueError("Condition is not scalar")
         return cond
@@ -163,7 +163,7 @@ class Decl(LocNode):  # TODO probably Stmt
     name: SymbolName
     dtype: common.DataType
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Decl:
             raise TypeError("Trying to instantiate `Decl` abstract class.")
         super().__init__(*args, **kwargs)

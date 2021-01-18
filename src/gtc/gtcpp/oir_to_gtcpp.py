@@ -1,23 +1,40 @@
-from typing import Dict, List, Set, Union
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-import eve
 from dataclasses import dataclass, field
+from typing import List, Set, Tuple, Union
+
 from devtools import debug  # noqa: F401
 
-from gt4py.gtc import common, oir
-from gt4py.gtc.common import CartesianOffset
-from gt4py.gtc.gtcpp import gtcpp
-from gt4py.gtc.gtcpp.gtcpp import GTParamList, IJCache
+import eve
+from eve.utils import XIterator
+from gtc import common, oir
+from gtc.common import CartesianOffset
+from gtc.gtcpp import gtcpp
+from gtc.gtcpp.gtcpp import GTParamList, IJCache
 
 
-# TODO(havogt) between oir and gtcpp we need to group oir.VerticalLoops
+# TODO(havogt) between oir and gtcpp we should consider grouping oir.VerticalLoops
 
 # - Each HorizontalExecution is a Functor (and a Stage)
 # - Each VerticalLoop is MultiStage
 
 
 def _extract_accessors(node: eve.Node) -> GTParamList:
-    extents: Dict[str, gtcpp.GTExtent] = (
+    extents: XIterator[Tuple[str, gtcpp.GTExtent]] = (
         node.iter_tree()
         .if_isinstance(gtcpp.AccessorRef)
         .reduceby(
@@ -194,7 +211,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             comp_ctx=comp_ctx,
             **kwargs,
         )
-        caches: List[Union[IJCache]] = []  # TODO
+        caches: List[Union[IJCache]] = []  # TODO(havogt): caches are not implemented
         return gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs):

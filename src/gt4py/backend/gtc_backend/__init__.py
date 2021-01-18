@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from .gtcpp.backend import GTCGTBackend
 
 

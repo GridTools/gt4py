@@ -1,7 +1,6 @@
+# -*- coding: utf-8 -*-
 from typing import Dict, List, Union, cast
 
-from gt4py.gtc import common, gtir
-from gt4py.gtc.common import ExprKind
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
     ArgumentInfo,
@@ -30,6 +29,8 @@ from gt4py.ir.nodes import (
     VarDecl,
     VarRef,
 )
+from gtc import common, gtir
+from gtc.common import ExprKind
 
 
 def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:

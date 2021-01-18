@@ -1,9 +1,25 @@
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from typing import Dict
 
-from gt4py.gtc import common
-from gt4py.gtc.common import DataType
-from gt4py.gtc.gtir import FieldDecl, Literal, ParAssignStmt, Stencil
-from gt4py.gtc.passes.gtir_dtype_resolver import _GTIRPropagateDtypeToAccess, resolve_dtype
+from gtc import common
+from gtc.common import DataType
+from gtc.gtir import FieldDecl, Literal, ParAssignStmt, Stencil
+from gtc.passes.gtir_dtype_resolver import _GTIRPropagateDtypeToAccess, resolve_dtype
 
 from .gtir_utils import FieldAccessBuilder, StencilBuilder, VerticalLoopBuilder
 
@@ -28,7 +44,7 @@ def get_nodes_with_name(stencil: Stencil, name: str):
 
 def resolve_dtype_and_validate(testee: Stencil, expected_dtypes: Dict[str, common.DataType]):
     # ensure consistency (input is not already fully resolved)
-    for name, dtype in expected_dtypes.items():
+    for name, _dtype in expected_dtypes.items():
         nodes = get_nodes_with_name(testee, name)
         assert len(nodes) > 0
         assert any([node.dtype is None for node in nodes])

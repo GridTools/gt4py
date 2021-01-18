@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -21,6 +21,14 @@ __license__ = "GPLv3+"
 
 
 from pkg_resources import DistributionNotFound, get_distribution
+
+
+try:
+    __version__ = get_distribution(__name__).version
+except DistributionNotFound:
+    __version__ = "unknown"
+finally:
+    del get_distribution, DistributionNotFound
 
 
 # Disable isort to avoid circular imports
@@ -46,11 +54,3 @@ from .definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterI
 from .stencil_object import StencilObject
 
 # isort: on
-
-
-try:
-    __version__ = get_distribution(__name__).version
-except DistributionNotFound:
-    __version__ = "unknown"
-finally:
-    del get_distribution, DistributionNotFound

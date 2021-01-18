@@ -1,8 +1,8 @@
+# -*- coding: utf-8 -*-
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
-
 from gt4py import backend as gt_backend
 from gt4py import gt2_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
@@ -12,12 +12,12 @@ from gt4py.backend.gt_backends import (
     x86_is_compatible_layout,
 )
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gt4py.gtc import gtir_to_oir
-from gt4py.gtc.common import DataType
-from gt4py.gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
-from gt4py.gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gt4py.gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-from gt4py.gtc.passes.gtir_upcaster import upcast
+from gtc import gtir_to_oir
+from gtc.common import DataType
+from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
+from gtc.passes.gtir_dtype_resolver import resolve_dtype
+from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
+from gtc.passes.gtir_upcaster import upcast
 
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ class GTCGTExtGenerator:
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp)
-        bindings = GTCppBindingsCodegen.apply(gtcpp, self.module_name)
+        bindings = GTCppBindingsCodegen.apply(gtcpp, module_name=self.module_name)
         return {
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings.cpp": bindings},
@@ -51,7 +51,7 @@ class GTCGTExtGenerator:
 
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     def __init__(self):
-        self._unique_index = 0
+        self._unique_index: int = 0
 
     def unique_index(self) -> int:
         self._unique_index += 1
@@ -67,7 +67,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         elif dtype == DataType.BOOL:
             return "bool"
         else:
-            assert False
+            raise AssertionError(f"Invalid DataType value: {dtype}")
 
     def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
         if "external_arg" in kwargs:
@@ -139,7 +139,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     )
 
     @classmethod
-    def apply(cls, root, module_name, **kwargs) -> str:
+    def apply(cls, root, *, module_name="stencil", **kwargs) -> str:
         generated_code = cls().visit(root, module_name=module_name, **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
