@@ -137,7 +137,7 @@ class GTIRToOIR(NodeTranslator):
     def visit_FieldIfStmt(
         self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs
     ):
-        mask_field_decl = _create_mask(ctx, "mask_" + node.id_, self.visit(node.cond))
+        mask_field_decl = _create_mask(ctx, f"mask_{node.id_}", self.visit(node.cond))
         current_mask = oir.FieldAccess(
             name=mask_field_decl.name, offset=CartesianOffset.zero(), dtype=mask_field_decl.dtype
         )
