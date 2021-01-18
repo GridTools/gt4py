@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from typing import Dict
 
 from gtc import common
@@ -28,7 +29,7 @@ def get_nodes_with_name(stencil: Stencil, name: str):
 
 def resolve_dtype_and_validate(testee: Stencil, expected_dtypes: Dict[str, common.DataType]):
     # ensure consistency (input is not already fully resolved)
-    for name, dtype in expected_dtypes.items():
+    for name, _dtype in expected_dtypes.items():
         nodes = get_nodes_with_name(testee, name)
         assert len(nodes) > 0
         assert any([node.dtype is None for node in nodes])

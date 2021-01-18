@@ -664,7 +664,6 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
 
         For detailed information check :func:`attrgetter_` and :func:`operator.attrgetter` reference.
 
-
         Examples:
             >>> from collections import namedtuple
             >>> Point = namedtuple('Point', ['x', 'y'])
@@ -1018,8 +1017,8 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
               for :func:`operator.itemgetter`.
 
         Keyword Arguments:
-            as_dict: if `True`, it will return the groups ``dict`` instead of an :class:`XIterator`
-                over `groups.items()`.
+            as_dict: if `True`, it will return the groups ``dict`` instead of a :class:`XIterator`
+                instance over `groups.items()`.
 
         For detailed information check :func:`toolz.itertoolz.groupby` reference.
 
@@ -1158,16 +1157,18 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         with some caveats).
 
         The `key` argument is used in the following way:
+
             - if `key` is a callable, it will be passed directly to :func:`toolz.itertoolz.reduceby`
               to compute an actual `key` value for each item in the sequence.
             - if `key` is a ``str`` or (multiple ``str`` args) they will be used as
               attributes names (:func:`operator.attrgetter`).
-            - if `key` is a ``list`` of values, they will be used as index values for :func:`operator.itemgetter`.
+            - if `key` is a ``list`` of values, they will be used as index values
+              for :func:`operator.itemgetter`.
 
         Keyword Arguments:
+            as_dict: if `True`, it will return the groups ``dict`` instead of a :class:`XIterator`
+                instance over `groups.items()`.
             init: initial value for the reduction.
-            as_dict: if `True`, it will return the groups ``dict`` instead of an :class:`XIterator`
-                over `groups.items()`.
 
         For detailed information check :func:`toolz.itertoolz.reduceby` reference.
 
@@ -1198,7 +1199,7 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
             >>> list(it.reduceby(lambda nvowels, name: nvowels + sum(i in 'aeiou' for i in name), len, init=0))
             [(5, 4), (3, 2), (7, 3)]
 
-        """
+        """  # noqa: RST203  # sphinx.napoleon conventions confuses RST validator
 
         if (not callable(key) and not isinstance(key, (int, str, list))) or not all(
             isinstance(i, str) for i in attr_keys

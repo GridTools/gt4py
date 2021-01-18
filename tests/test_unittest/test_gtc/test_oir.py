@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pytest
 from pydantic.error_wrappers import ValidationError
 

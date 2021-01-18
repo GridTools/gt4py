@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from typing import Tuple
 
 from gt4py.ir.nodes import Domain, IterationOrder

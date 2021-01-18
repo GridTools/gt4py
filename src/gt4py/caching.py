@@ -337,9 +337,7 @@ class NoCachingStrategy(CachingStrategy):
 
     name = "nocaching"
 
-    def __init__(
-        self, builder: "StencilBuilder", *, output_path: pathlib.Path = pathlib.Path(".")
-    ):
+    def __init__(self, builder: "StencilBuilder", *, output_path: pathlib.Path = pathlib.Path(".")):
         super().__init__(builder)
         self._output_path = output_path
 

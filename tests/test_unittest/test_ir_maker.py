@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import ast
 
 from gt4py.frontend.gtscript_frontend import IRMaker

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from pathlib import Path
 
 import pytest
@@ -147,6 +148,4 @@ def test_apply_method_compilation_succeeds(tmp_path, apply_method, expected_rege
     print(apply_method_code)
     match(apply_method_code, expected_regex)
 
-    build_gridtools_test(
-        tmp_path, GTCppCodegen.apply(_embed_apply_method_in_program(apply_method))
-    )
+    build_gridtools_test(tmp_path, GTCppCodegen.apply(_embed_apply_method_in_program(apply_method)))

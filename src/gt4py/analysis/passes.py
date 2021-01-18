@@ -231,9 +231,7 @@ class InitInfoPass(TransformPass):
 
         def _add_symbol(self, decl):
             has_redundancy = (
-                isinstance(decl, gt_ir.FieldDecl)
-                and self.redundant_temp_fields
-                and not decl.is_api
+                isinstance(decl, gt_ir.FieldDecl) and self.redundant_temp_fields and not decl.is_api
             )
             symbol_info = SymbolInfo(decl, has_redundancy=has_redundancy)
             self.data.symbols[decl.name] = symbol_info
@@ -278,9 +276,7 @@ class InitInfoPass(TransformPass):
 
         def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr):
             result = (
-                self.visit(node.condition)
-                + self.visit(node.then_expr)
-                + self.visit(node.else_expr)
+                self.visit(node.condition) + self.visit(node.then_expr) + self.visit(node.else_expr)
             )
             return result
 
@@ -673,9 +669,7 @@ class StageMergingWrapper:
         i_to_ib_map = self.interval_to_iblock_mapping
         for candidate_iblock in candidate.interval_blocks:
             if candidate_iblock.interval in i_to_ib_map:
-                self._merge_interval_block(
-                    i_to_ib_map[candidate_iblock.interval], candidate_iblock
-                )
+                self._merge_interval_block(i_to_ib_map[candidate_iblock.interval], candidate_iblock)
             else:
                 # candidate block must be inserted at the correct position so that they appear in the order dictated
                 #  by the iteration order. note that this reordering is valid as candidate was already checked for

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Test the backend-agnostic build system."""
 import pytest
 

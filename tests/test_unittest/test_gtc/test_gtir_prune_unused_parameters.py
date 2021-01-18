@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from gtc import common
 from gtc.gtir import FieldDecl, ScalarDecl
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters

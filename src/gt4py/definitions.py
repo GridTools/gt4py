@@ -640,10 +640,8 @@ class DomainInfo(
 
 class FieldInfo(collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "dtype"])):
     def __repr__(self):
-        result = (
-            "FieldInfo(access=AccessKind.{access}, boundary={boundary}, dtype={dtype})".format(
-                access=self.access.name, boundary=repr(self.boundary), dtype=repr(self.dtype)
-            )
+        result = "FieldInfo(access=AccessKind.{access}, boundary={boundary}, dtype={dtype})".format(
+            access=self.access.name, boundary=repr(self.boundary), dtype=repr(self.dtype)
         )
         return result
 

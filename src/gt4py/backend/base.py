@@ -221,8 +221,8 @@ class CLIBackendMixin(Backend):
             If the backend does not support the bindings language
 
         """
-        languages = getattr(self, "languages") or {"bindings": {}}
-        name = getattr(self, "name") or ""
+        languages = getattr(self, "languages", {"bindings": {}})
+        name = getattr(self, "name", "")
         if language_name not in languages["bindings"]:
             raise NotImplementedError(
                 f"Backend {name} does not implement bindings for {language_name}"

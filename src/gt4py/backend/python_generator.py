@@ -106,9 +106,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         #         self.k_splitters_value.extend(
         #             ["{}[{}]".format(item.name, i) for i in range(item.length)]
         #         )
-        self.k_splitters_value.append(
-            "{dom}[{idx}]".format(dom=self.domain_arg_name, idx=k_ax_idx)
-        )
+        self.k_splitters_value.append("{dom}[{idx}]".format(dom=self.domain_arg_name, idx=k_ax_idx))
 
         self.sources = sources
         self.visit(impl_node)

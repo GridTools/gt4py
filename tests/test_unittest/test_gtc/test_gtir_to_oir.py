@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from typing import Type
 
 from eve import Node

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from typing import List, Optional
 
 from gtc.common import DataType, ExprKind, LoopOrder
@@ -46,9 +47,7 @@ class FieldAccessBuilder:
         return self
 
     def build(self) -> FieldAccess:
-        return FieldAccess(
-            name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind
-        )
+        return FieldAccess(name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind)
 
 
 class ParAssignStmtBuilder:

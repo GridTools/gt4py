@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from typing import List
 
 from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
@@ -42,9 +43,7 @@ class AccessorRefBuilder:
         return self
 
     def build(self) -> AccessorRef:
-        return AccessorRef(
-            name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind
-        )
+        return AccessorRef(name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind)
 
 
 class AssignStmtBuilder:
@@ -95,7 +94,7 @@ class IfStmtBuilder:
 
 
 class GTAccessorBuilder:
-    def __init__(self, name, id) -> None:
+    def __init__(self, name, id) -> None:  # noqa: A002  # shadowing python builtin
         self._name = name
         self._id = id
         self._intent = Intent.INOUT

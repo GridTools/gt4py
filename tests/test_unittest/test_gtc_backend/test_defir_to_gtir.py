@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pytest
 from tests.definition_setup import ijk_domain  # noqa: F401
 from tests.definition_setup import (

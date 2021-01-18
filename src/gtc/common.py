@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
+# GTC Toolchain - GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
 # All rights reserved.
@@ -399,9 +399,7 @@ def binary_op_dtype_propagation(*, strict: bool):
                 if common_dtype is not DataType.BOOL:
                     values["dtype"] = common_dtype
                 else:
-                    raise ValueError(
-                        "Boolean expression is not allowed with arithmetic operation."
-                    )
+                    raise ValueError("Boolean expression is not allowed with arithmetic operation.")
             elif isinstance(values["op"], LogicalOperator):
                 if common_dtype is DataType.BOOL:
                     values["dtype"] = DataType.BOOL

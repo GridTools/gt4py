@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from typing import Any, Dict
 
 import numpy as np
@@ -50,11 +51,7 @@ class TestExecInfo:
                 + in_phi[0, 1, 0]  # type: ignore
             )
             lap2 = (  # noqa
-                -4 * lap1[0, 0, 0]
-                + lap1[-1, 0, 0]
-                + lap1[1, 0, 0]
-                + lap1[0, -1, 0]
-                + lap1[0, 1, 0]
+                -4 * lap1[0, 0, 0] + lap1[-1, 0, 0] + lap1[1, 0, 0] + lap1[0, -1, 0] + lap1[0, 1, 0]
             )
             flux_x = lap2[1, 0, 0] - lap2[0, 0, 0]  # noqa
             flux_y = lap2[0, 1, 0] - lap2[0, 0, 0]  # noqa

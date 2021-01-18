@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numpy
 
 from gt4py.gtscript import PARALLEL, Field, computation, interval
@@ -58,9 +59,7 @@ def test_usage_numpy_caching():
         StencilBuilder(simple_stencil)
         .with_backend("numpy")
         .with_externals({"a": 1.0})
-        .with_options(
-            name=simple_stencil.__name__, module=simple_stencil.__module__, rebuild=False
-        )
+        .with_options(name=simple_stencil.__name__, module=simple_stencil.__module__, rebuild=False)
     )
 
     # second build should use caching

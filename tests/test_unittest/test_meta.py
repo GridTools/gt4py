@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import ast
 
 import gt4py.utils as gt_util

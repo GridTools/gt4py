@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from typing import Iterator, List, Set, Tuple, Union
 
 import pytest

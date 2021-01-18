@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pytest
 
 from gtc.gtcpp import gtcpp_codegen

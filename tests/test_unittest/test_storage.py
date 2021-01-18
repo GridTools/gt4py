@@ -351,9 +351,7 @@ def test_normalize_shape():
     from gt4py.storage.utils import normalize_shape
 
     assert normalize_shape(None) is None
-    assert gt_utils.is_iterable_of(
-        normalize_shape([1, 2, 3]), iterable_class=tuple, item_class=int
-    )
+    assert gt_utils.is_iterable_of(normalize_shape([1, 2, 3]), iterable_class=tuple, item_class=int)
 
     # test that exceptions are raised for invalid inputs.
     try:

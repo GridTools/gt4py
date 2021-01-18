@@ -47,8 +47,10 @@ class GTScriptSymbolError(GTScriptSyntaxError):
             if loc is None:
                 message = "Unknown symbol '{name}' symbol".format(name=name)
             else:
-                message = "Unknown symbol '{name}' symbol in '{scope}' (line: {line}, col: {col})".format(
-                    name=name, scope=loc.scope, line=loc.line, col=loc.column
+                message = (
+                    "Unknown symbol '{name}' symbol in '{scope}' (line: {line}, col: {col})".format(
+                        name=name, scope=loc.scope, line=loc.line, col=loc.column
+                    )
                 )
         super().__init__(message, loc=loc)
         self.name = name
@@ -1492,9 +1494,7 @@ class GTScriptParser(ast.NodeVisitor):
                         )
 
                 elif not exhaustive:
-                    resolved_values_list.append(
-                        (name, GTScriptParser.eval_external(name, context))
-                    )
+                    resolved_values_list.append((name, GTScriptParser.eval_external(name, context)))
 
             for name, value in resolved_values_list:
                 if hasattr(value, "_gtscript_") and exhaustive:
@@ -1659,9 +1659,7 @@ class GTScriptParser(ast.NodeVisitor):
                 fields_decls[item.name] for item in api_signature if item.name in fields_decls
             ],
             parameters=[
-                parameter_decls[item.name]
-                for item in api_signature
-                if item.name in parameter_decls
+                parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
             ],
             computations=computations,
             externals=self.resolved_externals,

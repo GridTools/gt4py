@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Unit tests for the command line interface (CLI)."""
 import re
 import sys
@@ -111,9 +112,7 @@ def test_list_backends(clirunner, list_backends_line_pattern):
     result = clirunner.invoke(cli.gtpyc, ["list-backends"], catch_exceptions=False)
 
     assert result.exit_code == 0
-    assert re.findall(list_backends_line_pattern, result.output, re.MULTILINE), print(
-        result.output
-    )
+    assert re.findall(list_backends_line_pattern, result.output, re.MULTILINE), print(result.output)
 
 
 def test_gen_silent(clirunner, simple_stencil, tmp_path):

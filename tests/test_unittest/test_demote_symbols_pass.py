@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from gt4py.ir.nodes import Domain, IterationOrder
 
 from ..analysis_setup import AnalysisPass

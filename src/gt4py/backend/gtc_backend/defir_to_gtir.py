@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from typing import Dict, List, Union, cast
 
 from gt4py.ir import IRNodeVisitor
