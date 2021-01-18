@@ -105,7 +105,7 @@ class Decl(LocNode):
     name: SymbolName
     dtype: common.DataType
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Decl:
             raise TypeError("Trying to instantiate `Decl` abstract class.")
         super().__init__(*args, **kwargs)
@@ -129,7 +129,7 @@ class HorizontalExecution(LocNode):
     mask: Optional[Expr]
 
     @validator("mask")
-    def mask_is_boolean_field_expr(cls, v):
+    def mask_is_boolean_field_expr(cls, v: Optional[Expr]) -> Optional[Expr]:
         if v:
             if v.dtype != common.DataType.BOOL:
                 raise ValueError("Mask must be a boolean expression.")

@@ -14,23 +14,27 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict
+from typing import Any, Dict, Iterator, List
 
 from eve import Node, NodeTranslator
+from eve.concepts import TreeNode
 from gtc import gtir
+from gtc.common import DataType
 from gtc.gtir import Expr
 
 
-def _upcast_node(target_dtype, node: Expr) -> Expr:
+def _upcast_node(target_dtype: DataType, node: Expr) -> Expr:
     return node if node.dtype == target_dtype else gtir.Cast(dtype=target_dtype, expr=node)
 
 
-def _upcast_nodes(*exprs):
-    target_dtype = max([e.dtype for e in exprs])
+def _upcast_nodes(*exprs: Expr) -> Iterator[Expr]:
+    assert all(e.dtype for e in exprs)
+    dtypes: List[DataType] = [e.dtype for e in exprs]  # type: ignore # guaranteed to be not None
+    target_dtype = max(dtypes)
     return map(lambda e: _upcast_node(target_dtype, e), exprs)
 
 
-def _update_node(node: Node, updated_children: Dict[str, Node]) -> Expr:
+def _update_node(node: Node, updated_children: Dict[str, TreeNode]) -> Expr:
     # create new node only if children changed
     old_children = node.dict(include={*updated_children.keys()})
     if any([old_children[k] != updated_children[k] for k in updated_children.keys()]):
@@ -60,10 +64,11 @@ class _GTIRUpcasting(NodeTranslator):
         )
 
     def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs: Any) -> gtir.NativeFuncCall:
-        args = [*_upcast_nodes(*self.visit(node.args))]
+        args = [_upcast_nodes(arg) for arg in self.visit(node.args)]
         return _update_node(node, {"args": args})
 
     def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> gtir.ParAssignStmt:
+        assert node.left.dtype
         right = _upcast_node(node.left.dtype, self.visit(node.right))
         return _update_node(node, {"right": right})
 

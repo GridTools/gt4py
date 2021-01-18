@@ -36,3 +36,6 @@ FrozenList = Tuple[T, ...]
 AnyCallable = Callable[..., Any]
 AnyNoneCallable = Callable[..., None]
 AnyNoArgCallable = Callable[[], Any]
+
+RootValidatorValuesType = Dict[str, Any]
+RootValidatorType = Callable[[Type, RootValidatorValuesType], RootValidatorValuesType]

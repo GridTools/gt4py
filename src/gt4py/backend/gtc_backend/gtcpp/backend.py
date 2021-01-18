@@ -42,7 +42,7 @@ class GTCGTExtGenerator:
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp)
-        bindings = GTCppBindingsCodegen.apply(gtcpp, self.module_name)
+        bindings = GTCppBindingsCodegen.apply(gtcpp, module_name=self.module_name)
         return {
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings.cpp": bindings},
@@ -139,7 +139,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     )
 
     @classmethod
-    def apply(cls, root, module_name, **kwargs) -> str:
+    def apply(cls, root, *, module_name="stencil", **kwargs) -> str:
         generated_code = cls().visit(root, module_name=module_name, **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code

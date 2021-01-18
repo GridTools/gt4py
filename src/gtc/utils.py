@@ -14,14 +14,24 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, List
+from typing import Any, Iterable, List, Tuple, Type
 
 
-def flatten_list(nested_iterables, filter_none=False, *, skip_types=(str, bytes)) -> List[Any]:
+def flatten_list(
+    nested_iterables: Iterable[Any],
+    filter_none: bool = False,
+    *,
+    skip_types: Tuple[Type[Any], ...] = (str, bytes),
+) -> List[Any]:
     return list(flatten_list_iter(nested_iterables, filter_none, skip_types=skip_types))
 
 
-def flatten_list_iter(nested_iterables, filter_none=False, *, skip_types=(str, bytes)) -> Any:
+def flatten_list_iter(
+    nested_iterables: Iterable[Any],
+    filter_none: bool = False,
+    *,
+    skip_types: Tuple[Type[Any], ...] = (str, bytes),
+) -> Any:
     for item in nested_iterables:
         if isinstance(item, list) and not isinstance(item, skip_types):
             yield from flatten_list(item, filter_none)

@@ -91,7 +91,7 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
     """
 
     @validator("left")
-    def no_horizontal_offset_in_assignment(cls, v):
+    def no_horizontal_offset_in_assignment(cls, v: Expr) -> Expr:
         if v.offset.i != 0 or v.offset.j != 0:
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
@@ -117,7 +117,7 @@ class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
     """
 
     @validator("cond")
-    def verify_scalar_condition(cls, cond):
+    def verify_scalar_condition(cls, cond: Expr) -> Expr:
         if cond.kind != common.ExprKind.FIELD:
             raise ValueError("Condition is not a field expression")
         return cond
@@ -133,7 +133,7 @@ class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
     """
 
     @validator("cond")
-    def verify_scalar_condition(cls, cond):
+    def verify_scalar_condition(cls, cond: Expr) -> Expr:
         if cond.kind != common.ExprKind.SCALAR:
             raise ValueError("Condition is not scalar")
         return cond
@@ -163,7 +163,7 @@ class Decl(LocNode):  # TODO probably Stmt
     name: SymbolName
     dtype: common.DataType
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Decl:
             raise TypeError("Trying to instantiate `Decl` abstract class.")
         super().__init__(*args, **kwargs)

@@ -17,6 +17,7 @@
 import enum
 from typing import Any, ClassVar, Dict, Generic, List, Optional, Type, TypeVar, Union, cast
 
+import pydantic
 from pydantic import validator
 from pydantic.class_validators import root_validator
 
@@ -32,6 +33,7 @@ from eve import (
 )
 from eve import exceptions as eve_exceptions
 from eve.type_definitions import SymbolRef
+from eve.typingx import RootValidatorType, RootValidatorValuesType
 from gtc.utils import flatten_list
 
 
@@ -163,7 +165,7 @@ class NativeFunction(StrEnum):
 
     @property
     def arity(self) -> int:
-        return type(self).IR_OP_TO_NUM_ARGS[self]
+        return self.IR_OP_TO_NUM_ARGS[self]
 
 
 NativeFunction.IR_OP_TO_NUM_ARGS = {
@@ -218,7 +220,7 @@ class Expr(LocNode):
     kind: ExprKind
 
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Expr:
             raise TypeError("Trying to instantiate `Expr` abstract class.")
         super().__init__(*args, **kwargs)
@@ -226,7 +228,7 @@ class Expr(LocNode):
 
 class Stmt(LocNode):
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Stmt:
             raise TypeError("Trying to instantiate `Stmt` abstract class.")
         super().__init__(*args, **kwargs)
@@ -243,7 +245,7 @@ def verify_and_get_common_dtype(
 ) -> Optional[DataType]:
     assert len(values) > 0
     if all(v.dtype is not None for v in values):
-        dtypes = [v.dtype for v in values if v.dtype is not None]
+        dtypes: List[DataType] = [v.dtype for v in values]  # type: ignore # guaranteed to be not None
         dtype = dtypes[0]
         if strict:
             if all(dt == dtype for dt in dtypes):
@@ -277,9 +279,9 @@ class Literal(Node):
     )  # cast shouldn't be required, see https://github.com/GridTools/gtc/issues/100
 
 
-StmtT = TypeVar("StmtT")
-ExprT = TypeVar("ExprT")
-TargetT = TypeVar("TargetT")
+StmtT = TypeVar("StmtT", bound=Stmt)
+ExprT = TypeVar("ExprT", bound=Expr)
+TargetT = TypeVar("TargetT", bound=Expr)
 
 
 class CartesianOffset(Node):
@@ -288,25 +290,25 @@ class CartesianOffset(Node):
     k: int
 
     @classmethod
-    def zero(cls):
+    def zero(cls) -> "CartesianOffset":
         return cls(i=0, j=0, k=0)
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
-class ScalarAccess(Node):
+class ScalarAccess(LocNode):
     name: SymbolRef
     kind = ExprKind.SCALAR
 
 
-class FieldAccess(Node):
+class FieldAccess(LocNode):
     name: SymbolRef
     offset: CartesianOffset
     kind = ExprKind.FIELD
 
     @classmethod
-    def centered(cls, *, name, loc=None):
+    def centered(cls, *, name: str, loc: SourceLocation = None) -> "FieldAccess":
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
 
@@ -326,7 +328,7 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT]):
     false_branch: Optional[StmtT]
 
     @validator("cond")
-    def condition_is_boolean(cls, cond):
+    def condition_is_boolean(cls, cond: Expr) -> Expr:
         return verify_condition_is_boolean(cls, cond)
 
 
@@ -335,8 +337,10 @@ class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
     right: ExprT
 
 
-def assign_stmt_dtype_validation(*, strict: bool):
-    def _impl(cls, values):
+def assign_stmt_dtype_validation(*, strict: bool) -> RootValidatorType:
+    def _impl(
+        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
         verify_and_get_common_dtype(cls, [values["left"], values["right"]], strict=strict)
         return values
 
@@ -354,17 +358,17 @@ class UnaryOp(GenericNode, Generic[ExprT]):
     expr: ExprT
 
     @root_validator(skip_on_failure=True)
-    def dtype_propagation(cls, values):
+    def dtype_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
         values["dtype"] = values["expr"].dtype
         return values
 
     @root_validator(pre=True)
-    def kind_propagation(cls, values):
+    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
         values["kind"] = values["expr"].kind
         return values
 
     @root_validator(skip_on_failure=True)
-    def op_to_dtype_check(cls, values):
+    def op_to_dtype_check(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
         if values["expr"].dtype:
             if values["op"] == UnaryOperator.NOT:
                 if not values["expr"].dtype == DataType.BOOL:
@@ -393,13 +397,15 @@ class BinaryOp(GenericNode, Generic[ExprT]):
     right: ExprT
 
     @root_validator(pre=True)
-    def kind_propagation(cls, values):
+    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
         values["kind"] = compute_kind([values["left"], values["right"]])
         return values
 
 
-def binary_op_dtype_propagation(*, strict: bool):
-    def _impl(cls, values):
+def binary_op_dtype_propagation(*, strict: bool) -> RootValidatorType:
+    def _impl(
+        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
         common_dtype = verify_and_get_common_dtype(
             cls, [values["left"], values["right"]], strict=strict
         )
@@ -439,17 +445,19 @@ class TernaryOp(GenericNode, Generic[ExprT]):
     false_expr: ExprT
 
     @validator("cond")
-    def condition_is_boolean(cls, cond):
+    def condition_is_boolean(cls, cond: ExprT) -> ExprT:
         return verify_condition_is_boolean(cls, cond)
 
     @root_validator(pre=True)
-    def kind_propagation(cls, values):
+    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
         values["kind"] = compute_kind([values["true_expr"], values["false_expr"]])
         return values
 
 
-def ternary_op_dtype_propagation(*, strict: bool):
-    def _impl(cls, values):
+def ternary_op_dtype_propagation(*, strict: bool) -> RootValidatorType:
+    def _impl(
+        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
         common_dtype = verify_and_get_common_dtype(
             cls, [values["true_expr"], values["false_expr"]], strict=strict
         )
@@ -465,7 +473,7 @@ class Cast(GenericNode, Generic[ExprT]):
     expr: ExprT
 
     @root_validator(pre=True)
-    def kind_propagation(cls, values):
+    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
         values["kind"] = compute_kind([values["expr"]])
         return values
 
@@ -475,7 +483,7 @@ class NativeFuncCall(GenericNode, Generic[ExprT]):
     args: List[ExprT]
 
     @root_validator(skip_on_failure=True)
-    def arity_check(cls, values):
+    def arity_check(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
         if values["func"].arity != len(values["args"]):
             raise ValueError(
                 "{} accepts {} arguments, {} where passed.".format(
@@ -485,13 +493,15 @@ class NativeFuncCall(GenericNode, Generic[ExprT]):
         return values
 
     @root_validator(pre=True)
-    def kind_propagation(cls, values):
+    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
         values["kind"] = compute_kind(values["args"])
         return values
 
 
-def native_func_call_dtype_propagation(*, strict: bool = True):
-    def _impl(cls, values):
+def native_func_call_dtype_propagation(*, strict: bool = True) -> RootValidatorType:
+    def _impl(
+        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
         # assumes all NativeFunction args have a common dtype
         common_dtype = verify_and_get_common_dtype(cls, values["args"], strict=strict)
         if common_dtype:
@@ -501,8 +511,10 @@ def native_func_call_dtype_propagation(*, strict: bool = True):
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
 
 
-def validate_dtype_is_set():
-    def _impl(cls, values: dict):
+def validate_dtype_is_set() -> RootValidatorType:
+    def _impl(
+        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
         dtype_nodes: List[Node] = []
         for v in flatten_list(values.values()):
             if isinstance(v, Node):
@@ -520,15 +532,17 @@ def validate_dtype_is_set():
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
 
 
-def validate_symbol_refs():
+def validate_symbol_refs() -> RootValidatorType:
     """Works only, if only the root node has a symbol table."""
 
-    def _impl(cls, values: dict):
+    def _impl(
+        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
         class SymtableValidator(NodeVisitor):
             def __init__(self) -> None:
-                self.missing_symbols = []
+                self.missing_symbols: List[str] = []
 
-            def visit_Node(self, node: Node, *, symtable: Dict[str, Any], **kwargs):
+            def visit_Node(self, node: Node, *, symtable: Dict[str, Any], **kwargs: Any) -> None:
                 for name, metadata in node.__node_children__.items():
                     if isinstance(metadata["definition"].type_, type) and issubclass(
                         metadata["definition"].type_, SymbolRef
@@ -563,17 +577,17 @@ class AxisBound(Node):
     offset: int = 0
 
     @classmethod
-    def from_start(cls, offset: int):
+    def from_start(cls, offset: int) -> "AxisBound":
         return cls(level=LevelMarker.START, offset=offset)
 
     @classmethod
-    def from_end(cls, offset: int):
+    def from_end(cls, offset: int) -> "AxisBound":
         return cls(level=LevelMarker.END, offset=offset)
 
     @classmethod
-    def start(cls):
+    def start(cls) -> "AxisBound":
         return cls.from_start(0)
 
     @classmethod
-    def end(cls):
+    def end(cls) -> "AxisBound":
         return cls.from_end(0)

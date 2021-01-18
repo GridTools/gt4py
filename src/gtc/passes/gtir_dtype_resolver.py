@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import Any, Dict
+
 from eve import NodeTranslator
 from gtc import gtir
 from gtc.common import DataType, GTCPostconditionError
