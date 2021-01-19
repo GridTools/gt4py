@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
-from gt4py import gt2_src_manager
+from gt4py import gt_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
 from gt4py.backend.gt_backends import (
     gtcpu_is_compatible_type,
@@ -186,7 +186,7 @@ class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
         self.check_options(self.builder.options)
 
         # Generate the Python binary extension (checking if GridTools sources are installed)
-        if not gt2_src_manager.has_gt_sources() and not gt2_src_manager.install_gt_sources():
+        if not gt_src_manager.has_gt_sources(2) and not gt_src_manager.install_gt_sources(2):
             raise RuntimeError("Missing GridTools sources.")
 
         pyext_module_name: Optional[str]

@@ -21,7 +21,7 @@ import setuptools
 
 from gt4py import (  # TODO(havogt) this is a dependency from gtc tests to gt4py, ok?
     config,
-    gt2_src_manager,
+    gt_src_manager,
 )
 from gtc.common import DataType
 from gtc.gtcpp.gtcpp import Arg, GTAccessor, GTApplyMethod, GTExtent, GTStage, Intent, Program
@@ -39,7 +39,7 @@ from .gtcpp_utils import (
 from .utils import match
 
 
-if not gt2_src_manager.has_gt_sources() and not gt2_src_manager.install_gt_sources():
+if not gt_src_manager.has_gt_sources(2) and not gt_src_manager.install_gt_sources(2):
     raise RuntimeError("Missing GridTools sources.")
 
 
