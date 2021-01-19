@@ -16,7 +16,7 @@
 
 
 import enum
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 from pydantic.class_validators import validator
 
@@ -31,7 +31,7 @@ class Expr(common.Expr):
     dtype: Optional[common.DataType]
 
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Expr:
             raise TypeError("Trying to instantiate `Expr` abstract class.")
         super().__init__(*args, **kwargs)
@@ -39,7 +39,7 @@ class Expr(common.Expr):
 
 class Stmt(common.Stmt):
     # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if type(self) is Stmt:
             raise TypeError("Trying to instantiate `Stmt` abstract class.")
         super().__init__(*args, **kwargs)
@@ -73,7 +73,9 @@ class BlockStmt(common.BlockStmt[Stmt], Stmt):
 
 class AssignStmt(common.AssignStmt[Union[ScalarAccess, AccessorRef], Expr], Stmt):
     @validator("left")
-    def no_horizontal_offset_in_assignment(cls, v):
+    def no_horizontal_offset_in_assignment(
+        cls, v: Union[ScalarAccess, AccessorRef]
+    ) -> Union[ScalarAccess, AccessorRef]:
         if isinstance(v, AccessorRef) and (v.offset.i != 0 or v.offset.j != 0):
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
@@ -123,7 +125,7 @@ class GTLevel(LocNode):
     offset: int
 
     @validator("offset")
-    def offset_must_not_be_zero(cls, v):
+    def offset_must_not_be_zero(cls, v: int) -> int:
         if v == 0:
             raise ValueError("GridTools level offset must be != 0")
         return v
@@ -151,15 +153,15 @@ class GTExtent(LocNode):
     k: Tuple[int, int]
 
     @classmethod
-    def zero(cls):
+    def zero(cls) -> "GTExtent":
         return cls(i=(0, 0), j=(0, 0), k=(0, 0))
 
-    def __add__(self, other):
-        if isinstance(other, common.CartesianOffset):
+    def __add__(self, offset: common.CartesianOffset) -> "GTExtent":
+        if isinstance(offset, common.CartesianOffset):
             return GTExtent(
-                i=(min(self.i[0], other.i), max(self.i[1], other.i)),
-                j=(min(self.j[0], other.j), max(self.j[1], other.j)),
-                k=(min(self.k[0], other.k), max(self.k[1], other.k)),
+                i=(min(self.i[0], offset.i), max(self.i[1], offset.i)),
+                j=(min(self.j[0], offset.j), max(self.j[1], offset.j)),
+                k=(min(self.k[0], offset.k), max(self.k[1], offset.k)),
             )
         else:
             assert "Can only add CartesianOffsets"
@@ -189,10 +191,12 @@ class Param(LocNode):
         pass
 
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.name)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Param):
+            return NotImplemented
         return self.name == other.name
 
 
@@ -203,10 +207,12 @@ class Arg(LocNode):
         pass
 
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.name)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Arg):
+            return NotImplemented
         return self.name == other.name
 
 
@@ -214,7 +220,7 @@ class ApiParamDecl(LocNode):
     name: SymbolName
     dtype: common.DataType
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         if type(self) is ApiParamDecl:
             raise TypeError("Trying to instantiate `ApiParamDecl` abstract class.")
         super().__init__(*args, **kwargs)
@@ -241,7 +247,7 @@ class GTStage(LocNode):
     args: List[Arg]
 
     @validator("args")
-    def at_least_one_argument(cls, v):
+    def at_least_one_argument(cls, v: str) -> str:
         if len(v) == 0:
             raise ValueError("A GTStage needs at least one argument.")
         return v

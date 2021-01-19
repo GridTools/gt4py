@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List
+from typing import List, Optional
 
 from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
 from gtc.gtcpp.gtcpp import (
@@ -22,6 +22,7 @@ from gtc.gtcpp.gtcpp import (
     ApiParamDecl,
     Arg,
     AssignStmt,
+    Expr,
     FieldDecl,
     GTAccessor,
     GTApplyMethod,
@@ -95,8 +96,8 @@ class GTApplyMethodBuilder:
 class IfStmtBuilder:
     def __init__(self) -> None:
         self._cond = Literal(value="true", dtype=DataType.BOOL)
-        self._true_branch = None
-        self._false_branch = None
+        self._true_branch: Optional[Expr] = None
+        self._false_branch: Optional[Expr] = None
 
     def true_branch(self, stmt: Stmt) -> "IfStmtBuilder":
         self._true_branch = stmt

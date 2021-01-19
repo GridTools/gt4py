@@ -14,14 +14,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Any, Collection, Union
+
 from eve import Node, codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
+from eve.concepts import LeafNode
 from gtc.common import BuiltInLiteral, DataType, LoopOrder, NativeFunction, UnaryOperator
 from gtc.gtcpp import gtcpp
 
 
-def _offset_limit(root: Node):
+def _offset_limit(root: Node) -> int:
     return (
         root.iter_tree()
         .if_isinstance(gtcpp.GTLevel)
@@ -81,7 +84,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     Cast = as_fmt("static_cast<{dtype}>({expr})")
 
-    def visit_BuiltInLiteral(self, builtin: BuiltInLiteral, **kwargs):
+    def visit_BuiltInLiteral(self, builtin: BuiltInLiteral, **kwargs: Any) -> str:
         if builtin == BuiltInLiteral.TRUE:
             return "true"
         elif builtin == BuiltInLiteral.FALSE:
@@ -90,7 +93,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
-    def visit_NativeFunction(self, func: NativeFunction, **kwargs):
+    def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:
         if func == NativeFunction.SQRT:
             return "gridtools::math::sqrt"
         elif func == NativeFunction.MIN:
@@ -101,7 +104,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
-    def visit_DataType(self, dtype: DataType, **kwargs):
+    def visit_DataType(self, dtype: DataType, **kwargs: Any) -> str:
         if dtype == DataType.INT64:
             return "long long"
         elif dtype == DataType.FLOAT64:
@@ -112,7 +115,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "bool"
         raise NotImplementedError("Not implemented NativeFunction encountered.")
 
-    def visit_UnaryOperator(self, op: UnaryOperator, **kwargs):
+    def visit_UnaryOperator(self, op: UnaryOperator, **kwargs: Any) -> str:
         if op == UnaryOperator.NOT:
             return "!"
         elif op == UnaryOperator.NEG:
@@ -131,7 +134,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     GTMultiStage = as_mako("execute_${ loop_order }()${''.join(caches)}${''.join(stages)}")
 
-    def visit_LoopOrder(self, looporder: LoopOrder, **kwargs):
+    def visit_LoopOrder(self, looporder: LoopOrder, **kwargs: Any) -> str:
         return {
             LoopOrder.PARALLEL: "parallel",
             LoopOrder.FORWARD: "forward",
@@ -150,7 +153,9 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     BlockStmt = as_mako("{${''.join(body)}}")
 
-    def visit_GTComputationCall(self, node: gtcpp.GTComputationCall, **kwargs):
+    def visit_GTComputationCall(
+        self, node: gtcpp.GTComputationCall, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         return self.generic_visit(node, computation_name=node.id_, **kwargs)
 
     GTComputationCall = as_mako(
@@ -197,7 +202,9 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     )
 
     @classmethod
-    def apply(cls, root: gtcpp.Program, **kwargs) -> str:
+    def apply(cls, root: LeafNode, **kwargs: Any) -> str:
+        if not isinstance(root, gtcpp.Program):
+            raise ValueError("apply() requires gtcpp.Progam root node")
         generated_code = super().apply(root, offset_limit=_offset_limit(root), **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code

@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import List, Set, Tuple, Union
+from typing import Any, List, Set, Tuple, Union
 
 from devtools import debug  # noqa: F401
 
@@ -24,7 +24,6 @@ from eve.utils import XIterator
 from gtc import common, oir
 from gtc.common import CartesianOffset
 from gtc.gtcpp import gtcpp
-from gtc.gtcpp.gtcpp import GTParamList, IJCache
 
 
 # TODO(havogt) between oir and gtcpp we should consider grouping oir.VerticalLoops
@@ -33,7 +32,7 @@ from gtc.gtcpp.gtcpp import GTParamList, IJCache
 # - Each VerticalLoop is MultiStage
 
 
-def _extract_accessors(node: eve.Node) -> GTParamList:
+def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
     extents: XIterator[Tuple[str, gtcpp.GTExtent]] = (
         node.iter_tree()
         .if_isinstance(gtcpp.AccessorRef)
@@ -89,42 +88,46 @@ class OIRToGTCpp(eve.NodeTranslator):
             self.arguments.update(arguments)
             return self
 
-    def visit_Literal(self, node: oir.Literal, **kwargs):
+    def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> gtcpp.Literal:
         return gtcpp.Literal(value=node.value, dtype=node.dtype)
 
-    def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs):
+    def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> gtcpp.UnaryOp:
         return gtcpp.UnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs))
 
-    def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs):
+    def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> gtcpp.BinaryOp:
         return gtcpp.BinaryOp(
             op=node.op,
             left=self.visit(node.left, **kwargs),
             right=self.visit(node.right, **kwargs),
         )
 
-    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs):
+    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> gtcpp.TernaryOp:
         return gtcpp.TernaryOp(
             cond=self.visit(node.cond, **kwargs),
             true_expr=self.visit(node.true_expr, **kwargs),
             false_expr=self.visit(node.false_expr, **kwargs),
         )
 
-    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs):
+    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> gtcpp.NativeFuncCall:
         return gtcpp.NativeFuncCall(func=node.func, args=self.visit(node.args))
 
-    def visit_Cast(self, node: oir.Cast, **kwargs):
+    def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> gtcpp.Cast:
         return gtcpp.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 
-    def visit_Temporary(self, node: oir.Temporary, **kwargs):
+    def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> gtcpp.Temporary:
         return gtcpp.Temporary(name=node.name, dtype=node.dtype)
 
-    def visit_CartesianOffset(self, node: common.CartesianOffset, **kwargs):
+    def visit_CartesianOffset(
+        self, node: common.CartesianOffset, **kwargs: Any
+    ) -> common.CartesianOffset:
         return node
 
-    def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs):
+    def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> gtcpp.AccessorRef:
         return gtcpp.AccessorRef(name=node.name, offset=self.visit(node.offset), dtype=node.dtype)
 
-    def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs):
+    def visit_ScalarAccess(
+        self, node: oir.ScalarAccess, **kwargs: Any
+    ) -> Union[gtcpp.AccessorRef, gtcpp.ScalarAccess]:
         assert "stencil_symtable" in kwargs
         if node.name in kwargs["stencil_symtable"]:
             symbol = kwargs["stencil_symtable"][node.name]
@@ -135,7 +138,9 @@ class OIRToGTCpp(eve.NodeTranslator):
         else:
             return gtcpp.ScalarAccess(name=node.name, dtype=node.dtype)
 
-    def visit_AxisBound(self, node: oir.AxisBound, *, is_start: bool, **kwargs):
+    def visit_AxisBound(
+        self, node: oir.AxisBound, *, is_start: bool, **kwargs: Any
+    ) -> gtcpp.GTLevel:
         if node.level == common.LevelMarker.START:
             splitter = 0
             offset = node.offset + 1 if (node.offset >= 0 and is_start) else node.offset
@@ -146,13 +151,13 @@ class OIRToGTCpp(eve.NodeTranslator):
             raise ValueError("Cannot handle dynamic levels")
         return gtcpp.GTLevel(splitter=splitter, offset=offset)
 
-    def visit_Interval(self, node: oir.Interval, **kwargs):
+    def visit_Interval(self, node: oir.Interval, **kwargs: Any) -> gtcpp.GTInterval:
         return gtcpp.GTInterval(
             from_level=self.visit(node.start, is_start=True),
             to_level=self.visit(node.end, is_start=False),
         )
 
-    def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
+    def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> gtcpp.AssignStmt:
         assert "stencil_symtable" in kwargs
         return gtcpp.AssignStmt(
             left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
@@ -164,9 +169,9 @@ class OIRToGTCpp(eve.NodeTranslator):
         *,
         prog_ctx: ProgramContext,
         comp_ctx: GTComputationContext,
-        interval,
-        **kwargs,
-    ):
+        interval: gtcpp.GTInterval,
+        **kwargs: Any,
+    ) -> gtcpp.GTStage:
         assert "stencil_symtable" in kwargs
         body = self.visit(node.body, **kwargs)
         mask = self.visit(node.mask, **kwargs)
@@ -188,7 +193,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             gtcpp.GTFunctor(
                 name=node.id_,
                 applies=[apply_method],
-                param_list=GTParamList(accessors=accessors),
+                param_list=gtcpp.GTParamList(accessors=accessors),
             )
         ),
 
@@ -199,8 +204,8 @@ class OIRToGTCpp(eve.NodeTranslator):
         node: oir.VerticalLoop,
         *,
         comp_ctx: GTComputationContext,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> gtcpp.GTMultiStage:
         assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
         comp_ctx.add_temporaries(self.visit(node.declarations))
         # the following visit assumes that temporaries are already available in comp_ctx
@@ -211,16 +216,16 @@ class OIRToGTCpp(eve.NodeTranslator):
             comp_ctx=comp_ctx,
             **kwargs,
         )
-        caches: List[Union[IJCache]] = []  # TODO(havogt): caches are not implemented
+        caches: List[Union[gtcpp.IJCache]] = []  # TODO(havogt): caches are not implemented
         return gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches)
 
-    def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs):
+    def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> gtcpp.FieldDecl:
         return gtcpp.FieldDecl(name=node.name, dtype=node.dtype)
 
-    def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs):
+    def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> gtcpp.GlobalParamDecl:
         return gtcpp.GlobalParamDecl(name=node.name, dtype=node.dtype)
 
-    def visit_Stencil(self, node: oir.Stencil, **kwargs):
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> gtcpp.Program:
         prog_ctx = self.ProgramContext()
         comp_ctx = self.GTComputationContext()
         multi_stages = self.visit(
