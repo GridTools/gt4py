@@ -4,7 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
-PAPER         = a4
+PAPER         = 
 SRCDIR        = ../../src/gt4py
 AUTODOCDIR    = _source
 BUILDDIR      = _build
