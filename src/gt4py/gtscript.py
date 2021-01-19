@@ -26,7 +26,6 @@ import types
 
 import numpy as np
 
-from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py.lazy_stencil import LazyStencil
 from gt4py.stencil_builder import StencilBuilder
@@ -243,7 +242,7 @@ def stencil(
 
 
 def lazy_stencil(
-    backend=None,
+    backend_name=None,
     definition=None,
     *,
     build_info=None,
@@ -316,9 +315,9 @@ def lazy_stencil(
             }
         )
         stencil = LazyStencil(
-            StencilBuilder(
-                func, backend=gt_backend.from_name(backend), options=options
-            ).with_externals(externals or {})
+            StencilBuilder(func, backend_name=backend_name, options=options).with_externals(
+                externals or {}
+            )
         )
         if eager:
             stencil = stencil.implementation
