@@ -197,7 +197,8 @@ class TComputationBlock(TObject):
         return 0
 
     def build(self) -> ComputationBlock:
-        self.loc.scope = self.parent.child_scope
+        if self.parent:
+            self.loc.scope = self.parent.child_scope
         return ComputationBlock(
             interval=AxisInterval(
                 start=AxisBound(level=LevelMarker.START, offset=self.start),
@@ -260,7 +261,8 @@ class TAssign(TStatement):
         )
 
     def build(self) -> Assign:
-        self.loc.scope = self.parent.child_scope
+        if self.parent:
+            self.loc.scope = self.parent.child_scope
         return Assign(
             target=self.target.build(),
             value=self.value.build(),
@@ -286,7 +288,8 @@ class TFieldRef(TObject):
         self.offset = make_offset(offset)
 
     def build(self):
-        self.loc.scope = self.parent.child_scope
+        if self.parent:
+            self.loc.scope = self.parent.child_scope
         return FieldRef(
             name=self.name,
             offset=self.offset,

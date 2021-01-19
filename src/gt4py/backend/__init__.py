@@ -23,6 +23,7 @@ from . import python_generator
 
 from .debug_backend import *
 from .gt_backends import *
+from .gtc_backend import *
 from .numpy_backend import *
 
 

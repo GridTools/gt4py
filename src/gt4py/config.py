@@ -31,11 +31,17 @@ CUDA_ROOT: str = os.environ.get(
     "CUDA_HOME", os.environ.get("CUDA_PATH", os.path.abspath("/usr/local/cuda"))
 )
 
-GT_REPO_PATH: str = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "_external_src", "gridtools")
+
+GT_REPO_DIRNAME: str = "gridtools"
+GT_INCLUDE_PATH: str = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "_external_src", GT_REPO_DIRNAME, "include")
 )
 
-GT_INCLUDE_PATH: str = os.path.abspath(os.path.join(GT_REPO_PATH, "include"))
+GT2_REPO_DIRNAME: str = "gridtools2"
+GT2_INCLUDE_PATH: str = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "_external_src", GT2_REPO_DIRNAME, "include")
+)
+
 
 # Settings dict
 build_settings: Dict[str, Any] = {
@@ -45,6 +51,7 @@ build_settings: Dict[str, Any] = {
     "cuda_library_path": os.path.join(CUDA_ROOT, "lib64"),
     "cuda_arch": os.environ.get("CUDA_ARCH", None),
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
+    "gt2_include_path": os.environ.get("GT2_INCLUDE_PATH", GT2_INCLUDE_PATH),
     "openmp_cppflags": os.environ.get("OPENMP_CPPFLAGS", "-fopenmp").split(),
     "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", "-fopenmp").split(),
     "extra_compile_args": {
