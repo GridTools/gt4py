@@ -13,3 +13,21 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+from typing import Optional, Union
+
+from packaging.version import LegacyVersion, Version, parse
+from pkg_resources import DistributionNotFound, get_distribution
+
+
+__copyright__ = "Copyright (c) 2014-2021 ETH Zurich"
+__license__ = "GPLv3+"
+
+try:
+    __version__: str = get_distribution("gt4py").version
+except DistributionNotFound as e:
+    __version__ = "X.X.X.unknown"
+
+__versioninfo__: Optional[Union[LegacyVersion, Version]] = parse(__version__)
+
+del DistributionNotFound, LegacyVersion, Version, get_distribution, parse
