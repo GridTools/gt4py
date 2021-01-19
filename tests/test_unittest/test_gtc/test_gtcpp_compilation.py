@@ -50,7 +50,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],
-        include_dirs=[config.GT2_INCLUDE_PATH],
+        include_dirs=[config.GT2_INCLUDE_PATH, config.build_settings["boost_include_path"]],
         language="c++",
     )
     args = [
