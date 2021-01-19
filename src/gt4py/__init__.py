@@ -16,19 +16,23 @@
 
 """Python API to develop performance portable applications for weather and climate."""
 
-__copyright__ = "Copyright (c) 2014-2020 ETH Zurich"
-__license__ = "GPLv3+"
+from typing import Optional, Union
 
-
+from packaging.version import LegacyVersion, Version, parse
 from pkg_resources import DistributionNotFound, get_distribution
 
 
+__copyright__ = "Copyright (c) 2014-2021 ETH Zurich"
+__license__ = "GPLv3+"
+
 try:
-    __version__ = get_distribution(__name__).version
-except DistributionNotFound:
-    __version__ = "unknown"
-finally:
-    del get_distribution, DistributionNotFound
+    __version__: str = get_distribution(__name__).version
+except DistributionNotFound as e:
+    __version__ = "X.X.X.unknown"
+
+__versioninfo__: Optional[Union[LegacyVersion, Version]] = parse(__version__)
+
+del DistributionNotFound, LegacyVersion, Version, get_distribution, parse
 
 
 # Disable isort to avoid circular imports

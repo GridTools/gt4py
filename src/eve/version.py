@@ -22,14 +22,11 @@ from packaging.version import LegacyVersion, Version, parse
 from pkg_resources import DistributionNotFound, get_distribution
 
 
-__version__: str = "unknown"
-__versioninfo__: Optional[Union[LegacyVersion, Version]] = None
-
 try:
-    __version__ = get_distribution("gt4py").version
-    __versioninfo__ = parse(__version__)
+    __version__: str = get_distribution("gt4py").version
 except DistributionNotFound:
-    pass
+    __version__ = "X.X.X.unknown"
 
-finally:
-    del DistributionNotFound, LegacyVersion, Version, get_distribution, parse
+__versioninfo__: Optional[Union[LegacyVersion, Version]] = parse(__version__)
+
+del DistributionNotFound, LegacyVersion, Version, get_distribution, parse

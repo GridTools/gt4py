@@ -11,30 +11,35 @@
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath(os.path.join("..", "src")))
+# sys.path.insert(0, os.path.abspath('.'))
 
-# -- Project information -----------------------------------------------------
+import os
+import sys
 
-# Version tag from setuptools_scm
-from pkg_resources import get_distribution
+src_dir = os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir, "src")
+abs_src_dir = os.path.abspath(src_dir)
+sys.path.insert(0, abs_src_dir)
 
-
-full_version = get_distribution("gt4py").version
+import gt4py
 
 
 # -- Project information -----------------------------------------------------
 
 project = "GT4Py"
-copyright = "2014-2020, ETH Zurich"
+copyright = "2014-2021, ETH Zurich"
 author = "ETH Zurich"
+description = "Python API of the GridTools framework to develop performance portable applications for weather and climate."
 
-# The short X.Y version
-version = ".".join(full_version.split(".")[:2])
+# The version info for the project you're documenting, acts as replacement for
+# |version| and |release|, also used in various other places throughout the
+# built documents.
+
+# The short X.Y.Z version.
+version = gt4py.__versioninfo__.base_version
+
 # The full version, including alpha/beta/rc tags
-release = ".".join(full_version.split(".")[2:])
+release = gt4py.__version__
+
 
 # -- General configuration ---------------------------------------------------
 
@@ -49,7 +54,7 @@ extensions = [
     "sphinx.ext.autodoc",
     # 'sphinx.ext.coverage',
     "sphinx.ext.doctest",
-    # "sphinx.ext.intersphinx",
+    "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     # "sphinx.ext.todo",
@@ -73,18 +78,56 @@ master_doc = "index"
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+# language = None
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path .
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", ".venv", "Thumbs.db", ".DS_Store"]
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
 
 # A list of prefixes that are ignored for sorting the Python module index
-modindex_common_prefix = ["gridtools."]
+#modindex_common_prefix = ["gt4py."]
+
+
+# -- Extension configuration -------------------------------------------------
+
+# ---- Options for autodoc extension
+autodoc_default_options = {
+    # "member-order": "bysource",
+    "special-members": "__call__",
+    "undoc-members": True
+}
+autodoc_mock_imports = ["dawn4py"]
+
+# ---- Options for intersphinx extension
+intersphinx_mapping = {
+    "attrs": ("https://www.attrs.org/en/stable/", None),
+    "numpy": ('https://numpy.org/doc/stable/', None),
+    "python": ("https://docs.python.org/3", None),
+    "scipy": ('https://docs.scipy.org/doc/scipy/reference', None),
+    "sphinx": ('https://www.sphinx-doc.org/en/stable/', None),
+}
+
+# ---- Options for Napoleon extension
+# napoleon_google_docstring = True
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = False
+napoleon_include_private_with_doc = True
+# napoleon_include_special_with_doc = True
+# napoleon_use_admonition_for_examples = False
+# napoleon_use_admonition_for_notes = False
+# napoleon_use_admonition_for_references = False
+# napoleon_use_ivar = False
+# napoleon_use_param = True
+# napoleon_use_rtype = True
+
+# ----Options for todo extension
+# If true, `todo` and `todoList` produce output, else they produce nothing.
+todo_include_todos = False
+
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -131,7 +174,7 @@ html_static_path = ["_static"]
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = "GT4Pydoc"
+htmlhelp_basename = f"{project.lower()}doc"
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -154,14 +197,14 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
-latex_documents = [(master_doc, "GT4Py.tex", "GT4Py Documentation", author, "manual")]
+latex_documents = [(master_doc, f"{project.lower()}.tex", f"{project} Documentation", author, "manual")]
 
 
 # -- Options for manual page output ------------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "gt4py", "GT4Py Documentation", [author], 1)]
+man_pages = [(master_doc, f"{project.lower()}", f"{project} Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output ----------------------------------------------
@@ -172,45 +215,11 @@ man_pages = [(master_doc, "gt4py", "GT4Py Documentation", [author], 1)]
 texinfo_documents = [
     (
         master_doc,
-        "GT4Py",
-        "GT4Py Documentation",
+        f"{project.lower()}",
+        f"{project} Documentation",
         author,
-        "GT4Py",
-        "GridTools for Python.",
+        f"{project}",
+        f"{description}",
         "Miscellaneous",
     )
 ]
-
-
-# -- Extension configuration -------------------------------------------------
-
-# -- Options for autodoc extension -------------------------------------------
-autodoc_default_options = {
-    # "member-order": "bysource",
-    "special-members": "__call__"
-}
-autodoc_mock_imports = ["dawn4py"]
-
-# -- Options for intersphinx extension ---------------------------------------
-# intersphinx_mapping = {
-#     "attrs": ("https://www.attrs.org/en/latest/", None),
-#     "python": ("https://docs.python.org/3", None),
-# }
-
-# -- Options for Napoleon extension ------------------------------------------
-# napoleon_google_docstring = True
-napoleon_numpy_docstring = True
-napoleon_include_init_with_doc = False
-napoleon_include_private_with_doc = True
-# napoleon_include_special_with_doc = True
-# napoleon_use_admonition_for_examples = False
-# napoleon_use_admonition_for_notes = False
-# napoleon_use_admonition_for_references = False
-# napoleon_use_ivar = False
-# napoleon_use_param = True
-# napoleon_use_rtype = True
-
-# -- Options for todo extension ----------------------------------------------
-
-# If true, `todo` and `todoList` produce output, else they produce nothing.
-todo_include_todos = False
