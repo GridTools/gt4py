@@ -497,6 +497,12 @@ def parameter_lookup_and_normalize(
     else:
         raise TypeError("not enough information to determine the number of dimensions")
 
+    if template is not None and layout is None:
+        if layout is None:
+            layout = layout_from_strides(
+                template.strides if template.strides is not None else tuple(range(ndim))
+            )
+
     normalized_halo = normalize_halo(halo)
     if normalized_halo is None:
         normalized_halo = ((0, 0),) * ndim
@@ -612,17 +618,26 @@ def _cpu_view(gpu_array):
 
 
 def is_compatible_layout(strides, shape, layout_map):
-    if strides is None:
-        strides = [1] * len(shape)
-        stride = 1
-        for i, s in reversed(list(enumerate(shape))):
-            strides[i] = stride
-            stride = stride * shape[i]
-    stride = 0
-    if len(strides) < len(layout_map):
+    if len(shape) < len(layout_map):
         return False
+
+    layout_map = tuple(int(lm) for lm, sh in zip(layout_map, shape) if sh > 1)
+    if strides is None:
+        return tuple(int(lm) for lm in sorted(layout_map)) == layout_map
+    else:
+        strides = tuple(int(st) for st, sh in zip(strides, shape) if sh > 1)
+        if len(strides) < len(layout_map):
+            return False
+
+    stride = 0
     for dim in reversed(np.argsort(layout_map)):
         if strides[dim] < stride:
             return False
         stride = strides[dim]
     return True
+
+
+def layout_from_strides(strides):
+    res = np.argsort(np.argsort(strides))
+    res = -res + res.max()
+    return tuple(int(r) for r in res)

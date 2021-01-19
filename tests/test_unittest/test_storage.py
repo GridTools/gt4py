@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import collections
+import itertools
 import random
 
 import hypothesis as hyp
@@ -582,98 +583,6 @@ def test_normalize_shape():
 
     with pytest.raises(ValueError):
         normalize_shape((0,))
-
-
-class TestConstructionEndToEnd:
-    @pytest.mark.parametrize(
-        "alloc_fun",
-        [
-            gt_store.empty,
-            gt_store.ones,
-            gt_store.zeros,
-            lambda shape, *args, **kwargs: gt_store.full(shape, 3.0, *args, **kwargs),
-        ],
-    )
-    class TestConstructionFromParameters:
-        def run_test(self, alloc_fun, device, managed):
-            stor = alloc_fun(
-                device=device, managed=managed, dtype=np.float32, halo=(1, 2, 3), shape=(2, 4, 6)
-            )
-            assert stor.halo == ((1, 1), (2, 2), (3, 3))
-            assert stor.shape == (2, 4, 6)
-            assert stor.dtype == np.float32
-            assert isinstance(stor, gt_store.Storage)
-            return stor
-
-        def test_cpu(self, alloc_fun):
-            res = self.run_test(alloc_fun, None, False)
-            assert isinstance(res, gt4py.storage.definitions.CPUStorage)
-
-        @pytest.mark.requires_gpu
-        def test_gpu_only(self, alloc_fun):
-            res = self.run_test(alloc_fun, "gpu", False)
-            assert isinstance(res, gt4py.storage.definitions.GPUStorage)
-
-        @pytest.mark.requires_gpu
-        def test_gpu_cuda_managed(self, alloc_fun):
-            res = self.run_test(alloc_fun, "gpu", "cuda")
-            assert isinstance(res, gt4py.storage.definitions.CudaManagedGPUStorage)
-
-        @pytest.mark.requires_gpu
-        def test_gpu_gt4py_managed(self, alloc_fun):
-            res = self.run_test(alloc_fun, "gpu", "gt4py")
-            assert isinstance(res, gt4py.storage.definitions.ExplicitlyManagedGPUStorage)
-
-    @pytest.mark.parametrize(
-        ["alloc_fun", "kwargs"],
-        [
-            (gt_store.empty_like, {}),
-            (gt_store.ones_like, {}),
-            (gt_store.zeros_like, {}),
-            (lambda data, *args, **kwargs: gt_store.full_like(data, 3.0, *args, **kwargs), {}),
-            (gt_store.storage, {}),
-        ],
-    )
-    class TestConstructionFromTemplate:
-        def run_test(self, alloc_fun, data):
-            stor = alloc_fun(data=data)
-            assert stor.shape == data.shape
-            assert stor.dtype == data.dtype
-            assert stor.halo == data.halo
-
-            assert isinstance(stor, gt_store.Storage)
-            return stor
-
-        def test_cpu(self, alloc_fun, kwargs):
-            if "shape" not in kwargs:
-                kwargs["shape"] = (2, 4, 6)
-            data = gt_store.empty(device=None, managed=False, **kwargs)
-            res = self.run_test(alloc_fun, data)
-            assert isinstance(res, gt4py.storage.definitions.CPUStorage)
-
-        @pytest.mark.requires_gpu
-        def test_gpu_only(self, alloc_fun, kwargs):
-            if "shape" not in kwargs:
-                kwargs["shape"] = (2, 4, 6)
-            data = gt_store.empty(device="gpu", managed=False, **kwargs)
-            res = self.run_test(alloc_fun, data)
-            assert isinstance(res, gt4py.storage.definitions.GPUStorage)
-
-        @pytest.mark.requires_gpu
-        def test_gpu_cuda_managed(self, alloc_fun, kwargs):
-            if "shape" not in kwargs:
-                kwargs["shape"] = (2, 4, 6)
-            data = gt_store.empty(device="gpu", managed="cuda", **kwargs)
-            res = self.run_test(alloc_fun, data)
-            assert isinstance(res, gt4py.storage.definitions.CudaManagedGPUStorage)
-
-        @pytest.mark.requires_gpu
-        def test_gpu_gt4py_managed(self, alloc_fun, kwargs):
-            if "shape" not in kwargs:
-                kwargs["shape"] = (2, 4, 6)
-            data = gt_store.empty(device="gpu", managed="gt4py", **kwargs)
-            res = self.run_test(alloc_fun, data)
-            assert isinstance(res, gt4py.storage.definitions.ExplicitlyManagedGPUStorage)
 
 
 @pytest.mark.parametrize(
@@ -1328,3 +1237,28 @@ class TestParameterLookupAndNormalizeValid:
 
             if "ref:" + key in resolved_params:
                 assert res_params[key] is input_params[key]
+
+
+@pytest.mark.parametrize(
+    "layout", [pytest.param(s, id=str(s)) for s in itertools.permutations((0, 1, 2))]
+)
+@pytest.mark.parametrize(
+    "shape",
+    [
+        pytest.param(s, id=str(s))
+        for s in [
+            (3, 3, 3),
+            (3, 3, 1),
+            (3, 1, 3),
+            (1, 3, 3),
+            (3, 1, 1),
+            (1, 3, 1),
+            (1, 1, 3),
+            (1, 1, 1),
+        ]
+    ],
+)
+def test_layout_from_strides(layout, shape):
+    _, array = gt_storage_utils.allocate_cpu((0, 0, 0), shape, layout, np.float64, 8)
+    proposed_layout = gt_storage_utils.layout_from_strides(array.strides)
+    assert gt_storage_utils.is_compatible_layout(array.strides, shape, proposed_layout)
