@@ -16,6 +16,7 @@
 import os
 import sys
 
+
 src_dir = os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir, "src")
 abs_src_dir = os.path.abspath(src_dir)
 sys.path.insert(0, abs_src_dir)
@@ -89,7 +90,7 @@ exclude_patterns = ["_build", ".venv", "Thumbs.db", ".DS_Store"]
 pygments_style = "sphinx"
 
 # A list of prefixes that are ignored for sorting the Python module index
-#modindex_common_prefix = ["gt4py."]
+# modindex_common_prefix = ["gt4py."]
 
 
 # -- Extension configuration -------------------------------------------------
@@ -98,17 +99,17 @@ pygments_style = "sphinx"
 autodoc_default_options = {
     # "member-order": "bysource",
     "special-members": "__call__",
-    "undoc-members": True
+    "undoc-members": True,
 }
 autodoc_mock_imports = ["dawn4py"]
 
 # ---- Options for intersphinx extension
 intersphinx_mapping = {
     "attrs": ("https://www.attrs.org/en/stable/", None),
-    "numpy": ('https://numpy.org/doc/stable/', None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
     "python": ("https://docs.python.org/3", None),
-    "scipy": ('https://docs.scipy.org/doc/scipy/reference', None),
-    "sphinx": ('https://www.sphinx-doc.org/en/stable/', None),
+    "scipy": ("https://docs.scipy.org/doc/scipy/reference", None),
+    "sphinx": ("https://www.sphinx-doc.org/en/stable/", None),
 }
 
 # ---- Options for Napoleon extension
@@ -197,7 +198,9 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
-latex_documents = [(master_doc, f"{project.lower()}.tex", f"{project} Documentation", author, "manual")]
+latex_documents = [
+    (master_doc, f"{project.lower()}.tex", f"{project} Documentation", author, "manual")
+]
 
 
 # -- Options for manual page output ------------------------------------------

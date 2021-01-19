@@ -16,6 +16,7 @@
 import os
 import sys
 
+
 src_dir = os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir, "src")
 abs_src_dir = os.path.abspath(src_dir)
 sys.path.insert(0, abs_src_dir)
@@ -45,7 +46,7 @@ release = gtc.__version__
 # -- General configuration -----------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
-needs_sphinx = '1.3'
+needs_sphinx = "1.3"
 
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
@@ -113,16 +114,16 @@ pygments_style = "sphinx"
 autodoc_default_options = {
     # "member-order": "bysource",
     "special-members": "__call__",
-    "undoc-members": True
+    "undoc-members": True,
 }
 
 # ---- Options for intersphinx extension
 intersphinx_mapping = {
     "attrs": ("https://www.attrs.org/en/stable/", None),
-    "numpy": ('https://numpy.org/doc/stable/', None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
     "python": ("https://docs.python.org/3", None),
-    "scipy": ('https://docs.scipy.org/doc/scipy/reference', None),
-    "sphinx": ('https://www.sphinx-doc.org/en/stable/', None),
+    "scipy": ("https://docs.scipy.org/doc/scipy/reference", None),
+    "sphinx": ("https://www.sphinx-doc.org/en/stable/", None),
 }
 
 # ---- Options for Napoleon extension
@@ -241,7 +242,9 @@ htmlhelp_basename = f"{project.lower()}doc"
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
-latex_documents = [(master_doc, f"{project.lower()}.tex", f"{project} Documentation", author, "manual")]
+latex_documents = [
+    (master_doc, f"{project.lower()}.tex", f"{project} Documentation", author, "manual")
+]
 
 # The name of an image file (relative to this directory) to place at the top of
 # the title page.

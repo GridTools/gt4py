@@ -25,7 +25,7 @@ __license__ = "GPLv3+"
 
 try:
     __version__: str = get_distribution("gt4py").version
-except DistributionNotFound as e:
+except DistributionNotFound:
     __version__ = "X.X.X.unknown"
 
 __versioninfo__: Optional[Union[LegacyVersion, Version]] = parse(__version__)

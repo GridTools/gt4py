@@ -42,6 +42,9 @@ repos:
       exclude: >
           (?x)^(
           setup.py |
+          docs/gt4py/conf.py |
+          docs/eve/conf.py |
+          docs/gtc/conf.py |
           src/gt4py/__gtscript__.py |
           src/gt4py/__init__.py |
           src/gt4py/definitions.py |
@@ -99,7 +102,9 @@ repos:
     - id: mypy
       exclude:
           (?x)^(
-          docs/conf.py |
+          docs/gt4py/conf.py |
+          docs/gtc/conf.py |
+          docs/eve/conf.py |
           src/gt4py/analysis/infos.py |
           src/gt4py/analysis/passes.py |
           src/gt4py/analysis/transformer.py |
