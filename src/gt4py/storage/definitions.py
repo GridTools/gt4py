@@ -530,7 +530,7 @@ class ExplicitlyManagedGPUStorage(Storage):
                     self._device_field[...] = cp.asarray(data)
                 self._set_device_modified()
             else:
-                if sync_state.state != SyncState.SYNC_HOST_DIRTY:
+                if device_data is not None and sync_state.state != SyncState.SYNC_HOST_DIRTY:
                     self._device_field[...] = device_data
                     self._set_device_modified()
                 else:
