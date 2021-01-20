@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 class StorageDefaults:
     def __init__(self, *, device="cpu", alignment_size=None, layout=None):
         self.alignment_size = alignment_size
