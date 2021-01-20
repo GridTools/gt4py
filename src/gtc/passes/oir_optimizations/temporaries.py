@@ -22,6 +22,30 @@ from gtc import oir
 
 
 class TemporaryDisposal(NodeTranslator):
+    """
+    Removes unneeded temporary fields and accesses.
+
+    Replaces temporaries with a single write and single read access within a single
+    horizontal execution (and zero offsets) by direct assignment.
+
+    E.g. replaces the following sequence of statements within a horizontal execution
+        tmp[0, 0, 0] = expr()
+        (other statements...)
+        out[0, 0, 0] = tmp[0, 0, 0]
+    by
+        out[0, 0, 0] = expr()
+        (other statements...)
+
+    If there are any additional accesses to the output field between the two
+    temporary accesses or if there are multiple accesses to the temporary anywhere
+    inside the vertical loop, no optimization is performed.
+
+    For example, this is kept as is:
+        tmp[0, 0, 0] = expr()
+        foo[0, 0, 0] = inout[0, 0, 0]
+        inout[0, 0, 0] = tmp[0, 0, 0]
+    """
+
     class WritesAndReads(NodeVisitor):
         def visit_FieldAccess(
             self, node: oir.FieldAccess, *, other_accesses: Dict[str, int], **kwargs: Any
@@ -77,7 +101,25 @@ class TemporaryDisposal(NodeTranslator):
         for horizontal_execution in result.horizontal_executions:
             local_candidates = self.WritesAndReads.apply(horizontal_execution)
             for field, (read, write) in local_candidates.items():
-                if field in global_candidates and isinstance(symtable[field], oir.Temporary):
+                if not isinstance(symtable[field], oir.Temporary):
+                    # can not discard non-temporary fields
+                    continue
+
+                if field not in global_candidates:
+                    # temporary might be used in multiple horizontal executions
+                    continue
+
+                write_index = horizontal_execution.body.index(write)
+                read_index = horizontal_execution.body.index(read)
+                assert write_index < read_index, "unexpected write after read?"
+                for stmt in horizontal_execution.body[write_index + 1 : read_index]:
+                    # if there are any accesses to the destination field between the two to-be optimized accesses, we skip the optimization
+                    if any(
+                        name == read.left.name
+                        for name in stmt.iter_tree().if_isinstance(oir.FieldAccess).getattr("name")
+                    ):
+                        break
+                else:
                     write.left = read.left
                     horizontal_execution.body.remove(read)
                     result.declarations.remove(symtable[field])
