@@ -21,6 +21,8 @@ from gtc import oir
 
 
 class ZeroExtentMerging(NodeTranslator):
+    """Merges horizontal executions with zero offsets with previous horizontal exectutions within the same vertical loop."""
+
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
         assert node.horizontal_executions, "non-empty vertical loop expected"
         result = self.generic_visit(node)
