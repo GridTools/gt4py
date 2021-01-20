@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -324,7 +324,7 @@ def parameter_lookup_and_normalize(
     layout: Optional[Union[Callable, Sequence[int]]],
     managed: Optional[Union[bool, str]],
     shape: Optional[Sequence[int]] = None,
-    sync_state: SyncState = None,
+    sync_state: Optional[SyncState] = None,
     template: Any,
 ):
     if data is not None:
@@ -416,6 +416,9 @@ def parameter_lookup_and_normalize(
             raise TypeError("'managed' must be a string or 'False'")
         elif managed not in ["cuda", "gt4py", False]:
             raise ValueError('\'managed\' must be in ["cuda", "gt4py", False]')
+    if sync_state is not None:
+        if not isinstance(sync_state, SyncState):
+            raise TypeError("'sync_state' must be an instance of SyncState.")
 
     default_parameters = get_default_parameters(defaults) if defaults is not None else None
     if default_parameters is not None:
@@ -545,6 +548,18 @@ def parameter_lookup_and_normalize(
         dtype = np.dtype("float64")
     if managed is None:
         managed = False
+
+    if managed == "gt4py":
+        if sync_state is None:
+            if hasattr(template, "sync_state"):
+                sync_state = template.sync_state
+            else:
+                sync_state = SyncState()
+
+        if copy:
+            state = sync_state.state
+            sync_state = SyncState()
+            sync_state.state = state
 
     assert gt_utils.is_iterable_of(shape, item_class=int, iterable_class=tuple)
 

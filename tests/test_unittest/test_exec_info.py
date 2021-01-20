@@ -1,3 +1,19 @@
+# -*- coding: utf-8 -*-
+#
+# GT4Py - GridTools4Py - GridTools for Python
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from typing import Any, Dict
 
 import numpy as np
@@ -50,11 +66,7 @@ class TestExecInfo:
                 + in_phi[0, 1, 0]  # type: ignore
             )
             lap2 = (  # noqa
-                -4 * lap1[0, 0, 0]
-                + lap1[-1, 0, 0]
-                + lap1[1, 0, 0]
-                + lap1[0, -1, 0]
-                + lap1[0, 1, 0]
+                -4 * lap1[0, 0, 0] + lap1[-1, 0, 0] + lap1[1, 0, 0] + lap1[0, -1, 0] + lap1[0, 1, 0]
             )
             flux_x = lap2[1, 0, 0] - lap2[0, 0, 0]  # noqa
             flux_y = lap2[0, 1, 0] - lap2[0, 0, 0]  # noqa

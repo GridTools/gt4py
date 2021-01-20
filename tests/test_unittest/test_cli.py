@@ -1,4 +1,21 @@
+# -*- coding: utf-8 -*-
+#
+# GT4Py - GridTools4Py - GridTools for Python
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Unit tests for the command line interface (CLI)."""
+
 import re
 import sys
 
@@ -15,7 +32,19 @@ def clirunner():
     yield CliRunner()
 
 
-@pytest.fixture(params=list(backend.REGISTRY.keys()) + ["nocli"])
+@pytest.fixture(
+    params=[
+        pytest.param(
+            name,
+            # gtc backends require definition ir as input, for now we skip the tests
+            marks=pytest.mark.skipif(
+                name.startswith("dawn:") or name.startswith("gtc:"),
+                reason="gtc backends not yet supported",
+            ),
+        )
+        for name in list(backend.REGISTRY.keys()) + ["nocli"]
+    ],
+)
 def backend_name(request, nocli_backend):
     """Parametrize by backend name."""
     yield request.param
@@ -72,6 +101,7 @@ BACKEND_ROW_PATTERN_BY_NAME = {
     "gtx86": r"^\s*gtx86\s*c\+\+\s*python\s*Yes",
     "gtmc": r"^\s*gtmc\s*c\+\+\s*python\s*Yes",
     "gtcuda": r"^\s*gtcuda\s*cuda\s*python\s*Yes",
+    "gtc:gt:cpu_ifirst": r"^\s*gtc:gt:cpu_ifirst\s*c\+\+\s*python\s*Yes",
     "dawn:gtx86": r"^\s*dawn:gtx86\s*c\+\+\s*python\s*No",
     "dawn:gtmc": r"^\s*dawn:gtmc\s*c\+\+\s*python\s*No",
     "dawn:gtcuda": r"^\s*dawn:gtcuda\s*cuda\s*python\s*No",
@@ -98,9 +128,7 @@ def test_list_backends(clirunner, list_backends_line_pattern):
     result = clirunner.invoke(cli.gtpyc, ["list-backends"], catch_exceptions=False)
 
     assert result.exit_code == 0
-    assert re.findall(list_backends_line_pattern, result.output, re.MULTILINE), print(
-        result.output
-    )
+    assert re.findall(list_backends_line_pattern, result.output, re.MULTILINE), print(result.output)
 
 
 def test_gen_silent(clirunner, simple_stencil, tmp_path):

@@ -137,7 +137,9 @@ class Storage:
 
         return res
 
-    def __deepcopy__(self, memo={}):
+    def __deepcopy__(self, memo=None):
+        if memo is None:
+            memo = {}
         return self.copy()
 
     def __setitem__(self, key, value):
@@ -232,7 +234,7 @@ class Storage:
             cuda_array_interface["touch"] = self._set_device_modified
             res["gpu"] = cuda_array_interface
 
-        for k, v in res.items():
+        for v in res.values():
             v["halo"] = self._halo
         return res
 
@@ -515,10 +517,8 @@ class ExplicitlyManagedGPUStorage(Storage):
         )
         self._field = field
         self._device_field = device_field
-        if sync_state is None:
-            self._sync_state = SyncState()
-        else:
-            self._sync_state = sync_state
+
+        self._sync_state = sync_state
 
         if copy:
             if sync_state is None:

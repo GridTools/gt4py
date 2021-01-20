@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -21,35 +21,49 @@ import subprocess
 from . import config as gt_config
 
 
-def install_gt_sources():
-    is_ok = has_gt_sources()
+_DEFAULT_GRIDTOOLS_VERSION = 1
+_GRIDTOOLS_GIT_BRANCHES = {1: "release_v1.1", 2: "v2.0.0"}
+_GRIDTOOLS_INCLUDE_PATHS = {1: gt_config.GT_INCLUDE_PATH, 2: gt_config.GT2_INCLUDE_PATH}
+_GRIDTOOLS_REPO_DIRNAMES = {1: gt_config.GT_REPO_DIRNAME, 2: gt_config.GT2_REPO_DIRNAME}
+
+
+def install_gt_sources(major_version: int = _DEFAULT_GRIDTOOLS_VERSION) -> bool:
+    assert major_version in _GRIDTOOLS_GIT_BRANCHES
+
+    is_ok = has_gt_sources(major_version)
     if not is_ok:
-        GIT_BRANCH = "release_v1.1"
+        GIT_BRANCH = _GRIDTOOLS_GIT_BRANCHES[major_version]
         GIT_REPO = "https://github.com/GridTools/gridtools.git"
 
         install_path = os.path.dirname(__file__)
-        target_path = os.path.abspath(os.path.join(install_path, "_external_src", "gridtools"))
+        target_path = os.path.abspath(
+            os.path.join(install_path, "_external_src", _GRIDTOOLS_REPO_DIRNAMES[major_version])
+        )
         if not os.path.exists(target_path):
             git_cmd = f"git clone --depth 1 -b {GIT_BRANCH} {GIT_REPO} {target_path}"
             print(f"Getting GridTools C++ sources...\n$ {git_cmd}")
             subprocess.check_call(git_cmd.split(), stderr=subprocess.STDOUT)
 
-        is_ok = has_gt_sources()
+        is_ok = has_gt_sources(major_version)
         if is_ok:
             print("Success!!")
         else:
             print(
                 f"\nOooops! GridTools sources have not been installed!\n"
                 f"Install them manually in '{install_path}/_external_src/'\n\n"
-                f"\tExample: git clone --depth 1 -b {GIT_BRANCH} {GIT_REPO}\n"
+                f"\tExample: git clone --depth 1 -b {GIT_BRANCH} {GIT_REPO} {target_path}\n"
             )
 
     return is_ok
 
 
-def remove_gt_sources():
+def remove_gt_sources(major_version: int = _DEFAULT_GRIDTOOLS_VERSION) -> bool:
+    assert major_version in _GRIDTOOLS_REPO_DIRNAMES
+
     install_path = os.path.dirname(__file__)
-    target_path = os.path.abspath(os.path.join(install_path, "_external_src", "gridtools"))
+    target_path = os.path.abspath(
+        os.path.join(install_path, "_external_src", _GRIDTOOLS_REPO_DIRNAMES[major_version])
+    )
 
     is_ok = not os.path.exists(target_path)
     if not is_ok:
@@ -70,14 +84,15 @@ def remove_gt_sources():
     return is_ok
 
 
-def has_gt_sources():
+def has_gt_sources(major_version: int = _DEFAULT_GRIDTOOLS_VERSION) -> bool:
+    assert major_version in _GRIDTOOLS_INCLUDE_PATHS
     return os.path.isfile(
-        os.path.join(gt_config.GT_INCLUDE_PATH, "gridtools", "common", "defs.hpp")
+        os.path.join(_GRIDTOOLS_INCLUDE_PATHS[major_version], "gridtools", "common", "defs.hpp")
     )
 
 
-def _print_status():
-    if has_gt_sources():
+def _print_status(major_version: int = _DEFAULT_GRIDTOOLS_VERSION) -> None:
+    if has_gt_sources(major_version):
         print("\nGridTools sources are installed\n")
     else:
         print("\nGridTools are missing (GT compiled backends will not work)\n")
@@ -86,13 +101,21 @@ def _print_status():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manage GridTools C++ code sources")
     parser.add_argument("command", choices=["install", "remove", "status"])
+    parser.add_argument(
+        "-m",
+        "--major-version",
+        choices=list(_GRIDTOOLS_GIT_BRANCHES.keys()),
+        type=int,
+        default=_DEFAULT_GRIDTOOLS_VERSION,
+        help=f"major GridTools version for the installation (default: {_DEFAULT_GRIDTOOLS_VERSION})",
+    )
     args = parser.parse_args()
 
     if args.command == "install":
-        install_gt_sources()
-        _print_status()
+        install_gt_sources(args.major_version)
+        _print_status(args.major_version)
     elif args.command == "remove":
-        remove_gt_sources()
-        _print_status()
+        remove_gt_sources(args.major_version)
+        _print_status(args.major_version)
     elif args.command == "status":
-        _print_status()
+        _print_status(args.major_version)

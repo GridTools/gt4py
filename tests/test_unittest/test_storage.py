@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -297,10 +297,10 @@ def generate_data_and_device_data():
 
                 assert params["copy"] == copy
                 if copy:
-                    params["sync_state"] is not data.sync_state
-                    params["sync_state"] == data.sync_state
+                    assert params["sync_state"] is not data.sync_state
+                    assert params["sync_state"].state == data.sync_state.state
                 else:
-                    params["sync_state"] is data.sync_state
+                    assert params["sync_state"] is data.sync_state
 
             yield make_pytest_param(
                 data=data, copy=copy, validator=validate, requires_gpu=False, test_label=test_label
@@ -456,15 +456,14 @@ class TestLowLevelAllocationRoutines:
             assert (
                 0 in shape
                 or ndim == 0
-                or gt_storage_utils.get_ptr(field[-1:])
-                <= gt_storage_utils.get_ptr(raw_buffer[-1:])
+                or gt_storage_utils.get_ptr(field[-1:]) <= gt_storage_utils.get_ptr(raw_buffer[-1:])
             )
 
             # check if the first compute-domain point in the last dimension is aligned for 100
             # random "columns"
 
             if ndim > 0 and all(s > 0 for s in shape):
-                for i in range(100):
+                for _ in range(100):
                     slices = []
                     for hidx in range(ndim):
                         if hidx == np.argmax(layout):
@@ -476,7 +475,7 @@ class TestLowLevelAllocationRoutines:
             # check that writing does not give errors, e.g. because of going out of bounds
             if ndim > 0 and all(s > 0 for s in shape):
                 slices = []
-                for hidx in range(ndim):
+                for _ in range(ndim):
                     slices = slices + [0]
                 field[tuple(slices)] = 1
 
@@ -571,9 +570,7 @@ def test_normalize_shape():
     from gt4py.storage.utils import normalize_shape
 
     assert normalize_shape(None) is None
-    assert gt_utils.is_iterable_of(
-        normalize_shape([1, 2, 3]), iterable_class=tuple, item_class=int
-    )
+    assert gt_utils.is_iterable_of(normalize_shape([1, 2, 3]), iterable_class=tuple, item_class=int)
 
     with pytest.raises(TypeError):
         normalize_shape("1")
@@ -1079,9 +1076,7 @@ class TestParameterLookupAndNormalizeValid:
             pytest.param(
                 {
                     "copy": False,
-                    "data": gt_store.empty((3, 3, 3), device="gpu", managed="cuda")
-                    if cp
-                    else None,
+                    "data": gt_store.empty((3, 3, 3), device="gpu", managed="cuda") if cp else None,
                 },
                 {"managed": "cuda"},
                 marks=[pytest.mark.requires_gpu],

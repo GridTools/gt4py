@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import abc
 import time
 from types import SimpleNamespace
@@ -368,9 +369,7 @@ class StencilObject(abc.ABC):
                         acquire()
                     if compute_device == "gpu":
                         buffers[name] = gt_storage.storage(
-                            np.asarray(
-                                SimpleNamespace(__array_interface__=array_interfaces[name])
-                            ),
+                            np.asarray(SimpleNamespace(__array_interface__=array_interfaces[name])),
                             defaults=self.backend,
                             managed=False,
                         )._device_field
@@ -383,9 +382,7 @@ class StencilObject(abc.ABC):
                             defaults=self.backend,
                             managed=False,
                         )._field
-        self.run(
-            _domain_=domain, _origin_=origin, exec_info=exec_info, **buffers, **parameter_args
-        )
+        self.run(_domain_=domain, _origin_=origin, exec_info=exec_info, **buffers, **parameter_args)
         for name in used_field_args.keys():
             if compute_device not in gt_data_interfaces[name]:
 

@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -36,9 +36,7 @@ if cp is None:
         name for name in ALL_BACKENDS if gt_backend.from_name(name).compute_device != "gpu"
     ]
 
-CPU_BACKENDS = [
-    name for name in ALL_BACKENDS if gt_backend.from_name(name).compute_device == "cpu"
-]
+CPU_BACKENDS = [name for name in ALL_BACKENDS if gt_backend.from_name(name).compute_device == "cpu"]
 GPU_BACKENDS = list(set(ALL_BACKENDS) - set(CPU_BACKENDS))
 INTERNAL_BACKENDS = ["debug", "numpy"] + [name for name in ALL_BACKENDS if name.startswith("gt")]
 DAWN_BACKENDS = [name for name in ALL_BACKENDS if "dawn:" in name]
