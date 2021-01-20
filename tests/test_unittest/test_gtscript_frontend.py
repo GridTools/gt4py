@@ -685,6 +685,87 @@ class TestCompileTimeAssertions:
             compile_definition(definition, "test_definition_error", module)
 
 
+class TestReducedDimensions:
+    def test_syntax(self, id_version):
+        def definition_func(
+            field_3d: gtscript.Field[np.float_, gtscript.IJK],
+            field_2d: gtscript.Field[np.float_, gtscript.IJ],
+            field_1d: gtscript.Field[np.float_, gtscript.K],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_2d = field_1d[1]
+                field_3d = field_2d + field_1d
+
+        module = f"TestReducedDimensions_test_syntax_{id_version}"
+        externals = {}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_syntax", module, externals=externals
+        )
+
+        assert len(def_ir.computations) == 1
+        first_stmt = def_ir.computations[0].body.stmts[0]
+
+        value_ref = first_stmt.value
+        assert value_ref.name == "field_1d"
+        assert set(value_ref.offset.keys()) == {"K"}
+
+        target_ref = first_stmt.target
+        assert target_ref.name == "field_2d"
+        assert set(target_ref.offset.keys()) == {"I", "J"}
+
+        second_stmt = def_ir.computations[0].body.stmts[1]
+
+        target_ref = second_stmt.target
+        assert target_ref.name == "field_3d"
+        assert set(target_ref.offset.keys()) == {"I", "J", "K"}
+
+    def test_error_syntax(self, id_version):
+        module = f"TestReducedDimensions_test_error_syntax_{id_version}"
+        externals = {}
+
+        def definition(
+            field_in: gtscript.Field[np.float_, gtscript.K],
+            field_out: gtscript.Field[np.float_, gtscript.IJK],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out = field_in[0, 0, 1]
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Incorrect offset specification detected"
+        ):
+            compile_definition(definition, "test_error_syntax", module, externals=externals)
+
+    def test_error_annotation(self, id_version):
+        module = f"TestReducedDimensions_test_error_annotation_{id_version}"
+        externals = {}
+
+        def definition(
+            field_in: gtscript.Field[np.float_, gtscript.I],
+            field_out: gtscript.Field[np.float_, gtscript.IJK],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out = field_in[1]
+
+        with pytest.raises(
+            gt_frontend.GTScriptDefinitionError, match="Invalid definition of argument"
+        ):
+            compile_definition(definition, "test_error_annotation", module, externals=externals)
+
+    def test_error_write_1d(self, id_version):
+        module = f"TestReducedDimensions_test_error_write_1d_{id_version}"
+        externals = {}
+
+        def definition(
+            field_in: gtscript.Field[np.float_, gtscript.IJK],
+            field_out: gtscript.Field[np.float_, gtscript.K],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out = field_in[0, 0, 0]
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Cannot assign to 1D field"):
+            compile_definition(definition, "test_error_annotation", module, externals=externals)
+
+
 class TestImports:
     def test_all_legal_combinations(self, id_version):
         def definition_func(inout_field: gtscript.Field[float]):
