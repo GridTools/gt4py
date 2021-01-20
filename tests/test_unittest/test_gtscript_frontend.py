@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -547,9 +547,7 @@ class TestExternalsWithSubroutines:
             "lap": _lap,
         }
 
-        with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"
-        ):
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"):
             compile_definition(
                 definition_func, "test_no_nested_function_calls", module, externals=externals
             )
@@ -615,9 +613,7 @@ class TestFunctionReturn:
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError, match="should have a single return statement"
         ):
-            compile_definition(
-                definition_func, "test_multiple_return", module, externals=externals
-            )
+            compile_definition(definition_func, "test_multiple_return", module, externals=externals)
 
     def test_conditional_return(self, id_version):
         @gtscript.function
