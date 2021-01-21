@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import collections
-from typing import Any, Dict, List, Set, Tuple, Union
+from typing import Any, Dict, Set, Union
 
 from eve import NodeTranslator, NodeVisitor
 from gtc import oir
@@ -33,38 +33,24 @@ class TemporaryDisposal(NodeTranslator):
             self,
             node: oir.FieldAccess,
             *,
-            access_map: Dict[str, List[Tuple[oir.HorizontalExecution, bool]]],
-            horizontal_execution: oir.HorizontalExecution,
+            access_map: Dict[str, Set[int]],
+            hexec_id: int,
             **kwargs: Any,
         ) -> None:
-            data = (
-                horizontal_execution,
-                node.offset.i == node.offset.j == node.offset.k,
-            )
-            if data not in access_map[node.name]:
-                access_map[node.name].append(data)
+            access_map[node.name].add(hexec_id)
 
-        def visit_HorizontalExecution(
-            self,
-            node: oir.HorizontalExecution,
-            **kwargs: Any,
-        ) -> None:
-            self.generic_visit(node, horizontal_execution=node, **kwargs)
+        def visit_HorizontalExecution(self, node: oir.HorizontalExecution, **kwargs: Any) -> None:
+            self.generic_visit(node, hexec_id=id(node), **kwargs)
 
-        def visit_Stencil(
-            self, node: oir.Stencil, **kwargs: Any
-        ) -> Dict[str, oir.HorizontalExecution]:
-            access_map: Dict[
-                str, List[Tuple[oir.HorizontalExecution, bool]]
-            ] = collections.defaultdict(list)
+        def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> Dict[str, int]:
+            access_map: Dict[str, Set[int]] = collections.defaultdict(set)
             self.generic_visit(node, access_map=access_map, **kwargs)
             return {
-                field: accesses[0][0]
+                field: next(iter(accesses))
                 for field, accesses in access_map.items()
-                if field in node.symtable_
+                if len(accesses) == 1
+                and field in node.symtable_
                 and isinstance(node.symtable_[field], oir.Temporary)
-                and len(accesses) == 1
-                and accesses[0][1]
             }
 
     def visit_FieldAccess(
@@ -77,14 +63,14 @@ class TemporaryDisposal(NodeTranslator):
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
-        local_tmps: Dict[str, oir.HorizontalExecution],
+        local_tmps: Dict[str, int],
         symtable: Dict[str, Any],
         **kwargs: Any,
     ) -> oir.HorizontalExecution:
         result = self.generic_visit(node, local_tmps=local_tmps, **kwargs)
         tmps = []
-        for name, hexec in local_tmps.items():
-            if node == hexec:
+        for name, hexec_id in local_tmps.items():
+            if id(node) == hexec_id:
                 decl = symtable[name]
                 tmps.append(oir.LocalScalar(name=name, dtype=decl.dtype, loc=decl.loc))
         result.declarations += tmps
@@ -93,7 +79,7 @@ class TemporaryDisposal(NodeTranslator):
     def visit_VerticalLoop(
         self,
         node: oir.VerticalLoop,
-        local_tmps: Dict[str, oir.HorizontalExecution],
+        local_tmps: Dict[str, int],
         symtable: Dict[str, Any],
         **kwargs: Any,
     ) -> oir.VerticalLoop:
