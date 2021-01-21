@@ -19,7 +19,9 @@ from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
 
 from ...oir_utils import (
     AssignStmtBuilder,
+    FieldDeclBuilder,
     HorizontalExecutionBuilder,
+    StencilBuilder,
     TemporaryBuilder,
     VerticalLoopBuilder,
 )
@@ -27,19 +29,55 @@ from ...oir_utils import (
 
 def test_temporaries_to_scalars_basic():
     testee = (
-        VerticalLoopBuilder()
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-            .add_stmt(AssignStmtBuilder("bar", "tmp").build())
+        StencilBuilder()
+        .add_param(TemporaryBuilder("tmp").build())
+        .add_param(FieldDeclBuilder("foo").build())
+        .add_param(FieldDeclBuilder("bar").build())
+        .add_vertical_loop(
+            VerticalLoopBuilder()
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_stmt(AssignStmtBuilder("tmp", "foo").build())
+                .add_stmt(AssignStmtBuilder("bar", "tmp").build())
+                .build()
+            )
+            .add_declaration(TemporaryBuilder(name="tmp").build())
             .build()
         )
-        .add_declaration(TemporaryBuilder(name="tmp").build())
         .build()
     )
     transformed = TemporariesToScalars().visit(testee)
-    hexec = transformed.horizontal_executions[0]
+    hexec = transformed.vertical_loops[0].horizontal_executions[0]
     assert isinstance(hexec.body[0].left, oir.ScalarAccess)
     assert isinstance(hexec.body[1].right, oir.ScalarAccess)
-    assert not transformed.declarations
+    assert not transformed.vertical_loops[0].declarations
     assert hexec.declarations[0].name == "tmp"
+
+
+def test_temporaries_to_scalars_multiexec():
+    testee = (
+        StencilBuilder()
+        .add_param(TemporaryBuilder("tmp").build())
+        .add_param(FieldDeclBuilder("foo").build())
+        .add_param(FieldDeclBuilder("bar").build())
+        .add_param(FieldDeclBuilder("baz").build())
+        .add_vertical_loop(
+            VerticalLoopBuilder()
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_stmt(AssignStmtBuilder("tmp", "foo").build())
+                .add_stmt(AssignStmtBuilder("bar", "tmp").build())
+                .build()
+            )
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_stmt(AssignStmtBuilder("baz", "tmp").build())
+                .build()
+            )
+            .add_declaration(TemporaryBuilder(name="tmp").build())
+            .build()
+        )
+        .build()
+    )
+    transformed = TemporariesToScalars().visit(testee)
+    assert transformed == testee

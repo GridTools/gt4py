@@ -20,12 +20,15 @@ from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
 from gtc.oir import (
     AssignStmt,
     AxisBound,
+    Decl,
     Expr,
     FieldAccess,
+    FieldDecl,
     HorizontalExecution,
     Interval,
     ScalarAccess,
     ScalarDecl,
+    Stencil,
     Stmt,
     SymbolName,
     Temporary,
@@ -82,10 +85,19 @@ class FieldAccessBuilder:
 class TemporaryBuilder:
     def __init__(self, name: SymbolName = None, dtype: DataType = None) -> None:
         self._name = name
-        self._dtype = DataType.FLOAT32
+        self._dtype = DataType.FLOAT32 if dtype is None else dtype
 
     def build(self) -> Temporary:
         return Temporary(name=self._name, dtype=self._dtype)
+
+
+class FieldDeclBuilder:
+    def __init__(self, name: SymbolName = None, dtype: DataType = None) -> None:
+        self._name = name
+        self._dtype = DataType.FLOAT32 if dtype is None else dtype
+
+    def build(self) -> FieldDecl:
+        return FieldDecl(name=self._name, dtype=self._dtype)
 
 
 class HorizontalExecutionBuilder:
@@ -127,4 +139,26 @@ class VerticalLoopBuilder:
             horizontal_executions=self._horizontal_executions,
             loop_order=self._loop_order,
             declarations=self._declarations,
+        )
+
+
+class StencilBuilder:
+    def __init__(self, name="foo") -> None:
+        self._name: str = name
+        self._params: List[Decl] = []
+        self._vertical_loops: List[VerticalLoop] = []
+
+    def add_param(self, param: Decl) -> "StencilBuilder":
+        self._params.append(param)
+        return self
+
+    def add_vertical_loop(self, vertical_loop: VerticalLoop) -> "StencilBuilder":
+        self._vertical_loops.append(vertical_loop)
+        return self
+
+    def build(self) -> Stencil:
+        return Stencil(
+            name=self._name,
+            params=self._params,
+            vertical_loops=self._vertical_loops,
         )
