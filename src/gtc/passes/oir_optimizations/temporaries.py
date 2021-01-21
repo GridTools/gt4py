@@ -33,13 +33,11 @@ class TemporaryDisposal(NodeTranslator):
             self,
             node: oir.FieldAccess,
             *,
-            access_map: Dict[str, List[Tuple[oir.VerticalLoop, oir.HorizontalExecution, bool]]],
-            vertical_loop: oir.VerticalLoop,
+            access_map: Dict[str, List[Tuple[oir.HorizontalExecution, bool]]],
             horizontal_execution: oir.HorizontalExecution,
             **kwargs: Any,
         ) -> None:
             data = (
-                vertical_loop,
                 horizontal_execution,
                 node.offset.i == node.offset.j == node.offset.k,
             )
@@ -53,43 +51,58 @@ class TemporaryDisposal(NodeTranslator):
         ) -> None:
             self.generic_visit(node, horizontal_execution=node, **kwargs)
 
-        def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> None:
-            self.generic_visit(node, vertical_loop=node, **kwargs)
-
         def visit_Stencil(
             self, node: oir.Stencil, **kwargs: Any
-        ) -> Dict[str, Tuple[oir.VerticalLoop, oir.HorizontalExecution]]:
+        ) -> Dict[str, oir.HorizontalExecution]:
             access_map: Dict[
-                str, List[Tuple[oir.VerticalLoop, oir.HorizontalExecution, bool]]
+                str, List[Tuple[oir.HorizontalExecution, bool]]
             ] = collections.defaultdict(list)
             self.generic_visit(node, access_map=access_map, **kwargs)
             return {
-                field: accesses[0][:2]
+                field: accesses[0][0]
                 for field, accesses in access_map.items()
                 if field in node.symtable_
                 and isinstance(node.symtable_[field], oir.Temporary)
                 and len(accesses) == 1
-                and accesses[0][2]
+                and accesses[0][1]
             }
 
-    class AccessReplacer(NodeTranslator):
-        def visit_FieldAccess(
-            self, node: oir.FieldAccess, *, local_tmps: Set[str], **kwargs: Any
-        ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
-            if node.name in local_tmps:
-                return oir.ScalarAccess(name=node.name, dtype=node.dtype)
-            return self.generic_visit(node, **kwargs)
+    def visit_FieldAccess(
+        self, node: oir.FieldAccess, *, local_tmps: Set[str], **kwargs: Any
+    ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
+        if node.name in local_tmps:
+            return oir.ScalarAccess(name=node.name, dtype=node.dtype)
+        return self.generic_visit(node, **kwargs)
+
+    def visit_HorizontalExecution(
+        self,
+        node: oir.HorizontalExecution,
+        local_tmps: Dict[str, oir.HorizontalExecution],
+        symtable: Dict[str, Any],
+        **kwargs: Any,
+    ) -> oir.HorizontalExecution:
+        result = self.generic_visit(node, local_tmps=local_tmps, **kwargs)
+        tmps = []
+        for name, hexec in local_tmps.items():
+            if node == hexec:
+                decl = symtable[name]
+                tmps.append(oir.LocalScalar(name=name, dtype=decl.dtype, loc=decl.loc))
+        result.declarations += tmps
+        return result
+
+    def visit_VerticalLoop(
+        self,
+        node: oir.VerticalLoop,
+        local_tmps: Dict[str, oir.HorizontalExecution],
+        symtable: Dict[str, Any],
+        **kwargs: Any,
+    ) -> oir.VerticalLoop:
+        result = self.generic_visit(node, local_tmps=local_tmps, symtable=symtable, **kwargs)
+        result.declarations = [d for d in result.declarations if d.name not in local_tmps]
+        return result
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        result = self.generic_visit(node, **kwargs)
-        local_tmps = self.LocalTemporaryFinder().visit(result)
-        for local_tmp, (vertical_loop, horizontal_execution) in local_tmps.items():
-            decl = result.symtable_[local_tmp]
-            vertical_loop.declarations.remove(decl)
-            horizontal_execution.declarations.append(
-                oir.LocalScalar(name=decl.name, dtype=decl.dtype, loc=decl.loc)
-            )
-
-        result = self.AccessReplacer().visit(result, local_tmps=local_tmps)
+        local_tmps = self.LocalTemporaryFinder().visit(node)
+        result = self.generic_visit(node, local_tmps=local_tmps, symtable=node.symtable_, **kwargs)
         result.collect_symbols()
         return result
