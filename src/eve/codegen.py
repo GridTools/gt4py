@@ -150,6 +150,7 @@ if _CLANG_FORMAT_EXECUTABLE is not None:
         sort_includes: bool = False,
     ) -> str:
         """Format C++ source code using clang-format."""
+        assert isinstance(_CLANG_FORMAT_EXECUTABLE, str)
         args = [_CLANG_FORMAT_EXECUTABLE]
         if style:
             args.append(f"--style={style}")
