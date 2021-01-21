@@ -34,7 +34,7 @@ from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
 from gtc.passes.oir_optimizations.horizontal_execution_merging import ZeroExtentMerging
-from gtc.passes.oir_optimizations.temporaries import TemporaryDisposal
+from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
 
 
 if TYPE_CHECKING:
@@ -68,7 +68,7 @@ class GTCGTExtGenerator:
 
     def _optimize_oir(self, oir):
         oir = ZeroExtentMerging().visit(oir)
-        oir = TemporaryDisposal().visit(oir)
+        oir = TemporariesToScalars().visit(oir)
         return oir
 
 

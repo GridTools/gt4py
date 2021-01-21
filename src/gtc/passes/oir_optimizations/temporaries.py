@@ -21,7 +21,7 @@ from eve import NodeTranslator, NodeVisitor
 from gtc import oir
 
 
-class TemporaryDisposal(NodeTranslator):
+class TemporariesToScalars(NodeTranslator):
     """Replaces temporary fields by scalars.
 
     1. Finds temporaries that are only accessed within a single HorizontalExecution.

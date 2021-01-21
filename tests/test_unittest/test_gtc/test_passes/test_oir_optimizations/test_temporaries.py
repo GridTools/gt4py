@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gtc import oir
-from gtc.passes.oir_optimizations.temporaries import TemporaryDisposal
+from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
 
 from ...oir_utils import (
     AssignStmtBuilder,
@@ -25,7 +25,7 @@ from ...oir_utils import (
 )
 
 
-def test_temporary_disposal_basic():
+def test_temporaries_to_scalars_basic():
     testee = (
         VerticalLoopBuilder()
         .add_horizontal_execution(
@@ -37,7 +37,7 @@ def test_temporary_disposal_basic():
         .add_declaration(TemporaryBuilder(name="tmp").build())
         .build()
     )
-    transformed = TemporaryDisposal().visit(testee)
+    transformed = TemporariesToScalars().visit(testee)
     hexec = transformed.horizontal_executions[0]
     assert isinstance(hexec.body[0].left, oir.ScalarAccess)
     assert isinstance(hexec.body[1].right, oir.ScalarAccess)
