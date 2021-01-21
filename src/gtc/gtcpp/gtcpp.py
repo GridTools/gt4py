@@ -49,12 +49,6 @@ class Offset(common.CartesianOffset):
     pass
 
 
-class VarDecl(Stmt):
-    name: SymbolName
-    init: Expr
-    dtype: common.DataType
-
-
 class Literal(common.Literal, Expr):  # type: ignore
     pass
 
