@@ -109,7 +109,7 @@ class OIRToGTCpp(eve.NodeTranslator):
         )
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> gtcpp.NativeFuncCall:
-        return gtcpp.NativeFuncCall(func=node.func, args=self.visit(node.args))
+        return gtcpp.NativeFuncCall(func=node.func, args=self.visit(node.args, **kwargs))
 
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> gtcpp.Cast:
         return gtcpp.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
@@ -132,11 +132,11 @@ class OIRToGTCpp(eve.NodeTranslator):
         if node.name in kwargs["stencil_symtable"]:
             symbol = kwargs["stencil_symtable"][node.name]
             assert isinstance(symbol, oir.ScalarDecl)
-            return gtcpp.AccessorRef(
-                name=symbol.name, offset=CartesianOffset.zero(), dtype=symbol.dtype
-            )
-        else:
-            return gtcpp.ScalarAccess(name=node.name, dtype=node.dtype)
+            if not isinstance(symbol, oir.LocalScalar):
+                return gtcpp.AccessorRef(
+                    name=symbol.name, offset=CartesianOffset.zero(), dtype=symbol.dtype
+                )
+        return gtcpp.ScalarAccess(name=node.name, dtype=node.dtype)
 
     def visit_AxisBound(
         self, node: oir.AxisBound, *, is_start: bool, **kwargs: Any
@@ -177,7 +177,11 @@ class OIRToGTCpp(eve.NodeTranslator):
         mask = self.visit(node.mask, **kwargs)
         if mask:
             body = [gtcpp.IfStmt(cond=mask, true_branch=gtcpp.BlockStmt(body=body))]
-        apply_method = gtcpp.GTApplyMethod(interval=self.visit(interval), body=body)
+        apply_method = gtcpp.GTApplyMethod(
+            interval=self.visit(interval),
+            body=body,
+            local_variables=[self.visit(var, **kwargs) for var in node.declarations],
+        )
         accessors = _extract_accessors(apply_method)
         stage_args = [gtcpp.Arg(name=acc.name) for acc in accessors]
 
@@ -224,6 +228,9 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> gtcpp.GlobalParamDecl:
         return gtcpp.GlobalParamDecl(name=node.name, dtype=node.dtype)
+
+    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> gtcpp.LocalVarDecl:
+        return gtcpp.LocalVarDecl(name=node.name, dtype=node.dtype, loc=node.loc)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> gtcpp.Program:
         prog_ctx = self.ProgramContext()

@@ -37,6 +37,7 @@ from gtc.gtcpp.gtcpp import (
     IfStmt,
     Intent,
     Literal,
+    LocalVarDecl,
     Program,
     Stmt,
     Temporary,
@@ -84,13 +85,16 @@ class GTApplyMethodBuilder:
     def __init__(self) -> None:
         self._interval = GTIntervalBuilder().build()
         self._body: List[Stmt] = []
+        self._local_variables: List[LocalVarDecl] = []
 
     def add_stmt(self, stmt: Stmt) -> "GTApplyMethodBuilder":
         self._body.append(stmt)
         return self
 
     def build(self) -> GTApplyMethod:
-        return GTApplyMethod(interval=self._interval, body=self._body)
+        return GTApplyMethod(
+            interval=self._interval, body=self._body, local_variables=self._local_variables
+        )
 
 
 class IfStmtBuilder:

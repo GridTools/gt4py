@@ -130,9 +130,15 @@ class GTInterval(LocNode):
     to_level: GTLevel
 
 
+class LocalVarDecl(LocNode):
+    name: SymbolName
+    dtype: common.DataType
+
+
 class GTApplyMethod(LocNode):
     interval: GTInterval
     body: List[Stmt]
+    local_variables: List[LocalVarDecl]
 
 
 @enum.unique
@@ -223,11 +229,6 @@ class ApiParamDecl(LocNode):
 class FieldDecl(ApiParamDecl):
     # TODO dimensions
     pass
-
-
-# TODO(havogt) this will be required once we can demote Temporaries to Scalars
-# class ScalarDecl(Decl):
-#     pass
 
 
 class GlobalParamDecl(ApiParamDecl):

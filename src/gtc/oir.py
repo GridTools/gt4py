@@ -120,6 +120,10 @@ class ScalarDecl(Decl):
     pass
 
 
+class LocalScalar(ScalarDecl):
+    pass
+
+
 class Temporary(FieldDecl):
     pass
 
@@ -127,6 +131,7 @@ class Temporary(FieldDecl):
 class HorizontalExecution(LocNode):
     body: List[Stmt]
     mask: Optional[Expr]
+    declarations: List[LocalScalar]
 
     @validator("mask")
     def mask_is_boolean_field_expr(cls, v: Optional[Expr]) -> Optional[Expr]:

@@ -25,7 +25,9 @@ from gtc.oir import (
     HorizontalExecution,
     Interval,
     ScalarAccess,
+    ScalarDecl,
     Stmt,
+    SymbolName,
     Temporary,
     VerticalLoop,
 )
@@ -77,17 +79,29 @@ class FieldAccessBuilder:
         return FieldAccess(name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind)
 
 
+class TemporaryBuilder:
+    def __init__(self, name: SymbolName = None, dtype: DataType = None) -> None:
+        self._name = name
+        self._dtype = DataType.FLOAT32
+
+    def build(self) -> Temporary:
+        return Temporary(name=self._name, dtype=self._dtype)
+
+
 class HorizontalExecutionBuilder:
     def __init__(self) -> None:
         self._body: List[Stmt] = []
         self._mask = None
+        self._declarations: List[ScalarDecl] = []
 
     def add_stmt(self, stmt: Stmt) -> "HorizontalExecutionBuilder":
         self._body.append(stmt)
         return self
 
     def build(self) -> HorizontalExecution:
-        return HorizontalExecution(body=self._body, mask=self._mask)
+        return HorizontalExecution(
+            body=self._body, mask=self._mask, declarations=self._declarations
+        )
 
 
 class VerticalLoopBuilder:
@@ -101,6 +115,10 @@ class VerticalLoopBuilder:
         self, horizontal_execution: HorizontalExecution
     ) -> "VerticalLoopBuilder":
         self._horizontal_executions.append(horizontal_execution)
+        return self
+
+    def add_declaration(self, declaration: Temporary) -> "VerticalLoopBuilder":
+        self._declarations.append(declaration)
         return self
 
     def build(self) -> VerticalLoop:
