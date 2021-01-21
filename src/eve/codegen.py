@@ -61,19 +61,9 @@ from .visitors import NodeVisitor
 
 def _get_clang_format() -> Optional[str]:
     """Return the clang-format executable, or None if not available."""
-    default_filename = "clang-format"
-    try:
-        import clang_format
-
-        del clang_format
-        return default_filename
-    except ImportError:
-        executable = os.getenv("CLANG_FORMAT_EXECUTABLE", default_filename)
-        ret = run([executable, "--version"])
-        if ret.returncode != 0:
-            return None
-        else:
-            return executable
+    executable = os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format")
+    ret = run([executable, "--version"])
+    return executable if ret.returncode == 0 else None
 
 
 _CLANG_FORMAT_EXECUTABLE = _get_clang_format()
@@ -160,7 +150,7 @@ if _CLANG_FORMAT_EXECUTABLE is not None:
         sort_includes: bool = False,
     ) -> str:
         """Format C++ source code using clang-format."""
-        args = [str(_CLANG_FORMAT_EXECUTABLE)]
+        args = [_CLANG_FORMAT_EXECUTABLE]
         if style:
             args.append(f"--style={style}")
         if fallback_style:
