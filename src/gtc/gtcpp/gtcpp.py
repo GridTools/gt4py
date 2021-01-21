@@ -241,12 +241,6 @@ class GTStage(LocNode):
     # or `temporaries`
     args: List[Arg]
 
-    @validator("args")
-    def at_least_one_argument(cls, v: str) -> str:
-        if len(v) == 0:
-            raise ValueError("A GTStage needs at least one argument.")
-        return v
-
 
 class IJCache(LocNode):
     name: SymbolRef  # symbol ref to GTComputation params or temporaries
