@@ -44,7 +44,11 @@ class ZeroOffsetMerging(NodeTranslator):
 
 
 class GreedyMerging(NodeTranslator):
+    """Merges consecutive horizontal executions if there are no write/read conflicts."""
+
     class AccessCollector(NodeVisitor):
+        """Collects all field accesses inside a horizontal execution with corresponding offsets."""
+
         def visit_FieldAccess(
             self,
             node: oir.FieldAccess,
