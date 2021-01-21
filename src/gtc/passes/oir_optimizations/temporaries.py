@@ -24,11 +24,15 @@ from gtc import oir
 class TemporaryDisposal(NodeTranslator):
     """Replaces temporary fields by scalars.
 
-    All temporary fields that are local to a horizontal execution and accesed
-    only without offsets are replaced by scalars.
+    1. Finds temporaries that are only accessed within a single HorizontalExecution.
+    2. Replaces corresponding FieldAccess nodes by ScalarAccess nodes.
+    3. Removes matching temporaries from VerticalLoop declarations.
+    4. Add matching temporaries to HorizontalExecution declarations.
     """
 
     class LocalTemporaryFinder(NodeVisitor):
+        """Finds a map from local temporaries to horizontal executions."""
+
         def visit_FieldAccess(
             self,
             node: oir.FieldAccess,
@@ -68,12 +72,11 @@ class TemporaryDisposal(NodeTranslator):
         **kwargs: Any,
     ) -> oir.HorizontalExecution:
         result = self.generic_visit(node, local_tmps=local_tmps, **kwargs)
-        tmps = []
-        for name, hexec_id in local_tmps.items():
-            if id(node) == hexec_id:
-                decl = symtable[name]
-                tmps.append(oir.LocalScalar(name=name, dtype=decl.dtype, loc=decl.loc))
-        result.declarations += tmps
+        result.declarations += [
+            oir.LocalScalar(name=name, dtype=symtable[name].dtype, loc=symtable[name].loc)
+            for name, hexec_id in local_tmps.items()
+            if hexec_id == id(node)
+        ]
         return result
 
     def visit_VerticalLoop(
