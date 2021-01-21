@@ -59,16 +59,6 @@ from .typingx import (
 from .visitors import NodeVisitor
 
 
-def _get_clang_format() -> Optional[str]:
-    """Return the clang-format executable, or None if not available."""
-    executable = os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format")
-    ret = run([executable, "--version"])
-    return executable if ret.returncode == 0 else None
-
-
-_CLANG_FORMAT_EXECUTABLE = _get_clang_format()
-
-
 SourceFormatter = Callable[[str], str]
 
 #: Global dict storing registered formatters.
@@ -137,6 +127,16 @@ def format_python_source(
     assert isinstance(formatted_source, str)
 
     return formatted_source
+
+
+def _get_clang_format() -> Optional[str]:
+    """Return the clang-format executable, or None if not available."""
+    executable = os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format")
+    ret = run([executable, "--version"], capture_output=True)
+    return executable if ret.returncode == 0 else None
+
+
+_CLANG_FORMAT_EXECUTABLE = _get_clang_format()
 
 
 if _CLANG_FORMAT_EXECUTABLE is not None:
