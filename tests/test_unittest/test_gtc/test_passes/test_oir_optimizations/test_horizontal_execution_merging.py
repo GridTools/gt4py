@@ -14,7 +14,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.passes.oir_optimizations.horizontal_execution_merging import ZeroExtentMerging
+import pytest
+
+from gtc.passes.oir_optimizations.horizontal_execution_merging import (
+    GreedyMerging,
+    ZeroExtentMerging,
+)
 
 from ...oir_utils import (
     AssignStmtBuilder,
@@ -25,7 +30,12 @@ from ...oir_utils import (
 )
 
 
-def test_zero_extent_merging_with_zero_extents():
+@pytest.fixture(params=[ZeroExtentMerging(), GreedyMerging()])
+def merger(request):
+    return request.param
+
+
+def test_zero_extent_merging(merger):
     testee = (
         VerticalLoopBuilder()
         .add_horizontal_execution(
@@ -39,14 +49,44 @@ def test_zero_extent_merging_with_zero_extents():
         )
         .build()
     )
-    transformed = ZeroExtentMerging().visit(testee)
+    transformed = merger.visit(testee)
     assert len(transformed.horizontal_executions) == 1
     assert transformed.horizontal_executions[0].body == sum(
         (he.body for he in testee.horizontal_executions), []
     )
 
 
-def test_zero_extent_merging_mixed():
+def test_mixed_merging(merger):
+    testee = (
+        VerticalLoopBuilder()
+        .add_horizontal_execution(
+            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
+        )
+        .add_horizontal_execution(
+            HorizontalExecutionBuilder()
+            .add_stmt(
+                AssignStmtBuilder("baz")
+                .right(
+                    FieldAccessBuilder("foo").offset(CartesianOffsetBuilder(i=1).build()).build()
+                )
+                .build()
+            )
+            .build()
+        )
+        .add_horizontal_execution(
+            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "baz").build()).build()
+        )
+        .build()
+    )
+    transformed = merger.visit(testee)
+    assert len(transformed.horizontal_executions) == 2
+    assert transformed.horizontal_executions[0].body == testee.horizontal_executions[0].body
+    assert transformed.horizontal_executions[1].body == sum(
+        (he.body for he in testee.horizontal_executions[1:]), []
+    )
+
+
+def test_nonzero_extent_merging(merger):
     testee = (
         VerticalLoopBuilder()
         .add_horizontal_execution(
@@ -63,14 +103,13 @@ def test_zero_extent_merging_mixed():
             )
             .build()
         )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "baz").build()).build()
-        )
         .build()
     )
-    transformed = ZeroExtentMerging().visit(testee)
-    assert len(transformed.horizontal_executions) == 2
-    assert transformed.horizontal_executions[0].body == testee.horizontal_executions[0].body
-    assert transformed.horizontal_executions[1].body == sum(
-        (he.body for he in testee.horizontal_executions[1:]), []
-    )
+    transformed = merger.visit(testee)
+    if isinstance(merger, ZeroExtentMerging):
+        assert transformed == testee
+    else:
+        assert len(transformed.horizontal_executions) == 1
+        assert transformed.horizontal_executions[0].body == sum(
+            (he.body for he in testee.horizontal_executions), []
+        )

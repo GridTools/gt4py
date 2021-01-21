@@ -14,9 +14,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any
+from collections import defaultdict
+from typing import Any, Dict, Set, Tuple
 
-from eve import NodeTranslator
+from eve import NodeTranslator, NodeVisitor
 from gtc import oir
 
 
@@ -25,7 +26,7 @@ class ZeroExtentMerging(NodeTranslator):
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
         assert node.horizontal_executions, "non-empty vertical loop expected"
-        result = self.generic_visit(node)
+        result = self.generic_visit(node, **kwargs)
         horizontal_executions = [result.horizontal_executions[0]]
         for horizontal_execution in result.horizontal_executions[1:]:
             has_zero_extents = (
@@ -34,10 +35,65 @@ class ZeroExtentMerging(NodeTranslator):
                 .map(lambda x: x.offset.i == x.offset.j == 0)
                 .reduce(lambda a, b: a and b, init=True)
             )
-            # TODO: support masks?
-            if has_zero_extents and horizontal_execution.mask is None:
+            if has_zero_extents and horizontal_execution.mask == horizontal_executions[-1].mask:
                 horizontal_executions[-1].body += horizontal_execution.body
             else:
                 horizontal_executions.append(horizontal_execution)
+        result.horizontal_executions = horizontal_executions
+        return result
+
+
+class GreedyMerging(NodeTranslator):
+    class AccessCollector(NodeVisitor):
+        def visit_FieldAccess(
+            self,
+            node: oir.FieldAccess,
+            *,
+            accesses: Dict[str, Set[Tuple[int, int, int]]],
+            **kwargs: Any,
+        ) -> None:
+            accesses[node.name].add((node.offset.i, node.offset.j, node.offset.k))
+
+        def visit_AssignStmt(
+            self,
+            node: oir.AssignStmt,
+            *,
+            reads: Dict[str, Set[Tuple[int, int, int]]],
+            writes: Dict[str, Set[Tuple[int, int, int]]],
+            **kwargs: Any,
+        ) -> None:
+            self.visit(node.left, accesses=writes, **kwargs)
+            self.visit(node.right, accesses=reads, **kwargs)
+
+        def visit_HorizontalExecution(
+            self, node: oir.HorizontalExecution, **kwargs: Any
+        ) -> Tuple[Dict[str, Set[Tuple[int, int, int]]], Dict[str, Set[Tuple[int, int, int]]]]:
+            reads: Dict[str, Set[Tuple[int, int, int]]] = defaultdict(set)
+            writes: Dict[str, Set[Tuple[int, int, int]]] = defaultdict(set)
+            for stmt in node.body:
+                self.visit(stmt, reads=reads, writes=writes)
+            if node.mask:
+                self.visit(node.mask, accesses=reads)
+            return reads, writes
+
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
+        assert node.horizontal_executions, "non-empty vertical loop expected"
+        result = self.generic_visit(node, **kwargs)
+        horizontal_executions = [result.horizontal_executions[0]]
+        _, previous_writes = self.AccessCollector().visit(horizontal_executions[-1])
+        for horizontal_execution in result.horizontal_executions[1:]:
+            current_reads, current_writes = self.AccessCollector().visit(horizontal_execution)
+            conflicting = {
+                field
+                for field, offsets in current_reads.items()
+                if field in previous_writes and offsets ^ previous_writes[field]
+            }
+            if not conflicting and horizontal_execution.mask == horizontal_executions[-1].mask:
+                horizontal_executions[-1].body += horizontal_execution.body
+                for field, writes in current_writes.items():
+                    previous_writes[field] |= writes
+            else:
+                horizontal_executions.append(horizontal_execution)
+                previous_writes = current_writes
         result.horizontal_executions = horizontal_executions
         return result
