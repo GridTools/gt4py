@@ -21,7 +21,7 @@ from eve import NodeTranslator, NodeVisitor
 from gtc import oir
 
 
-class ZeroExtentMerging(NodeTranslator):
+class ZeroOffsetMerging(NodeTranslator):
     """Merges horizontal executions with zero offsets with previous horizontal exectutions within the same vertical loop."""
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:

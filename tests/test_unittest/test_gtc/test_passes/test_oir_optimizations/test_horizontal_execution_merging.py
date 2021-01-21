@@ -18,7 +18,7 @@ import pytest
 
 from gtc.passes.oir_optimizations.horizontal_execution_merging import (
     GreedyMerging,
-    ZeroExtentMerging,
+    ZeroOffsetMerging,
 )
 
 from ...oir_utils import (
@@ -30,7 +30,7 @@ from ...oir_utils import (
 )
 
 
-@pytest.fixture(params=[ZeroExtentMerging(), GreedyMerging()])
+@pytest.fixture(params=[ZeroOffsetMerging(), GreedyMerging()])
 def merger(request):
     return request.param
 
@@ -106,7 +106,7 @@ def test_nonzero_extent_merging(merger):
         .build()
     )
     transformed = merger.visit(testee)
-    if isinstance(merger, ZeroExtentMerging):
+    if isinstance(merger, ZeroOffsetMerging):
         assert transformed == testee
     else:
         assert len(transformed.horizontal_executions) == 1
