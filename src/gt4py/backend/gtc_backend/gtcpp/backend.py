@@ -45,9 +45,6 @@ if TYPE_CHECKING:
 
 
 class GTCGTExtGenerator:
-    COMPUTATION_FILES = ["computation.hpp"]
-    BINDINGS_FILES = ["bindings.cpp"]
-
     def __init__(self, class_name, module_name, gt_backend_t, options):
         self.class_name = class_name
         self.module_name = module_name
@@ -63,9 +60,10 @@ class GTCGTExtGenerator:
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
         bindings = GTCppBindingsCodegen.apply(gtcpp, module_name=self.module_name)
+        bindings_ext = ".cu" if self.gt_backend_t == "gpu" else ".cpp"
         return {
             "computation": {"computation.hpp": implementation},
-            "bindings": {"bindings.cpp": bindings},
+            "bindings": {"bindings" + binding_ext: bindings},
         }
 
 
@@ -166,12 +164,11 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 
 
 class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
-    languages = {"computation": "c++", "bindings": ["python"]}
     options: ClassVar[Dict[str, Any]] = {}
     PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
 
-    def _generate_extension(self, use_cuda) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=use_cuda)
+    def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
+        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=uses_cuda)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
@@ -199,6 +196,7 @@ class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
 
     name = "gtc:gt:cpu_ifirst"
     GT_BACKEND_T = "cpu_ifirst"
+    languages = {"computation": "c++", "bindings": ["python"]}
     storage_info = {
         "alignment": 8,
         "device": "cpu",
@@ -208,7 +206,7 @@ class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
     }
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return super()._generate_extension(use_cuda=False)
+        return super()._generate_extension(uses_cuda=False)
 
 
 @gt_backend.register
@@ -217,6 +215,7 @@ class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
 
     name = "gtc:gt:cpu_kfirst"
     GT_BACKEND_T = "cpu_kfirst"
+    languages = {"computation": "c++", "bindings": ["python"]}
     storage_info = {
         "alignment": 1,
         "device": "cpu",
@@ -226,7 +225,7 @@ class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
     }
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return super()._generate_extension(use_cuda=False)
+        return super()._generate_extension(uses_cuda=False)
 
 
 @gt_backend.register
@@ -235,6 +234,7 @@ class GTCGTGpuBackend(GTCGTBaseBackend):
 
     name = "gtc:gt:gpu"
     GT_BACKEND_T = "gpu"
+    languages = {"computation": "cuda", "bindings": ["python"]}
     storage_info = {
         "alignment": 32,
         "device": "gpu",
@@ -244,4 +244,4 @@ class GTCGTGpuBackend(GTCGTBaseBackend):
     }
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return super()._generate_extension(use_cuda=False)
+        return super()._generate_extension(uses_cuda=True)
