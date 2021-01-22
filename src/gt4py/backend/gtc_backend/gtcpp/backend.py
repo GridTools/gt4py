@@ -22,8 +22,13 @@ from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
 from gt4py.backend.gt_backends import (
+    cuda_is_compatible_layout,
+    cuda_is_compatible_type,
+    cuda_layout,
     gtcpu_is_compatible_type,
+    make_mc_layout_map,
     make_x86_layout_map,
+    mc_is_compatible_layout,
     x86_is_compatible_layout,
 )
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
@@ -56,7 +61,7 @@ class GTCGTExtGenerator:
         upcasted = upcast(dtype_deduced)
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
-        implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp)
+        implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
         bindings = GTCppBindingsCodegen.apply(gtcpp, module_name=self.module_name)
         return {
             "computation": {"computation.hpp": implementation},
@@ -160,27 +165,13 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return formatted_code
 
 
-@gt_backend.register
-class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
-    """GridTools python backend using gtc."""
-
-    name = "gtc:gt:cpu_ifirst"
-
-    GT_BACKEND_T = "x86"
-    options: ClassVar[Dict[str, Any]] = {}
-    storage_info = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": make_x86_layout_map,
-        "is_compatible_layout": x86_is_compatible_layout,
-        "is_compatible_type": gtcpu_is_compatible_type,
-    }
+class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
     languages = {"computation": "c++", "bindings": ["python"]}
-
+    options: ClassVar[Dict[str, Any]] = {}
     PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
 
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=False)
+    def _generate_extension(self, use_cuda) -> Tuple[str, str]:
+        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=use_cuda)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
@@ -200,3 +191,57 @@ class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
             pyext_module_name=pyext_module_name,
             pyext_file_path=pyext_file_path,
         )
+
+
+@gt_backend.register
+class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
+    """GridTools python backend using gtc."""
+
+    name = "gtc:gt:cpu_ifirst"
+    GT_BACKEND_T = "cpu_ifirst"
+    storage_info = {
+        "alignment": 8,
+        "device": "cpu",
+        "layout_map": make_mc_layout_map,
+        "is_compatible_layout": mc_is_compatible_layout,
+        "is_compatible_type": gtcpu_is_compatible_type,
+    }
+
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return super()._generate_extension(use_cuda=False)
+
+
+@gt_backend.register
+class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
+    """GridTools python backend using gtc."""
+
+    name = "gtc:gt:cpu_kfirst"
+    GT_BACKEND_T = "cpu_kfirst"
+    storage_info = {
+        "alignment": 1,
+        "device": "cpu",
+        "layout_map": make_x86_layout_map,
+        "is_compatible_layout": x86_is_compatible_layout,
+        "is_compatible_type": gtcpu_is_compatible_type,
+    }
+
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return super()._generate_extension(use_cuda=False)
+
+
+@gt_backend.register
+class GTCGTGpuBackend(GTCGTBaseBackend):
+    """GridTools python backend using gtc."""
+
+    name = "gtc:gt:gpu"
+    GT_BACKEND_T = "gpu"
+    storage_info = {
+        "alignment": 32,
+        "device": "gpu",
+        "layout_map": cuda_layout,
+        "is_compatible_layout": cuda_is_compatible_layout,
+        "is_compatible_type": cuda_is_compatible_type,
+    }
+
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return super()._generate_extension(use_cuda=False)
