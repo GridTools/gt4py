@@ -59,7 +59,9 @@ class GTCGTExtGenerator:
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
-        bindings = GTCppBindingsCodegen.apply(gtcpp, module_name=self.module_name)
+        bindings = GTCppBindingsCodegen.apply(
+            gtcpp, module_name=self.module_name, gt_backend_t=self.gt_backend_t
+        )
         bindings_ext = ".cu" if self.gt_backend_t == "gpu" else ".cpp"
         return {
             "computation": {"computation.hpp": implementation},
@@ -88,15 +90,19 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             raise AssertionError(f"Invalid DataType value: {dtype}")
 
     def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
+        assert "gt_backend_t" in kwargs
         if "external_arg" in kwargs:
             if kwargs["external_arg"]:
                 return "py::buffer {name}, std::array<gt::uint_t,3> {name}_origin".format(
                     name=node.name
                 )
             else:
-                return """gt::sid::shift_sid_origin(gt::as_sid<{dtype}, 3,
+                return """gt::sid::shift_sid_origin(gt::as_{sid_type}<{dtype}, 3,
                     std::integral_constant<int, {unique_index}>>({name}), {name}_origin)""".format(
-                    name=node.name, dtype=self.visit(node.dtype), unique_index=self.unique_index()
+                    name=node.name,
+                    dtype=self.visit(node.dtype),
+                    unique_index=self.unique_index(),
+                    sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
                 )
 
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
@@ -108,8 +114,8 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 
     def visit_Program(self, node: gtcpp.Program, **kwargs):
         assert "module_name" in kwargs
-        entry_params = self.visit(node.parameters, external_arg=True)
-        sid_params = self.visit(node.parameters, external_arg=False)
+        entry_params = self.visit(node.parameters, external_arg=True, **kwargs)
+        sid_params = self.visit(node.parameters, external_arg=False, **kwargs)
         return self.generic_visit(
             node,
             entry_params=entry_params,
