@@ -29,7 +29,7 @@ A_ARITHMETIC_TYPE = common.DataType.FLOAT32
 
 def test_propagate_dtype_to_FieldAccess():
     name = "foo"
-    decl = FieldDecl(name=name, dtype=A_ARITHMETIC_TYPE)
+    decl = FieldDecl(name=name, dtype=A_ARITHMETIC_TYPE, dimensions=(True, True, True))
 
     testee = FieldAccessBuilder(name).build()
 
@@ -60,7 +60,7 @@ def resolve_dtype_and_validate(testee: Stencil, expected_dtypes: Dict[str, commo
 def test_resolve_dtype_to_FieldAccess():
     testee = (
         StencilBuilder()
-        .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE))
+        .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE, dimensions=(True, True, True)))
         .add_par_assign_stmt(
             ParAssignStmt(
                 left=FieldAccessBuilder("field").dtype(None).build(),
@@ -97,7 +97,7 @@ def test_resolve_AUTO_from_literal_to_temporary():
 def test_resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary():
     testee = (
         StencilBuilder()
-        .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE))
+        .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE, dimensions=(True, True, True)))
         .add_vertical_loop(
             VerticalLoopBuilder()
             .add_temporary("tmp", DataType.AUTO)
@@ -117,7 +117,7 @@ def test_resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary():
 def test_resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary_to_FieldAccess_to_temporary():
     testee = (
         StencilBuilder()
-        .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE))
+        .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE, dimensions=(True, True, True)))
         .add_vertical_loop(
             VerticalLoopBuilder()
             .add_temporary("tmp1", DataType.AUTO)

@@ -25,7 +25,7 @@ A_ARITHMETIC_TYPE = common.DataType.FLOAT32
 
 
 def test_all_parameters_used():
-    field_param = FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE)
+    field_param = FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE, dimensions=(True, True, True))
     scalar_param = ScalarDecl(name="scalar", dtype=A_ARITHMETIC_TYPE)
     testee = (
         StencilBuilder()
@@ -42,8 +42,10 @@ def test_all_parameters_used():
 
 
 def test_unused_are_removed():
-    field_param = FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE)
-    unused_field_param = FieldDecl(name="unused_field", dtype=A_ARITHMETIC_TYPE)
+    field_param = FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE, dimensions=(True, True, True))
+    unused_field_param = FieldDecl(
+        name="unused_field", dtype=A_ARITHMETIC_TYPE, dimensions=(True, True, True)
+    )
     scalar_param = ScalarDecl(name="scalar", dtype=A_ARITHMETIC_TYPE)
     unused_scalar_param = ScalarDecl(name="unused_scalar", dtype=A_ARITHMETIC_TYPE)
     testee = (

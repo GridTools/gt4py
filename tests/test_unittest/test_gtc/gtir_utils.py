@@ -126,7 +126,7 @@ class VerticalLoopBuilder:
         self._body = []
 
     def add_temporary(self, name: str, dtype: DataType) -> "VerticalLoopBuilder":
-        self._temporaries.append(FieldDecl(name=name, dtype=dtype))
+        self._temporaries.append(FieldDecl(name=name, dtype=dtype, dimensions=(True, True, True)))
         return self
 
     def add_stmt(self, stmt: Stmt):
