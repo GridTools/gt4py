@@ -29,6 +29,7 @@ from gt4py.ir.nodes import (
     BuiltinLiteral,
     Cast,
     ComputationBlock,
+    Domain,
     FieldDecl,
     FieldRef,
     If,
@@ -160,7 +161,9 @@ class DefIRToGTIR(IRNodeVisitor):
                     dtype = cast(
                         common.DataType, common.DataType.FLOAT64
                     )  # see https://github.com/GridTools/gtc/issues/100
-                temporaries.append(gtir.FieldDecl(name=s.name, dtype=dtype))
+                temporaries.append(
+                    gtir.FieldDecl(name=s.name, dtype=dtype, dimensions=(True, True, True))
+                )
             else:
                 stmts.append(self.visit(s))
         start, end = self.visit(node.interval)
@@ -259,8 +262,12 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_FieldDecl(self, node: FieldDecl):
+        domain_axes = Domain.LatLonGrid().axes
+        dimensions = [axis in node.axes for axis in domain_axes]
         # datatype conversion works via same ID
-        return gtir.FieldDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
+        return gtir.FieldDecl(
+            name=node.name, dtype=common.DataType(int(node.data_type.value)), dimensions=dimensions
+        )
 
     def visit_VarDecl(self, node: VarDecl):
         # datatype conversion works via same ID

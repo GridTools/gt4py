@@ -27,7 +27,7 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from pydantic import validator
 
@@ -170,8 +170,7 @@ class Decl(LocNode):  # TODO probably Stmt
 
 
 class FieldDecl(Decl):
-    # TODO dimensions
-    pass
+    dimensions: Tuple[bool, bool, bool]
 
 
 class ScalarDecl(Decl):

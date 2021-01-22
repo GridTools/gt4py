@@ -126,7 +126,7 @@ class GTIRToOIR(NodeTranslator):
         return oir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 
     def visit_FieldDecl(self, node: gtir.FieldDecl, **kwargs: Any) -> oir.FieldDecl:
-        return oir.FieldDecl(name=node.name, dtype=node.dtype)
+        return oir.FieldDecl(name=node.name, dtype=node.dtype, dimensions=node.dimensions)
 
     def visit_ScalarDecl(self, node: gtir.ScalarDecl, **kwargs: Any) -> oir.ScalarDecl:
         return oir.ScalarDecl(name=node.name, dtype=node.dtype)
