@@ -263,7 +263,7 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_FieldDecl(self, node: FieldDecl):
         domain_axes = Domain.LatLonGrid().axes
-        dimensions = [axis in node.axes for axis in domain_axes]
+        dimensions = [axis.name in node.axes for axis in domain_axes]
         # datatype conversion works via same ID
         return gtir.FieldDecl(
             name=node.name, dtype=common.DataType(int(node.data_type.value)), dimensions=dimensions
