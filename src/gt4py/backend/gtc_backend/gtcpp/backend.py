@@ -63,7 +63,7 @@ class GTCGTExtGenerator:
         bindings_ext = ".cu" if self.gt_backend_t == "gpu" else ".cpp"
         return {
             "computation": {"computation.hpp": implementation},
-            "bindings": {"bindings" + binding_ext: bindings},
+            "bindings": {"bindings" + bindings_ext: bindings},
         }
 
 
