@@ -446,6 +446,10 @@ class CallInliner(ast.NodeTransformer):
             node.orelse = self._process_stmts(node.orelse)
         return node
 
+    def visit_Assert(self, node: ast.Assert):
+        """Assertions are removed in the AssertionChecker later."""
+        return node
+
     def visit_Assign(self, node: ast.Assign):
         if isinstance(node.value, ast.Call) and node.value.func.id not in gtscript.MATH_BUILTINS:
             assert len(node.targets) == 1
@@ -462,9 +466,6 @@ class CallInliner(ast.NodeTransformer):
         if call_name in gtscript.MATH_BUILTINS:
             # A math function -- visit arguments and return as-is.
             node.args = [self.visit(arg) for arg in node.args]
-            return node
-        elif call_name == "__INLINED":
-            # This node is either in an assertion or a compile-time if-then. Both cases are dealt with later.
             return node
         elif any(
             isinstance(arg, ast.Call) and arg.func.id not in gtscript.MATH_BUILTINS
