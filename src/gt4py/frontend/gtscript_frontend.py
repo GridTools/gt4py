@@ -460,7 +460,11 @@ class CallInliner(ast.NodeTransformer):
         call_name = node.func.id
 
         if call_name in gtscript.MATH_BUILTINS:
+            # A math function -- visit arguments and return as-is.
             node.args = [self.visit(arg) for arg in node.args]
+            return node
+        elif call_name == "__INLINED":
+            # This node is either in an assertion or a compile-time if-then. Both cases are dealt with later.
             return node
         elif any(
             isinstance(arg, ast.Call) and arg.func.id not in gtscript.MATH_BUILTINS
@@ -470,8 +474,7 @@ class CallInliner(ast.NodeTransformer):
                 "Function calls are not supported in arguments to function calls",
                 loc=gt_ir.Location.from_ast_node(node),
             )
-
-        elif call_name not in self.context and not hasattr(self.context[call_name], "_gtscript_"):
+        elif call_name not in self.context or not hasattr(self.context[call_name], "_gtscript_"):
             raise GTScriptSyntaxError("Unknown call", loc=gt_ir.Location.from_ast_node(node))
 
         # Recursively inline any possible nested subroutine call
@@ -1630,12 +1633,12 @@ class GTScriptParser(ast.NodeVisitor):
             self.external_context,
             exhaustive=False,
         )
-        AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
-
         ValueInliner.apply(main_func_node, context=local_context)
 
         # Inline function calls
         CallInliner.apply(main_func_node, context=local_context)
+
+        AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
 
         # Evaluate and inline compile-time conditionals
         CompiledIfInliner.apply(main_func_node, context=local_context)
