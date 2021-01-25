@@ -23,7 +23,7 @@
     - k_axis: { "n_intervals": int, "offset_limit": int}
     - max_ndim: int
     - multi_stages: [{ "exec": str, "steps": [[str]]]
-    - parameters: [{ "name": str, "dtype": str }]
+    - parameters: [{ "name": str, "dtype": str, "selector": [bool], "naxes": int }]
     - stage_functors: {
         name:str : {
             "args": [
@@ -104,6 +104,8 @@ using p_{{ param.name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_p
 {% if tmp_fields -%}
 {%- for field in tmp_fields %}
 using p_{{ field.name }} = gt::tmp_arg<{{ arg_counter + loop.index0 }}, data_store_t<{{ field.dtype }}, 0>>;
+// TODO: Change when `lower-dimensional-support` branch is merged
+// using p_{{ field.name }} = gt::tmp_arg<{{ arg_counter + loop.index0 }}, typename storage_traits<{{ field.dtype }}, 0, {{ field.selector | join(", ") | lower }}>::store_t>;
 {%- endfor %}
 {% set arg_counter = arg_counter + tmp_fields|length %}
 {%- endif %}
