@@ -18,7 +18,7 @@ import pytest
 from pydantic.error_wrappers import ValidationError
 
 from gtc.common import CartesianOffset, DataType, ExprKind
-from gtc.oir import AssignStmt, Expr, FieldAccess, HorizontalExecution
+from gtc.oir import AssignStmt, Expr, FieldAccess, HorizontalExecution, Temporary
 
 
 A_ARITHMETIC_TYPE = DataType.INT32
@@ -43,3 +43,11 @@ def test_no_horizontal_offset_allowed():
 def test_mask_must_be_bool():
     with pytest.raises(ValidationError, match=r".*must be.* bool.*"):
         HorizontalExecution(body=[], mask=DummyExpr(dtype=A_ARITHMETIC_TYPE)),
+
+
+def test_temporary_default_3d():
+    temp = Temporary(name="a", dtype=DataType.INT64)
+    assert temp.dimensions == (True, True, True)
+
+    temp1d = Temporary(name="b", dtype=DataType.INT64, dimensions=(True, False, False))
+    assert temp1d.dimensions == (True, False, False)
