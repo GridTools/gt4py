@@ -33,6 +33,7 @@ from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
+import gtc.utils as gtc_utils
 
 
 if TYPE_CHECKING:
@@ -91,9 +92,25 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                     name=node.name
                 )
             else:
-                return """gt::sid::shift_sid_origin(gt::as_sid<{dtype}, 3,
-                    std::integral_constant<int, {unique_index}>>({name}), {name}_origin)""".format(
-                    name=node.name, dtype=self.visit(node.dtype), unique_index=self.unique_index()
+                num_dims = node.dimensions.count(True)
+                sid_def = """gt::as_sid<{dtype}, {num_dims},
+                    std::integral_constant<int, {unique_index}>>({name})""".format(
+                    name=node.name,
+                    dtype=self.visit(node.dtype),
+                    unique_index=self.unique_index(),
+                    num_dims=num_dims,
+                )
+                if num_dims != 3:
+                    gt_dims = [
+                        f"gt::stencil::dim::{dim}"
+                        for dim in gtc_utils.mask_to_dims(node.dimensions)
+                    ]
+                    sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
+                        gt_dims=", ".join(gt_dims), sid_def=sid_def
+                    )
+                return "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
+                    sid_def=sid_def,
+                    name=node.name,
                 )
 
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
@@ -122,6 +139,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
         #include <gridtools/stencil/global_parameter.hpp>
         #include <gridtools/sid/sid_shift_origin.hpp>
+        #include <gridtools/sid/rename_dimensions.hpp>
         #include "computation.hpp"
         namespace gt = gridtools;
         namespace py = ::pybind11;
