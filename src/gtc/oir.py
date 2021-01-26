@@ -25,7 +25,7 @@ from typing import Any, List, Optional, Union
 
 from pydantic import validator
 
-from eve import Str, SymbolName, SymbolTableTrait
+from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
@@ -146,11 +146,20 @@ class Interval(LocNode):
     end: AxisBound
 
 
+class CacheDecl(LocNode):
+    name: SymbolRef
+
+
+class IJCache(CacheDecl):
+    pass
+
+
 class VerticalLoop(LocNode):
     interval: Interval
     horizontal_executions: List[HorizontalExecution]
     loop_order: common.LoopOrder
     declarations: List[Temporary]
+    caches: List[CacheDecl]
 
 
 class Stencil(LocNode, SymbolTableTrait):

@@ -201,6 +201,7 @@ class GTIRToOIR(NodeTranslator):
             loop_order=node.loop_order,
             declarations=ctx.decls,
             horizontal_executions=ctx.horizontal_executions,
+            caches=[],
         )
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> oir.Stencil:

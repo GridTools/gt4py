@@ -20,6 +20,7 @@ from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
 from gtc.oir import (
     AssignStmt,
     AxisBound,
+    CacheDecl,
     Decl,
     Expr,
     FieldAccess,
@@ -122,6 +123,7 @@ class VerticalLoopBuilder:
         self._horizontal_executions: List[HorizontalExecution] = []
         self._loop_order = LoopOrder.PARALLEL
         self._declarations: List[Temporary] = []
+        self._caches: List[CacheDecl] = []
 
     def add_horizontal_execution(
         self, horizontal_execution: HorizontalExecution
@@ -139,6 +141,7 @@ class VerticalLoopBuilder:
             horizontal_executions=self._horizontal_executions,
             loop_order=self._loop_order,
             declarations=self._declarations,
+            caches=self._caches,
         )
 
 
