@@ -533,7 +533,7 @@ def validate_dtype_is_set() -> RootValidatorType:
 
 
 def validate_symbol_refs() -> RootValidatorType:
-    """Works only, if only the root node has a symbol table."""
+    """Validate that symbol refs are found in a symbol table valid at the current scope."""
 
     def _impl(
         cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
