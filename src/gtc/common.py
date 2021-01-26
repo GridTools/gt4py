@@ -579,10 +579,13 @@ def validate_lvalue_dims() -> RootValidatorType:
         def __init__(self, root_symtable: Dict[str, Any]):
             self.root_symtable = root_symtable
 
-        def visit(self, node: Any, **kwargs: Any) -> None:
+        def visit_Node(self, node: Node, **kwargs: Any) -> None:
+            symtable = kwargs.get("symtable", self.root_symtable)
             if hasattr(node, "loop_order"):
                 kwargs["loop_order"] = node.loop_order
-            super().visit(node, **kwargs)
+            if isinstance(node, SymbolTableTrait):
+                kwargs["symtable"] = {**symtable, **node.symtable_}
+            self.generic_visit(node, **kwargs)
 
         def visit_AssignStmt(
             self, node: AssignStmt, *, loop_order: LoopOrder, **kwargs: Any
