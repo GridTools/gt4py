@@ -88,6 +88,7 @@ class TemporariesToScalars(NodeTranslator):
     ) -> oir.VerticalLoop:
         result = self.generic_visit(node, local_tmps=local_tmps, symtable=symtable, **kwargs)
         result.declarations = [d for d in result.declarations if d.name not in local_tmps]
+        result.caches = [c for c in result.caches if c.name not in local_tmps]
         return result
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
