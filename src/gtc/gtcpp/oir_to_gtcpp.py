@@ -220,8 +220,11 @@ class OIRToGTCpp(eve.NodeTranslator):
             comp_ctx=comp_ctx,
             **kwargs,
         )
-        caches: List[Union[gtcpp.IJCache]] = []  # TODO(havogt): caches are not implemented
+        caches = [self.visit(cache) for cache in node.caches]
         return gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches)
+
+    def visit_IJCache(self, node: oir.IJCache, **kwargs: Any) -> gtcpp.IJCache:
+        return gtcpp.IJCache(name=node.name, loc=node.loc)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> gtcpp.FieldDecl:
         return gtcpp.FieldDecl(name=node.name, dtype=node.dtype)

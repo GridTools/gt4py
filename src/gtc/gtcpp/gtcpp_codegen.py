@@ -137,6 +137,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     GTMultiStage = as_mako("execute_${ loop_order }()${''.join(caches)}${''.join(stages)}")
 
+    IJCache = as_fmt(".ij_cached({name})")
+
     def visit_LoopOrder(self, looporder: LoopOrder, **kwargs: Any) -> str:
         return {
             LoopOrder.PARALLEL: "parallel",

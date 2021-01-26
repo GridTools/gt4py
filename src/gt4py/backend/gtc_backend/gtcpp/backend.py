@@ -33,6 +33,7 @@ from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
+from gtc.passes.oir_optimizations.caches import IJCacheDetection
 from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
 
@@ -69,6 +70,7 @@ class GTCGTExtGenerator:
     def _optimize_oir(self, oir):
         oir = GreedyMerging().visit(oir)
         oir = TemporariesToScalars().visit(oir)
+        oir = IJCacheDetection().visit(oir)
         return oir
 
 
