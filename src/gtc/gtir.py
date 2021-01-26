@@ -247,9 +247,7 @@ class VerticalLoop(LocNode):
         reads_with_offset = _reads_with_offset(values["body"])
 
         intersec = writes.intersection(reads_with_offset)
-        non_tmp_fields = set(
-            filter(lambda acc: acc not in [tmp.name for tmp in values["temporaries"]], intersec)
-        )
+        non_tmp_fields = {acc for acc in intersec if acc not in {tmp.name for tmp in values["temporaries"]}}
         if len(non_tmp_fields) > 0:
             raise ValueError(
                 f"Illegal write and read with horizontal offset detected for {non_tmp_fields}."
