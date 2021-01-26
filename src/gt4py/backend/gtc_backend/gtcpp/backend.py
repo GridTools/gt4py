@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
@@ -171,7 +171,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 
 
 class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
-    options: ClassVar[Dict[str, Any]] = {}
+    options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
