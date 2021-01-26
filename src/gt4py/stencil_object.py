@@ -148,10 +148,9 @@ class StencilObject(abc.ABC):
                 raise ValueError(
                     f"The storage for '{name}' has mask '{storage_mask}', but the API signature expects '{api_mask}'"
                 )
-            field_mask = self._get_field_mask(name)
-            upper_boundary = self.field_info[name].boundary.upper_indices.filter_mask(field_mask)
+            upper_boundary = self.field_info[name].boundary.upper_indices.filter_mask(api_mask)
             field_domain = Shape(field.shape) - (origin[name] + upper_boundary)
-            max_domain &= Shape.from_mask(field_domain, field_mask, default=large_val)
+            max_domain &= Shape.from_mask(field_domain, api_mask, default=large_val)
         return max_domain
 
     def _validate_args(self, used_field_args, used_param_args, domain, origin):
