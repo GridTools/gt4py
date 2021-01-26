@@ -21,6 +21,7 @@ from eve import SourceLocation
 from gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
 from gtc.gtir import (
     AxisBound,
+    BinaryOp,
     CartesianOffset,
     Decl,
     Expr,
@@ -33,7 +34,14 @@ from gtc.gtir import (
     VerticalLoop,
 )
 
-from .gtir_utils import DummyExpr, FieldAccessBuilder, ParAssignStmtBuilder, StencilBuilder
+from .gtir_utils import (
+    DummyExpr,
+    FieldAccessBuilder,
+    ParAssignStmtBuilder,
+    StencilBuilder,
+    VerticalLoopBuilder,
+    make_Literal,
+)
 
 
 ARITHMETIC_TYPE = DataType.FLOAT32
@@ -131,3 +139,40 @@ def test_symbolref_without_decl():
         StencilBuilder().add_par_assign_stmt(
             ParAssignStmtBuilder("out_field", "in_field").build()
         ).build()
+
+
+@pytest.mark.parametrize(
+    "write_and_read_with_horizontal_offset",
+    [
+        lambda: VerticalLoopBuilder()
+        .add_stmt(
+            ParAssignStmtBuilder("b")
+            .right(FieldAccessBuilder("a").offset(CartesianOffset(i=1, j=0, k=0)).build())
+            .build()
+        )
+        .add_stmt(
+            ParAssignStmtBuilder("a").right(make_Literal("1.0", dtype=ARITHMETIC_TYPE)).build()
+        )
+        .build(),
+        # nested rhs
+        lambda: VerticalLoopBuilder()
+        .add_stmt(
+            ParAssignStmtBuilder("b")
+            .right(
+                BinaryOp(
+                    op=A_ARITHMETIC_OPERATOR,
+                    left=FieldAccessBuilder("a").build(),
+                    right=FieldAccessBuilder("a").offset(CartesianOffset(i=1, j=0, k=0)).build(),
+                )
+            )
+            .build()
+        )
+        .add_stmt(
+            ParAssignStmtBuilder("a").right(make_Literal("1.0", dtype=ARITHMETIC_TYPE)).build()
+        )
+        .build(),
+    ],
+)
+def test_write_and_read_with_offset_violation(write_and_read_with_horizontal_offset):
+    with pytest.raises(ValidationError, match=r"Illegal write.*read with.*offset"):
+        write_and_read_with_horizontal_offset()

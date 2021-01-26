@@ -27,11 +27,14 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, Generator, List, Set
 
 from pydantic import validator
+from pydantic.class_validators import root_validator
 
-from eve import Node, Str, SymbolName, SymbolTableTrait
+from eve import Node, Str, SymbolName, SymbolTableTrait, utils
+from eve.iterators import TreeIterationItem
+from eve.typingx import RootValidatorValuesType
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
@@ -189,6 +192,47 @@ class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
     temporaries: List[FieldDecl]
     body: List[Stmt]
+
+    @root_validator(skip_on_failure=True)
+    def no_write_and_read_with_horizontal_offset(
+        cls, values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
+        @utils.as_xiter
+        def _collection_iter_tree(
+            collection: List[Node],
+        ) -> Generator[TreeIterationItem, None, None]:
+            for elem in collection:
+                yield from elem.iter_tree()
+
+        # TODO(havogt): move to utils?
+        def _writes(stmts: List[Stmt]) -> Set[str]:
+            result = set()
+            for left in _collection_iter_tree(stmts).if_isinstance(ParAssignStmt).getattr("left"):
+                result |= left.iter_tree().if_isinstance(FieldAccess).getattr("name").to_set()
+            return result
+
+        # TODO(havogt): move to utils?
+        def _reads_with_offset(stmts: List[Stmt]) -> Set[str]:
+            result = set()
+            for right in _collection_iter_tree(stmts).if_isinstance(ParAssignStmt).getattr("right"):
+                result |= (
+                    right.iter_tree()
+                    .if_isinstance(FieldAccess)
+                    .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
+                    .getattr("name")
+                    .to_set()
+                )
+            return result
+
+        writes = _writes(values["body"])
+        reads_with_offset = _reads_with_offset(values["body"])
+
+        intersec = writes.intersection(reads_with_offset)
+        if len(intersec) > 0:
+            raise ValueError(
+                f"Illegal write and read with horizontal offset detected for {intersec}."
+            )
+        return values
 
 
 class Stencil(LocNode, SymbolTableTrait):
