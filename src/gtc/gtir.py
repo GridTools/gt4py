@@ -99,6 +99,22 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
 
+    @root_validator(skip_on_failure=True)
+    def no_write_and_read_with_offset_of_same_field(cls, values: RootValidatorValuesType):
+        if isinstance(values["left"], FieldAccess):
+            offset_reads = (
+                values["right"]
+                .iter_tree()
+                .if_isinstance(FieldAccess)
+                .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
+                .getattr("name")
+                .to_set()
+            )
+            if values["left"].name in offset_reads:
+                raise ValueError("Self-assignment with offset is illegal.")
+
+        return values
+
     _dtype_validation = common.assign_stmt_dtype_validation(strict=False)
 
 

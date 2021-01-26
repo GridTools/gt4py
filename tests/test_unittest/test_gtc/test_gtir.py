@@ -218,3 +218,10 @@ def test_temporary_write_and_read_with_offset_is_allowed():
         )
         .build()
     )
+
+
+def test_illegal_self_assignment_with_offset():
+    with pytest.raises(ValidationError, match=r"Self-assignment"):
+        ParAssignStmtBuilder("a").right(
+            FieldAccessBuilder("a").offset(CartesianOffset(i=1, j=0, k=0)).build()
+        ).build()
