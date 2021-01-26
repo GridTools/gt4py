@@ -174,14 +174,14 @@ class GTCppCodegen(codegen.TemplatedGenerator):
                 return multi_pass(${ ','.join(multi_stages) });
             };
 
-            run(${computation_name}, cpu_ifirst<>{} /* TODO */, grid, ${','.join(arguments)});
+            run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(arguments)});
         }
         %endif
         """
     )
 
     Program = as_mako(
-        """#include <gridtools/stencil/cpu_ifirst.hpp>
+        """#include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
 
         namespace ${ name }_impl_{
@@ -208,6 +208,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     def apply(cls, root: LeafNode, **kwargs: Any) -> str:
         if not isinstance(root, gtcpp.Program):
             raise ValueError("apply() requires gtcpp.Progam root node")
+        if "gt_backend_t" not in kwargs:
+            raise TypeError("apply() missing 1 required keyword-only argument: 'gt_backend_t'")
         generated_code = super().apply(root, offset_limit=_offset_limit(root), **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
