@@ -19,13 +19,19 @@ from typing import Any, Dict, Set, Tuple
 
 from eve import NodeTranslator, NodeVisitor
 from gtc import oir
+from gtc.common import GTCPostconditionError, GTCPreconditionError
 
 
 class ZeroOffsetMerging(NodeTranslator):
-    """Merges horizontal executions with zero offsets with previous horizontal exectutions within the same vertical loop."""
+    """Merges horizontal executions with zero offsets with previous horizontal exectutions within the same vertical loop.
+
+    Precondition: All vertical loops are non-empty.
+    Postcondition: The number of horizontal executions is equal or smaller than before.
+    """
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
-        assert node.horizontal_executions, "non-empty vertical loop expected"
+        if not node.horizontal_executions:
+            raise GTCPreconditionError(expected="non-empty vertical loop")
         result = self.generic_visit(node, **kwargs)
         horizontal_executions = [result.horizontal_executions[0]]
         for horizontal_execution in result.horizontal_executions[1:]:
@@ -40,11 +46,19 @@ class ZeroOffsetMerging(NodeTranslator):
             else:
                 horizontal_executions.append(horizontal_execution)
         result.horizontal_executions = horizontal_executions
+        if len(result.horizontal_executions) > len(node.horizontal_executions):
+            raise GTCPostconditionError(
+                expected="the number of horizontal executions is equal or smaller than before"
+            )
         return result
 
 
 class GreedyMerging(NodeTranslator):
-    """Merges consecutive horizontal executions if there are no write/read conflicts."""
+    """Merges consecutive horizontal executions if there are no write/read conflicts.
+
+    Preconditions: All vertical loops are non-empty. No write after read with horizontal offsets within a single vertical loop.
+    Postcondition: The number of horizontal executions is equal or smaller than before.
+    """
 
     class AccessCollector(NodeVisitor):
         """Collects all field accesses inside a horizontal execution with corresponding offsets."""
@@ -81,21 +95,27 @@ class GreedyMerging(NodeTranslator):
             return reads, writes
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
-        assert node.horizontal_executions, "non-empty vertical loop expected"
+        if not node.horizontal_executions:
+            raise GTCPreconditionError(expected="non-empty vertical loop")
         result = self.generic_visit(node, **kwargs)
         horizontal_executions = [result.horizontal_executions[0]]
         previous_reads, previous_writes = self.AccessCollector().visit(horizontal_executions[-1])
         for horizontal_execution in result.horizontal_executions[1:]:
             current_reads, current_writes = self.AccessCollector().visit(horizontal_execution)
-            conflicting = {
-                field
-                for field, offsets in current_reads.items()
-                if field in previous_writes and offsets ^ previous_writes[field]
-            } | {
+            if {
                 field
                 for field, offsets in current_writes.items()
                 if field in previous_reads
                 and any(o[:2] != (0, 0) for o in offsets ^ previous_reads[field])
+            }:
+                raise GTCPreconditionError(
+                    expected="no write after read with horizontal offsets within a single vertical loop"
+                )
+
+            conflicting = {
+                field
+                for field, offsets in current_reads.items()
+                if field in previous_writes and offsets ^ previous_writes[field]
             }
             if not conflicting and horizontal_execution.mask == horizontal_executions[-1].mask:
                 horizontal_executions[-1].body += horizontal_execution.body
@@ -108,4 +128,8 @@ class GreedyMerging(NodeTranslator):
                 previous_writes = current_writes
                 previous_reads = current_reads
         result.horizontal_executions = horizontal_executions
+        if len(result.horizontal_executions) > len(node.horizontal_executions):
+            raise GTCPostconditionError(
+                expected="the number of horizontal executions is equal or smaller than before"
+            )
         return result

@@ -74,7 +74,7 @@ def test_mixed_merging(merger):
             .build()
         )
         .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "baz").build()).build()
+            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("bar", "baz").build()).build()
         )
         .build()
     )
