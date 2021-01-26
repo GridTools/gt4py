@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
 from gtc.gtcpp.gtcpp import (
@@ -190,8 +190,10 @@ class ProgramBuilder:
         self._functors.append(functor)
         return self
 
-    def add_parameter(self, name: str, dtype: DataType) -> "ProgramBuilder":
-        self._parameters.append(FieldDecl(name=name, dtype=dtype))
+    def add_parameter(
+        self, name: str, dtype: DataType, dimensions: Tuple[bool, bool, bool] = (True, True, True)
+    ) -> "ProgramBuilder":
+        self._parameters.append(FieldDecl(name=name, dtype=dtype, dimensions=dimensions))
         return self
 
     def gt_computation(self, gt_computation: GTComputationCall) -> "ProgramBuilder":
