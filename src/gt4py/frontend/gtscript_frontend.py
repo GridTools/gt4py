@@ -1173,22 +1173,17 @@ class IRMaker(ast.NodeVisitor):
                     else:
                         result.append(field_decl)
                     self.fields[field_decl.name] = field_decl
-                else:
-                    if len(self.fields[t.id].axes) == 1:
-                        raise GTScriptSyntaxError(
-                            message="Cannot assign to 1D field.",
-                            loc=gt_ir.Location.from_ast_node(t),
-                        )
+                elif len(self.fields[t.id].axes) == 1:
+                    raise GTScriptSyntaxError(
+                        message="Cannot assign to 1D field.",
+                        loc=gt_ir.Location.from_ast_node(t),
+                    )
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
 
             target.append(self.visit(t))
 
-        value = self.visit(node.value)
-        if len(target) == 1:
-            value = [gt_ir.utils.make_expr(value)]
-        else:
-            value = [gt_ir.utils.make_expr(item) for item in value]
+        value = [gt_ir.utils.make_expr(item) for item in gt_utils.listify(self.visit(node.value))]
 
         assert len(target) == len(value)
         for left, right in zip(target, value):
