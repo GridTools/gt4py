@@ -625,7 +625,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
                 extent = sir_field_info[arg.name]["extent"]
                 boundary = gt_definitions.Boundary([(-pair[0], pair[1]) for pair in extent])
                 data["field_info"][arg.name] = gt_definitions.FieldInfo(
-                    access=access, dtype=fields[arg.name].data_type.dtype, boundary=boundary
+                    access=access, boundary=boundary, axes=fields[arg.name].axes, dtype=fields[arg.name].data_type.dtype
                 )
             else:
                 data["parameter_info"][arg.name] = gt_definitions.ParameterInfo(

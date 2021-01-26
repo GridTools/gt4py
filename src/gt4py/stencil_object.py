@@ -2,6 +2,7 @@ import abc
 import sys
 import time
 import warnings
+from typing import Tuple
 
 import numpy as np
 
@@ -18,6 +19,7 @@ from gt4py.definitions import (
     Shape,
     normalize_domain,
     normalize_origin_mapping,
+    CartesianSpace,
 )
 
 
@@ -117,9 +119,9 @@ class StencilObject(abc.ABC):
     def __call__(self, *args, **kwargs):
         pass
 
-    @staticmethod
-    def _get_field_mask(field):
-        return getattr(field, "mask", [True] * len(field.shape))
+    def _get_field_mask(self, field_name: str) -> Tuple[bool]:
+        field_axes = self.field_info[field_name].axes
+        return list(axis in field_axes for axis in CartesianSpace.names)
 
     def _get_max_domain(self, field_args, origin):
         """Return the maximum domain size possible
@@ -140,7 +142,13 @@ class StencilObject(abc.ABC):
         large_val = np.iinfo(np.uintc).max
         max_domain = Shape([large_val] * self.domain_info.ndims)
         for name, field in field_args.items():
-            field_mask = self._get_field_mask(field)
+            storage_mask = field.mask
+            api_mask = self._get_field_mask(name)
+            if storage_mask != api_mask:
+                raise ValueError(
+                    f"The storage for '{name}' has mask '{storage_mask}', but the API signature expects '{api_mask}'"
+                )
+            field_mask = self._get_field_mask(name)
             upper_boundary = self.field_info[name].boundary.upper_indices.filter_mask(field_mask)
             field_domain = Shape(field.shape) - (origin[name] + upper_boundary)
             max_domain &= Shape.from_mask(field_domain, field_mask, default=large_val)
@@ -174,11 +182,18 @@ class StencilObject(abc.ABC):
                     "NumPy ndarray passed as field. This is discouraged and only works with constraints and only for certain backends.",
                     RuntimeWarning,
                 )
-            if not field.dtype == self.field_info[name].dtype:
+
+            field_dtype = self.field_info[name].dtype
+            if not field.dtype == field_dtype:
                 raise TypeError(
-                    f"The dtype of field '{name}' is '{field.dtype}' instead of '{self.field_info[name].dtype}'"
+                    f"The dtype of field '{name}' is '{field.dtype}' instead of '{field_dtype}'"
                 )
-            # ToDo: check if mask is correct: need mask info in stencil object.
+
+            field_mask = self._get_field_mask(name)
+            if field.mask != field_mask:
+                raise ValueError(
+                    f"The storage for '{name}' has mask '{field.mask}', but the API signature expects '{field_mask}'"
+                )
 
             if isinstance(field, gt_storage.storage.Storage):
                 if not field.is_stencil_view:
@@ -208,7 +223,7 @@ class StencilObject(abc.ABC):
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
         for name, field in used_field_args.items():
-            field_mask = self._get_field_mask(field)
+            field_mask = self._get_field_mask(name)
             min_origin = self.field_info[name].boundary.lower_indices.filter_mask(field_mask)
             restricted_domain = domain.filter_mask(field_mask)
             upper_indices = self.field_info[name].boundary.upper_indices.filter_mask(field_mask)
@@ -301,14 +316,17 @@ class StencilObject(abc.ABC):
         if origin is None:
             origin = {}
         else:
-            # This always returns an Index
             origin = normalize_origin_mapping(origin)
 
         for name, field in used_field_args.items():
             if "_all_" in origin:
-                field_mask = self._get_field_mask(field)
+                field_mask = self._get_field_mask(name)
                 origin.setdefault(name, origin["_all_"].filter_mask(field_mask))
             else:
+                storage_ndim = len(field.default_origin)
+                api_ndim = len(self.field_info[name].axes)
+                if storage_ndim != api_ndim:
+                    raise ValueError(f"The storage for '{name}' has {storage_ndim} dimensions, but the API signature expects {api_ndim}")
                 origin.setdefault(name, field.default_origin)
 
         # Domain

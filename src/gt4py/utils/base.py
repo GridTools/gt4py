@@ -233,22 +233,6 @@ def filter_mask(seq: Sequence[Any], mask: Sequence[bool]) -> Tuple[Any, ...]:
     return tuple(s for m, s in zip(mask, seq) if m)
 
 
-def filter_from_axes(seq: Sequence[Any], axes: Sequence[str]) -> Tuple[Any, ...]:
-    """
-    Return a sequence that is filtered on the axes provided.
-
-    Example:
-    >>> a = (1, 2, 3)
-    >>> axes = ("J",)
-    >>> filter_from_axes(a, axes)
-    (2,)
-    """
-    # Cannot use gt_ir.Domain.LatLonGrid().axes_names here because circular import
-    axis_to_index = {"I": 0, "J": 1, "K": 2}
-    assert all(axis in axis_to_index for axis in axes), f"Unknown axis in: {axes}"
-    return tuple(seq[axis_to_index[axis]] for axis in axes)
-
-
 def classmethod_to_function(class_method, instance=None, owner=type(None), remove_cls_arg=False):
     if remove_cls_arg:
         return functools.partial(class_method.__get__(instance, owner), None)
