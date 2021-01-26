@@ -30,13 +30,10 @@ Analysis is required to generate valid code (complying with the parallel model)
 from typing import Any, Dict, List, Tuple
 
 from pydantic import validator
-from pydantic.class_validators import root_validator
 
-from eve import Node, NodeVisitor, Str, SymbolName, SymbolTableTrait
-from eve.typingx import RootValidatorValuesType
+from eve import Node, Str, SymbolName, SymbolTableTrait
 from gtc import common
 from gtc.common import AxisBound, LocNode
-from gtc.utils import mask_to_dims
 
 
 class Expr(common.Expr):
@@ -204,37 +201,4 @@ class Stencil(LocNode, SymbolTableTrait):
         return [p.name for p in self.params]
 
     _validate_symbol_refs = common.validate_symbol_refs()
-
-    @root_validator(skip_on_failure=True)
-    def validate_lvalue_dims(
-        cls: "Stencil", values: RootValidatorValuesType
-    ) -> RootValidatorValuesType:
-        class _LvalueDimsValidator(NodeVisitor):
-            def __init__(self, root_symtable: Dict[str, Any]):
-                self.root_symtable = root_symtable
-
-            def visit_VerticalLoop(self, node: VerticalLoop, **kwargs: Any) -> None:
-                self.visit(node.body, loop_order=node.loop_order)
-
-            def visit_AssignStmt(
-                self, node: common.AssignStmt, *, loop_order: common.LoopOrder, **kwargs: Any
-            ) -> None:
-                symtable = kwargs.get("symtable", self.root_symtable)
-                allowed_masks = [(True, True, True)]  # ijk always allowed
-                if loop_order is not common.LoopOrder.PARALLEL:
-                    allowed_masks.append(
-                        (True, True, False)
-                    )  # ij only allowed in FORWARD and BACKWARD
-                name = node.left.name
-                mask = symtable[name].dimensions if name in symtable else (True, True, True)
-                if mask not in allowed_masks:
-                    dims = mask_to_dims(mask)
-                    raise ValueError(
-                        f"Not allowed to assign to {dims}-field `{name}` in {loop_order.name}."
-                    )
-                return None
-
-        symbols = values["symtable_"]
-        vertical_loops = values["vertical_loops"]
-        _LvalueDimsValidator(symbols).visit(vertical_loops)
-        return values
+    _validate_lvalue_dims = common.validate_lvalue_dims()

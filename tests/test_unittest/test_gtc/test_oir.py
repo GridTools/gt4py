@@ -17,8 +17,18 @@
 import pytest
 from pydantic.error_wrappers import ValidationError
 
-from gtc.common import CartesianOffset, DataType, ExprKind
-from gtc.oir import AssignStmt, Expr, FieldAccess, HorizontalExecution, Temporary
+from gtc.common import AxisBound, CartesianOffset, DataType, ExprKind, LoopOrder
+from gtc.oir import (
+    AssignStmt,
+    Expr,
+    FieldAccess,
+    FieldDecl,
+    HorizontalExecution,
+    Interval,
+    Stencil,
+    Temporary,
+    VerticalLoop,
+)
 
 
 A_ARITHMETIC_TYPE = DataType.INT32
@@ -51,3 +61,41 @@ def test_temporary_default_3d():
 
     temp1d = Temporary(name="b", dtype=DataType.INT64, dimensions=(True, False, False))
     assert temp1d.dimensions == (True, False, False)
+
+
+def test_assign_to_ik_fwd():
+    out_name = "ik_field"
+    in_name = "other_ik_field"
+    with pytest.raises(ValidationError, match=r"Not allowed to assign to ik-field"):
+        Stencil(
+            name="assign_to_ik_fwd",
+            params=[
+                FieldDecl(name=out_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)),
+                FieldDecl(name=in_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)),
+            ],
+            vertical_loops=[
+                VerticalLoop(
+                    interval=Interval(start=AxisBound.start(), end=AxisBound.end()),
+                    loop_order=LoopOrder.FORWARD,
+                    declarations=[],
+                    horizontal_executions=[
+                        HorizontalExecution(
+                            body=[
+                                AssignStmt(
+                                    left=FieldAccess(
+                                        name=out_name,
+                                        dtype=DataType.FLOAT32,
+                                        offset=CartesianOffset.zero(),
+                                    ),
+                                    right=FieldAccess(
+                                        name=in_name,
+                                        dtype=DataType.FLOAT32,
+                                        offset=CartesianOffset.zero(),
+                                    ),
+                                )
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        )

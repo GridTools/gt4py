@@ -154,3 +154,4 @@ class Stencil(LocNode, SymbolTableTrait):
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()
+    _validate_lvalue_dims = common.validate_lvalue_dims()

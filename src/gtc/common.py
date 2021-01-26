@@ -34,7 +34,7 @@ from eve import (
 from eve import exceptions as eve_exceptions
 from eve.type_definitions import SymbolRef
 from eve.typingx import RootValidatorType, RootValidatorValuesType
-from gtc.utils import flatten_list
+from gtc.utils import flatten_list, mask_to_dims
 
 
 class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
@@ -567,6 +567,45 @@ def validate_symbol_refs() -> RootValidatorType:
         if len(missing_symbols) > 0:
             raise ValueError("Symbols {} not found.".format(missing_symbols))
 
+        return values
+
+    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+
+
+def validate_lvalue_dims() -> RootValidatorType:
+    """Validate lvalue dimensions using the root node symbol table."""
+
+    class _LvalueDimsValidator(NodeVisitor):
+        def __init__(self, root_symtable: Dict[str, Any]):
+            self.root_symtable = root_symtable
+
+        def visit(self, node: Any, **kwargs: Any) -> None:
+            if hasattr(node, "loop_order"):
+                kwargs["loop_order"] = node.loop_order
+            super().visit(node, **kwargs)
+
+        def visit_AssignStmt(
+            self, node: AssignStmt, *, loop_order: LoopOrder, **kwargs: Any
+        ) -> None:
+            symtable = kwargs.get("symtable", self.root_symtable)
+            allowed_masks = [(True, True, True)]  # ijk always allowed
+            if loop_order is not LoopOrder.PARALLEL:
+                allowed_masks.append((True, True, False))  # ij only allowed in FORWARD and BACKWARD
+            name = node.left.name
+            mask = symtable[name].dimensions if name in symtable else (True, True, True)
+            if mask not in allowed_masks:
+                dims = mask_to_dims(mask)
+                raise ValueError(
+                    f"Not allowed to assign to {dims}-field `{name}` in {loop_order.name}."
+                )
+            return None
+
+    def _impl(
+        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
+        symbols = values["symtable_"]
+        vertical_loops = values["vertical_loops"]
+        _LvalueDimsValidator(symbols).visit(vertical_loops)
         return values
 
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
