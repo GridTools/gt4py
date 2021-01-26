@@ -16,10 +16,7 @@
 
 import pytest
 
-from gtc.passes.oir_optimizations.horizontal_execution_merging import (
-    GreedyMerging,
-    ZeroOffsetMerging,
-)
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 
 from ...oir_utils import (
     AssignStmtBuilder,
@@ -30,7 +27,7 @@ from ...oir_utils import (
 )
 
 
-@pytest.fixture(params=[ZeroOffsetMerging(), GreedyMerging()])
+@pytest.fixture(params=[GreedyMerging()])
 def merger(request):
     return request.param
 
@@ -86,6 +83,23 @@ def test_mixed_merging(merger):
     )
 
 
+def test_write_after_read_with_offset(merger):
+    testee = (
+        VerticalLoopBuilder()
+        .add_horizontal_execution(
+            HorizontalExecutionBuilder()
+            .add_stmt(AssignStmtBuilder("foo", "bar", (1, 0, 0)).build())
+            .build()
+        )
+        .add_horizontal_execution(
+            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("bar", "baz").build()).build()
+        )
+        .build()
+    )
+    transformed = merger.visit(testee)
+    assert transformed == testee
+
+
 def test_nonzero_extent_merging(merger):
     testee = (
         VerticalLoopBuilder()
@@ -106,10 +120,7 @@ def test_nonzero_extent_merging(merger):
         .build()
     )
     transformed = merger.visit(testee)
-    if isinstance(merger, ZeroOffsetMerging):
-        assert transformed == testee
-    else:
-        assert len(transformed.horizontal_executions) == 1
-        assert transformed.horizontal_executions[0].body == sum(
-            (he.body for he in testee.horizontal_executions), []
-        )
+    assert len(transformed.horizontal_executions) == 1
+    assert transformed.horizontal_executions[0].body == sum(
+        (he.body for he in testee.horizontal_executions), []
+    )
