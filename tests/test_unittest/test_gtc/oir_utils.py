@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Union
+from typing import List, Optional, Tuple, Union
 
 from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
 from gtc.oir import (
@@ -38,9 +38,11 @@ from gtc.oir import (
 
 
 class AssignStmtBuilder:
-    def __init__(self, left_name=None, right_name=None) -> None:
+    def __init__(self, left_name=None, right_name=None, right_offset=None) -> None:
         self._left = FieldAccessBuilder(left_name).build() if left_name else None
-        self._right = FieldAccessBuilder(right_name).build() if right_name else None
+        self._right = (
+            FieldAccessBuilder(right_name, offset=right_offset).build() if right_name else None
+        )
 
     def left(self, access: Union[ScalarAccess, FieldAccess]) -> "AssignStmtBuilder":
         self._left = access
@@ -65,9 +67,9 @@ class CartesianOffsetBuilder:
 
 
 class FieldAccessBuilder:
-    def __init__(self, name) -> None:
+    def __init__(self, name: str, offset: Optional[Tuple[int, int, int]] = None) -> None:
         self._name = name
-        self._offset = CartesianOffset.zero()
+        self._offset = CartesianOffsetBuilder(*(offset if offset else [])).build()
         self._kind = ExprKind.FIELD
         self._dtype = DataType.FLOAT32
 

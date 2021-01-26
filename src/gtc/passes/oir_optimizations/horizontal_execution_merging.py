@@ -14,12 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from collections import defaultdict
-from typing import Any, Dict, Set, Tuple
+from typing import Any
 
-from eve import NodeTranslator, NodeVisitor
+from eve import NodeTranslator
 from gtc import oir
 from gtc.common import GTCPostconditionError, GTCPreconditionError
+
+from .utils import AccessCollector
 
 
 class ZeroOffsetMerging(NodeTranslator):
@@ -60,48 +61,14 @@ class GreedyMerging(NodeTranslator):
     Postcondition: The number of horizontal executions is equal or smaller than before.
     """
 
-    class AccessCollector(NodeVisitor):
-        """Collects all field accesses inside a horizontal execution with corresponding offsets."""
-
-        def visit_FieldAccess(
-            self,
-            node: oir.FieldAccess,
-            *,
-            accesses: Dict[str, Set[Tuple[int, int, int]]],
-            **kwargs: Any,
-        ) -> None:
-            accesses[node.name].add((node.offset.i, node.offset.j, node.offset.k))
-
-        def visit_AssignStmt(
-            self,
-            node: oir.AssignStmt,
-            *,
-            reads: Dict[str, Set[Tuple[int, int, int]]],
-            writes: Dict[str, Set[Tuple[int, int, int]]],
-            **kwargs: Any,
-        ) -> None:
-            self.visit(node.left, accesses=writes, **kwargs)
-            self.visit(node.right, accesses=reads, **kwargs)
-
-        def visit_HorizontalExecution(
-            self, node: oir.HorizontalExecution, **kwargs: Any
-        ) -> Tuple[Dict[str, Set[Tuple[int, int, int]]], Dict[str, Set[Tuple[int, int, int]]]]:
-            reads: Dict[str, Set[Tuple[int, int, int]]] = defaultdict(set)
-            writes: Dict[str, Set[Tuple[int, int, int]]] = defaultdict(set)
-            for stmt in node.body:
-                self.visit(stmt, reads=reads, writes=writes)
-            if node.mask:
-                self.visit(node.mask, accesses=reads)
-            return reads, writes
-
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
         if not node.horizontal_executions:
             raise GTCPreconditionError(expected="non-empty vertical loop")
         result = self.generic_visit(node, **kwargs)
         horizontal_executions = [result.horizontal_executions[0]]
-        previous_reads, previous_writes = self.AccessCollector().visit(horizontal_executions[-1])
+        previous_reads, previous_writes = AccessCollector.apply(horizontal_executions[-1])
         for horizontal_execution in result.horizontal_executions[1:]:
-            current_reads, current_writes = self.AccessCollector().visit(horizontal_execution)
+            current_reads, current_writes = AccessCollector.apply(horizontal_execution)
             if {
                 field
                 for field, offsets in current_writes.items()
