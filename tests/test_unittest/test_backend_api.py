@@ -82,4 +82,5 @@ def test_generate_bindings(backend, tmp_path):
         else:
             result = builder.backend.generate_bindings("python")
         assert "init_1_src" in result
-        assert "bindings.cpp" in result["init_1_src"]
+        srcs = result["init_1_src"]
+        assert "bindings.cpp" in srcs or "bindings.cu" in srcs
