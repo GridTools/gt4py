@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -21,6 +21,7 @@ import pytest
 
 import gt4py as gt
 import gt4py.definitions as gt_definitions
+from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.stencil_object import StencilObject
@@ -94,6 +95,8 @@ class SuiteMeta(type):
                 implementation_strategy_factories[name] = implementation_strategy_factory
             elif symbol.kind == "parameter":
                 implementation_strategy_factories[name] = symbol.value_st_factory
+            elif symbol.kind == "none":
+                implementation_strategy_factories[name] = symbol.value_st_factory
 
             else:
                 assert False
@@ -162,7 +165,7 @@ class SuiteMeta(type):
         def generation_test_wrapper(self, test):
             @hyp.given(hypothesis_data=test["generation_strategy"]())
             def hyp_wrapper(test_hyp, hypothesis_data):
-                bases[0].test_generation(
+                bases[0]._test_generation(
                     self,
                     test_hyp,
                     {**test_hyp["constants"], **hypothesis_data, **cls_dict["singletons"]},
@@ -184,7 +187,7 @@ class SuiteMeta(type):
         def implementation_test_wrapper(self, test, implementation_strategy):
             @hyp.given(hypothesis_data=implementation_strategy())
             def hyp_wrapper(test_hyp, hypothesis_data):
-                bases[0].test_implementation(self, test_hyp, hypothesis_data)
+                bases[0]._test_implementation(self, test_hyp, hypothesis_data)
 
             hyp_wrapper(test)
 
@@ -206,19 +209,29 @@ class SuiteMeta(type):
     def __new__(cls, cls_name, bases, cls_dict):
         if cls_dict.get("_skip_", False):  # skip metaclass magic
             return super().__new__(cls, cls_name, bases, cls_dict)
-        # Check class dict
-        missing = {
+
+        # Grab members inherited from base classes
+        required_members = {
             "domain_range",
             "symbols",
             "definition",
             "validation",
             "backends",
             "dtypes",
-        } - cls_dict.keys()
-        if len(missing) > 0:
+        }
+        missing_members = required_members - cls_dict.keys()
+        for key in missing_members:
+            for base in bases:
+                if hasattr(base, key):
+                    cls_dict[key] = getattr(base, key)
+                    break
+
+        # Check class dict
+        missing_members = required_members - cls_dict.keys()
+        if len(missing_members) > 0:
             raise TypeError(
                 "Missing {missing} required members in '{name}' definition".format(
-                    missing=missing, name=cls_name
+                    missing=missing_members, name=cls_name
                 )
             )
 
@@ -227,9 +240,7 @@ class SuiteMeta(type):
         backends = cls_dict["backends"]
 
         # Create testing strategies
-        assert isinstance(
-            cls_dict["symbols"], collections.abc.Mapping
-        ), "Invalid 'symbols' mapping"
+        assert isinstance(cls_dict["symbols"], collections.abc.Mapping), "Invalid 'symbols' mapping"
 
         # Check domain and ndims
         assert 1 <= len(domain_range) <= 3 and all(
@@ -376,7 +387,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
     _skip_ = True  # Avoid processing of this empty test suite
 
-    def test_generation(self, test, externals_dict):
+    def _test_generation(self, test, externals_dict):
         """Test source code generation for all *backends* and *stencil suites*.
 
         The generated implementations are cached in a :class:`utils.ImplementationsDB`
@@ -405,16 +416,18 @@ class StencilTestSuite(metaclass=SuiteMeta):
             assert all(
                 field_info.boundary == cls.global_boundaries[name]
                 for name, field_info in implementation.field_info.items()
+                if field_info is not None
             )
         else:
             assert all(
                 field_info.boundary >= cls.global_boundaries[name]
                 for name, field_info in implementation.field_info.items()
+                if field_info is not None
             )
 
         test["implementations"].append(implementation)
 
-    def test_implementation(self, test, parameters_dict):
+    def _test_implementation(self, test, parameters_dict):
         """Test computed values for implementations generated for all *backends* and *stencil suites*.
 
         The generated implementations are reused from previous tests by means of a
@@ -491,23 +504,25 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
                 else:
                     inputs[k] = f
-            validation_fields = {
-                name: np.array(field, copy=True) for name, field in inputs.items()
-            }
+
+            # remove unused input parameters
+            inputs = {key: value for key, value in inputs.items() if value is not None}
+
+            validation_fields = {name: np.array(field, copy=True) for name, field in inputs.items()}
 
             implementation(**inputs, origin=patched_origin, exec_info=exec_info)
             domain = exec_info["domain"]
 
             validation_origins = {
-                name: tuple(
-                    nb[0] - g[0] for nb, g in zip(new_boundary, cls.symbols[name].boundary)
-                )
-                for name in implementation.field_info.keys()
+                name: tuple(nb[0] - g[0] for nb, g in zip(new_boundary, cls.symbols[name].boundary))
+                for name in inputs
+                if name in implementation.field_info
             }
 
             validation_shapes = {
                 name: tuple(d + g[0] + g[1] for d, g in zip(domain, cls.symbols[name].boundary))
-                for name in implementation.field_info.keys()
+                for name in inputs
+                if name in implementation.field_info
             }
 
             validation_field_views = {
@@ -540,8 +555,15 @@ class StencilTestSuite(metaclass=SuiteMeta):
                         slice(new_boundary[d][0], new_boundary[d][0] + domain[d])
                         for d in range(len(domain))
                     ]
+
+                    if gt_backend.from_name(value.backend).storage_info["device"] == "gpu":
+                        value.synchronize()
+                        value = value.data.get()
+                    else:
+                        value = value.data
+
                     np.testing.assert_allclose(
-                        value.data[domain_slice],
+                        value[domain_slice],
                         expected_value[domain_slice],
                         rtol=RTOL,
                         atol=ATOL,

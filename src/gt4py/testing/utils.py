@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -48,7 +48,12 @@ def standardize_dtype_dict(dtypes):
         (isinstance(k, str) or gt_utils.is_iterable_of(k, str)) for k in dtypes.keys()
     ), "Invalid key in 'dtypes'."
     assert all(
-        (isinstance(k, type) or gt_utils.is_iterable_of(k, type)) for k in dtypes.values()
+        (
+            isinstance(k, type)
+            or gt_utils.is_iterable_of(k, type)
+            or gt_utils.is_iterable_of(k, np.dtype)
+        )
+        for k in dtypes.values()
     ), "Invalid dtype in 'dtypes'"
 
     result = {}

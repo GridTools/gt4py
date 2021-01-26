@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import abc
 import sys
 import time
@@ -12,6 +13,7 @@ import gt4py.utils as gt_utils
 from gt4py.definitions import (
     AccessKind,
     Boundary,
+    CartesianSpace,
     DomainInfo,
     FieldInfo,
     Index,
@@ -19,7 +21,6 @@ from gt4py.definitions import (
     Shape,
     normalize_domain,
     normalize_origin_mapping,
-    CartesianSpace,
 )
 
 
@@ -325,7 +326,9 @@ class StencilObject(abc.ABC):
                 storage_ndim = len(field.default_origin)
                 api_ndim = len(self.field_info[name].axes)
                 if storage_ndim != api_ndim:
-                    raise ValueError(f"The storage for '{name}' has {storage_ndim} dimensions, but the API signature expects {api_ndim}")
+                    raise ValueError(
+                        f"The storage for '{name}' has {storage_ndim} dimensions, but the API signature expects {api_ndim}"
+                    )
                 origin.setdefault(name, field.default_origin)
 
         # Domain

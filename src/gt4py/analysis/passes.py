@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -231,9 +231,7 @@ class InitInfoPass(TransformPass):
 
         def _add_symbol(self, decl):
             has_redundancy = (
-                isinstance(decl, gt_ir.FieldDecl)
-                and self.redundant_temp_fields
-                and not decl.is_api
+                isinstance(decl, gt_ir.FieldDecl) and self.redundant_temp_fields and not decl.is_api
             )
             symbol_info = SymbolInfo(decl, has_redundancy=has_redundancy)
             self.data.symbols[decl.name] = symbol_info
@@ -278,9 +276,7 @@ class InitInfoPass(TransformPass):
 
         def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr):
             result = (
-                self.visit(node.condition)
-                + self.visit(node.then_expr)
-                + self.visit(node.else_expr)
+                self.visit(node.condition) + self.visit(node.then_expr) + self.visit(node.else_expr)
             )
             return result
 
@@ -673,9 +669,7 @@ class StageMergingWrapper:
         i_to_ib_map = self.interval_to_iblock_mapping
         for candidate_iblock in candidate.interval_blocks:
             if candidate_iblock.interval in i_to_ib_map:
-                self._merge_interval_block(
-                    i_to_ib_map[candidate_iblock.interval], candidate_iblock
-                )
+                self._merge_interval_block(i_to_ib_map[candidate_iblock.interval], candidate_iblock)
             else:
                 # candidate block must be inserted at the correct position so that they appear in the order dictated
                 #  by the iteration order. note that this reordering is valid as candidate was already checked for
@@ -1194,9 +1188,6 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
     """
 
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
-        def __init__(self):
-            pass
-
         @classmethod
         def apply(cls, node: gt_ir.StencilImplementation) -> Set[str]:
             collector = cls()
@@ -1204,28 +1195,30 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
-            self.demotables = set(node.temporary_fields)
-            self.seen_symbols: Set[str] = set()
-            self.stage_symbols: Optional[Set[str]] = None
+            self.demotables: Dict[str, Optional[str]] = {
+                temp_field: None for temp_field in node.temporary_fields
+            }
+            """Dictionary mapping temporaries to their most recently referenced stage."""
             self.visit(node)
-            return self.demotables
+            return set(self.demotables.keys())
 
-        def visit_Stage(self, node: gt_ir.Stage) -> None:
-            self.stage_symbols = set()
+        def visit_Stage(self, node: gt_ir.Stage, **kwargs: Any) -> None:
+            kwargs["stage_name"] = node.name
+            self.generic_visit(node, **kwargs)
 
-            self.generic_visit(node)
+        def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
+            self.visit(node.value, **kwargs)
+            if node.target.name in self.demotables:
+                self.demotables[node.target.name] = kwargs["stage_name"]
 
-            for s in self.stage_symbols:
-                if s in self.seen_symbols:
-                    self.demotables.discard(s)
-                self.seen_symbols.add(s)
-            self.stage_symbols = None
-
-        def visit_FieldRef(self, node: gt_ir.FieldRef) -> None:
-            if any(v != 0 for v in node.offset.values()):
-                self.demotables.discard(node.name)
-            assert self.stage_symbols is not None
-            self.stage_symbols.add(node.name)
+        def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> None:
+            field_name = node.name
+            if field_name in self.demotables:
+                assert self.demotables[field_name], f"Temporary {field_name} has no stage."
+                if kwargs["stage_name"] != self.demotables[field_name] or any(
+                    val != 0 for val in node.offset.values()
+                ):
+                    self.demotables.pop(field_name)
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
         @classmethod
