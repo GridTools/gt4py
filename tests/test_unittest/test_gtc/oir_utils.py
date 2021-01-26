@@ -26,6 +26,7 @@ from gtc.oir import (
     FieldAccess,
     FieldDecl,
     HorizontalExecution,
+    IJCache,
     Interval,
     ScalarAccess,
     ScalarDecl,
@@ -106,7 +107,7 @@ class FieldDeclBuilder:
 class HorizontalExecutionBuilder:
     def __init__(self) -> None:
         self._body: List[Stmt] = []
-        self._mask = None
+        self._mask: Optional[Expr] = None
         self._declarations: List[ScalarDecl] = []
 
     def add_stmt(self, stmt: Stmt) -> "HorizontalExecutionBuilder":
@@ -141,6 +142,10 @@ class VerticalLoopBuilder:
         self._declarations.append(declaration)
         return self
 
+    def add_cache(self, cache: CacheDecl) -> "VerticalLoopBuilder":
+        self._caches.append(cache)
+        return self
+
     def build(self) -> VerticalLoop:
         return VerticalLoop(
             interval=self._interval,
@@ -171,3 +176,11 @@ class StencilBuilder:
             params=self._params,
             vertical_loops=self._vertical_loops,
         )
+
+
+class IJCacheBuilder:
+    def __init__(self, name):
+        self._name = name
+
+    def build(self) -> IJCache:
+        return IJCache(name=self._name)
