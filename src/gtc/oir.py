@@ -21,9 +21,9 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
-from pydantic import validator
+from pydantic import root_validator, validator
 
 from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
 from gtc import common
@@ -160,6 +160,13 @@ class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
     declarations: List[Temporary]
     caches: List[CacheDecl]
+
+    @root_validator
+    def check_caches(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        tmp_names = {d.name for d in values["declarations"]}
+        for cache in values["caches"]:
+            assert cache.name in tmp_names
+        return values
 
 
 class Stencil(LocNode, SymbolTableTrait):
