@@ -236,7 +236,7 @@ class VerticalLoop(LocNode):
         )
         if len(non_tmp_fields) > 0:
             raise ValueError(
-                f"Illegal write and read with horizontal offset detected for {intersec}."
+                f"Illegal write and read with horizontal offset detected for {non_tmp_fields}."
             )
         return values
 
