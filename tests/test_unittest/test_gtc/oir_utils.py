@@ -113,6 +113,10 @@ class HorizontalExecutionBuilder:
         self._body.append(stmt)
         return self
 
+    def mask(self, mask: Expr) -> "HorizontalExecutionBuilder":
+        self._mask = mask
+        return self
+
     def build(self) -> HorizontalExecution:
         return HorizontalExecution(
             body=self._body, mask=self._mask, declarations=self._declarations
