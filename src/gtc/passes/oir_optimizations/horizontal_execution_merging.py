@@ -84,7 +84,7 @@ class GreedyMerging(NodeTranslator):
         assert node.horizontal_executions, "non-empty vertical loop expected"
         result = self.generic_visit(node, **kwargs)
         horizontal_executions = [result.horizontal_executions[0]]
-        _, previous_writes = self.AccessCollector().visit(horizontal_executions[-1])
+        previous_reads, previous_writes = self.AccessCollector().visit(horizontal_executions[-1])
         for horizontal_execution in result.horizontal_executions[1:]:
             current_reads, current_writes = self.AccessCollector().visit(horizontal_execution)
             conflicting = {
@@ -92,6 +92,11 @@ class GreedyMerging(NodeTranslator):
                 for field, offsets in current_reads.items()
                 if field in previous_writes and offsets ^ previous_writes[field]
             }
+            assert not {
+                field
+                for field, offsets in current_writes.items()
+                if field in previous_reads and offsets ^ previous_reads[field]
+            }, "found read with offset before write in a horizontal execution"
             if not conflicting and horizontal_execution.mask == horizontal_executions[-1].mask:
                 horizontal_executions[-1].body += horizontal_execution.body
                 for field, writes in current_writes.items():
