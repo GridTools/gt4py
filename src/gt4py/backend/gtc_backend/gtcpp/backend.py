@@ -26,6 +26,7 @@ from gt4py.backend.gt_backends import (
     cuda_is_compatible_type,
     cuda_layout,
     gtcpu_is_compatible_type,
+    GTCUDAPyModuleGenerator,
     make_mc_layout_map,
     make_x86_layout_map,
     mc_is_compatible_layout,
@@ -238,6 +239,7 @@ class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
 class GTCGTGpuBackend(GTCGTBaseBackend):
     """GridTools python backend using gtc."""
 
+    MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
     name = "gtc:gt:gpu"
     GT_BACKEND_T = "gpu"
     languages = {"computation": "cuda", "bindings": ["python"]}
