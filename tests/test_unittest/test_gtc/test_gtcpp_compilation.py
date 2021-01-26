@@ -122,7 +122,7 @@ def make_compilation_input_and_expected():
 @pytest.mark.parametrize("gtcpp_program,expected_regex", make_compilation_input_and_expected())
 def test_program_compilation_succeeds(tmp_path, gtcpp_program, expected_regex):
     assert isinstance(gtcpp_program, Program)
-    code = GTCppCodegen.apply(gtcpp_program)
+    code = GTCppCodegen.apply(gtcpp_program, gt_backend_t="cpu_ifirst")
     print(code)
     match(code, expected_regex)
     build_gridtools_test(tmp_path, code)
@@ -163,4 +163,7 @@ def test_apply_method_compilation_succeeds(tmp_path, apply_method, expected_rege
     print(apply_method_code)
     match(apply_method_code, expected_regex)
 
-    build_gridtools_test(tmp_path, GTCppCodegen.apply(_embed_apply_method_in_program(apply_method)))
+    build_gridtools_test(
+        tmp_path,
+        GTCppCodegen.apply(_embed_apply_method_in_program(apply_method), gt_backend_t="cpu_ifirst"),
+    )
