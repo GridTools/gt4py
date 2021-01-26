@@ -91,18 +91,21 @@ class GreedyMerging(NodeTranslator):
                 field
                 for field, offsets in current_reads.items()
                 if field in previous_writes and offsets ^ previous_writes[field]
-            }
-            assert not {
+            } | {
                 field
                 for field, offsets in current_writes.items()
-                if field in previous_reads and offsets ^ previous_reads[field]
-            }, "found read with offset before write in a horizontal execution"
+                if field in previous_reads
+                and any(o[:2] != (0, 0) for o in offsets ^ previous_reads[field])
+            }
             if not conflicting and horizontal_execution.mask == horizontal_executions[-1].mask:
                 horizontal_executions[-1].body += horizontal_execution.body
                 for field, writes in current_writes.items():
                     previous_writes[field] |= writes
+                for field, reads in current_reads.items():
+                    previous_reads[field] |= reads
             else:
                 horizontal_executions.append(horizontal_execution)
                 previous_writes = current_writes
+                previous_reads = current_reads
         result.horizontal_executions = horizontal_executions
         return result
