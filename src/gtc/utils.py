@@ -38,3 +38,9 @@ def flatten_list_iter(
         else:
             if item is not None or not filter_none:
                 yield item
+
+
+def mask_to_dims(mask: Tuple[bool, bool, bool]) -> str:
+    labels = ["i", "j", "k"]
+    selection = [i for i, flag in enumerate(mask) if flag]
+    return "".join(labels[i] for i in selection)
