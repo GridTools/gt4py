@@ -55,7 +55,14 @@ def test_access_collector():
         )
         .build()
     )
-    assert AccessCollector.apply(testee) == AccessCollector.Result(
+    expected = AccessCollector.Result(
         reads={"tmp": {(0, 0, 0), (0, 1, 0)}, "foo": {(1, 0, 0)}, "mask": {(-1, -1, 1)}},
         writes={"tmp": {(0, 0, 0)}, "bar": {(0, 0, 0)}, "baz": {(0, 0, 0)}},
     )
+    result = AccessCollector.apply(testee)
+    assert result == expected
+    all_accesses = result.accesses
+    for field, offsets in expected.reads.items():
+        assert all(o in all_accesses[field] for o in offsets)
+    for field, offsets in expected.writes.items():
+        assert all(o in all_accesses[field] for o in offsets)

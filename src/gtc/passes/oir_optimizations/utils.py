@@ -60,6 +60,13 @@ class AccessCollector(NodeVisitor):
         reads: Dict[str, Set[Tuple[int, int, int]]]
         writes: Dict[str, Set[Tuple[int, int, int]]]
 
+        @property
+        def accesses(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+            return {
+                k: self.reads.get(k, set()) | self.writes.get(k, set())
+                for k in set(self.reads) | set(self.writes)
+            }
+
     @classmethod
     def apply(cls, node: oir.LocNode) -> "Result":
         result = cls.Result(reads=defaultdict(set), writes=defaultdict(set))
