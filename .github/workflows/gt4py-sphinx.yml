@@ -12,18 +12,18 @@ jobs:
   sphinx-build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python
-      uses: actions/setup-python@v1
-      with:
-        python-version: 3.8
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install -r requirements-dev.txt
-    - name: Install package
-      run: |
-        python -m pip install .
-    - name: Build documentation
-      run: |
-        cd docs && SPHINXOPTS=-W make -e html
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+      - name: Install package
+        run: |
+          python -m pip install .
+      - name: Build documentation
+        run: |
+          cd docs/gt4py && SPHINXOPTS=-W make -e html

@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -27,7 +27,10 @@ from gt4py import config as gt_config
 
 from .analysis_setup import (
     AnalysisPass,
+    build_iir_pass,
     compute_extents_pass,
+    compute_used_symbols_pass,
+    demote_locals_pass,
     init_pass,
     merge_blocks_pass,
     normalize_blocks_pass,

@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -30,20 +30,13 @@ REGISTRY = gt_utils.Registry()
 EXTERNALS_REGISTRY = gt_utils.Registry()
 
 
-def register(externals_or_func):
-    if callable(externals_or_func):
-        func = externals_or_func  # wacky hacky!
-        EXTERNALS_REGISTRY.setdefault(func.__name__, {})
-        REGISTRY.register(func.__name__, func)
-        return func
-    else:
+def register(func=None, *, externals=None, name=None):
+    def _register_decorator(actual_func):
+        EXTERNALS_REGISTRY.register(name or actual_func.__name__, externals or {})
+        REGISTRY.register(name or actual_func.__name__, actual_func)
+        return actual_func
 
-        def register_inner(arg_inner):
-            EXTERNALS_REGISTRY.register(arg_inner.__name__, externals_or_func)
-            REGISTRY.register(arg_inner.__name__, arg_inner)
-            return arg_inner
-
-        return register_inner
+    return _register_decorator(func) if func else _register_decorator
 
 
 Field0D = gtscript.Field[np.float_, ()]
@@ -114,7 +107,7 @@ def tridiagonal_solver(inf: Field3D, diag: Field3D, sup: Field3D, rhs: Field3D, 
             out = rhs - sup * out[0, 0, 1]
 
 
-@register(externals_or_func={"BET_M": 0.5, "BET_P": 0.5})
+@register(externals={"BET_M": 0.5, "BET_P": 0.5})
 def vertical_advection_dycore(
     utens_stage: Field3D,
     u_stage: Field3D,
@@ -137,10 +130,7 @@ def vertical_advection_dycore(
             # update the d column
             correction_term = -cs * (u_stage[0, 0, 1] - u_stage[0, 0, 0])
             dcol = (
-                dtr_stage * u_pos[0, 0, 0]
-                + utens[0, 0, 0]
-                + utens_stage[0, 0, 0]
-                + correction_term
+                dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
             )
 
             # Thomas forward
@@ -164,10 +154,7 @@ def vertical_advection_dycore(
                 u_stage[0, 0, 1] - u_stage[0, 0, 0]
             )
             dcol = (
-                dtr_stage * u_pos[0, 0, 0]
-                + utens[0, 0, 0]
-                + utens_stage[0, 0, 0]
-                + correction_term
+                dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
             )
 
             # Thomas forward
@@ -184,10 +171,7 @@ def vertical_advection_dycore(
             # update the d column
             correction_term = -as_ * (u_stage[0, 0, -1] - u_stage[0, 0, 0])
             dcol = (
-                dtr_stage * u_pos[0, 0, 0]
-                + utens[0, 0, 0]
-                + utens_stage[0, 0, 0]
-                + correction_term
+                dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
             )
 
             # Thomas forward
@@ -252,7 +236,7 @@ def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3D
 
 @register
 def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3D):
-    with computation(PARALLEL), interval(...):
+    with computation(PARALLEL), interval(0, 2):
         mid_storage = 2
         if in_storage[0, 0, 0] > 0:
             local_var = 4
@@ -260,6 +244,10 @@ def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3
                 mid_storage = 3
             else:
                 mid_storage = 4
+            out_storage[0, 0, 0] = local_var + mid_storage
+    with computation(FORWARD), interval(2, None):
+        if in_storage[0, 0, 0] < 0:
+            local_var = 6
             out_storage[0, 0, 0] = local_var + mid_storage
 
 
@@ -274,7 +262,7 @@ def multibranch_param_conditional(in_field: Field3D, out_field: Field3D, c: floa
             out_field = in_field
 
 
-@register(externals_or_func={"DO_SOMETHING": False})
+@register(externals={"DO_SOMETHING": False})
 def allow_empty_computation(in_field: Field3D, out_field: Field3D):
     from __externals__ import DO_SOMETHING
 
@@ -283,3 +271,47 @@ def allow_empty_computation(in_field: Field3D, out_field: Field3D):
     with computation(PARALLEL), interval(...):
         if __INLINED(DO_SOMETHING):
             out_field = abs(in_field)
+
+
+@register(externals={"PHYS_TEND": False}, name="unused_optional_field")
+@register(externals={"PHYS_TEND": True}, name="required_optional_field")
+def optional_field(
+    in_field: Field3D,
+    out_field: Field3D,
+    dyn_tend: Field3D,
+    phys_tend: Field3D = None,
+    *,
+    dt: float,
+):
+    from __externals__ import PHYS_TEND
+
+    with computation(PARALLEL), interval(...):
+        out_field = in_field + dt * dyn_tend
+        if __INLINED(PHYS_TEND):
+            out_field = out_field + dt * phys_tend
+
+
+@register(externals={"PHYS_TEND_A": False, "PHYS_TEND_B": False}, name="two_optional_fields_00")
+@register(externals={"PHYS_TEND_A": False, "PHYS_TEND_B": True}, name="two_optional_fields_01")
+@register(externals={"PHYS_TEND_A": True, "PHYS_TEND_B": True}, name="two_optional_fields_11")
+def two_optional_fields(
+    in_a: Field3D,
+    in_b: Field3D,
+    out_a: Field3D,
+    out_b: Field3D,
+    dyn_tend_a: Field3D,
+    dyn_tend_b: Field3D,
+    phys_tend_a: Field3D = None,
+    phys_tend_b: Field3D = None,
+    *,
+    dt: float,
+):
+    from __externals__ import PHYS_TEND_A, PHYS_TEND_B
+
+    with computation(PARALLEL), interval(...):
+        out_a = in_a + dt * dyn_tend_a
+        out_b = in_b + dt * dyn_tend_b
+        if __INLINED(PHYS_TEND_A):
+            out_a = out_a + dt * phys_tend_a
+        if __INLINED(PHYS_TEND_B):
+            out_b = out_b + dt * phys_tend_b
