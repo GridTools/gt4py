@@ -33,7 +33,13 @@ from gtc.gtir import (
     VerticalLoop,
 )
 
-from .gtir_utils import DummyExpr, FieldAccessBuilder, ParAssignStmtBuilder, StencilBuilder
+from .gtir_utils import (
+    DummyExpr,
+    FieldAccessBuilder,
+    ParAssignStmtBuilder,
+    StencilBuilder,
+    VerticalLoopBuilder,
+)
 
 
 ARITHMETIC_TYPE = DataType.FLOAT32
@@ -131,3 +137,49 @@ def test_symbolref_without_decl():
         StencilBuilder().add_par_assign_stmt(
             ParAssignStmtBuilder("out_field", "in_field").build()
         ).build()
+
+
+def test_assign_to_ik_fwd():
+    out_name = "ik_field"
+    in_name = "other_ik_field"
+    with pytest.raises(ValidationError, match=r"Not allowed to assign to ik-field"):
+        (
+            StencilBuilder(name="assign_to_ik_fwd")
+            .add_param(
+                FieldDecl(name=out_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)),
+            )
+            .add_param(
+                FieldDecl(name=in_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)),
+            )
+            .add_vertical_loop(
+                VerticalLoopBuilder()
+                .set_loop_order(LoopOrder.FORWARD)
+                .add_stmt(ParAssignStmtBuilder(left_name=out_name, right_name=in_name).build())
+                .build()
+            )
+            .build()
+        )
+
+
+def test_assign_to_ij_par():
+    out_name = "ij_field"
+    in_name = "other_field"
+    with pytest.raises(
+        ValidationError, match=r"Not allowed to assign to ij-field `ij_field` in PARALLEL"
+    ):
+        (
+            StencilBuilder(name="assign_to_ij_par")
+            .add_param(
+                FieldDecl(name=out_name, dtype=DataType.FLOAT32, dimensions=(True, True, False)),
+            )
+            .add_param(
+                FieldDecl(name=in_name, dtype=DataType.FLOAT32, dimensions=(True, True, True)),
+            )
+            .add_vertical_loop(
+                VerticalLoopBuilder()
+                .set_loop_order(LoopOrder.PARALLEL)
+                .add_stmt(ParAssignStmtBuilder(left_name=out_name, right_name=in_name).build())
+                .build()
+            )
+            .build()
+        )

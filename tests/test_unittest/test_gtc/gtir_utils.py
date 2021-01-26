@@ -133,6 +133,10 @@ class VerticalLoopBuilder:
         self._body.append(stmt)
         return self
 
+    def set_loop_order(self, loop_order: LoopOrder) -> "VerticalLoopBuilder":
+        self._loop_order = loop_order
+        return self
+
     def build(self) -> VerticalLoop:
         return VerticalLoop(
             interval=self._interval,
