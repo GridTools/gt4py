@@ -22,11 +22,11 @@ from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
 from gt4py.backend.gt_backends import (
+    GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
     cuda_is_compatible_type,
     cuda_layout,
     gtcpu_is_compatible_type,
-    GTCUDAPyModuleGenerator,
     make_mc_layout_map,
     make_x86_layout_map,
     mc_is_compatible_layout,
