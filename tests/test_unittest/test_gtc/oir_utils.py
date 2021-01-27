@@ -132,6 +132,10 @@ class VerticalLoopBuilder:
         self._declarations: List[Temporary] = []
         self._caches: List[CacheDecl] = []
 
+    def loop_order(self, loop_order: LoopOrder) -> "VerticalLoopBuilder":
+        self._loop_order = loop_order
+        return self
+
     def add_horizontal_execution(
         self, horizontal_execution: HorizontalExecution
     ) -> "VerticalLoopBuilder":

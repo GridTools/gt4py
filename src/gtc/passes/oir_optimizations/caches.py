@@ -27,6 +27,7 @@ class IJCacheDetection(NodeTranslator):
         if node.loop_order != common.LoopOrder.PARALLEL:
             return self.generic_visit(node, **kwargs)
         accesses = AccessCollector.apply(node).accesses
+        # TODO: ij-Caches for non-temporaries?
         cacheable = {
             field
             for field, offsets in accesses.items()
@@ -51,11 +52,11 @@ class KCacheDetection(NodeTranslator):
         if node.loop_order == common.LoopOrder.PARALLEL:
             return self.generic_visit(node, **kwargs)
         accesses = AccessCollector.apply(node).accesses
+        # TODO: k-caches with non-zero ij offsets?
         cacheable = {
             field
             for field, offsets in accesses.items()
-            if field in {d.name for d in node.declarations}
-            and field not in {c.name for c in node.caches}
+            if field not in {c.name for c in node.caches}
             and len(offsets) > 1
             and all(o[:2] == (0, 0) for o in offsets)
         }

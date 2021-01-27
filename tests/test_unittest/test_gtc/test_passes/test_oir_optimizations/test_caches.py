@@ -14,7 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.passes.oir_optimizations.caches import IJCacheDetection
+from gtc.common import LoopOrder
+from gtc.oir import IJCache, KCache
+from gtc.passes.oir_optimizations.caches import IJCacheDetection, KCacheDetection
 
 from ...oir_utils import (
     AssignStmtBuilder,
@@ -54,3 +56,41 @@ def test_ij_cache_detection():
     transformed = IJCacheDetection().visit(testee)
     assert len(transformed.caches) == 2
     assert {cache.name for cache in transformed.caches} == {"tmp1", "tmp3"}
+    assert all(isinstance(cache, IJCache) for cache in transformed.caches)
+
+
+def test_k_cache_detection_basic():
+    testee = (
+        VerticalLoopBuilder()
+        .loop_order(LoopOrder.FORWARD)
+        .add_horizontal_execution(
+            HorizontalExecutionBuilder()
+            .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, 1)).build())
+            .add_stmt(AssignStmtBuilder("bar", "foo", (0, 0, -1)).build())
+            .add_stmt(AssignStmtBuilder("baz", "baz", (1, 0, 1)).build())
+            .add_stmt(AssignStmtBuilder("foo", "baz", (0, 1, -1)).build())
+            .build()
+        )
+        .build()
+    )
+    transformed = KCacheDetection().visit(testee)
+    assert {c.name for c in transformed.caches} == {"foo"}
+    assert all(isinstance(cache, KCache) for cache in transformed.caches)
+
+
+def test_k_cache_detection_single_access_point():
+    testee = (
+        VerticalLoopBuilder()
+        .loop_order(LoopOrder.FORWARD)
+        .add_horizontal_execution(
+            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
+        )
+        .add_horizontal_execution(
+            HorizontalExecutionBuilder()
+            .add_stmt(AssignStmtBuilder("bar", "baz", (0, 0, 1)).build())
+            .build()
+        )
+        .build()
+    )
+    transformed = KCacheDetection().visit(testee)
+    assert not transformed.caches
