@@ -120,11 +120,11 @@ class ScalarDecl(Decl):
     pass
 
 
-class LocalScalar(ScalarDecl):
+class LocalScalar(Decl):
     pass
 
 
-class Temporary(FieldDecl):
+class Temporary(Decl):
     pass
 
 
@@ -171,6 +171,7 @@ class VerticalLoop(LocNode):
 
 class Stencil(LocNode, SymbolTableTrait):
     name: Str
+    # TODO: fix to be List[Union[ScalarDecl, FieldDecl]]
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
 
