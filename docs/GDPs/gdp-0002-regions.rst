@@ -64,16 +64,16 @@ To illustrate the need for such a feature, consider a snippet of the model that 
             x_edge_ub(ut, ub, dt5=dt5, origin=(grid.local_iend, grid.local_jstart, 0), domain=domain_x_edge)
 
 The specific feature that we are proposing is the addition of a ``with horizontal()`` context that specifies the horizontal iteration space (over parallel axes) using ``region`` objects.
-The arguments of ``region`` object's ``__getitem__`` method use `axis offsets` to define a subregion of the stencil computational domain in the parallel ``I`` and ``J`` axes.
+The arguments of ``region`` object's ``__getitem__`` method use *axis offsets* to define a subregion of the stencil computational domain in the parallel ``I`` and ``J`` axes.
 
-Using this specification, the example is transformed into:
+Using this specification, the example is transformed into (for an ``NxN`` processor layout):
 
 .. code-block:: python
 
-    istart = I[0] if grid.west_edge else None
-    jstart = J[0] if grid.south_edge else None
-    iend = I[-1] if grid.east_edge else None
-    jend = J[-1] if grid.north_edge else None
+    istart = I[0] - np_local * (procid % N)
+    jstart = J[0] - np_local * (procid / N)
+    iend = I[-1] + np_global - (procid % N) * np
+    jend = J[-1] + np_global - (procid / N) * np
 
     @gtscript.stencil()
     def stencil(uc: Field, vc: Field, cosa: Field, rsina: Field, ut: Field, ub: Field, dt5: float, dt4: float):
@@ -85,7 +85,8 @@ Using this specification, the example is transformed into:
             with horizontal(region[:, jstart], region[:, jend]):
                 ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
 
-Notice that distributed domain decomposition works with this feature - ``region`` objects containing externals with a ``None`` value in its slices will be ignored.
+where ``np_local`` and ``np_global`` are the local and global number of horizontal cells in either direction.
+So, in defining the horizontal iteration restrictions, GT4Py is given all the information it needs about the domain decomposition to determine where to execute blocks.
 
 This greatly reduces the complexity of the code and consolidates operations on ``ub`` - it is now immediately clear what the stencil is filling into ``ub`` everywhere.
 
@@ -112,7 +113,8 @@ Axis Offsets
 ++++++++++++
 
 Regions computation is specified using `Axis Offsets`, which are defined in GT4Py by subscripting the axes (``I``, ``J``, and ``K``).
-These can be indexed, which returns the specific indices within a stencil relative to the compute origin. For example: ``I[0]`` is the first compute point, ``I[1]`` the second, and finally ``I[-1]`` is the last point in the stencil compute domain along the ``I`` axis.
+These may be indexed and returns the specific indices within a stencil relative to the compute origin.
+For example: ``I[0]`` is the first compute point, ``I[1]`` the second, and finally ``I[-1]`` is the last point in the stencil compute domain along the ``I`` axis.
 
 Stencil computation in the horizontal axes behaves differently than in the vertical because statements execute over an index space that may extend beyond the limits defined in the stencil compute domain.
 Such ``extents`` cannot be represented by merely subscripting axes, since for example ``I[-1]`` referes to the last compute domain index along the ``I`` axis, not the point before the beginning of it.
@@ -120,7 +122,6 @@ Axis Offsets therefore internally hold an offset which is added or subtracted fr
 For example ``I[0] - 2`` is itself an Axis Offset that refers to 2 points before the start of the compute domain in ``I``.
 
 Axis Offsets may be manipulated in Python or in a stencil and can be used as externals in GT4Py to be used in ``region`` subscripts.
-If the external variable is set to ``None``, then any regions using that external are ignored.
 
 Region Specification
 ++++++++++++++++++++
@@ -258,10 +259,10 @@ FV3 Example
 
 .. code-block:: python
 
-    istart = I[0] if grid.west_edge else None
-    jstart = J[0] if grid.south_edge else None
-    iend = I[-1] if grid.east_edge else None
-    jend = J[-1] if grid.north_edge else None
+    istart = I[0] - np_local * (procid % N)
+    jstart = J[0] - np_local * (procid / N)
+    iend = I[-1] + np_global - (procid % N) * np
+    jend = J[-1] + np_global - (procid / N) * np
 
     @gtscript.stencil(...)
     def divergence_corner(...):
