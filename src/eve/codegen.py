@@ -133,10 +133,11 @@ def _get_clang_format() -> Optional[str]:
     """Return the clang-format executable, or None if not available."""
     executable = os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format")
     try:
+        assert isinstance(executable, str)
         if run([executable, "--version"], capture_output=True).returncode != 0:
-            executable = None
+            return None
     except Exception:
-        executable = None
+        return None
 
     return executable
 
