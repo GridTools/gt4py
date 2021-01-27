@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any
+from typing import Any, Set
 
 from eve import NodeTranslator
 from gtc import common, oir
@@ -26,7 +26,7 @@ class IJCacheDetection(NodeTranslator):
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
         if node.loop_order != common.LoopOrder.PARALLEL:
             return self.generic_visit(node, **kwargs)
-        accesses = AccessCollector.apply(node).accesses
+        accesses = AccessCollector.apply(node).offsets()
         # TODO: ij-Caches for non-temporaries?
         cacheable = {
             field
@@ -51,7 +51,7 @@ class KCacheDetection(NodeTranslator):
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
         if node.loop_order == common.LoopOrder.PARALLEL:
             return self.generic_visit(node, **kwargs)
-        accesses = AccessCollector.apply(node).accesses
+        accesses = AccessCollector.apply(node).offsets()
         # TODO: k-caches with non-zero ij offsets?
         cacheable = {
             field
@@ -70,3 +70,32 @@ class KCacheDetection(NodeTranslator):
             declarations=self.visit(node.declarations, **kwargs),
             caches=caches,
         )
+
+
+class PruneKCacheFills(NodeTranslator):
+    def visit_KCache(self, node: oir.KCache, *, pruneable: Set[str], **kwargs: Any) -> oir.KCache:
+        if node.name in pruneable:
+            return oir.KCache(name=node.name, fill=False, flush=node.flush)
+        return self.generic_visit(node, **kwargs)
+
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
+        filling_fields = {c.name for c in node.caches if isinstance(c, oir.KCache) and c.fill}
+        if not filling_fields:
+            return self.generic_visit(node, **kwargs)
+        assert node.loop_order != common.LoopOrder.PARALLEL
+
+        accesses = AccessCollector.apply(node)
+        offsets = accesses.offsets()
+        center_accesses = [a for a in accesses.ordered_accesses() if a.offset == (0, 0, 0)]
+
+        def requires_fill(field: str) -> bool:
+            k_offsets = (o[2] for o in offsets[field])
+            if node.loop_order == common.LoopOrder.FORWARD and max(k_offsets) > 0:
+                return True
+            if node.loop_order == common.LoopOrder.BACKWARD and min(k_offsets) < 0:
+                return True
+            return next(a.is_read for a in center_accesses if a.field == field)
+
+        pruneable = {field for field in filling_fields if not requires_fill(field)}
+
+        return self.generic_visit(node, pruneable=pruneable, **kwargs)

@@ -14,11 +14,23 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from collections import defaultdict
-from typing import Any, Dict, NamedTuple, Set, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, List, Set, Tuple
 
 from eve import NodeVisitor
+from eve.utils import XIterator, xiter
 from gtc import oir
+
+
+@dataclass(frozen=True)
+class Access:
+    field: str
+    offset: Tuple[int, int, int]
+    is_write: bool
+
+    @property
+    def is_read(self) -> bool:
+        return not self.is_write
 
 
 class AccessCollector(NodeVisitor):
@@ -28,47 +40,60 @@ class AccessCollector(NodeVisitor):
         self,
         node: oir.FieldAccess,
         *,
-        accesses: Dict[str, Set[Tuple[int, int, int]]],
+        accesses: List[Access],
+        is_write: bool,
         **kwargs: Any,
     ) -> None:
-        accesses[node.name].add((node.offset.i, node.offset.j, node.offset.k))
+        accesses.append(
+            Access(
+                field=node.name,
+                offset=(node.offset.i, node.offset.j, node.offset.k),
+                is_write=is_write,
+            )
+        )
 
     def visit_AssignStmt(
         self,
         node: oir.AssignStmt,
-        *,
-        reads: Dict[str, Set[Tuple[int, int, int]]],
-        writes: Dict[str, Set[Tuple[int, int, int]]],
         **kwargs: Any,
     ) -> None:
-        self.visit(node.left, accesses=writes, **kwargs)
-        self.visit(node.right, accesses=reads, **kwargs)
+        self.visit(node.right, is_write=False, **kwargs)
+        self.visit(node.left, is_write=True, **kwargs)
 
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
-        reads: Dict[str, Set[Tuple[int, int, int]]],
-        writes: Dict[str, Set[Tuple[int, int, int]]],
         **kwargs: Any,
     ) -> None:
-        for stmt in node.body:
-            self.visit(stmt, reads=reads, writes=writes)
         if node.mask:
-            self.visit(node.mask, accesses=reads)
+            self.visit(node.mask, is_write=False, **kwargs)
+        for stmt in node.body:
+            self.visit(stmt, **kwargs)
 
-    class Result(NamedTuple):
-        reads: Dict[str, Set[Tuple[int, int, int]]]
-        writes: Dict[str, Set[Tuple[int, int, int]]]
+    @dataclass
+    class Result:
+        _ordered_accesses: List["Access"]
 
-        @property
-        def accesses(self) -> Dict[str, Set[Tuple[int, int, int]]]:
-            return {
-                k: self.reads.get(k, set()) | self.writes.get(k, set())
-                for k in set(self.reads) | set(self.writes)
-            }
+        @staticmethod
+        def _offset_dict(accesses: XIterator) -> Dict[str, Set[Tuple[int, int, int]]]:
+            return accesses.reduceby(
+                lambda acc, x: acc | {x.offset}, lambda x: x.field, as_dict=True, init=set()
+            )
+
+        def offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+            return self._offset_dict(xiter(self._ordered_accesses))
+
+        def read_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+            return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: not x.is_write))
+
+        def write_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+            return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
+
+        def ordered_accesses(self) -> List[Access]:
+            return self._ordered_accesses
 
     @classmethod
     def apply(cls, node: oir.LocNode) -> "Result":
-        result = cls.Result(reads=defaultdict(set), writes=defaultdict(set))
-        cls().visit(node, **result._asdict())
+        result = cls.Result([])
+        cls().visit(node, accesses=result._ordered_accesses)
         return result

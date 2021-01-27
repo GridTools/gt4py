@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gtc.common import DataType
-from gtc.passes.oir_optimizations.utils import AccessCollector
+from gtc.passes.oir_optimizations.utils import Access, AccessCollector
 
 from ...oir_utils import (
     AssignStmtBuilder,
@@ -46,8 +46,8 @@ def test_access_collector():
             )
             .add_horizontal_execution(
                 HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("baz", "tmp", (0, 1, 0)).build())
                 .mask(FieldAccessBuilder("mask", (-1, -1, 1)).dtype(DataType.BOOL).build())
+                .add_stmt(AssignStmtBuilder("baz", "tmp", (0, 1, 0)).build())
                 .build()
             )
             .add_declaration(TemporaryBuilder(name="tmp").build())
@@ -55,14 +55,27 @@ def test_access_collector():
         )
         .build()
     )
-    expected = AccessCollector.Result(
-        reads={"tmp": {(0, 0, 0), (0, 1, 0)}, "foo": {(1, 0, 0)}, "mask": {(-1, -1, 1)}},
-        writes={"tmp": {(0, 0, 0)}, "bar": {(0, 0, 0)}, "baz": {(0, 0, 0)}},
-    )
+    read_offsets = {"tmp": {(0, 0, 0), (0, 1, 0)}, "foo": {(1, 0, 0)}, "mask": {(-1, -1, 1)}}
+    write_offsets = {"tmp": {(0, 0, 0)}, "bar": {(0, 0, 0)}, "baz": {(0, 0, 0)}}
+    offsets = {
+        "tmp": {(0, 0, 0), (0, 1, 0)},
+        "foo": {(1, 0, 0)},
+        "bar": {(0, 0, 0)},
+        "baz": {(0, 0, 0)},
+        "mask": {(-1, -1, 1)},
+    }
+    ordered_accesses = [
+        Access(field="foo", offset=(1, 0, 0), is_write=False),
+        Access(field="tmp", offset=(0, 0, 0), is_write=True),
+        Access(field="tmp", offset=(0, 0, 0), is_write=False),
+        Access(field="bar", offset=(0, 0, 0), is_write=True),
+        Access(field="mask", offset=(-1, -1, 1), is_write=False),
+        Access(field="tmp", offset=(0, 1, 0), is_write=False),
+        Access(field="baz", offset=(0, 0, 0), is_write=True),
+    ]
+
     result = AccessCollector.apply(testee)
-    assert result == expected
-    all_accesses = result.accesses
-    for field, offsets in expected.reads.items():
-        assert all(o in all_accesses[field] for o in offsets)
-    for field, offsets in expected.writes.items():
-        assert all(o in all_accesses[field] for o in offsets)
+    assert result.read_offsets() == read_offsets
+    assert result.write_offsets() == write_offsets
+    assert result.offsets() == offsets
+    assert result.ordered_accesses() == ordered_accesses

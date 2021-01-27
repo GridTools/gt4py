@@ -28,6 +28,7 @@ from gtc.oir import (
     HorizontalExecution,
     IJCache,
     Interval,
+    KCache,
     ScalarAccess,
     ScalarDecl,
     Stencil,
@@ -188,3 +189,13 @@ class IJCacheBuilder:
 
     def build(self) -> IJCache:
         return IJCache(name=self._name)
+
+
+class KCacheBuilder:
+    def __init__(self, name, fill=True, flush=True):
+        self._name = name
+        self._fill = fill
+        self._flush = flush
+
+    def build(self) -> KCache:
+        return KCache(name=self._name, fill=self._fill, flush=self._flush)

@@ -35,9 +35,13 @@ class GreedyMerging(NodeTranslator):
             raise GTCPreconditionError(expected="non-empty vertical loop")
         result = self.generic_visit(node, **kwargs)
         horizontal_executions = [result.horizontal_executions[0]]
-        previous_reads, previous_writes = AccessCollector.apply(horizontal_executions[-1])
+        accesses = AccessCollector.apply(horizontal_executions[-1])
+        previous_reads = accesses.read_offsets()
+        previous_writes = accesses.write_offsets()
         for horizontal_execution in result.horizontal_executions[1:]:
-            current_reads, current_writes = AccessCollector.apply(horizontal_execution)
+            accesses = AccessCollector.apply(horizontal_execution)
+            current_reads = accesses.read_offsets()
+            current_writes = accesses.write_offsets()
 
             conflicting = {
                 field
