@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -344,9 +344,7 @@ class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = CPU_BACKENDS
-    symbols = dict(
-        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)])
-    )
+    symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(outfield):
 
@@ -367,14 +365,12 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = CPU_BACKENDS
-    symbols = dict(
-        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)])
-    )
+    symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(outfield):
 
         with computation(PARALLEL), interval(...):
-            if (outfield and outfield) or (not outfield and not outfield):
+            if (outfield > 0 and outfield > 0) or (not outfield > 0 and not outfield > 0):
                 if False:
                     outfield = 1
                 else:
