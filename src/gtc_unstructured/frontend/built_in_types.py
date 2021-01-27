@@ -85,8 +85,6 @@ class Location(BuiltInType):
 
 
 class Local(BuiltInType):
-    """
-    Used as a type argument to :class:`.Field` representing a Local dimension.
-    """
+    """Used as a type argument to :class:`.Field` representing a Local dimension."""
 
     pass

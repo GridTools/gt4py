@@ -19,6 +19,7 @@ import inspect
 import textwrap
 
 import devtools
+
 from gtc_unstructured.frontend.gtscript_to_gtir import (
     GTScriptToGTIR,
     NodeCanonicalizer,
@@ -28,7 +29,6 @@ from gtc_unstructured.frontend.gtscript_to_gtir import (
     VarDeclExtractor,
 )
 from gtc_unstructured.frontend.py_to_gtscript import PyToGTScript
-
 from gtc_unstructured.irs import common
 from gtc_unstructured.irs.gtir_to_nir import GtirToNir
 from gtc_unstructured.irs.nir_passes.merge_horizontal_loops import find_and_merge_horizontal_loops

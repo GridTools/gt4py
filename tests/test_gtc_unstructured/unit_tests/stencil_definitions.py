@@ -28,7 +28,6 @@ from gtc_unstructured.frontend.gtscript import (
     location,
     vertices,
 )
-
 from gtc_unstructured.irs import common
 
 

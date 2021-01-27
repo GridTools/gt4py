@@ -16,6 +16,8 @@
 import copy
 from typing import Any, Dict, List, Union, cast
 
+from devtools import debug
+
 import eve
 import gtc_unstructured.irs.common as common
 import gtc_unstructured.irs.gtir as gtir
@@ -41,7 +43,6 @@ from .gtscript_ast import (
     Symbol,
 )
 
-from devtools import debug
 
 _reduction_mapping = {
     "sum": gtir.ReduceOperator.ADD,
