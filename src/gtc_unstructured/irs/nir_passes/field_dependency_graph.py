@@ -47,7 +47,7 @@ class _FieldWriteDependencyGraph(NodeVisitor):
 
     @classmethod
     def generate(cls, loops, **kwargs):
-        """Runs the visitor, returns graph."""
+        """Generate dependency graph."""
         instance = cls()
         for loop in loops:
             instance.visit(loop, **kwargs)

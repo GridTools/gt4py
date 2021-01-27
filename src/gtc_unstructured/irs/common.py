@@ -71,7 +71,7 @@ class LoopOrder(IntEnum):
 
     FORWARD = 1
     BACKWARD = 2
-    # PARALLEL = 3
+    # PARALLEL = 3 # noqa E800
 
 
 @enum.unique

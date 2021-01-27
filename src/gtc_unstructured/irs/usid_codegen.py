@@ -139,7 +139,6 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
             for s in kernel.sids
             if len(s.entries) > 0
         ]
-        # connectivity_args = [c.name for c in kernel.connectivities]
         return self.generic_visit(
             node,
             connectivities=connectivities,
@@ -229,7 +228,6 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
         return self.generic_visit(
             node,
             computation_fields=node.parameters + node.temporaries,
-            # cache_allocator=cache_allocator_,
             sid_tags=sid_tags,
             symbol_tbl_kernel=symbol_tbl_kernel,
             **kwargs,

@@ -79,9 +79,7 @@ class GtirToNir(eve.NodeTranslator):
         location_refs: List[gtir.LocationRef],
         location_comprehensions: Dict[str, gtir.LocationComprehension],
     ):
-        """
-        Returns a dict with primary, secondary and vertical (TODO)
-        """
+        """Compute a dict with primary, secondary and vertical (TODO)."""
         result = {}
 
         decls = [location_comprehensions[ref.name] for ref in location_refs]

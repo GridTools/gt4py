@@ -21,9 +21,7 @@ import networkx as nx
 import eve  # noqa: F401
 from eve import Node, NodeTranslator, NodeVisitor
 from gtc_unstructured.irs import nir
-from gtc_unstructured.irs.nir_passes.field_dependency_graph import (
-    generate_dependency_graph,
-)
+from gtc_unstructured.irs.nir_passes.field_dependency_graph import generate_dependency_graph
 
 
 class _FindMergeCandidatesAnalysis(NodeVisitor):
@@ -36,17 +34,19 @@ class _FindMergeCandidatesAnalysis(NodeVisitor):
 
     TODO Question
     Should we report all possible merge candidates, example: A, B, C
-     - A + B and B + C possible, but not A + B + C  -> want both candidates (currently we only return [A,B])
-     - A + B + C possible, we only want A + B + C, but not A + B and B + C as candidates
+    - A + B and B + C possible, but not A + B + C  -> want both candidates (currently we only return [A,B])
+    - A + B + C possible, we only want A + B + C, but not A + B and B + C as candidates
 
     Candidates are selected as follows:
-     - Different location types cannot be fused
-     - Only adjacent loops are considered
-       Example: if A, C can be fused but an independent B which cannot be fused (e.g. different location) is in the middle,
-                we don't consider A + C for fusion
-     - Read after write access
-        - if the read is without offset, we can fuse
-        - if the read is with offset, we cannot fuse
+    - Different location types cannot be fused
+
+    - Only adjacent loops are considered
+      Example: if A, C can be fused but an independent B which cannot be fused (e.g. different location) is in the middle,
+      we don't consider A + C for fusion
+
+    - Read after write access
+      - if the read is without offset, we can fuse
+      - if the read is with offset, we cannot fuse
     """
 
     def __init__(self, **kwargs):
@@ -56,7 +56,7 @@ class _FindMergeCandidatesAnalysis(NodeVisitor):
 
     @classmethod
     def find(cls, root, **kwargs) -> List[List[nir.HorizontalLoop]]:
-        """Runs the visitor, returns merge candidates."""
+        """Run the visitor, returns merge candidates."""
         instance = cls()
         instance.visit(root, **kwargs)
         if len(instance.candidate) > 1:
@@ -88,12 +88,8 @@ def _find_merge_candidates(root: nir.VerticalLoop):
 
 
 class MergeHorizontalLoops(NodeTranslator):
-    """"""
-
     @classmethod
     def apply(cls, root: nir.VerticalLoop, merge_candidates, **kwargs) -> nir.VerticalLoop:
-        """"""
-        # merge_candidates = _find_merge_candidates(root)
         return cls().visit(root, merge_candidates=merge_candidates)
 
     def visit_VerticalLoop(

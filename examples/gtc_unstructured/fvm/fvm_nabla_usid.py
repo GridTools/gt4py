@@ -6,9 +6,8 @@ import os
 from devtools import debug  # noqa: F401
 
 import eve  # noqa: F401
-from gtc_unstructured.irs import common
+from gtc_unstructured.irs import common, usid_codegen
 from gtc_unstructured.irs.common import LocationType
-from gtc_unstructured.irs import usid_codegen
 from gtc_unstructured.irs.usid import (
     AssignStmt,
     BinaryOp,

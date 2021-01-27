@@ -20,7 +20,7 @@ from typing import List, Optional, Tuple, Union
 from devtools import debug  # noqa: F401
 from pydantic import validator
 
-from eve import Node, FrozenNode, Str
+from eve import FrozenNode, Node, Str
 from gtc_unstructured.irs import common
 
 
@@ -185,7 +185,6 @@ class NeighborLoop(Stmt):
 
 
 class Kernel(Node):
-    # location_type: common.LocationType
     name: Str  # symbol decl table
     connectivities: List[Connectivity]
     sids: List[SidComposite]
