@@ -25,7 +25,7 @@ from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, computation, interval
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS, OLD_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
@@ -182,7 +182,7 @@ def test_stage_merger_induced_interval_block_reordering(backend):
     np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, -1], 2)
 
 
-@pytest.mark.parametrize("backend", CPU_BACKENDS)
+@pytest.mark.parametrize("backend", OLD_BACKENDS)
 def test_lower_dimensional_inputs(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
@@ -190,11 +190,11 @@ def test_lower_dimensional_inputs(backend):
         field_2d: gtscript.Field[np.float_, gtscript.IJ],
         field_1d: gtscript.Field[np.float_, gtscript.K],
     ):
-        with computation(PARALLEL):
-            with interval(0, 1):
-                field_2d = field_1d[1] + field_3d[0, 1, 0]
-
         with computation(FORWARD):
+            with interval(0, 1):
+                field_d = field_1d[1] + field_3d[0, 1, 0]
+
+        with computation(PARALLEL):
             with interval(0, 1):
                 tmp = field_2d[0, 1] + field_1d[1]
                 field_3d = tmp[1, 0, 0] + field_1d[1]
@@ -209,12 +209,12 @@ def test_lower_dimensional_inputs(backend):
     assert field_3d.shape == full_shape[:]
 
     field_2d = gt_storage.ones(
-        backend, default_origin[:-1], full_shape[:-1], dtype, mask=(True, True, False)
+        backend, default_origin[:-1], full_shape[:-1], dtype, mask=[True, True, False]
     )
     assert field_2d.shape == full_shape[:-1]
 
     field_1d = gt_storage.zeros(
-        backend, (default_origin[-1],), (full_shape[-1],), dtype, mask=(False, False, True)
+        backend, (default_origin[-1],), (full_shape[-1],), dtype, mask=[False, False, True]
     )
     assert field_1d.shape == (full_shape[-1],)
 

@@ -714,6 +714,7 @@ class IRMaker(ast.NodeVisitor):
         self.domain = domain or gt_ir.Domain.LatLonGrid()
         self.extra_temp_decls = extra_temp_decls or {}
         self.parsing_context = None
+        self.iteration_order = None
         self.if_decls_stack = []
         gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
             "abs": gt_ir.NativeFunction.ABS,
@@ -825,7 +826,9 @@ class IRMaker(ast.NodeVisitor):
         ):
             raise syntax_error
 
-        return gt_ir.IterationOrder[iteration_order_node.id]
+        self.iteration_order = gt_ir.IterationOrder[iteration_order_node.id]
+
+        return self.iteration_order
 
     def _visit_interval_node(self, node: ast.withitem, loc: gt_ir.Location):
         range_error = GTScriptSyntaxError(
@@ -1144,6 +1147,7 @@ class IRMaker(ast.NodeVisitor):
                         isinstance(t.slice.value, ast.Tuple)
                         and all(v.n == 0 for v in t.slice.value.elts)
                     )
+                    or (isinstance(t.slice.value, ast.Constant) and t.slice.value.value == 0)
                 ):
                     if t.value.id not in {
                         name for name, field in self.fields.items() if field.is_api
@@ -1160,7 +1164,7 @@ class IRMaker(ast.NodeVisitor):
                         message="Assignment to non-zero offsets is not supported.",
                         loc=gt_ir.Location.from_ast_node(t),
                     )
-            if isinstance(t, ast.Name):
+            elif isinstance(t, ast.Name):
                 if not self._is_known(t.id):
                     field_decl = gt_ir.FieldDecl(
                         name=t.id,
@@ -1174,14 +1178,21 @@ class IRMaker(ast.NodeVisitor):
                     else:
                         result.append(field_decl)
                     self.fields[field_decl.name] = field_decl
-                else:
-                    if len(self.fields[t.id].axes) == 1:
-                        raise GTScriptSyntaxError(
-                            message="Cannot assign to 1D field.",
-                            loc=gt_ir.Location.from_ast_node(t),
-                        )
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
+
+            axes = self.fields[t.id].axes
+            if len(axes) <= 2:
+                if "K" in axes:
+                    raise GTScriptSyntaxError(
+                        message="Cannot assign to lower dimensional K-field.",
+                        loc=gt_ir.Location.from_ast_node(t),
+                    )
+                if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
+                    raise GTScriptSyntaxError(
+                        message="Cannot assign to IJ-field in parallel computation.",
+                        loc=gt_ir.Location.from_ast_node(t),
+                    )
 
             target.append(self.visit(t))
 

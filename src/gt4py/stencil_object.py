@@ -3,7 +3,7 @@ import abc
 import sys
 import time
 import warnings
-from typing import Tuple
+from typing import List
 
 import numpy as np
 
@@ -120,7 +120,7 @@ class StencilObject(abc.ABC):
     def __call__(self, *args, **kwargs):
         pass
 
-    def _get_field_mask(self, field_name: str) -> Tuple[bool]:
+    def _get_field_mask(self, field_name: str) -> List[bool]:
         field_axes = self.field_info[field_name].axes
         return list(axis in field_axes for axis in CartesianSpace.names)
 
