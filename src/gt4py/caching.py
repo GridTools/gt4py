@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -337,9 +337,7 @@ class NoCachingStrategy(CachingStrategy):
 
     name = "nocaching"
 
-    def __init__(
-        self, builder: "StencilBuilder", *, output_path: pathlib.Path = pathlib.Path(".")
-    ):
+    def __init__(self, builder: "StencilBuilder", *, output_path: pathlib.Path = pathlib.Path(".")):
         super().__init__(builder)
         self._output_path = output_path
 
