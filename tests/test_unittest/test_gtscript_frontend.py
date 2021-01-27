@@ -692,7 +692,7 @@ class TestReducedDimensions:
             field_2d: gtscript.Field[np.float_, gtscript.IJ],
             field_1d: gtscript.Field[np.float_, gtscript.K],
         ):
-            with computation(PARALLEL), interval(...):
+            with computation(FORWARD), interval(...):
                 field_2d = field_1d[1]
                 field_3d = field_2d + field_1d
 
@@ -762,7 +762,9 @@ class TestReducedDimensions:
             with computation(PARALLEL), interval(...):
                 field_out = field_in[0, 0, 0]
 
-        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Cannot assign to 1D field"):
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Cannot assign to lower dimensional"
+        ):
             compile_definition(definition, "test_error_annotation", module, externals=externals)
 
 
