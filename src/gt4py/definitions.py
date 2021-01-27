@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -142,28 +142,44 @@ class NumericTuple(tuple):
         return self._apply(other, max)
 
     def __lt__(self, other):
-        """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.lt)
+        """No element can be greater, but if any element is smaller, return True."""
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: -1 if a < b else (1 if a > b else 0),
+            lambda items: any(i < 0 for i in items) and not any(i > 0 for i in items),
+        )
 
     def __le__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.le)
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: -1 if a < b else (1 if a > b else 0),
+            lambda items: all(i <= 0 for i in items),
+        )
 
     def __eq__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.eq)
+        return self._compare(self._broadcast(other), operator.eq, all)
 
     def __ne__(self, other):
         """Element-wise comparison."""
-        return not self._compare(self._broadcast(other), operator.eq)
+        return not self._compare(self._broadcast(other), operator.eq, all)
 
     def __gt__(self, other):
-        """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.gt)
+        """No element can be smaller, but if any element is larger, return True."""
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: 1 if a > b else (-1 if a < b else 0),
+            lambda items: any(i > 0 for i in items) and not any(i < 0 for i in items),
+        )
 
     def __ge__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.ge)
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: 1 if a > b else (-1 if a < b else 0),
+            lambda items: all(i >= 0 for i in items),
+        )
 
     def __repr__(self):
         return "{cls_name}({value})".format(
@@ -209,11 +225,11 @@ class NumericTuple(tuple):
 
         return value
 
-    def _compare(self, other, op):
+    def _compare(self, other, op, reduction_op):
         if len(self) != len(other):  # or not isinstance(other, type(self))
             raise ValueError("Incompatible instance '{obj}'".format(obj=other))
 
-        return all(op(a, b) for a, b in zip(self, other))
+        return reduction_op(op(a, b) for a, b in zip(self, other))
 
 
 class Index(NumericTuple):
@@ -624,10 +640,8 @@ class DomainInfo(
 
 class FieldInfo(collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "dtype"])):
     def __repr__(self):
-        result = (
-            "FieldInfo(access=AccessKind.{access}, boundary={boundary}, dtype={dtype})".format(
-                access=self.access.name, boundary=repr(self.boundary), dtype=repr(self.dtype)
-            )
+        result = "FieldInfo(access=AccessKind.{access}, boundary={boundary}, dtype={dtype})".format(
+            access=self.access.name, boundary=repr(self.boundary), dtype=repr(self.dtype)
         )
         return result
 
@@ -642,6 +656,7 @@ class BuildOptions(AttributeClassLike):
 
     name = attribute(of=str)
     module = attribute(of=str)
+    format_source = attribute(of=bool, default=True)
     backend_opts = attribute(of=DictOf[str, Any], factory=dict)
     build_info = attribute(of=dict, optional=True)
     rebuild = attribute(of=bool, default=False)
@@ -655,7 +670,7 @@ class BuildOptions(AttributeClassLike):
     @property
     def shashed_id(self):
         result = gt_utils.shashed_id(
-            self.name, self.module, *tuple(sorted(self.backend_opts.items()))
+            self.name, self.module, self.format_source, *tuple(sorted(self.backend_opts.items()))
         )
 
         return result
