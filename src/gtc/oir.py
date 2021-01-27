@@ -154,6 +154,11 @@ class IJCache(CacheDecl):
     pass
 
 
+class KCache(CacheDecl):
+    fill: bool
+    flush: bool
+
+
 class VerticalLoop(LocNode):
     interval: Interval
     horizontal_executions: List[HorizontalExecution]
