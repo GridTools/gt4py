@@ -1169,7 +1169,7 @@ class IRMaker(ast.NodeVisitor):
                     field_decl = gt_ir.FieldDecl(
                         name=t.id,
                         data_type=gt_ir.DataType.AUTO,
-                        axes=[ax.name for ax in gt_ir.Domain.LatLonGrid().axes],
+                        axes=gt_ir.Domain.LatLonGrid().axes_names,
                         # layout_id=t.id,
                         is_api=False,
                     )
@@ -1182,17 +1182,14 @@ class IRMaker(ast.NodeVisitor):
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
 
             axes = self.fields[t.id].axes
-            if len(axes) <= 2:
-                if "K" in axes:
-                    raise GTScriptSyntaxError(
-                        message="Cannot assign to lower dimensional K-field.",
-                        loc=gt_ir.Location.from_ast_node(t),
-                    )
-                if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
-                    raise GTScriptSyntaxError(
-                        message="Cannot assign to IJ-field in parallel computation.",
-                        loc=gt_ir.Location.from_ast_node(t),
-                    )
+            par_axes_names = [axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes]
+            if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
+                par_axes_names.append(gt_ir.Domain.LatLonGrid().sequential_axis.name)
+            if set(par_axes_names) - set(axes):
+                raise GTScriptSyntaxError(
+                    message=f"Cannot assign to a field unless all parallel axes are present: '{par_axes_names}'.",
+                    loc=gt_ir.Location.from_ast_node(t),
+                )
 
             target.append(self.visit(t))
 
@@ -1579,10 +1576,6 @@ class GTScriptParser(ast.NodeVisitor):
                     assert arg_info.default in [gt_ir.Empty, None]
                     data_type = gt_ir.DataType.from_dtype(np.dtype(arg_annotation.dtype))
                     axes = [ax.name for ax in arg_annotation.axes]
-                    seq_name = gt_ir.Domain.LatLonGrid().sequential_axis.name
-                    if len(axes) == 1 and seq_name not in axes:
-                        # If there is only a single axis, it cannot be a parallel axis.
-                        raise GTScriptDefinitionError
                     fields_decls[arg_info.name] = gt_ir.FieldDecl(
                         name=arg_info.name,
                         data_type=data_type,

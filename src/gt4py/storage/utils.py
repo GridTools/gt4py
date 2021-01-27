@@ -20,7 +20,6 @@ import numbers
 import numpy as np
 
 import gt4py.utils as gt_util
-from gt4py.definitions import Index, Shape
 
 
 try:
@@ -62,7 +61,7 @@ def normalize_shape(shape, mask=None):
     if sum(mask) < len(shape):
         new_shape = [int(h) for i, h in enumerate(new_shape) if mask[i]]
 
-    return Shape(new_shape)
+    return tuple(new_shape)
 
 
 def normalize_default_origin(default_origin, mask=None):
@@ -88,7 +87,7 @@ def normalize_default_origin(default_origin, mask=None):
     if sum(mask) < len(default_origin):
         new_default_origin = [h for i, h in enumerate(new_default_origin) if mask[i]]
 
-    return Index(new_default_origin)
+    return tuple(new_default_origin)
 
 
 def compute_padded_shape(shape, items_per_alignment, order_idx):
