@@ -22,7 +22,8 @@ from . import config as gt_config
 
 
 _DEFAULT_GRIDTOOLS_VERSION = 1
-_GRIDTOOLS_GIT_BRANCHES = {1: "release_v1.1", 2: "v2.0.0"}
+# TODO: GT2 release with CUDA SID adapter
+_GRIDTOOLS_GIT_BRANCHES = {1: "release_v1.1", 2: "master"}
 _GRIDTOOLS_INCLUDE_PATHS = {1: gt_config.GT_INCLUDE_PATH, 2: gt_config.GT2_INCLUDE_PATH}
 _GRIDTOOLS_REPO_DIRNAMES = {1: gt_config.GT_REPO_DIRNAME, 2: gt_config.GT2_REPO_DIRNAME}
 
