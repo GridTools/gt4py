@@ -16,6 +16,7 @@
 
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
 
+import gtc.utils as gtc_utils
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
@@ -33,7 +34,6 @@ from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
-import gtc.utils as gtc_utils
 
 
 if TYPE_CHECKING:

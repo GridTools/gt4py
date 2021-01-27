@@ -692,7 +692,7 @@ class TestReducedDimensions:
             field_2d: gtscript.Field[np.float_, gtscript.IJ],
             field_1d: gtscript.Field[np.float_, gtscript.K],
         ):
-            with computation(PARALLEL), interval(...):
+            with computation(FORWARD), interval(...):
                 field_2d = field_1d[1]
                 field_3d = field_2d + field_1d
 
@@ -735,22 +735,6 @@ class TestReducedDimensions:
         ):
             compile_definition(definition, "test_error_syntax", module, externals=externals)
 
-    def test_error_annotation(self, id_version):
-        module = f"TestReducedDimensions_test_error_annotation_{id_version}"
-        externals = {}
-
-        def definition(
-            field_in: gtscript.Field[np.float_, gtscript.I],
-            field_out: gtscript.Field[np.float_, gtscript.IJK],
-        ):
-            with computation(PARALLEL), interval(...):
-                field_out = field_in[1]
-
-        with pytest.raises(
-            gt_frontend.GTScriptDefinitionError, match="Invalid definition of argument"
-        ):
-            compile_definition(definition, "test_error_annotation", module, externals=externals)
-
     def test_error_write_1d(self, id_version):
         module = f"TestReducedDimensions_test_error_write_1d_{id_version}"
         externals = {}
@@ -762,7 +746,10 @@ class TestReducedDimensions:
             with computation(PARALLEL), interval(...):
                 field_out = field_in[0, 0, 0]
 
-        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Cannot assign to 1D field"):
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Cannot assign to a field unless all parallel axes are present",
+        ):
             compile_definition(definition, "test_error_annotation", module, externals=externals)
 
 
