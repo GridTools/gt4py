@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -43,9 +43,7 @@ def stencil(
 
 
 def test_origin_selection():
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
+    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
@@ -61,9 +59,7 @@ def test_origin_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
+    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
@@ -79,9 +75,7 @@ def test_origin_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
+    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
@@ -99,9 +93,7 @@ def test_origin_selection():
 
 
 def test_domain_selection():
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
+    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
@@ -117,9 +109,7 @@ def test_domain_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
+    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )

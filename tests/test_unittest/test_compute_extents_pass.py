@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from gt4py.analysis.infos import IntervalInfo
 from gt4py.analysis.passes import compute_extent_diff, overlap_with_extent
 from gt4py.ir.nodes import AxisBound, AxisInterval, Domain, IterationOrder, LevelMarker

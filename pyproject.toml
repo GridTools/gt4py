@@ -3,8 +3,8 @@ requires = ["setuptools>=40.8.0", "wheel", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.black]
-line-length = 99
-target_version = ['py36', 'py37', 'py38']
+line-length = 100
+target_version = ['py38']
 include = '\.pyi?$'
 exclude = '''
 /(

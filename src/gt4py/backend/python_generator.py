@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -106,9 +106,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         #         self.k_splitters_value.extend(
         #             ["{}[{}]".format(item.name, i) for i in range(item.length)]
         #         )
-        self.k_splitters_value.append(
-            "{dom}[{idx}]".format(dom=self.domain_arg_name, idx=k_ax_idx)
-        )
+        self.k_splitters_value.append("{dom}[{idx}]".format(dom=self.domain_arg_name, idx=k_ax_idx))
 
         self.sources = sources
         self.visit(impl_node)

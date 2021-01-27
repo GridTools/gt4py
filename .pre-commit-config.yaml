@@ -1,6 +1,14 @@
 default_language_version:
-    python: python3.6
+    python: python3.8
 repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.5.0
+    hooks:
+    - id: check-json
+    - id: check-toml
+    - id: check-yaml
+    - id: fix-encoding-pragma
+
 -   repo: https://github.com/psf/black
     rev: 20.8b1
     hooks:
@@ -21,10 +29,22 @@ repos:
     rev: 3.8.4
     hooks:
     - id: flake8
-      additional_dependencies: ["flake8-mutable", "flake8-fixme", "flake8-docstrings", "flake8-rst-docstrings", "pygments", "flake8-eradicate", "flake8-debugger"]
+      additional_dependencies:
+      - darglint
+      - flake8-bugbear
+      - flake8-builtins
+      - flake8-debugger
+      - flake8-docstrings
+      - flake8-eradicate
+      - flake8-mutable
+      - flake8-rst-docstrings
+      - pygments
       exclude: >
           (?x)^(
           setup.py |
+          docs/gt4py/conf.py |
+          docs/eve/conf.py |
+          docs/gtc/conf.py |
           src/gt4py/__gtscript__.py |
           src/gt4py/__init__.py |
           src/gt4py/definitions.py |
@@ -82,7 +102,9 @@ repos:
     - id: mypy
       exclude:
           (?x)^(
-          docs/conf.py |
+          docs/gt4py/conf.py |
+          docs/gtc/conf.py |
+          docs/eve/conf.py |
           src/gt4py/analysis/infos.py |
           src/gt4py/analysis/passes.py |
           src/gt4py/analysis/transformer.py |
@@ -105,6 +127,11 @@ repos:
           tests/test_unittest/test_storage.py |
           tests/test_unittest/test_dawn_backends.py |
           tests/definition_setup.py |
+          tests/test_unittest/test_gtc/test_common.py |
+          tests/test_unittest/test_gtc/test_oir.py |
+          tests/test_unittest/test_gtc/gtir_utils.py |
+          tests/test_unittest/test_gtc/test_gtir_upcaster.py |
+          tests/test_unittest/test_gtc/test_gtir_to_oir.py |
           )$
 
 -   repo: https://github.com/pre-commit/pre-commit-hooks
