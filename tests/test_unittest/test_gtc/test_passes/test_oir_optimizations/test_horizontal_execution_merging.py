@@ -42,6 +42,9 @@ def test_zero_extent_merging(merger):
             HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("baz", "bar").build()).build()
         )
         .add_horizontal_execution(
+            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "foo").build()).build()
+        )
+        .add_horizontal_execution(
             HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "baz").build()).build()
         )
         .build()
