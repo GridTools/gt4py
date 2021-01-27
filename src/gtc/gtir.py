@@ -100,7 +100,9 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
         return v
 
     @root_validator(skip_on_failure=True)
-    def no_write_and_read_with_offset_of_same_field(cls, values: RootValidatorValuesType):
+    def no_write_and_read_with_offset_of_same_field(
+        cls, values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
         if isinstance(values["left"], FieldAccess):
             offset_reads = (
                 values["right"]
@@ -247,7 +249,9 @@ class VerticalLoop(LocNode):
         reads_with_offset = _reads_with_offset(values["body"])
 
         intersec = writes.intersection(reads_with_offset)
-        non_tmp_fields = {acc for acc in intersec if acc not in {tmp.name for tmp in values["temporaries"]}}
+        non_tmp_fields = {
+            acc for acc in intersec if acc not in {tmp.name for tmp in values["temporaries"]}
+        }
         if len(non_tmp_fields) > 0:
             raise ValueError(
                 f"Illegal write and read with horizontal offset detected for {non_tmp_fields}."
