@@ -23,13 +23,14 @@ import abc
 import collections.abc
 import contextlib
 import inspect
+import os
 import re
 import string
 import sys
 import textwrap
 import types
 import typing
-from subprocess import PIPE, Popen
+from subprocess import PIPE, Popen, run
 
 import black
 import jinja2
@@ -56,15 +57,6 @@ from .typingx import (
     cast,
 )
 from .visitors import NodeVisitor
-
-
-try:
-    import clang_format
-
-    _CLANG_FORMAT_AVAILABLE = True
-    del clang_format
-except ImportError:
-    _CLANG_FORMAT_AVAILABLE = False
 
 
 SourceFormatter = Callable[[str], str]
@@ -137,7 +129,17 @@ def format_python_source(
     return formatted_source
 
 
-if _CLANG_FORMAT_AVAILABLE:
+def _get_clang_format() -> Optional[str]:
+    """Return the clang-format executable, or None if not available."""
+    executable = os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format")
+    ret = run([executable, "--version"], capture_output=True)
+    return executable if ret.returncode == 0 else None
+
+
+_CLANG_FORMAT_EXECUTABLE = _get_clang_format()
+
+
+if _CLANG_FORMAT_EXECUTABLE is not None:
 
     @register_formatter("cpp")
     def format_cpp_source(
@@ -148,7 +150,8 @@ if _CLANG_FORMAT_AVAILABLE:
         sort_includes: bool = False,
     ) -> str:
         """Format C++ source code using clang-format."""
-        args = ["clang-format"]
+        assert isinstance(_CLANG_FORMAT_EXECUTABLE, str)
+        args = [_CLANG_FORMAT_EXECUTABLE]
         if style:
             args.append(f"--style={style}")
         if fallback_style:
