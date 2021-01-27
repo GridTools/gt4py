@@ -178,9 +178,9 @@ class OIRToGTCpp(eve.NodeTranslator):
         if mask:
             body = [gtcpp.IfStmt(cond=mask, true_branch=gtcpp.BlockStmt(body=body))]
         apply_method = gtcpp.GTApplyMethod(
-            interval=self.visit(interval),
+            interval=self.visit(interval, **kwargs),
             body=body,
-            local_variables=[self.visit(var, **kwargs) for var in node.declarations],
+            local_variables=self.visit(node.declarations, **kwargs),
         )
         accessors = _extract_accessors(apply_method)
         stage_args = [gtcpp.Arg(name=acc.name) for acc in accessors]
