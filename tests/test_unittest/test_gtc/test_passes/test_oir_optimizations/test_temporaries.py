@@ -30,7 +30,6 @@ from ...oir_utils import (
 def test_temporaries_to_scalars_basic():
     testee = (
         StencilBuilder()
-        .add_param(TemporaryBuilder("tmp").build())
         .add_param(FieldDeclBuilder("foo").build())
         .add_param(FieldDeclBuilder("bar").build())
         .add_vertical_loop(
@@ -57,7 +56,6 @@ def test_temporaries_to_scalars_basic():
 def test_temporaries_to_scalars_multiexec():
     testee = (
         StencilBuilder()
-        .add_param(TemporaryBuilder("tmp").build())
         .add_param(FieldDeclBuilder("foo").build())
         .add_param(FieldDeclBuilder("bar").build())
         .add_param(FieldDeclBuilder("baz").build())
