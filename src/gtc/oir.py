@@ -120,11 +120,11 @@ class ScalarDecl(Decl):
     pass
 
 
-class LocalScalar(ScalarDecl):
+class LocalScalar(Decl):
     pass
 
 
-class Temporary(FieldDecl):
+class Temporary(Decl):
     pass
 
 
