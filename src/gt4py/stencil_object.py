@@ -3,7 +3,7 @@ import abc
 import sys
 import time
 import warnings
-from typing import List
+from typing import Tuple
 
 import numpy as np
 
@@ -120,9 +120,9 @@ class StencilObject(abc.ABC):
     def __call__(self, *args, **kwargs):
         pass
 
-    def _get_field_mask(self, field_name: str) -> List[bool]:
+    def _get_field_mask(self, field_name: str) -> Tuple[bool]:
         field_axes = self.field_info[field_name].axes
-        return list(axis in field_axes for axis in CartesianSpace.names)
+        return tuple(axis in field_axes for axis in CartesianSpace.names)
 
     def _get_max_domain(self, field_args, origin):
         """Return the maximum domain size possible
@@ -145,13 +145,13 @@ class StencilObject(abc.ABC):
         for name, field in field_args.items():
             api_mask = self._get_field_mask(name)
             if isinstance(field, gt_storage.storage.Storage):
-                storage_mask = field.mask
+                storage_mask = tuple(field.mask)
                 if storage_mask != api_mask:
                     raise ValueError(
                         f"The storage for '{name}' has mask '{storage_mask}', but the API signature expects '{api_mask}'"
                     )
             upper_boundary = self.field_info[name].boundary.upper_indices.filter_mask(api_mask)
-            field_domain = Shape(field.shape) - (origin[name] + upper_boundary)
+            field_domain = Shape(field.shape) - (Index(origin[name]) + upper_boundary)
             max_domain &= Shape.from_mask(field_domain, api_mask, default=large_val)
         return max_domain
 
@@ -192,7 +192,7 @@ class StencilObject(abc.ABC):
 
             if isinstance(field, gt_storage.storage.Storage):
                 field_mask = self._get_field_mask(name)
-                if field.mask != field_mask:
+                if tuple(field.mask) != field_mask:
                     raise ValueError(
                         f"The storage for '{name}' has mask '{field.mask}', but the API signature expects '{field_mask}'"
                     )
