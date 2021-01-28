@@ -138,6 +138,9 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     GTMultiStage = as_mako("execute_${ loop_order }()${''.join(caches)}${''.join(stages)}")
 
     IJCache = as_fmt(".ij_cached({name})")
+    KCache = as_mako(
+        ".k_cached(${'cache_io_policy::fill(), ' if fill else ''}${'cache_io_policy::flush(), ' if flush else ''}${name})"
+    )
 
     def visit_LoopOrder(self, looporder: LoopOrder, **kwargs: Any) -> str:
         return {

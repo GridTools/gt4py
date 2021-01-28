@@ -225,6 +225,9 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_IJCache(self, node: oir.IJCache, **kwargs: Any) -> gtcpp.IJCache:
         return gtcpp.IJCache(name=node.name, loc=node.loc)
 
+    def visit_KCache(self, node: oir.KCache, **kwargs: Any) -> gtcpp.KCache:
+        return gtcpp.KCache(name=node.name, fill=node.fill, flush=node.flush, loc=node.loc)
+
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> gtcpp.FieldDecl:
         return gtcpp.FieldDecl(name=node.name, dtype=node.dtype)
 
