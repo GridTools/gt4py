@@ -186,22 +186,17 @@ class AxisIntervalParser(ast.NodeVisitor):
         else:
             slice_node = cls.single_index_slice(node)
 
-        # abs(offset) > LARGE_NUM corresponds to infinite extension
-        LARGE_NUM = 1000000
+        LARGE_NUM = np.iinfo(np.int32).max
 
         if slice_node.lower is not None:
             start = parser.visit(slice_node.lower)
-            if start.offset < -LARGE_NUM:
-                start = gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0, extend=True)
         else:
-            start = gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0, extend=True)
+            start = gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=-LARGE_NUM)
 
         if slice_node.upper is not None:
             end = parser.visit(slice_node.upper)
-            if end.offset > LARGE_NUM:
-                end = gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, extend=True)
         else:
-            end = gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, extend=True)
+            end = gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=LARGE_NUM)
 
         return gt_ir.AxisInterval(start=start, end=end, loc=loc)
 
