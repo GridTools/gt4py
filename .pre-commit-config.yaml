@@ -99,6 +99,7 @@ repos:
           tests/test_unittest/test_dawn_backends.py |
           tests/test_unittest/test_gtscript_frontend.py |
           tests/test_unittest/test_storage.py |
+          tests/test_gtc_unstructured/.* |
           )$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -135,6 +136,7 @@ repos:
           tests/test_unittest/test_gtc/gtir_utils.py |
           tests/test_unittest/test_gtc/test_gtir_upcaster.py |
           tests/test_unittest/test_gtc/test_gtir_to_oir.py |
+          tests/test_gtc_unstructured/.* |
           )$
 
   - repo: https://github.com/pre-commit/pre-commit-hooks

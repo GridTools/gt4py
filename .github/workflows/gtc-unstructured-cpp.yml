@@ -20,7 +20,7 @@ jobs:
       - name: Install eve and dependencies
         run: |
           python3 -m pip install .[format]
-          python3 -m pip install -r requirements_dev.txt # TODO remove (once we don't include debugtools)
+          python3 -m pip install -r requirements-dev.txt # TODO remove (once we don't include debugtools)
       - name: Test cpputil
         run: |
           cd cpputil/unstructured

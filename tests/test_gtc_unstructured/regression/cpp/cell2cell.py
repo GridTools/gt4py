@@ -21,12 +21,8 @@ from gtc_unstructured.frontend.gtscript import (
     computation,
     location,
 )
-
 from gtc_unstructured.irs.common import DataType
-from gtc_unstructured.irs.usid_codegen import (
-    UsidGpuCodeGenerator,
-    UsidNaiveCodeGenerator,
-)
+from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 
 
 dtype = DataType.FLOAT64
