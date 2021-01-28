@@ -23,7 +23,7 @@ jobs:
           python3 -m pip install -r requirements-dev.txt # TODO remove (once we don't include debugtools)
       - name: Test cpputil
         run: |
-          cd cpputil/unstructured
+          cd src/gtc_unstructured/cpputil/unstructured
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
@@ -31,7 +31,7 @@ jobs:
           ctest --output-on-failure
       - name: Test gtc cpp regression
         run: |
-          cd tests/tests_gtc/regression/cpp
+          cd tests/test_gtc_unstructured/regression/cpp
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
