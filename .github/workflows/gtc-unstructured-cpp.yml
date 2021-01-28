@@ -23,7 +23,7 @@ jobs:
           python3 -m pip install -r requirements-dev.txt # TODO remove (once we don't include debugtools)
       - name: Test cpputil
         run: |
-          cd src/gtc_unstructured/cpputil/unstructured
+          cd src/gtc_unstructured/cpp_util/unstructured
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
