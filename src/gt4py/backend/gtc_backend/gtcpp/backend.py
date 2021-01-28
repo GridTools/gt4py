@@ -88,8 +88,9 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
         if "external_arg" in kwargs:
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,3> {name}_origin".format(
-                    name=node.name
+                return "py::buffer {name}, std::array<gt::uint_t,{ndim}> {name}_origin".format(
+                    name=node.name,
+                    ndim=node.dimensions.count(True),
                 )
             else:
                 num_dims = node.dimensions.count(True)
