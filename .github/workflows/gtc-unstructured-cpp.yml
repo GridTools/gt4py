@@ -1,4 +1,4 @@
-name: ctest
+name: gtc_unstructured
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v1
       - name: Install eve and dependencies
         run: |
-          python3 -m pip install .[format, unstructured]
+          python3 -m pip install .[format,unstructured]
           python3 -m pip install -r requirements_dev.txt # TODO remove (once we don't include debugtools)
       - name: Test cpputil
         run: |
