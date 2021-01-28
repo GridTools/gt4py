@@ -97,7 +97,7 @@ def test_k_cache_detection_single_access_point():
     assert not transformed.caches
 
 
-def test_prune_k_cache_fills():
+def test_prune_k_cache_fills_forward():
     testee = (
         VerticalLoopBuilder()
         .loop_order(LoopOrder.FORWARD)
@@ -108,6 +108,33 @@ def test_prune_k_cache_fills():
             .add_stmt(AssignStmtBuilder("baz", "baz", (0, 0, -1)).build())
             .add_stmt(AssignStmtBuilder("barbaz", "bar").build())
             .add_stmt(AssignStmtBuilder("barbaz", "barbaz", (0, 0, -1)).build())
+            .build()
+        )
+        .add_cache(KCacheBuilder("foo", fill=True).build())
+        .add_cache(KCacheBuilder("bar", fill=True).build())
+        .add_cache(KCacheBuilder("baz", fill=True).build())
+        .add_cache(KCacheBuilder("barbaz", fill=True).build())
+        .build()
+    )
+    transformed = PruneKCacheFills().visit(testee)
+    cache_dict = {c.name: c for c in transformed.caches}
+    assert cache_dict["foo"].fill
+    assert cache_dict["bar"].fill
+    assert not cache_dict["baz"].fill
+    assert not cache_dict["barbaz"].fill
+
+
+def test_prune_k_cache_fills_backward():
+    testee = (
+        VerticalLoopBuilder()
+        .loop_order(LoopOrder.BACKWARD)
+        .add_horizontal_execution(
+            HorizontalExecutionBuilder()
+            .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, -1)).build())
+            .add_stmt(AssignStmtBuilder("bar", "bar", (0, 0, 0)).build())
+            .add_stmt(AssignStmtBuilder("baz", "baz", (0, 0, 1)).build())
+            .add_stmt(AssignStmtBuilder("barbaz", "bar").build())
+            .add_stmt(AssignStmtBuilder("barbaz", "barbaz", (0, 0, 1)).build())
             .build()
         )
         .add_cache(KCacheBuilder("foo", fill=True).build())
