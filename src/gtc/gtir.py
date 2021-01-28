@@ -27,11 +27,14 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Generator, List, Set, Tuple
 
 from pydantic import validator
+from pydantic.class_validators import root_validator
 
-from eve import Node, Str, SymbolName, SymbolTableTrait
+from eve import Node, Str, SymbolName, SymbolTableTrait, utils
+from eve.iterators import TreeIterationItem
+from eve.typingx import RootValidatorValuesType
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
@@ -95,6 +98,24 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
         if v.offset.i != 0 or v.offset.j != 0:
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
+
+    @root_validator(skip_on_failure=True)
+    def no_write_and_read_with_offset_of_same_field(
+        cls, values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
+        if isinstance(values["left"], FieldAccess):
+            offset_reads = (
+                values["right"]
+                .iter_tree()
+                .if_isinstance(FieldAccess)
+                .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
+                .getattr("name")
+                .to_set()
+            )
+            if values["left"].name in offset_reads:
+                raise ValueError("Self-assignment with offset is illegal.")
+
+        return values
 
     _dtype_validation = common.assign_stmt_dtype_validation(strict=False)
 
@@ -188,6 +209,53 @@ class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
     temporaries: List[FieldDecl]
     body: List[Stmt]
+
+    @root_validator(skip_on_failure=True)
+    def no_write_and_read_with_horizontal_offset(
+        cls, values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
+        """
+        In the same VerticalLoop a field must not be written and read with a horizontal offset.
+
+        Temporaries don't have this contraint. Backends are required to implement temporaries with block-private halos.
+        """
+        # TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode
+        @utils.as_xiter
+        def _collection_iter_tree(
+            collection: List[Node],
+        ) -> Generator[TreeIterationItem, None, None]:
+            for elem in collection:
+                yield from elem.iter_tree()
+
+        def _writes(stmts: List[Stmt]) -> Set[str]:
+            result = set()
+            for left in _collection_iter_tree(stmts).if_isinstance(ParAssignStmt).getattr("left"):
+                result |= left.iter_tree().if_isinstance(FieldAccess).getattr("name").to_set()
+            return result
+
+        def _reads_with_offset(stmts: List[Stmt]) -> Set[str]:
+            return (
+                _collection_iter_tree(stmts)
+                .if_isinstance(FieldAccess)
+                .filter(
+                    lambda acc: acc.offset.i != 0 or acc.offset.j != 0
+                )  # writes always have zero offset
+                .getattr("name")
+                .to_set()
+            )
+
+        writes = _writes(values["body"])
+        reads_with_offset = _reads_with_offset(values["body"])
+
+        intersec = writes.intersection(reads_with_offset)
+        non_tmp_fields = {
+            acc for acc in intersec if acc not in {tmp.name for tmp in values["temporaries"]}
+        }
+        if len(non_tmp_fields) > 0:
+            raise ValueError(
+                f"Illegal write and read with horizontal offset detected for {non_tmp_fields}."
+            )
+        return values
 
 
 class Stencil(LocNode, SymbolTableTrait):
