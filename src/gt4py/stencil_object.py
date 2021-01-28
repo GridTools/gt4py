@@ -8,6 +8,7 @@ from typing import Tuple
 import numpy as np
 
 import gt4py.backend as gt_backend
+import gt4py.ir as gt_ir
 import gt4py.storage as gt_storage
 import gt4py.utils as gt_utils
 from gt4py.definitions import (
@@ -323,7 +324,7 @@ class StencilObject(abc.ABC):
         for name, field in used_field_args.items():
             if "_all_" in origin:
                 field_mask = self._get_field_mask(name)
-                origin.setdefault(name, origin["_all_"].filter_mask(field_mask))
+                origin.setdefault(name, gt_ir.Index(origin["_all_"].filter_mask(field_mask)))
             else:
                 storage_ndim = len(field.shape)
                 api_ndim = len(self.field_info[name].axes)
@@ -331,7 +332,7 @@ class StencilObject(abc.ABC):
                     raise ValueError(
                         f"The storage for '{name}' has {storage_ndim} dimensions, but the API signature expects {api_ndim}"
                     )
-                origin.setdefault(name, field.default_origin)
+                origin.setdefault(name, gt_ir.Index(field.default_origin))
 
         # Domain
         if domain is None:
