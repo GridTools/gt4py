@@ -964,7 +964,7 @@ class IRMaker(ast.NodeVisitor):
 
     def visit_Subscript(self, node: ast.Subscript):
         assert isinstance(node.ctx, (ast.Load, ast.Store))
-        index = tuple(sl.value for sl in gt_utils.listify(self.visit(node.slice)))
+        index = [ast.literal_eval(n) for n in node.slice.value.elts]
         result = self.visit(node.value)
         if isinstance(result, gt_ir.VarRef):
             result.index = index[0]
