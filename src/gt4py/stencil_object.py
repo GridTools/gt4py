@@ -325,7 +325,7 @@ class StencilObject(abc.ABC):
                 field_mask = self._get_field_mask(name)
                 origin.setdefault(name, origin["_all_"].filter_mask(field_mask))
             else:
-                storage_ndim = len(field.default_origin)
+                storage_ndim = len(field.shape)
                 api_ndim = len(self.field_info[name].axes)
                 if storage_ndim != api_ndim:
                     raise ValueError(
