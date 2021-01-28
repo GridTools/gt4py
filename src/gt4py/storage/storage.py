@@ -131,8 +131,8 @@ class Storage(np.ndarray):
 
         if mask is None:
             mask = [True] * len(shape)
-        default_origin = storage_utils.normalize_default_origin(default_origin, mask)
-        shape = storage_utils.normalize_shape(shape, mask)
+        default_origin = tuple(storage_utils.normalize_default_origin(default_origin, mask))
+        shape = tuple(storage_utils.normalize_shape(shape, mask))
 
         if not backend in gt_backend.REGISTRY:
             ValueError("Backend must be in {}.".format(gt_backend.REGISTRY))
