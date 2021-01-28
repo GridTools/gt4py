@@ -438,6 +438,11 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 field_attributes = {
                     "name": field_decl.name,
                     "dtype": self._make_cpp_type(field_decl.data_type),
+                    "naxes": len(field_decl.axes),
+                    "axes": field_decl.axes,
+                    "selector": tuple(
+                        axis in field_decl.axes for axis in self.impl_node.domain.axes_names
+                    ),
                 }
                 if field_decl.is_api:
                     if field_decl.layout_id not in storage_ids:

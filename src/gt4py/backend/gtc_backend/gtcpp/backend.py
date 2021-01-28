@@ -14,14 +14,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
-from gt4py.backend.gt_backends import gtx86_layout
+from gt4py.backend.gt_backends import (
+    GTCUDAPyModuleGenerator,
+    gtcuda_layout,
+    gtmc_layout,
+    gtx86_layout,
+)
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.storage.default_parameters import StorageDefaults
 from gtc import gtir_to_oir
@@ -37,9 +42,6 @@ if TYPE_CHECKING:
 
 
 class GTCGTExtGenerator:
-    COMPUTATION_FILES = ["computation.hpp"]
-    BINDINGS_FILES = ["bindings.cpp"]
-
     def __init__(self, class_name, module_name, gt_backend_t, options):
         self.class_name = class_name
         self.module_name = module_name
@@ -53,11 +55,14 @@ class GTCGTExtGenerator:
         upcasted = upcast(dtype_deduced)
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
-        implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp)
-        bindings = GTCppBindingsCodegen.apply(gtcpp, module_name=self.module_name)
+        implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
+        bindings = GTCppBindingsCodegen.apply(
+            gtcpp, module_name=self.module_name, gt_backend_t=self.gt_backend_t
+        )
+        bindings_ext = ".cu" if self.gt_backend_t == "gpu" else ".cpp"
         return {
             "computation": {"computation.hpp": implementation},
-            "bindings": {"bindings.cpp": bindings},
+            "bindings": {"bindings" + bindings_ext: bindings},
         }
 
 
@@ -82,15 +87,20 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             raise AssertionError(f"Invalid DataType value: {dtype}")
 
     def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
+        assert "gt_backend_t" in kwargs
         if "external_arg" in kwargs:
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,3> {name}_origin".format(
-                    name=node.name
+                return "py::{objtype} {name}, std::array<gt::uint_t,3> {name}_origin".format(
+                    objtype=("object" if kwargs["gt_backend_t"] == "gpu" else "buffer"),
+                    name=node.name,
                 )
             else:
-                return """gt::sid::shift_sid_origin(gt::as_sid<{dtype}, 3,
+                return """gt::sid::shift_sid_origin(gt::as_{sid_type}<{dtype}, 3,
                     std::integral_constant<int, {unique_index}>>({name}), {name}_origin)""".format(
-                    name=node.name, dtype=self.visit(node.dtype), unique_index=self.unique_index()
+                    name=node.name,
+                    dtype=self.visit(node.dtype),
+                    unique_index=self.unique_index(),
+                    sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
                 )
 
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
@@ -102,8 +112,8 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 
     def visit_Program(self, node: gtcpp.Program, **kwargs):
         assert "module_name" in kwargs
-        entry_params = self.visit(node.parameters, external_arg=True)
-        sid_params = self.visit(node.parameters, external_arg=False)
+        entry_params = self.visit(node.parameters, external_arg=True, **kwargs)
+        sid_params = self.visit(node.parameters, external_arg=False, **kwargs)
         return self.generic_visit(
             node,
             entry_params=entry_params,
@@ -157,24 +167,12 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return formatted_code
 
 
-@gt_backend.register
-class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
-    """GridTools python backend using gtc."""
-
-    name = "gtc:gt:cpu_ifirst"
-
-    GT_BACKEND_T = "x86"
-    options: ClassVar[Dict[str, Any]] = {}
-    compute_device = "cpu"
-    assert_specified_layout = True
-    storage_defaults = StorageDefaults(layout=gtx86_layout)
-
-    languages = {"computation": "c++", "bindings": ["python"]}
-
+class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
+    options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
 
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=False)
+    def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
+        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=uses_cuda)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
@@ -194,3 +192,49 @@ class GTCGTBackend(BaseGTBackend, CLIBackendMixin):
             pyext_module_name=pyext_module_name,
             pyext_file_path=pyext_file_path,
         )
+
+
+@gt_backend.register
+class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
+    """GridTools python backend using gtc."""
+
+    name = "gtc:gt:cpu_ifirst"
+    GT_BACKEND_T = "cpu_ifirst"
+    languages = {"computation": "c++", "bindings": ["python"]}
+    compute_device = "cpu"
+    assert_specified_layout = False
+    storage_defaults = StorageDefaults(layout=gtmc_layout, device="cpu", alignment_size=8)
+
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return super()._generate_extension(uses_cuda=False)
+
+
+@gt_backend.register
+class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
+    """GridTools python backend using gtc."""
+
+    name = "gtc:gt:cpu_kfirst"
+    GT_BACKEND_T = "cpu_kfirst"
+    languages = {"computation": "c++", "bindings": ["python"]}
+    compute_device = "cpu"
+    assert_specified_layout = False
+    storage_defaults = StorageDefaults(layout=gtx86_layout)
+
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return super()._generate_extension(uses_cuda=False)
+
+
+@gt_backend.register
+class GTCGTGpuBackend(GTCGTBaseBackend):
+    """GridTools python backend using gtc."""
+
+    MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
+    name = "gtc:gt:gpu"
+    GT_BACKEND_T = "gpu"
+    languages = {"computation": "cuda", "bindings": ["python"]}
+    compute_device = "gpu"
+    assert_specified_layout = False
+    storage_defaults = StorageDefaults(layout=gtcuda_layout, device="gpu", alignment_size=32)
+
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+        return super()._generate_extension(uses_cuda=True)

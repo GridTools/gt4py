@@ -372,3 +372,26 @@ class TestNonStorageArguments:
         stencil(field)
 
         np.testing.assert_equal(storage.to_numpy(), 3.0)
+
+
+class TestAxesMismatch:
+    def run_test(self, field_out, match):
+        @gtscript.stencil(backend="debug")
+        def definition(
+            field_out: gtscript.Field[np.float64, gtscript.IJ],
+        ):
+            with computation(FORWARD), interval(...):
+                field_out = 1.0
+
+        with pytest.raises(ValueError, match=match):
+            definition(field_out)
+
+    def test_ndarray(self):
+        self.run_test(
+            np.ndarray((3, 3, 3), np.float64),
+            f"The storage for '.*' has 3 dimensions, but the API signature expects 2",
+        )
+
+    @pytest.mark.skip("Need dims of __gt_data_interface__ support")
+    def test_gt_data_interface(self):
+        raise NotImplementedError

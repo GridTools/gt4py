@@ -326,10 +326,12 @@ class BaseBackend(Backend):
                     else gt_definitions.AccessKind.READ_ONLY
                 )
                 if arg.name not in implementation_ir.unreferenced:
+                    field_decl = implementation_ir.fields[arg.name]
                     data["field_info"][arg.name] = gt_definitions.FieldInfo(
                         access=access,
-                        dtype=implementation_ir.fields[arg.name].data_type.dtype,
                         boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
+                        axes=field_decl.axes,
+                        dtype=field_decl.data_type.dtype,
                     )
                 else:
                     data["field_info"][arg.name] = None

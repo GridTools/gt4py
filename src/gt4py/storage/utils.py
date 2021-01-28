@@ -23,6 +23,7 @@ from typing import Any, Callable, Optional, Sequence, Tuple, Union
 import numpy as np
 
 import gt4py.utils as gt_util
+from gt4py.definitions import Shape
 
 
 try:
@@ -51,7 +52,10 @@ def check_mask(mask):
         raise TypeError("Mask must be an iterable of booleans.")
 
 
-def normalize_shape(shape, mask=None):
+def normalize_shape(
+    shape: Optional[Sequence[int]], mask: Optional[Sequence[bool]] = None
+) -> Optional[Shape]:
+
     check_mask(mask)
 
     if shape is None:
@@ -73,7 +77,7 @@ def normalize_shape(shape, mask=None):
     if sum(mask) < len(shape):
         new_shape = [int(h) for i, h in enumerate(new_shape) if mask[i]]
 
-    return tuple(new_shape)
+    return Shape(new_shape)
 
 
 def is_cuda_managed(data):

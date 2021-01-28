@@ -2,7 +2,7 @@
 import abc
 import time
 from types import SimpleNamespace
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 
@@ -15,7 +15,13 @@ import gt4py.backend as gt_backend
 import gt4py.ir as gt_ir
 import gt4py.storage as gt_storage
 import gt4py.storage.utils as gt_storage_utils
-from gt4py.definitions import Index, Shape, normalize_domain, normalize_origin_mapping
+from gt4py.definitions import (
+    CartesianSpace,
+    Index,
+    Shape,
+    normalize_domain,
+    normalize_origin_mapping,
+)
 
 
 class StencilObject(abc.ABC):
@@ -112,6 +118,10 @@ class StencilObject(abc.ABC):
     def __call__(self, *args, **kwargs):
         pass
 
+    def _get_field_mask(self, field_name: str) -> Tuple[bool, ...]:
+        field_axes = self.field_info[field_name].axes
+        return tuple(axis in field_axes for axis in CartesianSpace.names)
+
     def _get_max_domain(self, array_interfaces, origin):
         """Return the maximum domain size possible.
 
@@ -128,11 +138,16 @@ class StencilObject(abc.ABC):
         -------
             `Shape`: the maximum domain size.
         """
-        max_domain = Shape([np.iinfo(np.uintc).max] * self.domain_info.ndims)
+        large_val = np.iinfo(np.uintc).max
+        max_domain = Shape([large_val] * self.domain_info.ndims)
         shapes = {name: Shape(interface["shape"]) for name, interface in array_interfaces.items()}
         for name, shape in shapes.items():
-            upper_boundary = Index(self.field_info[name].boundary.upper_indices)
-            max_domain &= shape - (Index(origin[name]) + upper_boundary)
+            api_mask = self._get_field_mask(name)
+            upper_boundary = Index(self.field_info[name].boundary.upper_indices).filter_mask(
+                api_mask
+            )
+            field_domain = Shape(shape) - (origin[name] + upper_boundary)
+            max_domain &= Shape.from_mask(field_domain, api_mask, default=large_val)
         return max_domain
 
     def _validate_args(self, array_interfaces, used_param_args, domain, origin):
@@ -152,7 +167,9 @@ class StencilObject(abc.ABC):
                 if not gt_storage_utils.is_compatible_layout(
                     interface["strides"],
                     interface["shape"],
-                    gt_backend.from_name(self.backend).storage_defaults.layout("IJK"),
+                    gt_backend.from_name(self.backend).storage_defaults.layout(
+                        self.field_info[name].axes
+                    ),
                 ):
                     raise ValueError(
                         f"The layout of the field '{name}' is not compatible with the backend."
@@ -190,17 +207,17 @@ class StencilObject(abc.ABC):
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
         for name, interface in array_interfaces.items():
-            min_origin = self.field_info[name].boundary.lower_indices
+            field_mask = self._get_field_mask(name)
+            min_origin = self.field_info[name].boundary.lower_indices.filter_mask(field_mask)
+            restricted_domain = domain.filter_mask(field_mask)
+            upper_indices = self.field_info[name].boundary.upper_indices.filter_mask(field_mask)
             if origin[name] < min_origin:
                 raise ValueError(
                     f"Origin for field {name} too small. Must be at least {min_origin}, is "
                     f"{origin[name]}"
                 )
             min_shape = tuple(
-                o + d + h
-                for o, d, h in zip(
-                    origin[name], domain, self.field_info[name].boundary.upper_indices
-                )
+                o + d + h for o, d, h in zip(origin[name], restricted_domain, upper_indices)
             )
             if min_shape > interface["shape"]:
                 raise ValueError(
@@ -320,17 +337,20 @@ class StencilObject(abc.ABC):
             origin = normalize_origin_mapping(origin)
 
         for name, interface in array_interfaces.items():
-            origin.setdefault(
-                name,
-                origin["_all_"]
-                if "_all_" in origin
-                else tuple(
-                    h
-                    for h, _ in interface.get(
-                        "halo", ((0, 0),) * len(self.field_info[name].boundary)
+            if "_all_" in origin:
+                field_mask = self._get_field_mask(name)
+                origin.setdefault(name, gt_ir.Index(origin["_all_"].filter_mask(field_mask)))
+            else:
+                storage_ndim = len(interface["shape"])
+                api_ndim = len(self.field_info[name].axes)
+                if storage_ndim != api_ndim:
+                    raise ValueError(
+                        f"The storage for '{name}' has {storage_ndim} dimensions, but the API signature expects {api_ndim}"
                     )
-                ),
-            )
+                origin.setdefault(
+                    name,
+                    gt_ir.Index(tuple(h for h, _ in interface.get("halo", ((0, 0),) * api_ndim))),
+                )
 
         # Domain
         if domain is None:
