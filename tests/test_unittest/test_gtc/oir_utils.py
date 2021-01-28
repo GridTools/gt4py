@@ -36,6 +36,7 @@ from gtc.oir import (
     SymbolName,
     Temporary,
     VerticalLoop,
+    VerticalLoopSection,
 )
 
 
@@ -125,11 +126,27 @@ class HorizontalExecutionBuilder:
         )
 
 
-class VerticalLoopBuilder:
+class VerticalLoopSectionBuilder:
     def __init__(self) -> None:
         self._interval = Interval(start=AxisBound.start(), end=AxisBound.end())
         self._horizontal_executions: List[HorizontalExecution] = []
+
+    def add_horizontal_execution(
+        self, horizontal_execution: HorizontalExecution
+    ) -> "VerticalLoopSectionBuilder":
+        self._horizontal_executions.append(horizontal_execution)
+        return self
+
+    def build(self) -> VerticalLoopSection:
+        return VerticalLoopSection(
+            interval=self._interval, horizontal_executions=self._horizontal_executions
+        )
+
+
+class VerticalLoopBuilder:
+    def __init__(self) -> None:
         self._loop_order = LoopOrder.PARALLEL
+        self._sections: List[VerticalLoopSection] = []
         self._declarations: List[Temporary] = []
         self._caches: List[CacheDecl] = []
 
@@ -137,10 +154,8 @@ class VerticalLoopBuilder:
         self._loop_order = loop_order
         return self
 
-    def add_horizontal_execution(
-        self, horizontal_execution: HorizontalExecution
-    ) -> "VerticalLoopBuilder":
-        self._horizontal_executions.append(horizontal_execution)
+    def add_section(self, section: VerticalLoopSection) -> "VerticalLoopBuilder":
+        self._sections.append(section)
         return self
 
     def add_declaration(self, declaration: Temporary) -> "VerticalLoopBuilder":
@@ -153,8 +168,7 @@ class VerticalLoopBuilder:
 
     def build(self) -> VerticalLoop:
         return VerticalLoop(
-            interval=self._interval,
-            horizontal_executions=self._horizontal_executions,
+            sections=self._sections,
             loop_order=self._loop_order,
             declarations=self._declarations,
             caches=self._caches,

@@ -25,6 +25,7 @@ from ...oir_utils import (
     StencilBuilder,
     TemporaryBuilder,
     VerticalLoopBuilder,
+    VerticalLoopSectionBuilder,
 )
 
 
@@ -38,16 +39,20 @@ def test_access_collector():
         .add_param(FieldDeclBuilder("mask", dtype=DataType.BOOL).build())
         .add_vertical_loop(
             VerticalLoopBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("tmp", "foo", (1, 0, 0)).build())
-                .add_stmt(AssignStmtBuilder("bar", "tmp").build())
-                .build()
-            )
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .mask(FieldAccessBuilder("mask", (-1, -1, 1)).dtype(DataType.BOOL).build())
-                .add_stmt(AssignStmtBuilder("baz", "tmp", (0, 1, 0)).build())
+            .add_section(
+                VerticalLoopSectionBuilder()
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("tmp", "foo", (1, 0, 0)).build())
+                    .add_stmt(AssignStmtBuilder("bar", "tmp").build())
+                    .build()
+                )
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .mask(FieldAccessBuilder("mask", (-1, -1, 1)).dtype(DataType.BOOL).build())
+                    .add_stmt(AssignStmtBuilder("baz", "tmp", (0, 1, 0)).build())
+                    .build()
+                )
                 .build()
             )
             .add_declaration(TemporaryBuilder(name="tmp").build())

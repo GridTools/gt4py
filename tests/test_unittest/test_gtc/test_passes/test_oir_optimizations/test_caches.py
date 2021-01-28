@@ -25,27 +25,32 @@ from ...oir_utils import (
     KCacheBuilder,
     TemporaryBuilder,
     VerticalLoopBuilder,
+    VerticalLoopSectionBuilder,
 )
 
 
 def test_ij_cache_detection():
     testee = (
         VerticalLoopBuilder()
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(AssignStmtBuilder("tmp1", "bar", (1, 0, 0)).build())
-            .build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(AssignStmtBuilder("tmp2", "tmp1", (0, 1, 0)).build())
-            .build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(AssignStmtBuilder("baz", "tmp2", (0, 0, 1)).build())
-            .add_stmt(AssignStmtBuilder("tmp3", "baz").build())
-            .add_stmt(AssignStmtBuilder("foo", "tmp3").build())
+        .add_section(
+            VerticalLoopSectionBuilder()
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_stmt(AssignStmtBuilder("tmp1", "bar", (1, 0, 0)).build())
+                .build()
+            )
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_stmt(AssignStmtBuilder("tmp2", "tmp1", (0, 1, 0)).build())
+                .build()
+            )
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_stmt(AssignStmtBuilder("baz", "tmp2", (0, 0, 1)).build())
+                .add_stmt(AssignStmtBuilder("tmp3", "baz").build())
+                .add_stmt(AssignStmtBuilder("foo", "tmp3").build())
+                .build()
+            )
             .build()
         )
         .add_declaration(TemporaryBuilder(name="tmp1").build())
@@ -64,12 +69,16 @@ def test_k_cache_detection_basic():
     testee = (
         VerticalLoopBuilder()
         .loop_order(LoopOrder.FORWARD)
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, 1)).build())
-            .add_stmt(AssignStmtBuilder("bar", "foo", (0, 0, -1)).build())
-            .add_stmt(AssignStmtBuilder("baz", "baz", (1, 0, 1)).build())
-            .add_stmt(AssignStmtBuilder("foo", "baz", (0, 1, -1)).build())
+        .add_section(
+            VerticalLoopSectionBuilder()
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, 1)).build())
+                .add_stmt(AssignStmtBuilder("bar", "foo", (0, 0, -1)).build())
+                .add_stmt(AssignStmtBuilder("baz", "baz", (1, 0, 1)).build())
+                .add_stmt(AssignStmtBuilder("foo", "baz", (0, 1, -1)).build())
+                .build()
+            )
             .build()
         )
         .build()
@@ -83,12 +92,18 @@ def test_k_cache_detection_single_access_point():
     testee = (
         VerticalLoopBuilder()
         .loop_order(LoopOrder.FORWARD)
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(AssignStmtBuilder("bar", "baz", (0, 0, 1)).build())
+        .add_section(
+            VerticalLoopSectionBuilder()
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_stmt(AssignStmtBuilder("foo", "bar").build())
+                .build()
+            )
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_stmt(AssignStmtBuilder("bar", "baz", (0, 0, 1)).build())
+                .build()
+            )
             .build()
         )
         .build()
@@ -101,13 +116,17 @@ def test_prune_k_cache_fills_forward():
     testee = (
         VerticalLoopBuilder()
         .loop_order(LoopOrder.FORWARD)
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, 1)).build())
-            .add_stmt(AssignStmtBuilder("bar", "bar", (0, 0, 0)).build())
-            .add_stmt(AssignStmtBuilder("baz", "baz", (0, 0, -1)).build())
-            .add_stmt(AssignStmtBuilder("barbaz", "bar").build())
-            .add_stmt(AssignStmtBuilder("barbaz", "barbaz", (0, 0, -1)).build())
+        .add_section(
+            VerticalLoopSectionBuilder()
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, 1)).build())
+                .add_stmt(AssignStmtBuilder("bar", "bar", (0, 0, 0)).build())
+                .add_stmt(AssignStmtBuilder("baz", "baz", (0, 0, -1)).build())
+                .add_stmt(AssignStmtBuilder("barbaz", "bar").build())
+                .add_stmt(AssignStmtBuilder("barbaz", "barbaz", (0, 0, -1)).build())
+                .build()
+            )
             .build()
         )
         .add_cache(KCacheBuilder("foo", fill=True).build())
@@ -128,13 +147,17 @@ def test_prune_k_cache_fills_backward():
     testee = (
         VerticalLoopBuilder()
         .loop_order(LoopOrder.BACKWARD)
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, -1)).build())
-            .add_stmt(AssignStmtBuilder("bar", "bar", (0, 0, 0)).build())
-            .add_stmt(AssignStmtBuilder("baz", "baz", (0, 0, 1)).build())
-            .add_stmt(AssignStmtBuilder("barbaz", "bar").build())
-            .add_stmt(AssignStmtBuilder("barbaz", "barbaz", (0, 0, 1)).build())
+        .add_section(
+            VerticalLoopSectionBuilder()
+            .add_horizontal_execution(
+                HorizontalExecutionBuilder()
+                .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, -1)).build())
+                .add_stmt(AssignStmtBuilder("bar", "bar", (0, 0, 0)).build())
+                .add_stmt(AssignStmtBuilder("baz", "baz", (0, 0, 1)).build())
+                .add_stmt(AssignStmtBuilder("barbaz", "bar").build())
+                .add_stmt(AssignStmtBuilder("barbaz", "barbaz", (0, 0, 1)).build())
+                .build()
+            )
             .build()
         )
         .add_cache(KCacheBuilder("foo", fill=True).build())

@@ -159,12 +159,27 @@ class KCache(CacheDecl):
     flush: bool
 
 
-class VerticalLoop(LocNode):
+class VerticalLoopSection(LocNode):
     interval: Interval
     horizontal_executions: List[HorizontalExecution]
+
+
+class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
+    sections: List[VerticalLoopSection]
     declarations: List[Temporary]
     caches: List[CacheDecl]
+
+    @validator("sections")
+    def valid_sections(cls, v: List[VerticalLoopSection]) -> List[VerticalLoopSection]:
+        if not v:
+            raise ValueError("Empty vertical loop is not allowed")
+
+        for a, b in zip((s.interval.end for s in v[:-1]), (s.interval.start for s in v[1:])):
+            if a.level != b.level or a.offset != b.offset:
+                raise ValueError("Loop intervals not contiguous")
+
+        return v
 
 
 class Stencil(LocNode, SymbolTableTrait):

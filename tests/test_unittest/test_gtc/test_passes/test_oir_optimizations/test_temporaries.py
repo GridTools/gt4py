@@ -24,6 +24,7 @@ from ...oir_utils import (
     StencilBuilder,
     TemporaryBuilder,
     VerticalLoopBuilder,
+    VerticalLoopSectionBuilder,
 )
 
 
@@ -34,10 +35,14 @@ def test_temporaries_to_scalars_basic():
         .add_param(FieldDeclBuilder("bar").build())
         .add_vertical_loop(
             VerticalLoopBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-                .add_stmt(AssignStmtBuilder("bar", "tmp").build())
+            .add_section(
+                VerticalLoopSectionBuilder()
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("tmp", "foo").build())
+                    .add_stmt(AssignStmtBuilder("bar", "tmp").build())
+                    .build()
+                )
                 .build()
             )
             .add_declaration(TemporaryBuilder(name="tmp").build())
@@ -46,7 +51,7 @@ def test_temporaries_to_scalars_basic():
         .build()
     )
     transformed = TemporariesToScalars().visit(testee)
-    hexec = transformed.vertical_loops[0].horizontal_executions[0]
+    hexec = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
     assert isinstance(hexec.body[0].left, oir.ScalarAccess)
     assert isinstance(hexec.body[1].right, oir.ScalarAccess)
     assert not transformed.vertical_loops[0].declarations
@@ -61,15 +66,19 @@ def test_temporaries_to_scalars_multiexec():
         .add_param(FieldDeclBuilder("baz").build())
         .add_vertical_loop(
             VerticalLoopBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-                .add_stmt(AssignStmtBuilder("bar", "tmp").build())
-                .build()
-            )
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("baz", "tmp").build())
+            .add_section(
+                VerticalLoopSectionBuilder()
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("tmp", "foo").build())
+                    .add_stmt(AssignStmtBuilder("bar", "tmp").build())
+                    .build()
+                )
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("baz", "tmp").build())
+                    .build()
+                )
                 .build()
             )
             .add_declaration(TemporaryBuilder(name="tmp").build())

@@ -197,10 +197,14 @@ class GTIRToOIR(NodeTranslator):
             ctx.add_decl(oir.Temporary(name=temp.name, dtype=temp.dtype))
 
         return oir.VerticalLoop(
-            interval=self.visit(node.interval),
             loop_order=node.loop_order,
+            sections=[
+                oir.VerticalLoopSection(
+                    interval=self.visit(node.interval, **kwargs),
+                    horizontal_executions=ctx.horizontal_executions,
+                )
+            ],
             declarations=ctx.decls,
-            horizontal_executions=ctx.horizontal_executions,
             caches=[],
         )
 

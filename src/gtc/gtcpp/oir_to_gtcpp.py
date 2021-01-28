@@ -14,12 +14,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import itertools
 from dataclasses import dataclass, field
 from typing import Any, List, Set, Union
 
 from devtools import debug  # noqa: F401
 
 import eve
+from eve.utils import XIterator, xiter
 from gtc import common, oir
 from gtc.common import CartesianOffset
 from gtc.gtcpp import gtcpp
@@ -31,9 +33,12 @@ from gtc.gtcpp import gtcpp
 # - Each VerticalLoop is MultiStage
 
 
-def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
+def _extract_accessors(*nodes: eve.Node) -> List[gtcpp.GTAccessor]:
+    def iter_all_nodes_tree() -> XIterator[eve.Node]:
+        return xiter(itertools.chain(*(node.iter_tree() for node in nodes)))
+
     extents = (
-        node.iter_tree()
+        iter_all_nodes_tree()
         .if_isinstance(gtcpp.AccessorRef)
         .reduceby(
             (lambda extent, accessor_ref: extent + accessor_ref.offset),
@@ -44,7 +49,7 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
     )
 
     inout_fields: Set[str] = (
-        node.iter_tree()
+        iter_all_nodes_tree()
         .if_isinstance(gtcpp.AssignStmt)
         .getattr("left")
         .if_isinstance(gtcpp.AccessorRef)
@@ -206,19 +211,58 @@ class OIRToGTCpp(eve.NodeTranslator):
         self,
         node: oir.VerticalLoop,
         *,
+        prog_ctx: ProgramContext,
         comp_ctx: GTComputationContext,
         **kwargs: Any,
     ) -> gtcpp.GTMultiStage:
         assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
         comp_ctx.add_temporaries(self.visit(node.declarations))
         # the following visit assumes that temporaries are already available in comp_ctx
-        stages = self.visit(
-            node.horizontal_executions,
-            interval=node.interval,
-            default=([], []),
-            comp_ctx=comp_ctx,
-            **kwargs,
-        )
+        if all(len(section.horizontal_executions) == 1 for section in node.sections):
+            apply_methods = []
+            for section in node.sections:
+                hexec = section.horizontal_executions[0]
+                body = self.visit(hexec.body, **kwargs)
+                mask = self.visit(hexec.mask, **kwargs)
+                if mask:
+                    body = [gtcpp.IfStmt(cond=mask, true_branch=gtcpp.BlockStmt(body=body))]
+                apply_methods.append(
+                    gtcpp.GTApplyMethod(
+                        interval=self.visit(section.interval, **kwargs),
+                        body=body,
+                        local_variables=self.visit(hexec.declarations, **kwargs),
+                    )
+                )
+            accessors = _extract_accessors(*apply_methods)
+            stage_args = [gtcpp.Arg(name=acc.name) for acc in accessors]
+
+            comp_ctx.add_arguments(
+                {
+                    param_arg
+                    for param_arg in stage_args
+                    if param_arg.name not in [tmp.name for tmp in comp_ctx.temporaries]
+                }
+            )
+
+            prog_ctx.add_functor(
+                gtcpp.GTFunctor(
+                    name=node.id_,
+                    applies=apply_methods,
+                    param_list=gtcpp.GTParamList(accessors=accessors),
+                )
+            )
+            stages = [gtcpp.GTStage(functor=node.id_, args=stage_args)]
+        else:
+            stages = []
+            for section in node.sections:
+                stages += self.visit(
+                    section.horizontal_executions,
+                    interval=section.interval,
+                    default=([], []),
+                    prog_ctx=prog_ctx,
+                    comp_ctx=comp_ctx,
+                    **kwargs,
+                )
         caches = [self.visit(cache) for cache in node.caches]
         return gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches)
 

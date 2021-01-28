@@ -39,8 +39,7 @@ class IJCacheDetection(NodeTranslator):
             oir.IJCache(name=field) for field in cacheable
         ]
         return oir.VerticalLoop(
-            interval=self.visit(node.interval, **kwargs),
-            horizontal_executions=self.visit(node.horizontal_executions, **kwargs),
+            sections=self.visit(node.sections, **kwargs),
             loop_order=self.visit(node.loop_order, **kwargs),
             declarations=self.visit(node.declarations, **kwargs),
             caches=caches,
@@ -64,9 +63,8 @@ class KCacheDetection(NodeTranslator):
             oir.KCache(name=field, fill=True, flush=True) for field in cacheable
         ]
         return oir.VerticalLoop(
-            interval=self.visit(node.interval, **kwargs),
-            horizontal_executions=self.visit(node.horizontal_executions, **kwargs),
             loop_order=self.visit(node.loop_order, **kwargs),
+            sections=self.visit(node.sections, **kwargs),
             declarations=self.visit(node.declarations, **kwargs),
             caches=caches,
         )

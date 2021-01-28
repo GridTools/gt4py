@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any
+from typing import Any, Dict, Set, Tuple
 
 from eve import NodeTranslator
 from gtc import oir
@@ -30,18 +30,28 @@ class GreedyMerging(NodeTranslator):
     Postcondition: The number of horizontal executions is equal or smaller than before.
     """
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
+    def visit_VerticalLoopSection(
+        self, node: oir.VerticalLoopSection, **kwargs: Any
+    ) -> oir.VerticalLoopSection:
         if not node.horizontal_executions:
             raise GTCPreconditionError(expected="non-empty vertical loop")
         result = self.generic_visit(node, **kwargs)
         horizontal_executions = [result.horizontal_executions[0]]
         accesses = AccessCollector.apply(horizontal_executions[-1])
-        previous_reads = accesses.read_offsets()
-        previous_writes = accesses.write_offsets()
+
+        def ij_offsets(
+            offsets: Dict[str, Set[Tuple[int, int, int]]]
+        ) -> Dict[str, Set[Tuple[int, int]]]:
+            return {
+                field: {o[:2] for o in field_offsets} for field, field_offsets in offsets.items()
+            }
+
+        previous_reads = ij_offsets(accesses.read_offsets())
+        previous_writes = ij_offsets(accesses.write_offsets())
         for horizontal_execution in result.horizontal_executions[1:]:
             accesses = AccessCollector.apply(horizontal_execution)
-            current_reads = accesses.read_offsets()
-            current_writes = accesses.write_offsets()
+            current_reads = ij_offsets(accesses.read_offsets())
+            current_writes = ij_offsets(accesses.write_offsets())
 
             conflicting = {
                 field
