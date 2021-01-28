@@ -56,9 +56,9 @@ class GreedyMerging(NodeTranslator):
             if not conflicting and horizontal_execution.mask == horizontal_executions[-1].mask:
                 horizontal_executions[-1].body += horizontal_execution.body
                 for field, writes in current_writes.items():
-                    previous_writes[field] |= writes
+                    previous_writes.setdefault(field, set()).update(writes)
                 for field, reads in current_reads.items():
-                    previous_reads[field] |= reads
+                    previous_reads.setdefault(field, set()).update(reads)
             else:
                 horizontal_executions.append(horizontal_execution)
                 previous_writes = current_writes

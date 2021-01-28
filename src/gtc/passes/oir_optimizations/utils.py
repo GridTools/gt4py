@@ -77,7 +77,7 @@ class AccessCollector(NodeVisitor):
         @staticmethod
         def _offset_dict(accesses: XIterator) -> Dict[str, Set[Tuple[int, int, int]]]:
             return accesses.reduceby(
-                lambda acc, x: acc | {x.offset}, lambda x: x.field, as_dict=True, init=set()
+                lambda acc, x: acc | {x.offset}, "field", init=set(), as_dict=True
             )
 
         def offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
