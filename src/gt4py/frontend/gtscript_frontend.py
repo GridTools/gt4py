@@ -1202,7 +1202,7 @@ class IRMaker(ast.NodeVisitor):
 
             target.append(self.visit(t))
 
-        value = [item for item in gt_utils.listify(self.visit(node.value))]
+        value = gt_utils.listify(self.visit(node.value))
 
         assert len(target) == len(value)
         for left, right in zip(target, value):
