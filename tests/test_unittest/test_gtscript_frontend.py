@@ -101,7 +101,7 @@ class TestInlinedExternals:
                         + GLOBAL_NESTED_CONSTANTS.A
                         + GLOBAL_VERY_NESTED_CONSTANTS.nested.A
                     )
-                    if GLOBAL_BOOL_CONSTANT
+                    if GLOBAL_BOOL_CONSTANT and inout_field < 1.0
                     else 0
                 )
 
