@@ -259,13 +259,6 @@ class AxisIntervalParser(ast.NodeVisitor):
         else:
             return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
 
-    def visit_NameConstant(self, node: ast.NameConstant) -> gt_ir.AxisBound:
-        """Python < 3.8 uses ast.NameConstant for 'None'."""
-        if node.value is not None:
-            raise self.interval_error
-        else:
-            return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
-
     def visit_BinOp(self, node: ast.BinOp) -> gt_ir.AxisBound:
         left = self.visit(node.left)
         right = self.visit(node.right)
