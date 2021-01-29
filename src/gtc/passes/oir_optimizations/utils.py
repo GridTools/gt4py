@@ -84,10 +84,19 @@ class AccessCollector(NodeVisitor):
             return self._offset_dict(xiter(self._ordered_accesses))
 
         def read_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
-            return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: not x.is_write))
+            return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
 
         def write_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
+
+        def fields(self) -> Set[str]:
+            return {acc.field for acc in self._ordered_accesses}
+
+        def read_fields(self) -> Set[str]:
+            return {acc.field for acc in self._ordered_accesses if acc.is_read}
+
+        def write_fields(self) -> Set[str]:
+            return {acc.field for acc in self._ordered_accesses if acc.is_write}
 
         def ordered_accesses(self) -> List[Access]:
             return self._ordered_accesses

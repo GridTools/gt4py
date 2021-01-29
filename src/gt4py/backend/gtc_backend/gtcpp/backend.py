@@ -39,7 +39,12 @@ from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
-from gtc.passes.oir_optimizations.caches import IJCacheDetection, KCacheDetection, PruneKCacheFills
+from gtc.passes.oir_optimizations.caches import (
+    IJCacheDetection,
+    KCacheDetection,
+    PruneKCacheFills,
+    PruneKCacheFlushes,
+)
 from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
 from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
@@ -81,6 +86,7 @@ class GTCGTExtGenerator:
         oir = IJCacheDetection().visit(oir)
         oir = KCacheDetection().visit(oir)
         oir = PruneKCacheFills().visit(oir)
+        oir = PruneKCacheFlushes().visit(oir)
         return oir
 
 

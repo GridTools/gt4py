@@ -97,3 +97,31 @@ class PruneKCacheFills(NodeTranslator):
         pruneable = {field for field in filling_fields if not requires_fill(field)}
 
         return self.generic_visit(node, pruneable=pruneable, **kwargs)
+
+
+class PruneKCacheFlushes(NodeTranslator):
+    def visit_KCache(self, node: oir.KCache, *, pruneable: Set[str], **kwargs: Any) -> oir.KCache:
+        if node.name in pruneable:
+            return oir.KCache(name=node.name, fill=node.fill, flush=False)
+        return self.generic_visit(node, **kwargs)
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.KCache:
+        accesses = [AccessCollector.apply(vertical_loop) for vertical_loop in node.vertical_loops]
+        vertical_loops = []
+        for i, vertical_loop in enumerate(node.vertical_loops):
+            flushing_fields = {
+                c.name for c in vertical_loop.caches if isinstance(c, oir.KCache) and c.flush
+            }
+            read_only_fields = flushing_fields & (
+                accesses[i].read_fields() - accesses[i].write_fields()
+            )
+            tmps_without_reuse = (
+                flushing_fields & {d.name for d in vertical_loop.declarations}
+            ) - set().union(
+                *(acc.read_fields() for acc in accesses[i + 1 :])  # type: ignore
+            )
+            pruneable = read_only_fields | tmps_without_reuse
+            vertical_loops.append(self.visit(vertical_loop, pruneable=pruneable, **kwargs))
+        return oir.Stencil(
+            name=node.name, params=self.visit(node.params, **kwargs), vertical_loops=vertical_loops
+        )
