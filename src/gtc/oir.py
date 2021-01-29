@@ -190,3 +190,9 @@ class Stencil(LocNode, SymbolTableTrait):
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()
+
+    @validator("vertical_loops")
+    def not_empty(cls, v: List[VerticalLoop]) -> List[VerticalLoop]:
+        if not v:
+            raise ValueError("Empty stencil")
+        return v
