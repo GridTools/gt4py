@@ -42,6 +42,7 @@ from gtc.passes.gtir_upcaster import upcast
 from gtc.passes.oir_optimizations.caches import IJCacheDetection, KCacheDetection, PruneKCacheFills
 from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
+from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 
 
 if TYPE_CHECKING:
@@ -75,6 +76,7 @@ class GTCGTExtGenerator:
 
     def _optimize_oir(self, oir):
         oir = GreedyMerging().visit(oir)
+        oir = AdjacentLoopMerging().visit(oir)
         oir = TemporariesToScalars().visit(oir)
         oir = IJCacheDetection().visit(oir)
         oir = KCacheDetection().visit(oir)
