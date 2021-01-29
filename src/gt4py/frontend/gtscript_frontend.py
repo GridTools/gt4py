@@ -1639,11 +1639,11 @@ class GTScriptParser(ast.NodeVisitor):
         # Inline function calls
         CallInliner.apply(main_func_node, context=local_context)
 
-        AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
-
         # Evaluate and inline compile-time conditionals
         CompiledIfInliner.apply(main_func_node, context=local_context)
         # Cleaner.apply(self.definition_ir)
+
+        AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
 
         # Generate definition IR
         domain = gt_ir.Domain.LatLonGrid()
