@@ -87,4 +87,5 @@ def test_temporaries_to_scalars_multiexec():
         .build()
     )
     transformed = TemporariesToScalars().visit(testee)
-    assert transformed == testee
+    assert "tmp" in {d.name for d in transformed.vertical_loops[0].declarations}
+    assert not transformed.iter_tree().if_isinstance(oir.ScalarAccess).to_list()
