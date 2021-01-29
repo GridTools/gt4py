@@ -942,10 +942,16 @@ class IRMaker(ast.NodeVisitor):
 
     def visit_Subscript(self, node: ast.Subscript):
         assert isinstance(node.ctx, (ast.Load, ast.Store))
-        index_asts = (
-            node.slice.value.elts if isinstance(node.slice.value, ast.Tuple) else node.slice.value
+
+        # Python 3.9 skips wrapping the ast.Tuple in an ast.Index
+        tuple_or_constant = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
+        constant_nodes = gt_utils.listify(
+            tuple_or_constant.elts
+            if isinstance(tuple_or_constant, ast.Tuple)
+            else tuple_or_constant
         )
-        index = [ast.literal_eval(iast) for iast in gt_utils.listify(index_asts)]
+
+        index = [ast.literal_eval(cn) for cn in constant_nodes]
         result = self.visit(node.value)
         if isinstance(result, gt_ir.VarRef):
             result.index = index[0]
