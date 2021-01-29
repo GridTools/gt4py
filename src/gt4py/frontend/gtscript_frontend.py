@@ -447,7 +447,10 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        if isinstance(node.value, ast.Call) and node.value.func.id not in gtscript.MATH_BUILTINS:
+        if (
+            isinstance(node.value, ast.Call)
+            and gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
+        ):
             assert len(node.targets) == 1
             self.visit(node.value, target_node=node.targets[0])
             # This node can be now removed since the trivial assignment has been already done
@@ -457,7 +460,7 @@ class CallInliner(ast.NodeTransformer):
             return self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call, *, target_node=None):
-        call_name = node.func.id
+        call_name = gt_meta.get_qualified_name_from_node(node.func)
 
         if call_name in gtscript.MATH_BUILTINS:
             node.args = [self.visit(arg) for arg in node.args]
@@ -764,17 +767,6 @@ class IRMaker(ast.NodeVisitor):
     def _is_known(self, name: str):
         return self._is_field(name) or self._is_parameter(name) or self._is_local_symbol(name)
 
-    def _get_qualified_name(self, node: ast.AST, *, joiner="."):
-        if isinstance(node, ast.Name):
-            result = node.id
-        elif isinstance(node, ast.Attribute):
-            prefix = self._get_qualified_name(node.value)
-            result = joiner.join([prefix, node.attr])
-        else:
-            result = None
-
-        return result
-
     def _are_blocks_sorted(self, compute_blocks: List[gt_ir.ComputationBlock]):
         def sort_blocks_key(comp_block):
             start = comp_block.interval.start
@@ -933,7 +925,7 @@ class IRMaker(ast.NodeVisitor):
 
     # -- Symbol nodes --
     def visit_Attribute(self, node: ast.Attribute):
-        qualified_name = self._get_qualified_name(node)
+        qualified_name = gt_meta.get_qualified_name_from_node(node)
         return self.visit(ast.Name(id=qualified_name, ctx=node.ctx))
 
     def visit_Name(self, node: ast.Name) -> gt_ir.Ref:
