@@ -17,7 +17,7 @@
 import collections
 from typing import Any, Dict, Set, Union
 
-from eve import NodeTranslator, NodeVisitor
+from eve import NodeTranslator
 from gtc import oir
 
 
@@ -30,68 +30,69 @@ class TemporariesToScalars(NodeTranslator):
     4. Add matching temporaries to HorizontalExecution declarations.
     """
 
-    class LocalTemporaryFinder(NodeVisitor):
-        """Finds a map from local temporaries to horizontal executions."""
-
-        def visit_FieldAccess(
-            self,
-            node: oir.FieldAccess,
-            *,
-            access_map: Dict[str, Set[int]],
-            hexec_id: int,
-            **kwargs: Any,
-        ) -> None:
-            access_map[node.name].add(hexec_id)
-
-        def visit_HorizontalExecution(self, node: oir.HorizontalExecution, **kwargs: Any) -> None:
-            self.generic_visit(node, hexec_id=id(node), **kwargs)
-
-        def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> Dict[str, int]:
-            access_map: Dict[str, Set[int]] = collections.defaultdict(set)
-            self.generic_visit(node, access_map=access_map, **kwargs)
-            return {
-                field: next(iter(accesses))
-                for field, accesses in access_map.items()
-                if len(accesses) == 1
-                and field in node.symtable_
-                and isinstance(node.symtable_[field], oir.Temporary)
-            }
-
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, local_tmps: Set[str], **kwargs: Any
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
         if node.name in local_tmps:
+            assert (
+                node.offset.i == node.offset.j == node.offset.k == 0
+            ), "Non-zero offset in local temporary?!"
             return oir.ScalarAccess(name=node.name, dtype=node.dtype)
         return self.generic_visit(node, **kwargs)
 
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
-        local_tmps: Dict[str, int],
+        local_tmps: Set[str],
         symtable: Dict[str, Any],
         **kwargs: Any,
     ) -> oir.HorizontalExecution:
-        result = self.generic_visit(node, local_tmps=local_tmps, **kwargs)
-        result.declarations += [
-            oir.LocalScalar(name=name, dtype=symtable[name].dtype, loc=symtable[name].loc)
-            for name, hexec_id in local_tmps.items()
-            if hexec_id == id(node)
+        declarations = node.declarations + [
+            oir.LocalScalar(name=tmp, dtype=symtable[tmp].dtype, loc=symtable[tmp].loc)
+            for tmp in node.iter_tree()
+            .if_isinstance(oir.FieldAccess)
+            .getattr("name")
+            .if_in(local_tmps)
+            .to_set()
         ]
-        return result
+        return oir.HorizontalExecution(
+            body=self.visit(node.body, local_tmps=local_tmps, **kwargs),
+            mask=self.visit(node.mask, local_tmps=local_tmps, **kwargs),
+            declarations=declarations,
+        )
 
     def visit_VerticalLoop(
         self,
         node: oir.VerticalLoop,
-        local_tmps: Dict[str, int],
-        symtable: Dict[str, Any],
+        local_tmps: Set[str],
         **kwargs: Any,
     ) -> oir.VerticalLoop:
-        result = self.generic_visit(node, local_tmps=local_tmps, symtable=symtable, **kwargs)
-        result.declarations = [d for d in result.declarations if d.name not in local_tmps]
-        return result
+        return oir.VerticalLoop(
+            interval=node.interval,
+            horizontal_executions=self.visit(
+                node.horizontal_executions, local_tmps=local_tmps, **kwargs
+            ),
+            loop_order=node.loop_order,
+            declarations=[d for d in node.declarations if d.name not in local_tmps],
+        )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        local_tmps = self.LocalTemporaryFinder().visit(node)
-        result = self.generic_visit(node, local_tmps=local_tmps, symtable=node.symtable_, **kwargs)
-        result.collect_symbols()
-        return result
+        temporaries = {
+            symbol for symbol, value in node.symtable_.items() if isinstance(value, oir.Temporary)
+        }
+        horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
+        counts: collections.Counter = sum(
+            (
+                collections.Counter(
+                    horizontal_execution.iter_tree()
+                    .if_isinstance(oir.FieldAccess)
+                    .getattr("name")
+                    .if_in(temporaries)
+                    .to_set()
+                )
+                for horizontal_execution in horizontal_executions
+            ),
+            collections.Counter(),
+        )
+        local_tmps = {tmp for tmp, count in counts.items() if count == 1}
+        return self.generic_visit(node, local_tmps=local_tmps, symtable=node.symtable_, **kwargs)
