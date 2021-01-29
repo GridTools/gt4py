@@ -266,10 +266,6 @@ class AxisIntervalParser(ast.NodeVisitor):
         else:
             return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
 
-    def visit_Num(self, node: ast.Num) -> gt_ir.AxisBound:
-        """Equivalent to visit_Constant. Required for Python < 3.8."""
-        return self.make_axis_bound(node.n, self.loc)
-
     def visit_BinOp(self, node: ast.BinOp) -> gt_ir.AxisBound:
         left = self.visit(node.left)
         right = self.visit(node.right)
@@ -337,11 +333,7 @@ class ValueInliner(ast.NodeTransformer):
         qualified_name = gt_meta.get_qualified_name_from_node(name_or_attr_node)
         if qualified_name in self.context:
             value = self.context[qualified_name]
-            if value is None or isinstance(value, bool):
-                new_node = ast.NameConstant(value=value)
-            elif isinstance(value, numbers.Number):
-                new_node = ast.Num(n=value)
-            elif isinstance(value, gtscript._AxisOffset):
+            if value is None or isinstance(value, (bool, numbers.Number, gtscript._AxisOffset)):
                 new_node = ast.Constant(value=value)
             elif hasattr(value, "_gtscript_"):
                 pass
@@ -496,14 +488,7 @@ class CallInliner(ast.NodeTransformer):
             for name in arg_infos:
                 if name not in call_args:
                     assert arg_infos[name] != gt_ir.Empty
-                    if (
-                        (arg_infos[name] is True)
-                        or arg_infos[name] is False
-                        or arg_infos[name] is None
-                    ):
-                        call_args[name] = ast.Num(n=0.0)  # ast.NameConstant(value=arg_infos[name])
-                    else:
-                        call_args[name] = ast.Num(n=arg_infos[name])
+                    call_args[name] = ast.Constant(value=value)
         except Exception:
             raise GTScriptSyntaxError(
                 message="Invalid call signature", loc=gt_ir.Location.from_ast_node(node)
