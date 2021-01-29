@@ -481,7 +481,7 @@ class CallInliner(ast.NodeTransformer):
             for name in arg_infos:
                 if name not in call_args:
                     assert arg_infos[name] != gt_ir.Empty
-                    call_args[name] = ast.Constant(value=value)
+                    call_args[name] = ast.Constant(value=arg_infos[name])
         except Exception:
             raise GTScriptSyntaxError(
                 message="Invalid call signature", loc=gt_ir.Location.from_ast_node(node)
