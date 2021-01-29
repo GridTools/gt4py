@@ -899,10 +899,15 @@ class IRMaker(ast.NodeVisitor):
     # -- Literal nodes --
     def visit_Constant(
         self, node: ast.Constant
-    ) -> Union[gt_ir.ScalarLiteral, gt_ir.BuiltinLiteral]:
+    ) -> Union[gt_ir.ScalarLiteral, gt_ir.BuiltinLiteral, gt_ir.Cast]:
         value = node.value
-        if value is None or isinstance(value, bool):
+        if value is None:
             return gt_ir.BuiltinLiteral(value=gt_ir.Builtin.from_value(value))
+        elif isinstance(value, bool):
+            return gt_ir.Cast(
+                data_type=gt_ir.DataType.BOOL,
+                expr=gt_ir.BuiltinLiteral(value=gt_ir.Builtin.from_value(value)),
+            )
         elif isinstance(value, numbers.Number):
             data_type = gt_ir.DataType.from_dtype(np.dtype(type(value)))
             return gt_ir.ScalarLiteral(value=value, data_type=data_type)
@@ -1037,9 +1042,6 @@ class IRMaker(ast.NodeVisitor):
     def visit_BoolOp(self, node: ast.BoolOp) -> gt_ir.BinOpExpr:
         op = self.visit(node.op)
         rhs = self.visit(node.values[-1])
-        if isinstance(rhs, gt_ir.BuiltinLiteral):
-            assert rhs.value in (gt_ir.Builtin.FALSE, gt_ir.Builtin.TRUE)
-            rhs = gt_ir.Cast(data_type=gt_ir.DataType.BOOL, expr=rhs)
         for value in reversed(node.values[:-1]):
             lhs = self.visit(value)
             rhs = gt_ir.BinOpExpr(op=op, lhs=lhs, rhs=rhs)
