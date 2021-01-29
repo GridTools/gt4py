@@ -48,26 +48,15 @@ def test_visit_ParAssignStmt():
 
     ctx = GTIRToOIR.Context()
     GTIRToOIR().visit(testee, ctx=ctx)
-    result_decls = ctx.decls
     result_horizontal_executions = ctx.horizontal_executions
 
-    assert len(result_decls) == 1
-    assert isinstance(result_decls[0], oir.Temporary)
-    tmp_name = result_decls[0].name
+    assert len(result_horizontal_executions) == 1
+    assign = isinstance_and_return(result_horizontal_executions[0].body[0], oir.AssignStmt)
 
-    assert len(result_horizontal_executions) == 2
-    first_assign = isinstance_and_return(result_horizontal_executions[0].body[0], oir.AssignStmt)
-    second_assign = isinstance_and_return(result_horizontal_executions[1].body[0], oir.AssignStmt)
-
-    first_left = isinstance_and_return(first_assign.left, oir.FieldAccess)
-    first_right = isinstance_and_return(first_assign.right, oir.FieldAccess)
-    assert first_left.name == tmp_name
-    assert first_right.name == in_name
-
-    second_left = isinstance_and_return(second_assign.left, oir.FieldAccess)
-    second_right = isinstance_and_return(second_assign.right, oir.FieldAccess)
-    assert second_left.name == out_name
-    assert second_right.name == tmp_name
+    left = isinstance_and_return(assign.left, oir.FieldAccess)
+    right = isinstance_and_return(assign.right, oir.FieldAccess)
+    assert left.name == out_name
+    assert right.name == in_name
 
 
 def test_create_mask():

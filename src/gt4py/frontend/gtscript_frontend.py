@@ -715,6 +715,7 @@ class IRMaker(ast.NodeVisitor):
         self.local_symbols = local_symbols
         self.domain = domain or gt_ir.Domain.LatLonGrid()
         self.extra_temp_decls = extra_temp_decls or {}
+        self.iteration_order = None
         self.if_decls_stack = []
         gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
             "abs": gt_ir.NativeFunction.ABS,
@@ -856,7 +857,9 @@ class IRMaker(ast.NodeVisitor):
         ):
             raise syntax_error
 
-        return gt_ir.IterationOrder[iteration_order_node.id]
+        self.iteration_order = gt_ir.IterationOrder[iteration_order_node.id]
+
+        return self.iteration_order
 
     def _visit_interval_node(self, node: ast.withitem, loc: gt_ir.Location):
         range_error = GTScriptSyntaxError(
@@ -881,7 +884,8 @@ class IRMaker(ast.NodeVisitor):
         else:
             interval_node = args[0]
 
-        interval = parse_interval_node(interval_node, "K", loc=loc)
+        seq_name = gt_ir.Domain.LatLonGrid().sequential_axis.name
+        interval = parse_interval_node(interval_node, seq_name, loc=loc)
 
         if (
             interval.start.level == gt_ir.LevelMarker.END
@@ -975,9 +979,8 @@ class IRMaker(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name) -> gt_ir.Ref:
         symbol = node.id
         if self._is_field(symbol):
-            result = gt_ir.FieldRef(
-                name=symbol,
-                offset={axis: value for axis, value in zip(self.domain.axes_names, (0, 0, 0))},
+            result = gt_ir.FieldRef.at_center(
+                symbol, self.fields[symbol].axes, loc=gt_ir.Location.from_ast_node(node)
             )
         elif self._is_parameter(symbol):
             result = gt_ir.VarRef(name=symbol)
@@ -999,7 +1002,15 @@ class IRMaker(ast.NodeVisitor):
         if isinstance(result, gt_ir.VarRef):
             result.index = index
         else:
-            result.offset = {axis.name: value for axis, value in zip(self.domain.axes, index)}
+            field_axes = self.fields[result.name].axes
+            index = gt_utils.listify(index)
+            if len(field_axes) != len(index):
+                axes_str = "(" + ", ".join(field_axes) + ")"
+                raise GTScriptSyntaxError(
+                    f"Incorrect offset specification detected. Found {index}, "
+                    f"but the field has dimensions {axes_str}"
+                )
+            result.offset = {axis: value for axis, value in zip(field_axes, index)}
 
         return result
 
@@ -1164,7 +1175,8 @@ class IRMaker(ast.NodeVisitor):
         target = []
         if len(node.targets) > 1:
             raise GTScriptSyntaxError(
-                message="Assignment to multiple variables (e.g. var1 = var2 = value) not supported."
+                message="Assignment to multiple variables (e.g. var1 = var2 = value) not supported.",
+                loc=gt_ir.Location.from_ast_node(node),
             )
 
         for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
@@ -1175,6 +1187,7 @@ class IRMaker(ast.NodeVisitor):
                         isinstance(t.slice.value, ast.Tuple)
                         and all(v.n == 0 for v in t.slice.value.elts)
                     )
+                    or (isinstance(t.slice.value, ast.Constant) and t.slice.value.value == 0)
                 ):
                     if t.value.id not in {
                         name for name, field in self.fields.items() if field.is_api
@@ -1191,12 +1204,12 @@ class IRMaker(ast.NodeVisitor):
                         message="Assignment to non-zero offsets is not supported.",
                         loc=gt_ir.Location.from_ast_node(t),
                     )
-            if isinstance(t, ast.Name):
+            elif isinstance(t, ast.Name):
                 if not self._is_known(t.id):
                     field_decl = gt_ir.FieldDecl(
                         name=t.id,
                         data_type=gt_ir.DataType.AUTO,
-                        axes=[ax.name for ax in gt_ir.Domain.LatLonGrid().axes],
+                        axes=gt_ir.Domain.LatLonGrid().axes_names,
                         # layout_id=t.id,
                         is_api=False,
                     )
@@ -1207,6 +1220,16 @@ class IRMaker(ast.NodeVisitor):
                     self.fields[field_decl.name] = field_decl
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
+
+            axes = self.fields[t.id].axes
+            par_axes_names = [axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes]
+            if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
+                par_axes_names.append(gt_ir.Domain.LatLonGrid().sequential_axis.name)
+            if set(par_axes_names) - set(axes):
+                raise GTScriptSyntaxError(
+                    message=f"Cannot assign to a field unless all parallel axes are present: '{par_axes_names}'.",
+                    loc=gt_ir.Location.from_ast_node(t),
+                )
 
             target.append(self.visit(t))
 
