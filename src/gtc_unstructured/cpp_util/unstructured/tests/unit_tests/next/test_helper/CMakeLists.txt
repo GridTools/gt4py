@@ -1,0 +1,2 @@
+add_gtnext_test(NAME test_simple_mesh)
+add_gtnext_test(NAME test_field_builder)
