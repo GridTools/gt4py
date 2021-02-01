@@ -47,6 +47,10 @@ NOTHING = boltons.typeutils.make_sentinel(name="NOTHING", var_name="NOTHING")
 PydanticCallableGenerator = Generator[Callable[..., Any], None, None]
 
 
+#: :class:`bytes subclass for strict field definition
+Bytes = bytes  # noqa: F401
+
+
 class Enum(enum.Enum):
     """Basic :class:`enum.Enum` subclass with strict type validation."""
 
