@@ -16,13 +16,20 @@
 
 from gtc.common import LoopOrder
 from gtc.oir import IJCache, KCache
-from gtc.passes.oir_optimizations.caches import IJCacheDetection, KCacheDetection, PruneKCacheFills
+from gtc.passes.oir_optimizations.caches import (
+    IJCacheDetection,
+    KCacheDetection,
+    PruneKCacheFills,
+    PruneKCacheFlushes,
+)
 
 from ...oir_utils import (
     AssignStmtBuilder,
+    FieldDeclBuilder,
     HorizontalExecutionBuilder,
     IJCacheBuilder,
     KCacheBuilder,
+    StencilBuilder,
     TemporaryBuilder,
     VerticalLoopBuilder,
     VerticalLoopSectionBuilder,
@@ -172,3 +179,59 @@ def test_prune_k_cache_fills_backward():
     assert cache_dict["bar"].fill
     assert not cache_dict["baz"].fill
     assert not cache_dict["barbaz"].fill
+
+
+def test_prune_k_cache_flushes():
+    testee = (
+        StencilBuilder()
+        .add_param(FieldDeclBuilder("foo").build())
+        .add_param(FieldDeclBuilder("bar").build())
+        .add_param(FieldDeclBuilder("baz").build())
+        .add_vertical_loop(
+            VerticalLoopBuilder()
+            .loop_order(LoopOrder.FORWARD)
+            .add_section(
+                VerticalLoopSectionBuilder()
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, 1)).build())
+                    .add_stmt(AssignStmtBuilder("bar", "baz", (0, 0, 1)).build())
+                    .add_stmt(AssignStmtBuilder("tmp1", "tmp1", (0, 0, 1)).build())
+                    .add_stmt(AssignStmtBuilder("tmp2", "tmp2", (0, 0, 1)).build())
+                    .build()
+                )
+                .build()
+            )
+            .add_cache(KCacheBuilder("foo", flush=True).build())
+            .add_cache(KCacheBuilder("bar", flush=True).build())
+            .add_cache(KCacheBuilder("baz", flush=True).build())
+            .add_cache(KCacheBuilder("tmp1", flush=True).build())
+            .add_cache(KCacheBuilder("tmp2", flush=True).build())
+            .add_declaration(TemporaryBuilder("tmp1").build())
+            .add_declaration(TemporaryBuilder("tmp2").build())
+            .build()
+        )
+        .add_vertical_loop(
+            VerticalLoopBuilder()
+            .loop_order(LoopOrder.FORWARD)
+            .add_section(
+                VerticalLoopSectionBuilder()
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("bar", "bar", (0, 0, 1)).build())
+                    .add_stmt(AssignStmtBuilder("tmp1", "tmp1", (0, 0, 1)).build())
+                    .build()
+                )
+                .build()
+            )
+            .build()
+        )
+        .build()
+    )
+    transformed = PruneKCacheFlushes().visit(testee)
+    cache_dict = {c.name: c for c in transformed.vertical_loops[0].caches}
+    assert cache_dict["foo"].flush
+    assert cache_dict["bar"].flush
+    assert not cache_dict["baz"].flush
+    assert cache_dict["tmp1"].flush
+    assert not cache_dict["tmp2"].flush
