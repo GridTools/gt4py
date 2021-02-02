@@ -16,7 +16,7 @@
 
  ---- Template variables ----
 
-    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int, "selector": [bool], "naxes": int }]
     - gt_backend: str
     - module_name: str
     - parameters: [{ "name": str, "dtype": str }]
@@ -33,46 +33,54 @@
 
 namespace py = ::pybind11;
 
+static constexpr int MAX_DIM = 3;
+
 namespace {
 
 BufferInfo make_buffer_info(py::object& b) {
 {%- if gt_backend == "cuda" %}
-//    py_size_t ndim = static_cast<py_size_t>(b.attr("ndim").cast<int>());
+    py_size_t ndim = static_cast<py_size_t>(b.attr("ndim").cast<int>());
 //    auto shape_tuple = b.attr("shape").cast<std::tuple<int, int, int>>();
 //    std::vector<py_size_t> shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple), std::get<2>(shape_tuple)};
 //    auto strides_tuple = b.attr("strides").cast<std::tuple<int, int, int>>();
 //    std::vector<py_size_t> strides = {std::get<0>(strides_tuple), std::get<1>(strides_tuple), std::get<2>(strides_tuple)};
 //    void* ptr =  reinterpret_cast<void*>(b.attr("data").attr("ptr").cast<std::size_t>());
-    py_size_t ndim = 3;
     py::dict __cuda_array_interface__ = b.attr("__cuda_array_interface__").cast<py::dict>();
-    auto shape_tuple =  __cuda_array_interface__["shape"].cast<std::tuple<int, int, int>>();
-    std::vector<py_size_t> shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple), std::get<2>(shape_tuple)};
-    auto strides_tuple = __cuda_array_interface__["strides"].cast<std::tuple<int, int, int>>();
-    std::vector<py_size_t> strides = {std::get<0>(strides_tuple), std::get<1>(strides_tuple), std::get<2>(strides_tuple)};
+    std::vector<py_size_t> shape;
+    std::vector<py_size_t> strides;
+    if(ndim == 1) {
+        auto shape_tuple =  __cuda_array_interface__["shape"].cast<std::tuple<int>>();
+        shape = {std::get<0>(shape_tuple)};
+        auto strides_tuple = __cuda_array_interface__["strides"].cast<std::tuple<int>>();
+        strides = {std::get<0>(strides_tuple)};
+    } else if(ndim == 2) {
+        auto shape_tuple =  __cuda_array_interface__["shape"].cast<std::tuple<int, int>>();
+        shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple)};
+        auto strides_tuple = __cuda_array_interface__["strides"].cast<std::tuple<int, int>>();
+        strides = {std::get<0>(strides_tuple), std::get<1>(strides_tuple)};
+    } else {
+        auto shape_tuple =  __cuda_array_interface__["shape"].cast<std::tuple<int, int, int>>();
+        shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple), std::get<2>(shape_tuple)};
+        auto strides_tuple = __cuda_array_interface__["strides"].cast<std::tuple<int, int, int>>();
+        strides = {std::get<0>(strides_tuple), std::get<1>(strides_tuple), std::get<2>(strides_tuple)};
+    }
     void* ptr =  reinterpret_cast<void*>(std::get<0>(__cuda_array_interface__["data"].cast<std::tuple<std::size_t, bool>>()));
 {%- else %}
     auto buffer_info = static_cast<py::buffer&>(b).request();
-
     py_size_t ndim = static_cast<py_size_t>(buffer_info.ndim);
     std::vector<py_size_t>& shape = buffer_info.shape;
     std::vector<py_size_t>& strides = buffer_info.strides;
     void* ptr = static_cast<void*>(buffer_info.ptr);
 {%- endif %}
 
-    if (ndim != 3) {
-        throw std::runtime_error("Wrong number of dimensions [" +
-                                 std::to_string(ndim) +
-                                 " != " + std::to_string(3) + "]");
-    }
-
     return BufferInfo{ndim, shape, strides, ptr};
 }
 
-void run_computation(const std::array<gt::uint_t, 3>& domain,
+void run_computation(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- set comma = joiner(", ") -%}
 {%- for field in arg_fields -%}
                      {{- comma() }}
-                     py::object {{ field.name }}, const std::array<gt::uint_t, 3>& {{ field.name }}_origin
+                     py::object {{ field.name }}, const std::array<gt::uint_t, {{ field.naxes }}>& {{ field.name }}_origin
 {%- endfor -%}
 {%- for param in parameters -%}
                      {{- comma() }}

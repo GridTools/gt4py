@@ -68,11 +68,8 @@ class TemporariesToScalars(NodeTranslator):
         **kwargs: Any,
     ) -> oir.VerticalLoop:
         return oir.VerticalLoop(
-            interval=node.interval,
-            horizontal_executions=self.visit(
-                node.horizontal_executions, local_tmps=local_tmps, **kwargs
-            ),
             loop_order=node.loop_order,
+            sections=self.visit(node.sections, local_tmps=local_tmps, **kwargs),
             declarations=[d for d in node.declarations if d.name not in local_tmps],
             caches=[c for c in node.caches if c.name not in local_tmps],
         )

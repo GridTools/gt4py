@@ -9,3 +9,4 @@ seed-isort-config~=2.1
 sphinx~=3.1
 sphinx_rtd_theme~=0.4
 tox~=3.14
+devtools~=0.6

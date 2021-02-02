@@ -1,45 +1,45 @@
 default_language_version:
-    python: python3.8
+  python: python3.8
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v2.5.0
     hooks:
-    - id: check-json
-    - id: check-toml
-    - id: check-yaml
-    - id: fix-encoding-pragma
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+      - id: fix-encoding-pragma
 
--   repo: https://github.com/psf/black
+  - repo: https://github.com/psf/black
     rev: 20.8b1
     hooks:
-    - id: black
+      - id: black
 
--   repo: https://github.com/asottile/seed-isort-config
+  - repo: https://github.com/asottile/seed-isort-config
     rev: v2.2.0
     hooks:
-    - id: seed-isort-config
-      args: ["--application-directories=src:tests"]
+      - id: seed-isort-config
+        args: ["--application-directories=src:tests"]
 
--   repo: https://github.com/pre-commit/mirrors-isort
+  - repo: https://github.com/pre-commit/mirrors-isort
     rev: v5.6.4
     hooks:
-    - id: isort
+      - id: isort
 
--   repo: https://gitlab.com/PyCQA/flake8
+  - repo: https://gitlab.com/PyCQA/flake8
     rev: 3.8.4
     hooks:
-    - id: flake8
-      additional_dependencies:
-      - darglint
-      - flake8-bugbear
-      - flake8-builtins
-      - flake8-debugger
-      - flake8-docstrings
-      - flake8-eradicate
-      - flake8-mutable
-      - flake8-rst-docstrings
-      - pygments
-      exclude: >
+      - id: flake8
+        additional_dependencies:
+          - darglint
+          - flake8-bugbear
+          - flake8-builtins
+          - flake8-debugger
+          - flake8-docstrings
+          - flake8-eradicate
+          - flake8-mutable
+          - flake8-rst-docstrings
+          - pygments
+        exclude: >
           (?x)^(
           setup.py |
           docs/gt4py/conf.py |
@@ -75,6 +75,11 @@ repos:
           src/gt4py/utils/base.py |
           src/gt4py/utils/attrib.py |
           src/gt4py/utils/meta.py |
+          src/gtc_unstructured/frontend/gtscript.py |
+          src/gtc_unstructured/frontend/gtscript_to_gtir.py |
+          src/gtc_unstructured/frontend/gtscript_ast.py |
+          src/gtc_unstructured/frontend/ast_node_matcher.py |
+          src/gtc_unstructured/frontend/frontend.py |
           tests/conftest.py |
           tests/_disabled/test_iir/iir_stencil_definitions.py |
           tests/_disabled/test_iir/test_code_generation.py |
@@ -94,14 +99,14 @@ repos:
           tests/test_unittest/test_dawn_backends.py |
           tests/test_unittest/test_gtscript_frontend.py |
           tests/test_unittest/test_storage.py |
+          tests/test_gtc_unstructured/.* |
           )$
 
--   repo: https://github.com/pre-commit/mirrors-mypy
+  - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v0.790
     hooks:
-    - id: mypy
-      exclude:
-          (?x)^(
+      - id: mypy
+        exclude: (?x)^(
           docs/gt4py/conf.py |
           docs/gtc/conf.py |
           docs/eve/conf.py |
@@ -117,6 +122,7 @@ repos:
           src/gt4py/ir/utils.py |
           src/gt4py/stencil_object.py |
           src/gt4py/utils/meta.py |
+          src/gtc_unstructured/irs/nir_to_usid.py |
           tests/definitions.py |
           tests/test_integration/stencil_definitions.py |
           tests/test_integration/test_code_generation.py |
@@ -130,12 +136,13 @@ repos:
           tests/test_unittest/test_gtc/gtir_utils.py |
           tests/test_unittest/test_gtc/test_gtir_upcaster.py |
           tests/test_unittest/test_gtc/test_gtir_to_oir.py |
+          tests/test_gtc_unstructured/.* |
           )$
 
--   repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v3.3.0
     hooks:
-        - id: check-json
-        - id: pretty-format-json
-        - id: check-toml
-        - id: check-yaml
+      - id: check-json
+      - id: pretty-format-json
+      - id: check-toml
+      - id: check-yaml
