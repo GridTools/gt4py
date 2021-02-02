@@ -186,7 +186,7 @@ class VerticalLoop(LocNode):
         return v
 
     @root_validator
-    def valid_section_order(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def valid_section_intervals(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         loop_order, sections = values["loop_order"], values["sections"]
         starts, ends = zip(*((s.interval.start, s.interval.end) for s in sections))
         if loop_order == common.LoopOrder.BACKWARD:
