@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -48,6 +48,12 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         gt_ir.NativeFunction.FLOOR: "math.floor",
         gt_ir.NativeFunction.CEIL: "math.ceil",
         gt_ir.NativeFunction.TRUNC: "math.trunc",
+    }
+
+    BUILTIN_TO_PYTHON = {
+        gt_ir.Builtin.NONE: "None",
+        gt_ir.Builtin.FALSE: "False",
+        gt_ir.Builtin.TRUE: "True",
     }
 
     def __init__(
@@ -100,9 +106,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         #         self.k_splitters_value.extend(
         #             ["{}[{}]".format(item.name, i) for i in range(item.length)]
         #         )
-        self.k_splitters_value.append(
-            "{dom}[{idx}]".format(dom=self.domain_arg_name, idx=k_ax_idx)
-        )
+        self.k_splitters_value.append("{dom}[{idx}]".format(dom=self.domain_arg_name, idx=k_ax_idx))
 
         self.sources = sources
         self.visit(impl_node)
@@ -137,6 +141,9 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
     def visit_Cast(self, node: gt_ir.Cast):
         return self.visit(node.expr)
+
+    def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral):
+        return self.BUILTIN_TO_PYTHON[node.value]
 
     def visit_Decl(self, node: gt_ir.Decl):
         raise NotImplementedError()
@@ -261,6 +268,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         self.block_info.accessors = {accessor.symbol for accessor in node.accessors}
         self.block_info.iteration_order = iteration_order
         self.block_info.extent = node.compute_extent
+        self.var_refs_defined.clear()
 
         # Create regions and computations
         regions = []

@@ -1,8 +1,27 @@
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from typing import List, Optional, Union
+
 import pytest
 from pydantic import ValidationError
 
-from gt4py.gtc import common
-from gt4py.gtc.common import (
+import eve
+from gtc import common
+from gtc.common import (
     ArithmeticOperator,
     ComparisonOperator,
     DataType,
@@ -11,11 +30,11 @@ from gt4py.gtc.common import (
     IfStmt,
     Literal,
     LogicalOperator,
-    NativeFuncCall,
     NativeFunction,
     Stmt,
     UnaryOperator,
 )
+
 
 INT_TYPE = DataType.INT32
 FLOAT_TYPE = DataType.FLOAT32
@@ -56,6 +75,14 @@ class BinaryOpUpcasting(Expr, common.BinaryOp[Expr]):
 
 class TernaryOpUpcasting(Expr, common.TernaryOp[Expr]):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=False)
+
+
+class NativeFuncCall(Expr, common.NativeFuncCall[Expr]):
+    _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
+
+
+class AssignStmt(Stmt, common.AssignStmt[DummyExpr, Expr]):
+    _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
 @pytest.mark.parametrize(
@@ -185,11 +212,119 @@ def test_dtype_propagation(node, expected):
             lambda: NativeFuncCall(func=NativeFunction.SIN, args=[DummyExpr(), DummyExpr()]),
             r"accepts 1 arg.* 2.*passed",
         ),
+        (
+            lambda: AssignStmt(
+                left=DummyExpr(dtype=ARITHMETIC_TYPE),
+                right=DummyExpr(dtype=ANOTHER_ARITHMETIC_TYPE),
+            ),
+            r"Type mismatch",
+        ),
     ],
 )
 def test_invalid_nodes(invalid_node, expected_regex):
     with pytest.raises(ValidationError, match=expected_regex):
         invalid_node()
+
+
+class DummyNode(eve.Node):
+    dtype: Optional[common.DataType]
+
+
+class DtypeRootNode(eve.Node):
+    field1: DummyNode
+    field2: List[DummyNode]
+    _validate_dtype_is_set = common.validate_dtype_is_set()
+
+
+@pytest.mark.parametrize(
+    "tree_with_missing_dtype",
+    [
+        lambda: DtypeRootNode(field1=DummyNode(), field2=[]),
+        lambda: DtypeRootNode(field1=DummyNode(dtype=FLOAT_TYPE), field2=[DummyNode()]),
+        lambda: DtypeRootNode(
+            field1=DummyNode(dtype=FLOAT_TYPE), field2=[DummyNode(dtype=FLOAT_TYPE), DummyNode()]
+        ),
+    ],
+)
+def test_dtype_validator_for_invalid_tree(tree_with_missing_dtype):
+    with pytest.raises(ValidationError, match=r"Nodes without dtype"):
+        tree_with_missing_dtype()
+
+
+def test_dtype_validator_for_valid_tree():
+    DtypeRootNode(
+        field1=DummyNode(dtype=FLOAT_TYPE),
+        field2=[DummyNode(dtype=FLOAT_TYPE), DummyNode(dtype=FLOAT_TYPE)],
+    )
+
+
+class SymbolRefChildNode(eve.Node):
+    name: eve.SymbolRef
+
+
+class SymbolChildNode(eve.Node):
+    name: eve.SymbolName
+    clearly_a_symbol = ""  # prevent pydantic conversion
+
+
+class AnotherSymbolTable(eve.Node, eve.SymbolTableTrait):
+    nodes: List[Union[SymbolRefChildNode, SymbolChildNode]]
+
+
+class SymbolTableRootNode(eve.Node, eve.SymbolTableTrait):
+    nodes: List[Union[SymbolRefChildNode, SymbolChildNode, AnotherSymbolTable]]
+
+    _validate_symbol_refs = common.validate_symbol_refs()
+
+
+@pytest.mark.parametrize(
+    "tree_with_missing_symbol",
+    [
+        lambda: SymbolTableRootNode(nodes=[SymbolRefChildNode(name="foo")]),
+        lambda: SymbolTableRootNode(
+            nodes=[
+                SymbolChildNode(name="foo"),
+                SymbolRefChildNode(name="foo"),
+                SymbolRefChildNode(name="foo2"),
+            ],
+        ),
+        lambda: SymbolTableRootNode(
+            nodes=[
+                AnotherSymbolTable(nodes=[SymbolChildNode(name="inner_scope")]),
+                SymbolRefChildNode(name="inner_scope"),
+            ]
+        ),
+    ],
+)
+def test_symbolref_validation_for_invalid_tree(tree_with_missing_symbol):
+    with pytest.raises(ValidationError, match=r"Symbols.*not found"):
+        tree_with_missing_symbol()
+
+
+def test_symbolref_validation_for_valid_tree():
+    SymbolTableRootNode(
+        nodes=[SymbolChildNode(name="foo"), SymbolRefChildNode(name="foo")],
+    )
+    SymbolTableRootNode(
+        nodes=[
+            SymbolChildNode(name="foo"),
+            SymbolRefChildNode(name="foo"),
+            SymbolRefChildNode(name="foo"),
+        ],
+    ),
+    SymbolTableRootNode(
+        nodes=[
+            SymbolChildNode(name="outer_scope"),
+            AnotherSymbolTable(nodes=[SymbolRefChildNode(name="outer_scope")]),
+        ]
+    )
+    SymbolTableRootNode(
+        nodes=[
+            AnotherSymbolTable(
+                nodes=[SymbolChildNode(name="inner_scope"), SymbolRefChildNode(name="inner_scope")]
+            )
+        ]
+    )
 
 
 # For pydantic, nodes are the same (convertible to each other) if all fields are same.

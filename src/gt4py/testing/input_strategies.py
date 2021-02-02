@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -100,6 +100,11 @@ def parameter(*, one_of=None, in_range=None):
 
     else:
         assert False, "Missing value descriptor"
+
+
+def none():
+    """Define the symbol ``None``."""
+    return _SymbolStrategy(kind="none", boundary=None, value_st_factory=lambda dt: hyp_st.none())
 
 
 # ---- Custom Hypothesis strategies ----

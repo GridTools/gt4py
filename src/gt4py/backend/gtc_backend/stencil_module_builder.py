@@ -1,10 +1,11 @@
+# -*- coding: utf-8 -*-
 import ast
 import copy
 import pathlib
 from collections import OrderedDict
 from typing import List, Optional, Tuple, Union, cast
 
-from gt4py.gtc import gtir
+from gtc import gtir
 
 
 BOUNDARY_TYPE = Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]

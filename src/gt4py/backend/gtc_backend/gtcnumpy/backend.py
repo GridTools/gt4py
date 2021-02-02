@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numbers
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Type, Union, cast
 
@@ -8,20 +9,11 @@ from gt4py.backend.debug_backend import (
     debug_layout,
 )
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gt4py.backend.gtc_backend.stencil_object_snippet_generators import (
-    DomainInfoGenerator,
-    FieldInfoGenerator,
-    ParameterInfoGenerator,
-)
-from gt4py.gtc import gtir
-from gt4py.gtc.gtir_to_oir import GTIRToOIR
-from gt4py.gtc.passes.fields_metadata_pass import FieldsMetadataPass
-from gt4py.gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gt4py.gtc.passes.gtir_upcaster import upcast
-from gt4py.gtc.python import npir
-from gt4py.gtc.python.npir_gen import NpirGen
-from gt4py.gtc.python.oir_to_npir import OirToNpir
+from gt4py.backend.gtc_backend.mixin import GTCBackendMixin
 from gt4py.utils import text
+from gtc.python import npir
+from gtc.python.npir_gen import NpirGen
+from gtc.python.oir_to_npir import OirToNpir
 
 
 if TYPE_CHECKING:
@@ -89,17 +81,24 @@ class GTCModuleGenerator(BaseModuleGenerator):
         }
 
     def generate_gt_domain_info(self) -> str:
-        return DomainInfoGenerator.apply(self.backend.gtir)
+        from gt4py.definitions import DomainInfo
+
+        parallel_axes = self.builder.definition_ir.domain.parallel_axes or []
+        sequential_axis = self.builder.definition_ir.domain.sequential_axis.name
+        domain_info = repr(
+            DomainInfo(
+                parallel_axes=tuple(ax.name for ax in parallel_axes),
+                sequential_axis=sequential_axis,
+                ndims=len(parallel_axes) + (1 if sequential_axis else 0),
+            )
+        )
+        return domain_info
 
     def generate_gt_field_info(self) -> str:
-        # infos = [
-        #    f"'{name}': FieldInfo(access=AccessKind.{READ_WRITE}, boundary=
-        # ]
-        # return FieldInfoGenerator.apply(self.backend.gtir)
         return self.args_data["field_info"]
 
     def generate_gt_parameter_info(self) -> str:
-        return ParameterInfoGenerator.apply(self.backend.gtir)
+        return repr(self.args_data["parameter_info"])
 
     def generate_gt_constants(self) -> Dict[str, str]:
         if not self.builder.definition_ir.externals:
@@ -134,7 +133,7 @@ class GTCModuleGenerator(BaseModuleGenerator):
 
 
 @register
-class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
+class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
     """NumPy backend using gtc."""
 
     name = "gtc:numpy"
@@ -174,20 +173,8 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         args_data = self.make_args_data_from_iir(self.builder.implementation_ir)
         return self.MODULE_GENERATOR_CLASS(self.builder)(args_data)
 
-    def _make_gtir(self) -> gtir.Stencil:
-        gtir = FieldsMetadataPass().visit(DefIRToGTIR.apply(self.builder.definition_ir))
-        return upcast(resolve_dtype(gtir))
-
     def _make_npir(self) -> npir.Computation:
-        oir = GTIRToOIR().visit(self.gtir)
-        return OirToNpir().visit(oir)
-
-    @property
-    def gtir(self) -> gtir.Stencil:
-        key = self.GTIR_KEY
-        if key not in self.builder.backend_data:
-            self.builder.with_backend_data({key: self._make_gtir()})
-        return self.builder.backend_data[key]
+        return OirToNpir().visit(self.oir)
 
     @property
     def npir(self) -> npir.Computation:

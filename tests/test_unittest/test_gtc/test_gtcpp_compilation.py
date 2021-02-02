@@ -1,52 +1,46 @@
-import re
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from pathlib import Path
-from typing import Pattern, Union
 
 import pytest
 import setuptools
-from devtools import debug
 
-from gt4py import config, gt2_src_manager  # TODO must not include gt4py package or ok for test?
-from gt4py.gtc.common import DataType
-from gt4py.gtc.gtcpp.gtcpp import (
-    GTAccessor,
-    GTApplyMethod,
-    GTExtent,
-    GTStage,
-    Intent,
-    Literal,
-    ParamArg,
-    Program,
+from gt4py import (  # TODO(havogt) this is a dependency from gtc tests to gt4py, ok?
+    config,
+    gt_src_manager,
 )
-from gt4py.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
-from gt4py.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
+from gtc.common import DataType
+from gtc.gtcpp.gtcpp import Arg, GTAccessor, GTApplyMethod, GTExtent, GTStage, Intent, Program
+from gtc.gtcpp.gtcpp_codegen import GTCppCodegen
+from gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 
 from .gtcpp_utils import (
     AssignStmtBuilder,
-    GTAccessorBuilder,
     GTApplyMethodBuilder,
-    GTComputationBuilder,
+    GTComputationCallBuilder,
     GTFunctorBuilder,
     IfStmtBuilder,
     ProgramBuilder,
 )
+from .utils import match
 
 
-if not gt2_src_manager.has_gt_sources() and not gt2_src_manager.install_gt_sources():
+if not gt_src_manager.has_gt_sources(2) and not gt_src_manager.install_gt_sources(2):
     raise RuntimeError("Missing GridTools sources.")
-
-
-def match(value: str, regexp: "Union[str, Pattern]") -> "Literal[True]":
-    """
-    Stolen from `pytest.raises`.
-    Check whether the regular expression `regexp` matches `value` using :func:`python:re.search`.
-    If it matches `True` is returned.
-    If it doesn't match an `AssertionError` is raised.
-    """
-    assert re.search(regexp, str(value)), "Pattern {!r} does not match {!r}".format(
-        regexp, str(value)
-    )
-    return True
 
 
 def build_gridtools_test(tmp_path: Path, code: str):
@@ -56,9 +50,8 @@ def build_gridtools_test(tmp_path: Path, code: str):
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],
-        include_dirs=[config.GT2_INCLUDE_PATH],
+        include_dirs=[config.GT2_INCLUDE_PATH, config.build_settings["boost_include_path"]],
         language="c++",
-        # extra_compile_args=["-Wno-unknown-pragmas"],
     )
     args = [
         "build_ext",
@@ -75,9 +68,8 @@ def build_gridtools_test(tmp_path: Path, code: str):
     )
 
 
-@pytest.mark.parametrize(
-    "gtcpp_program,expected_regex",
-    [
+def make_compilation_input_and_expected():
+    return [
         (ProgramBuilder("test").build(), r"auto test"),
         (
             ProgramBuilder("test").add_functor(GTFunctorBuilder("fun").build()).build(),
@@ -110,18 +102,27 @@ def build_gridtools_test(tmp_path: Path, code: str):
         ),
         (ProgramBuilder("test").add_parameter("my_param", DataType.FLOAT64).build(), r"my_param"),
         (
-            ProgramBuilder("test").add_parameter("outer_param", DataType.FLOAT64)
-            # TODO this test needs a functor! make GTCpp validators stricter!
+            ProgramBuilder("test")
+            .add_parameter("outer_param", DataType.FLOAT64)
+            .add_functor(
+                GTFunctorBuilder("fun").add_apply_method().build(),
+            )
             .gt_computation(
-                GTComputationBuilder("test").add_stage(GTStage(functor="fun", args=[])).build()
-            ).build(),
+                GTComputationCallBuilder()
+                .add_stage(GTStage(functor="fun", args=[Arg(name="outer_param")]))
+                .add_argument(name="outer_param")
+                .build()
+            )
+            .build(),
             r"",
         ),
-    ],
-)
+    ]
+
+
+@pytest.mark.parametrize("gtcpp_program,expected_regex", make_compilation_input_and_expected())
 def test_program_compilation_succeeds(tmp_path, gtcpp_program, expected_regex):
     assert isinstance(gtcpp_program, Program)
-    code = GTCppCodegen.apply(gtcpp_program)
+    code = GTCppCodegen.apply(gtcpp_program, gt_backend_t="cpu_ifirst")
     print(code)
     match(code, expected_regex)
     build_gridtools_test(tmp_path, code)
@@ -163,5 +164,6 @@ def test_apply_method_compilation_succeeds(tmp_path, apply_method, expected_rege
     match(apply_method_code, expected_regex)
 
     build_gridtools_test(
-        tmp_path, GTCppCodegen.apply(_embed_apply_method_in_program(apply_method))
+        tmp_path,
+        GTCppCodegen.apply(_embed_apply_method_in_program(apply_method), gt_backend_t="cpu_ifirst"),
     )

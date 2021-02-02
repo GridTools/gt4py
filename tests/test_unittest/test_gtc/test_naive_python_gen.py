@@ -1,11 +1,12 @@
+# -*- coding: utf-8 -*-
 # TODO tests
 
 import ast
 
 import pytest
 
-from gt4py.gtc.common import ArithmeticOperator, LoopOrder
-from gt4py.gtc.gtir import (
+from gtc.common import ArithmeticOperator, LoopOrder
+from gtc.gtir import (
     AxisBound,
     BinaryOp,
     CartesianOffset,
@@ -14,7 +15,7 @@ from gt4py.gtc.gtir import (
     ParAssignStmt,
     VerticalLoop,
 )
-from gt4py.gtc.python.python_naive_codegen import PythonNaiveCodegen
+from gtc.python.python_naive_codegen import PythonNaiveCodegen
 
 
 def ast_parse(arg):

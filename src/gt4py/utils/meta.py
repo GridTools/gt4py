@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -199,7 +199,9 @@ def get_qualified_name_from_node(name_or_attribute, *, as_list=False):
     return components if as_list else ".".join(components)
 
 
-class ASTPass(ast.NodeVisitor):
+class ASTPass:
+    """Clone of the ast.NodeVisitor that supports forwarding kwargs."""
+
     def __call__(self, func_or_source_or_ast):
         ast_root = get_ast(func_or_source_or_ast)
         return self.visit(ast_root)
@@ -222,6 +224,8 @@ class ASTPass(ast.NodeVisitor):
 
 
 class ASTTransformPass(ASTPass):
+    """Clone of the ast.NodeTransformer that supports forwarding kwargs."""
+
     def generic_visit(self, node, **kwargs):
         for field, old_value in ast.iter_fields(node):
             if isinstance(old_value, list):

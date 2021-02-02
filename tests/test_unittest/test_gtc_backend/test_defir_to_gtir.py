@@ -1,3 +1,19 @@
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import pytest
 from tests.definition_setup import ijk_domain  # noqa: F401
 from tests.definition_setup import (
@@ -10,7 +26,6 @@ from tests.definition_setup import (
 )
 
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gt4py.gtc import common, gtir
 from gt4py.ir.nodes import (
     AxisBound,
     AxisInterval,
@@ -21,6 +36,7 @@ from gt4py.ir.nodes import (
     LevelMarker,
     ScalarLiteral,
 )
+from gtc import common, gtir
 
 
 @pytest.fixture
@@ -53,8 +69,8 @@ def test_computation_block(defir_to_gtir):
         .add_statements(TAssign("a", "b", (0, 0, 0)))
         .build()
     )
-    stencil = defir_to_gtir.visit_ComputationBlock(block)
-    assert isinstance(stencil, gtir.Stencil)
+    vertical_loop = defir_to_gtir.visit_ComputationBlock(block)
+    assert isinstance(vertical_loop, gtir.VerticalLoop)
 
 
 def test_block_stmt(defir_to_gtir):
@@ -66,7 +82,7 @@ def test_block_stmt(defir_to_gtir):
 def test_assign(defir_to_gtir):
     assign = TAssign("a", "b", (0, 0, 0)).build()
     assign_stmt = defir_to_gtir.visit_Assign(assign)
-    assert isinstance(assign_stmt, gtir.AssignStmt)
+    assert isinstance(assign_stmt, gtir.ParAssignStmt)
 
 
 def test_scalar_literal(defir_to_gtir):

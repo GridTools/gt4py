@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -20,7 +20,15 @@ import numpy as np
 from gt4py import gtscript
 from gt4py import testing as gt_testing
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
+from ..definitions import (
+    ALL_BACKENDS,
+    CPU_BACKENDS,
+    DAWN_BACKENDS,
+    DAWN_GPU_BACKENDS,
+    GPU_BACKENDS,
+    INTERNAL_BACKENDS,
+)
+from .stencil_definitions import optional_field, two_optional_fields
 
 
 # ---- Identity stencil ----
@@ -330,82 +338,19 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
         )
 
 
-@gtscript.function
-def fwd_diff_op_xy_varargin(field1, field2=None):
-    from __externals__ import BRANCH
-
-    if __INLINED(BRANCH):
-        dx = field1[1, 0, 0] - field1[0, 0, 0]
-        dy = field2[0, 1, 0] - field2[0, 0, 0]
-        return dx, dy
-    else:
-        return field1[1, 0, 0] - field1[0, 0, 0]
-
-
-class TestHorizontalDiffusionSubroutines3(gt_testing.StencilTestSuite):
-    """Diffusion in a horizontal 2D plane ."""
-
-    dtypes = (np.float_,)
-    domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = CPU_BACKENDS
-    symbols = dict(
-        fwd_diff=gt_testing.global_name(singleton=fwd_diff_op_xy_varargin),
-        BRANCH=gt_testing.global_name(one_of=(False,)),
-        u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (2, 2), (0, 0)]),
-        diffusion=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        weight=gt_testing.parameter(in_range=(0, 0.5)),
-    )
-
-    def definition(u, diffusion, *, weight):
-        """
-        Horizontal diffusion stencil.
-
-        Parameters
-        ----------
-        u : 3D float field, input
-        diffusion : 3D float field, output
-        weight : diffusion coefficient
-        """
-        from __externals__ import BRANCH, fwd_diff
-
-        with computation(PARALLEL), interval(...):
-            laplacian = lap_op(u=u)
-            laplacian2 = lap_op(u=u)
-            if __INLINED(BRANCH):
-                flux_i, flux_j = fwd_diff(field1=laplacian, field2=laplacian2)
-            else:
-                flux_i = fwd_diff(field1=laplacian)
-                flux_j = fwd_diff_op_y(field=laplacian)
-            diffusion = u[0, 0, 0] - weight * (
-                flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0]
-            )
-
-    def validation(u, diffusion, *, weight, domain, origin, **kwargs):
-        laplacian = 4.0 * u[1:-1, 1:-1, :] - (
-            u[2:, 1:-1, :] + u[:-2, 1:-1, :] + u[1:-1, 2:, :] + u[1:-1, :-2, :]
-        )
-        flux_i = laplacian[1:, 1:-1, :] - laplacian[:-1, 1:-1, :]
-        flux_j = laplacian[1:-1, 1:, :] - laplacian[1:-1, :-1, :]
-        diffusion[...] = u[2:-2, 2:-2, :] - weight * (
-            flux_i[1:, :, :] - flux_i[:-1, :, :] + flux_j[:, 1:, :] - flux_j[:, :-1, :]
-        )
-
-
 class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
     """Tests runtime ifs."""
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = CPU_BACKENDS
-    symbols = dict(
-        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)])
-    )
+    symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(outfield):
 
         with computation(PARALLEL), interval(...):
 
-            if 1:
+            if True:
                 outfield = 1
             else:
                 outfield = 2
@@ -420,15 +365,13 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = CPU_BACKENDS
-    symbols = dict(
-        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)])
-    )
+    symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(outfield):
 
         with computation(PARALLEL), interval(...):
-            if (outfield and outfield) or (not outfield and not outfield):
-                if 0:
+            if (outfield > 0 and outfield > 0) or (not outfield > 0 and not outfield > 0):
+                if False:
                     outfield = 1
                 else:
                     outfield = 2
@@ -569,3 +512,81 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
 
     def validation(outfield, *, a, b, c, domain, origin, **kwargs):
         outfield[...] = 1 if a > 0 or b > 0 or c > 0 else 0
+
+
+class TestOptionalField(gt_testing.StencilTestSuite):
+    dtypes = (np.float_,)
+    domain_range = [(1, 32), (1, 32), (1, 32)]
+    backends = list(set(ALL_BACKENDS) - set(DAWN_GPU_BACKENDS))
+    symbols = dict(
+        PHYS_TEND=gt_testing.global_name(one_of=(False, True)),
+        in_field=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        out_field=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        dyn_tend=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        phys_tend=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        dt=gt_testing.parameter(in_range=(0, 100)),
+    )
+
+    definition = optional_field
+
+    def validation(in_field, out_field, dyn_tend, phys_tend=None, *, dt, domain, origin, **kwargs):
+        out_field[...] = in_field + dt * dyn_tend
+        if PHYS_TEND:
+            out_field += dt * phys_tend
+
+
+class TestNotSpecifiedOptionalField(TestOptionalField):
+    backends = list(set(ALL_BACKENDS) - set(DAWN_BACKENDS))
+    symbols = TestOptionalField.symbols.copy()
+    symbols["PHYS_TEND"] = gt_testing.global_name(one_of=(False,))
+    symbols["phys_tend"] = gt_testing.none()
+
+
+class TestTwoOptionalFields(gt_testing.StencilTestSuite):
+    dtypes = (np.float_,)
+    domain_range = [(1, 32), (1, 32), (1, 32)]
+    backends = list(set(ALL_BACKENDS) - set(DAWN_GPU_BACKENDS))
+    symbols = dict(
+        PHYS_TEND_A=gt_testing.global_name(one_of=(False, True)),
+        PHYS_TEND_B=gt_testing.global_name(one_of=(False, True)),
+        in_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        in_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        out_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        out_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        dyn_tend_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        dyn_tend_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        phys_tend_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        phys_tend_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        dt=gt_testing.parameter(in_range=(0, 100)),
+    )
+
+    definition = two_optional_fields
+
+    def validation(
+        in_a,
+        in_b,
+        out_a,
+        out_b,
+        dyn_tend_a,
+        dyn_tend_b,
+        phys_tend_a=None,
+        phys_tend_b=None,
+        *,
+        dt,
+        domain,
+        origin,
+        **kwargs,
+    ):
+        out_a[...] = in_a + dt * dyn_tend_a
+        out_b[...] = in_b + dt * dyn_tend_b
+        if PHYS_TEND_A:
+            out_a += dt * phys_tend_a
+        if PHYS_TEND_B:
+            out_b += dt * phys_tend_b
+
+
+class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
+    backends = list(set(ALL_BACKENDS) - set(DAWN_BACKENDS))
+    symbols = TestTwoOptionalFields.symbols.copy()
+    symbols["PHYS_TEND_A"] = gt_testing.global_name(one_of=(False,))
+    symbols["phys_tend_a"] = gt_testing.none()

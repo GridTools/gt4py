@@ -1,12 +1,26 @@
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from typing import Type
 
-import pytest
 from eve import Node
-
-from gt4py.gtc import gtir, gtir_to_oir, oir
-from gt4py.gtc.common import BlockStmt, DataType, ExprKind
-from gt4py.gtc.gtir import ScalarIfStmt
-from gt4py.gtc.gtir_to_oir import GTIRToOIR
+from gtc import gtir, gtir_to_oir, oir
+from gtc.common import BlockStmt, DataType, ExprKind
+from gtc.gtir import ScalarIfStmt
+from gtc.gtir_to_oir import GTIRToOIR
 
 from . import gtir_utils
 from .gtir_utils import FieldAccessBuilder, FieldIfStmtBuilder
@@ -32,7 +46,10 @@ def test_visit_ParAssignStmt():
         left=FieldAccessBuilder(out_name).build(), right=FieldAccessBuilder(in_name).build()
     )
 
-    result_decls, result_horizontal_executions = GTIRToOIR().visit(testee)
+    ctx = GTIRToOIR.Context()
+    GTIRToOIR().visit(testee, ctx=ctx)
+    result_decls = ctx.decls
+    result_horizontal_executions = ctx.horizontal_executions
 
     assert len(result_decls) == 1
     assert isinstance(result_decls[0], oir.Temporary)
@@ -56,7 +73,9 @@ def test_visit_ParAssignStmt():
 def test_create_mask():
     mask_name = "mask"
     cond = DummyExpr(dtype=DataType.BOOL)
-    result_decl, result_assign = gtir_to_oir._create_mask(mask_name, cond)
+    ctx = GTIRToOIR.Context()
+    result_decl = gtir_to_oir._create_mask(ctx, mask_name, cond)
+    result_assign = ctx.horizontal_executions[0]
 
     assert isinstance(result_decl, oir.Temporary)
     assert result_decl.name == mask_name
@@ -71,17 +90,25 @@ def test_create_mask():
     assert right == cond
 
 
-@pytest.mark.parametrize(
-    "field_if_stmt",
-    [
-        # No else
-        FieldIfStmtBuilder().cond(FieldAccessBuilder("cond").dtype(DataType.BOOL).build()).build(),
-        # If and else
+def test_visit_FieldIfStmt():
+    testee = (
         FieldIfStmtBuilder()
         .cond(FieldAccessBuilder("cond").dtype(DataType.BOOL).build())
         .false_branch([])
-        .build(),
-        # Nested ifs
+        .build()
+    )
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
+
+
+def test_visit_FieldIfStmt_no_else():
+    testee = (
+        FieldIfStmtBuilder().cond(FieldAccessBuilder("cond").dtype(DataType.BOOL).build()).build()
+    )
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
+
+
+def test_visit_FieldIfStmt_nesting():
+    testee = (
         FieldIfStmtBuilder()
         .cond(FieldAccessBuilder("cond").dtype(DataType.BOOL).build())
         .add_true_stmt(
@@ -89,12 +116,9 @@ def test_create_mask():
             .cond(FieldAccessBuilder("cond2").dtype(DataType.BOOL).build())
             .build()
         )
-        .build(),
-    ],
-)
-def test_visit_FieldIfStmt(field_if_stmt):
-    # Testing only that lowering doesn't error.
-    GTIRToOIR().visit(field_if_stmt)
+        .build()
+    )
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
 
 def test_visit_ScalarIfStmt():
@@ -102,5 +126,4 @@ def test_visit_ScalarIfStmt():
         cond=gtir_utils.DummyExpr(dtype=DataType.BOOL, kind=ExprKind.SCALAR),
         true_branch=BlockStmt(body=[]),
     )
-    # Testing only that lowering doesn't error.
-    GTIRToOIR().visit(testee)
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())

@@ -1,10 +1,11 @@
+# -*- coding: utf-8 -*-
 import re
 from typing import Iterator, Optional, Set
 
 import pytest
 
-from gt4py.gtc import common
-from gt4py.gtc.python import npir, npir_gen
+from gtc import common
+from gtc.python import npir, npir_gen
 
 from .npir_utils import FieldSliceBuilder
 

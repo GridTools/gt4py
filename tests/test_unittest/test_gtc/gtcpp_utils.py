@@ -1,13 +1,32 @@
-from typing import List
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
-from gt4py.gtc.gtcpp.gtcpp import (
+from typing import List, Optional
+
+from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
+from gtc.gtcpp.gtcpp import (
     AccessorRef,
+    ApiParamDecl,
+    Arg,
     AssignStmt,
+    Expr,
     FieldDecl,
     GTAccessor,
     GTApplyMethod,
-    GTComputation,
+    GTComputationCall,
     GTExtent,
     GTFunctor,
     GTInterval,
@@ -18,9 +37,9 @@ from gt4py.gtc.gtcpp.gtcpp import (
     IfStmt,
     Intent,
     Literal,
-    ParamArg,
     Program,
     Stmt,
+    Temporary,
 )
 
 
@@ -40,9 +59,7 @@ class AccessorRefBuilder:
         return self
 
     def build(self) -> AccessorRef:
-        return AccessorRef(
-            name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind
-        )
+        return AccessorRef(name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind)
 
 
 class AssignStmtBuilder:
@@ -66,7 +83,7 @@ class GTIntervalBuilder:
 class GTApplyMethodBuilder:
     def __init__(self) -> None:
         self._interval = GTIntervalBuilder().build()
-        self._body = []
+        self._body: List[Stmt] = []
 
     def add_stmt(self, stmt: Stmt) -> "GTApplyMethodBuilder":
         self._body.append(stmt)
@@ -79,8 +96,8 @@ class GTApplyMethodBuilder:
 class IfStmtBuilder:
     def __init__(self) -> None:
         self._cond = Literal(value="true", dtype=DataType.BOOL)
-        self._true_branch = None
-        self._false_branch = None
+        self._true_branch: Optional[Expr] = None
+        self._false_branch: Optional[Expr] = None
 
     def true_branch(self, stmt: Stmt) -> "IfStmtBuilder":
         self._true_branch = stmt
@@ -93,7 +110,7 @@ class IfStmtBuilder:
 
 
 class GTAccessorBuilder:
-    def __init__(self, name, id) -> None:
+    def __init__(self, name, id) -> None:  # noqa: A002  # shadowing python builtin
         self._name = name
         self._id = id
         self._intent = Intent.INOUT
@@ -106,8 +123,8 @@ class GTAccessorBuilder:
 class GTFunctorBuilder:
     def __init__(self, name) -> None:
         self._name = name
-        self._applies = []
-        self._param_list_accessors = []
+        self._applies: List[GTApplyMethod] = []
+        self._param_list_accessors: List[GTAccessor] = []
 
     def add_accessors(self, accessors: List[GTAccessor]) -> "GTFunctorBuilder":
         self._param_list_accessors.extend(accessors)
@@ -131,14 +148,13 @@ class GTFunctorBuilder:
         )
 
 
-class GTComputationBuilder:
-    def __init__(self, name) -> None:
-        self._name = name
-        self._parameters = []
-        self._temporaries = []
-        self._multi_stages = []
+class GTComputationCallBuilder:
+    def __init__(self) -> None:
+        self._arguments: List[Arg] = []
+        self._temporaries: List[Temporary] = []
+        self._multi_stages: List[GTMultiStage] = []
 
-    def add_stage(self, stage: GTStage) -> "GTComputationBuilder":
+    def add_stage(self, stage: GTStage) -> "GTComputationCallBuilder":
         if len(self._multi_stages) == 0:
             self._multi_stages.append(
                 GTMultiStage(loop_order=LoopOrder.PARALLEL, stages=[], caches=[])
@@ -151,14 +167,13 @@ class GTComputationBuilder:
         )
         return self
 
-    def add_parameter(self, name: str) -> "GTComputationBuilder":
-        self._parameters.append(ParamArg(name=name))
+    def add_argument(self, name: str) -> "GTComputationCallBuilder":
+        self._arguments.append(Arg(name=name))
         return self
 
-    def build(self) -> GTComputation:
-        return GTComputation(
-            name=self._name,
-            parameters=self._parameters,
+    def build(self) -> GTComputationCall:
+        return GTComputationCall(
+            arguments=self._arguments,
             temporaries=self._temporaries,
             multi_stages=self._multi_stages,
         )
@@ -167,9 +182,9 @@ class GTComputationBuilder:
 class ProgramBuilder:
     def __init__(self, name) -> None:
         self._name = name
-        self._parameters = []
-        self._functors = []
-        self._gt_computation = GTComputationBuilder(name).build()
+        self._parameters: List[ApiParamDecl] = []
+        self._functors: List[GTFunctor] = []
+        self._gt_computation = GTComputationCallBuilder().build()
 
     def add_functor(self, functor: GTFunctor) -> "ProgramBuilder":
         self._functors.append(functor)
@@ -179,7 +194,7 @@ class ProgramBuilder:
         self._parameters.append(FieldDecl(name=name, dtype=dtype))
         return self
 
-    def gt_computation(self, gt_computation: GTComputation) -> "ProgramBuilder":
+    def gt_computation(self, gt_computation: GTComputationCall) -> "ProgramBuilder":
         self._gt_computation = gt_computation
         return self
 

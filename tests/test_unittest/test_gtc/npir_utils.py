@@ -1,4 +1,5 @@
-from gt4py.gtc.python import npir
+# -*- coding: utf-8 -*-
+from gtc.python import npir
 
 
 class FieldSliceBuilder:
@@ -18,4 +19,3 @@ class FieldSliceBuilder:
             j_offset=npir.AxisOffset.j(self._offsets[1]),
             k_offset=npir.AxisOffset.k(self._offsets[2], parallel=self._parallel_k),
         )
-

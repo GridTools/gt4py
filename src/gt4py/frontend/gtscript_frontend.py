@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -47,8 +47,10 @@ class GTScriptSymbolError(GTScriptSyntaxError):
             if loc is None:
                 message = "Unknown symbol '{name}' symbol".format(name=name)
             else:
-                message = "Unknown symbol '{name}' symbol in '{scope}' (line: {line}, col: {col})".format(
-                    name=name, scope=loc.scope, line=loc.line, col=loc.column
+                message = (
+                    "Unknown symbol '{name}' symbol in '{scope}' (line: {line}, col: {col})".format(
+                        name=name, scope=loc.scope, line=loc.line, col=loc.column
+                    )
                 )
         super().__init__(message, loc=loc)
         self.name = name
@@ -361,38 +363,34 @@ class ValueInliner(ast.NodeTransformer):
         return node
 
 
-class ReturnReplacer(ast.NodeTransformer):
+class ReturnReplacer(gt_utils.meta.ASTTransformPass):
     @classmethod
-    def apply(cls, ast_object, target_node):
-        replacer = cls(target_node)
-        replacer(ast_object)
+    def apply(cls, ast_object: ast.AST, target_node: ast.AST) -> None:
+        """Ensure that there is only a single return statement (can still return a tuple)."""
+        ret_count = sum(isinstance(node, ast.Return) for node in ast.walk(ast_object))
+        if ret_count != 1:
+            raise GTScriptSyntaxError("GTScript Functions should have a single return statement")
+        cls().visit(ast_object, target_node=target_node)
 
-    def __init__(self, target_node):
-        self.target_node = target_node
+    @staticmethod
+    def _get_num_values(node: ast.AST) -> int:
+        return len(node.elts) if isinstance(node, ast.Tuple) else 1
 
-    def __call__(self, ast_object):
-        self.visit(ast_object)
-
-    def visit_Return(self, node: ast.Return):
-        if isinstance(node.value, ast.Tuple):
-            rhs_length = len(node.value.elts)
-        else:
-            rhs_length = 1
-
-        if isinstance(self.target_node, ast.Tuple):
-            lhs_length = len(self.target_node.elts)
-        else:
-            lhs_length = 1
+    def visit_Return(self, node: ast.Return, *, target_node: ast.AST) -> ast.Assign:
+        rhs_length = self._get_num_values(node.value)
+        lhs_length = self._get_num_values(target_node)
 
         if lhs_length == rhs_length:
             return ast.Assign(
-                targets=[self.target_node],
+                targets=[target_node],
                 value=node.value,
                 lineno=node.lineno,
                 col_offset=node.col_offset,
             )
         else:
-            return ast.Raise(lineno=node.lineno, col_offset=node.col_offset)
+            raise GTScriptSyntaxError(
+                "Number of returns values does not match arguments on left side"
+            )
 
 
 class CallInliner(ast.NodeTransformer):
@@ -1470,7 +1468,9 @@ class GTScriptParser(ast.NodeVisitor):
 
         # Resolve function-like imports
         func_externals = {
-            key: value for key, value in context.items() if isinstance(value, types.FunctionType)
+            key: value
+            for key, value in itertools.chain(context.items(), resolved_values_list)
+            if isinstance(value, types.FunctionType)
         }
         for name, value in func_externals.items():
             if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
@@ -1494,9 +1494,7 @@ class GTScriptParser(ast.NodeVisitor):
                         )
 
                 elif not exhaustive:
-                    resolved_values_list.append(
-                        (name, GTScriptParser.eval_external(name, context))
-                    )
+                    resolved_values_list.append((name, GTScriptParser.eval_external(name, context)))
 
             for name, value in resolved_values_list:
                 if hasattr(value, "_gtscript_") and exhaustive:
@@ -1661,9 +1659,7 @@ class GTScriptParser(ast.NodeVisitor):
                 fields_decls[item.name] for item in api_signature if item.name in fields_decls
             ],
             parameters=[
-                parameter_decls[item.name]
-                for item in api_signature
-                if item.name in parameter_decls
+                parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
             ],
             computations=computations,
             externals=self.resolved_externals,

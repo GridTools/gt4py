@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 import pytest
 
-from gt4py.gtc import common, oir
-from gt4py.gtc.python import npir
-from gt4py.gtc.python.oir_to_npir import OirToNpir
+from gtc import common, oir
+from gtc.python import npir
+from gtc.python.oir_to_npir import OirToNpir
 
 
 class VerticalLoopBuilder:

@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -31,11 +31,17 @@ CUDA_ROOT: str = os.environ.get(
     "CUDA_HOME", os.environ.get("CUDA_PATH", os.path.abspath("/usr/local/cuda"))
 )
 
-GT_REPO_PATH: str = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "_external_src", "gridtools")
+
+GT_REPO_DIRNAME: str = "gridtools"
+GT_INCLUDE_PATH: str = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "_external_src", GT_REPO_DIRNAME, "include")
 )
 
-GT_INCLUDE_PATH: str = os.path.abspath(os.path.join(GT_REPO_PATH, "include"))
+GT2_REPO_DIRNAME: str = "gridtools2"
+GT2_INCLUDE_PATH: str = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "_external_src", GT2_REPO_DIRNAME, "include")
+)
+
 
 GT2_REPO_PATH: str = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "_external_src", "gridtools2")

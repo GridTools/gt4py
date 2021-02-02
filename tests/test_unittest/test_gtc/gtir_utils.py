@@ -1,7 +1,23 @@
-from typing import List
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.gtc.common import DataType, ExprKind, LoopOrder
-from gt4py.gtc.gtir import (
+from typing import List, Optional
+
+from gtc.common import DataType, ExprKind, LoopOrder
+from gtc.gtir import (
     AxisBound,
     BlockStmt,
     CartesianOffset,
@@ -46,15 +62,13 @@ class FieldAccessBuilder:
         return self
 
     def build(self) -> FieldAccess:
-        return FieldAccess(
-            name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind
-        )
+        return FieldAccess(name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind)
 
 
 class ParAssignStmtBuilder:
     def __init__(self, left_name=None, right_name=None) -> None:
-        self._left = FieldAccessBuilder(left_name) if left_name else None
-        self._right = FieldAccessBuilder(right_name) if right_name else None
+        self._left = FieldAccessBuilder(left_name).build() if left_name else None
+        self._right = FieldAccessBuilder(right_name).build() if right_name else None
 
     def left(self, left: FieldAccess) -> "ParAssignStmtBuilder":
         self._left = left
@@ -71,8 +85,8 @@ class ParAssignStmtBuilder:
 class FieldIfStmtBuilder:
     def __init__(self) -> None:
         self._cond = None
-        self._true_branch = []
-        self._false_branch = None
+        self._true_branch: List[Stmt] = []
+        self._false_branch: Optional[List[Stmt]] = None
 
     def cond(self, cond: Expr) -> "FieldIfStmtBuilder":
         self._cond = cond
@@ -135,7 +149,7 @@ class StencilBuilder:
         self._vertical_loops = []
 
     def add_param(self, param: Decl) -> "StencilBuilder":
-        self._params.append(param),
+        self._params.append(param)
         return self
 
     def add_vertical_loop(self, vertical_loop: VerticalLoop) -> "StencilBuilder":

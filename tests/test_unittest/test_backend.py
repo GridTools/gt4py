@@ -1,3 +1,19 @@
+# -*- coding: utf-8 -*-
+#
+# GT4Py - GridTools4Py - GridTools for Python
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import inspect
 
 import pytest
@@ -6,7 +22,7 @@ from gt4py.backend import REGISTRY as backend_registry
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
-from ..definitions import ALL_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, DAWN_CPU_BACKENDS
 
 
 def stencil_def(
@@ -83,8 +99,9 @@ def test_generate_pre_run(backend_name, mode):
     module_generator.args_data = args_data
     source = module_generator.generate_pre_run()
 
-    if backend_cls.storage_info["device"] == "cpu":
-        assert source == ""
+    if backend_name in CPU_BACKENDS:
+        if backend_name not in DAWN_CPU_BACKENDS:
+            assert source == ""
     else:
         for key in field_info_val[mode]:
             assert f"{key}.host_to_device()" in source
@@ -104,7 +121,7 @@ def test_generate_post_run(backend_name, mode):
     module_generator.args_data = args_data
     source = module_generator.generate_post_run()
 
-    if backend_cls.storage_info["device"] == "cpu":
+    if backend_name in CPU_BACKENDS:
         assert source == ""
     else:
         assert source == "out._set_device_modified()"
