@@ -26,8 +26,6 @@ from gtc.common import CartesianOffset
 from gtc.gtcpp import gtcpp
 
 
-# TODO(havogt) between oir and gtcpp we should consider grouping oir.VerticalLoops
-
 # - Each HorizontalExecution is a Functor (and a Stage)
 # - Each VerticalLoop is MultiStage
 
