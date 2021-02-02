@@ -1228,8 +1228,10 @@ class IRMaker(ast.NodeVisitor):
     def _unroll_computations(self, node: ast.With):
         def recurse_unroll(node, index, items):
             if isinstance(node.body[index], ast.With):
-                unrolled_blocks = recurse_unroll(
-                    node.body[index], 0, items + node.body[index].items
+                unrolled_blocks = (
+                    recurse_unroll(node.body[index], 0, items + node.body[index].items)
+                    if len(node.body[index].body) > 0
+                    else []
                 )
                 processed_stmts = 1
             else:
