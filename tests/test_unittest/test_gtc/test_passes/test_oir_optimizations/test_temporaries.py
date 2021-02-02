@@ -15,7 +15,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gtc import oir
-from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
+from gtc.passes.oir_optimizations.temporaries import (
+    LocalTemporariesToScalars,
+    WriteBeforeReadTemporariesToScalars,
+)
 
 from ...oir_utils import (
     AssignStmtBuilder,
@@ -28,7 +31,7 @@ from ...oir_utils import (
 )
 
 
-def test_temporaries_to_scalars_basic():
+def test_local_temporaries_to_scalars_basic():
     testee = (
         StencilBuilder()
         .add_param(FieldDeclBuilder("foo").build())
@@ -50,7 +53,7 @@ def test_temporaries_to_scalars_basic():
         )
         .build()
     )
-    transformed = TemporariesToScalars().visit(testee)
+    transformed = LocalTemporariesToScalars().visit(testee)
     hexec = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
     assert isinstance(hexec.body[0].left, oir.ScalarAccess)
     assert isinstance(hexec.body[1].right, oir.ScalarAccess)
@@ -58,7 +61,7 @@ def test_temporaries_to_scalars_basic():
     assert hexec.declarations[0].name == "tmp"
 
 
-def test_temporaries_to_scalars_multiexec():
+def test_local_temporaries_to_scalars_multiexec():
     testee = (
         StencilBuilder()
         .add_param(FieldDeclBuilder("foo").build())
@@ -86,6 +89,54 @@ def test_temporaries_to_scalars_multiexec():
         )
         .build()
     )
-    transformed = TemporariesToScalars().visit(testee)
+    transformed = LocalTemporariesToScalars().visit(testee)
     assert "tmp" in {d.name for d in transformed.vertical_loops[0].declarations}
     assert not transformed.iter_tree().if_isinstance(oir.ScalarAccess).to_list()
+
+
+def test_write_before_read_temporaries_to_scalars():
+    testee = (
+        StencilBuilder()
+        .add_param(FieldDeclBuilder("foo").build())
+        .add_param(FieldDeclBuilder("bar").build())
+        .add_vertical_loop(
+            VerticalLoopBuilder()
+            .add_section(
+                VerticalLoopSectionBuilder()
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("tmp1", "foo").build())
+                    .add_stmt(AssignStmtBuilder("tmp2", "tmp1").build())
+                    .add_stmt(AssignStmtBuilder("tmp3", "tmp2").build())
+                    .build()
+                )
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("bar", "tmp2").build())
+                    .add_stmt(AssignStmtBuilder("tmp3", "bar").build())
+                    .add_stmt(AssignStmtBuilder("foo", "tmp3").build())
+                    .build()
+                )
+                .build()
+            )
+            .add_declaration(TemporaryBuilder(name="tmp1").build())
+            .add_declaration(TemporaryBuilder(name="tmp2").build())
+            .add_declaration(TemporaryBuilder(name="tmp3").build())
+            .build()
+        )
+        .build()
+    )
+    transformed = WriteBeforeReadTemporariesToScalars().visit(testee)
+    hexec0 = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
+    hexec1 = transformed.vertical_loops[0].sections[0].horizontal_executions[1]
+    assert {d.name for d in hexec0.declarations} == {"tmp1", "tmp3"}
+    assert {d.name for d in hexec1.declarations} == {"tmp3"}
+    assert {d.name for d in transformed.vertical_loops[0].declarations} == {"tmp2"}
+    assert isinstance(hexec0.body[0].left, oir.ScalarAccess)
+    assert not isinstance(hexec0.body[1].left, oir.ScalarAccess)
+    assert isinstance(hexec0.body[1].right, oir.ScalarAccess)
+    assert isinstance(hexec0.body[2].left, oir.ScalarAccess)
+    assert not isinstance(hexec0.body[2].right, oir.ScalarAccess)
+    assert not isinstance(hexec1.body[0].right, oir.ScalarAccess)
+    assert isinstance(hexec1.body[1].left, oir.ScalarAccess)
+    assert isinstance(hexec1.body[2].right, oir.ScalarAccess)

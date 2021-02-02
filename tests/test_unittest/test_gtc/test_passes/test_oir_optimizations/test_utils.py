@@ -32,7 +32,6 @@ from ...oir_utils import (
 def test_access_collector():
     testee = (
         StencilBuilder()
-        .add_param(TemporaryBuilder("tmp").build())
         .add_param(FieldDeclBuilder("foo").build())
         .add_param(FieldDeclBuilder("bar").build())
         .add_param(FieldDeclBuilder("baz").build())

@@ -20,30 +20,24 @@ from typing import Any, Dict, Set, Union
 from eve import NodeTranslator
 from gtc import oir
 
+from .utils import AccessCollector
 
-class TemporariesToScalars(NodeTranslator):
-    """Replaces temporary fields by scalars.
 
-    1. Finds temporaries that are only accessed within a single HorizontalExecution.
-    2. Replaces corresponding FieldAccess nodes by ScalarAccess nodes.
-    3. Removes matching temporaries from VerticalLoop declarations.
-    4. Add matching temporaries to HorizontalExecution declarations.
-    """
-
+class TemporariesToScalarsBase(NodeTranslator):
     def visit_FieldAccess(
-        self, node: oir.FieldAccess, *, local_tmps: Set[str], **kwargs: Any
+        self, node: oir.FieldAccess, *, tmps_to_replace: Set[str], **kwargs: Any
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
-        if node.name in local_tmps:
+        if node.name in tmps_to_replace:
             assert (
                 node.offset.i == node.offset.j == node.offset.k == 0
-            ), "Non-zero offset in local temporary?!"
+            ), "Non-zero offset in temporary that is replaced?!"
             return oir.ScalarAccess(name=node.name, dtype=node.dtype)
         return self.generic_visit(node, **kwargs)
 
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
-        local_tmps: Set[str],
+        tmps_to_replace: Set[str],
         symtable: Dict[str, Any],
         **kwargs: Any,
     ) -> oir.HorizontalExecution:
@@ -52,27 +46,37 @@ class TemporariesToScalars(NodeTranslator):
             for tmp in node.iter_tree()
             .if_isinstance(oir.FieldAccess)
             .getattr("name")
-            .if_in(local_tmps)
+            .if_in(tmps_to_replace)
             .to_set()
         ]
         return oir.HorizontalExecution(
-            body=self.visit(node.body, local_tmps=local_tmps, **kwargs),
-            mask=self.visit(node.mask, local_tmps=local_tmps, **kwargs),
+            body=self.visit(node.body, tmps_to_replace=tmps_to_replace, **kwargs),
+            mask=self.visit(node.mask, tmps_to_replace=tmps_to_replace, **kwargs),
             declarations=declarations,
         )
 
     def visit_VerticalLoop(
         self,
         node: oir.VerticalLoop,
-        local_tmps: Set[str],
+        tmps_to_replace: Set[str],
         **kwargs: Any,
     ) -> oir.VerticalLoop:
         return oir.VerticalLoop(
             loop_order=node.loop_order,
-            sections=self.visit(node.sections, local_tmps=local_tmps, **kwargs),
-            declarations=[d for d in node.declarations if d.name not in local_tmps],
-            caches=[c for c in node.caches if c.name not in local_tmps],
+            sections=self.visit(node.sections, tmps_to_replace=tmps_to_replace, **kwargs),
+            declarations=[d for d in node.declarations if d.name not in tmps_to_replace],
+            caches=[c for c in node.caches if c.name not in tmps_to_replace],
         )
+
+
+class LocalTemporariesToScalars(TemporariesToScalarsBase):
+    """Replaces temporary fields by scalars.
+
+    1. Finds temporaries that are only accessed within a single HorizontalExecution.
+    2. Replaces corresponding FieldAccess nodes by ScalarAccess nodes.
+    3. Removes matching temporaries from VerticalLoop declarations.
+    4. Add matching temporaries to HorizontalExecution declarations.
+    """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         temporaries = {
@@ -93,4 +97,34 @@ class TemporariesToScalars(NodeTranslator):
             collections.Counter(),
         )
         local_tmps = {tmp for tmp, count in counts.items() if count == 1}
-        return self.generic_visit(node, local_tmps=local_tmps, symtable=node.symtable_, **kwargs)
+        return self.generic_visit(
+            node, tmps_to_replace=local_tmps, symtable=node.symtable_, **kwargs
+        )
+
+
+class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        write_before_read_tmps = {
+            symbol for symbol, value in node.symtable_.items() if isinstance(value, oir.Temporary)
+        }
+        horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
+
+        for horizontal_execution in horizontal_executions:
+            accesses = AccessCollector.apply(horizontal_execution)
+            offsets = accesses.offsets()
+            ordered_accesses = accesses.ordered_accesses()
+
+            def write_before_read(tmp: str) -> bool:
+                if tmp not in offsets:
+                    return True
+                if offsets[tmp] != {(0, 0, 0)}:
+                    return False
+                return next(o.is_write for o in ordered_accesses if o.field == tmp)
+
+            write_before_read_tmps = {
+                tmp for tmp in write_before_read_tmps if write_before_read(tmp)
+            }
+
+        return self.generic_visit(
+            node, tmps_to_replace=write_before_read_tmps, symtable=node.symtable_, **kwargs
+        )
