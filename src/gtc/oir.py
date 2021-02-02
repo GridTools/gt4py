@@ -21,9 +21,9 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
-from pydantic import validator
+from pydantic import root_validator, validator
 
 from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
 from gtc import common
@@ -145,6 +145,15 @@ class Interval(LocNode):
     start: AxisBound
     end: AxisBound
 
+    @root_validator
+    def check(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        start, end = values["start"], values["end"]
+        if start.level == common.LevelMarker.END and end.level == common.LevelMarker.START:
+            raise ValueError("Start level must be smaller or equal end level")
+        if start.level == end.level and start.offset > end.offset:
+            raise ValueError("Start offset must be smaller or equal end offset")
+        return values
+
 
 class CacheDecl(LocNode):
     name: SymbolRef
@@ -171,15 +180,26 @@ class VerticalLoop(LocNode):
     caches: List[CacheDecl]
 
     @validator("sections")
-    def valid_sections(cls, v: List[VerticalLoopSection]) -> List[VerticalLoopSection]:
+    def nonempty_loop(cls, v: List[VerticalLoopSection]) -> List[VerticalLoopSection]:
         if not v:
             raise ValueError("Empty vertical loop is not allowed")
-
-        for a, b in zip((s.interval.end for s in v[:-1]), (s.interval.start for s in v[1:])):
-            if a.level != b.level or a.offset != b.offset:
-                raise ValueError("Loop intervals not contiguous")
-
         return v
+
+    @root_validator
+    def valid_section_order(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        loop_order, sections = values["loop_order"], values["sections"]
+        starts, ends = zip(*((s.interval.start, s.interval.end) for s in sections))
+        if loop_order == common.LoopOrder.BACKWARD:
+            starts, ends = starts[:-1], ends[1:]
+        else:
+            starts, ends = starts[1:], ends[:-1]
+
+        if not all(
+            start.level == end.level and start.offset == end.offset
+            for start, end in zip(starts, ends)
+        ):
+            raise ValueError("Loop intervals not contiguous or in wrong order")
+        return values
 
 
 class Stencil(LocNode, SymbolTableTrait):

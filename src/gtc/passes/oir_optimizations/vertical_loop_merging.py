@@ -14,36 +14,29 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from eve import NodeTranslator
-from gtc import oir
+from gtc import common, oir
 
 
 class AdjacentLoopMerging(NodeTranslator):
     @staticmethod
-    def _mergeable(
-        a: oir.VerticalLoop, b: oir.VerticalLoop
-    ) -> Optional[Tuple[oir.VerticalLoop, oir.VerticalLoop]]:
+    def _mergeable(a: oir.VerticalLoop, b: oir.VerticalLoop) -> bool:
         if a.loop_order != b.loop_order:
-            return None
-        a_end = a.sections[-1].interval.end
-        b_start = b.sections[0].interval.start
-        if a_end.level == b_start.level and a_end.offset == b_start.offset:
-            return a, b
-        a_start = a.sections[0].interval.start
-        b_end = b.sections[-1].interval.end
-        if a_start.level == b_end.level and a_start.offset == b_end.offset:
-            return b, a
-        return None
+            return False
+        a_interval = a.sections[-1].interval
+        b_interval = b.sections[0].interval
+        if a.loop_order == common.LoopOrder.BACKWARD:
+            a_lim = a_interval.start
+            b_lim = b_interval.end
+        else:
+            a_lim = a_interval.end
+            b_lim = b_interval.start
+        return a_lim.level == b_lim.level and a_lim.offset == b_lim.offset
 
     @staticmethod
     def _merge(a: oir.VerticalLoop, b: oir.VerticalLoop) -> oir.VerticalLoop:
-        assert (
-            a.sections[-1].interval.end.level == b.sections[0].interval.start.level
-            and a.sections[-1].interval.end.offset == b.sections[0].interval.start.offset
-        )
-
         sections = a.sections + b.sections
         declarations = a.declarations + [
             bd for bd in b.declarations if bd.name not in {ad.name for ad in a.declarations}
@@ -61,7 +54,7 @@ class AdjacentLoopMerging(NodeTranslator):
             vertical_loop = self.visit(vertical_loop, **kwargs)
             mergeable = self._mergeable(vertical_loops[-1], vertical_loop)
             if mergeable:
-                vertical_loops[-1] = self._merge(*mergeable)
+                vertical_loops[-1] = self._merge(vertical_loops[-1], vertical_loop)
             else:
                 vertical_loops.append(vertical_loop)
 
