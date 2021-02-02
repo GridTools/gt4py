@@ -49,6 +49,8 @@ class AdjacentLoopMerging(NodeTranslator):
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        if not node.vertical_loops:
+            return self.generic_visit(node, **kwargs)
         vertical_loops = [self.visit(node.vertical_loops[0], **kwargs)]
         for vertical_loop in node.vertical_loops[1:]:
             vertical_loop = self.visit(vertical_loop, **kwargs)
