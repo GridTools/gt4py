@@ -131,7 +131,7 @@ class SymbolMapper(NodeTranslator):
     ) -> eve.Node:
         return cls().visit(
             node,
-            symbol_mapper=lambda s: symbol_mapper.get(s, None)
+            symbol_mapper=(lambda s: symbol_mapper.get(s, None))
             if isinstance(symbol_mapper, Mapping)
             else symbol_mapper,
         )
