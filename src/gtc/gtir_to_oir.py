@@ -36,7 +36,8 @@ def _create_mask(ctx: "GTIRToOIR.Context", name: str, cond: oir.Expr) -> oir.Tem
                 ),
                 right=cond,
             )
-        ]
+        ],
+        declarations=[],
     )
     ctx.add_horizontal_execution(fill_mask_field)
     return mask_field_decl
@@ -69,34 +70,11 @@ class GTIRToOIR(NodeTranslator):
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> None:
-        tmp = oir.Temporary(name=f"tmp_{node.left.name}_{node.id_}", dtype=node.left.dtype)
-
-        ctx.add_decl(tmp)
-
         ctx.add_horizontal_execution(
             oir.HorizontalExecution(
-                body=[
-                    oir.AssignStmt(
-                        left=oir.FieldAccess(
-                            name=tmp.name, offset=CartesianOffset.zero(), dtype=tmp.dtype
-                        ),
-                        right=self.visit(node.right),
-                    )
-                ],
+                body=[oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))],
                 mask=mask,
-            )
-        )
-        ctx.add_horizontal_execution(
-            oir.HorizontalExecution(
-                body=[
-                    oir.AssignStmt(
-                        left=self.visit(node.left),
-                        right=oir.FieldAccess(
-                            name=tmp.name, offset=CartesianOffset.zero(), dtype=tmp.dtype
-                        ),
-                    )
-                ],
-                mask=mask,
+                declarations=[],
             ),
         )
 
