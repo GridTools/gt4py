@@ -3,8 +3,6 @@ project(usid LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/private")
 
-set(CMAKE_CXX_STANDARD 17)
-
 add_compile_options(-Wall)
 
 include(CheckLanguage)
