@@ -15,9 +15,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Union
 
-from eve import NodeVisitor
+import eve
+from eve import NodeTranslator, NodeVisitor
 from eve.utils import XIterator, xiter
 from gtc import oir
 
@@ -106,3 +107,31 @@ class AccessCollector(NodeVisitor):
         result = cls.Result([])
         cls().visit(node, accesses=result._ordered_accesses)
         return result
+
+
+class SymbolMapper(NodeTranslator):
+    def visit_Node(
+        self, node: eve.Node, *, symbol_mapper: Callable[[str], Optional[str]]
+    ) -> eve.Node:
+        translated = dict()
+        for name, metadata in node.__node_children__.items():
+            if (
+                isinstance(metadata["definition"].type_, type)
+                and issubclass(metadata["definition"].type_, (eve.SymbolName, eve.SymbolRef))
+                and (mapped_name := symbol_mapper(getattr(node, name)))
+            ):
+                translated[name] = mapped_name
+            else:
+                translated[name] = self.visit(getattr(node, name), symbol_mapper=symbol_mapper)
+        return node.__class__(**translated)
+
+    @classmethod
+    def apply(
+        cls, node: eve.Node, symbol_mapper: Union[Callable[[str], Optional[str]], Mapping[str, str]]
+    ) -> eve.Node:
+        return cls().visit(
+            node,
+            symbol_mapper=lambda s: symbol_mapper.get(s, None)
+            if isinstance(symbol_mapper, Mapping)
+            else symbol_mapper,
+        )

@@ -29,6 +29,7 @@ from gtc.oir import (
     IJCache,
     Interval,
     KCache,
+    LocalScalar,
     ScalarAccess,
     ScalarDecl,
     Stencil,
@@ -88,6 +89,15 @@ class FieldAccessBuilder:
         return FieldAccess(name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind)
 
 
+class LocalScalarBuilder:
+    def __init__(self, name: SymbolName = None, dtype: DataType = None) -> None:
+        self._name = name
+        self._dtype = DataType.FLOAT32 if dtype is None else dtype
+
+    def build(self) -> LocalScalar:
+        return LocalScalar(name=self._name, dtype=self._dtype)
+
+
 class TemporaryBuilder:
     def __init__(self, name: SymbolName = None, dtype: DataType = None) -> None:
         self._name = name
@@ -118,6 +128,10 @@ class HorizontalExecutionBuilder:
 
     def mask(self, mask: Expr) -> "HorizontalExecutionBuilder":
         self._mask = mask
+        return self
+
+    def add_declaration(self, decl: ScalarDecl) -> "HorizontalExecutionBuilder":
+        self._declarations.append(decl)
         return self
 
     def build(self) -> HorizontalExecution:

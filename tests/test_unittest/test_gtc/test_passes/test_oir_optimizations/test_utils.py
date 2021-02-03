@@ -14,14 +14,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gtc import oir
 from gtc.common import DataType
-from gtc.passes.oir_optimizations.utils import Access, AccessCollector
+from gtc.passes.oir_optimizations.utils import Access, AccessCollector, SymbolMapper
 
 from ...oir_utils import (
     AssignStmtBuilder,
     FieldAccessBuilder,
     FieldDeclBuilder,
     HorizontalExecutionBuilder,
+    IJCacheBuilder,
+    LocalScalarBuilder,
     StencilBuilder,
     TemporaryBuilder,
     VerticalLoopBuilder,
@@ -83,3 +86,58 @@ def test_access_collector():
     assert result.write_offsets() == write_offsets
     assert result.offsets() == offsets
     assert result.ordered_accesses() == ordered_accesses
+
+
+def test_symbol_mapper():
+    testee = (
+        StencilBuilder()
+        .add_param(FieldDeclBuilder("foo").build())
+        .add_param(FieldDeclBuilder("bar").build())
+        .add_param(FieldDeclBuilder("baz").build())
+        .add_param(FieldDeclBuilder("mask", dtype=DataType.BOOL).build())
+        .add_vertical_loop(
+            VerticalLoopBuilder()
+            .add_section(
+                VerticalLoopSectionBuilder()
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("tmp", "foo", (1, 0, 0)).build())
+                    .add_stmt(AssignStmtBuilder("lcs", "tmp").build())
+                    .add_stmt(AssignStmtBuilder("bar", "lcs").build())
+                    .add_declaration(LocalScalarBuilder("lcs").build())
+                    .build()
+                )
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .mask(FieldAccessBuilder("mask", (-1, -1, 1)).dtype(DataType.BOOL).build())
+                    .add_stmt(AssignStmtBuilder("baz", "tmp", (0, 1, 0)).build())
+                    .build()
+                )
+                .build()
+            )
+            .add_declaration(TemporaryBuilder(name="tmp").build())
+            .add_cache(IJCacheBuilder(name="tmp").build())
+            .build()
+        )
+        .build()
+    )
+    transformed = SymbolMapper.apply(testee, lambda s: s + "X")
+    assert set(transformed.symtable_) == {"fooX", "barX", "bazX", "maskX", "lcsX", "tmpX"}
+    assert all(
+        list(
+            transformed.iter_tree()
+            .if_isinstance(oir.FieldAccess)
+            .getattr("name")
+            .map(lambda name: name.endswith("X"))
+        )
+    )
+    transformed = SymbolMapper.apply(testee, {name: name + "X" for name in testee.symtable_})
+    assert set(transformed.symtable_) == {"fooX", "barX", "bazX", "maskX", "lcsX", "tmpX"}
+    assert all(
+        list(
+            transformed.iter_tree()
+            .if_isinstance(oir.FieldAccess)
+            .getattr("name")
+            .map(lambda name: name.endswith("X"))
+        )
+    )
