@@ -25,7 +25,7 @@ import gt4py.ir as gt_ir
 import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
-from gt4py.gtscript import __INLINED, PARALLEL, I, computation, horizontal, interval, region
+from gt4py.gtscript import __INLINED, PARALLEL, I, J, computation, horizontal, interval, region
 
 from ..definitions import id_version
 
@@ -1088,7 +1088,7 @@ class TestAnnotations:
 class TestParallelIntervals:
     def test_simple(self):
         def definition_func(field: gtscript.Field[float]):
-            with computation(PARALLEL), interval(...), horizontal(region[I[0], :]):
+            with computation(PARALLEL), interval(...), horizontal(region[I[0], J[0] + 1]):
                 field = 0
 
         module = f"TestParallelIntervals_simple_{id_version}"
@@ -1106,13 +1106,10 @@ class TestParallelIntervals:
             == gt_ir.LevelMarker.START
         )
         assert parallel_interval[0].start.offset == 0
-        assert parallel_interval[0].start.extend == False
-
         assert parallel_interval[0].end.offset == 1
-        assert parallel_interval[0].end.extend == False
 
-        assert parallel_interval[1].start.extend == True
-        assert parallel_interval[1].end.extend == True
+        assert parallel_interval[1].start.offset == 1
+        assert parallel_interval[1].end.offset == 2
 
     def test_multiple(self):
         def definition_func(field: gtscript.Field[float]):
@@ -1140,7 +1137,7 @@ class TestParallelIntervals:
 
     def test_func_and_externals(self):
         def func(field):
-            from __externals__ import ext, other
+            from __externals__ import ext
 
             with horizontal(region[ext : I[0], :]):
                 field = 1
@@ -1153,7 +1150,7 @@ class TestParallelIntervals:
                 field = func(field)
 
         module = f"TestParallelIntervals_func_and_externals_{id_version}"
-        externals = {"ext": I[0] - np.iinfo(np.int32).max, "other": 1}
+        externals = {"ext": I[0] - np.iinfo(np.int32).max}
         stencil_id, def_ir = compile_definition(
             definition_func, "test_func_and_externals", module, externals=externals
         )
