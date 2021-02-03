@@ -417,7 +417,9 @@ class CallInliner(ast.NodeTransformer):
     def __init__(self, context: dict):
         self.context = context
         self.current_block = None
-        self.all_skip_names = set(gtscript.builtins | {"gt4py", "gtscript"})
+
+        context_base_names = {qualified_name.split(".")[0] for qualified_name in self.context}
+        self.all_skip_names = set(gtscript.builtins | {"gt4py", "gtscript"} | context_base_names)
 
     def __call__(self, func_node: ast.FunctionDef):
         self.visit(func_node)
