@@ -38,13 +38,9 @@ class AdjacentLoopMerging(NodeTranslator):
     @staticmethod
     def _merge(a: oir.VerticalLoop, b: oir.VerticalLoop) -> oir.VerticalLoop:
         sections = a.sections + b.sections
-        declarations = a.declarations + [
-            bd for bd in b.declarations if bd.name not in {ad.name for ad in a.declarations}
-        ]
         return oir.VerticalLoop(
             loop_order=a.loop_order,
             sections=sections,
-            declarations=declarations,
             caches=[],  # TODO: add support for cache merging?
         )
 
@@ -60,4 +56,9 @@ class AdjacentLoopMerging(NodeTranslator):
             else:
                 vertical_loops.append(vertical_loop)
 
-        return oir.Stencil(name=node.name, params=node.params, vertical_loops=vertical_loops)
+        return oir.Stencil(
+            name=node.name,
+            params=node.params,
+            vertical_loops=vertical_loops,
+            declarations=node.declarations,
+        )

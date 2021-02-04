@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Set
+from typing import Any, List, Set
 
 from eve import NodeTranslator
 from gtc import common, oir
@@ -23,15 +23,16 @@ from .utils import AccessCollector
 
 
 class IJCacheDetection(NodeTranslator):
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
+    def visit_VerticalLoop(
+        self, node: oir.VerticalLoop, *, temporaries: List[oir.Temporary], **kwargs: Any
+    ) -> oir.VerticalLoop:
         if node.loop_order != common.LoopOrder.PARALLEL:
             return self.generic_visit(node, **kwargs)
         accesses = AccessCollector.apply(node).offsets()
-        # TODO: ij-Caches for non-temporaries?
         cacheable = {
             field
             for field, offsets in accesses.items()
-            if field in {d.name for d in node.declarations}
+            if field in {tmp.name for tmp in temporaries}
             and field not in {c.name for c in node.caches}
             and all(o[2] == 0 for o in offsets)
         }
@@ -39,11 +40,13 @@ class IJCacheDetection(NodeTranslator):
             oir.IJCache(name=field) for field in cacheable
         ]
         return oir.VerticalLoop(
-            sections=self.visit(node.sections, **kwargs),
-            loop_order=self.visit(node.loop_order, **kwargs),
-            declarations=self.visit(node.declarations, **kwargs),
+            sections=node.sections,
+            loop_order=node.loop_order,
             caches=caches,
         )
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        return self.generic_visit(node, temporaries=node.declarations, **kwargs)
 
 
 class KCacheDetection(NodeTranslator):
@@ -63,9 +66,8 @@ class KCacheDetection(NodeTranslator):
             oir.KCache(name=field, fill=True, flush=True) for field in cacheable
         ]
         return oir.VerticalLoop(
-            loop_order=self.visit(node.loop_order, **kwargs),
-            sections=self.visit(node.sections, **kwargs),
-            declarations=self.visit(node.declarations, **kwargs),
+            loop_order=node.loop_order,
+            sections=node.sections,
             caches=caches,
         )
 
@@ -116,12 +118,15 @@ class PruneKCacheFlushes(NodeTranslator):
                 accesses[i].read_fields() - accesses[i].write_fields()
             )
             tmps_without_reuse = (
-                flushing_fields & {d.name for d in vertical_loop.declarations}
+                flushing_fields & {d.name for d in node.declarations}
             ) - set().union(
                 *(acc.read_fields() for acc in accesses[i + 1 :])  # type: ignore
             )
             pruneable = read_only_fields | tmps_without_reuse
             vertical_loops.append(self.visit(vertical_loop, pruneable=pruneable, **kwargs))
         return oir.Stencil(
-            name=node.name, params=self.visit(node.params, **kwargs), vertical_loops=vertical_loops
+            name=node.name,
+            params=self.visit(node.params, **kwargs),
+            vertical_loops=vertical_loops,
+            declarations=node.declarations,
         )

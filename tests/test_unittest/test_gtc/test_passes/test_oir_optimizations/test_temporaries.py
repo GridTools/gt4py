@@ -58,7 +58,7 @@ def test_local_temporaries_to_scalars_basic():
     assert isinstance(hexec.body[0].left, oir.ScalarAccess)
     assert isinstance(hexec.body[1].right, oir.ScalarAccess)
     assert not transformed.vertical_loops[0].declarations
-    assert hexec.declarations[0].name == "tmp"
+    assert len(hexec.declarations) == 1
 
 
 def test_local_temporaries_to_scalars_multiexec():
@@ -129,9 +129,9 @@ def test_write_before_read_temporaries_to_scalars():
     transformed = WriteBeforeReadTemporariesToScalars().visit(testee)
     hexec0 = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
     hexec1 = transformed.vertical_loops[0].sections[0].horizontal_executions[1]
-    assert {d.name for d in hexec0.declarations} == {"tmp1", "tmp3"}
-    assert {d.name for d in hexec1.declarations} == {"tmp3"}
-    assert {d.name for d in transformed.vertical_loops[0].declarations} == {"tmp2"}
+    assert len(hexec0.declarations) == 2
+    assert len(hexec1.declarations) == 1
+    assert len(transformed.vertical_loops[0].declarations) == 1
     assert isinstance(hexec0.body[0].left, oir.ScalarAccess)
     assert not isinstance(hexec0.body[1].left, oir.ScalarAccess)
     assert isinstance(hexec0.body[1].right, oir.ScalarAccess)
