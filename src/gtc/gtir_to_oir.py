@@ -166,6 +166,7 @@ class GTIRToOIR(NodeTranslator):
     def visit_VerticalLoop(
         self, node: gtir.VerticalLoop, *, ctx: Context, **kwargs: Any
     ) -> oir.VerticalLoop:
+        ctx.horizontal_executions.clear()
         self.visit(node.body, ctx=ctx)
 
         for temp in node.temporaries:
