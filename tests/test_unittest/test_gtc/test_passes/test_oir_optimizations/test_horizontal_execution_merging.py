@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gtc import oir
+from gtc.common import DataType
 from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
 
 from ...oir_utils import (
@@ -153,4 +155,81 @@ def test_on_the_fly_merging_basic():
         .build()
     )
     transformed = OnTheFlyMerging().visit(testee)
-    assert len(transformed.vertical_loops[0].sections[0].horizontal_executions) == 1
+    hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs) == 1
+    assert len(hexecs[0].declarations) == 1
+    assert isinstance(hexecs[0].declarations[0], oir.LocalScalar)
+    assert not transformed.declarations
+
+
+def test_on_the_fly_merging_with_offsets():
+    testee = (
+        StencilBuilder()
+        .add_param(FieldDeclBuilder("foo").build())
+        .add_param(FieldDeclBuilder("bar").build())
+        .add_param(FieldDeclBuilder("baz").build())
+        .add_vertical_loop(
+            VerticalLoopBuilder()
+            .add_section(
+                VerticalLoopSectionBuilder()
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("tmp", "foo").build())
+                    .build()
+                )
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("bar", "tmp", (1, 0, 0)).build())
+                    .add_stmt(AssignStmtBuilder("baz", "tmp", (0, 1, 0)).build())
+                    .build()
+                )
+                .build()
+            )
+            .build()
+        )
+        .add_declaration(TemporaryBuilder("tmp").build())
+        .build()
+    )
+    transformed = OnTheFlyMerging().visit(testee)
+    hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs) == 1
+    assert len(hexecs[0].declarations) == 2
+    assert all(isinstance(d, oir.LocalScalar) for d in hexecs[0].declarations)
+    assert not transformed.declarations
+    assert transformed.iter_tree().if_isinstance(oir.FieldAccess).filter(
+        lambda x: x.name == "foo"
+    ).getattr("offset").map(lambda o: (o.i, o.j, o.k)).to_set() == {(1, 0, 0), (0, 1, 0)}
+
+
+def test_on_the_fly_merging_with_mask():
+    testee = (
+        StencilBuilder()
+        .add_param(FieldDeclBuilder("foo").build())
+        .add_param(FieldDeclBuilder("bar").build())
+        .add_param(FieldDeclBuilder("baz").build())
+        .add_param(FieldDeclBuilder("mask", dtype=DataType.BOOL).build())
+        .add_vertical_loop(
+            VerticalLoopBuilder()
+            .add_section(
+                VerticalLoopSectionBuilder()
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("tmp", "foo").build())
+                    .mask(FieldAccessBuilder("mask").dtype(DataType.BOOL).build())
+                    .build()
+                )
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("bar", "tmp").build())
+                    .build()
+                )
+                .build()
+            )
+            .build()
+        )
+        .add_declaration(TemporaryBuilder("tmp").build())
+        .build()
+    )
+    transformed = OnTheFlyMerging().visit(testee)
+    assert len(transformed.vertical_loops[0].sections[0].horizontal_executions) == 2
+    assert len(transformed.declarations) == 1
