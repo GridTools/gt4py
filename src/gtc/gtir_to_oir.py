@@ -163,11 +163,11 @@ class GTIRToOIR(NodeTranslator):
             end=self.visit(node.end),
         )
 
-    def visit_VerticalLoop(self, node: gtir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
-        ctx = self.Context()
+    def visit_VerticalLoop(
+        self, node: gtir.VerticalLoop, *, ctx: Context, **kwargs: Any
+    ) -> oir.VerticalLoop:
         self.visit(node.body, ctx=ctx)
 
-        # should temporaries live at this level?
         for temp in node.temporaries:
             ctx.add_decl(oir.Temporary(name=temp.name, dtype=temp.dtype))
 
@@ -179,13 +179,14 @@ class GTIRToOIR(NodeTranslator):
                     horizontal_executions=ctx.horizontal_executions,
                 )
             ],
-            declarations=ctx.decls,
             caches=[],
         )
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> oir.Stencil:
+        ctx = self.Context()
         return oir.Stencil(
             name=node.name,
             params=self.visit(node.params),
-            vertical_loops=self.visit(node.vertical_loops),
+            vertical_loops=self.visit(node.vertical_loops, ctx=ctx),
+            declarations=ctx.decls,
         )

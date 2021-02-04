@@ -176,7 +176,6 @@ class VerticalLoopSection(LocNode):
 class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
     sections: List[VerticalLoopSection]
-    declarations: List[Temporary]
     caches: List[CacheDecl]
 
     @validator("sections")
@@ -207,6 +206,7 @@ class Stencil(LocNode, SymbolTableTrait):
     # TODO: fix to be List[Union[ScalarDecl, FieldDecl]]
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
+    declarations: List[Temporary]
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()

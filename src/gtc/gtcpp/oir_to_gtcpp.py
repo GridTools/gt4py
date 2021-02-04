@@ -208,8 +208,6 @@ class OIRToGTCpp(eve.NodeTranslator):
         comp_ctx: GTComputationContext,
         **kwargs: Any,
     ) -> gtcpp.GTMultiStage:
-        assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
-        comp_ctx.add_temporaries(self.visit(node.declarations))
         # the following visit assumes that temporaries are already available in comp_ctx
         stages = list(
             itertools.chain(
@@ -246,6 +244,10 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> gtcpp.Program:
         prog_ctx = self.ProgramContext()
         comp_ctx = self.GTComputationContext()
+
+        assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
+        comp_ctx.add_temporaries(self.visit(node.declarations))
+
         multi_stages = self.visit(
             node.vertical_loops,
             stencil_symtable=node.symtable_,
