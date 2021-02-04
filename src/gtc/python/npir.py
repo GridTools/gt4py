@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import List, Optional, Tuple, cast
+from typing import Any, List, Optional, Tuple, cast
 
 from pydantic import validator
 
@@ -9,7 +9,7 @@ from gtc import common
 
 class Expr(common.Expr):
     # TODO: remove when abstract nodes implemented in eve
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         if type(self) is Expr:
             raise TypeError("Cannot instantiate abstract Expr type of numpy IR")
         super().__init__(*args, **kwargs)
@@ -20,7 +20,7 @@ class Literal(common.Literal, Expr):
     dtype: common.DataType
 
     @validator("dtype")
-    def is_defined(cls, dtype):
+    def is_defined(cls, dtype: common.DataType) -> common.DataType:
         undefined = [common.DataType.AUTO, common.DataType.DEFAULT, common.DataType.INVALID]
         if dtype in undefined:
             raise ValueError("npir.Literal may not have undefined data type.")
@@ -52,15 +52,15 @@ class AxisOffset(eve.Node):
         return cls(axis_name=axis_name, offset=NumericalOffset(value=offset), parallel=parallel)
 
     @classmethod
-    def i(cls, offset: int, *, parallel=True) -> "AxisOffset":
+    def i(cls, offset: int, *, parallel: bool = True) -> "AxisOffset":
         return cls.from_int(axis_name=AxisName.I, offset=offset, parallel=parallel)
 
     @classmethod
-    def j(cls, offset: int, *, parallel=True) -> "AxisOffset":
+    def j(cls, offset: int, *, parallel: bool = True) -> "AxisOffset":
         return cls.from_int(axis_name=AxisName.J, offset=offset, parallel=parallel)
 
     @classmethod
-    def k(cls, offset: int, *, parallel=False) -> "AxisOffset":
+    def k(cls, offset: int, *, parallel: bool = False) -> "AxisOffset":
         return cls.from_int(axis_name=AxisName.K, offset=offset, parallel=parallel)
 
 
@@ -68,7 +68,7 @@ class VectorExpression(Expr):
     # TODO: remove when abstract nodes implemented in eve
     kind = cast(common.ExprKind, common.ExprKind.FIELD)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         if type(self) is VectorExpression:
             raise TypeError("Cannot instantiate abstract VectorExpression type of numpy IR")
         super().__init__(*args, **kwargs)

@@ -35,7 +35,7 @@ class OirToNpir(NodeTranslator):
                 self.add_offset(axis_index, value)
             return self
 
-    def visit_Stencil(self, node: oir.Stencil, **kwargs) -> npir.Computation:
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
         ctx = self.Context(symbol_table=node.symtable_)
         vertical_passes = [self.visit(vloop, ctx=ctx, **kwargs) for vloop in node.vertical_loops]
 
@@ -50,7 +50,7 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, ctx: Optional[Context] = None, **kwargs
+        self, node: oir.VerticalLoop, *, ctx: Optional[Context] = None, **kwargs: Any
     ) -> npir.VerticalPass:
         ctx = ctx or self.Context()
         kwargs.update(
@@ -68,7 +68,7 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_HorizontalExecution(
-        self, node: oir.HorizontalExecution, *, ctx: Optional[Context] = None, **kwargs
+        self, node: oir.HorizontalExecution, *, ctx: Optional[Context] = None, **kwargs: Any
     ) -> List[npir.VectorAssign]:
         mask = self.visit(node.mask, ctx=ctx, **kwargs)
         return self.visit(node.body, ctx=ctx, mask=mask, **kwargs)
@@ -79,7 +79,7 @@ class OirToNpir(NodeTranslator):
         *,
         ctx: Optional[Context] = None,
         mask: Optional[npir.VectorExpression],
-        **kwargs,
+        **kwargs: Any,
     ) -> npir.VectorAssign:
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, **kwargs),
@@ -88,7 +88,12 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_Cast(
-        self, node: oir.Cast, *, ctx: Optional[Context] = None, broadcast=False, **kwargs
+        self,
+        node: oir.Cast,
+        *,
+        ctx: Optional[Context] = None,
+        broadcast: bool = False,
+        **kwargs: Any,
     ) -> Union[npir.Cast, npir.BroadCast]:
         cast = npir.Cast(
             dtype=self.visit(node.dtype, ctx=ctx, **kwargs),
@@ -99,7 +104,7 @@ class OirToNpir(NodeTranslator):
         return cast
 
     def visit_FieldAccess(
-        self, node: oir.FieldAccess, *, ctx: Context, parallel_k: bool, **kwargs
+        self, node: oir.FieldAccess, *, ctx: Context, parallel_k: bool, **kwargs: Any
     ) -> Union[npir.FieldSlice, npir.VectorTemp]:
         if isinstance(ctx.symbol_table.get(node.name, None), oir.Temporary):
             return npir.VectorTemp(name=node.name)
@@ -112,7 +117,7 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_BinaryOp(
-        self, node: oir.BinaryOp, *, ctx: Optional[Context] = None, **kwargs
+        self, node: oir.BinaryOp, *, ctx: Optional[Context] = None, **kwargs: Any
     ) -> npir.VectorArithmetic:
         kwargs["broadcast"] = True
         return npir.VectorArithmetic(
@@ -121,11 +126,11 @@ class OirToNpir(NodeTranslator):
             right=self.visit(node.right, ctx=ctx, **kwargs),
         )
 
-    def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs) -> npir.VectorUnaryOp:
+    def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> npir.VectorUnaryOp:
         kwargs["broadcast"] = True
         return npir.VectorUnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs))
 
-    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs) -> npir.NativeFuncCall:
+    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> npir.NativeFuncCall:
         kwargs["broadcast"] = True
         return npir.NativeFuncCall(
             func=self.visit(node.func, **kwargs),
@@ -133,7 +138,7 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_Literal(
-        self, node: oir.Literal, *, broadcast: bool = False, **kwargs
+        self, node: oir.Literal, *, broadcast: bool = False, **kwargs: Any
     ) -> Union[npir.Literal, npir.BroadCast]:
         literal = npir.Literal(value=node.value, dtype=node.dtype)
         if broadcast:
