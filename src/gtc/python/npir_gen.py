@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import textwrap
-from typing import Any, Tuple
+from typing import Any, Collection, Tuple, Union
 
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
 from gtc import common
@@ -31,13 +31,15 @@ class NpirGen(TemplatedGenerator):
 
     Cast = FormatTemplate("np.{_this_node.dtype.name.lower()}({expr})")
 
-    def visit_NumericalOffset(self, node, **kwargs):
+    def visit_NumericalOffset(
+        self, node: npir.NumericalOffset, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         operator, delta = op_delta_from_int(node.value)
         return self.generic_visit(node, op=operator, delta=delta, **kwargs)
 
     NumericalOffset = FormatTemplate("{op}{delta}")
 
-    def visit_AxisOffset(self, node, **kwargs):
+    def visit_AxisOffset(self, node: npir.AxisOffset, **kwargs: Any) -> Union[str, Collection[str]]:
         offset = self.visit(node.offset)
         axis_name = self.visit(node.axis_name)
         if node.parallel:
@@ -49,7 +51,7 @@ class NpirGen(TemplatedGenerator):
 
     AxisOffset = FormatTemplate("{from_visitor}")
 
-    def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> str:
+    def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
         kwargs.setdefault("mask_acc", "")
         return self.generic_visit(node, **kwargs)
 
@@ -57,7 +59,9 @@ class NpirGen(TemplatedGenerator):
 
     VectorTemp = FormatTemplate("{name}")
 
-    def visit_VectorAssign(self, node: npir.VectorAssign, **kwargs: Any) -> str:
+    def visit_VectorAssign(
+        self, node: npir.VectorAssign, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         mask_acc = ""
         if node.mask:
             mask_acc = f"[{self.generic_visit(node.mask)}]"
@@ -67,21 +71,27 @@ class NpirGen(TemplatedGenerator):
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")
 
-    def visit_UnaryOperator(self, node: common.UnaryOperator, **kwargs: Any) -> str:
+    def visit_UnaryOperator(
+        self, node: common.UnaryOperator, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         if node is common.UnaryOperator.NOT:
             return "np.bitwise_not"
         return self.generic_visit(node, **kwargs)
 
-    def visit_VectorUnaryOp(self, node: npir.VectorUnaryOp, **kwargs: Any) -> str:
+    def visit_VectorUnaryOp(
+        self, node: npir.VectorUnaryOp, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         print(f"visiting {node.id_}")
         return self.generic_visit(node, **kwargs)
 
     VectorUnaryOp = FormatTemplate("({op}({expr}))")
 
-    def visit_LevelMarker(self, node, **kwargs):
+    def visit_LevelMarker(
+        self, node: common.LevelMarker, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         return "K" if node == common.LevelMarker.END else "k"
 
-    def visit_AxisBound(self, node, **kwargs):
+    def visit_AxisBound(self, node: common.AxisBound, **kwargs: Any) -> Union[str, Collection[str]]:
         delta = ""
         operator = ""
         if node.offset > 0:
@@ -91,7 +101,9 @@ class NpirGen(TemplatedGenerator):
 
     AxisBound = FormatTemplate("DOMAIN_{level}{op}{delta}")
 
-    def visit_VerticalPass(self, node, **kwargs):
+    def visit_VerticalPass(
+        self, node: npir.VerticalPass, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         for_loop_line = ""
         body_indent = 0
         if node.direction == common.LoopOrder.FORWARD:
@@ -130,7 +142,9 @@ class NpirGen(TemplatedGenerator):
         )
     )
 
-    def visit_Computation(self, node, **kwargs):
+    def visit_Computation(
+        self, node: npir.Computation, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         signature = ["*", *node.params, "_domain_", "_origin_"]
         data_views = JinjaTemplate(
             textwrap.dedent(
@@ -165,7 +179,9 @@ class NpirGen(TemplatedGenerator):
         )
     )
 
-    def visit_NativeFunction(self, node, **kwargs):
+    def visit_NativeFunction(
+        self, node: common.NativeFunction, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         if node == common.NativeFunction.MIN:
             return "minimum"
         elif node == common.NativeFunction.MAX:
