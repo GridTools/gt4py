@@ -165,7 +165,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
             src_dir.mkdir(parents=True, exist_ok=True)
             for filename, src in computation_src:
                 src_path = src_dir / filename
-                src_path.write_text(src)
+                src_path.write_text(cast(str, src))
         return self.make_module()
 
     # type ignore reason: signature differs from super on purpose
