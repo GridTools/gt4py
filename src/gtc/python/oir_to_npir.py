@@ -70,14 +70,21 @@ class OirToNpir(NodeTranslator):
     def visit_HorizontalExecution(
         self, node: oir.HorizontalExecution, *, ctx: Optional[Context] = None, **kwargs
     ) -> List[npir.VectorAssign]:
-        return self.visit(node.body, ctx=ctx, **kwargs)
+        mask = self.visit(node.mask, ctx=ctx, **kwargs)
+        return self.visit(node.body, ctx=ctx, mask=mask, **kwargs)
 
     def visit_AssignStmt(
-        self, node: oir.AssignStmt, *, ctx: Optional[Context] = None, **kwargs
+        self,
+        node: oir.AssignStmt,
+        *,
+        ctx: Optional[Context] = None,
+        mask: Optional[npir.VectorExpression],
+        **kwargs,
     ) -> npir.VectorAssign:
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, **kwargs),
             right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),
+            mask=mask,
         )
 
     def visit_Cast(
@@ -113,6 +120,10 @@ class OirToNpir(NodeTranslator):
             left=self.visit(node.left, ctx=ctx, **kwargs),
             right=self.visit(node.right, ctx=ctx, **kwargs),
         )
+
+    def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs) -> npir.VectorUnaryOp:
+        kwargs["broadcast"] = True
+        return npir.VectorUnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs))
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs) -> npir.NativeFuncCall:
         kwargs["broadcast"] = True

@@ -131,6 +131,26 @@ def test_vector_arithmetic() -> None:
     assert result == "(a_[i:I, j:J, k_] + b_[i:I, j:J, k_])"
 
 
+def test_vector_unary_op() -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.VectorUnaryOp(
+            expr=FieldSliceBuilder("a").build(),
+            op=common.UnaryOperator.NEG,
+        )
+    )
+    assert result == "(-(a_[i:I, j:J, k_]))"
+
+
+def test_vector_unary_not() -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.VectorUnaryOp(
+            expr=FieldSliceBuilder("a").build(),
+            op=common.UnaryOperator.NOT,
+        )
+    )
+    assert result == "(np.bitwise_not(a_[i:I, j:J, k_]))"
+
+
 def test_numerical_offset_pos() -> None:
     result = npir_gen.NpirGen().visit(npir.NumericalOffset(value=1))
     assert result == " + 1"

@@ -97,7 +97,7 @@ def test_assign_stmt_to_vector_assign(parallel_k):
     )
 
     ctx = OirToNpir.Context()
-    v_assign = OirToNpir().visit(assign_stmt, ctx=ctx, parallel_k=parallel_k)
+    v_assign = OirToNpir().visit(assign_stmt, ctx=ctx, parallel_k=parallel_k, mask=None)
     assert isinstance(v_assign, npir.VectorAssign)
     assert v_assign.left.k_offset.parallel is parallel_k
     assert v_assign.right.k_offset.parallel is parallel_k

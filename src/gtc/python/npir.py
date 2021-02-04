@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import List, Tuple, cast
+from typing import List, Optional, Tuple, cast
 
 from pydantic import validator
 
@@ -97,9 +97,14 @@ class VectorArithmetic(common.BinaryOp[VectorExpression], VectorExpression):
     pass
 
 
+class VectorUnaryOp(common.UnaryOp[VectorExpression], VectorExpression):
+    pass
+
+
 class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpression):
     left: VectorLValue
     right: VectorExpression
+    mask: Optional[VectorExpression]
 
 
 class VerticalPass(common.LocNode):

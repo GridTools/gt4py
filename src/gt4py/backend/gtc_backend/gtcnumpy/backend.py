@@ -2,13 +2,13 @@
 import numbers
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Type, Union, cast
 
+from eve.codegen import format_source
 from gt4py.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
 from gt4py.backend.debug_backend import (
     debug_is_compatible_layout,
     debug_is_compatible_type,
     debug_layout,
 )
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.backend.gtc_backend.mixin import GTCBackendMixin
 from gt4py.utils import text
 from gtc.python import npir
@@ -151,7 +151,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         computation_name = "computation.py"
-        return {computation_name: NpirGen.apply(self.npir)}
+        return {computation_name: format_source("python", NpirGen.apply(self.npir))}
 
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
         super().generate_bindings(language_name)

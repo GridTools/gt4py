@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import textwrap
-from typing import Tuple
+from typing import Any, Tuple
 
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
 from gtc import common
+from gtc.python import npir
 
 
 __all__ = ["NpirGen"]
@@ -48,13 +49,34 @@ class NpirGen(TemplatedGenerator):
 
     AxisOffset = FormatTemplate("{from_visitor}")
 
-    FieldSlice = FormatTemplate("{name}_[{i_offset}, {j_offset}, {k_offset}]")
+    def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> str:
+        kwargs.setdefault("mask_acc", "")
+        return self.generic_visit(node, **kwargs)
+
+    FieldSlice = FormatTemplate("{name}_[{i_offset}, {j_offset}, {k_offset}]{mask_acc}")
 
     VectorTemp = FormatTemplate("{name}")
+
+    def visit_VectorAssign(self, node: npir.VectorAssign, **kwargs: Any) -> str:
+        mask_acc = ""
+        if node.mask:
+            mask_acc = f"[{self.generic_visit(node.mask)}]"
+        return self.generic_visit(node, mask_acc=mask_acc, **kwargs)
 
     VectorAssign = FormatTemplate("{left} = {right}")
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")
+
+    def visit_UnaryOperator(self, node: common.UnaryOperator, **kwargs: Any) -> str:
+        if node is common.UnaryOperator.NOT:
+            return "np.bitwise_not"
+        return self.generic_visit(node, **kwargs)
+
+    def visit_VectorUnaryOp(self, node: npir.VectorUnaryOp, **kwargs: Any) -> str:
+        print(f"visiting {node.id_}")
+        return self.generic_visit(node, **kwargs)
+
+    VectorUnaryOp = FormatTemplate("({op}({expr}))")
 
     def visit_LevelMarker(self, node, **kwargs):
         return "K" if node == common.LevelMarker.END else "k"
