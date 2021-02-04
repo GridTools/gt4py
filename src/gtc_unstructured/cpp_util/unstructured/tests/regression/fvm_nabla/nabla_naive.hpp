@@ -1,7 +1,10 @@
 #pragma once
+#include "gridtools/usid/dim.hpp"
 #include "gridtools/usid/helpers.hpp"
 #include <gridtools/usid/naive_helpers.hpp>
+#include <iostream>
 namespace gridtools::usid::naive::nabla_impl_ {
+
     struct v2e_tag : connectivity<7, true> {};
     struct e2v_tag : connectivity<2, false> {};
     struct S_MXX_tag;
@@ -16,8 +19,10 @@ namespace gridtools::usid::naive::nabla_impl_ {
     struct kernel_0 {
         GT_FUNCTION auto operator()() const {
             return [](auto &&e, auto &&strides, auto &&v) {
-                auto zavg = 0.5 * sum_neighbors<double, e2v_tag>(
-                                      [](auto &&e, auto &&v) { return field<pp_tag>(v); }, e, strides, v);
+                double acc = 0.0;
+                foreach_neighbor<e2v_tag>([&](auto &&e, auto &&v) { acc += field<pp_tag>(v); }, e, strides, v);
+
+                auto zavg = 0.5 * acc;
                 field<zavgS_MXX_tag>(e) = field<S_MXX_tag>(e) * zavg;
                 field<zavgS_MYY_tag>(e) = field<S_MYY_tag>(e) * zavg;
             };
@@ -27,10 +32,17 @@ namespace gridtools::usid::naive::nabla_impl_ {
     struct kernel_1 {
         GT_FUNCTION auto operator()() const {
             return [](auto &&v, auto &&strides, auto &&e) {
-                field<pnabla_MXX_tag>(v) = sum_neighbors<double, v2e_tag>(
-                    [](auto &&v, auto &&e) { return field<zavgS_MXX_tag>(e) * field<sign_tag>(v); }, v, strides, e);
-                field<pnabla_MYY_tag>(v) = sum_neighbors<double, v2e_tag>(
-                    [](auto &&v, auto &&e) { return field<zavgS_MYY_tag>(e) * field<sign_tag>(v); }, v, strides, e);
+                field<pnabla_MXX_tag>(v) = 0.0;
+                field<pnabla_MYY_tag>(v) = 0.0;
+                foreach_neighbor<v2e_tag>(
+                    [](auto &&v, auto &&e) {
+                        field<pnabla_MXX_tag>(v) += field<zavgS_MXX_tag>(e) * field<sign_tag>(v);
+                        field<pnabla_MYY_tag>(v) += field<zavgS_MYY_tag>(e) * field<sign_tag>(v);
+                    },
+                    v,
+                    strides,
+                    e);
+
                 field<pnabla_MXX_tag>(v) = field<pnabla_MXX_tag>(v) / field<vol_tag>(v);
                 field<pnabla_MYY_tag>(v) = field<pnabla_MYY_tag>(v) / field<vol_tag>(v);
             };

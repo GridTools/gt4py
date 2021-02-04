@@ -43,12 +43,23 @@ namespace gridtools::usid {
     struct is_sparse_field<T, std::enable_if_t<std::is_base_of_v<sparse_field<typename T::connectivity_t>, T>>>
         : std::true_type {};
 
-    template <class T, class Conncectivity, class F, class Init, class G, class Ptr, class Strides, class Neighbors>
+    template <class Connectivity, class Fun, class Ptr, class Strides, class Neighbors>
+    GT_FUNCTION void foreach_neighbor(Fun &&fun, Ptr &&ptr, Strides &&strides, Neighbors &&neighbors) {
+        sid::make_loop<Connectivity>(typename Connectivity::max_neighbors_t())([&](auto const &ptr, auto &&) {
+            auto i = *host_device::at_key<Connectivity>(ptr);
+            if constexpr (Connectivity::has_skip_values_t::value)
+                if (i < 0)
+                    return;
+            fun(ptr, sid::shifted(neighbors.first, neighbors.second, i));
+        })(wstd::forward<decltype(ptr)>(ptr), strides);
+    }
+
+    template <class T, class Connectivity, class F, class Init, class G, class Ptr, class Strides, class Neighbors>
     GT_FUNCTION T fold_neighbors(F f, Init init, G g, Ptr &&ptr, Strides &&strides, Neighbors &&neighbors) {
         T acc = init(meta::lazy::id<T>());
-        sid::make_loop<Conncectivity>(typename Conncectivity::max_neighbors_t())([&](auto const &ptr, auto &&) {
-            auto i = *host_device::at_key<Conncectivity>(ptr);
-            if constexpr (Conncectivity::has_skip_values_t::value)
+        sid::make_loop<Connectivity>(typename Connectivity::max_neighbors_t())([&](auto const &ptr, auto &&) {
+            auto i = *host_device::at_key<Connectivity>(ptr);
+            if constexpr (Connectivity::has_skip_values_t::value)
                 if (i < 0)
                     return;
             acc = f(acc, g(ptr, sid::shifted(neighbors.first, neighbors.second, i)));

@@ -16,8 +16,9 @@ namespace gridtools::usid::cuda::nabla_impl_ {
     struct kernel_0 {
         GT_FUNCTION auto operator()() const {
             return [](auto &&ptr, auto &&strides, auto &&neighbors) {
-                auto zavg = 0.5 * sum_neighbors<double, e2v_tag>(
-                                      [](auto &&, auto &&n) { return field<pp_tag>(n); }, ptr, strides, neighbors);
+                double acc = 0.0;
+                foreach_neighbor<e2v_tag>([&](auto &&, auto &&n) { acc += field<pp_tag>(n); }, ptr, strides, neighbors);
+                auto zavg = 0.5 * acc;
                 field<zavgS_MXX_tag>(ptr) = field<S_MXX_tag>(ptr) * zavg;
                 field<zavgS_MYY_tag>(ptr) = field<S_MYY_tag>(ptr) * zavg;
             };
@@ -26,21 +27,29 @@ namespace gridtools::usid::cuda::nabla_impl_ {
     struct kernel_1 {
         GT_FUNCTION auto operator()() const {
             return [](auto &&ptr, auto &&strides, auto &&neighbors) {
-                field<pnabla_MXX_tag>(ptr) = sum_neighbors<double, v2e_tag>(
-                    [](auto &&p, auto &&n) { return field<zavgS_MXX_tag>(n) * field<sign_tag>(p); },
+                field<pnabla_MXX_tag>(ptr) = 0.0;
+                field<pnabla_MYY_tag>(ptr) = 0.0;
+                foreach_neighbor<v2e_tag>(
+                    [](auto &&p, auto &&n) {
+                        field<pnabla_MXX_tag>(p) += field<zavgS_MXX_tag>(n) * field<sign_tag>(p);
+                        field<pnabla_MYY_tag>(p) += field<zavgS_MYY_tag>(n) * field<sign_tag>(p);
+                    },
                     ptr,
                     strides,
                     neighbors);
-                field<pnabla_MYY_tag>(ptr) = sum_neighbors<double, v2e_tag>(
-                    [](auto &&p, auto &&n) { return field<zavgS_MYY_tag>(n) * field<sign_tag>(p); },
-                    ptr,
-                    strides,
-                    neighbors);
+            };
+        }
+    };
+
+    struct kernel_2 {
+        GT_FUNCTION auto operator()() const {
+            return [](auto &&ptr, auto &&strides) {
                 field<pnabla_MXX_tag>(ptr) = field<pnabla_MXX_tag>(ptr) / field<vol_tag>(ptr);
                 field<pnabla_MYY_tag>(ptr) = field<pnabla_MYY_tag>(ptr) / field<vol_tag>(ptr);
             };
         }
     };
+
     inline constexpr auto nabla = [](domain d, auto &&v2e, auto &&e2v) {
         static_assert(is_sid<decltype(v2e(traits_t()))>());
         static_assert(is_sid<decltype(e2v(traits_t()))>());
@@ -64,9 +73,13 @@ namespace gridtools::usid::cuda::nabla_impl_ {
                         e2v, S_MXX, S_MYY, zavgS_MXX, zavgS_MYY),
                     sid::composite::make<pp_tag>(pp));
                 call_kernel<kernel_1>(d.vertex,
-                    sid::composite::make<v2e_tag, pnabla_MXX_tag, pnabla_MYY_tag, sign_tag, vol_tag>(
-                        v2e, pnabla_MXX, pnabla_MYY, sid::rename_dimensions<dim::s, v2e_tag>(sign), vol),
+                    sid::composite::make<v2e_tag, pnabla_MXX_tag, pnabla_MYY_tag, sign_tag>(
+                        v2e, pnabla_MXX, pnabla_MYY, sid::rename_dimensions<dim::s, v2e_tag>(sign)),
                     sid::composite::make<zavgS_MXX_tag, zavgS_MYY_tag>(zavgS_MXX, zavgS_MYY));
+                // TODO pole edge computation
+                call_kernel<kernel_2>(d.vertex,
+                    sid::composite::make<v2e_tag, pnabla_MXX_tag, pnabla_MYY_tag, vol_tag>(
+                        v2e, pnabla_MXX, pnabla_MYY, vol));
             };
     };
 } // namespace gridtools::usid::cuda::nabla_impl_
