@@ -45,7 +45,7 @@ from gtc.passes.oir_optimizations.caches import (
     PruneKCacheFills,
     PruneKCacheFlushes,
 )
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
@@ -87,6 +87,7 @@ class GTCGTExtGenerator:
         oir = AdjacentLoopMerging().visit(oir)
         oir = LocalTemporariesToScalars().visit(oir)
         oir = WriteBeforeReadTemporariesToScalars().visit(oir)
+        oir = OnTheFlyMerging().visit(oir)
         oir = IJCacheDetection().visit(oir)
         oir = KCacheDetection().visit(oir)
         oir = PruneKCacheFills().visit(oir)

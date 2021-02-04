@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Set, Tuple
 
 from eve import NodeVisitor
+from eve.concepts import TreeNode
 from eve.utils import XIterator, xiter
 from gtc import oir
 
@@ -103,7 +104,7 @@ class AccessCollector(NodeVisitor):
             return self._ordered_accesses
 
     @classmethod
-    def apply(cls, node: oir.LocNode, **kwargs: Any) -> "Result":
+    def apply(cls, node: TreeNode, **kwargs: Any) -> "Result":
         result = cls.Result([])
         cls().visit(node, accesses=result._ordered_accesses, **kwargs)
         return result
