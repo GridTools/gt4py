@@ -54,9 +54,9 @@ def test_access_collector():
                 )
                 .build()
             )
-            .add_declaration(TemporaryBuilder(name="tmp").build())
             .build()
         )
+        .add_declaration(TemporaryBuilder(name="tmp").build())
         .build()
     )
     read_offsets = {"tmp": {(0, 0, 0), (0, 1, 0)}, "foo": {(1, 0, 0)}, "mask": {(-1, -1, 1)}}

@@ -14,13 +14,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
 
 from ...oir_utils import (
     AssignStmtBuilder,
     CartesianOffsetBuilder,
     FieldAccessBuilder,
+    FieldDeclBuilder,
     HorizontalExecutionBuilder,
+    StencilBuilder,
+    TemporaryBuilder,
+    VerticalLoopBuilder,
     VerticalLoopSectionBuilder,
 )
 
@@ -120,3 +124,33 @@ def test_nonzero_extent_merging():
     assert transformed.horizontal_executions[0].body == sum(
         (he.body for he in testee.horizontal_executions), []
     )
+
+
+def test_on_the_fly_merging_basic():
+    testee = (
+        StencilBuilder()
+        .add_param(FieldDeclBuilder("foo").build())
+        .add_param(FieldDeclBuilder("bar").build())
+        .add_vertical_loop(
+            VerticalLoopBuilder()
+            .add_section(
+                VerticalLoopSectionBuilder()
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("tmp", "foo").build())
+                    .build()
+                )
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("bar", "tmp").build())
+                    .build()
+                )
+                .build()
+            )
+            .build()
+        )
+        .add_declaration(TemporaryBuilder("tmp").build())
+        .build()
+    )
+    transformed = OnTheFlyMerging().visit(testee)
+    assert len(transformed.vertical_loops[0].sections[0].horizontal_executions) == 1

@@ -38,38 +38,46 @@ from ...oir_utils import (
 
 def test_ij_cache_detection():
     testee = (
-        VerticalLoopBuilder()
-        .add_section(
-            VerticalLoopSectionBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("tmp1", "bar", (1, 0, 0)).build())
+        StencilBuilder()
+        .add_param(FieldDeclBuilder("foo").build())
+        .add_param(FieldDeclBuilder("bar").build())
+        .add_param(FieldDeclBuilder("baz").build())
+        .add_vertical_loop(
+            VerticalLoopBuilder()
+            .add_section(
+                VerticalLoopSectionBuilder()
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("tmp1", "bar", (1, 0, 0)).build())
+                    .build()
+                )
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("tmp2", "tmp1", (0, 1, 0)).build())
+                    .build()
+                )
+                .add_horizontal_execution(
+                    HorizontalExecutionBuilder()
+                    .add_stmt(AssignStmtBuilder("baz", "tmp2", (0, 0, 1)).build())
+                    .add_stmt(AssignStmtBuilder("tmp3", "baz").build())
+                    .add_stmt(AssignStmtBuilder("foo", "tmp3").build())
+                    .build()
+                )
                 .build()
             )
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("tmp2", "tmp1", (0, 1, 0)).build())
-                .build()
-            )
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("baz", "tmp2", (0, 0, 1)).build())
-                .add_stmt(AssignStmtBuilder("tmp3", "baz").build())
-                .add_stmt(AssignStmtBuilder("foo", "tmp3").build())
-                .build()
-            )
+            .add_cache(IJCacheBuilder("tmp3").build())
             .build()
         )
         .add_declaration(TemporaryBuilder(name="tmp1").build())
         .add_declaration(TemporaryBuilder(name="tmp2").build())
         .add_declaration(TemporaryBuilder(name="tmp3").build())
-        .add_cache(IJCacheBuilder("tmp3").build())
         .build()
     )
     transformed = IJCacheDetection().visit(testee)
-    assert len(transformed.caches) == 2
-    assert {cache.name for cache in transformed.caches} == {"tmp1", "tmp3"}
-    assert all(isinstance(cache, IJCache) for cache in transformed.caches)
+    caches = transformed.vertical_loops[0].caches
+    assert len(caches) == 2
+    assert {cache.name for cache in caches} == {"tmp1", "tmp3"}
+    assert all(isinstance(cache, IJCache) for cache in caches)
 
 
 def test_k_cache_detection_basic():
@@ -207,8 +215,6 @@ def test_prune_k_cache_flushes():
             .add_cache(KCacheBuilder("baz", flush=True).build())
             .add_cache(KCacheBuilder("tmp1", flush=True).build())
             .add_cache(KCacheBuilder("tmp2", flush=True).build())
-            .add_declaration(TemporaryBuilder("tmp1").build())
-            .add_declaration(TemporaryBuilder("tmp2").build())
             .build()
         )
         .add_vertical_loop(
@@ -226,6 +232,8 @@ def test_prune_k_cache_flushes():
             )
             .build()
         )
+        .add_declaration(TemporaryBuilder("tmp1").build())
+        .add_declaration(TemporaryBuilder("tmp2").build())
         .build()
     )
     transformed = PruneKCacheFlushes().visit(testee)

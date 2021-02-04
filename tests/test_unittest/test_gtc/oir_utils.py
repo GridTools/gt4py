@@ -161,7 +161,6 @@ class VerticalLoopBuilder:
     def __init__(self) -> None:
         self._loop_order = LoopOrder.PARALLEL
         self._sections: List[VerticalLoopSection] = []
-        self._declarations: List[Temporary] = []
         self._caches: List[CacheDecl] = []
 
     def loop_order(self, loop_order: LoopOrder) -> "VerticalLoopBuilder":
@@ -172,10 +171,6 @@ class VerticalLoopBuilder:
         self._sections.append(section)
         return self
 
-    def add_declaration(self, declaration: Temporary) -> "VerticalLoopBuilder":
-        self._declarations.append(declaration)
-        return self
-
     def add_cache(self, cache: CacheDecl) -> "VerticalLoopBuilder":
         self._caches.append(cache)
         return self
@@ -184,7 +179,6 @@ class VerticalLoopBuilder:
         return VerticalLoop(
             sections=self._sections,
             loop_order=self._loop_order,
-            declarations=self._declarations,
             caches=self._caches,
         )
 
@@ -194,6 +188,7 @@ class StencilBuilder:
         self._name: str = name
         self._params: List[Decl] = []
         self._vertical_loops: List[VerticalLoop] = []
+        self._declarations: List[Temporary] = []
 
     def add_param(self, param: Decl) -> "StencilBuilder":
         self._params.append(param)
@@ -203,11 +198,16 @@ class StencilBuilder:
         self._vertical_loops.append(vertical_loop)
         return self
 
+    def add_declaration(self, declaration: Temporary) -> "StencilBuilder":
+        self._declarations.append(declaration)
+        return self
+
     def build(self) -> Stencil:
         return Stencil(
             name=self._name,
             params=self._params,
             vertical_loops=self._vertical_loops,
+            declarations=self._declarations,
         )
 
 
