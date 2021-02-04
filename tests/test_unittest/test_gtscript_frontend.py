@@ -1204,6 +1204,7 @@ class TestParallelIntervals:
         assert def_ir.computations[2].parallel_interval[0].start.offset == -1
 
     def test_func_and_externals(self):
+        @gtscript.function
         def func(field):
             from __externals__ import ext
 
