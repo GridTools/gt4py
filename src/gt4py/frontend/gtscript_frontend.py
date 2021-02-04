@@ -1440,6 +1440,14 @@ class GTScriptParser(ast.NodeVisitor):
                         context,
                         gt_ir.Location.from_ast_node(name_nodes[collected_name][0]),
                     )
+                    if hasattr(nonlocal_symbols[collected_name], "_gtscript_"):
+                        # Recursively add nonlocals and imported symbols
+                        nonlocal_symbols.update(
+                            nonlocal_symbols[collected_name]._gtscript_["nonlocals"]
+                        )
+                        imported_symbols.update(
+                            nonlocal_symbols[collected_name]._gtscript_["imported"]
+                        )
                 elif root_name not in local_symbols and root_name in unbound:
                     raise GTScriptSymbolError(
                         name=collected_name,
