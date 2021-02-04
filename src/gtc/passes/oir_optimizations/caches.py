@@ -117,11 +117,11 @@ class PruneKCacheFlushes(NodeTranslator):
             read_only_fields = flushing_fields & (
                 accesses[i].read_fields() - accesses[i].write_fields()
             )
+            future_reads: Set[str] = set()
+            future_reads = future_reads.union(*(acc.read_fields() for acc in accesses[i + 1 :]))
             tmps_without_reuse = (
                 flushing_fields & {d.name for d in node.declarations}
-            ) - set().union(
-                *(acc.read_fields() for acc in accesses[i + 1 :])  # type: ignore
-            )
+            ) - future_reads
             pruneable = read_only_fields | tmps_without_reuse
             vertical_loops.append(self.visit(vertical_loop, pruneable=pruneable, **kwargs))
         return oir.Stencil(
