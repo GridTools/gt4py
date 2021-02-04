@@ -431,6 +431,10 @@ class CallInliner(ast.NodeTransformer):
             node.orelse = self._process_stmts(node.orelse)
         return node
 
+    def visit_Assert(self, node: ast.Assert):
+        """Assertions are removed in the AssertionChecker later."""
+        return node
+
     def visit_Assign(self, node: ast.Assign):
         if (
             isinstance(node.value, ast.Call)
@@ -448,6 +452,7 @@ class CallInliner(ast.NodeTransformer):
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
         if call_name in gtscript.MATH_BUILTINS:
+            # A math function -- visit arguments and return as-is.
             node.args = [self.visit(arg) for arg in node.args]
             return node
         elif any(
@@ -458,8 +463,7 @@ class CallInliner(ast.NodeTransformer):
                 "Function calls are not supported in arguments to function calls",
                 loc=gt_ir.Location.from_ast_node(node),
             )
-
-        elif call_name not in self.context and not hasattr(self.context[call_name], "_gtscript_"):
+        elif call_name not in self.context or not hasattr(self.context[call_name], "_gtscript_"):
             raise GTScriptSyntaxError("Unknown call", loc=gt_ir.Location.from_ast_node(node))
 
         # Recursively inline any possible nested subroutine call
@@ -1639,8 +1643,6 @@ class GTScriptParser(ast.NodeVisitor):
             self.external_context,
             exhaustive=False,
         )
-        AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
-
         ValueInliner.apply(main_func_node, context=local_context)
 
         # Inline function calls
@@ -1649,6 +1651,8 @@ class GTScriptParser(ast.NodeVisitor):
         # Evaluate and inline compile-time conditionals
         CompiledIfInliner.apply(main_func_node, context=local_context)
         # Cleaner.apply(self.definition_ir)
+
+        AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
 
         # Generate definition IR
         domain = gt_ir.Domain.LatLonGrid()
