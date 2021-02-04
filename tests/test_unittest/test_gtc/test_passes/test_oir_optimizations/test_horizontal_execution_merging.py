@@ -14,8 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import pytest
-
 from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 
 from ...oir_utils import (
@@ -27,12 +25,7 @@ from ...oir_utils import (
 )
 
 
-@pytest.fixture(params=[GreedyMerging()])
-def merger(request):
-    return request.param
-
-
-def test_zero_extent_merging(merger):
+def test_zero_extent_merging():
     testee = (
         VerticalLoopSectionBuilder()
         .add_horizontal_execution(
@@ -49,14 +42,14 @@ def test_zero_extent_merging(merger):
         )
         .build()
     )
-    transformed = merger.visit(testee)
+    transformed = GreedyMerging().visit(testee)
     assert len(transformed.horizontal_executions) == 1
     assert transformed.horizontal_executions[0].body == sum(
         (he.body for he in testee.horizontal_executions), []
     )
 
 
-def test_mixed_merging(merger):
+def test_mixed_merging():
     testee = (
         VerticalLoopSectionBuilder()
         .add_horizontal_execution(
@@ -78,7 +71,7 @@ def test_mixed_merging(merger):
         )
         .build()
     )
-    transformed = merger.visit(testee)
+    transformed = GreedyMerging().visit(testee)
     assert len(transformed.horizontal_executions) == 2
     assert transformed.horizontal_executions[0].body == testee.horizontal_executions[0].body
     assert transformed.horizontal_executions[1].body == sum(
@@ -86,7 +79,7 @@ def test_mixed_merging(merger):
     )
 
 
-def test_write_after_read_with_offset(merger):
+def test_write_after_read_with_offset():
     testee = (
         VerticalLoopSectionBuilder()
         .add_horizontal_execution(
@@ -99,11 +92,11 @@ def test_write_after_read_with_offset(merger):
         )
         .build()
     )
-    transformed = merger.visit(testee)
+    transformed = GreedyMerging().visit(testee)
     assert transformed == testee
 
 
-def test_nonzero_extent_merging(merger):
+def test_nonzero_extent_merging():
     testee = (
         VerticalLoopSectionBuilder()
         .add_horizontal_execution(
@@ -122,7 +115,7 @@ def test_nonzero_extent_merging(merger):
         )
         .build()
     )
-    transformed = merger.visit(testee)
+    transformed = GreedyMerging().visit(testee)
     assert len(transformed.horizontal_executions) == 1
     assert transformed.horizontal_executions[0].body == sum(
         (he.body for he in testee.horizontal_executions), []
