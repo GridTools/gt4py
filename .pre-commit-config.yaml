@@ -93,7 +93,6 @@ repos:
           tests/test_integration/stencil_definitions.py |
           tests/test_integration/test_code_generation.py |
           tests/test_integration/test_cpp_regression.py |
-          tests/test_integration/test_suites.py |
           tests/test_integration/utils.py |
           tests/test_unittest/test_call_interface.py |
           tests/test_unittest/test_dawn_backends.py |

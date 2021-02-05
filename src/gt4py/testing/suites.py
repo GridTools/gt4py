@@ -173,9 +173,27 @@ class SuiteMeta(type):
 
             hyp_wrapper(test)
 
-        cls_dict["test_generation"] = pytest.mark.parametrize(
-            "test", [test for test in cls_dict["tests"] if test["suite"] == cls_name]
-        )(generation_test_wrapper)
+        pytest_params = []
+
+        for test in cls_dict["tests"]:
+            if test["suite"] == cls_name:
+                marks = (
+                    [pytest.mark.requires_gpu]
+                    if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu"
+                    else ()
+                )
+                name = test["backend"]
+                name += "".join(
+                    "_{}_{}".format(key, value) for key, value in test["constants"].items()
+                )
+                name += "".join(
+                    "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
+                )
+                param = pytest.param(test, marks=marks, id=name)
+                pytest_params.append(param)
+        cls_dict["test_generation"] = pytest.mark.parametrize("test", pytest_params)(
+            generation_test_wrapper
+        )
 
     def parametrize_implementation_tests(cls_name, bases, cls_dict):
 
@@ -192,13 +210,25 @@ class SuiteMeta(type):
             hyp_wrapper(test)
 
         runtime_pytest_params = []
-        for test in [t for t in cls_dict["tests"] if t["suite"] == cls_name]:
+        for test in (t for t in cls_dict["tests"] if t["suite"] == cls_name):
+            marks = (
+                [pytest.mark.requires_gpu]
+                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu"
+                else ()
+            )
+            name = test["backend"]
+            name += "".join("_{}_{}".format(key, value) for key, value in test["constants"].items())
+            name += "".join(
+                "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
+            )
             runtime_pytest_params.append(
-                (
+                pytest.param(
                     test,
                     composite_implementation_strategy_factory(
                         test["dtypes"], implementation_strategy_factories, global_boundaries
                     ),
+                    marks=marks,
+                    id=name,
                 )
             )
 
