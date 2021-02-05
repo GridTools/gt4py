@@ -114,12 +114,11 @@ storing a reference to the piece of source code which originated the node.
                 | If(condition: expr, main_body: BlockStmt, else_body: BlockStmt)
                 | BlockStmt
 
-    AxisBound(level: LevelMarker | VarRef, offset: int, extend: bool = False)
+    AxisBound(level: LevelMarker | VarRef, offset: int)
         # bound = level + offset
         # level: LevelMarker = special START or END level
         # level: VarRef = access to `int` or `[int]` variable holding the run-time value of the level
         # offset: int
-        # extend = True means extend infinitely far
 
     AxisInterval(start: AxisBound, end: AxisBound)
         # start is included
@@ -412,7 +411,7 @@ class FieldRef(Ref):
 
 @attribclass
 class Cast(Expr):
-    dtype = attribute(of=DataType)
+    data_type = attribute(of=DataType)
     expr = attribute(of=Expr)
     loc = attribute(of=Location, optional=True)
 
@@ -697,7 +696,6 @@ class IterationOrder(enum.Enum):
 class AxisBound(Node):
     level = attribute(of=UnionOf[LevelMarker, VarRef])
     offset = attribute(of=int, default=0)
-    extend = attribute(of=bool, default=False)
     loc = attribute(of=Location, optional=True)
 
 

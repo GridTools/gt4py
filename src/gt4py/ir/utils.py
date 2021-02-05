@@ -31,17 +31,6 @@ from .nodes import *
 DEFAULT_LAYOUT_ID = "_default_layout_id_"
 
 
-def make_expr(value):
-    if isinstance(value, Expr):
-        result = value
-    elif isinstance(value, numbers.Number):
-        data_type = DataType.from_dtype(np.dtype(type(value)))
-        result = ScalarLiteral(value=value, data_type=data_type)
-    else:
-        raise ValueError("Invalid expression value '{}'".format(value))
-    return result
-
-
 def make_field_decl(
     name: str,
     dtype=np.float_,

@@ -18,7 +18,7 @@ from typing import Iterator, List, Optional, Set, Tuple, Union
 
 import pytest
 
-from gt4py.analysis import TransformData
+from gt4py.analysis import IntervalInfo, TransformData
 from gt4py.definitions import BuildOptions
 from gt4py.ir.nodes import (
     ArgumentInfo,
@@ -198,8 +198,8 @@ class TComputationBlock(TObject):
             interval
             if interval is not None
             else AxisInterval(
-                start=AxisBound(level=LevelMarker.START, extend=True),
-                end=AxisBound(level=LevelMarker.END, extend=True),
+                start=AxisBound(level=LevelMarker.START, offset=IntervalInfo.MAX_INT),
+                end=AxisBound(level=LevelMarker.END, offset=-IntervalInfo.MAX_INT),
             )
             for interval in intervals
         ]
