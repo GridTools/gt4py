@@ -71,6 +71,12 @@ GLOBAL_VERY_NESTED_CONSTANTS = types.SimpleNamespace(nested=types.SimpleNamespac
 
 
 @gtscript.function
+def assert_in_func(field):
+    assert __INLINED(GLOBAL_CONSTANT < 2), "An error occurred"
+    return field[0, 0, 0] + GLOBAL_CONSTANT
+
+
+@gtscript.function
 def add_external_const(a):
     return a + 10.0 + GLOBAL_CONSTANT
 
@@ -671,6 +677,14 @@ class TestCompileTimeAssertions:
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
         compile_definition(definition, "test_assert_nested_attribute", module)
+
+    def test_inside_func(self, id_version):
+        def definition(inout_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                inout_field = assert_in_func(inout_field)
+
+        module = f"TestCompileTimeAssertions_test_module_{id_version}"
+        compile_definition(definition, "test_inside_func", module)
 
     def test_runtime_error(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
