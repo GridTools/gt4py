@@ -21,6 +21,7 @@ from gtc import gtir, gtir_to_oir, oir
 from gtc.common import DataType
 from gtc.gtir_to_oir import GTIRToOIR
 
+from . import oir_utils
 from .gtir_utils import (
     BlockStmtFactory,
     FieldAccessFactory,
@@ -56,7 +57,7 @@ def test_visit_ParAssignStmt():
 
 def test_create_mask():
     mask_name = "mask"
-    cond = FieldAccessFactory(dtype=DataType.BOOL)
+    cond = oir_utils.FieldAccessFactory(dtype=DataType.BOOL)
     ctx = GTIRToOIR.Context()
     result_decl = gtir_to_oir._create_mask(ctx, mask_name, cond)
     result_assign = ctx.horizontal_executions[0]
