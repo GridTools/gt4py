@@ -62,6 +62,15 @@ class SuiteMeta(type):
     to test a stencil definition and implementations using Hypothesis and pytest.
     """
 
+    required_members = {
+        "domain_range",
+        "symbols",
+        "definition",
+        "validation",
+        "backends",
+        "dtypes",
+    }
+
     def collect_symbols(cls_name, bases, cls_dict):
 
         domain_range = cls_dict["domain_range"]
@@ -246,37 +255,17 @@ class SuiteMeta(type):
             ("test", "implementation_strategy"), runtime_pytest_params
         )(implementation_test_wrapper)
 
-    def __new__(cls, cls_name, bases, cls_dict):
-        if cls_dict.get("_skip_", False):  # skip metaclass magic
-            return super().__new__(cls, cls_name, bases, cls_dict)
-
-        # Grab members inherited from base classes
-        required_members = {
-            "domain_range",
-            "symbols",
-            "definition",
-            "validation",
-            "backends",
-            "dtypes",
-        }
-        missing_members = required_members - cls_dict.keys()
-        for key in missing_members:
-            for base in bases:
-                if hasattr(base, key):
-                    cls_dict[key] = getattr(base, key)
-                    break
-
-        # Check class dict
-        missing_members = required_members - cls_dict.keys()
+    @classmethod
+    def _validate_new_args(cls, cls_name, bases, cls_dict):
+        missing_members = cls.required_members - cls_dict.keys()
         if len(missing_members) > 0:
             raise TypeError(
                 "Missing {missing} required members in '{name}' definition".format(
                     missing=missing_members, name=cls_name
                 )
             )
-
+        # Check class dict
         domain_range = cls_dict["domain_range"]
-        dtypes = cls_dict["dtypes"]
         backends = cls_dict["backends"]
 
         # Create testing strategies
@@ -286,13 +275,6 @@ class SuiteMeta(type):
         assert 1 <= len(domain_range) <= 3 and all(
             len(d) == 2 for d in domain_range
         ), "Invalid 'domain_range' definition"
-        ndims = len(domain_range)
-        if ndims in cls_dict:
-            assert (
-                ndims == cls_dict["ndims"]
-            ), "CartesianSpace definition conflicts with provided 'ndims' value"
-        else:
-            cls_dict["ndims"] = ndims
 
         if any(cls_name.endswith(suffix) for suffix in ("1D", "2D", "3D")):
             assert cls_dict["ndims"] == int(
@@ -301,12 +283,8 @@ class SuiteMeta(type):
 
         # Check dtypes
         assert isinstance(
-            dtypes, (Sequence, Mapping)
+            cls_dict["dtypes"], (Sequence, Mapping)
         ), "'dtypes' must be a sequence or a mapping object"
-
-        if isinstance(dtypes, Sequence):
-            dtypes = {tuple(cls_dict["symbols"].keys()): dtypes}
-        cls_dict["dtypes"] = dtypes = standardize_dtype_dict(dtypes)
 
         # Check backends
         assert isinstance(backends, Sequence) and all(
@@ -322,6 +300,27 @@ class SuiteMeta(type):
             raise TypeError("The 'definition' attribute must be a stencil definition function")
         if not isinstance(cls_dict["validation"], types.FunctionType):
             raise TypeError("The 'validation' attribute must be a validation function")
+
+    def __new__(cls, cls_name, bases, cls_dict):
+        if cls_dict.get("_skip_", False):  # skip metaclass magic
+            return super().__new__(cls, cls_name, bases, cls_dict)
+        # Grab members inherited from base classes
+
+        missing_members = cls.required_members - cls_dict.keys()
+
+        for key in missing_members:
+            for base in bases:
+                if hasattr(base, key):
+                    cls_dict[key] = getattr(base, key)
+                    break
+
+        dtypes = cls_dict["dtypes"]
+        if isinstance(dtypes, Sequence):
+            dtypes = {tuple(cls_dict["symbols"].keys()): dtypes}
+        cls_dict["dtypes"] = standardize_dtype_dict(dtypes)
+        cls_dict["ndims"] = len(cls_dict["domain_range"])
+
+        cls._validate_new_args(cls_name, bases, cls_dict)
 
         # Extract input and parameter names
         input_names = []
@@ -457,13 +456,139 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
         test["implementations"].append(implementation)
 
+    def _run_test_implementation(self, parameters_dict, implementation):
+
+        cls = type(self)
+        fields, exec_info = parameters_dict
+
+        # Domain
+        from gt4py.definitions import Shape
+        from gt4py.ir.nodes import Index
+
+        origin = cls.origin
+
+        shapes = {}
+        for name, field in [(k, v) for k, v in fields.items() if isinstance(v, np.ndarray)]:
+            shapes[name] = Shape(field.shape)
+        max_domain = Shape([sys.maxsize] * implementation.domain_info.ndims)
+        for name, shape in shapes.items():
+            upper_boundary = Index([b[1] for b in cls.symbols[name].boundary])
+            max_domain &= shape - (Index(origin) + upper_boundary)
+        domain = max_domain
+
+        max_boundary = ((0, 0), (0, 0), (0, 0))
+        for info in implementation.field_info.values():
+            if isinstance(info, gt_definitions.FieldInfo):
+                max_boundary = tuple(
+                    (max(m[0], abs(b[0])), max(m[1], b[1]))
+                    for m, b in zip(max_boundary, info.boundary)
+                )
+
+        new_boundary = tuple(
+            (max(abs(b[0]), abs(mb[0])), max(abs(b[1]), abs(mb[1])))
+            for b, mb in zip(cls.max_boundary, max_boundary)
+        )
+
+        shape = None
+        for field in fields.values():
+            if isinstance(field, np.ndarray):
+                assert field.shape == (shape if shape is not None else field.shape)
+                shape = field.shape
+
+        patched_origin = tuple(nb[0] for nb in new_boundary)
+        patching_origin = tuple(po - o for po, o in zip(patched_origin, origin))
+        patched_shape = tuple(nb[0] + nb[1] + d for nb, d in zip(new_boundary, domain))
+        patching_slices = [slice(po, po + s) for po, s in zip(patching_origin, shape)]
+
+        for k, v in implementation.constants.items():
+            sys.modules[self.__module__].__dict__[k] = v
+
+        inputs = {}
+        for k, f in fields.items():
+            if isinstance(f, np.ndarray):
+                patched_f = np.empty(shape=patched_shape)
+                patched_f[patching_slices] = f
+                inputs[k] = gt_storage.from_array(
+                    patched_f,
+                    dtype=f.dtype,
+                    shape=patched_f.shape,
+                    default_origin=patched_origin,
+                    backend=implementation.backend,
+                )
+
+            else:
+                inputs[k] = f
+
+        # remove unused input parameters
+        inputs = {key: value for key, value in inputs.items() if value is not None}
+
+        validation_fields = {name: np.array(field, copy=True) for name, field in inputs.items()}
+
+        implementation(**inputs, origin=patched_origin, exec_info=exec_info)
+        domain = exec_info["domain"]
+
+        validation_origins = {
+            name: tuple(nb[0] - g[0] for nb, g in zip(new_boundary, cls.symbols[name].boundary))
+            for name in inputs
+            if name in implementation.field_info
+        }
+
+        validation_shapes = {
+            name: tuple(d + g[0] + g[1] for d, g in zip(domain, cls.symbols[name].boundary))
+            for name in inputs
+            if name in implementation.field_info
+        }
+
+        validation_field_views = {
+            name: field[
+                tuple(
+                    slice(o, o + s)
+                    for o, s in zip(validation_origins[name], validation_shapes[name])
+                )
+            ]
+            if name in implementation.field_info
+            else field  # parameters
+            for name, field in validation_fields.items()
+        }
+        cls.validation(
+            **validation_field_views,
+            domain=domain,
+            origin={
+                name: tuple(b[0] for b in cls.symbols[name].boundary)
+                for name in validation_fields
+                if name in implementation.field_info
+            },
+        )
+
+        # Test values
+        for (name, value), expected_value in zip(inputs.items(), validation_fields.values()):
+            if isinstance(fields[name], np.ndarray):
+                domain_slice = [
+                    slice(new_boundary[d][0], new_boundary[d][0] + domain[d])
+                    for d in range(len(domain))
+                ]
+
+                if gt_backend.from_name(value.backend).storage_info["device"] == "gpu":
+                    value.synchronize()
+                    value = value.data.get()
+                else:
+                    value = value.data
+
+                np.testing.assert_allclose(
+                    value[domain_slice],
+                    expected_value[domain_slice],
+                    rtol=RTOL,
+                    atol=ATOL,
+                    equal_nan=EQUAL_NAN,
+                    err_msg="Wrong data in output field '{name}'".format(name=name),
+                )
+
     def _test_implementation(self, test, parameters_dict):
         """Test computed values for implementations generated for all *backends* and *stencil suites*.
 
         The generated implementations are reused from previous tests by means of a
         :class:`utils.ImplementationsDB` instance shared at module scope.
         """
-        cls = type(self)
         implementation_list = test["implementations"]
         if not implementation_list:
             pytest.skip(
@@ -473,126 +598,4 @@ class StencilTestSuite(metaclass=SuiteMeta):
             if not isinstance(implementation, StencilObject):
                 raise RuntimeError("Wrong function got from implementations_db cache!")
 
-            fields, exec_info = parameters_dict
-
-            # Domain
-            from gt4py.definitions import Shape
-            from gt4py.ir.nodes import Index
-
-            origin = cls.origin
-
-            shapes = {}
-            for name, field in [(k, v) for k, v in fields.items() if isinstance(v, np.ndarray)]:
-                shapes[name] = Shape(field.shape)
-            max_domain = Shape([sys.maxsize] * implementation.domain_info.ndims)
-            for name, shape in shapes.items():
-                upper_boundary = Index([b[1] for b in cls.symbols[name].boundary])
-                max_domain &= shape - (Index(origin) + upper_boundary)
-            domain = max_domain
-
-            max_boundary = ((0, 0), (0, 0), (0, 0))
-            for info in implementation.field_info.values():
-                if isinstance(info, gt_definitions.FieldInfo):
-                    max_boundary = tuple(
-                        (max(m[0], abs(b[0])), max(m[1], b[1]))
-                        for m, b in zip(max_boundary, info.boundary)
-                    )
-
-            new_boundary = tuple(
-                (max(abs(b[0]), abs(mb[0])), max(abs(b[1]), abs(mb[1])))
-                for b, mb in zip(cls.max_boundary, max_boundary)
-            )
-
-            shape = None
-            for field in fields.values():
-                if isinstance(field, np.ndarray):
-                    assert field.shape == (shape if shape is not None else field.shape)
-                    shape = field.shape
-
-            patched_origin = tuple(nb[0] for nb in new_boundary)
-            patching_origin = tuple(po - o for po, o in zip(patched_origin, origin))
-            patched_shape = tuple(nb[0] + nb[1] + d for nb, d in zip(new_boundary, domain))
-            patching_slices = [slice(po, po + s) for po, s in zip(patching_origin, shape)]
-
-            for k, v in implementation.constants.items():
-                sys.modules[self.__module__].__dict__[k] = v
-
-            inputs = {}
-            for k, f in fields.items():
-                if isinstance(f, np.ndarray):
-                    patched_f = np.empty(shape=patched_shape)
-                    patched_f[patching_slices] = f
-                    inputs[k] = gt_storage.from_array(
-                        patched_f,
-                        dtype=test["definition"].__annotations__[k],
-                        shape=patched_f.shape,
-                        default_origin=patched_origin,
-                        backend=test["backend"],
-                    )
-
-                else:
-                    inputs[k] = f
-
-            # remove unused input parameters
-            inputs = {key: value for key, value in inputs.items() if value is not None}
-
-            validation_fields = {name: np.array(field, copy=True) for name, field in inputs.items()}
-
-            implementation(**inputs, origin=patched_origin, exec_info=exec_info)
-            domain = exec_info["domain"]
-
-            validation_origins = {
-                name: tuple(nb[0] - g[0] for nb, g in zip(new_boundary, cls.symbols[name].boundary))
-                for name in inputs
-                if name in implementation.field_info
-            }
-
-            validation_shapes = {
-                name: tuple(d + g[0] + g[1] for d, g in zip(domain, cls.symbols[name].boundary))
-                for name in inputs
-                if name in implementation.field_info
-            }
-
-            validation_field_views = {
-                name: field[
-                    tuple(
-                        slice(o, o + s)
-                        for o, s in zip(validation_origins[name], validation_shapes[name])
-                    )
-                ]
-                if name in implementation.field_info
-                else field  # parameters
-                for name, field in validation_fields.items()
-            }
-            cls.validation(
-                **validation_field_views,
-                domain=domain,
-                origin={
-                    name: tuple(b[0] for b in cls.symbols[name].boundary)
-                    for name in validation_fields
-                    if name in implementation.field_info
-                },
-            )
-
-            # Test values
-            for (name, value), expected_value in zip(inputs.items(), validation_fields.values()):
-                if isinstance(fields[name], np.ndarray):
-                    domain_slice = [
-                        slice(new_boundary[d][0], new_boundary[d][0] + domain[d])
-                        for d in range(len(domain))
-                    ]
-
-                    if gt_backend.from_name(value.backend).storage_info["device"] == "gpu":
-                        value.synchronize()
-                        value = value.data.get()
-                    else:
-                        value = value.data
-
-                    np.testing.assert_allclose(
-                        value[domain_slice],
-                        expected_value[domain_slice],
-                        rtol=RTOL,
-                        atol=ATOL,
-                        equal_nan=EQUAL_NAN,
-                        err_msg="Wrong data in output field '{name}'".format(name=name),
-                    )
+            self._run_test_implementation(parameters_dict, implementation)

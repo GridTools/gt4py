@@ -171,9 +171,7 @@ class TestParametricMix(gt_testing.StencilTestSuite):
     def validation(
         field_a, field_b, field_c, field_out, *, weight, alpha_factor, domain, origin, **kwargs
     ):
-        from __externals__ import USE_ALPHA
-
-        if USE_ALPHA:
+        if USE_ALPHA:  # noqa: F821
             factor = alpha_factor
         else:
             factor = 1.0
