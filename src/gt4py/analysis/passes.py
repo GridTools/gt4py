@@ -972,7 +972,7 @@ class DataTypePass(TransformPass):
                 # cast all other args to this type
                 for index, arg in enumerate(node.args):
                     if arg.data_type != data_type:
-                        node.args[index] = gt_ir.Cast(dtype=data_type, expr=arg, loc=node.loc)
+                        node.args[index] = gt_ir.Cast(data_type=data_type, expr=arg, loc=node.loc)
 
             if node.func in (
                 gt_ir.NativeFunction.MIN,
