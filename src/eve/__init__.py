@@ -17,9 +17,6 @@
 """Eve: a stencil toolchain in pure Python."""
 
 
-# flake8: noqa  # disable flake8 because of non-used imports warnings
-from .version import __version__, __versioninfo__  # isort:skip
-
 # Internal dependencies between modules (each line depends on some of the previous ones):
 #
 #   - typingx  (no dependencies)
@@ -29,6 +26,11 @@ from .version import __version__, __versioninfo__  # isort:skip
 #   - traits, visitors
 #   - codegen
 #
+
+# flake8: noqa  # disable flake8 because of non-used imports warnings
+
+from __future__ import annotations  # isort:skip
+from .version import __version__, __versioninfo__  # isort:skip
 
 from .concepts import (
     FieldKind,
