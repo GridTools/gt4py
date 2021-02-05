@@ -27,6 +27,7 @@ import itertools
 import operator
 import pickle
 import re
+import types
 import typing
 import uuid
 import warnings
@@ -214,6 +215,51 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
     return lambda obj: getitem_(obj, key, default=default)
 
 
+def optional_lru_cache(
+    func: Callable = None, *, maxsize: Optional[int] = 128, typed: bool = False
+) -> Union[Callable, Callable[[Callable], Callable]]:
+    """Wrapper around :func:`functools.lru_cache` calling the original function
+    when arguments are not hashable.
+
+    Examples:
+        >>> @optional_lru_cache(typed=True)
+        ... def func(a, b):
+        ...     print(f"Inside func({a}, {b})")
+        ...     return a + b
+        ...
+        >>> print(func(1, 3))
+        Inside func(1, 3)
+        4
+        >>> print(func(1, 3))
+        4
+        >>> print(func([1], [3]))
+        Inside func([1], [3])
+        [1, 3]
+        >>> print(func([1], [3]))
+        Inside func([1], [3])
+        [1, 3]
+
+    Notes:
+        Based on :func:`typing._tp_cache`.
+
+    """
+
+    def _decorator(func: Callable) -> Callable:
+        cached = functools.lru_cache(maxsize=maxsize, typed=typed)(func)
+
+        @functools.wraps(func)
+        def inner(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return cached(*args, **kwargs)
+            except TypeError:
+                # Catch errors due to non-hashable arguments and fallback to original function
+                return func(*args, **kwargs)
+
+        return inner
+
+    return _decorator(func) if func is not None else _decorator
+
+
 def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     """Class decorator to automatically register virtual subclasses.
 
@@ -372,6 +418,36 @@ class CaseStyleConverter:
     @staticmethod
     def split_kebab_case(name: str) -> List[str]:
         return name.split("-")
+
+
+class FrozenNamespace(types.SimpleNamespace):
+    """An immutable `types.SimpleNamespace`-like class.
+
+    Examples:
+        >>> ns = FrozenNamespace(a=10, b="hello")
+        >>> ns.a
+        10
+        >>> ns.a = 20
+        Traceback (most recent call last):
+           ...
+        TypeError: Trying to modify immutable 'FrozenNamespace' instance.
+
+        >>> ns = FrozenNamespace(a=10, b="hello")
+        >>> list(ns.items())
+        [('a', 10), ('b', 'hello')]
+    """
+
+    def __setattr__(self, _name: str, _value: Any) -> None:
+        raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
+
+    def items(self) -> Iterable[Tuple[str, Any]]:
+        return self.__dict__.items()
+
+    def keys(self) -> Iterable[str]:
+        return self.__dict__.keys()
+
+    def values(self) -> Iterable[Any]:
+        return self.__dict__.values()
 
 
 class UIDGenerator:
@@ -1273,9 +1349,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
               for :func:`operator.itemgetter`.
 
         Keyword Arguments:
+            init: initial value for the reduction.
             as_dict: if `True`, it will return the groups ``dict`` instead of a :class:`XIterator`
                 instance over `groups.items()`.
-            init: initial value for the reduction.
 
         For detailed information check :func:`toolz.itertoolz.reduceby` reference.
 

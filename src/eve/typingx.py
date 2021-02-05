@@ -16,26 +16,37 @@
 
 """Python version independent typings."""
 
-# flake8: noqa
-from typing import *  # isort:skip
 
-import sys  # isort:skip
+# flake8: noqa
+
+from __future__ import annotations
+
 from typing import *
 from typing import IO, BinaryIO, TextIO
 
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Final, Literal, Protocol, TypedDict, runtime_checkable
-
-del sys
-
-
-T = TypeVar("T")
-FrozenList = Tuple[T, ...]
+from typing_extensions import *  # type: ignore
 
 AnyCallable = Callable[..., Any]
 AnyNoneCallable = Callable[..., None]
 AnyNoArgCallable = Callable[[], Any]
+
+
+T = TypeVar("T")
+V = TypeVar("V")
+
+class NonDataDescriptor(Protocol[T, V]):  # type: ignore
+    @overload
+    def __get__(self, _instance: None, _owner_type: Type[T]) -> NonDataDescriptor:
+        ...
+
+    @overload
+    def __get__(self, _instance: T, _owner_type: Optional[Type[T]] = None) -> V:
+        ...
+
+
+class DataDescriptor(NonDataDescriptor[T, V], Protocol):  # type: ignore
+    def __set__(self, _instance: T, _value: V) -> None:
+        ...
 
 RootValidatorValuesType = Dict[str, Any]
 RootValidatorType = Callable[[Type, RootValidatorValuesType], RootValidatorValuesType]
