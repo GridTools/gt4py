@@ -362,22 +362,16 @@ class InitInfoPass(TransformPass):
             self,
             parallel_interval: List[gt_ir.AxisInterval],
         ) -> List[IntervalInfo]:
-            def _make_level_info(info: gt_ir.AxisBound):
-                level = 0 if info.level == gt_ir.LevelMarker.START else 1
-                if info.extend:
-                    offset = (
-                        -IntervalInfo.MAX_INT
-                        if info.level == gt_ir.LevelMarker.START
-                        else IntervalInfo.MAX_INT
-                    )
-                else:
-                    offset = info.offset
-                return (level, offset)
-
             parallel_interval_info = [
                 IntervalInfo(
-                    start=_make_level_info(axis_interval.start),
-                    end=_make_level_info(axis_interval.end),
+                    start=(
+                        0 if axis_interval.start.level == gt_ir.LevelMarker.START else 1,
+                        axis_interval.start.offset,
+                    ),
+                    end=(
+                        0 if axis_interval.end.level == gt_ir.LevelMarker.START else 1,
+                        axis_interval.end.offset,
+                    ),
                 )
                 for axis_interval in parallel_interval
             ]
@@ -1340,17 +1334,13 @@ class BuildIIRPass(TransformPass):
 
         parallel_interval = []
         for interval in intervals:
-            extend_start = interval.start[1] == -IntervalInfo.MAX_INT
-            extend_end = interval.end[1] == IntervalInfo.MAX_INT
             start = gt_ir.AxisBound(
                 level=gt_ir.LevelMarker.START if interval.start[0] == 0 else gt_ir.LevelMarker.END,
-                offset=interval.start[1] if not extend_start else 0,
-                extend=extend_start,
+                offset=interval.start[1],
             )
             end = gt_ir.AxisBound(
                 level=gt_ir.LevelMarker.START if interval.end[0] == 0 else gt_ir.LevelMarker.END,
-                offset=interval.end[1] if not extend_end else 0,
-                extend=extend_end,
+                offset=interval.end[1],
             )
             parallel_interval.append(gt_ir.AxisInterval(start=start, end=end))
 
