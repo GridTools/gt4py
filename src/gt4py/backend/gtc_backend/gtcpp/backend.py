@@ -40,6 +40,8 @@ from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
+from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
 
 
 if TYPE_CHECKING:
@@ -59,6 +61,7 @@ class GTCGTExtGenerator:
         dtype_deduced = resolve_dtype(gtir_without_unused_params)
         upcasted = upcast(dtype_deduced)
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
+        oir = self._optimize_oir(oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
         bindings = GTCppBindingsCodegen.apply(
@@ -69,6 +72,11 @@ class GTCGTExtGenerator:
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings" + bindings_ext: bindings},
         }
+
+    def _optimize_oir(self, oir):
+        oir = GreedyMerging().visit(oir)
+        oir = TemporariesToScalars().visit(oir)
+        return oir
 
 
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):

@@ -49,12 +49,6 @@ class Offset(common.CartesianOffset):
     pass
 
 
-class VarDecl(Stmt):
-    name: SymbolName
-    init: Expr
-    dtype: common.DataType
-
-
 class Literal(common.Literal, Expr):  # type: ignore
     pass
 
@@ -136,9 +130,15 @@ class GTInterval(LocNode):
     to_level: GTLevel
 
 
+class LocalVarDecl(LocNode):
+    name: SymbolName
+    dtype: common.DataType
+
+
 class GTApplyMethod(LocNode):
     interval: GTInterval
     body: List[Stmt]
+    local_variables: List[LocalVarDecl]
 
 
 @enum.unique
@@ -230,11 +230,6 @@ class FieldDecl(ApiParamDecl):
     dimensions: Tuple[bool, bool, bool]
 
 
-# TODO(havogt) this will be required once we can demote Temporaries to Scalars
-# class ScalarDecl(Decl):
-#     pass
-
-
 class GlobalParamDecl(ApiParamDecl):
     pass
 
@@ -244,12 +239,6 @@ class GTStage(LocNode):
     # `args` are SymbolRefs to GTComputation `arguments` (interpreted as parameters)
     # or `temporaries`
     args: List[Arg]
-
-    @validator("args")
-    def at_least_one_argument(cls, v: str) -> str:
-        if len(v) == 0:
-            raise ValueError("A GTStage needs at least one argument.")
-        return v
 
 
 class IJCache(LocNode):
