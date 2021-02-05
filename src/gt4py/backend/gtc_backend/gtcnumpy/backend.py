@@ -41,7 +41,7 @@ class GTCModuleGenerator(BaseModuleGenerator):
                 gt_field_info=self.generate_gt_field_info(),
                 stencil_signature=self.generate_signature(),
                 field_names=self.generate_field_names(),
-                param_names=[],
+                param_names=self.generate_param_names(),
                 pre_run=self.generate_pre_run(),
                 post_run=self.generate_post_run(),
                 implementation=self.generate_implementation(),
@@ -128,7 +128,9 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return self.backend.npir.field_params
 
     def generate_param_names(self) -> List[str]:
-        return [param.name for param in self.backend.gtir.params]
+        return [
+            name for name in self.backend.npir.params if name not in self.generate_field_names()
+        ]
 
     def generate_implementation(self) -> str:
         params = [f"{p.name}={p.name}" for p in self.backend.gtir.params]

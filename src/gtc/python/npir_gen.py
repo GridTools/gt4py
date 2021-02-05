@@ -57,6 +57,8 @@ class NpirGen(TemplatedGenerator):
 
     FieldSlice = FormatTemplate("{name}_[{i_offset}, {j_offset}, {k_offset}]{mask_acc}")
 
+    NamedScalar = FormatTemplate("{name}")
+
     VectorTemp = FormatTemplate("{name}")
 
     def visit_VectorAssign(
@@ -92,11 +94,10 @@ class NpirGen(TemplatedGenerator):
         return "K" if node == common.LevelMarker.END else "k"
 
     def visit_AxisBound(self, node: common.AxisBound, **kwargs: Any) -> Union[str, Collection[str]]:
-        delta = ""
-        operator = ""
-        if node.offset > 0:
-            operator = " - " if node.level == common.LevelMarker.END else " + "
-            delta = str(node.offset)
+        if node.offset == 0:
+            return self.generic_visit(node, op="", delta="", **kwargs)
+        operator = " - " if node.offset < 0 else " + "
+        delta = str(abs(node.offset))
         return self.generic_visit(node, op=operator, delta=delta, **kwargs)
 
     AxisBound = FormatTemplate("DOMAIN_{level}{op}{delta}")

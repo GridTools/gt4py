@@ -89,6 +89,10 @@ class FieldSlice(VectorExpression, VectorLValue):
     k_offset: AxisOffset
 
 
+class NamedScalar(common.ScalarAccess, Expr):
+    pass
+
+
 class VectorTemp(VectorExpression, VectorLValue):
     name: common.SymbolRef
 

@@ -38,9 +38,15 @@ class OirToNpir(NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
         ctx = self.Context(symbol_table=node.symtable_)
         vertical_passes = [self.visit(vloop, ctx=ctx, **kwargs) for vloop in node.vertical_loops]
-
+        field_names: List[str] = []
+        scalar_names: List[str] = []
+        for decl in node.params:
+            if isinstance(decl, oir.FieldDecl):
+                field_names.append(decl.name)
+            else:
+                scalar_names.append(decl.name)
         return npir.Computation(
-            field_params=[decl.name for decl in node.params if isinstance(decl, oir.FieldDecl)],
+            field_params=field_names,
             params=[decl.name for decl in node.params],
             vertical_passes=vertical_passes,
             domain_padding=npir.DomainPadding(
@@ -144,3 +150,13 @@ class OirToNpir(NodeTranslator):
         if broadcast:
             return npir.BroadCast(expr=literal, dtype=node.dtype)
         return literal
+
+    def visit_ScalarAccess(
+        self, node: oir.ScalarAccess, *, broadcast: bool = False, **kwargs: Any
+    ) -> Union[npir.BroadCast, npir.NamedScalar]:
+        name = npir.NamedScalar(
+            name=self.visit(node.name, **kwargs), dtype=self.visit(node.dtype, **kwargs)
+        )
+        if broadcast:
+            return npir.BroadCast(expr=name, dtype=name.dtype)
+        return name
