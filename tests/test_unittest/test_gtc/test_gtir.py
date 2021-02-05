@@ -18,11 +18,9 @@ import pytest
 from pydantic.error_wrappers import ValidationError
 
 from eve import SourceLocation
-from gtc.common import ArithmeticOperator, BuiltInLiteral, DataType, LevelMarker, LoopOrder
+from gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
 from gtc.gtir import (
     AxisBound,
-    BinaryOp,
-    CartesianOffset,
     Decl,
     Expr,
     FieldAccess,
@@ -35,13 +33,12 @@ from gtc.gtir import (
 )
 
 from .gtir_utils import (
-    DummyExpr,
-    FieldAccessBuilder,
-    FieldIfStmtBuilder,
-    ParAssignStmtBuilder,
-    StencilBuilder,
-    VerticalLoopBuilder,
-    make_Literal,
+    BinaryOpFactory,
+    FieldDeclFactory,
+    FieldIfStmtFactory,
+    ParAssignStmtFactory,
+    StencilFactory,
+    VerticalLoopFactory,
 )
 
 
@@ -111,23 +108,14 @@ def test_abstract_classes_not_instantiatable(invalid_node):
 
 
 def test_can_have_vertical_offset():
-    ParAssignStmt(
-        left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=0, k=1)).build(),
-        right=DummyExpr(),
-    )
+    ParAssignStmtFactory(left__offset__k=1)
 
 
 @pytest.mark.parametrize(
     "assign_stmt_with_offset",
     [
-        lambda: ParAssignStmt(
-            left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0)).build(),
-            right=DummyExpr(),
-        ),
-        lambda: ParAssignStmt(
-            left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=1, k=0)).build(),
-            right=DummyExpr(),
-        ),
+        lambda: ParAssignStmtFactory(left__offset__i=1),
+        lambda: ParAssignStmtFactory(left__offset__j=1),
     ],
 )
 def test_no_horizontal_offset_allowed(assign_stmt_with_offset):
@@ -137,66 +125,41 @@ def test_no_horizontal_offset_allowed(assign_stmt_with_offset):
 
 def test_symbolref_without_decl():
     with pytest.raises(ValidationError, match=r"Symbols.*not found"):
-        StencilBuilder().add_par_assign_stmt(
-            ParAssignStmtBuilder("out_field", "in_field").build()
-        ).build()
+        StencilFactory(params=[])
 
 
 @pytest.mark.parametrize(
     "write_and_read_with_horizontal_offset",
     [
-        lambda: VerticalLoopBuilder()
-        .add_stmt(
-            ParAssignStmtBuilder("b")
-            .right(FieldAccessBuilder("a").offset(CartesianOffset(i=1, j=0, k=0)).build())
-            .build()
-        )
-        .add_stmt(
-            ParAssignStmtBuilder("a").right(make_Literal("1.0", dtype=ARITHMETIC_TYPE)).build()
-        )
-        .build(),
+        lambda: VerticalLoopFactory(
+            body=[
+                ParAssignStmtFactory(right__name="a", right__offset__i=1),
+                ParAssignStmtFactory(left__name="a"),
+            ]
+        ),
         # nested rhs
-        lambda: VerticalLoopBuilder()
-        .add_stmt(
-            ParAssignStmtBuilder("b")
-            .right(
-                BinaryOp(
-                    op=A_ARITHMETIC_OPERATOR,
-                    left=FieldAccessBuilder("a").build(),
-                    right=FieldAccessBuilder("a").offset(CartesianOffset(i=1, j=0, k=0)).build(),
-                )
-            )
-            .build()
-        )
-        .add_stmt(
-            ParAssignStmtBuilder("a").right(make_Literal("1.0", dtype=ARITHMETIC_TYPE)).build()
-        )
-        .build(),
+        lambda: VerticalLoopFactory(
+            body=[
+                ParAssignStmtFactory(
+                    right=BinaryOpFactory(
+                        left__name="a",
+                        right__name="a",
+                        right__offset__i=1,
+                    )
+                ),
+                ParAssignStmtFactory(left__name="a"),
+            ]
+        ),
         # offset access in condition
-        lambda: VerticalLoopBuilder()
-        .add_stmt(
-            FieldIfStmtBuilder()
-            .cond(
-                FieldAccessBuilder("a")
-                .dtype(DataType.BOOL)
-                .offset(CartesianOffset(i=1, j=0, k=0))
-                .build()
-            )
-            .true_branch(
-                [
-                    ParAssignStmtBuilder("irrelevant")
-                    .right(make_Literal("1.0", dtype=ARITHMETIC_TYPE))
-                    .build()
-                ]
-            )
-            .build()
-        )
-        .add_stmt(
-            ParAssignStmtBuilder("a")
-            .right(make_Literal(BuiltInLiteral.TRUE, dtype=DataType.BOOL))
-            .build()
-        )
-        .build(),
+        lambda: VerticalLoopFactory(
+            body=[
+                FieldIfStmtFactory(
+                    cond__name="a",
+                    cond__offset__i=1,
+                ),
+                ParAssignStmtFactory(left__name="a"),
+            ]
+        ),
     ],
 )
 def test_write_and_read_with_offset_violation(write_and_read_with_horizontal_offset):
@@ -205,23 +168,15 @@ def test_write_and_read_with_offset_violation(write_and_read_with_horizontal_off
 
 
 def test_temporary_write_and_read_with_offset_is_allowed():
-    (
-        VerticalLoopBuilder()
-        .add_temporary("a", ARITHMETIC_TYPE)
-        .add_stmt(
-            ParAssignStmtBuilder("b")
-            .right(FieldAccessBuilder("a").offset(CartesianOffset(i=1, j=0, k=0)).build())
-            .build()
-        )
-        .add_stmt(
-            ParAssignStmtBuilder("a").right(make_Literal("1.0", dtype=ARITHMETIC_TYPE)).build()
-        )
-        .build()
+    VerticalLoopFactory(
+        body=[
+            ParAssignStmtFactory(right__name="a", right__offset__i=1),
+            ParAssignStmtFactory(left__name="a"),
+        ],
+        temporaries=[FieldDeclFactory(name="a")],
     )
 
 
 def test_illegal_self_assignment_with_offset():
     with pytest.raises(ValidationError, match=r"Self-assignment"):
-        ParAssignStmtBuilder("a").right(
-            FieldAccessBuilder("a").offset(CartesianOffset(i=1, j=0, k=0)).build()
-        ).build()
+        ParAssignStmtFactory(left__name="a", right__name="a", right__offset__i=1)

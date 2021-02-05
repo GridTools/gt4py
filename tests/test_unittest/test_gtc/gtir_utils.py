@@ -14,165 +14,163 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Optional
+from typing import Set
 
-from gtc.common import DataType, ExprKind, LoopOrder
-from gtc.gtir import (
-    AxisBound,
-    BlockStmt,
-    CartesianOffset,
-    Decl,
-    Expr,
-    FieldAccess,
-    FieldDecl,
-    FieldIfStmt,
-    Interval,
-    Literal,
-    ParAssignStmt,
-    Stencil,
-    Stmt,
-    VerticalLoop,
-)
+import factory
+
+from eve import concepts, visitors
+from gtc import common, gtir
 
 
-class DummyExpr(Expr):
+class DummyExpr(gtir.Expr):
     """Fake expression for cases where a concrete expression is not needed."""
 
-    dtype: DataType = DataType.FLOAT32
-    kind: ExprKind = ExprKind.FIELD
+    dtype: common.DataType
+    kind: common.ExprKind
 
 
-def make_Literal(value: str, dtype: DataType):
-    return Literal(value=value, dtype=dtype)
+class DummyExprFactory(factory.Factory):
+    class Meta:
+        model = DummyExpr
+
+    dtype = common.DataType.FLOAT32
+    kind = factory.Faker("random_element", elements=common.ExprKind)
 
 
-class FieldAccessBuilder:
-    def __init__(self, name) -> None:
-        self._name = name
-        self._offset = CartesianOffset.zero()
-        self._kind = ExprKind.FIELD
-        self._dtype = DataType.FLOAT32
+class LiteralFactory(factory.Factory):
+    class Meta:
+        model = gtir.Literal
 
-    def offset(self, offset: CartesianOffset) -> "FieldAccessBuilder":
-        self._offset = offset
-        return self
-
-    def dtype(self, dtype: DataType) -> "FieldAccessBuilder":
-        self._dtype = dtype
-        return self
-
-    def build(self) -> FieldAccess:
-        return FieldAccess(name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind)
+    value = "42.0"
+    dtype = common.DataType.FLOAT32
 
 
-class ParAssignStmtBuilder:
-    def __init__(self, left_name=None, right_name=None) -> None:
-        self._left = FieldAccessBuilder(left_name).build() if left_name else None
-        self._right = FieldAccessBuilder(right_name).build() if right_name else None
+class CartesianOffsetFactory(factory.Factory):
+    class Meta:
+        model = common.CartesianOffset
 
-    def left(self, left: FieldAccess) -> "ParAssignStmtBuilder":
-        self._left = left
-        return self
-
-    def right(self, right: Expr) -> "ParAssignStmtBuilder":
-        self._right = right
-        return self
-
-    def build(self) -> ParAssignStmt:
-        return ParAssignStmt(left=self._left, right=self._right)
+    i = 0
+    j = 0
+    k = 0
 
 
-class FieldIfStmtBuilder:
-    def __init__(self) -> None:
-        self._cond = None
-        self._true_branch: List[Stmt] = []
-        self._false_branch: Optional[List[Stmt]] = None
+class FieldAccessFactory(factory.Factory):
+    class Meta:
+        model = gtir.FieldAccess
 
-    def cond(self, cond: Expr) -> "FieldIfStmtBuilder":
-        self._cond = cond
-        return self
-
-    def true_branch(self, true_branch: List[Stmt]) -> "FieldIfStmtBuilder":
-        self._true_branch = true_branch
-        return self
-
-    def false_branch(self, false_branch: List[Stmt]) -> "FieldIfStmtBuilder":
-        self._false_branch = false_branch
-        return self
-
-    def add_true_stmt(self, stmt: Stmt) -> "FieldIfStmtBuilder":
-        self._true_branch.append(stmt)
-        return self
-
-    def add_false_stmt(self, stmt: Stmt) -> "FieldIfStmtBuilder":
-        if not self._false_branch:
-            self._false_branch = []
-        self._false_branch.append(stmt)
-        return self
-
-    def build(self) -> FieldIfStmt:
-        return FieldIfStmt(
-            cond=self._cond,
-            true_branch=BlockStmt(body=self._true_branch),
-            false_branch=BlockStmt(body=self._false_branch) if self._false_branch else None,
-        )
+    name = factory.Faker("word")
+    offset = factory.SubFactory(CartesianOffsetFactory)
+    dtype = common.DataType.FLOAT32
 
 
-class VerticalLoopBuilder:
-    def __init__(self) -> None:
-        self._interval = Interval(start=AxisBound.start(), end=AxisBound.end())
-        self._loop_order = LoopOrder.PARALLEL
-        self._temporaries = []
-        self._body = []
+class ScalarAccessFactory(factory.Factory):
+    class Meta:
+        model = gtir.ScalarAccess
 
-    def add_temporary(self, name: str, dtype: DataType) -> "VerticalLoopBuilder":
-        self._temporaries.append(FieldDecl(name=name, dtype=dtype))
-        return self
-
-    def add_stmt(self, stmt: Stmt):
-        self._body.append(stmt)
-        return self
-
-    def build(self) -> VerticalLoop:
-        return VerticalLoop(
-            interval=self._interval,
-            loop_order=self._loop_order,
-            temporaries=self._temporaries,
-            body=self._body,
-        )
+    name = factory.Faker("word")
+    dtype = common.DataType.FLOAT32
 
 
-class StencilBuilder:
-    def __init__(self, name="foo") -> None:
-        self._name = name
-        self._params = []
-        self._vertical_loops = []
+class ParAssignStmtFactory(factory.Factory):
+    class Meta:
+        model = gtir.ParAssignStmt
 
-    def add_param(self, param: Decl) -> "StencilBuilder":
-        self._params.append(param)
-        return self
+    left = factory.SubFactory(FieldAccessFactory)
+    right = factory.SubFactory(FieldAccessFactory)
 
-    def add_vertical_loop(self, vertical_loop: VerticalLoop) -> "StencilBuilder":
-        self._vertical_loops.append(vertical_loop)
-        return self
 
-    def add_par_assign_stmt(self, par_assign_stmt: ParAssignStmt) -> "StencilBuilder":
-        if len(self._vertical_loops) == 0:
-            self._vertical_loops.append(  # TODO builder
-                VerticalLoop(
-                    interval=Interval(start=AxisBound.start(), end=AxisBound.end()),
-                    loop_order=LoopOrder.FORWARD,
-                    body=[],
-                    temporaries=[],
-                )
-            )
+class BinaryOpFactory(factory.Factory):
+    class Meta:
+        model = gtir.BinaryOp
 
-        self._vertical_loops[-1].body.append(par_assign_stmt)
-        return self
+    op = common.ArithmeticOperator.ADD
+    left = factory.SubFactory(FieldAccessFactory)
+    right = factory.SubFactory(FieldAccessFactory)
 
-    def build(self) -> Stencil:
-        return Stencil(
-            name=self._name,
-            params=self._params,
-            vertical_loops=self._vertical_loops,
-        )
+
+class BlockStmtFactory(factory.Factory):
+    class Meta:
+        model = gtir.BlockStmt
+
+    body = []
+
+
+class FieldIfStmtFactory(factory.Factory):
+    class Meta:
+        model = gtir.FieldIfStmt
+
+    cond = factory.SubFactory(FieldAccessFactory, dtype=common.DataType.BOOL)
+    true_branch = factory.SubFactory(BlockStmtFactory)
+    false_branch = None
+
+
+class ScalarIfStmtFactory(factory.Factory):
+    class Meta:
+        model = gtir.ScalarIfStmt
+
+    cond = factory.SubFactory(ScalarAccessFactory, dtype=common.DataType.BOOL)
+    true_branch = factory.SubFactory(BlockStmtFactory)
+    false_branch = None
+
+
+class IntervalFactory(factory.Factory):
+    class Meta:
+        model = gtir.Interval
+
+    start = common.AxisBound.start()
+    end = common.AxisBound.end()
+
+
+class FieldDeclFactory(factory.Factory):
+    class Meta:
+        model = gtir.FieldDecl
+
+    name = factory.Faker("word")
+    dtype = common.DataType.FLOAT32
+
+
+class ScalarDeclFactory(factory.Factory):
+    class Meta:
+        model = gtir.ScalarDecl
+
+    name = factory.Faker("word")
+    dtype = common.DataType.FLOAT32
+
+
+class VerticalLoopFactory(factory.Factory):
+    class Meta:
+        model = gtir.VerticalLoop
+
+    interval = factory.SubFactory(IntervalFactory)
+    loop_order = common.LoopOrder.PARALLEL
+    temporaries = []
+    body = factory.List([factory.SubFactory(ParAssignStmtFactory)])
+
+
+class StencilFactory(factory.Factory):
+    class Meta:
+        model = gtir.Stencil
+
+    name = factory.Faker("word")
+    params = []
+    vertical_loops = factory.List([factory.SubFactory(VerticalLoopFactory)])
+
+    @factory.lazy_attribute
+    def params(self):
+        """Automatically collect undefined symbols and put them into the parameter list."""
+
+        class CollectSymbolsAndRefs(visitors.NodeVisitor):
+            def visit_Node(self, node: concepts.Node, *, symbols: Set[str], refs: Set[str]) -> None:
+                for name, metadata in node.__node_children__.items():
+                    type_ = metadata["definition"].type_
+                    if isinstance(type_, type):
+                        if issubclass(type_, gtir.SymbolName):
+                            symbols.add(getattr(node, name))
+                        elif issubclass(type_, common.SymbolRef):
+                            refs.add(getattr(node, name))
+                self.generic_visit(node, symbols=symbols, refs=refs)
+
+        symbols: Set[str] = set()
+        refs: Set[str] = set()
+        CollectSymbolsAndRefs().visit(self.vertical_loops, symbols=symbols, refs=refs)
+        return [FieldDeclFactory(name=name) for name in refs - symbols]
