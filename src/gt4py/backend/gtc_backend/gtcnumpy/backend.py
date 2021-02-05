@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import numbers
+import pathlib
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Type, Union, cast
 
 from eve.codegen import format_source
@@ -49,14 +50,21 @@ class GTCModuleGenerator(BaseModuleGenerator):
         )
 
     def generate_imports(self) -> str:
+        comp_pkg = (
+            self.builder.caching.module_prefix + "computation" + self.builder.caching.module_postfix
+        )
         return "\n".join(
             [
                 *super().generate_imports().splitlines(),
                 "import sys",
                 "import pathlib",
-                "sys.path.append(str(pathlib.Path(__file__).parent))",
                 "import numpy",
-                "import computation",
+                "path_backup = sys.path.copy()",
+                "sys.path.append(str(pathlib.Path(__file__).parent))",
+                f"import {comp_pkg} as computation",
+                "print(repr(computation))",
+                "sys.path = path_backup",
+                "del path_backup",
             ]
         )
 
@@ -132,6 +140,16 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return cast(GTCNumpyBackend, self.builder.backend)
 
 
+def recursive_write(root_path: pathlib.Path, tree: Dict[str, Union[str, dict]]):
+    root_path.mkdir(parents=True, exist_ok=True)
+    for key, value in tree.items():
+        if isinstance(value, dict):
+            recursive_write(root_path / key, value)
+        else:
+            src_path = root_path / key
+            src_path.write_text(cast(str, value))
+
+
 @register
 class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
     """NumPy backend using gtc."""
@@ -150,8 +168,15 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
     GTIR_KEY = "gtc:gtir"
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
-        computation_name = "computation.py"
-        return {computation_name: format_source("python", NpirGen.apply(self.npir))}
+        computation_name = (
+            self.builder.caching.module_prefix
+            + "computation"
+            + self.builder.caching.module_postfix
+            + ".py"
+        )
+        return {
+            computation_name: format_source("python", NpirGen.apply(self.npir)),
+        }
 
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
         super().generate_bindings(language_name)
@@ -160,12 +185,9 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
         src_dir = self.builder.module_path.parent
-        computation_src = list(self.generate_computation().items())
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             src_dir.mkdir(parents=True, exist_ok=True)
-            for filename, src in computation_src:
-                src_path = src_dir / filename
-                src_path.write_text(cast(str, src))
+            recursive_write(src_dir, self.generate_computation())
         return self.make_module()
 
     # type ignore reason: signature differs from super on purpose
