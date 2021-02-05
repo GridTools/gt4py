@@ -22,21 +22,6 @@ from eve import concepts, visitors
 from gtc import common, gtir
 
 
-class DummyExpr(gtir.Expr):
-    """Fake expression for cases where a concrete expression is not needed."""
-
-    dtype: common.DataType
-    kind: common.ExprKind
-
-
-class DummyExprFactory(factory.Factory):
-    class Meta:
-        model = DummyExpr
-
-    dtype = common.DataType.FLOAT32
-    kind = factory.Faker("random_element", elements=common.ExprKind)
-
-
 class LiteralFactory(factory.Factory):
     class Meta:
         model = gtir.Literal
