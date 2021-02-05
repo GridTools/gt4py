@@ -82,6 +82,8 @@ class GreedyMerging(NodeTranslator):
 
 
 class OnTheFlyMerging(NodeTranslator):
+    """Merges consecutive horizontal executions inside parallel vertical loops by introducing redundant computations."""
+
     def visit_CartesianOffset(
         self,
         node: common.CartesianOffset,
@@ -115,6 +117,14 @@ class OnTheFlyMerging(NodeTranslator):
         tmps_to_remove: Set[str],
         new_symbol_name: Callable[[str], str],
     ) -> List[oir.HorizontalExecution]:
+        """Recursively merge horizontal executions.
+
+        Uses the following algorithm:
+        1. Get output fields of the first horizontal execution.
+        2. Check in which following h. execs. the outputs are read.
+        3. Duplicate the body of the first h. exec. for each read access (with corresponding offset) and prepend it to the depending h. execs.
+        4. Recursve on the resulting h. execs.
+        """
         if len(horizontal_executions) <= 1:
             return horizontal_executions
         first, *others = horizontal_executions

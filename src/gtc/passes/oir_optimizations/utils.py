@@ -83,24 +83,31 @@ class AccessCollector(NodeVisitor):
             )
 
         def offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+            """Get a dictonary, mapping all accessed fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses))
 
         def read_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+            """Get a dictonary, mapping read fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
 
         def write_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+            """Get a dictonary, mapping written fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
 
         def fields(self) -> Set[str]:
+            """Get a set of all accessed fields' names."""
             return {acc.field for acc in self._ordered_accesses}
 
         def read_fields(self) -> Set[str]:
+            """Get a set of all read fields' names."""
             return {acc.field for acc in self._ordered_accesses if acc.is_read}
 
         def write_fields(self) -> Set[str]:
+            """Get a set of all written fields' names."""
             return {acc.field for acc in self._ordered_accesses if acc.is_write}
 
         def ordered_accesses(self) -> List[Access]:
+            """Get a list of ordered accesses."""
             return self._ordered_accesses
 
     @classmethod
@@ -111,6 +118,16 @@ class AccessCollector(NodeVisitor):
 
 
 def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
+    """Create a function that generates symbol names that are not already in use.
+
+    Args:
+        used_names: Symbol names that are already in use and thus should not be generated.
+                    NOTE: `used_names` will be modified to contain all generated symbols.
+
+    Returns:
+        A callable to generate new unique symbol names.
+    """
+
     def increment_string_suffix(s: str) -> str:
         if not s[-1].isnumeric():
             return s + "0"

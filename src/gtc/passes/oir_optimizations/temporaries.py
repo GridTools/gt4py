@@ -91,7 +91,7 @@ class TemporariesToScalarsBase(NodeTranslator):
 
 
 class LocalTemporariesToScalars(TemporariesToScalarsBase):
-    """Replaces temporary fields by scalars.
+    """Replaces temporary fields accessed only within a single horizontal execution by scalars.
 
     1. Finds temporaries that are only accessed within a single HorizontalExecution.
     2. Replaces corresponding FieldAccess nodes by ScalarAccess nodes.
@@ -122,6 +122,8 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
 
 
 class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
+    """Replaces temporay fields that are always written before read by scalars."""
+
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         write_before_read_tmps = {
             symbol for symbol, value in node.symtable_.items() if isinstance(value, oir.Temporary)
