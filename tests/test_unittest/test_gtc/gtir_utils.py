@@ -14,12 +14,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Set
-
 import factory
 
-from eve import concepts, visitors
 from gtc import common, gtir
+
+from .common_utils import CartesianOffsetFactory, undefined_symbol_list
 
 
 class LiteralFactory(factory.Factory):
@@ -28,15 +27,6 @@ class LiteralFactory(factory.Factory):
 
     value = "42.0"
     dtype = common.DataType.FLOAT32
-
-
-class CartesianOffsetFactory(factory.Factory):
-    class Meta:
-        model = common.CartesianOffset
-
-    i = 0
-    j = 0
-    k = 0
 
 
 class FieldAccessFactory(factory.Factory):
@@ -137,25 +127,5 @@ class StencilFactory(factory.Factory):
         model = gtir.Stencil
 
     name = factory.Faker("word")
-    params = []
     vertical_loops = factory.List([factory.SubFactory(VerticalLoopFactory)])
-
-    @factory.lazy_attribute
-    def params(self):
-        """Automatically collect undefined symbols and put them into the parameter list."""
-
-        class CollectSymbolsAndRefs(visitors.NodeVisitor):
-            def visit_Node(self, node: concepts.Node, *, symbols: Set[str], refs: Set[str]) -> None:
-                for name, metadata in node.__node_children__.items():
-                    type_ = metadata["definition"].type_
-                    if isinstance(type_, type):
-                        if issubclass(type_, gtir.SymbolName):
-                            symbols.add(getattr(node, name))
-                        elif issubclass(type_, common.SymbolRef):
-                            refs.add(getattr(node, name))
-                self.generic_visit(node, symbols=symbols, refs=refs)
-
-        symbols: Set[str] = set()
-        refs: Set[str] = set()
-        CollectSymbolsAndRefs().visit(self.vertical_loops, symbols=symbols, refs=refs)
-        return [FieldDeclFactory(name=name) for name in refs - symbols]
+    params = undefined_symbol_list(lambda name: FieldDeclFactory(name=name), "vertical_loops")

@@ -14,21 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Set
+from typing import List
 
 import factory
 
-from eve import concepts, visitors
 from gtc import common, oir
 
-
-class CartesianOffsetFactory(factory.Factory):
-    class Meta:
-        model = common.CartesianOffset
-
-    i = 0
-    j = 0
-    k = 0
+from .common_utils import CartesianOffsetFactory, undefined_symbol_list
 
 
 class FieldAccessFactory(factory.Factory):
@@ -97,23 +89,4 @@ class StencilFactory(factory.Factory):
 
     name = factory.Faker("word")
     vertical_loops = factory.List([factory.SubFactory(VerticalLoopFactory)])
-
-    @factory.lazy_attribute
-    def params(self):
-        """Automatically collect undefined symbols and put them into the parameter list."""
-
-        class CollectSymbolsAndRefs(visitors.NodeVisitor):
-            def visit_Node(self, node: concepts.Node, *, symbols: Set[str], refs: Set[str]) -> None:
-                for name, metadata in node.__node_children__.items():
-                    type_ = metadata["definition"].type_
-                    if isinstance(type_, type):
-                        if issubclass(type_, oir.SymbolName):
-                            symbols.add(getattr(node, name))
-                        elif issubclass(type_, common.SymbolRef):
-                            refs.add(getattr(node, name))
-                self.generic_visit(node, symbols=symbols, refs=refs)
-
-        symbols: Set[str] = set()
-        refs: Set[str] = set()
-        CollectSymbolsAndRefs().visit(self.vertical_loops, symbols=symbols, refs=refs)
-        return [FieldDeclFactory(name=name) for name in refs - symbols]
+    params = undefined_symbol_list(lambda name: FieldDeclFactory(name=name), "vertical_loops")
