@@ -212,7 +212,7 @@ class DefIRToGTIR(IRNodeVisitor):
         raise NotImplementedError(f"BuiltIn.{node.value} not implemented in lowering")
 
     def visit_Cast(self, node: Cast) -> gtir.Cast:
-        return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))
+        return gtir.Cast(dtype=common.DataType(node.data_type.value), expr=self.visit(node.expr))
 
     def visit_NativeFuncCall(self, node: NativeFuncCall) -> gtir.NativeFuncCall:
         return gtir.NativeFuncCall(
