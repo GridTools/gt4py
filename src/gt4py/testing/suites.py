@@ -13,10 +13,15 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import inspect
 import sys
+import types
+from collections.abc import Mapping, Sequence
 from itertools import count, product
 
+import hypothesis as hyp
+import hypothesis.strategies as hyp_st
+import numpy as np
 import pytest
 
 import gt4py as gt
@@ -24,10 +29,17 @@ import gt4py.definitions as gt_definitions
 from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
+from gt4py import utils as gt_utils
 from gt4py.stencil_object import StencilObject
 
-from .input_strategies import *
-from .utils import *
+from .input_strategies import (
+    composite_implementation_strategy_factory,
+    composite_strategy_factory,
+    ndarray_shape_st,
+    ndarray_st,
+    padded_shape_st,
+)
+from .utils import annotate_function, standardize_dtype_dict
 
 
 counter = count()
@@ -64,7 +76,7 @@ class SuiteMeta(type):
         constants = cls_dict["constants"] = dict()
         singletons = cls_dict["singletons"] = dict()
         max_boundary = ((0, 0), (0, 0), (0, 0))
-        for name, symbol in cls_dict["symbols"].items():
+        for symbol in cls_dict["symbols"].values():
             if symbol.kind == "field":
                 max_boundary = tuple(
                     (max(m[0], abs(b[0])), max(m[0], b[0]))
@@ -99,7 +111,7 @@ class SuiteMeta(type):
                 implementation_strategy_factories[name] = symbol.value_st_factory
 
             else:
-                assert False
+                raise AssertionError
 
         cls_dict["origin"] = tuple(o[0] for o in max_boundary)
 
@@ -197,8 +209,6 @@ class SuiteMeta(type):
 
     def parametrize_implementation_tests(cls_name, bases, cls_dict):
 
-        dtypes = cls_dict["dtypes"]
-        generation_strategy_factories = cls_dict["generation_strategy_factories"]
         implementation_strategy_factories = cls_dict["implementation_strategy_factories"]
         global_boundaries = cls_dict["global_boundaries"]
 
@@ -270,7 +280,7 @@ class SuiteMeta(type):
         backends = cls_dict["backends"]
 
         # Create testing strategies
-        assert isinstance(cls_dict["symbols"], collections.abc.Mapping), "Invalid 'symbols' mapping"
+        assert isinstance(cls_dict["symbols"], Mapping), "Invalid 'symbols' mapping"
 
         # Check domain and ndims
         assert 1 <= len(domain_range) <= 3 and all(
@@ -291,15 +301,15 @@ class SuiteMeta(type):
 
         # Check dtypes
         assert isinstance(
-            dtypes, (collections.abc.Sequence, collections.abc.Mapping)
+            dtypes, (Sequence, Mapping)
         ), "'dtypes' must be a sequence or a mapping object"
 
-        if isinstance(dtypes, collections.abc.Sequence):
+        if isinstance(dtypes, Sequence):
             dtypes = {tuple(cls_dict["symbols"].keys()): dtypes}
         cls_dict["dtypes"] = dtypes = standardize_dtype_dict(dtypes)
 
         # Check backends
-        assert isinstance(backends, collections.abc.Sequence) and all(
+        assert isinstance(backends, Sequence) and all(
             isinstance(b, str) for b in backends
         ), "'backends' must be a sequence of strings"
         for b in backends:
@@ -348,7 +358,7 @@ class SuiteMeta(type):
 
 
 class StencilTestSuite(metaclass=SuiteMeta):
-    """Base class for every *stencil test suite*.
+    r"""Base class for every *stencil test suite*.
 
     Every new test suite must inherit from this class and define proper
     attributes and methods to generate a valid set of testing strategies.
@@ -363,27 +373,24 @@ class StencilTestSuite(metaclass=SuiteMeta):
         `None` key assigned to its value. It is meant to be populated with labels representing
         groups of symbols that should have the same type.
         Example:
-
         .. code-block:: python
 
                     {
                         'float_symbols' : (np.float32, np.float64),
-                        'int_symbols' : (int, np.int_, np.int64)
+                        'int_symbols' : (int, np.int\_, np.int64)
+
                     }
 
     domain_range : `Sequence` of pairs like `((int, int), (int, int) ... )`
          CartesianSpace sizes for testing. Each item encodes the (min, max) range of sizes for every axis.
-
     symbols : `dict`
         Definition of symbols (globals, parameters and inputs) used in this stencil.
         - ``name``: `utils._SymbolDescriptor`. It is recommended to use the convenience
         functions `global_name()`, `parameter()` and `field()`. These functions have similar
         and self-explanatory arguments. Note that `dtypes` could be a list of actual dtypes
         but it is usually assumed to be a label from the global suite dtypes dictionary.
-
     definition : `function`
         Stencil definition function.
-
     validation : `function`
         Stencil validation function. It should have exactly the same signature than
         arguments to access the actual values used in the current testing invocation.
@@ -391,27 +398,22 @@ class StencilTestSuite(metaclass=SuiteMeta):
         It should always return a `list` of `numpy.ndarray` s, one per output, even if
         the function only defines one output value.
 
-
     Automatically generated class members are:
 
     definition_strategies : `dict`
         Hypothesis strategies for the stencil parameters used at definition (externals)
         - ``constant_name``: Hypothesis strategy (`strategy`).
-
     validation_strategies : `dict`
         Hypothesis strategies for the stencil parameters used at run-time (fields and parameters)
         - ``field_name``: Hypothesis strategy (`strategy`).
         - ``parameter_name``: Hypothesis strategy (`strategy`).
-
     ndims : `int`
         Constant of dimensions (1-3). If the name of class ends in ["1D", "2D", "3D"],
         this attribute needs to match the name or an assertion error will be raised.
-
     global_boundaries : `dict`
         Expected global boundaries for the input fields.
         - ``field_name``: 'list' of ``ndim`` 'tuple`s  (``(lower_boundary, upper_boundary)``).
         Example (3D): `[(1, 3), (2, 2), (0, 0)]`
-
 
     """
 
@@ -431,8 +433,6 @@ class StencilTestSuite(metaclass=SuiteMeta):
             name=f"{test['suite']}_{backend_slug}_{test['test_id']}",
             rebuild=True,
             externals=externals_dict,
-            # debug_mode=True,
-            # _impl_opts={"cache-validation": False, "code-generation": False},
         )
 
         for k, v in externals_dict.items():
@@ -463,8 +463,6 @@ class StencilTestSuite(metaclass=SuiteMeta):
         The generated implementations are reused from previous tests by means of a
         :class:`utils.ImplementationsDB` instance shared at module scope.
         """
-        # backend = "debug"
-
         cls = type(self)
         implementation_list = test["implementations"]
         if not implementation_list:
@@ -493,7 +491,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
             domain = max_domain
 
             max_boundary = ((0, 0), (0, 0), (0, 0))
-            for name, info in implementation.field_info.items():
+            for info in implementation.field_info.values():
                 if isinstance(info, gt_definitions.FieldInfo):
                     max_boundary = tuple(
                         (max(m[0], abs(b[0])), max(m[1], b[1]))
@@ -506,7 +504,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
             )
 
             shape = None
-            for name, field in fields.items():
+            for field in fields.values():
                 if isinstance(field, np.ndarray):
                     assert field.shape == (shape if shape is not None else field.shape)
                     shape = field.shape
@@ -577,9 +575,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
             )
 
             # Test values
-            for (name, value), (expected_name, expected_value) in zip(
-                inputs.items(), validation_fields.items()
-            ):
+            for (name, value), expected_value in zip(inputs.items(), validation_fields.values()):
                 if isinstance(fields[name], np.ndarray):
                     domain_slice = [
                         slice(new_boundary[d][0], new_boundary[d][0] + domain[d])

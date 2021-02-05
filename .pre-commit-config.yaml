@@ -67,10 +67,6 @@ repos:
           src/gt4py/storage/__init__.py |
           src/gt4py/storage/storage.py |
           src/gt4py/storage/utils.py |
-          src/gt4py/testing/__init__.py |
-          src/gt4py/testing/input_strategies.py |
-          src/gt4py/testing/suites.py |
-          src/gt4py/testing/utils.py |
           src/gt4py/utils/__init__.py |
           src/gt4py/utils/base.py |
           src/gt4py/utils/attrib.py |
