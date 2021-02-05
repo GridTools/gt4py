@@ -18,9 +18,10 @@ import pytest
 from pydantic.error_wrappers import ValidationError
 
 from eve import SourceLocation
-from gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
+from gtc.common import ArithmeticOperator, BuiltInLiteral, DataType, LevelMarker, LoopOrder
 from gtc.gtir import (
     AxisBound,
+    BinaryOp,
     CartesianOffset,
     Decl,
     Expr,
@@ -33,7 +34,15 @@ from gtc.gtir import (
     VerticalLoop,
 )
 
-from .gtir_utils import DummyExpr, FieldAccessBuilder, ParAssignStmtBuilder, StencilBuilder
+from .gtir_utils import (
+    DummyExpr,
+    FieldAccessBuilder,
+    FieldIfStmtBuilder,
+    ParAssignStmtBuilder,
+    StencilBuilder,
+    VerticalLoopBuilder,
+    make_Literal,
+)
 
 
 ARITHMETIC_TYPE = DataType.FLOAT32
@@ -130,4 +139,89 @@ def test_symbolref_without_decl():
     with pytest.raises(ValidationError, match=r"Symbols.*not found"):
         StencilBuilder().add_par_assign_stmt(
             ParAssignStmtBuilder("out_field", "in_field").build()
+        ).build()
+
+
+@pytest.mark.parametrize(
+    "write_and_read_with_horizontal_offset",
+    [
+        lambda: VerticalLoopBuilder()
+        .add_stmt(
+            ParAssignStmtBuilder("b")
+            .right(FieldAccessBuilder("a").offset(CartesianOffset(i=1, j=0, k=0)).build())
+            .build()
+        )
+        .add_stmt(
+            ParAssignStmtBuilder("a").right(make_Literal("1.0", dtype=ARITHMETIC_TYPE)).build()
+        )
+        .build(),
+        # nested rhs
+        lambda: VerticalLoopBuilder()
+        .add_stmt(
+            ParAssignStmtBuilder("b")
+            .right(
+                BinaryOp(
+                    op=A_ARITHMETIC_OPERATOR,
+                    left=FieldAccessBuilder("a").build(),
+                    right=FieldAccessBuilder("a").offset(CartesianOffset(i=1, j=0, k=0)).build(),
+                )
+            )
+            .build()
+        )
+        .add_stmt(
+            ParAssignStmtBuilder("a").right(make_Literal("1.0", dtype=ARITHMETIC_TYPE)).build()
+        )
+        .build(),
+        # offset access in condition
+        lambda: VerticalLoopBuilder()
+        .add_stmt(
+            FieldIfStmtBuilder()
+            .cond(
+                FieldAccessBuilder("a")
+                .dtype(DataType.BOOL)
+                .offset(CartesianOffset(i=1, j=0, k=0))
+                .build()
+            )
+            .true_branch(
+                [
+                    ParAssignStmtBuilder("irrelevant")
+                    .right(make_Literal("1.0", dtype=ARITHMETIC_TYPE))
+                    .build()
+                ]
+            )
+            .build()
+        )
+        .add_stmt(
+            ParAssignStmtBuilder("a")
+            .right(make_Literal(BuiltInLiteral.TRUE, dtype=DataType.BOOL))
+            .build()
+        )
+        .build(),
+    ],
+)
+def test_write_and_read_with_offset_violation(write_and_read_with_horizontal_offset):
+    with pytest.raises(ValidationError, match=r"Illegal write.*read with.*offset"):
+        write_and_read_with_horizontal_offset()
+
+
+def test_temporary_write_and_read_with_offset_is_allowed():
+    (
+        VerticalLoopBuilder()
+        .add_temporary("a", ARITHMETIC_TYPE)
+        .add_stmt(
+            ParAssignStmtBuilder("b")
+            .right(FieldAccessBuilder("a").offset(CartesianOffset(i=1, j=0, k=0)).build())
+            .build()
+        )
+        .add_stmt(
+            ParAssignStmtBuilder("a").right(make_Literal("1.0", dtype=ARITHMETIC_TYPE)).build()
+        )
+        .build()
+    )
+
+
+def test_illegal_self_assignment_with_offset():
+    with pytest.raises(ValidationError, match=r"Self-assignment"):
+        ParAssignStmtBuilder("a").right(
+            FieldAccessBuilder("a").offset(CartesianOffset(i=1, j=0, k=0)).build()
         ).build()
