@@ -37,7 +37,7 @@ class TestIdentity(gt_testing.StencilTestSuite):
 
     dtypes = {("field_a",): (np.float64, np.float32)}
     domain_range = [(1, 25), (1, 25), (1, 25)]
-    backends = CPU_BACKENDS
+    backends = INTERNAL_BACKENDS
     symbols = dict(field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(field_a):
@@ -532,10 +532,9 @@ class TestOptionalField(gt_testing.StencilTestSuite):
     definition = optional_field
 
     def validation(in_field, out_field, dyn_tend, phys_tend=None, *, dt, domain, origin, **kwargs):
-        from __externals__ import PHYS_TEND
 
         out_field[...] = in_field + dt * dyn_tend
-        if PHYS_TEND:
+        if PHYS_TEND:  # noqa: F821
             out_field += dt * phys_tend
 
 
@@ -581,13 +580,12 @@ class TestTwoOptionalFields(gt_testing.StencilTestSuite):
         origin,
         **kwargs,
     ):
-        from __externals__ import PHYS_TEND_A, PHYS_TEND_B
 
         out_a[...] = in_a + dt * dyn_tend_a
         out_b[...] = in_b + dt * dyn_tend_b
-        if PHYS_TEND_A:
+        if PHYS_TEND_A:  # noqa: F821
             out_a += dt * phys_tend_a
-        if PHYS_TEND_B:
+        if PHYS_TEND_B:  # noqa: F821
             out_b += dt * phys_tend_b
 
 
