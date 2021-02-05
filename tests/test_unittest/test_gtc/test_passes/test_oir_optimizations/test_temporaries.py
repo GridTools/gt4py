@@ -18,32 +18,25 @@ from gtc import oir
 from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
 
 from ...oir_utils import (
-    AssignStmtBuilder,
-    FieldDeclBuilder,
-    HorizontalExecutionBuilder,
-    StencilBuilder,
-    TemporaryBuilder,
-    VerticalLoopBuilder,
+    AssignStmtFactory,
+    HorizontalExecutionFactory,
+    StencilFactory,
+    TemporaryFactory,
+    VerticalLoopFactory,
 )
 
 
 def test_temporaries_to_scalars_basic():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-                .add_stmt(AssignStmtBuilder("bar", "tmp").build())
-                .build()
+    testee = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                horizontal_executions__0__body=[
+                    AssignStmtFactory(left__name="tmp"),
+                    AssignStmtFactory(right__name="tmp"),
+                ],
+                declarations=[TemporaryFactory(name="tmp")],
             )
-            .add_declaration(TemporaryBuilder(name="tmp").build())
-            .build()
-        )
-        .build()
+        ],
     )
     transformed = TemporariesToScalars().visit(testee)
     hexec = transformed.vertical_loops[0].horizontal_executions[0]
@@ -54,28 +47,21 @@ def test_temporaries_to_scalars_basic():
 
 
 def test_temporaries_to_scalars_multiexec():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_param(FieldDeclBuilder("baz").build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-                .add_stmt(AssignStmtBuilder("bar", "tmp").build())
-                .build()
+    testee = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                horizontal_executions=[
+                    HorizontalExecutionFactory(
+                        body=[
+                            AssignStmtFactory(left__name="tmp"),
+                            AssignStmtFactory(right__name="tmp"),
+                        ]
+                    ),
+                    HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="tmp")]),
+                ],
+                declarations=[TemporaryFactory(name="tmp")],
             )
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("baz", "tmp").build())
-                .build()
-            )
-            .add_declaration(TemporaryBuilder(name="tmp").build())
-            .build()
-        )
-        .build()
+        ]
     )
     transformed = TemporariesToScalars().visit(testee)
     assert "tmp" in {d.name for d in transformed.vertical_loops[0].declarations}
