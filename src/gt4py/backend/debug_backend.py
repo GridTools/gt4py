@@ -91,7 +91,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
             ):
                 conditions.append(make_condition(axis_name, "<", interval.end))
 
-        return [f"if {' and '.join(conditions)}:"]
+        return [f"if {' and '.join(conditions)}:"] if len(conditions) > 0 else [""]
 
     def make_temporary_field(self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent):
         source_lines = super().make_temporary_field(name, dtype, extent)
