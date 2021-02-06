@@ -428,7 +428,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
             if (
                 interval.end.level == gt_ir.LevelMarker.START
-                or interval.end.offset <= upper_extent[d]
+                or interval.end.offset < upper_extent[d]
             ):
                 conditions.append(make_condition(gt_axis_name, "<", interval.end))
 

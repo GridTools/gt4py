@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 import numpy as np
 
@@ -62,12 +62,14 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
-    def make_positional_condition(self, parallel_interval: List[gt_ir.AxisInterval]):
+    def make_positional_condition(
+        self, parallel_interval: List[gt_ir.AxisInterval]
+    ) -> Optional[str]:
         extent = self.block_info.extent
         lower_extent = extent.lower_indices
         upper_extent = extent.upper_indices
 
-        def make_condition(axis_name: str, symbol: str, axis_bound: gt_ir.AxisBound):
+        def make_condition(axis_name: str, symbol: str, axis_bound: gt_ir.AxisBound) -> str:
             relative_offset = (
                 "0"
                 if axis_bound.level == gt_ir.LevelMarker.START
@@ -87,11 +89,11 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
             if (
                 interval.end.level == gt_ir.LevelMarker.START
-                or interval.end.offset <= upper_extent[d]
+                or interval.end.offset < upper_extent[d]
             ):
                 conditions.append(make_condition(axis_name, "<", interval.end))
 
-        return [f"if {' and '.join(conditions)}:"] if len(conditions) > 0 else []
+        return f"if {' and '.join(conditions)}:" if len(conditions) > 0 else None
 
     def make_temporary_field(self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent):
         source_lines = super().make_temporary_field(name, dtype, extent)
@@ -101,7 +103,6 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
     def make_stage_source(self, iteration_order: gt_ir.IterationOrder, regions: list):
         extent = self.block_info.extent
-        parallel_interval = self.block_info.parallel_interval
         lower_extent = extent.lower_indices
         upper_extent = extent.upper_indices
         # seq_axis_name = self.impl_node.domain.sequential_axis.name
@@ -126,19 +127,22 @@ class DebugSourceGenerator(PythonSourceGenerator):
             == regions
         )
 
+        if self.block_info.parallel_interval:
+            condition = self.make_positional_condition(self.block_info.parallel_interval)
+        else:
+            condition = None
+
         for bounds, body_sources in regions:
             source_lines.extend(self._make_regional_computation(iteration_order, bounds))
             with source_lines.indented(steps=1):
                 source_lines.extend(ij_loop_lines.text)
 
-            if parallel_interval:
-                with source_lines.indented(steps=extent.ndims):
-                    source_lines.extend(self.make_positional_condition(parallel_interval))
-                with source_lines.indented(steps=extent.ndims + 1):
-                    source_lines.extend(body_sources)
-            else:
-                with source_lines.indented(steps=extent.ndims):
-                    source_lines.extend(body_sources)
+            body_indent = extent.ndims
+            if condition:
+                source_lines.append(condition, indent_steps=body_indent)
+                body_indent += 1
+            with source_lines.indented(steps=body_indent):
+                source_lines.extend(body_sources)
 
         return source_lines.text
 
