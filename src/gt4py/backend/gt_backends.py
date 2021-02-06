@@ -136,6 +136,9 @@ class _MaxKOffsetExtractor(gt_ir.IRNodeVisitor):
         self.visit(node)
         return self.max_offset
 
+    def visit_Stage(self, node: gt_ir.Stage) -> None:
+        self.visit(node.apply_blocks)
+
     def visit_AxisBound(self, node: gt_ir.AxisBound) -> None:
         self.max_offset = max(self.max_offset, abs(node.offset) + 1)
 
@@ -217,6 +220,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         self.module_name = module_name
         self.gt_backend_t = gt_backend_t
         self.options = options
+        self.stage_extents: Optional[gt_ir.Extent] = None
 
         self.templates = {}
         for key, file_name in self.TEMPLATE_FILES.items():
@@ -399,19 +403,36 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         return (start_splitter, start_offset), (end_splitter, end_offset)
 
     def _parallel_interval_condition(self, parallel_interval: List[gt_ir.AxisInterval]) -> str:
-        defs = []
-        for interval, axis_name in zip(parallel_interval, self.impl_node.domain.par_axes_names):
-            index = f"eval.{axis_name.lower()}()"
-            for axis_bound, oper in zip((interval.start, interval.end), (">=", "<")):
-                if not axis_bound.extend:
-                    relative_offset = (
-                        "0"
-                        if axis_bound.level == gt_ir.LevelMarker.START
-                        else f"static_cast<gt::int_t>(eval(domain_size_{axis_name.upper()}()))"
-                    )
-                    defs.append(f"{index} {oper} {relative_offset}{axis_bound.offset:+d}")
+        assert self.stage_extents is not None
+        lower_extent = self.stage_extents.lower_indices
+        upper_extent = self.stage_extents.upper_indices
 
-        return " && ".join(defs)
+        def make_condition(axis_name: str, symbol: str, axis_bound: gt_ir.AxisBound):
+            relative_offset = (
+                "0"
+                if axis_bound.level == gt_ir.LevelMarker.START
+                else f"static_cast<gt::int_t>(eval(domain_size_{axis_name.upper()}()))"
+            )
+            return f"{axis_name} {symbol} {relative_offset}{axis_bound.offset:+d}"
+
+        conditions = []
+        for d, (interval, axis_name) in enumerate(
+            zip(parallel_interval, self.impl_node.domain.par_axes_names)
+        ):
+            gt_axis_name = f"eval.{axis_name.lower()}()"
+            if (
+                interval.start.level == gt_ir.LevelMarker.END
+                or interval.start.offset > lower_extent[d]
+            ):
+                conditions.append(make_condition(gt_axis_name, ">=", interval.start))
+
+            if (
+                interval.end.level == gt_ir.LevelMarker.START
+                or interval.end.offset <= upper_extent[d]
+            ):
+                conditions.append(make_condition(gt_axis_name, "<", interval.end))
+
+        return " && ".join(conditions)
 
     def visit_ApplyBlock(
         self, node: gt_ir.ApplyBlock
@@ -434,6 +455,8 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
     def visit_Stage(self, node: gt_ir.Stage) -> Dict[str, Any]:
         # Initialize symbols for the generation of references in this stage
         self.stage_symbols = {}
+        self.stage_extents = node.compute_extent
+
         args = []
         for accessor in node.accessors:
             self.stage_symbols[accessor.symbol] = accessor

@@ -194,45 +194,6 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
-    @staticmethod
-    def _compute_overlap(
-        axis_interval: gt_ir.AxisInterval, axis_extents: Tuple[int, int]
-    ) -> gt_ir.AxisInterval:
-        """Return the part of the axis iterated over."""
-        # TODO Ensure the AxisInterval overlaps?
-        if axis_interval.start.level == gt_ir.LevelMarker.START:
-            offset = (
-                max(axis_interval.start.offset, axis_extents[0])
-                if not axis_interval.start.extend
-                else axis_extents[0]
-            )
-            start_bound = gt_ir.AxisBound(
-                level=gt_ir.LevelMarker.START,
-                offset=offset,
-            )
-        else:
-            if axis_interval.start.extend:
-                raise ValueError("Logic error. Cannot extend here.")
-            start_bound = gt_ir.AxisBound(
-                level=gt_ir.LevelMarker.END, offset=axis_interval.start.offset
-            )
-
-        if axis_interval.end.level == gt_ir.LevelMarker.END:
-            offset = (
-                min(axis_interval.end.offset, axis_extents[1])
-                if not axis_interval.end.extend
-                else axis_extents[1]
-            )
-            end_bound = gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=offset)
-        else:
-            if axis_interval.end.extend:
-                raise ValueError("Logic error. Cannot extend here.")
-            end_bound = gt_ir.AxisBound(
-                level=gt_ir.LevelMarker.START, offset=axis_interval.end.offset
-            )
-
-        return gt_ir.AxisInterval(start=start_bound, end=end_bound)
-
     # ---- Visitor handlers ----
     def visit_ShapedExpr(self, node: ShapedExpr) -> str:
         is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
@@ -264,21 +225,36 @@ class NumPySourceGenerator(PythonSourceGenerator):
             if axis != self.domain.sequential_axis.name
         ]
 
+        lower_indices = self.block_info.extent.lower_indices
+        upper_indices = self.block_info.extent.upper_indices
+
         index = []
         for fd, d in enumerate(parallel_axes_dims):
             ax = self.domain.axes_names[d]
             ax_offset = node.offset.get(ax, 0)
 
-            axis_extents = self.block_info.extent[d]
-
             if self.block_info.parallel_interval:
-                axis_interval = type(self)._compute_overlap(
-                    self.block_info.parallel_interval[d], axis_extents
+                restricted_interval = self.block_info.parallel_interval[d]
+                start_offset = (
+                    max(lower_indices[d], restricted_interval.start.offset)
+                    if restricted_interval.start.level == gt_ir.LevelMarker.START
+                    else restricted_interval.start.offset
+                )
+                end_offset = (
+                    min(upper_indices[d], restricted_interval.end.offset)
+                    if restricted_interval.end.level == gt_ir.LevelMarker.END
+                    else restricted_interval.end.offset
+                )
+                axis_interval = gt_ir.AxisInterval(
+                    start=gt_ir.AxisBound(
+                        level=restricted_interval.start.level, offset=start_offset
+                    ),
+                    end=gt_ir.AxisBound(level=restricted_interval.end.level, offset=end_offset),
                 )
             else:
                 axis_interval = gt_ir.AxisInterval(
-                    start=gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=axis_extents[0]),
-                    end=gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=axis_extents[1]),
+                    start=gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=lower_indices[d]),
+                    end=gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=upper_indices[d]),
                 )
 
             origin_expr = f"{node.name}{self.origin_marker}[{fd}]"

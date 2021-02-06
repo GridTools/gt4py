@@ -63,20 +63,33 @@ class DebugSourceGenerator(PythonSourceGenerator):
         return source_lines
 
     def make_positional_condition(self, parallel_interval: List[gt_ir.AxisInterval]):
+        extent = self.block_info.extent
+        lower_extent = extent.lower_indices
+        upper_extent = extent.upper_indices
+
+        def make_condition(axis_name: str, symbol: str, axis_bound: gt_ir.AxisBound):
+            relative_offset = (
+                "0"
+                if axis_bound.level == gt_ir.LevelMarker.START
+                else f"{self.domain_arg_name}[{d}]"
+            )
+            return f"{axis_name} {symbol} {relative_offset}{axis_bound.offset:+d}"
+
         conditions = []
         for d, (interval, axis_name) in enumerate(
             zip(parallel_interval, self.impl_node.domain.par_axes_names)
         ):
-            for axis_bound, symbol in zip((interval.start, interval.end), (">=", "<")):
-                if not axis_bound.extend:
-                    relative_offset = (
-                        "0"
-                        if axis_bound.level == gt_ir.LevelMarker.START
-                        else f"{self.domain_arg_name}[{d}]"
-                    )
-                    conditions.append(
-                        f"{axis_name} {symbol} {relative_offset}{axis_bound.offset:+d}"
-                    )
+            if (
+                interval.start.level == gt_ir.LevelMarker.END
+                or interval.start.offset > lower_extent[d]
+            ):
+                conditions.append(make_condition(axis_name, ">=", interval.start))
+
+            if (
+                interval.end.level == gt_ir.LevelMarker.START
+                or interval.end.offset <= upper_extent[d]
+            ):
+                conditions.append(make_condition(axis_name, "<", interval.end))
 
         return [f"if {' and '.join(conditions)}:"]
 
