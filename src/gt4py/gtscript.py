@@ -445,7 +445,7 @@ class _FieldDescriptor:
         return f"_FieldDescriptor({args})"
 
     def __str__(self):
-        if self.data_axes == (1,):
+        if self.data_dims == (1,):
             dtype_and_ddims = str(self.dtype)
         else:
             dtype_and_ddims = f"({self.data_dims}, {self.dtype})"

@@ -27,7 +27,7 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-from typing import Any, Dict, Generator, List, Set, Tuple
+from typing import Any, Generator, List, Set, Tuple
 
 from pydantic import validator
 from pydantic.class_validators import root_validator
