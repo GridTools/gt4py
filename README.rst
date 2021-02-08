@@ -98,12 +98,16 @@ repository:
     # pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cudaXX]
 
 In either case, you need to run a post-installation script to install
-GridTools C++ sources:
+GridTools C++ sources.The new ``gtc:`` backends require GridTools v2,
+while the old GT4Py ``gt:`` backends require GridTools v1:
 
 ::
 
-    # Run the command to install GridTools C++ sources
-    python -m gt4py.gt_src_manager install
+    # Run the command to install GridTools v1.x C++ sources
+    python -m gt4py.gt_src_manager install -m 1
+
+    # Run the command to install GridTools v2.x C++ sources
+    python -m gt4py.gt_src_manager install -m 2
 
 Note that ``pip`` will not delete GridTools C++ sources when
 uninstalling the package, so make sure you run the remove command in
@@ -111,7 +115,7 @@ advance:
 
 ::
 
-    python -m gt4py.gt_src_manager remove
+    python -m gt4py.gt_src_manager remove  # -m 1 and/or -m 2
     pip uninstall gt4py
 
 Recommended installation for developers

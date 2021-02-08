@@ -403,7 +403,7 @@ class FieldRef(Ref):
 
 @attribclass
 class Cast(Expr):
-    dtype = attribute(of=DataType)
+    data_type = attribute(of=DataType)
     expr = attribute(of=Expr)
     loc = attribute(of=Location, optional=True)
 
