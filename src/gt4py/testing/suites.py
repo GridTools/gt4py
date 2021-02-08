@@ -13,10 +13,10 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import collections
 import inspect
 import sys
 import types
-from collections.abc import Mapping, Sequence
 from itertools import count, product
 
 import hypothesis as hyp
@@ -204,9 +204,7 @@ class SuiteMeta(type):
                     else ()
                 )
                 name = test["backend"]
-                name += "".join(
-                    "_{}_{}".format(key, value) for key, value in test["constants"].items()
-                )
+                name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
                 name += "".join(
                     "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
                 )
@@ -236,7 +234,7 @@ class SuiteMeta(type):
                 else ()
             )
             name = test["backend"]
-            name += "".join("_{}_{}".format(key, value) for key, value in test["constants"].items())
+            name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
             name += "".join(
                 "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
             )
@@ -269,7 +267,7 @@ class SuiteMeta(type):
         backends = cls_dict["backends"]
 
         # Create testing strategies
-        assert isinstance(cls_dict["symbols"], Mapping), "Invalid 'symbols' mapping"
+        assert isinstance(cls_dict["symbols"], collections.abc.Mapping), "Invalid 'symbols' mapping"
 
         # Check domain and ndims
         assert 1 <= len(domain_range) <= 3 and all(
@@ -283,11 +281,11 @@ class SuiteMeta(type):
 
         # Check dtypes
         assert isinstance(
-            cls_dict["dtypes"], (Sequence, Mapping)
+            cls_dict["dtypes"], (collections.abc.Sequence, collections.abc.Mapping)
         ), "'dtypes' must be a sequence or a mapping object"
 
         # Check backends
-        assert isinstance(backends, Sequence) and all(
+        assert isinstance(backends, collections.abc.Sequence) and all(
             isinstance(b, str) for b in backends
         ), "'backends' must be a sequence of strings"
         for b in backends:
@@ -315,7 +313,7 @@ class SuiteMeta(type):
                     break
 
         dtypes = cls_dict["dtypes"]
-        if isinstance(dtypes, Sequence):
+        if isinstance(dtypes, collections.abc.Sequence):
             dtypes = {tuple(cls_dict["symbols"].keys()): dtypes}
         cls_dict["dtypes"] = standardize_dtype_dict(dtypes)
         cls_dict["ndims"] = len(cls_dict["domain_range"])

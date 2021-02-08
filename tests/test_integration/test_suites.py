@@ -57,7 +57,7 @@ class TestCopy(gt_testing.StencilTestSuite):
 
     def definition(field_a, field_b):
         with computation(PARALLEL), interval(...):
-            field_b = field_a  # noqa: F841
+            field_b = field_a  # noqa: F841  # Local name is assigned to but never used
 
     def validation(field_a, field_b, domain=None, origin=None):
         field_b[...] = field_a
@@ -105,7 +105,7 @@ class TestGlobalScale(gt_testing.StencilTestSuite):
             field_a = SCALE_FACTOR * field_a[0, 0, 0]
 
     def validation(field_a, domain, origin, **kwargs):
-        field_a[...] = SCALE_FACTOR * field_a  # noqa: F821
+        field_a[...] = SCALE_FACTOR * field_a  # noqa: F821  # Undefined name
 
 
 # ---- Parametric scale stencil -----
@@ -159,14 +159,14 @@ class TestParametricMix(gt_testing.StencilTestSuite):
                 factor = alpha_factor
             else:
                 factor = 1.0
-            field_out = factor * field_a[0, 0, 0] - (1 - factor) * (  # noqa: F841
-                field_b[0, 0, 0] - weight * field_c[0, 0, 0]
-            )
+            field_out = factor * field_a[  # noqa: F841 # Local name is assigned to but never used
+                0, 0, 0
+            ] - (1 - factor) * (field_b[0, 0, 0] - weight * field_c[0, 0, 0])
 
     def validation(
         field_a, field_b, field_c, field_out, *, weight, alpha_factor, domain, origin, **kwargs
     ):
-        if USE_ALPHA:  # noqa: F821
+        if USE_ALPHA:  # noqa: F821  # Undefined name
             factor = alpha_factor
         else:
             factor = 1.0
@@ -190,8 +190,12 @@ class TestHeatEquation_FTCS_3D(gt_testing.StencilTestSuite):
 
     def definition(u, v, u_new, v_new, *, ru, rv):
         with computation(PARALLEL), interval(...):
-            u_new = u[0, 0, 0] + ru * (u[1, 0, 0] - 2 * u[0, 0, 0] + u[-1, 0, 0])  # noqa: F841
-            v_new = v[0, 0, 0] + rv * (v[0, 1, 0] - 2 * v[0, 0, 0] + v[0, -1, 0])  # noqa: F841
+            u_new = u[0, 0, 0] + ru * (  # noqa: F841 # Local name is assigned to but never used
+                u[1, 0, 0] - 2 * u[0, 0, 0] + u[-1, 0, 0]
+            )
+            v_new = v[0, 0, 0] + rv * (  # noqa: F841 # Local name is assigned to but never used
+                v[0, 1, 0] - 2 * v[0, 0, 0] + v[0, -1, 0]
+            )
 
     def validation(u, v, u_new, v_new, *, ru, rv, domain, origin, **kwargs):
         u_new[...] = u[1:-1, :, :] + ru * (u[2:, :, :] - 2 * u[1:-1, :, :] + u[:-2, :, :])
@@ -215,9 +219,9 @@ class TestHorizontalDiffusion(gt_testing.StencilTestSuite):
             laplacian = 4.0 * u[0, 0, 0] - (u[1, 0, 0] + u[-1, 0, 0] + u[0, 1, 0] + u[0, -1, 0])
             flux_i = laplacian[1, 0, 0] - laplacian[0, 0, 0]
             flux_j = laplacian[0, 1, 0] - laplacian[0, 0, 0]
-            diffusion = u[0, 0, 0] - weight * (  # noqa: F841
-                flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0]
-            )
+            diffusion = u[  # noqa: F841 # Local name is assigned to but never used
+                0, 0, 0
+            ] - weight * (flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0])
 
     def validation(u, diffusion, *, weight, domain, origin, **kwargs):
         laplacian = 4.0 * u[1:-1, 1:-1, :] - (
@@ -280,9 +284,9 @@ class TestHorizontalDiffusionSubroutines(gt_testing.StencilTestSuite):
         with computation(PARALLEL), interval(...):
             laplacian = lap_op(u=u)
             flux_i, flux_j = fwd_diff(field=laplacian)
-            diffusion = u[0, 0, 0] - weight * (  # noqa: F841
-                flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0]
-            )
+            diffusion = u[  # noqa: F841 # Local name is assigned to but never used
+                0, 0, 0
+            ] - weight * (flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0])
 
     def validation(u, diffusion, *, weight, domain, origin, **kwargs):
         laplacian = 4.0 * u[1:-1, 1:-1, :] - (
@@ -320,9 +324,9 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
                 flux_j = fwd_diff_op_y(field=laplacian)
             else:
                 flux_i, flux_j = fwd_diff_op_xy(field=laplacian)
-            diffusion = u[0, 0, 0] - weight * (  # noqa: F841
-                flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0]
-            )
+            diffusion = u[  # noqa: F841 # Local name is assigned to but never used
+                0, 0, 0
+            ] - weight * (flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0])
 
     def validation(u, diffusion, *, weight, domain, origin, **kwargs):
         laplacian = 4.0 * u[1:-1, 1:-1, :] - (
@@ -350,7 +354,7 @@ class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
             if True:
                 outfield = 1
             else:
-                outfield = 2  # noqa: F841
+                outfield = 2  # noqa: F841  # Local name is assigned to but never used
 
     def validation(outfield, *, domain, origin, **kwargs):
         outfield[...] = 1
@@ -424,12 +428,12 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
                 if field_a < 0:
                     field_b = -field_a
                 else:
-                    field_b = field_a  # noqa: F841
+                    field_b = field_a  # noqa: F841  # Local name is assigned to but never used
             else:
                 if field_a < 0:
                     field_c = -field_a
                 else:
-                    field_c = field_a  # noqa: F841
+                    field_c = field_a  # noqa: F841  # Local name is assigned to but never used
 
             field_a = add_one(field_a)
 
@@ -455,9 +459,9 @@ class TestTernaryOp(gt_testing.StencilTestSuite):
     def definition(infield, outfield):
 
         with computation(PARALLEL), interval(...):
-            outfield = (infield > 0.0) * infield + (infield <= 0.0) * (  # noqa: F841
-                -infield[0, 1, 0]
-            )
+            outfield = (  # noqa: F841 # Local name is assigned to but never used
+                infield > 0.0
+            ) * infield + (infield <= 0.0) * (-infield[0, 1, 0])
 
     def validation(infield, outfield, *, domain, origin, **kwargs):
         outfield[...] = np.choose(infield[:, :-1, :] > 0, [-infield[:, 1:, :], infield[:, :-1, :]])
@@ -481,7 +485,7 @@ class TestThreeWayAnd(gt_testing.StencilTestSuite):
             if a > 0 and b > 0 and c > 0:
                 outfield = 1
             else:
-                outfield = 0  # noqa: F841
+                outfield = 0  # noqa: F841  # Local name is assigned to but never used
 
     def validation(outfield, *, a, b, c, domain, origin, **kwargs):
         outfield[...] = 1 if a > 0 and b > 0 and c > 0 else 0
@@ -505,7 +509,7 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
             if a > 0 or b > 0 or c > 0:
                 outfield = 1
             else:
-                outfield = 0  # noqa: F841
+                outfield = 0  # noqa: F841  # Local name is assigned to but never used
 
     def validation(outfield, *, a, b, c, domain, origin, **kwargs):
         outfield[...] = 1 if a > 0 or b > 0 or c > 0 else 0
@@ -529,7 +533,7 @@ class TestOptionalField(gt_testing.StencilTestSuite):
     def validation(in_field, out_field, dyn_tend, phys_tend=None, *, dt, domain, origin, **kwargs):
 
         out_field[...] = in_field + dt * dyn_tend
-        if PHYS_TEND:  # noqa: F821
+        if PHYS_TEND:  # noqa: F821  # Undefined name
             out_field += dt * phys_tend
 
 
@@ -578,9 +582,9 @@ class TestTwoOptionalFields(gt_testing.StencilTestSuite):
 
         out_a[...] = in_a + dt * dyn_tend_a
         out_b[...] = in_b + dt * dyn_tend_b
-        if PHYS_TEND_A:  # noqa: F821
+        if PHYS_TEND_A:  # noqa: F821  # Undefined name
             out_a += dt * phys_tend_a
-        if PHYS_TEND_B:  # noqa: F821
+        if PHYS_TEND_B:  # noqa: F821  # Undefined name
             out_b += dt * phys_tend_b
 
 
