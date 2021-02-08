@@ -136,6 +136,15 @@ class OirToNpir(NodeTranslator):
         kwargs["broadcast"] = True
         return npir.VectorUnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs))
 
+    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> npir.VectorTernaryOp:
+        kwargs["broadcast"] = True
+
+        return npir.VectorTernaryOp(
+            cond=self.visit(node.cond, **kwargs),
+            true_expr=self.visit(node.true_expr, **kwargs),
+            false_expr=self.visit(node.false_expr, **kwargs),
+        )
+
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> npir.NativeFuncCall:
         kwargs["broadcast"] = True
         return npir.NativeFuncCall(

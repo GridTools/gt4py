@@ -105,6 +105,10 @@ class VectorUnaryOp(common.UnaryOp[VectorExpression], VectorExpression):
     pass
 
 
+class VectorTernaryOp(common.TernaryOp[VectorExpression], VectorExpression):
+    pass
+
+
 class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpression):
     left: VectorLValue
     right: VectorExpression

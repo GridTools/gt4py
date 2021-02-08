@@ -88,6 +88,8 @@ class NpirGen(TemplatedGenerator):
 
     VectorUnaryOp = FormatTemplate("({op}({expr}))")
 
+    VectorTernaryOp = FormatTemplate("np.where({cond}, {true_expr}, {false_expr})")
+
     def visit_LevelMarker(
         self, node: common.LevelMarker, **kwargs: Any
     ) -> Union[str, Collection[str]]:
