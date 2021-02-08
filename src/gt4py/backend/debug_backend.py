@@ -139,7 +139,8 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
             body_indent = extent.ndims
             if condition:
-                source_lines.append(condition, indent_steps=body_indent)
+                with source_lines.indented(steps=body_indent):
+                    source_lines.append(condition)
                 body_indent += 1
             with source_lines.indented(steps=body_indent):
                 source_lines.extend(body_sources)
