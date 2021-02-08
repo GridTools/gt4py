@@ -1,6 +1,11 @@
 default_language_version:
   python: python3.8
 repos:
+# - repo: meta
+#   hooks:
+#   - id: check-hooks-apply
+#   - id: check-useless-excludes
+
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v3.4.0
   hooks:
@@ -22,24 +27,34 @@ repos:
   - id: pretty-format-yaml
     args: [--autofix, --preserve-quotes, --indent, '2']
 
-# - repo: https://github.com/Lucas-C/pre-commit-hooks
-#   rev: v1.1.9
-#   hooks:
-#   - id: insert-license
-#     name: Add license for all GT4Py Python source files
-#     exclude: (^\..*$)|(^.*/gtc(_.*)?/.*$)|(^.*/eve(_.*)?/.*$)
-#     types: [python]
-#     args: [--comment-style, "|#|", --license-filepath, .license_headers/gt4py_license_header.txt, --fuzzy-match-generates-todo]
+- repo: https://github.com/Lucas-C/pre-commit-hooks
+  rev: v1.1.9
+  hooks:
+  - id: insert-license
+    name: Add license for all GT4Py Python source files
+    exclude: (^\..*$)|(^.*/gtc(_.*)?/.*$)|(^.*/eve(_.*)?/.*$)
+    types: [python]
+    args: [--comment-style, "|#|", --license-filepath, .license_headers/gt4py_license_header.txt, --fuzzy-match-generates-todo]
 
-# - repo: https://github.com/Lucas-C/pre-commit-hooks
-#   rev: v1.1.9
-#   hooks:
-#   - id: insert-license
-#     name: Add license for all GTC Python source files
-#     exclude: ^\..*$
-#     files: ^.*/gtc(_.*)?/.*$
-#     types: [python]
-#     args: [--comment-style, "|#|", --license-filepath, .license_headers/gtc_license_header.txt, --fuzzy-match-generates-todo]
+- repo: https://github.com/Lucas-C/pre-commit-hooks
+  rev: v1.1.9
+  hooks:
+  - id: insert-license
+    name: Add license for all GTC Python source files
+    exclude: ^\..*$
+    files: ^.*/gtc(_.*)?/.*$
+    types: [python]
+    args: [--comment-style, "|#|", --license-filepath, .license_headers/gtc_license_header.txt, --fuzzy-match-generates-todo]
+
+- repo: https://github.com/Lucas-C/pre-commit-hooks
+  rev: v1.1.9
+  hooks:
+  - id: insert-license
+    name: Add license for all Eve Python source files
+    exclude: ^\..*$
+    files: ^.*/eve(_.*)?/.*$
+    types: [python]
+    args: [--comment-style, "|#|", --license-filepath, .license_headers/eve_license_header.txt, --fuzzy-match-generates-todo]
 
 - repo: https://github.com/psf/black
   rev: 20.8b1
