@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Any, List, Optional, Tuple, cast
+from typing import Any, List, Optional, Tuple, Union, cast
 
 from pydantic import validator
 
@@ -98,7 +98,11 @@ class VectorTemp(VectorExpression, VectorLValue):
 
 
 class VectorArithmetic(common.BinaryOp[VectorExpression], VectorExpression):
-    pass
+    op: Union[common.ArithmeticOperator, common.ComparisonOperator]
+
+
+class VectorLogic(common.BinaryOp[VectorExpression], VectorExpression):
+    op: common.LogicalOperator
 
 
 class VectorUnaryOp(common.UnaryOp[VectorExpression], VectorExpression):

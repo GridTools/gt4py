@@ -73,6 +73,8 @@ class NpirGen(TemplatedGenerator):
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")
 
+    VectorLogic = FormatTemplate("np.bitwise_{op}({left}, {right})")
+
     def visit_UnaryOperator(
         self, node: common.UnaryOperator, **kwargs: Any
     ) -> Union[str, Collection[str]]:

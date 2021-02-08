@@ -124,12 +124,18 @@ class OirToNpir(NodeTranslator):
 
     def visit_BinaryOp(
         self, node: oir.BinaryOp, *, ctx: Optional[Context] = None, **kwargs: Any
-    ) -> npir.VectorArithmetic:
+    ) -> Union[npir.VectorArithmetic, npir.VectorLogic]:
         kwargs["broadcast"] = True
+        left = self.visit(node.left, ctx=ctx, **kwargs)
+        right = self.visit(node.right, ctx=ctx, **kwargs)
+
+        if isinstance(node.op, common.LogicalOperator):
+            return npir.VectorLogic(op=node.op, left=left, right=right)
+
         return npir.VectorArithmetic(
             op=node.op,
-            left=self.visit(node.left, ctx=ctx, **kwargs),
-            right=self.visit(node.right, ctx=ctx, **kwargs),
+            left=left,
+            right=right,
         )
 
     def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> npir.VectorUnaryOp:
