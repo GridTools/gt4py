@@ -133,6 +133,12 @@ def match(concrete_node, pattern_node, captures=None) -> bool:
             else:
                 opt_captures: Dict[str, Any] = {}
                 is_opt = _check_optional(pattern_val, opt_captures)
+
+                # workaround for python >= 3.9 falsely returning some ast fields, e.g. ast.arg.annotation, as set even
+                # if they don't. note that this prevents specification of default values for these fields
+                if hasattr(concrete_node, fieldname) and getattr(concrete_node, fieldname) is None and pattern_val is None:
+                    is_opt = True
+
                 if is_opt:
                     # if the node is optional populate captures from the default values stored in the pattern node
                     captures.update(opt_captures)
