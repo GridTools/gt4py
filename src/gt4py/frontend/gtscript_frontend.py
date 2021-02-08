@@ -251,7 +251,10 @@ class AxisIntervalParser(gt_meta.ASTPass):
                 LARGE_NUM = np.iinfo(np.int32).max
                 seq_name = gt_ir.Domain.LatLonGrid().sequential_axis.name
                 level = endpt
-                offset = 0 if self.axis_name == seq_name else -LARGE_NUM
+                if self.axis_name == seq_name:
+                    offset = 0
+                else:
+                    offset = -LARGE_NUM if level == gt_ir.LevelMarker.START else LARGE_NUM
             else:
                 raise self.interval_error
 
