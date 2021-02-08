@@ -355,7 +355,7 @@ class SuiteMeta(type):
 
 
 class StencilTestSuite(metaclass=SuiteMeta):
-    r"""Base class for every *stencil test suite*.
+    """Base class for every *stencil test suite*.
 
     Every new test suite must inherit from this class and define proper
     attributes and methods to generate a valid set of testing strategies.
@@ -363,55 +363,63 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
     Supported and required class attributes are:
 
+    Attributes
+    ----------
     dtypes : `dict` or `list`
+        Required class attribute.
         GlobalDecl suite dtypes dictionary.
         - ``label``: `list` of `dtype`.
         If this value is a `list`, it will be converted to a `dict` with the default
         `None` key assigned to its value. It is meant to be populated with labels representing
         groups of symbols that should have the same type.
+
         Example:
+
         .. code-block:: python
 
                     {
                         'float_symbols' : (np.float32, np.float64),
-                        'int_symbols' : (int, np.int\_, np.int64)
-
+                        'int_symbols' : (int, np.int_, np.int64)
                     }
 
     domain_range : `Sequence` of pairs like `((int, int), (int, int) ... )`
-         CartesianSpace sizes for testing. Each item encodes the (min, max) range of sizes for every axis.
+        Required class attribute.
+        CartesianSpace sizes for testing. Each item encodes the (min, max) range of sizes for every axis.
     symbols : `dict`
+        Required class attribute.
         Definition of symbols (globals, parameters and inputs) used in this stencil.
         - ``name``: `utils._SymbolDescriptor`. It is recommended to use the convenience
         functions `global_name()`, `parameter()` and `field()`. These functions have similar
         and self-explanatory arguments. Note that `dtypes` could be a list of actual dtypes
         but it is usually assumed to be a label from the global suite dtypes dictionary.
     definition : `function`
+        Required class attribute.
         Stencil definition function.
     validation : `function`
+        Required class attribute.
         Stencil validation function. It should have exactly the same signature than
         arguments to access the actual values used in the current testing invocation.
         the ``definition`` function plus the extra ``_globals_``, ``_domain_``, and ``_origin_``
         It should always return a `list` of `numpy.ndarray` s, one per output, even if
         the function only defines one output value.
-
-    Automatically generated class members are:
-
     definition_strategies : `dict`
+        Automatically generated.
         Hypothesis strategies for the stencil parameters used at definition (externals)
         - ``constant_name``: Hypothesis strategy (`strategy`).
     validation_strategies : `dict`
+        Automatically generated.
         Hypothesis strategies for the stencil parameters used at run-time (fields and parameters)
         - ``field_name``: Hypothesis strategy (`strategy`).
         - ``parameter_name``: Hypothesis strategy (`strategy`).
     ndims : `int`
+        Automatically generated.
         Constant of dimensions (1-3). If the name of class ends in ["1D", "2D", "3D"],
         this attribute needs to match the name or an assertion error will be raised.
     global_boundaries : `dict`
+        Automatically generated.
         Expected global boundaries for the input fields.
         - ``field_name``: 'list' of ``ndim`` 'tuple`s  (``(lower_boundary, upper_boundary)``).
         Example (3D): `[(1, 3), (2, 2), (0, 0)]`
-
     """
 
     _skip_ = True  # Avoid processing of this empty test suite
