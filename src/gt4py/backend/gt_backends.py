@@ -408,29 +408,29 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         upper_extent = self.stage_extents.upper_indices
 
         def make_condition(axis_name: str, symbol: str, axis_bound: gt_ir.AxisBound):
+            gt_axis_name = f"eval.{axis_name.lower()}()"
             relative_offset = (
                 "0"
                 if axis_bound.level == gt_ir.LevelMarker.START
                 else f"static_cast<gt::int_t>(eval(domain_size_{axis_name.upper()}()))"
             )
-            return f"{axis_name} {symbol} {relative_offset}{axis_bound.offset:+d}"
+            return f"{gt_axis_name} {symbol} {relative_offset}{axis_bound.offset:+d}"
 
         conditions = []
         for d, (interval, axis_name) in enumerate(
             zip(parallel_interval, self.impl_node.domain.par_axes_names)
         ):
-            gt_axis_name = f"eval.{axis_name.lower()}()"
             if (
                 interval.start.level == gt_ir.LevelMarker.END
                 or interval.start.offset > lower_extent[d]
             ):
-                conditions.append(make_condition(gt_axis_name, ">=", interval.start))
+                conditions.append(make_condition(axis_name, ">=", interval.start))
 
             if (
                 interval.end.level == gt_ir.LevelMarker.START
                 or interval.end.offset < upper_extent[d]
             ):
-                conditions.append(make_condition(gt_axis_name, "<", interval.end))
+                conditions.append(make_condition(axis_name, "<", interval.end))
 
         return " && ".join(conditions)
 
