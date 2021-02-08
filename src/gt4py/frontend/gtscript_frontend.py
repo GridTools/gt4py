@@ -1523,14 +1523,6 @@ class GTScriptParser(ast.NodeVisitor):
                         context,
                         gt_ir.Location.from_ast_node(name_nodes[collected_name][0]),
                     )
-                    if hasattr(nonlocal_symbols[collected_name], "_gtscript_"):
-                        # Recursively add nonlocals and imported symbols
-                        nonlocal_symbols.update(
-                            nonlocal_symbols[collected_name]._gtscript_["nonlocals"]
-                        )
-                        imported_symbols.update(
-                            nonlocal_symbols[collected_name]._gtscript_["imported"]
-                        )
                 elif root_name not in local_symbols and root_name in unbound:
                     raise GTScriptSymbolError(
                         name=collected_name,
@@ -1543,6 +1535,8 @@ class GTScriptParser(ast.NodeVisitor):
     def eval_external(name: str, context: dict, loc=None):
         try:
             value = eval(name, context)
+            if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
+                GTScriptParser.annotate_definition(value)
 
             assert (
                 value is None
@@ -1575,8 +1569,8 @@ class GTScriptParser(ast.NodeVisitor):
             if isinstance(value, types.FunctionType)
         }
         for name, value in func_externals.items():
-            if not hasattr(value, "_gtscript_"):
-                raise TypeError(f"{value.__name__} is not a gtscript function")
+            if isinstance(value, types.FunctionType) and not hasattr(value, "_gtscript_"):
+                GTScriptParser.annotate_definition(value)
             for imported_name, imported_value in value._gtscript_["imported"].items():
                 resolved_imports[imported_name] = imported_value
 

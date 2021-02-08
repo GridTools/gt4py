@@ -449,7 +449,7 @@ class TestIntervalSyntax:
         externals = {}
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
+            gt_frontend.GTScriptSyntaxError, match="Invalid 'interval' specification"
         ):
             compile_definition(definition_func, "test_error_none", module, externals=externals)
 
