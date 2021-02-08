@@ -70,10 +70,12 @@ Using this specification, the example is transformed into (for an ``NxN`` proces
 
 .. code-block:: python
 
-    istart = I[0] - np_local * (procid % N)
-    jstart = J[0] - np_local * (procid / N)
-    iend = I[-1] + np_global - (procid % N) * np
-    jend = J[-1] + np_global - (procid / N) * np
+    row = (procid / N)
+    col = (procid % N)
+    istart = I[0] - np_local * col
+    jstart = J[0] - np_local * row
+    iend = I[-1] + np_global - col * (np_local + 1)
+    jend = J[-1] + np_global - row * (np_local + 1)
 
     @gtscript.stencil()
     def stencil(uc: Field, vc: Field, cosa: Field, rsina: Field, ut: Field, ub: Field, dt5: float, dt4: float):
@@ -86,7 +88,9 @@ Using this specification, the example is transformed into (for an ``NxN`` proces
                 ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
 
 where ``np_local`` and ``np_global`` are the local and global number of horizontal cells in either direction.
-So, in defining the horizontal iteration restrictions, GT4Py is given all the information it needs about the domain decomposition to determine where to execute blocks.
+For a ``256x256`` horizontal grid using ``4`` processors in a ``2x2`` grid, ``np_local`` and ``np_global`` would be ``128`` and ``256``, respectively.
+GT4Py is given all the information it needs to reason about where a computation occurs, without overspecification.
+This information is encoded in the offsets relative to the start or stop of the stencil compute domain when it runs.
 
 This greatly reduces the complexity of the code and consolidates operations on ``ub`` - it is now immediately clear what the stencil is filling into ``ub`` everywhere.
 
@@ -167,7 +171,7 @@ For example, the following will execute
         field_out = field_in[-1, 0, 0] + field_in[0, 0, 0]
 
 since the ``field_in`` value at ``I[0]-1`` is being consumed to compute a value of an output field inside the compute domain.
-If this used ``I[0]-2``, the code would be ignored.
+If the region were defined using ``I[0]-2``, the code would be ignored.
 
 
 Implementation
@@ -259,10 +263,12 @@ FV3 Example
 
 .. code-block:: python
 
-    istart = I[0] - np_local * (procid % N)
-    jstart = J[0] - np_local * (procid / N)
-    iend = I[-1] + np_global - (procid % N) * np
-    jend = J[-1] + np_global - (procid / N) * np
+    row = (procid / N)
+    col = (procid % N)
+    istart = I[0] - np_local * col
+    jstart = J[0] - np_local * row
+    iend = I[-1] + np_global - col * (np_local + 1)
+    jend = J[-1] + np_global - row * (np_local + 1)
 
     @gtscript.stencil(...)
     def divergence_corner(...):
