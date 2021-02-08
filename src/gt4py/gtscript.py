@@ -23,6 +23,7 @@ definitions for the keywords of the DSL.
 import collections
 import inspect
 import types
+from typing import Tuple
 
 import numpy as np
 
@@ -427,7 +428,7 @@ PARALLEL = 0
 
 
 class _FieldDescriptor:
-    def __init__(self, dtype, axes):
+    def __init__(self, dtype, axes, data_dims: Tuple[int] = (1,)):
         if isinstance(dtype, str):
             self.dtype = dtype
         else:
@@ -435,12 +436,20 @@ class _FieldDescriptor:
                 raise ValueError("Invalid data type descriptor")
             self.dtype = np.dtype(dtype)
         self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
+        self.data_dims = data_dims
 
     def __repr__(self):
-        return f"_FieldDescriptor(dtype={repr(self.dtype)}, axes={repr(self.axes)})"
+        args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}"
+        if self.data_dims != (1,):
+            args = f", data_dims={repr(self.data_dims)}"
+        return f"_FieldDescriptor({args})"
 
     def __str__(self):
-        return f"Field<{str(self.dtype)}, [{', '.join(str(ax) for ax in self.axes)}]>"
+        if self.data_axes == (1,):
+            dtype_and_ddims = str(self.dtype)
+        else:
+            dtype_and_ddims = f"({self.data_dims}, {self.dtype})"
+        return f"Field<{dtype_and_ddims}, [{', '.join(str(ax) for ax in self.axes)}]>"
 
 
 class _FieldDescriptorMaker:
@@ -448,10 +457,17 @@ class _FieldDescriptorMaker:
         if isinstance(dtype_and_axes, collections.abc.Collection) and not isinstance(
             dtype_and_axes, str
         ):
-            dtype, axes = dtype_and_axes
+            if isinstance(dtype_and_axes[0], collections.abc.Collection):
+                # dtype also includes data axes
+                data_dims, dtype = dtype_and_axes[0]
+                axes = dtype_and_axes[1]
+            else:
+                data_dims = (1,)
+                dtype, axes = dtype_and_axes
         else:
             dtype, axes = [dtype_and_axes, IJK]
-        return _FieldDescriptor(dtype, axes)
+            data_dims = (1,)
+        return _FieldDescriptor(dtype, axes, data_dims)
 
 
 # GTScript builtins: variable annotations

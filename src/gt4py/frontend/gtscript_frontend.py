@@ -957,14 +957,21 @@ class IRMaker(ast.NodeVisitor):
         if isinstance(result, gt_ir.VarRef):
             result.index = index[0]
         else:
-            field_axes = self.fields[result.name].axes
-            if len(field_axes) != len(index):
-                axes_str = "(" + ", ".join(field_axes) + ")"
+            if isinstance(node.value, ast.Name):
+                field_axes = self.fields[result.name].axes
+                if len(field_axes) != len(index):
+                    axes_str = "(" + ", ".join(field_axes) + ")"
+                    raise GTScriptSyntaxError(
+                        f"Incorrect offset specification detected. Found {index}, "
+                        f"but the field has dimensions {axes_str}"
+                    )
+                result.offset = {axis: value for axis, value in zip(field_axes, index)}
+            elif isinstance(node.value, ast.Subscript):
+                result.data_index = index
+            else:
                 raise GTScriptSyntaxError(
-                    f"Incorrect offset specification detected. Found {index}, "
-                    f"but the field has dimensions {axes_str}"
+                    "Unrecognized subscript expression", loc=gt_ir.Location.from_ast_node(node)
                 )
-            result.offset = {axis: value for axis, value in zip(field_axes, index)}
 
         return result
 
