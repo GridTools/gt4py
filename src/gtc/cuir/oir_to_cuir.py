@@ -14,9 +14,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Any
 
 import eve
+from gtc import oir
+from gtc.cuir import cuir
 
 
 class OIRToCUIR(eve.NodeTranslator):
-    pass
+    def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> cuir.FieldDecl:
+        return cuir.FieldDecl(name=node.name, dtype=node.dtype)
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> cuir.Program:
+        return cuir.Program(name=node.name, params=self.visit(node.params))

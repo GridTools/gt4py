@@ -14,9 +14,38 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Any
 
 from eve import codegen
+from eve.codegen import FormatTemplate as as_fmt
+from eve.codegen import MakoTemplate as as_mako
+from gtc.cuir import cuir
+from eve.concepts import LeafNode
 
 
 class CUIRCodegen(codegen.TemplatedGenerator):
-    pass
+    FieldDecl = as_fmt("{name}")
+
+    Program = as_mako(
+        """#include <array>
+
+        namespace ${name}_impl_{
+            using Domain = std::array<unsigned, 3>;
+
+            auto ${name}(Domain domain){
+                return [domain](${','.join('auto&& ' + p for p in params)}){
+
+                };
+            };
+        }
+
+        using ${name}_impl_::${name};
+        """)
+
+    @classmethod
+    def apply(cls, root: LeafNode, **kwargs: Any) -> str:
+        if not isinstance(root, cuir.Program):
+            raise ValueError("apply() requires gtcpp.Progam root node")
+        generated_code = super().apply(root, **kwargs)
+        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
+        return formatted_code

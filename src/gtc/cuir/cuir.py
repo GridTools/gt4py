@@ -14,9 +14,26 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from eve import Str, SymbolTableTrait
-from gtc.common import LocNode
+from typing import Any, List
+
+from eve import Str, SymbolName, SymbolTableTrait
+from gtc.common import DataType, LocNode
+
+
+class Decl(LocNode):
+    name: SymbolName
+    dtype: DataType
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if type(self) is Decl:
+            raise TypeError("Trying to instantiate `Decl` abstract class.")
+        super().__init__(*args, **kwargs)
+
+
+class FieldDecl(Decl):
+    pass
 
 
 class Program(LocNode, SymbolTableTrait):
     name: Str
+    params: List[FieldDecl]

@@ -89,10 +89,24 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
         else:
             raise AssertionError(f"Invalid DataType value: {dtype}")
 
+    def visit_FieldDecl(self, node: cuir.FieldDecl, **kwargs):
+        if "external_arg" in kwargs:
+            if kwargs["external_arg"]:
+                return "py::buffer {name}, std::array<gt::uint_t,3> {name}_origin".format(
+                    name=node.name
+                )
+            else:
+                return """gt::sid::shift_sid_origin(gt::as_cuda_sid<{dtype}, 3,
+                    std::integral_constant<int, {unique_index}>>({name}), {name}_origin)""".format(
+                    name=node.name,
+                    dtype=self.visit(node.dtype),
+                    unique_index=self.unique_index(),
+                )
+
     def visit_Program(self, node: cuir.Program, **kwargs):
         assert "module_name" in kwargs
-        entry_params = self.visit(node.parameters, external_arg=True, **kwargs)
-        sid_params = self.visit(node.parameters, external_arg=False, **kwargs)
+        entry_params = self.visit(node.params, external_arg=True, **kwargs)
+        sid_params = self.visit(node.params, external_arg=False, **kwargs)
         return self.generic_visit(
             node,
             entry_params=entry_params,
@@ -124,7 +138,7 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
                             std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
                 }
 
-                //${name}(domain)(${','.join(sid_params)});
+                ${name}(domain)(${','.join(sid_params)});
 
                 if (!exec_info.is(py::none()))
                 {
