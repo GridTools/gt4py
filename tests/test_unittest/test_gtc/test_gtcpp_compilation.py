@@ -144,8 +144,8 @@ def _embed_apply_method_in_program(apply_method: GTApplyMethod):
     [
         (GTApplyMethodFactory(), r"apply"),
         (
-            GTApplyMethodFactory(body__0__left__name="a", body__0__right__name="b"),
-            r"a.*=.*b",
+            GTApplyMethodFactory(body__0__left__name="foo", body__0__right__name="bar"),
+            r"foo.*=.*bar",
         ),
         (
             GTApplyMethodFactory(body__0=IfStmtFactory()),

@@ -52,10 +52,10 @@ def copy_assign():
     yield ParAssignStmt(
         loc=SourceLocation(line=3, column=2, source="copy_gtir"),
         left=FieldAccess.centered(
-            name="a", loc=SourceLocation(line=3, column=1, source="copy_gtir")
+            name="foo", loc=SourceLocation(line=3, column=1, source="copy_gtir")
         ),
         right=FieldAccess.centered(
-            name="b", loc=SourceLocation(line=3, column=3, source="copy_gtir")
+            name="bar", loc=SourceLocation(line=3, column=3, source="copy_gtir")
         ),
     )
 
@@ -86,8 +86,8 @@ def copy_computation(copy_v_loop):
         name="copy_gtir",
         loc=SourceLocation(line=1, column=1, source="copy_gtir"),
         params=[
-            FieldDecl(name="a", dtype=DataType.FLOAT32),
-            FieldDecl(name="b", dtype=DataType.FLOAT32),
+            FieldDecl(name="foo", dtype=DataType.FLOAT32),
+            FieldDecl(name="bar", dtype=DataType.FLOAT32),
         ],
         vertical_loops=[copy_v_loop],
     )
@@ -95,7 +95,7 @@ def copy_computation(copy_v_loop):
 
 def test_copy(copy_computation):
     assert copy_computation
-    assert copy_computation.param_names == ["a", "b"]
+    assert copy_computation.param_names == ["foo", "bar"]
 
 
 @pytest.mark.parametrize(
@@ -133,8 +133,8 @@ def test_symbolref_without_decl():
     [
         lambda: VerticalLoopFactory(
             body=[
-                ParAssignStmtFactory(right__name="a", right__offset__i=1),
-                ParAssignStmtFactory(left__name="a"),
+                ParAssignStmtFactory(right__name="foo", right__offset__i=1),
+                ParAssignStmtFactory(left__name="foo"),
             ]
         ),
         # nested rhs
@@ -142,22 +142,22 @@ def test_symbolref_without_decl():
             body=[
                 ParAssignStmtFactory(
                     right=BinaryOpFactory(
-                        left__name="a",
-                        right__name="a",
+                        left__name="foo",
+                        right__name="foo",
                         right__offset__i=1,
                     )
                 ),
-                ParAssignStmtFactory(left__name="a"),
+                ParAssignStmtFactory(left__name="foo"),
             ]
         ),
         # offset access in condition
         lambda: VerticalLoopFactory(
             body=[
                 FieldIfStmtFactory(
-                    cond__name="a",
+                    cond__name="foo",
                     cond__offset__i=1,
                 ),
-                ParAssignStmtFactory(left__name="a"),
+                ParAssignStmtFactory(left__name="foo"),
             ]
         ),
     ],
@@ -170,13 +170,13 @@ def test_write_and_read_with_offset_violation(write_and_read_with_horizontal_off
 def test_temporary_write_and_read_with_offset_is_allowed():
     VerticalLoopFactory(
         body=[
-            ParAssignStmtFactory(right__name="a", right__offset__i=1),
-            ParAssignStmtFactory(left__name="a"),
+            ParAssignStmtFactory(right__name="foo", right__offset__i=1),
+            ParAssignStmtFactory(left__name="foo"),
         ],
-        temporaries=[FieldDeclFactory(name="a")],
+        temporaries=[FieldDeclFactory(name="foo")],
     )
 
 
 def test_illegal_self_assignment_with_offset():
     with pytest.raises(ValidationError, match=r"Self-assignment"):
-        ParAssignStmtFactory(left__name="a", right__name="a", right__offset__i=1)
+        ParAssignStmtFactory(left__name="foo", right__name="foo", right__offset__i=1)
