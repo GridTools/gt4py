@@ -28,7 +28,7 @@ class AccessorRefFactory(factory.Factory):
     class Meta:
         model = gtcpp.AccessorRef
 
-    name = identifier()
+    name = identifier(gtcpp.AccessorRef)
     offset = factory.SubFactory(CartesianOffsetFactory)
     dtype = common.DataType.FLOAT32
 
@@ -103,7 +103,7 @@ class GTAccessorFactory(factory.Factory):
     class Meta:
         model = gtcpp.GTAccessor
 
-    name = identifier()
+    name = identifier(gtcpp.GTAccessor)
     id = factory.Sequence(lambda i: i)  # noqa: A003
     intent = gtcpp.Intent.INOUT
     extent = factory.SubFactory(GTExtentFactory)
@@ -120,7 +120,7 @@ class GTFunctorFactory(factory.Factory):
     class Meta:
         model = gtcpp.GTFunctor
 
-    name = identifier()
+    name = identifier(gtcpp.GTFunctor)
     applies = factory.List([factory.SubFactory(GTApplyMethodFactory)])
     param_list = undefined_symbol_list(
         lambda name: GTAccessorFactory(name=name),
@@ -133,14 +133,14 @@ class ArgFactory(factory.Factory):
     class Meta:
         model = gtcpp.Arg
 
-    name = identifier()
+    name = identifier(gtcpp.Arg)
 
 
 class GTStageFactory(factory.Factory):
     class Meta:
         model = gtcpp.GTStage
 
-    functor = identifier()
+    functor = identifier(gtcpp.GTStage)
     args: List[gtcpp.Arg] = []
 
 
@@ -166,7 +166,7 @@ class FieldDeclFactory(factory.Factory):
     class Meta:
         model = gtcpp.FieldDecl
 
-    name = identifier()
+    name = identifier(gtcpp.FieldDecl)
     dtype = common.DataType.FLOAT32
 
 
@@ -174,7 +174,7 @@ class ProgramFactory(factory.Factory):
     class Meta:
         model = gtcpp.Program
 
-    name = identifier()
+    name = identifier(gtcpp.Program)
     functors = factory.List([factory.SubFactory(GTFunctorFactory)])
     gt_computation = factory.SubFactory(GTComputationCallFactory)
     parameters = undefined_symbol_list(

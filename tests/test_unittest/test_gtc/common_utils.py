@@ -51,8 +51,8 @@ def undefined_symbol_list(
     return factory.LazyAttribute(func)
 
 
-def identifier():
-    return factory.Faker("random_lowercase_letter")
+def identifier(cls):
+    return factory.Sequence(lambda n: f"val_{cls.__name__}_{n}")
 
 
 class CartesianOffsetFactory(factory.Factory):

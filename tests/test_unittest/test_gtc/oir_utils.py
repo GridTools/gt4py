@@ -27,7 +27,7 @@ class FieldAccessFactory(factory.Factory):
     class Meta:
         model = oir.FieldAccess
 
-    name = identifier()
+    name = identifier(oir.FieldAccess)
     offset = factory.SubFactory(CartesianOffsetFactory)
     dtype = common.DataType.FLOAT32
 
@@ -44,7 +44,7 @@ class TemporaryFactory(factory.Factory):
     class Meta:
         model = oir.Temporary
 
-    name = identifier()
+    name = identifier(oir.Temporary)
     dtype = common.DataType.FLOAT32
 
 
@@ -52,7 +52,7 @@ class FieldDeclFactory(factory.Factory):
     class Meta:
         model = oir.FieldDecl
 
-    name = identifier()
+    name = identifier(oir.FieldDecl)
     dtype = common.DataType.FLOAT32
 
 
@@ -87,6 +87,6 @@ class StencilFactory(factory.Factory):
     class Meta:
         model = oir.Stencil
 
-    name = identifier()
+    name = identifier(oir.Stencil)
     vertical_loops = factory.List([factory.SubFactory(VerticalLoopFactory)])
     params = undefined_symbol_list(lambda name: FieldDeclFactory(name=name), "vertical_loops")

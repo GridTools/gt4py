@@ -33,7 +33,7 @@ class FieldAccessFactory(factory.Factory):
     class Meta:
         model = gtir.FieldAccess
 
-    name = identifier()
+    name = identifier(gtir.FieldAccess)
     offset = factory.SubFactory(CartesianOffsetFactory)
     dtype = common.DataType.FLOAT32
 
@@ -42,7 +42,7 @@ class ScalarAccessFactory(factory.Factory):
     class Meta:
         model = gtir.ScalarAccess
 
-    name = identifier()
+    name = identifier(gtir.ScalarAccess)
     dtype = common.DataType.FLOAT32
 
 
@@ -100,7 +100,7 @@ class FieldDeclFactory(factory.Factory):
     class Meta:
         model = gtir.FieldDecl
 
-    name = identifier()
+    name = identifier(gtir.FieldDecl)
     dtype = common.DataType.FLOAT32
 
 
@@ -108,7 +108,7 @@ class ScalarDeclFactory(factory.Factory):
     class Meta:
         model = gtir.ScalarDecl
 
-    name = identifier()
+    name = identifier(gtir.ScalarDecl)
     dtype = common.DataType.FLOAT32
 
 
@@ -126,6 +126,6 @@ class StencilFactory(factory.Factory):
     class Meta:
         model = gtir.Stencil
 
-    name = identifier()
+    name = identifier(gtir.Stencil)
     vertical_loops = factory.List([factory.SubFactory(VerticalLoopFactory)])
     params = undefined_symbol_list(lambda name: FieldDeclFactory(name=name), "vertical_loops")
