@@ -13,9 +13,3 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-from .cuda.backend import GTCCudaBackend
-from .gtcpp.backend import GTCGTCpuIfirstBackend, GTCGTCpuKfirstBackend, GTCGTGpuBackend
-
-
-__all__ = ["GTCCudaBackend", "GTCGTCpuIfirstBackend", "GTCGTCpuKfirstBackend", "GTCGTGpuBackend"]
