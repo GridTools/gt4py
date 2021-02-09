@@ -23,7 +23,7 @@ from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 
 
 def _create_mask(ctx: "GTIRToOIR.Context", name: str, cond: oir.Expr) -> oir.Temporary:
-    mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL)
+    mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL, dimensions=(True, True, False))
     ctx.add_decl(mask_field_decl)
 
     fill_mask_field = oir.HorizontalExecution(
@@ -169,7 +169,9 @@ class GTIRToOIR(NodeTranslator):
 
         # should temporaries live at this level?
         for temp in node.temporaries:
-            ctx.add_decl(oir.Temporary(name=temp.name, dtype=temp.dtype))
+            ctx.add_decl(
+                oir.Temporary(name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions)
+            )
 
         return oir.VerticalLoop(
             interval=self.visit(node.interval),
