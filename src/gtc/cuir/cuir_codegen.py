@@ -19,8 +19,8 @@ from typing import Any
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
-from gtc.cuir import cuir
 from eve.concepts import LeafNode
+from gtc.cuir import cuir
 
 
 class CUIRCodegen(codegen.TemplatedGenerator):
@@ -40,7 +40,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         }
 
         using ${name}_impl_::${name};
-        """)
+        """
+    )
 
     @classmethod
     def apply(cls, root: LeafNode, **kwargs: Any) -> str:
