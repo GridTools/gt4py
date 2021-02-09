@@ -19,9 +19,12 @@ from typing import List, Optional, Tuple, Union
 
 from devtools import debug  # noqa: F401
 from pydantic import validator
+from pydantic.class_validators import root_validator
 
-from eve import FrozenNode, Node, Str
+from eve import FrozenNode, Node, Str, SymbolTableTrait
+from eve.type_definitions import SymbolName, SymbolRef
 from gtc_unstructured.irs import common
+from gtc import common as stable_gtc_common
 
 
 class Expr(Node):
@@ -32,29 +35,9 @@ class Stmt(Node):
     location_type: common.LocationType
 
 
-class NeighborChain(FrozenNode):
-    elements: Tuple[common.LocationType, ...]
-
-    # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
-    def __hash__(self):
-        return hash(self.elements)
-
-    def __eq__(self, other):
-        return self.elements == other.elements
-
-    @validator("elements")
-    def not_empty(cls, elements):
-        if len(elements) < 1:
-            raise ValueError("NeighborChain must contain at least one locations")
-        return elements
-
-    def __str__(self):
-        return "_".join([common.LocationType(loc).name.lower() for loc in self.elements])
-
-
 class FieldAccess(Expr):
-    name: Str  # symbol ref to SidCompositeEntry
-    sid: Str  # symbol ref
+    name: SymbolRef  # symbol ref to SidCompositeEntry
+    sid: SymbolRef  # symbol ref
 
 
 class VarDecl(Stmt):
@@ -84,12 +67,13 @@ class BinaryOp(common.BinaryOp[Expr], Expr):
 
 
 class Connectivity(FrozenNode):
-    name: Str  # symbol name
-    chain: NeighborChain
+    name: SymbolName
+    max_neighbors: int
+    has_skip_values: bool
 
     @property
-    def neighbor_tbl_tag(self):
-        return self.name + "_neighbor_tbl_tag"
+    def tag(self):
+        return self.name + "_tag"
 
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
     def __hash__(self):
@@ -100,11 +84,13 @@ class Connectivity(FrozenNode):
 
 
 class SidCompositeEntry(FrozenNode):
-    name: Str  # symbol decl (TODO ensure field exists via symbol table)
+    ref: SymbolRef  # ref to field
+    name: SymbolName  # generated from ref
 
-    @property
-    def tag_name(self):
-        return self.name + "_tag"
+    @root_validator(pre=True)
+    def set_name(cls, values):
+        values["name"] = values["ref"] + "_tag"
+        return values
 
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
     def __hash__(self):
@@ -114,15 +100,20 @@ class SidCompositeEntry(FrozenNode):
         return self.name == other.name
 
 
+class SidCompositeSparseEntry(SidCompositeEntry):
+    connectivity: SymbolRef
+
+
 class SidCompositeNeighborTableEntry(FrozenNode):
-    connectivity: Str
+    connectivity: SymbolRef
     connectivity_deref_: Optional[
         Connectivity
     ]  # TODO temporary workaround for symbol tbl reference
 
     @property
     def tag_name(self):
-        return self.connectivity_deref_.neighbor_tbl_tag
+        return self.connectivity + "_tag"  # TODO
+        # return self.connectivity_deref_.neighbor_tbl_tag
 
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
     def __hash__(self):
@@ -133,10 +124,10 @@ class SidCompositeNeighborTableEntry(FrozenNode):
 
 
 class SidComposite(Node):
-    name: Str  # symbol
-    location: NeighborChain
+    name: SymbolName
+    # location: NeighborChain
     entries: List[
-        Union[SidCompositeEntry, SidCompositeNeighborTableEntry]
+        Union[SidCompositeEntry, SidCompositeSparseEntry, SidCompositeNeighborTableEntry]
     ]  # TODO ensure tags are unique
 
     @property
@@ -174,24 +165,29 @@ class SidComposite(Node):
         return entries
 
 
-class NeighborLoop(Stmt):
-    body_location_type: common.LocationType
+class PtrRef(Node):
+    name: SymbolName
+
+    @property
+    def ptr_name(self):
+        return self.name
+
+
+class NeighborLoop(Stmt, SymbolTableTrait):
+    primary_sid: SymbolRef
+    secondary_sid: SymbolRef
+    connectivity: SymbolRef
+    primary: PtrRef
+    secondary: PtrRef
     body: List[Stmt]
-    connectivity: Str  # symbol ref to Connectivity
-    outer_sid: Str  # symbol ref to SidComposite where the neighbor tables lives (and sparse fields)
-    sid: Optional[
-        Str
-    ]  # symbol ref to SidComposite where the fields of the loop body live (None if only sparse fields are accessed)
 
 
-class Kernel(Node):
-    name: Str  # symbol decl table
-    connectivities: List[Connectivity]
-    sids: List[SidComposite]
-
-    primary_connectivity: Str  # symbol ref to the above
-    primary_sid: Str  # symbol ref to the above
-    ast: List[Stmt]
+class Kernel(Node, SymbolTableTrait):
+    name: SymbolName
+    primary_location: common.LocationType  # TODO probably replace by domain for this location or not needed?
+    primary_composite: SidComposite  # TODO maybe the composites should live in the Call
+    secondary_composites: List[SidComposite]
+    body: List[Stmt]
 
     # private symbol table
     @property
@@ -200,7 +196,7 @@ class Kernel(Node):
 
 
 class KernelCall(Node):
-    name: Str  # symbol ref
+    name: SymbolRef
 
 
 class VerticalDimension(Node):
@@ -208,18 +204,36 @@ class VerticalDimension(Node):
 
 
 class UField(Node):
-    name: Str
+    name: SymbolName
     vtype: common.DataType
-    dimensions: List[Union[common.LocationType, NeighborChain, VerticalDimension]]  # Set?
+    dimensions: List[Union[common.LocationType, VerticalDimension]]  # Set?
+
+    @property
+    def tag(self):
+        return self.name + "_tag"
+
+
+class SparseField(Node):
+    name: SymbolName
+    vtype: common.DataType
+    connectivity: SymbolRef
+    dimensions: List[Union[common.LocationType, VerticalDimension]]
+
+    @property
+    def tag(self):
+        return self.name + "_tag"
 
 
 class Temporary(UField):
     pass
 
 
-class Computation(Node):
+class Computation(Node, SymbolTableTrait):
     name: Str
-    parameters: List[UField]
+    connectivities: List[Connectivity]
+    parameters: List[Union[UField, SparseField]]
     temporaries: List[Temporary]
     kernels: List[Kernel]
     ctrlflow_ast: List[KernelCall]
+
+    _validate_symbol_refs = stable_gtc_common.validate_symbol_refs()

@@ -17,43 +17,33 @@ from gtc_unstructured.irs.usid import (
     Kernel,
     KernelCall,
     Literal,
-    NeighborChain,
     NeighborLoop,
+    PtrRef,
     SidComposite,
     SidCompositeEntry,
-    SidCompositeNeighborTableEntry,
+    SidCompositeSparseEntry,
+    SparseField,
     Temporary,
     UField,
     VerticalDimension,
 )
 
+connectivities = [
+    Connectivity(name="v2e", max_neighbors=7, has_skip_values=True),
+    Connectivity(name="e2v", max_neighbors=2, has_skip_values=False),
+]
 
-nabla_edge_1_primary_composite = SidComposite(
-    name="e",
-    location=NeighborChain(elements=[LocationType.Edge]),
-    entries=[
-        SidCompositeEntry(name="zavg_tmp"),
-        SidCompositeEntry(name="zavgS_MXX"),
-        SidCompositeEntry(name="zavgS_MYY"),
-        SidCompositeEntry(name="S_MXX"),
-        SidCompositeEntry(name="S_MYY"),
-        SidCompositeNeighborTableEntry(connectivity="edge_to_vertex_conn"),
-    ],
+pp_acc = FieldAccess(name="pp_tag", sid="sec", location_type=LocationType.Vertex)
+zavg_tmp_acc = FieldAccess(name="zavg_tmp_tag", sid="primary_edge", location_type=LocationType.Edge)
+zavg_tmp_acc_on_v = FieldAccess(name="zavg_tmp_tag", sid="prim", location_type=LocationType.Vertex)
+zavgS_MXX_acc = FieldAccess(
+    name="zavgS_MXX_tag", sid="primary_edge", location_type=LocationType.Edge
 )
-nabla_vertex_composite = SidComposite(
-    name="v_on_e",
-    location=NeighborChain(elements=[LocationType.Edge, LocationType.Vertex]),
-    entries=[SidCompositeEntry(name="pp")],
+zavgS_MYY_acc = FieldAccess(
+    name="zavgS_MYY_tag", sid="primary_edge", location_type=LocationType.Edge
 )
-
-
-pp_acc = FieldAccess(name="pp", sid="v_on_e", location_type=LocationType.Vertex)
-zavg_tmp_acc = FieldAccess(name="zavg_tmp", sid="e", location_type=LocationType.Edge)
-zavg_tmp_acc_on_v = FieldAccess(name="zavg_tmp", sid="e", location_type=LocationType.Vertex)
-zavgS_MXX_acc = FieldAccess(name="zavgS_MXX", sid="e", location_type=LocationType.Edge)
-zavgS_MYY_acc = FieldAccess(name="zavgS_MYY", sid="e", location_type=LocationType.Edge)
-S_MXX_acc = FieldAccess(name="S_MXX", sid="e", location_type=LocationType.Edge)
-S_MYY_acc = FieldAccess(name="S_MYY", sid="e", location_type=LocationType.Edge)
+S_MXX_acc = FieldAccess(name="S_MXX_tag", sid="primary_edge", location_type=LocationType.Edge)
+S_MYY_acc = FieldAccess(name="S_MYY_tag", sid="primary_edge", location_type=LocationType.Edge)
 
 edge1_assign0 = AssignStmt(
     left=zavg_tmp_acc,
@@ -78,11 +68,12 @@ edge1_assign3 = AssignStmt(
 )
 
 vertex_on_edge_loop = NeighborLoop(
-    body_location_type=LocationType.Vertex,
+    primary_sid="primary_edge",
+    secondary_sid="vertices",
+    connectivity="e2v",
+    primary=PtrRef(name="prim"),
+    secondary=PtrRef(name="sec"),
     location_type=LocationType.Edge,
-    outer_sid="e",
-    connectivity="edge_to_vertex_conn",
-    sid="v_on_e",
     body=[
         AssignStmt(
             location_type=LocationType.Vertex,
@@ -99,64 +90,45 @@ vertex_on_edge_loop = NeighborLoop(
 
 nabla_edge_1 = Kernel(
     name="nabla_edge_1",
-    connectivities=[
-        Connectivity(name="edge_conn", chain=NeighborChain(elements=[LocationType.Edge])),
-        Connectivity(
-            name="edge_to_vertex_conn",
-            chain=NeighborChain(elements=[LocationType.Edge, LocationType.Vertex]),
-        ),
-    ],
-    sids=[nabla_edge_1_primary_composite, nabla_vertex_composite],
-    primary_connectivity="edge_conn",
-    primary_sid="e",
-    ast=[edge1_assign0, vertex_on_edge_loop, edge1_assign1, edge1_assign2, edge1_assign3],
+    primary_location=common.LocationType.Edge,
+    primary_composite=SidComposite(
+        name="primary_edge",
+        entries=[
+            SidCompositeEntry(ref="e2v"),
+            SidCompositeEntry(ref="zavg_tmp"),
+            SidCompositeEntry(ref="S_MXX"),
+            SidCompositeEntry(ref="S_MYY"),
+            SidCompositeEntry(ref="zavgS_MXX"),
+            SidCompositeEntry(ref="zavgS_MYY"),
+        ],
+    ),
+    secondary_composites=[SidComposite(name="vertices", entries=[SidCompositeEntry(ref="pp")])],
+    body=[edge1_assign0, vertex_on_edge_loop, edge1_assign1, edge1_assign2, edge1_assign3],
 )
 
 
-nabla_vertex_2_primary_composite = SidComposite(
-    name="vertex_prim",
-    location=NeighborChain(elements=[LocationType.Vertex]),
-    entries=[
-        SidCompositeEntry(name="pnabla_MXX"),
-        SidCompositeEntry(name="pnabla_MYY"),
-        SidCompositeEntry(name="sign"),
-        SidCompositeNeighborTableEntry(connectivity="v2e_conn"),
-    ],
-)
+zavgS_MXX_acc = FieldAccess(name="zavgS_MXX_tag", sid="n", location_type=LocationType.Edge)
+zavgS_MYY_acc = FieldAccess(name="zavgS_MYY_tag", sid="n", location_type=LocationType.Edge)
 
-nabla_vertex_2_to_edge_composite = SidComposite(
-    name="e2v",
-    location=NeighborChain(elements=[LocationType.Vertex, LocationType.Edge]),
-    entries=[SidCompositeEntry(name="zavgS_MXX"), SidCompositeEntry(name="zavgS_MYY")],
-)
-
-pnabla_MXX_acc = FieldAccess(name="pnabla_MXX", location_type=LocationType.Edge, sid="vertex_prim")
+pnabla_MXX_acc = FieldAccess(name="pnabla_MXX_tag", location_type=LocationType.Edge, sid="p")
 pnabla_MXX_acc_vertex = FieldAccess(
-    name="pnabla_MXX", location_type=LocationType.Vertex, sid="vertex_prim"
+    name="pnabla_MXX_tag", location_type=LocationType.Vertex, sid="vertex_prim"
 )
-pnabla_MYY_acc = FieldAccess(name="pnabla_MYY", location_type=LocationType.Edge, sid="vertex_prim")
+pnabla_MYY_acc = FieldAccess(name="pnabla_MYY_tag", location_type=LocationType.Edge, sid="p")
 pnabla_MYY_acc_vertex = FieldAccess(
-    name="pnabla_MYY", location_type=LocationType.Vertex, sid="vertex_prim"
+    name="pnabla_MYY_tag", location_type=LocationType.Vertex, sid="vertex_prim"
 )
-sign_acc = FieldAccess(name="sign", location_type=LocationType.Edge, sid="vertex_prim")
+sign_acc = FieldAccess(name="sign_tag", location_type=LocationType.Edge, sid="p")
 
-zavgS_MXX_acc = FieldAccess(name="zavgS_MXX", sid="e2v", location_type=LocationType.Edge)
-zavgS_MYY_acc = FieldAccess(name="zavgS_MYY", sid="e2v", location_type=LocationType.Edge)
-
-prim_vertex_conn = Connectivity(
-    name="prim_vertex_conn", chain=NeighborChain(elements=[LocationType.Vertex])
-)
-v2e_conn = Connectivity(
-    name="v2e_conn",
-    chain=NeighborChain(elements=[LocationType.Vertex, LocationType.Edge]),
-)
 
 edge_on_vertex_loop_x = NeighborLoop(
-    body_location_type=LocationType.Edge,
+    primary_sid="vertex_prim",
+    secondary_sid="edge_neighbors",
+    primary=PtrRef(name="p"),
+    secondary=PtrRef(name="n"),
+    # body_location_type=LocationType.Edge,
     location_type=LocationType.Vertex,
-    connectivity="v2e_conn",
-    outer_sid="vertex_prim",
-    sid="e2v",
+    connectivity="v2e",
     body=[
         AssignStmt(
             location_type=LocationType.Edge,
@@ -177,11 +149,13 @@ edge_on_vertex_loop_x = NeighborLoop(
 )
 
 edge_on_vertex_loop_y = NeighborLoop(
-    body_location_type=LocationType.Edge,
+    primary_sid="vertex_prim",
+    secondary_sid="edge_neighbors",
+    primary=PtrRef(name="p"),
+    secondary=PtrRef(name="n"),
+    # body_location_type=LocationType.Edge,
     location_type=LocationType.Vertex,
-    connectivity="v2e_conn",
-    outer_sid="vertex_prim",
-    sid="e2v",
+    connectivity="v2e",
     body=[
         AssignStmt(
             location_type=LocationType.Edge,
@@ -206,6 +180,7 @@ vertex_2_init_to_zero_x = AssignStmt(
     right=Literal(value="0.0", location_type=LocationType.Vertex, vtype=common.DataType.FLOAT64),
     location_type=LocationType.Vertex,
 )
+
 vertex_2_init_to_zero_y = AssignStmt(
     left=pnabla_MYY_acc_vertex,
     right=Literal(value="0.0", location_type=LocationType.Vertex, vtype=common.DataType.FLOAT64),
@@ -215,11 +190,27 @@ vertex_2_init_to_zero_y = AssignStmt(
 
 nabla_vertex_2 = Kernel(
     name="nabla_vertex_2",
-    connectivities=[prim_vertex_conn, v2e_conn],
-    sids=[nabla_vertex_2_primary_composite, nabla_vertex_2_to_edge_composite],
-    primary_connectivity="prim_vertex_conn",
-    primary_sid="vertex_prim",
-    ast=[
+    primary_location=common.LocationType.Vertex,
+    primary_composite=SidComposite(
+        name="vertex_prim",
+        entries=[
+            SidCompositeEntry(ref="v2e"),  # TODO?
+            # SidCompositeNeighborTableEntry(connectivity="v2e"),
+            SidCompositeEntry(ref="pnabla_MXX"),
+            SidCompositeEntry(ref="pnabla_MYY"),
+            SidCompositeSparseEntry(ref="sign", connectivity="v2e"),
+        ],
+    ),
+    secondary_composites=[
+        SidComposite(
+            name="edge_neighbors",
+            entries=[
+                SidCompositeEntry(ref="zavgS_MXX"),
+                SidCompositeEntry(ref="zavgS_MYY"),
+            ],
+        )
+    ],
+    body=[
         vertex_2_init_to_zero_x,
         edge_on_vertex_loop_x,
         vertex_2_init_to_zero_y,
@@ -227,24 +218,13 @@ nabla_vertex_2 = Kernel(
     ],
 )
 
-nabla_vertex_4_composite = SidComposite(
-    name="nabla_vertex_4_composite",
-    location=NeighborChain(elements=[LocationType.Vertex]),
-    entries=[
-        SidCompositeEntry(name="vol"),
-        SidCompositeEntry(name="pnabla_MXX"),
-        SidCompositeEntry(name="pnabla_MYY"),
-    ],
-)
-
-
 pnabla_MXX_acc = FieldAccess(
-    name="pnabla_MXX", sid="nabla_vertex_4_composite", location_type=LocationType.Vertex
+    name="pnabla_MXX_tag", sid="primary", location_type=LocationType.Vertex
 )
 pnabla_MYY_acc = FieldAccess(
-    name="pnabla_MYY", sid="nabla_vertex_4_composite", location_type=LocationType.Vertex
+    name="pnabla_MYY_tag", sid="primary", location_type=LocationType.Vertex
 )
-vol_acc = FieldAccess(name="vol", sid="nabla_vertex_4_composite", location_type=LocationType.Vertex)
+vol_acc = FieldAccess(name="vol_tag", sid="primary", location_type=LocationType.Vertex)
 div = BinaryOp(left=pnabla_MXX_acc, right=vol_acc, op=common.BinaryOperator.DIV)
 div2 = BinaryOp(left=pnabla_MYY_acc, right=vol_acc, op=common.BinaryOperator.DIV)
 assign = AssignStmt(left=pnabla_MXX_acc, right=div)
@@ -252,13 +232,17 @@ assign2 = AssignStmt(left=pnabla_MYY_acc, right=div2)
 
 nabla_vertex_4 = Kernel(
     name="nabla_vertex_4",
-    connectivities=[
-        Connectivity(name="a_conn", chain=NeighborChain(elements=[LocationType.Vertex]))
-    ],
-    sids=[nabla_vertex_4_composite],
-    primary_connectivity="a_conn",
-    primary_sid="nabla_vertex_4_composite",
-    ast=[assign, assign2],
+    primary_location=common.LocationType.Vertex,
+    primary_composite=SidComposite(
+        name="primary",
+        entries=[
+            SidCompositeEntry(ref="pnabla_MXX"),
+            SidCompositeEntry(ref="pnabla_MYY"),
+            SidCompositeEntry(ref="vol"),
+        ],
+    ),
+    secondary_composites=[],
+    body=[assign, assign2],
 )
 
 S_MXX = UField(
@@ -266,16 +250,6 @@ S_MXX = UField(
 )
 S_MYY = UField(
     name="S_MYY", dimensions=[LocationType.Edge, VerticalDimension()], vtype=common.DataType.FLOAT64
-)
-zavgS_MXX = UField(
-    name="zavgS_MXX",
-    dimensions=[LocationType.Edge, VerticalDimension()],
-    vtype=common.DataType.FLOAT64,
-)
-zavgS_MYY = UField(
-    name="zavgS_MYY",
-    dimensions=[LocationType.Edge, VerticalDimension()],
-    vtype=common.DataType.FLOAT64,
 )
 pp = UField(
     name="pp", dimensions=[LocationType.Vertex, VerticalDimension()], vtype=common.DataType.FLOAT64
@@ -293,16 +267,27 @@ pnabla_MYY = UField(
 vol = UField(
     name="vol", dimensions=[LocationType.Vertex, VerticalDimension()], vtype=common.DataType.FLOAT64
 )
-sign = UField(
+sign = SparseField(
     name="sign",
     dimensions=[
         LocationType.Vertex,
-        NeighborChain(elements=[LocationType.Edge]),
         VerticalDimension(),
     ],
+    connectivity="v2e",
     vtype=common.DataType.FLOAT64,
 )
 
+
+zavgS_MXX = Temporary(
+    name="zavgS_MXX",
+    dimensions=[LocationType.Edge, VerticalDimension()],
+    vtype=common.DataType.FLOAT64,
+)
+zavgS_MYY = Temporary(
+    name="zavgS_MYY",
+    dimensions=[LocationType.Edge, VerticalDimension()],
+    vtype=common.DataType.FLOAT64,
+)
 
 zavg_tmp = Temporary(
     name="zavg_tmp",
@@ -312,8 +297,9 @@ zavg_tmp = Temporary(
 
 comp = Computation(
     name="nabla",
-    parameters=[S_MXX, S_MYY, zavgS_MXX, zavgS_MYY, pp, pnabla_MXX, pnabla_MYY, vol, sign],
-    temporaries=[zavg_tmp],
+    connectivities=connectivities,
+    parameters=[S_MXX, S_MYY, pp, pnabla_MXX, pnabla_MYY, vol, sign],
+    temporaries=[zavgS_MXX, zavgS_MYY, zavg_tmp],
     kernels=[nabla_edge_1, nabla_vertex_2, nabla_vertex_4],
     ctrlflow_ast=[
         KernelCall(name="nabla_edge_1"),
@@ -328,6 +314,14 @@ debug(comp)
 generated_code = usid_codegen.UsidGpuCodeGenerator.apply(comp)
 print(generated_code)
 
-output_file = os.path.dirname(os.path.realpath(__file__)) + "/generated_fvm_nabla_ugpu.hpp"
+output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_cuda.hpp"
+with open(output_file, "w+") as output:
+    output.write(generated_code)
+
+# TODO
+generated_code = usid_codegen.UsidNaiveCodeGenerator.apply(comp)
+print(generated_code)
+
+output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_naive.hpp"
 with open(output_file, "w+") as output:
     output.write(generated_code)
