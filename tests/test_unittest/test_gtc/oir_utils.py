@@ -88,18 +88,28 @@ class TemporaryBuilder:
     def __init__(self, name: SymbolName = None, dtype: DataType = None) -> None:
         self._name = name
         self._dtype = DataType.FLOAT32 if dtype is None else dtype
+        self._dimensions = (True, True, True)
+
+    def dimensions(self, dimensions: Tuple[bool, bool, bool]) -> "TemporaryBuilder":
+        self._dimensions = dimensions
+        return self
 
     def build(self) -> Temporary:
-        return Temporary(name=self._name, dtype=self._dtype)
+        return Temporary(name=self._name, dtype=self._dtype, dimensions=self._dimensions)
 
 
 class FieldDeclBuilder:
     def __init__(self, name: SymbolName = None, dtype: DataType = None) -> None:
         self._name = name
         self._dtype = DataType.FLOAT32 if dtype is None else dtype
+        self._dimensions = (True, True, True)
+
+    def dimensions(self, dimensions: Tuple[bool, bool, bool]) -> "FieldDeclBuilder":
+        self._dimensions = dimensions
+        return self
 
     def build(self) -> FieldDecl:
-        return FieldDecl(name=self._name, dtype=self._dtype)
+        return FieldDecl(name=self._name, dtype=self._dtype, dimensions=self._dimensions)
 
 
 class HorizontalExecutionBuilder:
