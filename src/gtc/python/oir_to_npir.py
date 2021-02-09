@@ -62,6 +62,8 @@ class OirToNpir(NodeTranslator):
         kwargs.update(
             {
                 "parallel_k": True if node.loop_order == common.LoopOrder.PARALLEL else False,
+                "lower_k": node.interval.start,
+                "upper_k": node.interval.end,
             }
         )
         v_assigns = [self.visit(h_exec, ctx=ctx, **kwargs) for h_exec in node.horizontal_executions]
@@ -114,7 +116,18 @@ class OirToNpir(NodeTranslator):
     ) -> Union[npir.FieldSlice, npir.VectorTemp]:
         if isinstance(ctx.symbol_table.get(node.name, None), oir.Temporary):
             return npir.VectorTemp(name=node.name)
-        ctx.add_offsets(node.offset.i, node.offset.j, node.offset.k)
+        k_offset = node.offset.k
+        if (lower_k := kwargs.get("lower_k")) and k_offset < 0:
+            if lower_k.level is common.LevelMarker.START:
+                k_offset = min(k_offset + lower_k.offset, 0)
+            else:
+                k_offset = 0
+        if (upper_k := kwargs.get("upper_k")) and k_offset > 0:
+            if upper_k.level is common.LevelMarker.END:
+                k_offset = max(k_offset - upper_k.offset, 0)
+            else:
+                k_offset = 0
+        ctx.add_offsets(node.offset.i, node.offset.j, k_offset)
         return npir.FieldSlice(
             name=str(node.name),
             i_offset=npir.AxisOffset.i(node.offset.i),
