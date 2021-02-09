@@ -18,7 +18,7 @@ import factory
 
 from gtc import common, gtir
 
-from .common_utils import CartesianOffsetFactory, undefined_symbol_list
+from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
 
 
 class LiteralFactory(factory.Factory):
@@ -33,7 +33,7 @@ class FieldAccessFactory(factory.Factory):
     class Meta:
         model = gtir.FieldAccess
 
-    name = factory.Faker("word")
+    name = identifier()
     offset = factory.SubFactory(CartesianOffsetFactory)
     dtype = common.DataType.FLOAT32
 
@@ -42,7 +42,7 @@ class ScalarAccessFactory(factory.Factory):
     class Meta:
         model = gtir.ScalarAccess
 
-    name = factory.Faker("word")
+    name = identifier()
     dtype = common.DataType.FLOAT32
 
 
@@ -100,7 +100,7 @@ class FieldDeclFactory(factory.Factory):
     class Meta:
         model = gtir.FieldDecl
 
-    name = factory.Faker("word")
+    name = identifier()
     dtype = common.DataType.FLOAT32
 
 
@@ -108,7 +108,7 @@ class ScalarDeclFactory(factory.Factory):
     class Meta:
         model = gtir.ScalarDecl
 
-    name = factory.Faker("word")
+    name = identifier()
     dtype = common.DataType.FLOAT32
 
 
@@ -126,6 +126,6 @@ class StencilFactory(factory.Factory):
     class Meta:
         model = gtir.Stencil
 
-    name = factory.Faker("word")
+    name = identifier()
     vertical_loops = factory.List([factory.SubFactory(VerticalLoopFactory)])
     params = undefined_symbol_list(lambda name: FieldDeclFactory(name=name), "vertical_loops")

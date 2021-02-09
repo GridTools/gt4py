@@ -21,14 +21,14 @@ import factory
 from gtc import common
 from gtc.gtcpp import gtcpp
 
-from .common_utils import CartesianOffsetFactory, undefined_symbol_list
+from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
 
 
 class AccessorRefFactory(factory.Factory):
     class Meta:
         model = gtcpp.AccessorRef
 
-    name = factory.Faker("word")
+    name = identifier()
     offset = factory.SubFactory(CartesianOffsetFactory)
     dtype = common.DataType.FLOAT32
 
@@ -103,7 +103,7 @@ class GTAccessorFactory(factory.Factory):
     class Meta:
         model = gtcpp.GTAccessor
 
-    name = factory.Faker("word")
+    name = identifier()
     id = factory.Sequence(lambda i: i)  # noqa: A003
     intent = gtcpp.Intent.INOUT
     extent = factory.SubFactory(GTExtentFactory)
@@ -120,7 +120,7 @@ class GTFunctorFactory(factory.Factory):
     class Meta:
         model = gtcpp.GTFunctor
 
-    name = factory.Faker("word")
+    name = identifier()
     applies = factory.List([factory.SubFactory(GTApplyMethodFactory)])
     param_list = undefined_symbol_list(
         lambda name: GTAccessorFactory(name=name),
@@ -133,14 +133,14 @@ class ArgFactory(factory.Factory):
     class Meta:
         model = gtcpp.Arg
 
-    name = factory.Faker("word")
+    name = identifier()
 
 
 class GTStageFactory(factory.Factory):
     class Meta:
         model = gtcpp.GTStage
 
-    functor = factory.Faker("word")
+    functor = identifier()
     args: List[gtcpp.Arg] = []
 
 
@@ -166,7 +166,7 @@ class FieldDeclFactory(factory.Factory):
     class Meta:
         model = gtcpp.FieldDecl
 
-    name = factory.Faker("word")
+    name = identifier()
     dtype = common.DataType.FLOAT32
 
 
@@ -174,7 +174,7 @@ class ProgramFactory(factory.Factory):
     class Meta:
         model = gtcpp.Program
 
-    name = factory.Faker("word")
+    name = identifier()
     functors = factory.List([factory.SubFactory(GTFunctorFactory)])
     gt_computation = factory.SubFactory(GTComputationCallFactory)
     parameters = undefined_symbol_list(

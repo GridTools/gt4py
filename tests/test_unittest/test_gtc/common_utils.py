@@ -51,6 +51,10 @@ def undefined_symbol_list(
     return factory.LazyAttribute(func)
 
 
+def identifier():
+    return factory.Faker("random_lowercase_letter")
+
+
 class CartesianOffsetFactory(factory.Factory):
     class Meta:
         model = common.CartesianOffset
