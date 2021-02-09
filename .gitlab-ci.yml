@@ -9,6 +9,9 @@ include:
   PYVERSION_PREFIX: py38
   PYVERSION: 3.8.5
 
+.status: &status
+  STATUS_IMAGE: reg.giuv.cscs.ch/docker/gitlab-status:latest
+
 stages:
   - notifystart
   - image
@@ -19,8 +22,10 @@ notify_github_pending:
   stage: notifystart
   only: ["master", "staging", "trying"]
   tags: ["kubernetes"]
-  image: $CSCS_REGISTRY_IMAGE/gitlab-status
+  image: $STATUS_IMAGE
   script: ./ci/set_github_status.sh pending
+  variables:
+    <<: *status
 
 build py38:
   extends: .dind
@@ -77,13 +82,17 @@ notify_github_success:
   when: on_success
   only: ["master", "staging", "trying"]
   tags: ["kubernetes"]
-  image: $CSCS_REGISTRY_IMAGE/gitlab-status
+  image: $STATUS_IMAGE
   script: ./ci/set_github_status.sh success
+  variables:
+    <<: *status
 
 notify_github_failure:
   stage: cleanup
   when: on_failure
   only: ["master", "staging", "trying"]
   tags: ["kubernetes"]
-  image: $CSCS_REGISTRY_IMAGE/gitlab-status
+  image: $STATUS_IMAGE
   script: ./ci/set_github_status.sh failure
+  variables:
+    <<: *status
