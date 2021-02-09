@@ -1,6 +1,6 @@
 check-manifest>=0.40
 coverage>=5.0
-factoryboy~=3.2
+factory_boy~=3.2
 flake8~=3.8
 hypothesis>=4.14
 isort~=5.1
