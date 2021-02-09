@@ -52,10 +52,7 @@ class Literal(Expr):
 
 
 class VarAccess(Expr):
-    name: Str  # via symbol table
-    dummy: Optional[
-        Str
-    ]  # to distinguish from FieldAccess, see https://github.com/eth-cscs/eve_toolchain/issues/34
+    name: SymbolRef
 
 
 class AssignStmt(common.AssignStmt[Union[FieldAccess, VarAccess], Expr], Stmt):
@@ -85,10 +82,11 @@ class Connectivity(FrozenNode):
 
 class SidCompositeEntry(FrozenNode):
     ref: SymbolRef  # ref to field
-    name: SymbolName  # generated from ref
+    name: SymbolName  # (don't set: generated from ref)
 
     @root_validator(pre=True)
     def set_name(cls, values):
+        assert "name" not in values
         values["name"] = values["ref"] + "_tag"
         return values
 
@@ -104,55 +102,13 @@ class SidCompositeSparseEntry(SidCompositeEntry):
     connectivity: SymbolRef
 
 
-class SidCompositeNeighborTableEntry(FrozenNode):
-    connectivity: SymbolRef
-    connectivity_deref_: Optional[
-        Connectivity
-    ]  # TODO temporary workaround for symbol tbl reference
-
-    @property
-    def tag_name(self):
-        return self.connectivity + "_tag"  # TODO
-        # return self.connectivity_deref_.neighbor_tbl_tag
-
-    # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
-    def __hash__(self):
-        return hash(self.connectivity)
-
-    def __eq__(self, other):
-        return self.connectivity == other.connectivity
-
-
 class SidComposite(Node):
     name: SymbolName
-    # location: NeighborChain
-    entries: List[
-        Union[SidCompositeEntry, SidCompositeSparseEntry, SidCompositeNeighborTableEntry]
-    ]  # TODO ensure tags are unique
-
-    @property
-    def with_connectivity(self) -> bool:
-        for e in self.entries:
-            if isinstance(e, SidCompositeNeighborTableEntry):
-                return True
-        return False
-
-    # node private symbol table to entries
-    @property
-    def symbol_tbl(self):
-        return {e.name: e for e in self.entries if isinstance(e, SidCompositeEntry)}
-
-    @property
-    def field_name(self):
-        return self.name + "_fields"
+    entries: List[Union[SidCompositeEntry, SidCompositeSparseEntry]]
 
     @property
     def ptr_name(self):
         return self.name + "_ptrs"
-
-    @property
-    def origin_name(self):
-        return self.name + "_origins"
 
     @property
     def strides_name(self):
@@ -184,15 +140,10 @@ class NeighborLoop(Stmt, SymbolTableTrait):
 
 class Kernel(Node, SymbolTableTrait):
     name: SymbolName
-    primary_location: common.LocationType  # TODO probably replace by domain for this location or not needed?
-    primary_composite: SidComposite  # TODO maybe the composites should live in the Call
+    primary_location: common.LocationType  # TODO probably replace by domain for this location
+    primary_composite: SidComposite
     secondary_composites: List[SidComposite]
     body: List[Stmt]
-
-    # private symbol table
-    @property
-    def symbol_tbl(self):
-        return {**{s.name: s for s in self.sids}, **{c.name: c for c in self.connectivities}}
 
 
 class KernelCall(Node):

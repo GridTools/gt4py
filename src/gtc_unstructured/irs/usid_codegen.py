@@ -29,7 +29,6 @@ from gtc_unstructured.irs.usid import (
     Kernel,
     KernelCall,
     NeighborLoop,
-    SidCompositeNeighborTableEntry,
     SidCompositeSparseEntry,
     Temporary,
 )
@@ -338,6 +337,8 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
 
     def visit_Computation(self, node: Computation, **kwargs):
         symbol_tbl_kernel = {k.name: k for k in node.kernels}
+
+        # maybe tags should be generated in lowering
         field_tags = set()
         for field in node.parameters + node.temporaries:
             field_tags.add("struct " + field.tag + ";")
