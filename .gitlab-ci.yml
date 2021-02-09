@@ -10,7 +10,7 @@ include:
   PYVERSION: 3.8.5
 
 .status: &status
-  STATUS_IMAGE: reg.giuv.cscs.ch/docker/gitlab-status:latest
+  STATUS_IMAGE: dropd/github-status:latest
 
 stages:
   - notifystart
