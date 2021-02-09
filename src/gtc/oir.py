@@ -112,7 +112,7 @@ class Decl(LocNode):
 
 
 class FieldDecl(Decl):
-    dimensions: Tuple[bool, bool, bool]
+    dimensions: Tuple[bool, bool, bool] = (True, True, True)
 
 
 class ScalarDecl(Decl):
