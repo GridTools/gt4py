@@ -19,17 +19,17 @@ notify_github_pending:
   stage: notifystart
   only: ["master", "staging", "trying"]
   tags: ["kubernetes"]
-  image: $CI_REGISTRY_IMAGE/bgcj
+  image: $CSCS_REGISTRY_IMAGE/gitlab-status
   script: ./ci/set_github_status.sh pending
 
 build py38:
   extends: .dind
   stage: image
   variables:
-    BUILD_IMAGE: $CI_REGISTRY_IMAGE/gt4py-ci/image:$PYVERSION
+    BUILD_IMAGE: $CSCS_REGISTRY_IMAGE/gt4py-ci:$PYVERSION
     <<: *py38
   script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker login -u $CSCS_REGISTRY_USER -p $CSCS_REGISTRY_PASSWORD $CSCS_REGISTRY
     - docker pull $BUILD_IMAGE || echo "has not been built yet"
     - docker build --network=host --cache-from $BUILD_IMAGE --build-arg BUILDKIT_INLINE_CACHE=1 --build-arg PYVERSION=$PYVERSION --build-arg CI_PROJECT_DIR=$CI_PROJECT_DIR -t $BUILD_IMAGE .
     - docker push $BUILD_IMAGE
@@ -52,7 +52,7 @@ test py38:
     - trying
   needs: ["build py38"]
   stage: test
-  image: $CI_REGISTRY_IMAGE/gt4py-ci/image:$PYVERSION
+  image: $CSCS_REGISTRY_IMAGE/gt4py-ci:$PYVERSION
   script: 
     - python -c "import cupy"
     - pip install clang-format
@@ -77,7 +77,7 @@ notify_github_success:
   when: on_success
   only: ["master", "staging", "trying"]
   tags: ["kubernetes"]
-  image: $CI_REGISTRY_IMAGE/bgcj
+  image: $CSCS_REGISTRY_IMAGE/gitlab-status
   script: ./ci/set_github_status.sh success
 
 notify_github_failure:
@@ -85,5 +85,5 @@ notify_github_failure:
   when: on_failure
   only: ["master", "staging", "trying"]
   tags: ["kubernetes"]
-  image: $CI_REGISTRY_IMAGE/bgcj
+  image: $CSCS_REGISTRY_IMAGE/gitlab-status
   script: ./ci/set_github_status.sh failure
