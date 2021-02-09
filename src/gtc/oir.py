@@ -123,7 +123,7 @@ class LocalScalar(Decl):
     pass
 
 
-class Temporary(Decl):
+class Temporary(FieldDecl):
     pass
 
 

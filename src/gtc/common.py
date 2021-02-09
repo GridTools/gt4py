@@ -595,7 +595,10 @@ def validate_lvalue_dims() -> RootValidatorType:
             if loop_order is not LoopOrder.PARALLEL:
                 allowed_masks.append((True, True, False))  # ij only allowed in FORWARD and BACKWARD
             name = node.left.name
-            mask = symtable[name].dimensions if name in symtable else (True, True, True)
+            if name in symtable and hasattr(symtable[name], "dimensions"):
+                mask = symtable[name].dimensions
+            else:
+                mask = (True, True, True)
             if mask not in allowed_masks:
                 dims = mask_to_dims(mask)
                 raise ValueError(
