@@ -34,6 +34,21 @@ class FieldDecl(Decl):
     pass
 
 
+class Temporary(Decl):
+    pass
+
+
+class VerticalLoop(LocNode):
+    pass
+
+
+class Kernel(LocNode):
+    name: Str
+    vertical_loops: List[VerticalLoop]
+
+
 class Program(LocNode, SymbolTableTrait):
     name: Str
     params: List[FieldDecl]
+    declarations: List[Temporary]
+    kernels: List[Kernel]

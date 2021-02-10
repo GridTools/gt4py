@@ -25,5 +25,16 @@ class OIRToCUIR(eve.NodeTranslator):
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> cuir.FieldDecl:
         return cuir.FieldDecl(name=node.name, dtype=node.dtype)
 
+    def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> cuir.Temporary:
+        return cuir.Temporary(name=node.name, dtype=node.dtype)
+
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> cuir.Kernel:
+        return cuir.Kernel(name=node.id_, vertical_loops=[])
+
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> cuir.Program:
-        return cuir.Program(name=node.name, params=self.visit(node.params))
+        return cuir.Program(
+            name=node.name,
+            params=self.visit(node.params),
+            declarations=self.visit(node.declarations),
+            kernels=self.visit(node.vertical_loops),
+        )
