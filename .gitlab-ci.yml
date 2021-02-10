@@ -56,7 +56,7 @@ test py38:
   script: 
     - python -c "import cupy"
     - pip install clang-format
-    - tox --sitepackages -r -e $PYVERSION_PREFIX-internal-cuda101
+    - tox --sitepackages -r -e $PYVERSION_PREFIX-internal-cuda101 -- -n auto
   variables:
     CRAY_CUDA_MPS: 1
     PULL_IMAGE: "YES"
