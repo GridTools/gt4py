@@ -61,19 +61,17 @@ class TemporariesToScalars(NodeTranslator):
             declarations=declarations,
         )
 
-    def visit_VerticalLoop(
+    def visit_VerticalLoopSection(
         self,
         node: oir.VerticalLoop,
         local_tmps: Set[str],
         **kwargs: Any,
-    ) -> oir.VerticalLoop:
-        return oir.VerticalLoop(
+    ) -> oir.VerticalLoopSection:
+        return oir.VerticalLoopSection(
             interval=node.interval,
             horizontal_executions=self.visit(
                 node.horizontal_executions, local_tmps=local_tmps, **kwargs
             ),
-            loop_order=node.loop_order,
-            declarations=[d for d in node.declarations if d.name not in local_tmps],
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -95,4 +93,11 @@ class TemporariesToScalars(NodeTranslator):
             collections.Counter(),
         )
         local_tmps = {tmp for tmp, count in counts.items() if count == 1}
-        return self.generic_visit(node, local_tmps=local_tmps, symtable=node.symtable_, **kwargs)
+        return oir.Stencil(
+            name=node.name,
+            params=node.params,
+            vertical_loops=self.visit(
+                node.vertical_loops, local_tmps=local_tmps, symtable=node.symtable_, **kwargs
+            ),
+            declarations=[d for d in node.declarations if d.name not in local_tmps],
+        )
