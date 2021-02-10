@@ -70,7 +70,7 @@ try:
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz
+    import toolz  # noqa: F401  # imported but unused
 
 
 def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
@@ -218,8 +218,7 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
 def optional_lru_cache(
     func: Callable = None, *, maxsize: Optional[int] = 128, typed: bool = False
 ) -> Union[Callable, Callable[[Callable], Callable]]:
-    """Wrapper around :func:`functools.lru_cache` calling the original function
-    when arguments are not hashable.
+    """Wrap :func:`functools.lru_cache` to fall back to the original function if arguments are not hashable.
 
     Examples:
         >>> @optional_lru_cache(typed=True)
@@ -241,7 +240,6 @@ def optional_lru_cache(
 
     Notes:
         Based on :func:`typing._tp_cache`.
-
     """
 
     def _decorator(func: Callable) -> Callable:
@@ -1382,7 +1380,7 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
             >>> list(it.reduceby(lambda nvowels, name: nvowels + sum(i in 'aeiou' for i in name), len, init=0))
             [(5, 4), (3, 2), (7, 3)]
 
-        """  # noqa: RST203  # sphinx.napoleon conventions confuses RST validator
+        """  # noqa: RST203  # sphinx.napoleon conventions confuse RST validator
         if (not callable(key) and not isinstance(key, (int, str, list))) or not all(
             isinstance(i, str) for i in attr_keys
         ):

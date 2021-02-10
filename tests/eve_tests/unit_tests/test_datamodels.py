@@ -254,8 +254,8 @@ sample_type_data = [
 
 
 @pytest.mark.parametrize(["type_hint", "valid_values", "wrong_values"], sample_type_data)
-def test_field_type_hint(type_hint: Type, valid_values: Sequence[Any], wrong_values: Sequence[Any]):
-    context = {}
+def test_field_type_hint(type_hint: str, valid_values: Sequence[Any], wrong_values: Sequence[Any]):
+    context: Dict[str, Any] = {}
     exec(
         f"""
 @datamodels.datamodel
@@ -397,7 +397,7 @@ class ChildModelWithValidators(ModelWithValidators):
 
 
 @pytest.mark.parametrize("model_class", [ModelWithValidators, ChildModelWithValidators])
-def test_field_validators(model_class: datamodels.DataModelLike):
+def test_field_validators(model_class: Type[Union[ModelWithValidators, ChildModelWithValidators]]):
 
     with pytest.raises(ValueError, match="int_value"):
         model_class(int_value=-1)
@@ -500,7 +500,7 @@ class ChildModelWithRootValidators(ModelWithRootValidators):
 
 
 @pytest.mark.parametrize("model_class", [ModelWithRootValidators, ChildModelWithRootValidators])
-def test_root_validators(model_class: datamodels.DataModelLike):
+def test_root_validators(model_class: Type[datamodels.DataModelLike]):
     model_class(int_value=0, float_value=1.1, str_value="")
     with pytest.raises(ValueError, match="float_value"):
         model_class(int_value=1, float_value=1.0, str_value="")

@@ -31,7 +31,7 @@ try:
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz
+    import toolz  # noqa: F401  # imported but unused
 
 
 KeyValue = Tuple[Union[int, str], Any]

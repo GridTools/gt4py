@@ -117,7 +117,7 @@ class DataModelLike(_AttrClassLike, _DataClassLike, _DevToolsPrettyPrintable, Pr
     ]
 
 
-class GenericDataModelLike(DataModelLike):
+class GenericDataModelLike(DataModelLike, Protocol):
     __args__: ClassVar[Tuple[Union[Type, TypeVar]]]
     __parameters__: ClassVar[Tuple[TypeVar]]
 
@@ -206,9 +206,11 @@ class _SENTINEL:
 
 # -- Validators --
 class _TupleValidator:
-    """Implementation of attr.s type validator for Tuple typings."""
+    """Implementation of ``attr.s`` type validator for ``Tuple`` typings."""
 
+    #: Collection of validators.
     validators: Tuple[attr._ValidatorType, ...]
+    #: Class used in the container ``isintance()`` check.
     tuple_type: Type[Tuple]
 
     def __init__(
@@ -239,9 +241,11 @@ class _TupleValidator:
 
 
 class _OrValidator:
-    """Implementation of attr.s validator composing multiple validators together using OR."""
+    """Implementation of ``attr.s`` validator composing multiple validators together using OR."""
 
+    #: Collection of validators.
     validators: Tuple[attr._ValidatorType, ...]
+    #: Exception class for validation errors.
     error_type: Type[Exception]
 
     def __init__(
@@ -267,7 +271,7 @@ class _OrValidator:
 
 
 class _LiteralValidator:
-    """Implementation of attr.s type validator for Literal typings."""
+    """Implementation of ``attr.s`` type validator for ``Literal`` typings."""
 
     literal: Any
 
@@ -286,7 +290,7 @@ class _LiteralValidator:
 
 
 def empty_attrs_validator() -> attr._ValidatorType:
-    """Create an attr.s empty validator which always succeeds."""
+    """Create an ``attr.s`` empty validator which always succeeds."""
 
     def _empty_validator(instance: _AttrClassLike, attribute: attr.Attribute, value: Any) -> None:
         pass
@@ -295,7 +299,7 @@ def empty_attrs_validator() -> attr._ValidatorType:
 
 
 def instance_of_int_attrs_validator() -> attr._ValidatorType:
-    """Create an attr.s validator for `int` values which fails with `bool` values."""
+    """Create an ``attr.s`` validator for ``int`` values which fails with ``bool`` values."""
 
     def _int_validator(instance: _AttrClassLike, attribute: attr.Attribute, value: Any) -> None:
         if not isinstance(value, int) or isinstance(value, bool):
@@ -309,7 +313,7 @@ def instance_of_int_attrs_validator() -> attr._ValidatorType:
 def or_attrs_validator(
     *validators: attr._ValidatorType, error_type: Type[Exception]
 ) -> attr._ValidatorType:
-    """Create an attr.s validator combinator where only one of the validators needs to pass."""
+    """Create an ``attr.s`` validator combinator where only one of the validators needs to pass."""
     if len(validators) == 1:
         return validators[0]
     else:
@@ -317,12 +321,12 @@ def or_attrs_validator(
 
 
 def literal_type_attrs_validator(*type_args: Type) -> attr._ValidatorType:
-    """Create an attr.s strict type validator for Literal typings."""
+    """Create an ``attr.s`` strict type validator for ``Literal`` typings."""
     return or_attrs_validator(*(_LiteralValidator(t) for t in type_args), error_type=ValueError)
 
 
 def tuple_type_attrs_validator(*type_args: Type, tuple_type: Type = tuple) -> attr._ValidatorType:
-    """Create an attr.s strict type validator for Tuple typings."""
+    """Create an ``attr.s`` strict type validator for ``Tuple`` typings."""
     if len(type_args) == 2 and (type_args[1] is Ellipsis):
         # Tuple as an immutable sequence type: Tuple[int, ...]
         if not issubclass(tuple_type, tuple):
@@ -338,7 +342,7 @@ def tuple_type_attrs_validator(*type_args: Type, tuple_type: Type = tuple) -> at
 
 
 def union_type_attrs_validator(*type_args: Type) -> attr._ValidatorType:
-    """Create an attr.s strict type validator for Union typings."""
+    """Create an ``attr.s`` strict type validator for Union typings."""
     if len(type_args) == 2 and (type_args[1] is type(None)):  # noqa: E721  # use isinstance()
         non_optional_validator = strict_type_attrs_validator(type_args[0])
         return attr.validators.optional(non_optional_validator)
@@ -349,7 +353,7 @@ def union_type_attrs_validator(*type_args: Type) -> attr._ValidatorType:
 
 
 def strict_type_attrs_validator(type_hint: Type) -> attr._ValidatorType:
-    """Create an attr.s strict type validator for a specific typing hint."""
+    """Create an ``attr.s`` strict type validator for a specific typing hint."""
     origin_type = typing.get_origin(type_hint)
     type_args = typing.get_args(type_hint)
 
@@ -534,7 +538,7 @@ def _make_devtools_pretty() -> Callable[
     def __pretty__(
         self: DataModelLike, fmt: Callable[[Any], Any], **kwargs: Any
     ) -> Generator[Any, None, None]:
-        """Used by `devtools <https://python-devtools.helpmanual.io/>` to provide a human readable representation.
+        """Provide a human readable representation for `devtools <https://python-devtools.helpmanual.io/>`.
 
         Note:
             Adapted from `pydantic <https://github.com/samuelcolvin/pydantic>`.
@@ -556,7 +560,7 @@ def _make_data_model_class_getitem() -> classmethod:
     def __class_getitem__(
         cls: Type[GenericDataModelLike], args: Union[Type, Tuple[Type]]
     ) -> GenericDataModelAlias:
-        """Return an instance compatible with aliases created by the `typing` module for `typing.Generic`s.
+        """Return an instance compatible with aliases created by :class:`typing.Generic` classes.
 
         See :class:`GenericDataModelAlias` for further information.
         """
@@ -608,8 +612,8 @@ def _make_datamodel(
                 )
 
                 # TODO(egparedes): implement type coercing
-                # if cls.__dict__[key].converter is True:
-                #     cls.__dict__[key].converter = _make_type_coercer(type_hint)
+                # TODO: if cls.__dict__[key].converter is True:
+                # TODO:    cls.__dict__[key].converter = _make_type_coercer(type_hint)
 
     # All fields should be annotated with type hints
     for key, value in cls.__dict__.items():
@@ -777,13 +781,13 @@ def _make_concrete_with_cache(
 
 
 def is_datamodel(obj: Any) -> bool:
-    """Returns True if `obj` is a Data Model class or an instance of a Data Model."""
+    """Return True if `obj` is a Data Model class or an instance of a Data Model."""
     cls = obj if isinstance(obj, type) else obj.__class__
     return hasattr(cls, _MODEL_FIELDS)
 
 
 def is_generic(model: Union[DataModelLike, Type[DataModelLike]]) -> bool:
-    """Returns True if `model` is a generic Data Model class or an instance of a generic Data Model."""
+    """Return True if `model` is a generic Data Model class or an instance of a generic Data Model."""
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
 
@@ -791,7 +795,7 @@ def is_generic(model: Union[DataModelLike, Type[DataModelLike]]) -> bool:
 
 
 def is_instantiable(model: Type[DataModelLike]) -> bool:
-    """Returns True if `model` is a instantiable Data Model class or an instance of a instantiable Data Model."""
+    """Return True if `model` is a instantiable Data Model class or an instance of a instantiable Data Model."""
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
 
@@ -837,11 +841,12 @@ def get_fields(
         FrozenNamespace(amount=Attribute(name='amount', default=1, ...),\
  name=Attribute(name='name', default=NOTHING, ...),\
  numbers=Attribute(name='numbers', default=NOTHING, ...))
+
         >>> fields(Model, as_dataclass=True)  # doctest:+ELLIPSIS
         (Field(name='amount',type='int',default=1,default_factory=...),\
  Field(name='name',type='str',default=...),\
  Field(name='numbers',type='List[float]',default=...))
-    """
+    """  # noqa: RST201  # doctest conventions confuse RST validator
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
     if not isinstance(model, type):
@@ -881,7 +886,7 @@ def asdict(
         ...     y: int
         >>> c = C(x=1, y=2)
         >>> assert asdict(c) == {'x': 1, 'y': 2}
-    """
+    """  # noqa: RST301  # sphinx.napoleon conventions confuse RST validator
     if not is_datamodel(instance) or isinstance(instance, type):
         raise TypeError(f"Invalid datamodel instance: '{instance}'.")
     return attr.asdict(
@@ -916,7 +921,7 @@ def astuple(
         ...     y: int
         >>> c = C(x=1, y=2)
         >>> assert astuple(c) == (1, 2)
-    """
+    """  # noqa: RST301  # sphinx.napoleon conventions confuse RST validator
     if not is_datamodel(instance) or isinstance(instance, type):
         raise TypeError(f"Invalid datamodel instance: '{instance}'.")
     return attr.astuple(
@@ -953,7 +958,8 @@ def concretize(
             by actually inserting the new class into the target `module`.
         overwrite_definition: If ``True``, a previous definition of the class in
             the target module will be overwritten.
-    """
+
+    """  # noqa: RST301  # doctest conventions confuse RST validator
     concrete_cls = _make_concrete_with_cache(
         datamodel_cls, *type_args, class_name=class_name, module=module
     )
@@ -977,7 +983,7 @@ def concretize(
 
 
 def validator(name: str) -> Callable[[Callable], Callable]:
-    """Decorator to define a custom field validator for a specific field.
+    """Define a custom field validator for a specific field (decorator function).
 
     Arguments:
         name: Name of the field to be validated by the decorated function.
@@ -999,14 +1005,13 @@ def validator(name: str) -> Callable[[Callable], Callable]:
 
 
 def root_validator(func: Callable, /) -> classmethod:
-    """Decorator to define a custom root validator.
+    """Define a custom root validator (decorator function).
 
     The decorated functions should have the following signature:
     ``def _root_validator_function(cls, instance):`` where ``cls`` will
     be the class of the model and ``instance`` the actual instance being
     validated.
     """
-
     cls_method = classmethod(func)
     setattr(cls_method, _ROOT_VALIDATOR_TAG, None)
     return cls_method
@@ -1059,7 +1064,6 @@ def field(
     Note:
         Currently implemented using :func:`attr.ib` from `attrs <https://www.attrs.org/>`_
     """
-
     defaults_kwargs = {}
     if default is not NOTHING and default_factory is not NOTHING:
         raise ValueError("Cannot specify both default and default_factory.")
@@ -1091,7 +1095,7 @@ def datamodel(
     frozen: bool = False,
     instantiable: bool = True,
 ) -> Union[Type, Callable[[Type], Type]]:
-    """A class decorator to add generated special methods to classes according to the specified attributes.
+    """Add generated special methods to classes according to the specified attributes (class decorator).
 
     Examines PEP 526 ``__annotations__`` to determine field types and creates
     strict type validation functions for the fields.
@@ -1174,17 +1178,17 @@ class DataModel:
 
 
 # TODO(egparedes): implement type coercing
-# def _make_type_coercer(type_hint: Type[T]) -> Callable[[Any], T]:
-#     return type_hint if isinstance(type_hint, type) else lambda x: x  # type: ignore
+# TODO:  def _make_type_coercer(type_hint: Type[T]) -> Callable[[Any], T]:
+# TODO:      return type_hint if isinstance(type_hint, type) else lambda x: x  # type: ignore
 
 
 # TODO(egparedes): implement full instance freezing
-# def _frozen_setattr(instance, attribute, value):
-#     raise attr.exceptions.FrozenAttributeError(
-#         f"Trying to modify immutable '{attribute.name}' attribute in '{type(instance).__name__}' instance."
-#     )
+# TODO: def _frozen_setattr(instance, attribute, value):
+# TODO:      raise attr.exceptions.FrozenAttributeError(
+# TODO:         f"Trying to modify immutable '{attribute.name}' attribute in '{type(instance).__name__}' instance."
+# TODO:      )
 
 
 # TODO(egparedes): implement validation on attribute assignment
-# def _valid_setattr(instance, attribute, value):
-#     print("SET", attribute, value)
+# TODO:  def _valid_setattr(instance, attribute, value):
+# TODO:      print("SET", attribute, value)
