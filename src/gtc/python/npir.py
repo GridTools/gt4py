@@ -76,6 +76,7 @@ class VectorExpression(Expr):
 
 class BroadCast(VectorExpression):
     expr: Expr
+    dims: int = 3
 
 
 class VectorLValue(common.LocNode):
@@ -95,6 +96,10 @@ class NamedScalar(common.ScalarAccess, Expr):
 
 class VectorTemp(VectorExpression, VectorLValue):
     name: common.SymbolRef
+
+
+class EmptyTemp(VectorExpression):
+    dtype: common.DataType
 
 
 class VectorArithmetic(common.BinaryOp[VectorExpression], VectorExpression):
@@ -121,6 +126,7 @@ class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpr
 
 class VerticalPass(common.LocNode):
     body: List[VectorAssign]
+    temp_defs: List[VectorAssign]
     lower: common.AxisBound
     upper: common.AxisBound
     direction: common.LoopOrder

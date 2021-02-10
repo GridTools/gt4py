@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
@@ -12,8 +13,8 @@ class OirToNpir(NodeTranslator):
     """Lower from optimizable IR (OIR) to numpy IR (NPIR)."""
 
     @dataclass
-    class Context:
-        """Context for a HorizontalExecution."""
+    class VerticalContext:
+        """Context for a VerticalLoop."""
 
         symbol_table: Dict[str, Any] = field(default_factory=lambda: {})
 
@@ -21,7 +22,11 @@ class OirToNpir(NodeTranslator):
             default_factory=lambda: {"lower": [0, 0, 0], "upper": [0, 0, 0]}
         )
 
-        def add_offset(self, axis: int, value: int) -> "OirToNpir.Context":
+        temp_defs: OrderedDict[str, npir.VectorAssign] = field(
+            default_factory=lambda: OrderedDict({})
+        )
+
+        def add_offset(self, axis: int, value: int) -> "OirToNpir.VerticalContext":
             if value > 0:
                 current_value = self.domain_padding["upper"][axis]
                 self.domain_padding["upper"][axis] = max(current_value, value)
@@ -30,13 +35,20 @@ class OirToNpir(NodeTranslator):
                 self.domain_padding["lower"][axis] = max(current_value, abs(value))
             return self
 
-        def add_offsets(self, i: int, j: int, k: int) -> "OirToNpir.Context":
+        def add_offsets(self, i: int, j: int, k: int) -> "OirToNpir.VerticalContext":
             for axis_index, value in enumerate([i, j, k]):
                 self.add_offset(axis_index, value)
             return self
 
+        def ensure_temp_defined(self, temp: oir.FieldAccess) -> None:
+            if temp.name not in self.temp_defs:
+                self.temp_defs[str(temp.name)] = npir.VectorAssign(
+                    left=npir.VectorTemp(name=str(temp.name), dtype=temp.dtype),
+                    right=npir.EmptyTemp(dtype=temp.dtype),
+                )
+
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
-        ctx = self.Context(symbol_table=node.symtable_)
+        ctx = self.VerticalContext(symbol_table=node.symtable_)
         vertical_passes = [self.visit(vloop, ctx=ctx, **kwargs) for vloop in node.vertical_loops]
         field_names: List[str] = []
         scalar_names: List[str] = []
@@ -56,9 +68,10 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, ctx: Optional[Context] = None, **kwargs: Any
+        self, node: oir.VerticalLoop, *, ctx: Optional[VerticalContext] = None, **kwargs: Any
     ) -> npir.VerticalPass:
-        ctx = ctx or self.Context()
+        ctx = ctx or self.VerticalContext()
+        defined_temps = set(ctx.temp_defs.keys())
         kwargs.update(
             {
                 "parallel_k": True if node.loop_order == common.LoopOrder.PARALLEL else False,
@@ -68,15 +81,19 @@ class OirToNpir(NodeTranslator):
         )
         v_assigns = [self.visit(h_exec, ctx=ctx, **kwargs) for h_exec in node.horizontal_executions]
         body = [i for j in v_assigns for i in j]
+        undef_temps = [
+            temp_def for name, temp_def in ctx.temp_defs.items() if name not in defined_temps
+        ]
         return npir.VerticalPass(
             body=body,
+            temp_defs=undef_temps,
             lower=self.visit(node.interval.start, ctx=ctx, **kwargs),
             upper=self.visit(node.interval.end, ctx=ctx, **kwargs),
             direction=self.visit(node.loop_order, ctx=ctx, **kwargs),
         )
 
     def visit_HorizontalExecution(
-        self, node: oir.HorizontalExecution, *, ctx: Optional[Context] = None, **kwargs: Any
+        self, node: oir.HorizontalExecution, *, ctx: Optional[VerticalContext] = None, **kwargs: Any
     ) -> List[npir.VectorAssign]:
         mask = self.visit(node.mask, ctx=ctx, **kwargs)
         return self.visit(node.body, ctx=ctx, mask=mask, **kwargs)
@@ -85,12 +102,16 @@ class OirToNpir(NodeTranslator):
         self,
         node: oir.AssignStmt,
         *,
-        ctx: Optional[Context] = None,
-        mask: Optional[npir.VectorExpression],
+        ctx: Optional[VerticalContext] = None,
+        mask: Optional[npir.VectorExpression] = None,
         **kwargs: Any,
     ) -> npir.VectorAssign:
+        ctx = ctx or self.VerticalContext()
+        if isinstance(ctx.symbol_table.get(node.left.name, None), oir.Temporary):
+            ctx.ensure_temp_defined(node.left)
+
         return npir.VectorAssign(
-            left=self.visit(node.left, ctx=ctx, **kwargs),
+            left=self.visit(node.left, ctx=ctx, is_lvalue=True, **kwargs),
             right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),
             mask=mask,
         )
@@ -99,7 +120,7 @@ class OirToNpir(NodeTranslator):
         self,
         node: oir.Cast,
         *,
-        ctx: Optional[Context] = None,
+        ctx: Optional[VerticalContext] = None,
         broadcast: bool = False,
         **kwargs: Any,
     ) -> Union[npir.Cast, npir.BroadCast]:
@@ -112,10 +133,8 @@ class OirToNpir(NodeTranslator):
         return cast
 
     def visit_FieldAccess(
-        self, node: oir.FieldAccess, *, ctx: Context, parallel_k: bool, **kwargs: Any
+        self, node: oir.FieldAccess, *, ctx: VerticalContext, parallel_k: bool, **kwargs: Any
     ) -> Union[npir.FieldSlice, npir.VectorTemp]:
-        if isinstance(ctx.symbol_table.get(node.name, None), oir.Temporary):
-            return npir.VectorTemp(name=node.name)
         k_offset = node.offset.k
         if (lower_k := kwargs.get("lower_k")) and k_offset < 0:
             if lower_k.level is common.LevelMarker.START:
@@ -136,7 +155,7 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_BinaryOp(
-        self, node: oir.BinaryOp, *, ctx: Optional[Context] = None, **kwargs: Any
+        self, node: oir.BinaryOp, *, ctx: Optional[VerticalContext] = None, **kwargs: Any
     ) -> Union[npir.VectorArithmetic, npir.VectorLogic]:
         kwargs["broadcast"] = True
         left = self.visit(node.left, ctx=ctx, **kwargs)

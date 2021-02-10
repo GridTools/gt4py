@@ -24,12 +24,14 @@ def op_delta_from_int(value: int) -> Tuple[str, str]:
 
 
 class NpirGen(TemplatedGenerator):
+    def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
+        return f"np.{node.name.lower()}"
 
-    Literal = FormatTemplate("np.{_this_node.dtype.name.lower()}({value})")
+    Literal = FormatTemplate("{dtype}({value})")
 
     BroadCast = FormatTemplate("{expr}")
 
-    Cast = FormatTemplate("np.{_this_node.dtype.name.lower()}({expr})")
+    Cast = FormatTemplate("{dtype}({expr})")
 
     def visit_NumericalOffset(
         self, node: npir.NumericalOffset, **kwargs: Any
@@ -57,16 +59,18 @@ class NpirGen(TemplatedGenerator):
 
     FieldSlice = FormatTemplate("{name}_[{i_offset}, {j_offset}, {k_offset}]{mask_acc}")
 
+    EmptyTemp = FormatTemplate("np.zeros(_tmp_shape, dtype={dtype})")
+
     NamedScalar = FormatTemplate("{name}")
 
-    VectorTemp = FormatTemplate("{name}")
+    VectorTemp = FormatTemplate("{name}_")
 
     def visit_VectorAssign(
         self, node: npir.VectorAssign, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         mask_acc = ""
         if node.mask:
-            mask_acc = f"[{self.generic_visit(node.mask)}]"
+            mask_acc = f"[{self.visit(node.mask)}]"
         return self.generic_visit(node, mask_acc=mask_acc, **kwargs)
 
     VectorAssign = FormatTemplate("{left} = {right}")
@@ -125,7 +129,8 @@ class NpirGen(TemplatedGenerator):
         textwrap.dedent(
             """\
             ## -- begin vertical region --
-            k, K = {{ lower }}, {{ upper }}{{ for_loop_line }}
+            {% for assign in temp_defs %}{{ assign }}
+            {% endfor %}k, K = {{ lower }}, {{ upper }}{{ for_loop_line }}
             {% for assign in body %}{{ assign | indent(body_indent, first=True) }}
             {% endfor %}## -- end vertical region --
             """
@@ -142,6 +147,7 @@ class NpirGen(TemplatedGenerator):
             I, J, K = _di + i, _dj + j, _dk + k
             DOMAIN_k = k
             DOMAIN_K = K
+            _tmp_shape = (_di + i + _ui, _dj + j + _uj, _dk + k + _uk)
             ## -- end domain padding --
             """
         )

@@ -96,11 +96,31 @@ def test_assign_stmt_to_vector_assign(parallel_k):
         ),
     )
 
-    ctx = OirToNpir.Context()
+    ctx = OirToNpir.VerticalContext()
     v_assign = OirToNpir().visit(assign_stmt, ctx=ctx, parallel_k=parallel_k, mask=None)
     assert isinstance(v_assign, npir.VectorAssign)
     assert v_assign.left.k_offset.parallel is parallel_k
     assert v_assign.right.k_offset.parallel is parallel_k
+
+
+def test_temp_assign(parallel_k):
+    assign_stmt = oir.AssignStmt(
+        left=oir.FieldAccess(
+            name="a",
+            offset=common.CartesianOffset.zero(),
+            dtype=common.DataType.FLOAT64,
+        ),
+        right=oir.FieldAccess(
+            name="b", offset=common.CartesianOffset(i=-1, j=22, k=0), dtype=common.DataType.FLOAT64
+        ),
+    )
+    v_ctx = OirToNpir.VerticalContext(
+        symbol_table={"a": oir.Temporary(name="a", dtype=common.DataType.FLOAT64)}
+    )
+    _ = OirToNpir().visit(assign_stmt, ctx=v_ctx, parallel_k=parallel_k, mask=None)
+    assert len(v_ctx.temp_defs) == 1
+    assert isinstance(v_ctx.temp_defs["a"].left, npir.VectorTemp)
+    assert isinstance(v_ctx.temp_defs["a"].right, npir.EmptyTemp)
 
 
 def test_field_access_to_field_slice(parallel_k):
@@ -110,7 +130,7 @@ def test_field_access_to_field_slice(parallel_k):
         dtype=common.DataType.FLOAT64,
     )
 
-    ctx = OirToNpir.Context()
+    ctx = OirToNpir.VerticalContext()
     parallel_field_slice = OirToNpir().visit(field_access, ctx=ctx, parallel_k=parallel_k)
     assert parallel_field_slice.k_offset.parallel is parallel_k
     assert parallel_field_slice.i_offset.offset.value == -1
@@ -186,5 +206,5 @@ def test_native_func_call():
             ),
         ],
     )
-    result = OirToNpir().visit(oir_node, parallel_k=True, ctx=OirToNpir.Context())
+    result = OirToNpir().visit(oir_node, parallel_k=True, ctx=OirToNpir.VerticalContext())
     assert isinstance(result, npir.VectorExpression)

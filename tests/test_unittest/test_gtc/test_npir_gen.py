@@ -7,7 +7,7 @@ import pytest
 from gtc import common
 from gtc.python import npir, npir_gen
 
-from .npir_utils import FieldSliceBuilder
+from .npir_utils import FieldSliceBuilder, FieldSliceFactory
 
 
 UNDEFINED_DTYPES = {common.DataType.INVALID, common.DataType.AUTO, common.DataType.DEFAULT}
@@ -28,6 +28,13 @@ def other_dtype(defined_dtype) -> Iterator[Optional[common.DataType]]:
             other = dtype
             break
     yield other
+
+
+def test_datatype() -> None:
+    result = npir_gen.NpirGen().visit(common.DataType.FLOAT64)
+    print(result)
+    match = re.match(r"np.float64", result)
+    assert match
 
 
 def test_literal(defined_dtype: common.DataType) -> None:
@@ -92,7 +99,7 @@ def test_field_slice_sequential_k() -> None:
 
 def test_field_slice_parallel_k() -> None:
     result = npir_gen.NpirGen().visit(
-        FieldSliceBuilder("another_field", parallel_k=True).offsets(0, 0, -3).build()
+        FieldSliceFactory(name="another_field", parallel_k=True, offsets=(0, 0, -3))
     )
     assert result == "another_field_[i:I, j:J, (k - 3):(K - 3)]"
 
@@ -118,6 +125,16 @@ def test_vector_assign() -> None:
         )
     )
     assert result == "a_[i:I, j:J, k_] = b_[i:I, j:J, k_]"
+
+
+def test_temp_definition() -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.VectorAssign(
+            left=npir.VectorTemp(name="a"),
+            right=npir.EmptyTemp(dtype=common.DataType.INT64),
+        )
+    )
+    assert result == "a_ = np.zeros(_tmp_shape, dtype=np.int64)"
 
 
 def test_vector_arithmetic() -> None:
@@ -169,9 +186,10 @@ def test_numerical_offset_zero() -> None:
 def test_vertical_pass_seq() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VerticalPass(
+            temp_defs=[],
             body=[],
             lower=common.AxisBound.from_start(offset=1),
-            upper=common.AxisBound.from_end(offset=2),
+            upper=common.AxisBound.from_end(offset=-2),
             direction=common.LoopOrder.FORWARD,
         )
     )
@@ -187,6 +205,7 @@ def test_vertical_pass_seq() -> None:
 def test_vertical_pass_par() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VerticalPass(
+            temp_defs=[],
             body=[],
             lower=common.AxisBound.start(),
             upper=common.AxisBound.end(),
@@ -205,6 +224,7 @@ def test_vertical_pass_par() -> None:
 def test_verticall_pass_start_start_forward() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VerticalPass(
+            temp_defs=[],
             body=[],
             lower=common.AxisBound.start(),
             upper=common.AxisBound.from_start(offset=5),
@@ -223,15 +243,40 @@ def test_verticall_pass_start_start_forward() -> None:
 def test_verticall_pass_end_end_backward() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VerticalPass(
+            temp_defs=[],
             body=[],
-            lower=common.AxisBound.from_end(offset=4),
-            upper=common.AxisBound.from_end(offset=1),
+            lower=common.AxisBound.from_end(offset=-4),
+            upper=common.AxisBound.from_end(offset=-1),
             direction=common.LoopOrder.BACKWARD,
         )
     )
     print(result)
     match = re.match(
         r"(#.*?\n)?k, K = DOMAIN_K \- 4, DOMAIN_K \- 1\nfor k_ in range\(K-1, k-1, -1\):\n",
+        result,
+        re.MULTILINE,
+    )
+    assert match
+
+
+def test_vertical_pass_temp_def() -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.VerticalPass(
+            temp_defs=[
+                npir.VectorAssign(
+                    left=npir.VectorTemp(name="a"),
+                    right=npir.EmptyTemp(dtype=common.DataType.INT64),
+                )
+            ],
+            body=[],
+            lower=common.AxisBound.from_end(offset=-4),
+            upper=common.AxisBound.from_end(offset=-1),
+            direction=common.LoopOrder.BACKWARD,
+        )
+    )
+    print(result)
+    match = re.match(
+        r"(#.*?\n)?a_ = np.zeros\(_tmp_shape, dtype=np.int64\)\nk, K = DOMAIN_K \- 4, DOMAIN_K \- 1\nfor k_ in range\(K-1, k-1, -1\):\n",
         result,
         re.MULTILINE,
     )
@@ -300,6 +345,7 @@ def test_full_computation_valid(tmp_path) -> None:
             field_params=["f1", "f2", "f3"],
             vertical_passes=[
                 npir.VerticalPass(
+                    temp_defs=[],
                     lower=common.AxisBound.start(),
                     upper=common.AxisBound.end(),
                     direction=common.LoopOrder.PARALLEL,
@@ -319,8 +365,9 @@ def test_full_computation_valid(tmp_path) -> None:
                     ],
                 ),
                 npir.VerticalPass(
+                    temp_defs=[],
                     lower=common.AxisBound.from_start(offset=1),
-                    upper=common.AxisBound.from_end(offset=3),
+                    upper=common.AxisBound.from_end(offset=-3),
                     direction=common.LoopOrder.BACKWARD,
                     body=[
                         npir.VectorAssign(

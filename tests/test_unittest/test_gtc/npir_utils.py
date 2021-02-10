@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+from typing import Tuple
+
+import factory
+
 from gtc.python import npir
 
 
@@ -19,3 +23,19 @@ class FieldSliceBuilder:
             j_offset=npir.AxisOffset.j(self._offsets[1]),
             k_offset=npir.AxisOffset.k(self._offsets[2], parallel=self._parallel_k),
         )
+
+
+class FieldSliceFactory(factory.Factory):
+    class Meta:
+        model = npir.FieldSlice
+
+    class Params:
+        offsets: Tuple[int, int, int] = (0, 0, 0)
+        parallel_k: bool = False
+
+    name = factory.Sequence(lambda n: "field_%d" % n)
+    i_offset = factory.LazyAttribute(lambda obj: npir.AxisOffset.i(obj.offsets[0]))
+    j_offset = factory.LazyAttribute(lambda obj: npir.AxisOffset.j(obj.offsets[1]))
+    k_offset = factory.LazyAttribute(
+        lambda obj: npir.AxisOffset.k(obj.offsets[2], parallel=obj.parallel_k)
+    )
