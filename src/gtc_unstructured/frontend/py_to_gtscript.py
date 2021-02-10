@@ -137,7 +137,7 @@ class PyToGTScript:
         Call = ast.Call(args=Capture("args"), func=ast.Name(id=Capture("func")))
 
         LocationComprehension = ast.comprehension(
-            target=Capture("target"), iter=Capture("iterator")
+            target=Capture("target"), iter=Capture("iterable")
         )
 
         Generator = ast.GeneratorExp(generators=Capture("generators"), elt=Capture("elt"))

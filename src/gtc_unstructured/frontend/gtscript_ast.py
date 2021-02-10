@@ -125,7 +125,7 @@ class Call(Expr):
 
 class LocationComprehension(GTScriptASTNode):
     target: Symbol
-    iterator: Call
+    iterable: Union[SubscriptSingle, SubscriptMultiple]
 
 
 class Generator(Expr):

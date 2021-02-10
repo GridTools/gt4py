@@ -22,8 +22,9 @@ import eve
 import gtc_unstructured.irs.common as common
 import gtc_unstructured.irs.gtir as gtir
 
+from . import built_in_functions
 from .built_in_types import BuiltInTypeMeta
-from .gtscript import Field, Local, Location, Mesh, TemporaryField
+from .gtscript import Field, Local, Location, Connectivity, TemporaryField
 from .gtscript_ast import (
     Argument,
     Assign,
@@ -50,7 +51,6 @@ _reduction_mapping = {
     "min": gtir.ReduceOperator.MIN,
     "max": gtir.ReduceOperator.MAX,
 }
-
 
 class SymbolTable:
     """
@@ -192,11 +192,13 @@ class VarDeclExtractor(eve.NodeVisitor):
         return cls(symbol_table).visit(gt4py_ast)
 
     def visit_LocationComprehension(self, node: LocationComprehension):
-        assert node.iterator.func == "neighbors"
-        assert isinstance(node.iterator.args[-1], Symbol)
-        location_type = self.symbol_table.materialize_constant(node.iterator.args[-1].name)
+        # todo(tehrengruber): do type inference to validate that the iterator returns Locations
+        if not node.iterable.value.name in self.symbol_table:
+            raise ValueError(f"Reference to undefined symbol `{node.iterable.value.name}`")
+        connectivity = self.symbol_table[node.iterable.value.name]
+        location_type = connectivity.secondary_location()
         self.symbol_table[node.target.name] = Location[location_type]
-        self.generic_visit(node.iterator)
+        self.generic_visit(node.iterable)
 
     def visit_LocationSpecification(self, node: LocationSpecification):
         location_type = self.symbol_table.materialize_constant(node.location_type)
@@ -305,19 +307,21 @@ class GTScriptToGTIR(eve.NodeTranslator):
     def visit_LocationComprehension(
         self, node: LocationComprehension, *, location_stack, **kwargs
     ) -> gtir.LocationComprehension:
-        if not node.iterator.func == "neighbors":
+        connectivity = self.symbol_table[node.iterable.value.name]
+        if not issubclass(connectivity, Connectivity):
+            # todo(tehrengruber): better error message
             raise ValueError(
-                f"Invalid neighbor specification. Expected a call to `neighbors`, but got `{node.iterator.func}`."
+                f"Invalid neighbor specification. Expected a connectivity access.`."
             )
 
-        of = self.visit(node.iterator.args[0], location_stack=location_stack, **kwargs)
+        of = self.visit(node.iterable.value, location_stack=location_stack, **kwargs)
         if not isinstance(of, gtir.LocationRef):
             raise ValueError(f"Expected a `LocationRef` node, but got `{type(of)}`")
 
         src_comprehension = location_stack[-1]
         assert src_comprehension.name == of.name
         elements = [src_comprehension.chain.elements[-1]]
-        for loc_type in node.iterator.args[1:]:
+        for loc_type in node.iterable.args[1:]:
             assert isinstance(loc_type, Symbol)
             elements.append(
                 self.symbol_table.materialize_constant(
@@ -331,32 +335,33 @@ class GTScriptToGTIR(eve.NodeTranslator):
     def visit_Call(self, node: Call, *, location_stack, **kwargs):
         # TODO(tehrengruber): all of this can be done with the symbol table and the call inliner
         # reductions
-        if node.func in _reduction_mapping:
-            if not len(node.args):
-                raise ValueError(
-                    f"Invalid number of arguments specified for function {node.func}. Expected 1, but {len(node.args)} were given."
+        if node.func in built_in_functions:
+            if any(method.applicable(node.signature) for method in built_in_functions.neighbor_reductions):
+                if not len(node.args):
+                    raise ValueError(
+                        f"Invalid number of arguments specified for function {node.func}. Expected 1, but {len(node.args)} were given."
+                    )
+                if not isinstance(node.args[0], Generator) or len(node.args[0].generators) != 1:
+                    raise ValueError("Invalid argument to {node.func}")
+
+                op = _reduction_mapping[node.func]
+                neighbors = self.visit(
+                    node.args[0].generators[0], **{**kwargs, "location_stack": location_stack}
                 )
-            if not isinstance(node.args[0], Generator) or len(node.args[0].generators) != 1:
-                raise ValueError("Invalid argument to {node.func}")
 
-            op = _reduction_mapping[node.func]
-            neighbors = self.visit(
-                node.args[0].generators[0], **{**kwargs, "location_stack": location_stack}
-            )
+                # operand gets new location stack
+                new_location_stack = location_stack + [neighbors]
 
-            # operand gets new location stack
-            new_location_stack = location_stack + [neighbors]
+                operand = self.visit(
+                    node.args[0].elt, **{**kwargs, "location_stack": new_location_stack}
+                )
 
-            operand = self.visit(
-                node.args[0].elt, **{**kwargs, "location_stack": new_location_stack}
-            )
-
-            return gtir.NeighborReduce(
-                op=op,
-                operand=operand,
-                neighbors=neighbors,
-                location_type=location_stack[-1].chain.elements[-1],
-            )
+                return gtir.NeighborReduce(
+                    op=op,
+                    operand=operand,
+                    neighbors=neighbors,
+                    location_type=location_stack[-1].chain.elements[-1],
+                )
 
         raise ValueError()
 
@@ -456,6 +461,11 @@ class GTScriptToGTIR(eve.NodeTranslator):
         )
 
     @staticmethod
+    def _transform_connectivity_type(name, connectivity_type):
+        raise NotImplementedError()
+        #return gtir.Connecitvity(name=SymbolName.from_string(name), primary=1)
+
+    @staticmethod
     def _transform_field_type(name, field_type):
         assert issubclass(field_type, Field) or issubclass(field_type, TemporaryField)
         (
@@ -488,12 +498,13 @@ class GTScriptToGTIR(eve.NodeTranslator):
 
     def visit_Computation(self, node: Computation) -> gtir.Computation:
         # parse arguments
-        if not issubclass(self.symbol_table[node.arguments[0].name], Mesh):
-            raise ValueError("First stencil argument must be a gtscript.Mesh")
-
         field_args = []
-        for arg in node.arguments[1:]:
-            field_args.append(self._transform_field_type(arg.name, self.symbol_table[arg.name]))
+        connectivity_args = []
+        for arg in node.arguments:
+            if issubclass(self.symbol_table[arg.name], Field):
+                field_args.append(self._transform_field_type(arg.name, self.symbol_table[arg.name]))
+            elif issubclass(self.symbol_table[arg.name], Connectivity):
+                connectivity_args.append(self._transform_connectivity_type(arg.name, self.symbol_table[arg.name]))
 
         # parse temporary fields
         temporary_field_decls = []

@@ -36,15 +36,21 @@ class BuiltInTypeMeta(type):
         instance = type.__new__(cls, class_name, bases, namespace)
         instance.class_name = class_name
         instance.namespace = namespace
-        instance.args = args
+        instance.args = args if args else []
         return instance
+
+    @property
+    def body(self):
+        """Return type function body (name borrowed from polymorphism theory)."""
+        return self.__class__(self.class_name, (), self.namespace, args=[])
 
     def __eq__(self, other) -> bool:
         if (
             isinstance(other, BuiltInTypeMeta)
             and self.namespace == other.namespace
             and self.class_name == other.class_name
-        ) and (self.args is None or self.args == other.args):
+            and self.args == other.args
+        ):
             return True
         return False
 
@@ -53,7 +59,7 @@ class BuiltInTypeMeta(type):
     ) -> "BuiltInTypeMeta":  # TODO(tehrengruber): evaluate using __class_getitem__ instead
         if not isinstance(args, tuple):
             args = (args,)
-        return BuiltInTypeMeta(self.class_name, (), self.namespace, args=args)
+        return self.__class__(self.class_name, self.__bases__, self.namespace, args=args)
 
     def __instancecheck__(self, instance) -> bool:
         # TODO(tehrengruber): implement
@@ -61,15 +67,36 @@ class BuiltInTypeMeta(type):
 
     def __subclasscheck__(self, other) -> bool:
         # TODO(tehrengruber): enhance
-        return cast(bool, self == other)
+        for base in other.__mro__:
+            if self == base or (isinstance(base, BuiltInTypeMeta) and self == base.body):
+                return True
+        return False
 
 
 class BuiltInType(metaclass=BuiltInTypeMeta):
     pass
 
 
-class Mesh(BuiltInType):
-    pass
+class Connectivity(BuiltInType):
+    @classmethod
+    def base_connecitivty(cls):
+        return next(t for t in cls.__mro__ if issubclass(t, Connectivity) and t.body == Connectivity)
+
+    @classmethod
+    def primary_location(cls):
+        return cls.base_connecitivty().args[0]
+
+    @classmethod
+    def secondary_location(cls):
+        return cls.base_connecitivty().args[1]
+
+    @classmethod
+    def max_neighbors(cls):
+        return cls.base_connecitivty().args[2]
+
+    @classmethod
+    def has_skip_values(cls):
+        return cls.base_connecitivty().args[3]
 
 
 class Field(BuiltInType):
@@ -86,5 +113,6 @@ class Location(BuiltInType):
 
 class Local(BuiltInType):
     """Used as a type argument to :class:`.Field` representing a Local dimension."""
+    pass
 
     pass
