@@ -13,6 +13,7 @@ flake8-rst-docstrings>=0.0.14
 hypothesis>=4.14
 isort~=5.1
 pre-commit~=1.18
+psutil>=5.0
 pygments>=2.7
 pytest~=6.1
 pytest-cache>=1.0
