@@ -92,13 +92,12 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             return "+"
         raise NotImplementedError("Not implemented UnaryOperator encountered.")
 
+    Extent = as_fmt("extent<{iminus}, {iplus}, {jminus}, {jplus}>()")
+
     HorizontalExecution = as_mako(
         """
         // ${id_}
-        % if _this_node.sync_before:
-            __syncthreads();
-        % endif
-        if (validator(extent<0, 0, 0, 0>())${' && ' + mask if _this_node.mask else ''}) {
+        if (validator(${extent})${' && ' + mask if _this_node.mask else ''}) {
             ${'\\n'.join(declarations)}
             ${'\\n'.join(body)}
         }
@@ -109,7 +108,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """
         // ${id_}
         if (k_block >= ${start_offset} && k_block < k_size - ${end_offset}) {
-            ${'\\n'.join(horizontal_executions)}
+            ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
         }
         """
     )

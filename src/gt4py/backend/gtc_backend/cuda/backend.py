@@ -30,7 +30,7 @@ from gt4py.backend.gt_backends import (
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
-from gtc.cuir import cuir, cuir_codegen, oir_to_cuir
+from gtc.cuir import cuir, cuir_codegen, extent_analysis, oir_to_cuir
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
@@ -56,6 +56,7 @@ class GTCCudaExtGenerator:
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
         oir = self._optimize_oir(oir)
         cuir = oir_to_cuir.OIRToCUIR().visit(oir)
+        cuir = extent_analysis.ComputeExtents().visit(cuir)
         implementation = cuir_codegen.CUIRCodegen.apply(cuir)
         bindings = GTCCudaBindingsCodegen.apply(cuir, module_name=self.module_name)
         return {

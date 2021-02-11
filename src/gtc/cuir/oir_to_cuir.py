@@ -64,7 +64,6 @@ class OIRToCUIR(eve.NodeTranslator):
             body=self.visit(node.body, **kwargs),
             mask=self.visit(node.mask, **kwargs),
             declarations=self.visit(node.declarations),
-            sync_before=True,
         )
 
     def visit_AxisBound(self, node: oir.AxisBound, **kwargs: Any) -> int:

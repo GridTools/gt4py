@@ -103,13 +103,16 @@ class Extent(LocNode):
     jminus: int
     jplus: int
 
+    @classmethod
+    def zero(cls) -> "Extent":
+        return cls(iminus=0, iplus=0, jminus=0, jplus=0)
+
 
 class HorizontalExecution(LocNode):
     body: List[Stmt]
     mask: Optional[Expr]
     declarations: List[LocalScalar]
     extent: Optional[Extent]
-    sync_before: bool
 
 
 class VerticalLoopSection(LocNode):
