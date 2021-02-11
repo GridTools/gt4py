@@ -69,7 +69,10 @@ class GTCModuleGenerator(BaseModuleGenerator):
         )
 
     def generate_module_members(self) -> str:
-        return super().generate_module_members()
+        module_members = super().generate_module_members()
+        if not self.backend.npir.field_params:
+            module_members += "\n_NO_FIELDS = None\n"
+        return module_members
 
     def generate_class_name(self) -> str:
         return self.builder.class_name
@@ -125,7 +128,10 @@ class GTCModuleGenerator(BaseModuleGenerator):
         }
 
     def generate_field_names(self) -> List[str]:
-        return self.backend.npir.field_params
+        field_names = self.backend.npir.field_params.copy()
+        if not field_names:
+            field_names.append("_NO_FIELDS")
+        return field_names
 
     def generate_param_names(self) -> List[str]:
         return [

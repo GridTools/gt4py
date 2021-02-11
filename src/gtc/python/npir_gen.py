@@ -89,7 +89,6 @@ class NpirGen(TemplatedGenerator):
     def visit_VectorUnaryOp(
         self, node: npir.VectorUnaryOp, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        print(f"visiting {node.id_}")
         return self.generic_visit(node, **kwargs)
 
     VectorUnaryOp = FormatTemplate("({op}({expr}))")
