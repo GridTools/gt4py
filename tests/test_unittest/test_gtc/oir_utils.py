@@ -20,7 +20,7 @@ from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
 from gtc.oir import (
     AssignStmt,
     AxisBound,
-    CacheDecl,
+    CacheDesc,
     Decl,
     Expr,
     FieldAccess,
@@ -161,7 +161,7 @@ class VerticalLoopBuilder:
     def __init__(self) -> None:
         self._loop_order = LoopOrder.PARALLEL
         self._sections: List[VerticalLoopSection] = []
-        self._caches: List[CacheDecl] = []
+        self._caches: List[CacheDesc] = []
 
     def loop_order(self, loop_order: LoopOrder) -> "VerticalLoopBuilder":
         self._loop_order = loop_order
@@ -171,7 +171,7 @@ class VerticalLoopBuilder:
         self._sections.append(section)
         return self
 
-    def add_cache(self, cache: CacheDecl) -> "VerticalLoopBuilder":
+    def add_cache(self, cache: CacheDesc) -> "VerticalLoopBuilder":
         self._caches.append(cache)
         return self
 

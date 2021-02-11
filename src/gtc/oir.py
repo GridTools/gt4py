@@ -150,20 +150,22 @@ class Interval(LocNode):
         start, end = values["start"], values["end"]
         if start.level == common.LevelMarker.END and end.level == common.LevelMarker.START:
             raise ValueError("Start level must be smaller or equal end level")
-        if start.level == end.level and start.offset > end.offset:
-            raise ValueError("Start offset must be smaller or equal end offset")
+        if start.level == end.level and not start.offset < end.offset:
+            raise ValueError(
+                "Start offset must be smaller than end offset if start and end levels are equal"
+            )
         return values
 
 
-class CacheDecl(LocNode):
+class CacheDesc(LocNode):
     name: SymbolRef
 
 
-class IJCache(CacheDecl):
+class IJCache(CacheDesc):
     pass
 
 
-class KCache(CacheDecl):
+class KCache(CacheDesc):
     fill: bool
     flush: bool
 
@@ -176,7 +178,7 @@ class VerticalLoopSection(LocNode):
 class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
     sections: List[VerticalLoopSection]
-    caches: List[CacheDecl]
+    caches: List[CacheDesc]
 
     @validator("sections")
     def nonempty_loop(cls, v: List[VerticalLoopSection]) -> List[VerticalLoopSection]:
