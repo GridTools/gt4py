@@ -51,11 +51,11 @@ def find_caches(root: Optional[str] = None, cache_name: Optional[str] = None) ->
     return result
 
 
-def clean_caches(caches: Sequence[pathlib.Path], *, quiet: bool = True) -> None:
+def clean_caches(caches: Sequence[pathlib.Path], *, verbose: bool = False) -> None:
     for c in caches:
         try:
             canonical_path = c.resolve(strict=True)
-            if not quiet:
+            if verbose:
                 print(f"\t{canonical_path}")
             shutil.rmtree(canonical_path)
         except OSError as e:
@@ -72,7 +72,7 @@ if __name__ == "__main__":
 
     if args.command == "clean":
         print("\nCleaning cache folders:\n")
-        clean_caches(caches, quiet=False)
+        clean_caches(caches, verbose=True)
 
     elif args.command == "status":
         print(f"\nCache folder name: '{_get_cache_name()}'")
