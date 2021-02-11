@@ -14,10 +14,65 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, List
+from typing import Any, List, Optional, Union
 
 from eve import Str, SymbolName, SymbolTableTrait
-from gtc.common import DataType, LocNode
+from gtc import common
+from gtc.common import DataType, LocNode, LoopOrder
+
+
+class Expr(common.Expr):
+    dtype: Optional[common.DataType]
+
+    # TODO Eve could provide support for making a node abstract
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if type(self) is Expr:
+            raise TypeError("Trying to instantiate `Expr` abstract class.")
+        super().__init__(*args, **kwargs)
+
+
+class Stmt(common.Stmt):
+    # TODO Eve could provide support for making a node abstract
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if type(self) is Stmt:
+            raise TypeError("Trying to instantiate `Stmt` abstract class.")
+        super().__init__(*args, **kwargs)
+
+
+class Literal(common.Literal, Expr):  # type: ignore
+    pass
+
+
+class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
+    pass
+
+
+class FieldAccess(common.FieldAccess, Expr):  # type: ignore
+    pass
+
+
+class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt):
+    _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
+
+
+class UnaryOp(common.UnaryOp[Expr], Expr):
+    pass
+
+
+class BinaryOp(common.BinaryOp[Expr], Expr):
+    _dtype_propagation = common.binary_op_dtype_propagation(strict=True)
+
+
+class TernaryOp(common.TernaryOp[Expr], Expr):
+    _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
+
+
+class Cast(common.Cast[Expr], Expr):  # type: ignore
+    pass
+
+
+class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
+    _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
 class Decl(LocNode):
@@ -34,12 +89,38 @@ class FieldDecl(Decl):
     pass
 
 
+class LocalScalar(Decl):
+    pass
+
+
 class Temporary(Decl):
     pass
 
 
+class Extent(LocNode):
+    iminus: int
+    iplus: int
+    jminus: int
+    jplus: int
+
+
+class HorizontalExecution(LocNode):
+    body: List[Stmt]
+    mask: Optional[Expr]
+    declarations: List[LocalScalar]
+    extent: Optional[Extent]
+    sync_before: bool
+
+
+class VerticalLoopSection(LocNode):
+    start_offset: int
+    end_offset: int
+    horizontal_executions: List[HorizontalExecution]
+
+
 class VerticalLoop(LocNode):
-    pass
+    loop_order: LoopOrder
+    sections: List[VerticalLoopSection]
 
 
 class Kernel(LocNode):
