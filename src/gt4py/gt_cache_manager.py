@@ -86,4 +86,3 @@ if __name__ == "__main__":
 
     else:
         raise AssertionError(f"command={args.command}")
-
