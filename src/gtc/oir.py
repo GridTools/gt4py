@@ -150,8 +150,10 @@ class Interval(LocNode):
         start, end = values["start"], values["end"]
         if start.level == common.LevelMarker.END and end.level == common.LevelMarker.START:
             raise ValueError("Start level must be smaller or equal end level")
-        if start.level == end.level and start.offset >= end.offset:
-            raise ValueError("Start offset must be smaller or equal end offset")
+        if start.level == end.level and not start.offset < end.offset:
+            raise ValueError(
+                "Start offset must be smaller than end offset if start and end levels are equal"
+            )
         return values
 
 
