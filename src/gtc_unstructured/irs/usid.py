@@ -41,7 +41,7 @@ class FieldAccess(Expr):
 
 
 class VarDecl(Stmt):
-    name: Str
+    name: SymbolName
     init: Expr
     vtype: common.DataType
 

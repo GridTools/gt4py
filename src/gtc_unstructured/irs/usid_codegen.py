@@ -142,9 +142,10 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
             **kwargs,
         )
 
+    # TODO consider stricter capture
     NeighborLoop = as_mako(
         """
-        foreach_neighbor<${connectivity_deref.tag}>([](auto &&${primary}, auto &&${secondary}){${''.join(body)}}, ${primary_sid_deref.ptr_name}, ${primary_sid_deref.strides_name}, ${secondary_sid});
+        foreach_neighbor<${connectivity_deref.tag}>([&](auto &&${primary}, auto &&${secondary}){${''.join(body)}}, ${primary_sid_deref.ptr_name}, ${primary_sid_deref.strides_name}, ${secondary_sid});
         """
     )
 
