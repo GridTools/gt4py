@@ -181,12 +181,10 @@ def vertical_advection_dycore(
     with computation(BACKWARD):
         with interval(-1, None):
             datacol = dcol[0, 0, 0]
-            data_col = datacol
             utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
 
         with interval(0, -1):
-            datacol = dcol[0, 0, 0] - ccol[0, 0, 0] * data_col[0, 0, 1]
-            data_col = datacol
+            datacol = dcol[0, 0, 0] - ccol[0, 0, 0] * datacol[0, 0, 1]
             utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
 
 
