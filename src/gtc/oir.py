@@ -155,15 +155,15 @@ class Interval(LocNode):
         return values
 
 
-class CacheDecl(LocNode):
+class CacheDesc(LocNode):
     name: SymbolRef
 
 
-class IJCache(CacheDecl):
+class IJCache(CacheDesc):
     pass
 
 
-class KCache(CacheDecl):
+class KCache(CacheDesc):
     fill: bool
     flush: bool
 
@@ -176,7 +176,7 @@ class VerticalLoopSection(LocNode):
 class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
     sections: List[VerticalLoopSection]
-    caches: List[CacheDecl]
+    caches: List[CacheDesc]
 
     @validator("sections")
     def nonempty_loop(cls, v: List[VerticalLoopSection]) -> List[VerticalLoopSection]:
