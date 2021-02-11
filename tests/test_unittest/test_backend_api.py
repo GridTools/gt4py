@@ -43,7 +43,7 @@ def test_generate_computation(backend, tmp_path):
     builder = StencilBuilder(init_1, backend=backend).with_caching(
         "nocaching", output_path=tmp_path / __name__ / "generate_computation"
     )
-    if backend.name.startswith("gtc:"):
+    if backend.name.startswith("gtc:gt:"):
         result = builder.backend.generate_computation(ir=builder.definition_ir)
     else:
         result = builder.backend.generate_computation()

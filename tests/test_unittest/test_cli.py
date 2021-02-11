@@ -38,7 +38,7 @@ def clirunner():
             name,
             # gtc backends require definition ir as input, for now we skip the tests
             marks=pytest.mark.skipif(
-                name.startswith("dawn:") or name.startswith("gtc:"),
+                name.startswith("dawn:") or name.startswith("gtc:gt:"),
                 reason="gtc backends not yet supported",
             ),
         )
@@ -110,8 +110,7 @@ BACKEND_ROW_PATTERN_BY_NAME = {
     "dawn:naive": r"^\s*dawn:naive\s*c\+\+\s*python\s*No",
     "dawn:cxxopt": r"^\s*dawn:cxxopt\s*c\+\+\s*python\s*No",
     "dawn:cuda": r"^\s*dawn:cuda\s*cuda\s*python\s*No",
-    "gtc:py": r"^\s*gtc:py\s*python\s*python\s*Yes",
-    "gtc:numpy": r"^\s*gtc:py\s*python\s*python\s*Yes",
+    "gtc:numpy": r"^\s*gtc:numpy\s*python\s*python\s*Yes",
     "nocli": r"^\s*nocli\s*\?\s*\?\s*No",
 }
 
