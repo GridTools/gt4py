@@ -53,13 +53,14 @@ def find_caches(root: Optional[str] = None, cache_name: Optional[str] = None) ->
 
 def clean_caches(caches: Sequence[pathlib.Path], *, verbose: bool = False) -> None:
     for c in caches:
-        try:
-            canonical_path = c.resolve(strict=True)
-            if verbose:
-                print(f"\t{canonical_path}")
-            shutil.rmtree(canonical_path)
-        except OSError as e:
-            print(f"Error: {c} : {e.strerror}")
+        if c.exists():
+            try:
+                canonical_path = c.resolve(strict=True)
+                if verbose:
+                    print(f"\t{canonical_path} [tree]")
+                shutil.rmtree(canonical_path, ignore_errors=False)
+            except OSError as e:
+                print(f"Error: {c} : {e.strerror}")
 
 
 if __name__ == "__main__":
@@ -69,9 +70,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     caches = [cache for root in args.root for cache in find_caches(root)]
+    num_matches = len(caches)
 
     if args.command == "clean":
-        print("\nCleaning cache folders:\n")
+        print(f"\nCleaning cache folders: ({num_matches} found)\n")
         clean_caches(caches, verbose=True)
 
     elif args.command == "status":
@@ -80,7 +82,7 @@ if __name__ == "__main__":
         print(f"\tconfig = {_get_root()})")
         print(f"\targs = {args.root})")
         caches_list = "\n\t".join(str(c) for c in caches)
-        print(f"\nFound:\n\t{caches_list}")
+        print(f"\nFound {num_matches} matches{':' if num_matches > 0 else ''}\n\t{caches_list}")
 
     else:
         raise AssertionError(f"command={args.command}")
