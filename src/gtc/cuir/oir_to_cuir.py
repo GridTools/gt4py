@@ -17,7 +17,7 @@
 from typing import Any
 
 import eve
-from gtc import common, oir
+from gtc import oir
 from gtc.cuir import cuir
 
 

@@ -108,7 +108,7 @@ class Extent(LocNode):
         return cls(iminus=0, iplus=0, jminus=0, jplus=0)
 
     @classmethod
-    def union(cls, *extents):
+    def union(cls, *extents: "Extent") -> "Extent":
         return cls(
             iminus=min(e.iminus for e in extents),
             iplus=max(e.iplus for e in extents),
