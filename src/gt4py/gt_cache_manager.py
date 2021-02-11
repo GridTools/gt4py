@@ -82,9 +82,8 @@ if __name__ == "__main__":
         print(f"\tconfig = {_get_root()})")
         print(f"\targs = {args.root})")
         caches_list = "\n\t".join(str(c) for c in caches)
-        print(f"\nFound {num_matches} matches{':' if num_matches > 0 else ''}\n\t{caches_list}")
+        print(f"\nFound {num_matches} matches{':' if num_matches > 0 else ''}\n\t{caches_list}\n")
 
     else:
         raise AssertionError(f"command={args.command}")
 
-    print()
