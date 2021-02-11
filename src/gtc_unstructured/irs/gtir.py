@@ -18,10 +18,12 @@ import enum
 from typing import List, Optional, Union
 
 from devtools import debug  # noqa: F401
-from pydantic import root_validator, validator
+from pydantic import root_validator
 
-from eve import Node, Str, StrEnum
+from eve import Node, Str, StrEnum, SymbolTableTrait
+from eve.type_definitions import SymbolName, SymbolRef
 from gtc_unstructured.irs import common
+from gtc import common as stable_gtc_common
 
 
 class Expr(Node):
@@ -38,16 +40,6 @@ class Literal(common.Literal, Expr):
     pass
 
 
-class NeighborChain(Node):
-    elements: List[common.LocationType]
-
-    @validator("elements")
-    def not_empty(cls, elements):
-        if len(elements) < 1:
-            raise ValueError("NeighborChain must contain at least one locations")
-        return elements
-
-
 @enum.unique
 class ReduceOperator(StrEnum):
     """Reduction operator identifier."""
@@ -58,18 +50,23 @@ class ReduceOperator(StrEnum):
     MIN = "MIN"
 
 
-class Domain(Node):
-    pass
+class PrimaryLocation(Node):
+    name: SymbolName
+    location_type: common.LocationType
+
+
+# TODO indirection not needed?
+class ConnectivityRef(Node):
+    name: SymbolRef
 
 
 class LocationRef(Node):
-    name: str
+    name: SymbolRef  # to PrimaryLocation or LocationComprehension
 
 
 class LocationComprehension(Node):
-    name: str
-    chain: NeighborChain
-    of: Union[LocationRef, Domain]
+    name: SymbolName
+    of: ConnectivityRef
 
 
 class NeighborReduce(Expr):
@@ -77,16 +74,18 @@ class NeighborReduce(Expr):
     op: ReduceOperator
     neighbors: LocationComprehension
 
-    @root_validator(pre=True)
-    def check_location_type(cls, values):
-        if values["neighbors"].chain.elements[-1] != values["operand"].location_type:
-            raise ValueError("Location type mismatch")
-        return values
+    # TODO to validate we would need to lookup the connectivity,
+    # i.e. can only be done when symbols are resolvable
+    # @root_validator(pre=True)
+    # def check_location_type(cls, values):
+    #     if values["neighbors"].chain.elements[-1] != values["operand"].location_type:
+    #         raise ValueError("Location type mismatch")
+    #     return values
 
 
 class FieldAccess(Expr):
-    name: Str  # via symbol table
-    subscript: List[LocationRef]  # maybe remove the separate LocationRef
+    name: SymbolRef
+    subscript: List[LocationRef]
 
 
 class AssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
@@ -103,7 +102,6 @@ class VerticalDimension(Node):
 
 class HorizontalDimension(Node):
     primary: common.LocationType
-    secondary: Optional[NeighborChain]
 
 
 class Dimensions(Node):
@@ -113,8 +111,15 @@ class Dimensions(Node):
 
 
 class UField(Node):
-    name: Str
-    vtype: common.DataType
+    name: SymbolName
+    vtype: common.DataType  # TODO rename vtype
+    dimensions: Dimensions
+
+
+class SparseField(Node):
+    name: SymbolName
+    connectivity: SymbolRef
+    vtype: common.DataType  # TODO rename vtype
     dimensions: Dimensions
 
 
@@ -124,22 +129,17 @@ class TemporaryField(UField):
 
 class HorizontalLoop(Node):
     stmt: Stmt
-    location: LocationComprehension
+    location: PrimaryLocation
 
     @root_validator(pre=True)
     def check_location_type(cls, values):
-        # Don't infer here! The location type of the loop should always come from the frontend!
-        if len(values["location"].chain.elements) != 1:
-            raise ValueError(
-                "LocationComprehension on HorizontalLoop must have NeighborChain of length 1"
-            )
-        if values["stmt"].location_type != values["location"].chain.elements[0]:
+        if values["stmt"].location_type != values["location"].location_type:
             raise ValueError("Location type mismatch")
         return values
 
 
 class VerticalLoop(Node):
-    # each statement inside a `with location_type` is interpreted as a full horizontal loop (see parallel model of SIR)
+    # each statement inside a `with location_type` is interpreted as a full horizontal loop (see parallel model)
     horizontal_loops: List[HorizontalLoop]
     loop_order: common.LoopOrder
 
@@ -148,8 +148,19 @@ class Stencil(Node):
     vertical_loops: List[VerticalLoop]
 
 
-class Computation(Node):
+class Connectivity(Node):
+    name: SymbolName
+    primary: common.LocationType
+    secondary: common.LocationType
+    max_neighbors: int
+    has_skip_values: bool
+
+
+class Computation(Node, SymbolTableTrait):
     name: Str
-    params: List[UField]
+    connectivities: List[Connectivity]
+    params: List[Union[UField, SparseField]]
     declarations: Optional[List[TemporaryField]]
     stencils: List[Stencil]
+
+    _validate_symbol_refs = stable_gtc_common.validate_symbol_refs()

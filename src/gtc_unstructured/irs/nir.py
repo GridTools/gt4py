@@ -19,9 +19,10 @@ from typing import List, Optional, Tuple, Union
 from devtools import debug  # noqa: F401
 from pydantic import root_validator, validator
 
-from eve import Node, Str
-from eve.concepts import FrozenNode
+from eve import Node, Str, SymbolTableTrait
+from eve.type_definitions import SymbolName, SymbolRef
 from gtc_unstructured.irs import common
+from gtc import common as stable_gtc_common
 
 
 class Expr(Node):
@@ -39,26 +40,6 @@ class Literal(Expr):
     vtype: common.DataType
 
 
-class NeighborChain(FrozenNode):
-    elements: Tuple[common.LocationType, ...]
-
-    # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
-    def __hash__(self):
-        return hash(self.elements)
-
-    def __eq__(self, other):
-        return self.elements == other.elements
-
-    @validator("elements")
-    def not_empty(cls, elements):
-        if len(elements) < 1:
-            raise ValueError("NeighborChain must contain at least one locations")
-        return elements
-
-    def __str__(self):
-        return "_".join([common.LocationType(loc).name for loc in self.elements])
-
-
 class LocalVar(Node):
     name: Str
     vtype: common.DataType
@@ -68,9 +49,6 @@ class LocalVar(Node):
 class BlockStmt(Stmt):
     declarations: List[LocalVar]
     statements: List[Stmt]
-
-    class Config:
-        validate_assignment = True
 
     @root_validator(pre=True)
     def check_location_type(cls, values):
@@ -94,14 +72,15 @@ class BlockStmt(Stmt):
 
 
 class NeighborLoop(Stmt):
-    neighbors: NeighborChain
+    name: SymbolName  # interpret as loop var
+    connectivity: SymbolRef
     body: BlockStmt
 
-    @root_validator(pre=True)
-    def check_location_type(cls, values):
-        if values["neighbors"].elements[-1] != values["body"].location_type:
-            raise ValueError("Location type mismatch")
-        return values
+    # @root_validator(pre=True)
+    # def check_location_type(cls, values):
+    #     if values["neighbors"].elements[-1] != values["body"].location_type:
+    #         raise ValueError("Location type mismatch")
+    #     return values
 
 
 class Access(Expr):
@@ -109,12 +88,13 @@ class Access(Expr):
 
 
 class FieldAccess(Access):
-    primary: NeighborChain
-    secondary: Optional[NeighborChain]
+    primary: SymbolRef  # TODO to a PrimaryLocation or a LocationComprehension
+    # secondary: Optional[SymbolRef]  # TODO unused? # to a LocationRef
+    # TODO vertical
 
-    @property
-    def extent(self):
-        return len(self.primary.elements) > 1
+    # @property
+    # def extent(self):
+    #     return len(self.primary.elements) > 1
 
 
 class VarAccess(Access):
@@ -135,7 +115,7 @@ class VerticalDimension(Node):
 
 class HorizontalDimension(Node):
     primary: common.LocationType
-    secondary: Optional[NeighborChain]
+    # secondary_connectivity: SymbolRef
 
 
 class Dimensions(Node):
@@ -145,23 +125,35 @@ class Dimensions(Node):
 
 
 class UField(Node):
-    name: Str
+    name: SymbolName
     vtype: common.DataType
     dimensions: Dimensions
+
+
+class SparseField(Node):
+    name: SymbolName
+    vtype: common.DataType
+    dimensions: Dimensions
+    connectivity: SymbolRef
 
 
 class TemporaryField(UField):
     pass
 
 
-class HorizontalLoop(Node):
-    stmt: BlockStmt
+class IterationSpace(Node):
+    name: SymbolName
     location_type: common.LocationType
+
+
+class HorizontalLoop(Node, SymbolTableTrait):
+    stmt: BlockStmt
+    iteration_space: IterationSpace  # maybe inline iterationspace?
 
     @root_validator(pre=True)
     def check_location_type(cls, values):
         # Don't infer here! The location type of the loop should always come from the frontend!
-        if values["stmt"].location_type != values["location_type"]:
+        if values["stmt"].location_type != values["iteration_space"].location_type:
             raise ValueError("Location type mismatch")
         return values
 
@@ -176,8 +168,19 @@ class Stencil(Node):
     vertical_loops: List[VerticalLoop]
 
 
-class Computation(Node):
+class Connectivity(Node):
+    name: SymbolName
+    primary: common.LocationType
+    secondary: common.LocationType
+    max_neighbors: int
+    has_skip_values: bool
+
+
+class Computation(Node, SymbolTableTrait):
     name: Str
-    params: List[UField]
+    connectivities: List[Connectivity]
+    params: List[Union[SparseField, UField]]
     stencils: List[Stencil]
     declarations: List[TemporaryField]
+
+    _validate_symbol_refs = stable_gtc_common.validate_symbol_refs()

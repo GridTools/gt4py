@@ -97,6 +97,7 @@ if(BUILD_TESTING)
     find_package(Atlas REQUIRED)
 
     add_subdirectory(usid)
+    add_subdirectory(gtir)
 
     # add_regression_test(cell2cell)
     # add_regression_test(vertex2edge)

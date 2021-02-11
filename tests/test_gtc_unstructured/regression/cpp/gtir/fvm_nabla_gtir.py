@@ -11,17 +11,19 @@ from gtc_unstructured.irs.gtir import (
     AssignStmt,
     BinaryOp,
     Computation,
+    Connectivity,
+    ConnectivityRef,
     Dimensions,
-    Domain,
     FieldAccess,
     HorizontalDimension,
     HorizontalLoop,
     Literal,
     LocationComprehension,
     LocationRef,
-    NeighborChain,
     NeighborReduce,
+    PrimaryLocation,
     ReduceOperator,
+    SparseField,
     Stencil,
     TemporaryField,
     UField,
@@ -49,18 +51,6 @@ S_MYY = UField(
 )
 fields.append(S_MYY)
 
-zavgS_MXX = UField(
-    name="zavgS_MXX",
-    vtype=DataType.FLOAT64,
-    dimensions=Dimensions(horizontal=HorizontalDimension(primary=LocationType.Edge)),
-)
-fields.append(zavgS_MXX)
-zavgS_MYY = UField(
-    name="zavgS_MYY",
-    vtype=DataType.FLOAT64,
-    dimensions=Dimensions(horizontal=HorizontalDimension(primary=LocationType.Edge)),
-)
-fields.append(zavgS_MYY)
 
 pp = UField(
     name="pp",
@@ -89,13 +79,13 @@ vol = UField(
 )
 fields.append(vol)
 
-sign = UField(
+sign = SparseField(
     name="sign",
     vtype=DataType.FLOAT64,
+    connectivity="v2e",
     dimensions=Dimensions(
         horizontal=HorizontalDimension(
             primary=LocationType.Vertex,
-            secondary=NeighborChain(elements=[LocationType.Vertex, LocationType.Edge]),
         )
     ),
 )
@@ -110,8 +100,7 @@ zavg_red = NeighborReduce(
     ),
     neighbors=LocationComprehension(
         name="v_of_e",
-        chain=NeighborChain(elements=[LocationType.Edge, LocationType.Vertex]),
-        of=LocationRef(name="e"),
+        of=ConnectivityRef(name="e2v"),
     ),
     location_type=LocationType.Edge,
 )
@@ -162,21 +151,15 @@ vertical_loops.append(
         loop_order=LoopOrder.FORWARD,
         horizontal_loops=[
             HorizontalLoop(
-                location=LocationComprehension(
-                    name="e", chain=NeighborChain(elements=[LocationType.Edge]), of=Domain()
-                ),
+                location=PrimaryLocation(name="e", location_type=LocationType.Edge),
                 stmt=zavg_assign,
             ),
             HorizontalLoop(
-                location=LocationComprehension(
-                    name="e", chain=NeighborChain(elements=[LocationType.Edge]), of=Domain()
-                ),
+                location=PrimaryLocation(name="e", location_type=LocationType.Edge),
                 stmt=assign_zavgS_MXX,
             ),
             HorizontalLoop(
-                location=LocationComprehension(
-                    name="e", chain=NeighborChain(elements=[LocationType.Edge]), of=Domain()
-                ),
+                location=PrimaryLocation(name="e", location_type=LocationType.Edge),
                 stmt=assign_zavgS_MYY,
             ),
         ],
@@ -208,8 +191,7 @@ assign_pnabla_MXX = AssignStmt(
         location_type=LocationType.Vertex,
         neighbors=LocationComprehension(
             name="e_of_v",
-            chain=NeighborChain(elements=[LocationType.Vertex, LocationType.Edge]),
-            of=LocationRef(name="v"),
+            of=ConnectivityRef(name="v2e"),
         ),
     ),
     location_type=LocationType.Vertex,
@@ -236,8 +218,7 @@ assign_pnabla_MYY = AssignStmt(
         location_type=LocationType.Vertex,
         neighbors=LocationComprehension(
             name="e_of_v",
-            chain=NeighborChain(elements=[LocationType.Vertex, LocationType.Edge]),
-            of=LocationRef(name="v"),
+            of=ConnectivityRef(name="v2e"),
         ),
     ),
     location_type=LocationType.Vertex,
@@ -249,15 +230,11 @@ vertical_loops.append(
         loop_order=LoopOrder.FORWARD,
         horizontal_loops=[
             HorizontalLoop(
-                location=LocationComprehension(
-                    name="v", chain=NeighborChain(elements=[LocationType.Vertex]), of=Domain()
-                ),
+                location=PrimaryLocation(name="v", location_type=LocationType.Vertex),
                 stmt=assign_pnabla_MXX,
             ),
             HorizontalLoop(
-                location=LocationComprehension(
-                    name="v", chain=NeighborChain(elements=[LocationType.Vertex]), of=Domain()
-                ),
+                location=PrimaryLocation(name="v", location_type=LocationType.Vertex),
                 stmt=assign_pnabla_MYY,
             ),
         ],
@@ -297,54 +274,81 @@ assign_pnabla_MYY_vol = AssignStmt(
     ),
 )
 
-vertical_loops.append(
-    VerticalLoop(
-        loop_order=LoopOrder.FORWARD,
-        horizontal_loops=[
-            HorizontalLoop(
-                location=LocationComprehension(
-                    name="v", chain=NeighborChain(elements=[LocationType.Vertex]), of=Domain()
-                ),
-                stmt=assign_pnabla_MXX_vol,
-            ),
-            HorizontalLoop(
-                location=LocationComprehension(
-                    name="v", chain=NeighborChain(elements=[LocationType.Vertex]), of=Domain()
-                ),
-                stmt=assign_pnabla_MYY_vol,
-            ),
-        ],
-    )
+vloop4 = VerticalLoop(
+    loop_order=LoopOrder.FORWARD,
+    horizontal_loops=[
+        HorizontalLoop(
+            location=PrimaryLocation(name="v", location_type=LocationType.Vertex),
+            stmt=assign_pnabla_MXX_vol,
+        ),
+        HorizontalLoop(
+            location=PrimaryLocation(name="v", location_type=LocationType.Vertex),
+            stmt=assign_pnabla_MYY_vol,
+        ),
+    ],
 )
 
+vertical_loops.append(vloop4)
+
 nabla_stencil = Stencil(vertical_loops=vertical_loops)
+# nabla_stencil = Stencil(vertical_loops=vertical_loops)
+
+
+connectivities = [
+    Connectivity(
+        name="v2e",
+        primary=LocationType.Vertex,
+        secondary=LocationType.Edge,
+        max_neighbors=7,
+        has_skip_values=True,
+    ),
+    Connectivity(
+        name="e2v",
+        primary=LocationType.Edge,
+        secondary=LocationType.Vertex,
+        max_neighbors=2,
+        has_skip_values=False,
+    ),
+]
 
 comp = Computation(
     name="nabla",
     params=fields,
     stencils=[nabla_stencil],
+    connectivities=connectivities,
     declarations=[
         TemporaryField(
             name="zavg_tmp",
             vtype=DataType.FLOAT64,
             dimensions=Dimensions(horizontal=HorizontalDimension(primary=LocationType.Edge)),
-        )
+        ),
+        TemporaryField(
+            name="zavgS_MXX",
+            vtype=DataType.FLOAT64,
+            dimensions=Dimensions(horizontal=HorizontalDimension(primary=LocationType.Edge)),
+        ),
+        TemporaryField(
+            name="zavgS_MYY",
+            vtype=DataType.FLOAT64,
+            dimensions=Dimensions(horizontal=HorizontalDimension(primary=LocationType.Edge)),
+        ),
     ],
 )
-
+debug(comp)
 nir_comp = GtirToNir().visit(comp)
 nir_comp = find_and_merge_horizontal_loops(nir_comp)
+debug(nir_comp)
 usid_comp = NirToUsid().visit(nir_comp)
 debug(usid_comp)
 
 generated_code = UsidGpuCodeGenerator.apply(usid_comp)
 print(generated_code)
 
-output_file = os.path.dirname(os.path.realpath(__file__)) + "/generated_fvm_nabla_ugpu.hpp"
+output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_cuda.hpp"
 with open(output_file, "w+") as output:
     output.write(generated_code)
 
 generated_code = UsidNaiveCodeGenerator.apply(usid_comp)
-output_file = os.path.dirname(os.path.realpath(__file__)) + "/generated_fvm_nabla_unaive.hpp"
+output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_naive.hpp"
 with open(output_file, "w+") as output:
     output.write(generated_code)

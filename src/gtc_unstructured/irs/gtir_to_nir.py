@@ -15,15 +15,31 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import copy
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import ClassVar, Dict, List, Mapping
 
-import eve  # noqa: F401
+import eve
 from gtc_unstructured.irs import common, gtir, nir
+from devtools import debug
 
 
 class GtirToNir(eve.NodeTranslator):
+    @dataclass
+    class HorizontalLoopContext:
+        """"""
+
+        declarations: List[nir.LocalVar] = field(default_factory=list)
+        statements: List[nir.Stmt] = field(default_factory=list)
+
+        def add_declaration(self, decl: nir.LocalVar) -> "GtirToNir.HorizontalLoopContext":
+            self.declarations.append(decl)
+            return self
+
+        def add_statement(self, stmt: nir.Stmt) -> "GtirToNir.HorizontalLoopContext":
+            self.statements.append(stmt)
+            return self
+
     REDUCE_OP_INIT_VAL: ClassVar[
         Mapping[gtir.ReduceOperator, common.BuiltInLiteral]
     ] = MappingProxyType(
@@ -47,13 +63,11 @@ class GtirToNir(eve.NodeTranslator):
         }
     )
 
-    def visit_NeighborChain(self, node: gtir.NeighborChain, **kwargs):
-        return nir.NeighborChain(elements=node.elements)
+    # def visit_NeighborChain(self, node: gtir.NeighborChain, **kwargs):
+    #     return nir.NeighborChain(elements=node.elements)
 
     def visit_HorizontalDimension(self, node: gtir.HorizontalDimension, **kwargs):
-        return nir.HorizontalDimension(
-            primary=node.primary, secondary=self.visit(node.secondary) if node.secondary else None
-        )
+        return nir.HorizontalDimension(primary=node.primary)
 
     def visit_VerticalDimension(self, node: gtir.VerticalDimension, **kwargs):
         return nir.VerticalDimension()
@@ -74,61 +88,59 @@ class GtirToNir(eve.NodeTranslator):
 
     # TODO test
     # TODO discuss if this actually works: can we uniquely identify which ref in the field references which dimension or do we need other techniques (e.g. refer to primary and secondary dimension by name)
-    @staticmethod
-    def order_location_refs(
-        location_refs: List[gtir.LocationRef],
-        location_comprehensions: Dict[str, gtir.LocationComprehension],
-    ):
-        """Compute a dict with primary, secondary and vertical (TODO)."""
-        result = {}
+    # @staticmethod
+    # def order_location_refs(
+    #     location_refs,  #: List[gtir.LocationRef],
+    #     location_comprehensions: Dict[str, gtir.LocationComprehension],
+    # ):
+    #     """Compute a dict with primary, secondary and vertical (TODO)."""
+    #     result = {}
 
-        decls = [location_comprehensions[ref.name] for ref in location_refs]
+    #     decls = [location_comprehensions[ref.name] for ref in location_refs]
 
-        # If there is a secondary dimension (sparse), then one of the LocationComprehensions references the other.
-        for decl in decls:
-            if not isinstance(decl.of, gtir.Domain) and decl.of.name in [
-                ref.name for ref in location_refs
-            ]:
-                assert "secondary" not in result
-                result["secondary"] = decl.name
-            else:
-                assert "primary" not in result
-                result["primary"] = decl.name
+    #     # If there is a secondary dimension (sparse), then one of the LocationComprehensions references the other.
+    #     for decl in decls:
+    #         if not isinstance(decl.of, gtir.Domain) and decl.of.name in [
+    #             ref.name for ref in location_refs
+    #         ]:
+    #             assert "secondary" not in result
+    #             result["secondary"] = decl.name
+    #         else:
+    #             assert "primary" not in result
+    #             result["primary"] = decl.name
 
-        return result
+    #     return result
 
-    def visit_FieldAccess(self, node: gtir.FieldAccess, *, location_comprehensions, **kwargs):
-        ordered_location_refs = self.order_location_refs(node.subscript, location_comprehensions)
-        primary_chain = location_comprehensions[ordered_location_refs["primary"]].chain
-        secondary_chain = (
-            location_comprehensions[ordered_location_refs["secondary"]].chain
-            if "secondary" in ordered_location_refs
-            else None
-        )
-
+    def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs):
+        # TODO currently assume they are ordered
         return nir.FieldAccess(
             name=node.name,
             location_type=node.location_type,
-            primary=primary_chain,
-            secondary=secondary_chain,
+            primary=node.subscript[0].name,  # TODO pick the correct one
+            # secondary=secondary_chain,
         )
 
-    def visit_NeighborReduce(self, node: gtir.NeighborReduce, *, last_block, **kwargs):
-        loc_comprehension = copy.deepcopy(kwargs["location_comprehensions"])
-        assert node.neighbors.name not in loc_comprehension
-        loc_comprehension[node.neighbors.name] = node.neighbors
-        kwargs["location_comprehensions"] = loc_comprehension
+    def visit_NeighborReduce(
+        self, node: gtir.NeighborReduce, *, hloop_ctx: "HorizontalLoopContext", **kwargs
+    ):
+        # loc_comprehension = copy.deepcopy(kwargs["location_comprehensions"])
+        # assert node.neighbors.name not in loc_comprehension
+        # loc_comprehension[node.neighbors.name] = node.neighbors
+        # kwargs["location_comprehensions"] = loc_comprehension
 
-        body_location = node.neighbors.chain.elements[-1]
+        # body_location = node.neighbors.chain.elements[-1]
+
+        connectivity_deref: gtir.Connectivity = kwargs["symtable"][node.neighbors.of.name]
+
         reduce_var_name = "local" + str(node.id_)
-        last_block.declarations.append(
+        hloop_ctx.add_declaration(
             nir.LocalVar(
                 name=reduce_var_name,
                 vtype=common.DataType.FLOAT64,  # TODO
                 location_type=node.location_type,
             )
         )
-        last_block.statements.append(
+        hloop_ctx.add_statement(
             nir.AssignStmt(
                 left=nir.VarAccess(name=reduce_var_name, location_type=node.location_type),
                 right=nir.Literal(
@@ -139,6 +151,7 @@ class GtirToNir(eve.NodeTranslator):
                 location_type=node.location_type,
             ),
         )
+        body_location = connectivity_deref.secondary
         body = nir.BlockStmt(
             declarations=[],
             statements=[
@@ -155,9 +168,10 @@ class GtirToNir(eve.NodeTranslator):
             ],
             location_type=body_location,
         )
-        last_block.statements.append(
+        hloop_ctx.add_statement(
             nir.NeighborLoop(
-                neighbors=self.visit(node.neighbors.chain),
+                name=node.neighbors.name,
+                connectivity=connectivity_deref.name,
                 body=body,
                 location_type=node.location_type,
             )
@@ -175,42 +189,63 @@ class GtirToNir(eve.NodeTranslator):
             location_type=node.location_type,
         )
 
-    def visit_AssignStmt(self, node: gtir.AssignStmt, **kwargs):
-        return nir.AssignStmt(
-            left=self.visit(node.left, **kwargs),
-            right=self.visit(node.right, **kwargs),
-            location_type=node.location_type,
+    def visit_AssignStmt(
+        self, node: gtir.AssignStmt, *, hloop_ctx: "HorizontalLoopContext", **kwargs
+    ):
+        hloop_ctx.add_statement(
+            nir.AssignStmt(
+                left=self.visit(node.left, **kwargs),
+                right=self.visit(node.right, hloop_ctx=hloop_ctx, **kwargs),
+                location_type=node.location_type,
+            )
         )
 
     def visit_HorizontalLoop(self, node: gtir.HorizontalLoop, **kwargs):
-        block = nir.BlockStmt(declarations=[], statements=[], location_type=node.stmt.location_type)
-        stmt = self.visit(
-            node.stmt, last_block=block, location_comprehensions={node.location.name: node.location}
+        hloop_ctx = self.HorizontalLoopContext()
+        self.visit(
+            node.stmt,
+            hloop_ctx=hloop_ctx,
+            location_comprehensions={node.location.name: node.location},
+            **kwargs,
         )
-        block.statements.append(stmt)
         return nir.HorizontalLoop(
-            stmt=block,
-            location_type=node.location.chain.elements[0],
+            stmt=nir.BlockStmt(
+                declarations=hloop_ctx.declarations,
+                statements=hloop_ctx.statements,
+                location_type=node.location.location_type,
+            ),
+            iteration_space=nir.IterationSpace(
+                name=node.location.name, location_type=node.location.location_type
+            ),
         )
 
     def visit_VerticalLoop(self, node: gtir.VerticalLoop, **kwargs):
         return nir.VerticalLoop(
-            horizontal_loops=[self.visit(h) for h in node.horizontal_loops],
+            horizontal_loops=self.visit(node.horizontal_loops, **kwargs),
             loop_order=node.loop_order,
+        )
+
+    def visit_Connectivity(self, node: gtir.Connectivity, **kwargs):
+        debug(node)
+        return nir.Connectivity(
+            name=node.name,
+            primary=node.primary,
+            secondary=node.secondary,
+            max_neighbors=node.max_neighbors,
+            has_skip_values=node.has_skip_values,
         )
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs):
         return nir.Stencil(
-            vertical_loops=[self.visit(loop) for loop in node.vertical_loops],
+            vertical_loops=[self.visit(loop, **kwargs) for loop in node.vertical_loops],
         )
         # TODO
 
-    def visit_Computation(self, node: gtir.Stencil, **kwargs):
+    def visit_Computation(self, node: gtir.Computation, **kwargs):
         return nir.Computation(
             name=node.name,
-            params=[self.visit(p) for p in node.params],
-            declarations=[self.visit(decl) for decl in node.declarations]
-            if node.declarations
-            else [],
-            stencils=[self.visit(s) for s in node.stencils],
+            connectivities=self.visit(node.connectivities),
+            params=self.visit(node.params),
+            declarations=self.visit(node.declarations) if node.declarations else [],
+            stencils=self.visit(node.stencils, symtable=node.symtable_),
         )
