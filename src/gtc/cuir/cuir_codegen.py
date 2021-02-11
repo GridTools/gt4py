@@ -20,7 +20,7 @@ from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
-from gtc.common import BuiltInLiteral, DataType, NativeFunction, UnaryOperator
+from gtc.common import BuiltInLiteral, DataType, LevelMarker, NativeFunction, UnaryOperator
 from gtc.cuir import cuir
 
 
@@ -92,22 +92,29 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             return "+"
         raise NotImplementedError("Not implemented UnaryOperator encountered.")
 
-    Extent = as_fmt("extent<{iminus}, {iplus}, {jminus}, {jplus}>()")
+    Extent = as_fmt("extent<{iminus}, {iplus}, {jminus}, {jplus}>")
 
     HorizontalExecution = as_mako(
         """
         // ${id_}
-        if (validator(${extent})${' && ' + mask if _this_node.mask else ''}) {
+        if (validator(${extent}())${' && ' + mask if _this_node.mask else ''}) {
             ${'\\n'.join(declarations)}
             ${'\\n'.join(body)}
         }
         """
     )
 
+    def visit_AxisBound(self, node: cuir.AxisBound, **kwargs: Any) -> str:
+        if node.level == LevelMarker.START:
+            return f"{node.offset}"
+        if node.level == LevelMarker.END:
+            return f"k_size + {node.offset}"
+        raise ValueError("Cannot handle dynamic levels")
+
     VerticalLoopSection = as_mako(
         """
         // ${id_}
-        if (k_block >= ${start_offset} && k_block < k_size - ${end_offset}) {
+        if (k_block >= ${start} && k_block < ${end}) {
             ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
         }
         """
@@ -173,12 +180,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     def visit_Program(self, node: cuir.Program, **kwargs: Any) -> Union[str, Collection[str]]:
         return self.generic_visit(
-            node, declarations_dtypes=[self.visit(d.dtype, **kwargs) for d in node.declarations]
+            node,
+            declarations_dtypes=[self.visit(d.dtype, **kwargs) for d in node.declarations],
+            max_extent=self.visit(cuir.Extent.union(*node.iter_tree().if_isinstance(cuir.Extent))),
         )
 
     Program = as_mako(
         """#include <array>
         #include <gridtools/common/cuda_util.hpp>
+        #include <gridtools/common/gt_math.hpp>
         #include <gridtools/common/host_device.hpp>
         #include <gridtools/common/hymap.hpp>
         #include <gridtools/common/integral_constant.hpp>
@@ -229,22 +239,37 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                     gpu_backend::shared_allocator shared_alloc;
                     auto i_blocks = (domain[0] + i_block_size_t() - 1) / i_block_size_t();
                     auto j_blocks = (domain[1] + j_block_size_t() - 1) / j_block_size_t();
+                    % for d, dtype in zip(declarations, declarations_dtypes):
+                        auto ${d} = gpu_backend::make_tmp_storage<${dtype}>(
+                            1_c,
+                            i_block_size_t(),
+                            j_block_size_t(),
+                            ${max_extent}(),
+                            i_blocks,
+                            j_blocks,
+                            domain[2],
+                            tmp_alloc);
+                    % endfor
+
                     auto composite = sid::composite::make<
-                        ${', '.join(f'tag::{p}' for p in params + declarations)}>(
-                        ${', '.join([f'block({p})' for p in params] +
-                                    [f'gpu_backend::make_tmp_storage<{dtype}>(1_c, i_block_size_t(), j_block_size_t(), extent<0, 0, 0, 0>(), i_blocks, j_blocks, domain[3], tmp_alloc)' for d, dtype in zip(declarations, declarations_dtypes)])}
-                    );
+                            ${', '.join(f'tag::{p}' for p in params + declarations)}
+                        >(
+                            ${', '.join([f'block({p})' for p in params] + list(declarations))}
+                        );
 
                     % for kernel in _this_node.kernels:
-                        gpu_backend::launch_kernel<extent<0, 0, 0, 0>,
+                        gpu_backend::launch_kernel<${max_extent},
                             i_block_size_t::value, j_block_size_t::value>(
                             domain[0], domain[1], domain[2],
                             ${kernel.name}_f<decltype(composite)>{
                                 sid::get_origin(composite),
-                                sid::get_strides(composite)
+                                sid::get_strides(composite),
+                                domain[2]
                             },
                             shared_alloc.size());
                     % endfor
+
+                    GT_CUDA_CHECK(cudaDeviceSynchronize());
                 };
             }
         }

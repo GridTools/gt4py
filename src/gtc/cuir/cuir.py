@@ -18,7 +18,7 @@ from typing import Any, List, Optional, Union
 
 from eve import Str, SymbolName, SymbolTableTrait
 from gtc import common
-from gtc.common import DataType, LocNode, LoopOrder
+from gtc.common import AxisBound, DataType, LocNode, LoopOrder
 
 
 class Expr(common.Expr):
@@ -107,6 +107,15 @@ class Extent(LocNode):
     def zero(cls) -> "Extent":
         return cls(iminus=0, iplus=0, jminus=0, jplus=0)
 
+    @classmethod
+    def union(cls, *extents):
+        return cls(
+            iminus=min(e.iminus for e in extents),
+            iplus=max(e.iplus for e in extents),
+            jminus=min(e.jminus for e in extents),
+            jplus=max(e.jplus for e in extents),
+        )
+
 
 class HorizontalExecution(LocNode):
     body: List[Stmt]
@@ -116,8 +125,8 @@ class HorizontalExecution(LocNode):
 
 
 class VerticalLoopSection(LocNode):
-    start_offset: int
-    end_offset: int
+    start: AxisBound
+    end: AxisBound
     horizontal_executions: List[HorizontalExecution]
 
 

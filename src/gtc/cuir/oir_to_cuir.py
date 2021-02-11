@@ -28,6 +28,9 @@ class OIRToCUIR(eve.NodeTranslator):
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> cuir.FieldDecl:
         return cuir.FieldDecl(name=node.name, dtype=node.dtype)
 
+    def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> cuir.UnaryOp:
+        return cuir.UnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs))
+
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> cuir.BinaryOp:
         return cuir.BinaryOp(
             op=node.op, left=self.visit(node.left), right=self.visit(node.right), dtype=node.dtype
@@ -50,6 +53,9 @@ class OIRToCUIR(eve.NodeTranslator):
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> cuir.Cast:
         return cuir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 
+    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> cuir.NativeFuncCall:
+        return cuir.NativeFuncCall(func=node.func, args=self.visit(node.args, **kwargs))
+
     def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> cuir.TernaryOp:
         return cuir.TernaryOp(
             cond=self.visit(node.cond, **kwargs),
@@ -66,20 +72,12 @@ class OIRToCUIR(eve.NodeTranslator):
             declarations=self.visit(node.declarations),
         )
 
-    def visit_AxisBound(self, node: oir.AxisBound, **kwargs: Any) -> int:
-        if node.level == common.LevelMarker.START:
-            return node.offset
-        elif node.level == common.LevelMarker.END:
-            return node.offset
-        else:
-            raise ValueError("Cannot handle dynamic levels")
-
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, **kwargs: Any
     ) -> cuir.VerticalLoopSection:
         return cuir.VerticalLoopSection(
-            start_offset=self.visit(node.interval.start),
-            end_offset=self.visit(node.interval.end),
+            start=node.interval.start,
+            end=node.interval.end,
             horizontal_executions=self.visit(node.horizontal_executions, **kwargs),
         )
 

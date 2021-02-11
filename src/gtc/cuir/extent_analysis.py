@@ -96,7 +96,7 @@ class ComputeExtents(NodeTranslator):
             }
 
         return cuir.VerticalLoopSection(
-            start_offset=node.start_offset,
-            end_offset=node.end_offset,
+            start=node.start,
+            end=node.end,
             horizontal_executions=list(reversed(horizontal_executions)),
         )
