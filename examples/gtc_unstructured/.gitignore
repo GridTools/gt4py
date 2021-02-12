@@ -1,0 +1,5 @@
+generated_*
+*.idx
+*.cppimporthash
+.rendered*
+compile_commands.json

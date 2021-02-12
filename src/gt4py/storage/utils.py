@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -16,10 +16,12 @@
 
 import math
 import numbers
+from typing import Optional, Sequence
 
 import numpy as np
 
 import gt4py.utils as gt_util
+from gt4py.definitions import Index, Shape
 
 
 try:
@@ -38,7 +40,9 @@ def check_mask(mask):
         raise TypeError("Mask must be an iterable of booleans.")
 
 
-def normalize_shape(shape, mask=None):
+def normalize_shape(
+    shape: Optional[Sequence[int]], mask: Optional[Sequence[bool]] = None
+) -> Optional[Shape]:
 
     check_mask(mask)
 
@@ -61,10 +65,12 @@ def normalize_shape(shape, mask=None):
     if sum(mask) < len(shape):
         new_shape = [int(h) for i, h in enumerate(new_shape) if mask[i]]
 
-    return tuple(new_shape)
+    return Shape(new_shape)
 
 
-def normalize_default_origin(default_origin, mask=None):
+def normalize_default_origin(
+    default_origin: Optional[Sequence[int]], mask: Optional[Sequence[bool]] = None
+) -> Optional[Index]:
 
     check_mask(mask)
 
@@ -87,7 +93,7 @@ def normalize_default_origin(default_origin, mask=None):
     if sum(mask) < len(default_origin):
         new_default_origin = [h for i, h in enumerate(new_default_origin) if mask[i]]
 
-    return tuple(new_default_origin)
+    return Index(new_default_origin)
 
 
 def compute_padded_shape(shape, items_per_alignment, order_idx):

@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -231,9 +231,7 @@ class InitInfoPass(TransformPass):
 
         def _add_symbol(self, decl):
             has_redundancy = (
-                isinstance(decl, gt_ir.FieldDecl)
-                and self.redundant_temp_fields
-                and not decl.is_api
+                isinstance(decl, gt_ir.FieldDecl) and self.redundant_temp_fields and not decl.is_api
             )
             symbol_info = SymbolInfo(decl, has_redundancy=has_redundancy)
             self.data.symbols[decl.name] = symbol_info
@@ -278,9 +276,7 @@ class InitInfoPass(TransformPass):
 
         def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr):
             result = (
-                self.visit(node.condition)
-                + self.visit(node.then_expr)
-                + self.visit(node.else_expr)
+                self.visit(node.condition) + self.visit(node.then_expr) + self.visit(node.else_expr)
             )
             return result
 
@@ -673,9 +669,7 @@ class StageMergingWrapper:
         i_to_ib_map = self.interval_to_iblock_mapping
         for candidate_iblock in candidate.interval_blocks:
             if candidate_iblock.interval in i_to_ib_map:
-                self._merge_interval_block(
-                    i_to_ib_map[candidate_iblock.interval], candidate_iblock
-                )
+                self._merge_interval_block(i_to_ib_map[candidate_iblock.interval], candidate_iblock)
             else:
                 # candidate block must be inserted at the correct position so that they appear in the order dictated
                 #  by the iteration order. note that this reordering is valid as candidate was already checked for
@@ -978,7 +972,7 @@ class DataTypePass(TransformPass):
                 # cast all other args to this type
                 for index, arg in enumerate(node.args):
                     if arg.data_type != data_type:
-                        node.args[index] = gt_ir.Cast(dtype=data_type, expr=arg, loc=node.loc)
+                        node.args[index] = gt_ir.Cast(data_type=data_type, expr=arg, loc=node.loc)
 
             if node.func in (
                 gt_ir.NativeFunction.MIN,

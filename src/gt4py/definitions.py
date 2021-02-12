@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -19,6 +19,7 @@ import collections
 import enum
 import numbers
 import operator
+from typing import Mapping, Optional
 
 from gt4py import utils as gt_utils
 from gt4py.utils.attrib import Any, AttributeClassLike
@@ -46,6 +47,8 @@ class NumericTuple(tuple):
     """N-dimensional like vector implemented as a subclass of the tuple builtin."""
 
     __slots__ = ()
+
+    _DEFAULT = 0
 
     @classmethod
     def _check_value(cls, value, ndims):
@@ -78,6 +81,12 @@ class NumericTuple(tuple):
     @classmethod
     def from_k(cls, value, ndims=CartesianSpace.ndims):
         return cls([value] * ndims, ndims=(ndims, ndims))
+
+    @classmethod
+    def from_mask(cls, seq, mask, default=None):
+        if default is None:
+            default = cls._DEFAULT
+        return cls(gt_utils.interpolate_mask(seq, mask, default))
 
     @classmethod
     def from_value(cls, value):
@@ -231,6 +240,9 @@ class NumericTuple(tuple):
 
         return reduction_op(op(a, b) for a, b in zip(self, other))
 
+    def filter_mask(self, mask):
+        return type(self)(gt_utils.filter_mask(self, mask))
+
 
 class Index(NumericTuple):
     """Index in a grid (all elements are ints)."""
@@ -248,6 +260,8 @@ class Shape(NumericTuple):
     """Shape of a n-dimensional grid (all elements are int >= 0)."""
 
     __slots__ = ()
+
+    _DEFAULT = 1
 
     @classmethod
     def _check_value(cls, value, ndims):
@@ -393,11 +407,11 @@ class FrameTuple(tuple):
 
     @property
     def lower_indices(self):
-        return tuple(d[0] for d in self)
+        return NumericTuple(*(d[0] for d in self))
 
     @property
     def upper_indices(self):
-        return tuple(d[1] for d in self)
+        return NumericTuple(*(d[1] for d in self))
 
     def append(self, point):
         other = self.__class__([(i, i) for i in point])
@@ -638,12 +652,15 @@ class DomainInfo(
     pass
 
 
-class FieldInfo(collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "dtype"])):
+class FieldInfo(
+    collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "axes", "dtype"])
+):
     def __repr__(self):
-        result = (
-            "FieldInfo(access=AccessKind.{access}, boundary={boundary}, dtype={dtype})".format(
-                access=self.access.name, boundary=repr(self.boundary), dtype=repr(self.dtype)
-            )
+        result = "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, dtype={dtype})".format(
+            access=self.access.name,
+            boundary=repr(self.boundary),
+            axes=repr(self.axes),
+            dtype=repr(self.dtype),
         )
         return result
 
@@ -718,20 +735,20 @@ def normalize_domain(domain):
     return domain
 
 
-def normalize_origin(origin):
+def normalize_origin(origin) -> Optional[Index]:
     if origin is not None:
         origin = tuple(origin)
         if isinstance(origin, numbers.Integral):
-            origin = Shape.from_k(int(origin))
+            origin = Index.from_k(int(origin))
         elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin):
-            origin = Shape.from_value(origin)
+            origin = Index.from_value(origin)
         else:
             raise ValueError("Invalid 'origin' value ({})".format(origin))
 
     return origin
 
 
-def normalize_origin_mapping(origin_mapping):
+def normalize_origin_mapping(origin_mapping) -> Mapping[str, Index]:
     origin_mapping = origin_mapping if origin_mapping is not None else {}
     if isinstance(origin_mapping, collections.abc.Mapping):
         origin_mapping = {

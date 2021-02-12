@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -131,8 +131,8 @@ class Storage(np.ndarray):
 
         if mask is None:
             mask = [True] * len(shape)
-        default_origin = storage_utils.normalize_default_origin(default_origin, mask)
-        shape = storage_utils.normalize_shape(shape, mask)
+        default_origin = tuple(storage_utils.normalize_default_origin(default_origin, mask))
+        shape = tuple(storage_utils.normalize_shape(shape, mask))
 
         if not backend in gt_backend.REGISTRY:
             ValueError("Backend must be in {}.".format(gt_backend.REGISTRY))
@@ -140,9 +140,7 @@ class Storage(np.ndarray):
         alignment = gt_backend.from_name(backend).storage_info["alignment"]
         layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)
 
-        obj = cls._construct(
-            backend, np.dtype(dtype), default_origin, shape, alignment, layout_map
-        )
+        obj = cls._construct(backend, np.dtype(dtype), default_origin, shape, alignment, layout_map)
         obj._backend = backend
         obj.is_stencil_view = True
         obj._mask = mask
@@ -275,8 +273,7 @@ class GPUStorage(Storage):
         # check that memory of field is within raw_buffer
         if (
             not self.ctypes.data >= self._raw_buffer.data.ptr
-            and self.ctypes.data + self.itemsize * (self.size - 1)
-            <= self._raw_buffer[-1:].data.ptr
+            and self.ctypes.data + self.itemsize * (self.size - 1) <= self._raw_buffer[-1:].data.ptr
         ):
             raise Exception("The buffers are in an inconsistent state.")
 

@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -130,10 +130,7 @@ def vertical_advection_dycore(
             # update the d column
             correction_term = -cs * (u_stage[0, 0, 1] - u_stage[0, 0, 0])
             dcol = (
-                dtr_stage * u_pos[0, 0, 0]
-                + utens[0, 0, 0]
-                + utens_stage[0, 0, 0]
-                + correction_term
+                dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
             )
 
             # Thomas forward
@@ -157,10 +154,7 @@ def vertical_advection_dycore(
                 u_stage[0, 0, 1] - u_stage[0, 0, 0]
             )
             dcol = (
-                dtr_stage * u_pos[0, 0, 0]
-                + utens[0, 0, 0]
-                + utens_stage[0, 0, 0]
-                + correction_term
+                dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
             )
 
             # Thomas forward
@@ -177,10 +171,7 @@ def vertical_advection_dycore(
             # update the d column
             correction_term = -as_ * (u_stage[0, 0, -1] - u_stage[0, 0, 0])
             dcol = (
-                dtr_stage * u_pos[0, 0, 0]
-                + utens[0, 0, 0]
-                + utens_stage[0, 0, 0]
-                + correction_term
+                dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
             )
 
             # Thomas forward
@@ -190,12 +181,10 @@ def vertical_advection_dycore(
     with computation(BACKWARD):
         with interval(-1, None):
             datacol = dcol[0, 0, 0]
-            data_col = datacol
             utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
 
         with interval(0, -1):
-            datacol = dcol[0, 0, 0] - ccol[0, 0, 0] * data_col[0, 0, 1]
-            data_col = datacol
+            datacol = dcol[0, 0, 0] - ccol[0, 0, 0] * datacol[0, 0, 1]
             utens_stage = dtr_stage * (datacol - u_pos[0, 0, 0])
 
 

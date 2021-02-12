@@ -143,8 +143,8 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         for i in range(len(out_fields) - 1, -1, -1):
             out_field = out_fields[i]
             compute_extent |= out_field["extent"]
-            for input in out_field["inputs"]:
-                in_field = field_info[input]
+            for input_f in out_field["inputs"]:
+                in_field = field_info[input_f]
                 accumulated_extent = compute_extent + in_field["extent"]
                 in_field["extent"] |= accumulated_extent
 
@@ -173,7 +173,7 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         elif node.data_type in (gt_ir.DataType.FLOAT32, gt_ir.DataType.FLOAT64):
             sir_type = SIR.BuiltinType.Float
         else:
-            assert False, "Unrecognized data type"
+            raise AssertionError("Unrecognized data type")
         return sir_utils.make_literal_access_expr(value=repr(node.value), type=sir_type)
 
     def visit_VarRef(self, node: gt_ir.VarRef, **kwargs: Any) -> SIR.VarAccessExpr:
@@ -317,9 +317,7 @@ _DAWN_BACKEND_OPTIONS = {**_DAWN_BASE_OPTIONS, **_DAWN_TOOLCHAIN_OPTIONS}
 
 class DawnPyModuleGenerator(gt_backend.PyExtModuleGenerator):
     def generate_implementation(self) -> str:
-        sources = gt_text.TextBlock(
-            indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE
-        )
+        sources = gt_text.TextBlock(indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
 
         args = []
         empty_checks = []
@@ -586,7 +584,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             elif parameter.data_type in [gt_ir.DataType.FLOAT32, gt_ir.DataType.FLOAT64]:
                 dtype = "double"
             else:
-                assert False, "Wrong data_type for parameter"
+                raise AssertionError("Wrong data_type for parameter")
             parameters.append({"name": parameter.name, "dtype": dtype})
 
         template_args = dict(
@@ -625,7 +623,10 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
                 extent = sir_field_info[arg.name]["extent"]
                 boundary = gt_definitions.Boundary([(-pair[0], pair[1]) for pair in extent])
                 data["field_info"][arg.name] = gt_definitions.FieldInfo(
-                    access=access, dtype=fields[arg.name].data_type.dtype, boundary=boundary
+                    access=access,
+                    boundary=boundary,
+                    axes=fields[arg.name].axes,
+                    dtype=fields[arg.name].data_type.dtype,
                 )
             else:
                 data["parameter_info"][arg.name] = gt_definitions.ParameterInfo(

@@ -16,7 +16,7 @@
 
  ---- Template variables ----
 
-    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - arg_fields: [{ "name": str, "dtype": str, "layout_id": int, "selector": [bool], "naxes": int }]
     - constants: { name:str : str }
     - gt_backend: str
     - halo_sizes: [int]
@@ -57,9 +57,12 @@
 #include <array>
 #include <cassert>
 #include <stdexcept>
+#include <type_traits>
 {%- if gt_backend != "cuda" %}
 #include <cmath>
 {%- endif %}
+
+static constexpr int MAX_DIM = 3;
 
 namespace {{ stencil_unique_name }} {
 
@@ -67,6 +70,76 @@ namespace {
 
 // Backend
 using backend_t = gt::backend::{{ gt_backend }};
+
+
+// Storage definitions
+template <typename T, int Id, bool... Dims>
+struct storage_traits {
+    using info_t = gt::storage_traits<backend_t>::special_storage_info_t<
+        Id, gt::selector<Dims...>, gt::halo<0, 0, 0 /* not used */>>;
+    using store_t = gt::storage_traits<backend_t>::data_store_t<T, info_t>;
+};
+
+template<typename T, int Id>
+struct storage_traits<T, Id, 1, 1, 1> {
+    using info_t = gt::storage_traits<backend_t>::storage_info_t<
+        Id, 3, gt::halo<0, 0, 0 /* not used */>>;
+    using store_t = gt::storage_traits<backend_t>::data_store_t<T, info_t>;
+};
+
+template <typename T>
+constexpr int count(std::integer_sequence<T>) { return 0; }
+
+template <typename T, T Head, T... Tail>
+constexpr int count(std::integer_sequence<T, Head, Tail...>) {
+  return Head + count(std::integer_sequence<T, Tail...>());
+}
+
+template <class T, T... Ints>
+constexpr T get(std::integer_sequence<T, Ints...>, std::size_t i) {
+  constexpr T arr[] = {Ints...};
+  return arr[i];
+}
+
+template<typename T, int Id, int NDIM, bool... Dims>
+typename storage_traits<T, Id, Dims...>::store_t
+make_data_store(const BufferInfo& bi,
+                const std::array<gt::uint_t, MAX_DIM>& compute_domain_shape,
+                const std::array<gt::uint_t, NDIM>& origin,
+                gt::selector<Dims...> mask)
+{
+    // ptr, dims and strides are "outer domain" (i.e., compute domain + halo
+    // region). The halo region is only defined through `make_grid` (and
+    // currently, in the storage info)
+    static_assert(NDIM == count(mask), "Mask dimensions do not match origin");
+
+    gt::array<gt::uint_t, MAX_DIM> dims{};
+    gt::array<gt::uint_t, MAX_DIM> strides{};
+    T* ptr = static_cast<T*>(bi.ptr);
+
+    int curr_stride = 0;
+    for (int i = 0, j = 0; i < MAX_DIM; ++i) {
+        if (get(mask, i) != 0) {
+            curr_stride = strides[i] = bi.strides[j] / sizeof(T);
+            ptr += strides[i] * origin[j];
+            dims[i] = compute_domain_shape[i] + 2 * origin[j];
+            ++j;
+        } else {
+            strides[i] = curr_stride;
+            dims[i] = 0;
+        }
+    }
+
+    using storage_info_t = typename storage_traits<T, Id, Dims...>::info_t;
+    using data_store_t = typename storage_traits<T, Id, Dims...>::store_t;
+
+    return data_store_t{storage_info_t{dims, strides}, ptr,
+{%- if gt_backend == "cuda" %}
+                           gt::ownership::external_gpu};
+{%- else %}
+                           gt::ownership::external_cpu};
+{%- endif %}
+}
 
 // Axis
 static constexpr gt::uint_t level_offset_limit = {{ k_axis.offset_limit }};
@@ -80,21 +153,10 @@ static constexpr gt::uint_t halo_size_i = {{ halo_sizes[0] }};
 static constexpr gt::uint_t halo_size_j = {{ halo_sizes[1] }};
 static constexpr gt::uint_t halo_size_k = {{ halo_sizes[2] }};
 
-// Storage definitions
-template <int Id>
-using storage_info_t =
-    gt::storage_traits<backend_t>::storage_info_t<
-        Id, 3,
-        gt::halo<0, 0, 0 /* not used */>>;
-
-template<typename T, int Id>
-using data_store_t =
-    gt::storage_traits<backend_t>::data_store_t<T, storage_info_t<Id>>;
-
 // Placeholder definitions
 {% set arg_counter = 0 -%}
 {%- for field in arg_fields %}
-using p_{{ field.name }} = gt::arg<{{ arg_counter + loop.index0 }}, data_store_t<{{ field.dtype }}, {{ field.layout_id }}>>;
+using p_{{ field.name }} = gt::arg<{{ arg_counter + loop.index0 }}, typename storage_traits<{{ field.dtype }}, {{ field.layout_id }}, {{ field.selector | join(", ") | lower }}>::store_t>;
 {%- endfor %}
 {% set arg_counter = arg_counter + arg_fields|length %}
 {% for param in parameters %}
@@ -103,9 +165,7 @@ using p_{{ param.name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_p
 {% set arg_counter = arg_counter + parameters|length %}
 {% if tmp_fields -%}
 {%- for field in tmp_fields %}
-using p_{{ field.name }} = gt::tmp_arg<{{ arg_counter + loop.index0 }}, data_store_t<{{ field.dtype }}, 0>>;
-// TODO: Change when `lower-dimensional-support` branch is merged
-// using p_{{ field.name }} = gt::tmp_arg<{{ arg_counter + loop.index0 }}, typename storage_traits<{{ field.dtype }}, 0, {{ field.selector | join(", ") | lower }}>::store_t>;
+using p_{{ field.name }} = gt::tmp_arg<{{ arg_counter + loop.index0 }}, typename storage_traits<{{ field.dtype }}, 0, {{ field.selector | join(", ") | lower }}>::store_t>;
 {%- endfor %}
 {% set arg_counter = arg_counter + tmp_fields|length %}
 {%- endif %}
@@ -125,7 +185,7 @@ static constexpr auto {{ name }} = {{ value }};
 struct {{ name }}_func {
     {%- for arg in stage.args %}
     using {{ arg.name }} = gt::{{ arg.access_type }}_accessor<{{ loop.index0 }}
-                {%- if arg.extent is not none %}, gt::extent<{{ arg.extent|join(", ")}}>{% endif -%}>;
+                {%- if arg.extent is not none %}, gt::extent<{{ arg.extent|join(", ") }}>{% endif -%}>;
     {%- endfor %}
 
     using param_list = gt::make_param_list<{{ stage.args|map(attribute='name')|join(", ")}} >;
@@ -155,41 +215,10 @@ gt::halo_descriptor make_halo_descriptor(gt::uint_t compute_domain_shape) {
             compute_domain_shape};
 }
 
-auto make_grid(const std::array<gt::uint_t, 3>& compute_domain_shape) {
+auto make_grid(const std::array<gt::uint_t, MAX_DIM>& compute_domain_shape) {
     return gt::make_grid(make_halo_descriptor(compute_domain_shape[0]),
                          make_halo_descriptor(compute_domain_shape[1]),
                          axis_t(compute_domain_shape[2]));
-}
-
-
-template<typename T, int Id>
-data_store_t<T, Id> make_data_store(const BufferInfo& bi,
-                                    const std::array<gt::uint_t, 3>& compute_domain_shape,
-                                    const std::array<gt::uint_t, 3>& origin)
-{
-    if (bi.ndim != 3) {
-        throw std::runtime_error("Wrong number of dimensions [" +
-                                 std::to_string(bi.ndim) +
-                                 " != " + std::to_string(3) + "]");
-    }
-
-    // ptr, dims and strides are "outer domain" (i.e., compute domain + halo
-    // region). The halo region is only defined through `make_grid` (and
-    // currently, in the storage info)
-    gt::array<gt::uint_t, 3> dims{};
-    gt::array<gt::uint_t, 3> strides{};
-    T* ptr = static_cast<T*>(bi.ptr);
-    for (int i = 0; i < 3; ++i) {
-        strides[i] = bi.strides[i] / sizeof(T);
-        ptr += strides[i] * origin[i];
-        dims[i] = compute_domain_shape[i]+2*origin[i];
-    }
-    return data_store_t<T, Id>{storage_info_t<Id>{dims, strides}, ptr,
-{%- if gt_backend == "cuda" %}
-                           gt::ownership::external_gpu};
-{%- else %}
-                           gt::ownership::external_cpu};
-{%- endif %}
 }
 
 }  // namespace
@@ -204,11 +233,11 @@ gt::global_parameter<{{ param.dtype }}> {{ param.name }}_param = gt::make_global
 
 
 // Run actual computation
-void run(const std::array<gt::uint_t, 3>& domain,
+void run(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- set comma = joiner(", ") %}
 {%- for field in arg_fields -%}
          {{- comma() }}
-         const BufferInfo& bi_{{ field.name }} {{- comma() -}} const std::array<gt::uint_t, 3>& {{ field.name }}_origin
+         const BufferInfo& bi_{{ field.name }} {{- comma() -}} const std::array<gt::uint_t, {{ field.naxes }}>& {{ field.name }}_origin
 {%- endfor %}
 {%- for param in parameters %}
          {{- comma() }}
@@ -234,7 +263,7 @@ void run(const std::array<gt::uint_t, 3>& domain,
 #}
     // Initialize data stores from input buffers
 {%- for field in arg_fields %}
-    auto ds_{{ field.name }} = make_data_store<{{ field.dtype }}, {{ field.layout_id }}>(bi_{{ field.name }}, domain, {{ field.name }}_origin);
+    auto ds_{{ field.name }} = make_data_store<{{ field.dtype }}, {{ field.layout_id }}, {{ field.naxes }}>(bi_{{ field.name }}, domain, {{ field.name }}_origin, gt::selector<{{ field.selector | join(", ") | lower }}>{});
 {%- endfor %}
 
     // Update global parameters
