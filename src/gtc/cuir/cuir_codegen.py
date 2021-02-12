@@ -272,7 +272,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
             auto ${name}(domain_t domain){
                 return [domain](${','.join(f'auto&& {p}' for p in params)}){
-                    auto tmp_alloc = sid::device::make_cached_allocator(&cuda_util::cuda_malloc<char[]>);
+                    auto tmp_alloc = sid::host_device::make_cached_allocator(&cuda_util::cuda_malloc<char[]>);
                     gpu_backend::shared_allocator shared_alloc;
                     const auto i_size = domain[0];
                     const auto j_size = domain[1];
@@ -305,17 +305,16 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                                     ${', '.join([f'block({p})' for p in params] + list(declarations))}
                                 );
                             using composite_${vertical_loop.id_}_t = decltype(composite_${vertical_loop.id_});
-                            sid::ptr_diff_type<composite_${vertical_loop.id_}_t> offset_${vertical_loop.id_}{};
+                            sid::ptr_diff_type<composite_${vertical_loop.id_}_t> offset_${vertical_loop.id_};
+                            auto strides_${vertical_loop.id_} = sid::get_strides(composite_${vertical_loop.id_});
                             sid::shift(
                                 offset_${vertical_loop.id_},
-                                sid::get_stride<dim::k>(
-                                    sid::get_strides(composite_${vertical_loop.id_})
-                                ),
+                                sid::get_stride<dim::k>(strides_${vertical_loop.id_}),
                                 ${loop_start(vertical_loop)}
                             );
                             loop_${vertical_loop.id_}_f<composite_${vertical_loop.id_}_t> loop_${vertical_loop.id_}{
                                 sid::get_origin(composite_${vertical_loop.id_}) + offset_${vertical_loop.id_},
-                                sid::get_strides(composite_${vertical_loop.id_}),
+                                std::move(strides_${vertical_loop.id_}),
                                 k_size
                             };
 
