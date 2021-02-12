@@ -89,7 +89,7 @@ class Access(Expr):
 
 class FieldAccess(Access):
     primary: SymbolRef  # TODO to a PrimaryLocation or a LocationComprehension
-    # secondary: Optional[SymbolRef]  # TODO unused? # to a LocationRef
+    secondary: Optional[SymbolRef]  # TODO unused? # to a LocationRef
     # TODO vertical
 
     # @property

@@ -20,24 +20,10 @@ from typing import Dict, Set, Union
 from devtools import debug  # noqa: F401
 
 import eve  # noqa: F401
-from gtc_unstructured.irs import common, nir, usid
-
-
-def location_type_from_dimensions(dimensions):
-    location_type = [dim for dim in dimensions if isinstance(dim, common.LocationType)]
-    if len(location_type) == 1:
-        return location_type[0]
-    elif len(location_type) == 0:
-        return None
-    else:
-        raise ValueError("Invalid!")
+from gtc_unstructured.irs import nir, usid
 
 
 class NirToUsid(eve.NodeTranslator):
-    def __init__(self, **kwargs):
-        super().__init__()
-        self.fields = dict()  # poor man symbol table
-
     @dataclass
     class KernelContext:
         """"""
@@ -45,9 +31,6 @@ class NirToUsid(eve.NodeTranslator):
         primary_composite_name: str
         primary_composite_entries: Set = field(default_factory=set)
         composites: Dict = field(default_factory=dict)
-
-        def init(self, primary_composite_name: str) -> None:
-            self.primary_composite_name = primary_composite_name
 
         def add_primary_entry(
             self, entry: Union[usid.SidCompositeEntry, usid.SidCompositeSparseEntry]
@@ -63,8 +46,7 @@ class NirToUsid(eve.NodeTranslator):
         def add_entry(
             self, name: str, entry: Union[usid.SidCompositeEntry, usid.SidCompositeSparseEntry]
         ) -> "NirToUsid.KernelContext":
-            # if name not in self.composites:
-            #     self.composites[name] = set()
+            assert name in self.composites
             self.composites[name].add(entry)
             return self
 
@@ -78,9 +60,6 @@ class NirToUsid(eve.NodeTranslator):
         if dims.vertical:
             dimensions.append(self.visit(dims.vertical))
         return dimensions
-
-    # def visit_NeighborChain(self, node: nir.NeighborChain, **kwargs):
-    #     return usid.NeighborChain(elements=[location for location in node.elements])
 
     def visit_VerticalDimension(self, node: nir.VerticalDimension, **kwargs):
         return usid.VerticalDimension()
@@ -133,41 +112,36 @@ class NirToUsid(eve.NodeTranslator):
             primary=usid.PtrRef(name=primary),
             secondary=usid.PtrRef(name=secondary),
             location_type=node.location_type,
-            body=self.visit(node.body, kernel_ctx=kernel_ctx, acc_mapping=acc_mapping, **kwargs),
+            body=self.visit(
+                node.body, kernel_ctx=kernel_ctx, acc_mapping=lambda x: acc_mapping[x], **kwargs
+            ),
         )
 
-    def visit_FieldAccess(self, node: nir.FieldAccess, kernel_ctx: "KernelContext", **kwargs):
+    def visit_FieldAccess(
+        self,
+        node: nir.FieldAccess,
+        *,
+        kernel_ctx: "KernelContext",
+        acc_mapping=lambda x: x,
+        **kwargs,
+    ):
         symtable = kwargs["symtable"]
         field_deref = symtable[node.name]
-        location_deref = symtable[node.primary]
-        if "acc_mapping" not in kwargs:
-            sid = location_deref.name
-            kernel_ctx.add_primary_entry(usid.SidCompositeEntry(ref=node.name))
-            ref = sid
+        sid = node.primary
+        ref = acc_mapping(sid)
+        if isinstance(field_deref, nir.SparseField):
+            kernel_ctx.add_primary_entry(
+                usid.SidCompositeSparseEntry(ref=node.name, connectivity=field_deref.connectivity)
+            )
         else:
-            assert "acc_mapping" in kwargs
-            acc_mapping: Dict[str, str] = kwargs["acc_mapping"]
-            sid = node.primary
-            ref = acc_mapping[sid]
-            debug(sid)
-            debug(acc_mapping)
-            debug(ref)
-            if isinstance(field_deref, nir.SparseField):
-                kernel_ctx.add_primary_entry(
-                    usid.SidCompositeSparseEntry(
-                        ref=node.name, connectivity=field_deref.connectivity
-                    )
-                )
-                ref = "p"  # todo
+            if sid == kernel_ctx.primary_composite_name:
+                kernel_ctx.add_primary_entry(usid.SidCompositeEntry(ref=node.name))
             else:
-                if sid == kernel_ctx.primary_composite_name:
-                    kernel_ctx.add_primary_entry(usid.SidCompositeEntry(ref=node.name))
-                else:
-                    kernel_ctx.add_entry(sid, usid.SidCompositeEntry(ref=node.name))
+                kernel_ctx.add_entry(sid, usid.SidCompositeEntry(ref=node.name))
 
         return usid.FieldAccess(
             name=node.name + "_tag",
-            sid=ref,  # kwargs["sids_tbl"][self.visit(node.primary, **kwargs)].name,
+            sid=ref,
             location_type=node.location_type,
         )
 
@@ -253,13 +227,11 @@ class NirToUsid(eve.NodeTranslator):
         for f in node.params:  # before visiting stencils!
             converted_param = self.visit(f)
             parameters.append(converted_param)
-            self.fields[converted_param.name] = converted_param
 
         temporaries = []
         for tmp in node.declarations or []:
             converted_tmp = self.visit(tmp)
             temporaries.append(converted_tmp)
-            self.fields[converted_tmp.name] = converted_tmp
 
         kernels = []
         ctrlflow_ast = []
@@ -267,8 +239,6 @@ class NirToUsid(eve.NodeTranslator):
             kernel, kernel_call = self.visit(s, symtable=node.symtable_)
             kernels.extend(kernel)
             ctrlflow_ast.extend(kernel_call)
-
-        debug(kernels)
 
         return usid.Computation(
             name=node.name,

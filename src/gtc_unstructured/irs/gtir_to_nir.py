@@ -63,9 +63,6 @@ class GtirToNir(eve.NodeTranslator):
         }
     )
 
-    # def visit_NeighborChain(self, node: gtir.NeighborChain, **kwargs):
-    #     return nir.NeighborChain(elements=node.elements)
-
     def visit_HorizontalDimension(self, node: gtir.HorizontalDimension, **kwargs):
         return nir.HorizontalDimension(primary=node.primary)
 
@@ -87,49 +84,38 @@ class GtirToNir(eve.NodeTranslator):
         )
 
     # TODO test
-    # TODO discuss if this actually works: can we uniquely identify which ref in the field references which dimension or do we need other techniques (e.g. refer to primary and secondary dimension by name)
-    # @staticmethod
-    # def order_location_refs(
-    #     location_refs,  #: List[gtir.LocationRef],
-    #     location_comprehensions: Dict[str, gtir.LocationComprehension],
-    # ):
-    #     """Compute a dict with primary, secondary and vertical (TODO)."""
-    #     result = {}
+    # TODO super ugly
+    @staticmethod
+    def order_location_refs(location_refs: List[gtir.LocationRef], symtable):
+        # TODO deal with k
+        primary = None
+        secondary = None
 
-    #     decls = [location_comprehensions[ref.name] for ref in location_refs]
+        decls = [symtable[ref.name] for ref in location_refs]
+        debug(decls)
 
-    #     # If there is a secondary dimension (sparse), then one of the LocationComprehensions references the other.
-    #     for decl in decls:
-    #         if not isinstance(decl.of, gtir.Domain) and decl.of.name in [
-    #             ref.name for ref in location_refs
-    #         ]:
-    #             assert "secondary" not in result
-    #             result["secondary"] = decl.name
-    #         else:
-    #             assert "primary" not in result
-    #             result["primary"] = decl.name
+        for decl in decls:
+            if not primary:
+                primary = decl.name
+            elif isinstance(decl, gtir.PrimaryLocation):
+                secondary = primary
+                primary = decl.name
 
-    #     return result
+        assert primary
+        return primary, secondary
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs):
-        # TODO currently assume they are ordered
+        primary, secondary = self.order_location_refs(node.subscript, kwargs["symtable"])
         return nir.FieldAccess(
             name=node.name,
             location_type=node.location_type,
-            primary=node.subscript[0].name,  # TODO pick the correct one
-            # secondary=secondary_chain,
+            primary=primary,
+            secondary=secondary,
         )
 
     def visit_NeighborReduce(
         self, node: gtir.NeighborReduce, *, hloop_ctx: "HorizontalLoopContext", **kwargs
     ):
-        # loc_comprehension = copy.deepcopy(kwargs["location_comprehensions"])
-        # assert node.neighbors.name not in loc_comprehension
-        # loc_comprehension[node.neighbors.name] = node.neighbors
-        # kwargs["location_comprehensions"] = loc_comprehension
-
-        # body_location = node.neighbors.chain.elements[-1]
-
         connectivity_deref: gtir.Connectivity = kwargs["symtable"][node.neighbors.of.name]
 
         reduce_var_name = "local" + str(node.id_)
