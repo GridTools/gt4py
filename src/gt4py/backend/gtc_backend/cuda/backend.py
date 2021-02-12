@@ -104,6 +104,13 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
                     unique_index=self.unique_index(),
                 )
 
+    def visit_ScalarDecl(self, node: cuir.ScalarDecl, **kwargs):
+        if "external_arg" in kwargs:
+            if kwargs["external_arg"]:
+                return "{dtype} {name}".format(name=node.name, dtype=self.visit(node.dtype))
+            else:
+                return "gridtools::stencil::make_global_parameter({name})".format(name=node.name)
+
     def visit_Program(self, node: cuir.Program, **kwargs):
         assert "module_name" in kwargs
         entry_params = self.visit(node.params, external_arg=True, **kwargs)

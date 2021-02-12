@@ -30,6 +30,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     FieldDecl = as_fmt("{name}")
 
+    ScalarDecl = as_fmt("{name}")
+
     Temporary = as_fmt("{name}")
 
     AssignStmt = as_fmt("{left} = {right};")

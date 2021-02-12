@@ -89,6 +89,10 @@ class FieldDecl(Decl):
     pass
 
 
+class ScalarDecl(Decl):
+    pass
+
+
 class LocalScalar(Decl):
     pass
 
@@ -142,6 +146,6 @@ class Kernel(LocNode):
 
 class Program(LocNode, SymbolTableTrait):
     name: Str
-    params: List[FieldDecl]
+    params: List[Decl]
     declarations: List[Temporary]
     kernels: List[Kernel]
