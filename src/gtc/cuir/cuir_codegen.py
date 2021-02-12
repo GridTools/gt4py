@@ -118,6 +118,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         // ${id_}
         ${loop_entry(start, end)} {
             ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
+            ${loop_shift()}
         }
         """
     )
@@ -134,11 +135,17 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 return f"for (int k_block = {end} - 1; k_block >= {start}; --k_block)"
             raise AssertionError("Invalid loop order")
 
+        def loop_shift() -> str:
+            if node.loop_order == cuir.LoopOrder.PARALLEL:
+                return ""
+            step = 1 if node.loop_order == cuir.LoopOrder.FORWARD else -1
+            return f"sid::shift(ptr, sid::get_stride<dim::k>(m_strides), {step}_c);"
+
         return self.generic_visit(
             node,
             accesses=node.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set(),
             loop_entry=loop_entry,
-            is_parallel=node.loop_order == cuir.LoopOrder.PARALLEL,
+            loop_shift=loop_shift,
             **kwargs,
         )
 
@@ -167,7 +174,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 sid::shift(ptr,
                            sid::get_stride<dim::j>(m_strides),
                            j_block);
-                % if is_parallel:
+                % if is_parallel(_this_node):
                 const int k_block = blockIdx.z;
                 sid::shift(ptr,
                            sid::get_stride<dim::k>(m_strides),
@@ -214,14 +221,25 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     def visit_Program(self, node: cuir.Program, **kwargs: Any) -> Union[str, Collection[str]]:
         def loop_start(vertical_loop: cuir.VerticalLoop) -> str:
             if vertical_loop.loop_order == cuir.LoopOrder.BACKWARD:
-                return self.visit(vertical_loop.sections[0].end)
+                return self.visit(vertical_loop.sections[0].end) + ' - 1'
             return self.visit(vertical_loop.sections[0].start)
+
+        def is_parallel(vertical_loop: cuir.VerticalLoop) -> bool:
+            return vertical_loop.loop_order == cuir.LoopOrder.PARALLEL
+
+        def parallel_loop_size(vertical_loop: cuir.VerticalLoop) -> str:
+            assert vertical_loop.loop_order == cuir.LoopOrder.PARALLEL
+            start = self.visit(vertical_loop.sections[0].start)
+            end = self.visit(vertical_loop.sections[-1].end)
+            return f"({end}) - ({start})"
 
         return self.generic_visit(
             node,
             declarations_dtypes=[self.visit(d.dtype, **kwargs) for d in node.declarations],
             max_extent=self.visit(cuir.Extent.union(*node.iter_tree().if_isinstance(cuir.Extent))),
             loop_start=loop_start,
+            is_parallel=is_parallel,
+            parallel_loop_size=parallel_loop_size,
         )
 
     Program = as_mako(
@@ -327,7 +345,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                         };
                         gpu_backend::launch_kernel<${max_extent},
                             i_block_size_t::value, j_block_size_t::value>(
-                            i_size, j_size, k_size,
+                            i_size,
+                            j_size,
+                            ${'k_size' if is_parallel(kernel.vertical_loops[0]) else '1'},
                             kernel_${kernel.id_},
                             shared_alloc.size());
                     % endfor
