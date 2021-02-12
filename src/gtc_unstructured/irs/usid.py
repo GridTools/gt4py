@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Union
 
 from devtools import debug  # noqa: F401
 from pydantic import validator
