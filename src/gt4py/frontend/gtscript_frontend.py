@@ -961,8 +961,8 @@ class IRMaker(ast.NodeVisitor):
             if len(field_axes) != len(index):
                 axes_str = "(" + ", ".join(field_axes) + ")"
                 raise GTScriptSyntaxError(
-                    f"Incorrect offset specification detected. Found {index}, "
-                    f"but the field has dimensions {axes_str}"
+                    f"Incorrect offset {index} to field '{result.name}' "
+                    f"with dimensions {axes_str}"
                 )
             result.offset = {axis: value for axis, value in zip(field_axes, index)}
 
@@ -1175,13 +1175,12 @@ class IRMaker(ast.NodeVisitor):
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
 
-            axes = self.fields[t.id].axes
             par_axes_names = [axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes]
             if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
                 par_axes_names.append(gt_ir.Domain.LatLonGrid().sequential_axis.name)
-            if set(par_axes_names) - set(axes):
+            if set(par_axes_names) - set(self.fields[t.id].axes):
                 raise GTScriptSyntaxError(
-                    message=f"Cannot assign to a field unless all parallel axes are present: '{par_axes_names}'.",
+                    message=f"Cannot assign to field '{node.targets[0].id}' as all parallel axes '{par_axes_names}' are not present.",
                     loc=gt_ir.Location.from_ast_node(t),
                 )
 
@@ -1286,7 +1285,7 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
                     self.local_symbols.add(t.value.id)
                 else:
                     raise GTScriptSyntaxError(
-                        message="invalid target in assign", loc=gt_ir.Location.from_ast_node(node)
+                        message="Invalid target in assign", loc=gt_ir.Location.from_ast_node(node)
                     )
 
 

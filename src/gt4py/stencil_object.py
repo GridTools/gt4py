@@ -149,7 +149,7 @@ class StencilObject(abc.ABC):
                 storage_mask = tuple(field.mask)
                 if storage_mask != api_mask:
                     raise ValueError(
-                        f"The storage for '{name}' has mask '{storage_mask}', but the API signature expects '{api_mask}'"
+                        f"Storage for '{name}' has mask '{storage_mask}', API signature expects '{api_mask}'"
                     )
             upper_boundary = self.field_info[name].boundary.upper_indices.filter_mask(api_mask)
             field_domain = Shape(field.shape) - (origin[name] + upper_boundary)
@@ -196,7 +196,7 @@ class StencilObject(abc.ABC):
                 storage_mask = tuple(field.mask)
                 if storage_mask != field_mask:
                     raise ValueError(
-                        f"The storage for '{name}' has mask '{storage_mask}', but the API signature expects '{field_mask}'"
+                        f"Storage for '{name}' has mask '{storage_mask}', API signature expects '{field_mask}'"
                     )
 
                 if not field.is_stencil_view:
@@ -322,15 +322,17 @@ class StencilObject(abc.ABC):
             origin = normalize_origin_mapping(origin)
 
         for name, field in used_field_args.items():
+            storage_ndim = len(field.shape)
             if "_all_" in origin:
                 field_mask = self._get_field_mask(name)
-                origin.setdefault(name, gt_ir.Index(origin["_all_"].filter_mask(field_mask)))
+                field_origin = gt_ir.Index(origin["_all_"].filter_mask(field_mask))
+                min_origin = [min(field.shape[i] - 1, field_origin[i]) for i in range(storage_ndim)]
+                origin.setdefault(name, Index(min_origin))
             else:
-                storage_ndim = len(field.shape)
                 api_ndim = len(self.field_info[name].axes)
                 if storage_ndim != api_ndim:
                     raise ValueError(
-                        f"The storage for '{name}' has {storage_ndim} dimensions, but the API signature expects {api_ndim}"
+                        f"Storage for '{name}' has {storage_ndim} dimensions, API signature expects {api_ndim}"
                     )
                 origin.setdefault(name, gt_ir.Index(field.default_origin))
 
