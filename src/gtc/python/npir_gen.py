@@ -160,15 +160,45 @@ class NpirGen(TemplatedGenerator):
             textwrap.dedent(
                 """\
                 # -- begin data views --
-                {% for name in field_params %}{{ name }}_ = {{ name }}[
-                    (_origin_["{{ name }}"][0] - i):(_origin_["{{ name }}"][0] + _di + _ui),
-                    (_origin_["{{ name }}"][1] - j):(_origin_["{{ name }}"][1] + _dj + _uj),
-                    (_origin_["{{ name }}"][2] - k):(_origin_["{{ name }}"][2] + _dk + _uk)
+                class ShimmedView:
+                    def __init__(self, field, offsets):
+                        self.field = field
+                        self.offsets = offsets
+
+                    def shim_key(self, key):
+                        new_args = []
+                        if not isinstance(key, tuple):
+                            key = (key, )
+                        for dim, idx in enumerate(key):
+                            if isinstance(idx, slice):
+                                start = 0 if idx.start is None else idx.start
+                                stop = 0 if idx.stop is None else idx.stop
+                                new_args.append(
+                                    slice(start + self.offsets[dim], stop + self.offsets[dim], idx.step)
+                                )
+                            else:
+                                new_args.append(idx + self.offsets[dim])
+                        return tuple(new_args)
+
+                    def __getitem__(self, key):
+                        return self.field.__getitem__(self.shim_key(key))
+
+                    def __setitem__(self, key, value):
+                        return self.field.__setitem__(self.shim_key(key), value)
+
+                {% for name in field_params %}__pi, __pj, __pk, = {{ field_paddings[name]['lower'] }}
+                __pI, __pJ, __pK, = {{ field_paddings[name]['upper'] }}
+                {{ name }}_ = {{ name }}[
+                    (_origin_["{{ name }}"][0] - __pi):(_origin_["{{ name }}"][0] + _di + __pI),
+                    (_origin_["{{ name }}"][1] - __pj):(_origin_["{{ name }}"][1] + _dj + __pJ),
+                    (_origin_["{{ name }}"][2] - __pk):(_origin_["{{ name }}"][2] + _dk + __pK)
                 ]
+                {% if not field_paddings[name]['lower'] == lower %}{{ name }}_ = ShimmedView({{ name }}_, (__pi - i, __pj - j, __pk - k))
+                {% endif %}
                 {% endfor %}# -- end data views --
                 """
             )
-        ).render(field_params=node.field_params)
+        ).render(field_params=node.field_params, field_paddings=node.field_paddings, lower=node.domain_padding.lower)
         return self.generic_visit(
             node, signature=", ".join(signature), data_views=data_views, **kwargs
         )

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Any, List, Optional, Tuple, Union, cast
+from typing import Any, List, Optional, Tuple, Union, cast, Dict
 
 from pydantic import validator
 
@@ -139,6 +139,7 @@ class DomainPadding(eve.Node):
 
 class Computation(common.LocNode):
     field_params: List[str]
+    field_paddings: Dict[str, Dict[str, Tuple[int, int, int]]]
     params: List[str]
     vertical_passes: List[VerticalPass]
     domain_padding: DomainPadding
