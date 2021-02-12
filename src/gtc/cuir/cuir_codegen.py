@@ -221,7 +221,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     def visit_Program(self, node: cuir.Program, **kwargs: Any) -> Union[str, Collection[str]]:
         def loop_start(vertical_loop: cuir.VerticalLoop) -> str:
             if vertical_loop.loop_order == cuir.LoopOrder.BACKWARD:
-                return self.visit(vertical_loop.sections[0].end) + ' - 1'
+                return self.visit(vertical_loop.sections[0].end) + " - 1"
             return self.visit(vertical_loop.sections[0].start)
 
         def is_parallel(vertical_loop: cuir.VerticalLoop) -> bool:
