@@ -140,7 +140,7 @@ class NirToUsid(eve.NodeTranslator):
                 kernel_ctx.add_entry(sid, usid.SidCompositeEntry(ref=node.name))
 
         return usid.FieldAccess(
-            name=node.name + "_tag",
+            name=node.name + usid.TAG_APPENDIX,
             sid=ref,
             location_type=node.location_type,
         )

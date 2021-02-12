@@ -27,6 +27,9 @@ from gtc_unstructured.irs import common
 from gtc import common as stable_gtc_common
 
 
+TAG_APPENDIX: str = "_tag"
+
+
 class Expr(Node):
     location_type: common.LocationType
 
@@ -70,7 +73,7 @@ class Connectivity(FrozenNode):
 
     @property
     def tag(self):
-        return self.name + "_tag"
+        return self.name + TAG_APPENDIX
 
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
     def __hash__(self):
@@ -87,7 +90,7 @@ class SidCompositeEntry(FrozenNode):
     @root_validator(pre=True)
     def set_name(cls, values):
         assert "name" not in values
-        values["name"] = values["ref"] + "_tag"
+        values["name"] = values["ref"] + TAG_APPENDIX
         return values
 
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
@@ -161,7 +164,7 @@ class UField(Node):
 
     @property
     def tag(self):
-        return self.name + "_tag"
+        return self.name + TAG_APPENDIX
 
 
 class SparseField(Node):
@@ -172,7 +175,7 @@ class SparseField(Node):
 
     @property
     def tag(self):
-        return self.name + "_tag"
+        return self.name + TAG_APPENDIX
 
 
 class Temporary(UField):
