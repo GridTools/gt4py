@@ -14,10 +14,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any
+from typing import Any, Dict
 
 import eve
-from gtc import oir
+from gtc import common, oir
 from gtc.cuir import cuir
 
 
@@ -28,12 +28,18 @@ class OIRToCUIR(eve.NodeTranslator):
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> cuir.FieldDecl:
         return cuir.FieldDecl(name=node.name, dtype=node.dtype)
 
+    def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> cuir.FieldDecl:
+        return cuir.FieldDecl(name=node.name, dtype=node.dtype)
+
     def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> cuir.UnaryOp:
         return cuir.UnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs))
 
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> cuir.BinaryOp:
         return cuir.BinaryOp(
-            op=node.op, left=self.visit(node.left), right=self.visit(node.right), dtype=node.dtype
+            op=node.op,
+            left=self.visit(node.left, **kwargs),
+            right=self.visit(node.right, **kwargs),
+            dtype=node.dtype,
         )
 
     def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> cuir.Temporary:
@@ -42,7 +48,13 @@ class OIRToCUIR(eve.NodeTranslator):
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> cuir.FieldAccess:
         return cuir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
 
-    def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs: Any) -> cuir.ScalarAccess:
+    def visit_ScalarAccess(
+        self, node: oir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any
+    ) -> cuir.ScalarAccess:
+        if isinstance(symtable.get(node.name, None), oir.ScalarDecl):
+            return cuir.FieldAccess(
+                name=node.name, offset=common.CartesianOffset.zero(), dtype=node.dtype
+            )
         return cuir.ScalarAccess(name=node.name, dtype=node.dtype)
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> cuir.AssignStmt:
@@ -96,5 +108,5 @@ class OIRToCUIR(eve.NodeTranslator):
             name=node.name,
             params=self.visit(node.params),
             declarations=self.visit(node.declarations),
-            kernels=self.visit(node.vertical_loops),
+            kernels=self.visit(node.vertical_loops, symtable=node.symtable_),
         )

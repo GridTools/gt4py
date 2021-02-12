@@ -120,26 +120,19 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    VerticalLoop = as_mako(
-        """
-        // ${id_}
-        % for section in sections:
-            ${section}
-        % endfor
-        """
-    )
-
-    def visit_Kernel(self, node: cuir.Kernel, **kwargs: Any) -> Union[str, Collection[str]]:
+    def visit_VerticalLoop(
+        self, node: cuir.VerticalLoop, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         return self.generic_visit(
             node,
             accesses=node.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set(),
             **kwargs,
         )
 
-    Kernel = as_mako(
+    VerticalLoop = as_mako(
         """
         template <class Sid>
-        struct ${name}_f {
+        struct loop_${id_}_f {
             sid::ptr_holder_type<Sid> m_ptr_holder;
             sid::strides_type<Sid> m_strides;
             int k_size;
@@ -170,11 +163,36 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                     auto &&${acc} = device::at_key<tag::${acc}>(ptr);
                 % endfor
 
-                % for vertical_loop in vertical_loops:
-                    ${vertical_loop}
+                % for section in sections:
+                    ${section}
                 % endfor
             }
         };
+        """
+    )
+
+    Kernel = as_mako(
+        """
+        % for vertical_loop in vertical_loops:
+            ${vertical_loop}
+        % endfor
+
+        template <${', '.join(f'class Loop{vl.id_}' for vl in _this_node.vertical_loops)}>
+        struct kernel_${id_}_f {
+            % for vertical_loop in _this_node.vertical_loops:
+                Loop${vertical_loop.id_} m_${vertical_loop.id_};
+            % endfor
+
+            template <class Validator>
+            GT_FUNCTION_DEVICE void operator()(const int i_block,
+                                               const int j_block,
+                                               Validator validator) const {
+                % for vertical_loop in _this_node.vertical_loops:
+                    m_${vertical_loop.id_}(i_block, j_block, validator);
+                % endfor
+            }
+        };
+
         """
     )
 
@@ -251,21 +269,26 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             tmp_alloc);
                     % endfor
 
-                    auto composite = sid::composite::make<
-                            ${', '.join(f'tag::{p}' for p in params + declarations)}
-                        >(
-                            ${', '.join([f'block({p})' for p in params] + list(declarations))}
-                        );
-
                     % for kernel in _this_node.kernels:
+                        % for vertical_loop in kernel.vertical_loops:
+                            auto composite_${vertical_loop.id_} = sid::composite::make<
+                                    ${', '.join(f'tag::{p}' for p in params + declarations)}
+                                >(
+                                    ${', '.join([f'block({p})' for p in params] + list(declarations))}
+                                );
+                            loop_${vertical_loop.id_}_f<decltype(composite_${vertical_loop.id_})> loop_${vertical_loop.id_}{
+                                sid::get_origin(composite_${vertical_loop.id_}),
+                                sid::get_strides(composite_${vertical_loop.id_}),
+                                domain[2]
+                            };
+                        % endfor
+                        kernel_${kernel.id_}_f<${', '.join(f'decltype(loop_{vl.id_})' for vl in kernel.vertical_loops)}> kernel_${kernel.id_}{
+                            ${', '.join(f'loop_{vl.id_}' for vl in kernel.vertical_loops)}
+                        };
                         gpu_backend::launch_kernel<${max_extent},
                             i_block_size_t::value, j_block_size_t::value>(
                             domain[0], domain[1], domain[2],
-                            ${kernel.name}_f<decltype(composite)>{
-                                sid::get_origin(composite),
-                                sid::get_strides(composite),
-                                domain[2]
-                            },
+                            kernel_${kernel.id_},
                             shared_alloc.size());
                     % endfor
 
