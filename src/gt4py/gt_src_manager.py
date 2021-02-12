@@ -14,11 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""Utils for the installation and removal of GridTools C++ sources."""
+
 import argparse
 import os
 import subprocess
 
-from . import config as gt_config
+import gt4py.config as gt_config
 
 
 _DEFAULT_GRIDTOOLS_VERSION = 1

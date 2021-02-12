@@ -45,15 +45,17 @@ using backend_t = DAWN_GT_BACKEND;
 #include <cassert>
 #include <stdexcept>
 
+static constexpr int MAX_DIM = 3;
+
 namespace {{ stencil_unique_name }} {
 
 namespace {
 
-std::array<gt::uint_t, 3> get_min_origin(
-    const std::initializer_list<const std::array<gt::uint_t, 3>>& origins) {
-    std::array<gt::uint_t, 3> min_origin = *origins.begin();
+std::array<gt::uint_t, MAX_DIM> get_min_origin(
+    const std::initializer_list<const std::array<gt::uint_t, MAX_DIM>>& origins) {
+    std::array<gt::uint_t, MAX_DIM> min_origin = *origins.begin();
     for(const auto& origin : origins) {
-        for(int i = 0; i < 3; ++i) {
+        for(int i = 0; i < MAX_DIM; ++i) {
             if(origin[i] < min_origin[i])
                 min_origin[i] = origin[i];
         }
@@ -61,10 +63,10 @@ std::array<gt::uint_t, 3> get_min_origin(
     return min_origin;
 }
 
-gridtools::dawn::domain make_domain(const std::array<gt::uint_t, 3> &in_size,
-                                    const std::array<gt::uint_t, 3> &min_origin) {
-    std::array<gt::uint_t, 3> size;
-    for (int i = 0; i < 3; ++i) {
+gridtools::dawn::domain make_domain(const std::array<gt::uint_t, MAX_DIM> &in_size,
+                                    const std::array<gt::uint_t, MAX_DIM> &min_origin) {
+    std::array<gt::uint_t, MAX_DIM> size;
+    for (int i = 0; i < MAX_DIM; ++i) {
       size[i] = in_size[i] + 2 * min_origin[i];
     }
 
@@ -82,23 +84,18 @@ static_assert(
 // Constants
 template<typename T>
 data_store_t make_data_store(const BufferInfo& bi,
-                             const std::array<gt::uint_t, 3>& compute_domain_shape,
-                             const std::array<gt::uint_t, 3>& origin)
+                             const std::array<gt::uint_t, MAX_DIM>& compute_domain_shape,
+                             const std::array<gt::uint_t, MAX_DIM>& origin)
 {
     static_assert(std::is_same<T, double>::value, "Only double is supported right now");
-    if (bi.ndim != 3) {
-        throw std::runtime_error("Wrong number of dimensions [" +
-                                 std::to_string(bi.ndim) +
-                                 " != " + std::to_string(3) + "]");
-    }
 
     // ptr, dims and strides are "outer domain" (i.e., compute domain + halo
     // region). The halo region is only defined through `make_grid` (and
     // currently, in the storage info)
-    gt::array<gt::uint_t, 3> dims{};
-    gt::array<gt::uint_t, 3> strides{};
+    gt::array<gt::uint_t, MAX_DIM> dims{};
+    gt::array<gt::uint_t, MAX_DIM> strides{};
     double* ptr = static_cast<double*>(bi.ptr);
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < MAX_DIM; ++i) {
         strides[i] = bi.strides[i] / sizeof(double);
         dims[i] = compute_domain_shape[i]+2*origin[i];
     }
@@ -114,11 +111,11 @@ data_store_t make_data_store(const BufferInfo& bi,
 
 
 // Run actual computation
-void run(const std::array<gt::uint_t, 3>& domain,
+void run(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- set comma = joiner(", ") %}
 {%- for field in arg_fields -%}
          {{- comma() }}
-         const BufferInfo& bi_{{ field.name }} {{- comma() -}} const std::array<gt::uint_t, 3>& {{ field.name }}_origin
+         const BufferInfo& bi_{{ field.name }} {{- comma() -}} const std::array<gt::uint_t, MAX_DIM>& {{ field.name }}_origin
 {%- endfor %}
 {%- for param in parameters %}
          {{- comma() }}
@@ -126,7 +123,7 @@ void run(const std::array<gt::uint_t, 3>& domain,
 {%- endfor %})
 {
     // Compute min origin
-    std::array<gt::uint_t, 3> min_origin = get_min_origin({
+    std::array<gt::uint_t, MAX_DIM> min_origin = get_min_origin({
 {%- for field in arg_fields -%}
          {{ field.name }}_origin {{ comma() if not loop.last }}
 {%- endfor -%}

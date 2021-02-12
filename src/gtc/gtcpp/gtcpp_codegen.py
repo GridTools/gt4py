@@ -59,10 +59,13 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     GTInterval = as_fmt("gridtools::stencil::core::interval<{from_level}, {to_level}>")
 
+    LocalVarDecl = as_fmt("{dtype} {name};")
+
     GTApplyMethod = as_mako(
         """
     template<typename Evaluation>
     GT_FUNCTION static void apply(Evaluation eval, ${interval}) {
+        ${ ' '.join(local_variables) }
         ${ '\\n'.join(body) }
     }
     """
