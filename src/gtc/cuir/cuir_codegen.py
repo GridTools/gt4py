@@ -332,6 +332,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                                 sid::get_stride<dim::k>(strides_${vertical_loop.id_}),
                                 ${loop_start(vertical_loop)}
                             );
+                            assert((${loop_start(vertical_loop)}) >= 0 &&
+                                   (${loop_start(vertical_loop)}) < k_size);
                             loop_${vertical_loop.id_}_f<composite_${vertical_loop.id_}_t> loop_${vertical_loop.id_}{
                                 sid::get_origin(composite_${vertical_loop.id_}) + offset_${vertical_loop.id_},
                                 std::move(strides_${vertical_loop.id_}),

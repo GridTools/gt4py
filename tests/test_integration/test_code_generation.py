@@ -69,11 +69,12 @@ def test_generation_gpu(name, backend):
                 mask=gtscript.mask_from_axes(v.axes),
                 backend=backend,
                 shape=(23, 23, 23),
-                default_origin=(10, 10, 10),
+                default_origin=(10, 10, 5),
             )
         else:
             args[k] = v(1.5)
-    stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3))
+    # vertical domain size >= 16 required for test_large_k_interval
+    stencil(**args, origin=(10, 10, 5), domain=(3, 3, 16))
 
 
 @pytest.mark.requires_gpu
