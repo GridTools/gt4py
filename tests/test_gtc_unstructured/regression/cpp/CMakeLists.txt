@@ -33,59 +33,64 @@ FetchContent_Declare(cpputil_usid
 FetchContent_MakeAvailable(cpputil_usid)
 
 
-# function(add_regression_test_executable)
-#     set(options)
-#     set(oneValueArgs NAME INPUT MODE)
-#     set(multiValueArgs SOURCES LIBRARIES)
-#     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+function(add_regression_test_executable)
+    set(options)
+    set(oneValueArgs NAME INPUT MODE)
+    set(multiValueArgs SOURCES LIBRARIES)
+    cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-#     message(STATUS "${ARG_NAME}")
+    message(STATUS "${ARG_NAME}")
 
-#     # generate c++ from gtscript
-#     set(STENCIL_IMPL_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/generated_${ARG_NAME}.hpp)
-#     add_custom_command(OUTPUT ${STENCIL_IMPL_SOURCE}
-#         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT} ${ARG_MODE}
-#         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT})
-#     add_custom_target(generated_${ARG_NAME} DEPENDS ${STENCIL_IMPL_SOURCE})
+    # generate c++ from gtscript
+    set(STENCIL_IMPL_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/generated_${ARG_NAME}.hpp)
+    add_custom_command(OUTPUT ${STENCIL_IMPL_SOURCE}
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT} ${ARG_MODE}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT})
+    add_custom_target(generated_${ARG_NAME} DEPENDS ${STENCIL_IMPL_SOURCE})
 
 
-#     # generate driver code
-#     #  create directory to generate code to
-#     set(gen_dir ${CMAKE_CURRENT_BINARY_DIR}/generated_${ARG_NAME})
-#     file(MAKE_DIRECTORY ${gen_dir})
-#     #  the gridtools_setup_target expect a relative path so transform it
-#     file(RELATIVE_PATH bin_dir_rel_to_src_dir ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/.)
-#     set(generated_arg_sources)
-#     foreach(arg_source ${ARG_SOURCES})
-#         get_filename_component(generated_source ${arg_source} NAME)
-#         configure_file(${arg_source} ${gen_dir}/${generated_source})
-#         list(APPEND generated_arg_sources ${bin_dir_rel_to_src_dir}/generated_${ARG_NAME}/${generated_source})
-#     endforeach()
+    # generate driver code
+    #  create directory to generate code to
+    set(gen_dir ${CMAKE_CURRENT_BINARY_DIR}/generated_${ARG_NAME})
+    file(MAKE_DIRECTORY ${gen_dir})
+    #  the gridtools_setup_target expect a relative path so transform it
+    file(RELATIVE_PATH bin_dir_rel_to_src_dir ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/.)
+    set(generated_arg_sources)
+    foreach(arg_source ${ARG_SOURCES})
+        get_filename_component(generated_source ${arg_source} NAME)
+        configure_file(${arg_source} ${gen_dir}/${generated_source})
+        list(APPEND generated_arg_sources ${bin_dir_rel_to_src_dir}/generated_${ARG_NAME}/${generated_source})
+    endforeach()
 
-#     # setup actual test
-#     add_executable(${ARG_NAME} ${generated_arg_sources}) # TODO fix GridTools appending .cu to .hpp, then we don't need the custom_target
-#     target_link_libraries(${ARG_NAME} ${ARG_LIBRARIES})
-#     add_dependencies(${ARG_NAME} generated_${ARG_NAME})
-#     add_test(NAME ${ARG_NAME} COMMAND $<TARGET_FILE:${ARG_NAME}>)
-# endfunction()
+    # setup actual test
+    add_executable(${ARG_NAME} ${generated_arg_sources}) # TODO fix GridTools appending .cu to .hpp, then we don't need the custom_target
+    target_link_libraries(${ARG_NAME} ${ARG_LIBRARIES})
+    add_dependencies(${ARG_NAME} generated_${ARG_NAME})
+    add_test(NAME ${ARG_NAME} COMMAND $<TARGET_FILE:${ARG_NAME}>)
+endfunction()
 
-# function(add_regression_test name)
-#     set(options)
-#     set(oneValueArgs)
-#     set(multiValueArgs ADDITIONAL_LIBRARIES)
-#     cmake_parse_arguments(PARSE_ARGV 1 ARG "${options}" "${oneValueArgs}" "${multiValueArgs}")
+function(add_regression_test name)
+    set(options)
+    set(oneValueArgs DRIVER)
+    set(multiValueArgs ADDITIONAL_LIBRARIES)
+    cmake_parse_arguments(PARSE_ARGV 1 ARG "${options}" "${oneValueArgs}" "${multiValueArgs}")
 
-#     set(_sources ${name}_driver.cc)
-#     set(libraries GridTools::gridtools gtest gtest_main gmock gtnext)
-#     list (APPEND libraries ${ARG_ADDITIONAL_LIBRARIES})
+    if(ARG_DRIVER)
+        set(_driver ${ARG_DRIVER})
+    else()
+        set(_driver ${name})
+    endif()
+    set(_sources ${_driver}_driver.cc)
+    set(libraries GridTools::gridtools gtest gtest_main gmock)
+    list (APPEND libraries ${ARG_ADDITIONAL_LIBRARIES})
 
-#     add_regression_test_executable(NAME ${name}_unaive INPUT ${name}.py MODE unaive SOURCES ${_sources} LIBRARIES ${libraries})
+    add_regression_test_executable(NAME ${name}_unaive INPUT ${name}.py MODE unaive SOURCES ${_sources} LIBRARIES usid_cpu ${libraries})
 
-#     if(TARGET GridTools::stencil_gpu)
-#         add_regression_test_executable(NAME ${name}_ugpu INPUT ${name}.py MODE ugpu SOURCES ${_sources} LIBRARIES ${libraries} GridTools::stencil_gpu)
-#         gridtools_setup_target(${name}_ugpu CUDA_ARCH sm_50)
-#     endif()
-# endfunction()
+    if(TARGET GridTools::stencil_gpu)
+        add_regression_test_executable(NAME ${name}_ugpu INPUT ${name}.py MODE ugpu SOURCES ${_sources} LIBRARIES ${libraries} usid_gpu GridTools::stencil_gpu)
+        gridtools_setup_target(${name}_ugpu CUDA_ARCH sm_50)
+    endif()
+endfunction()
 
 include(CTest)
 if(BUILD_TESTING)
@@ -101,6 +106,8 @@ if(BUILD_TESTING)
 
     # add_regression_test(cell2cell)
     # add_regression_test(vertex2edge)
+    add_regression_test(vertex2edge_gtir DRIVER vertex2edge)
+    add_regression_test(sparse_assign_gtir DRIVER sparse_assign)
     # add_regression_test(tmp_field)
     # add_regression_test(fvm_nabla ADDITIONAL_LIBRARIES atlas eckit)
 endif()
