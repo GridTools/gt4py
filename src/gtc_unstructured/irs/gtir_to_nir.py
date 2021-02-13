@@ -113,6 +113,39 @@ class GtirToNir(eve.NodeTranslator):
             secondary=secondary,
         )
 
+    def visit_NeighborAssignStmt(
+        self,
+        node: gtir.NeighborAssignStmt,
+        *,
+        symtable,
+        hloop_ctx: "HorizontalLoopContext",
+        **kwargs,
+    ):
+        symtable = {**symtable, **node.symtable_}
+        hloop_ctx.add_statement(
+            nir.NeighborLoop(
+                name=node.neighbors.name,
+                connectivity=node.neighbors.of.name,
+                body=nir.BlockStmt(
+                    declarations=[],
+                    statements=[
+                        nir.AssignStmt(
+                            left=nir.FieldAccess(
+                                name=node.left.name,
+                                primary=node.left.subscript[0].name,
+                                secondary=node.neighbors.name,
+                                location_type=node.location_type,
+                            ),
+                            right=self.visit(node.right, symtable=symtable, **kwargs),
+                            location_type=node.location_type,
+                        )
+                    ],
+                    location_type=node.location_type,
+                ),
+                location_type=node.location_type,
+            )
+        )
+
     def visit_NeighborReduce(
         self, node: gtir.NeighborReduce, *, hloop_ctx: "HorizontalLoopContext", **kwargs
     ):

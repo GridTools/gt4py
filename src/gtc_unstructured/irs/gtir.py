@@ -88,6 +88,11 @@ class FieldAccess(Expr):
     subscript: List[LocationRef]
 
 
+# to SparseField (or TODO LocalField)
+class NeighborAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt, SymbolTableTrait):
+    neighbors: LocationComprehension
+
+
 class AssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
     pass
 
