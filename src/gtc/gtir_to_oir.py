@@ -23,7 +23,7 @@ from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 
 
 def _create_mask(ctx: "GTIRToOIR.Context", name: str, cond: oir.Expr) -> oir.Temporary:
-    mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL, dimensions=(True, True, False))
+    mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL, dimensions=(True, True, True))
     ctx.add_decl(mask_field_decl)
 
     fill_mask_field = oir.HorizontalExecution(
