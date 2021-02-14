@@ -67,10 +67,6 @@ repos:
           src/gt4py/storage/__init__.py |
           src/gt4py/storage/storage.py |
           src/gt4py/storage/utils.py |
-          src/gt4py/testing/__init__.py |
-          src/gt4py/testing/input_strategies.py |
-          src/gt4py/testing/suites.py |
-          src/gt4py/testing/utils.py |
           src/gt4py/utils/__init__.py |
           src/gt4py/utils/base.py |
           src/gt4py/utils/attrib.py |
@@ -93,7 +89,6 @@ repos:
           tests/test_integration/stencil_definitions.py |
           tests/test_integration/test_code_generation.py |
           tests/test_integration/test_cpp_regression.py |
-          tests/test_integration/test_suites.py |
           tests/test_integration/utils.py |
           tests/test_unittest/test_call_interface.py |
           tests/test_unittest/test_dawn_backends.py |
