@@ -17,7 +17,7 @@
 
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import ClassVar, Dict, List, Mapping
+from typing import ClassVar, List, Mapping
 
 import eve
 from gtc_unstructured.irs import common, gtir, nir
@@ -27,8 +27,6 @@ from devtools import debug
 class GtirToNir(eve.NodeTranslator):
     @dataclass
     class HorizontalLoopContext:
-        """"""
-
         declarations: List[nir.LocalVar] = field(default_factory=list)
         statements: List[nir.Stmt] = field(default_factory=list)
 
@@ -113,6 +111,27 @@ class GtirToNir(eve.NodeTranslator):
             secondary=secondary,
         )
 
+    def visit_NeighborVectorAccess(
+        self,
+        node: gtir.NeighborVectorAccess,
+        *,
+        symtable,
+        loop_var,
+        hloop_ctx: "HorizontalLoopContext",
+        **kwargs,
+    ):
+        location_ref_deref = symtable[node.location_ref.name]
+        name = node.id_
+        hloop_ctx.add_declaration(
+            nir.LocalFieldVar(
+                name=name,
+                init=self.visit(node.exprs),
+                connectivity=location_ref_deref.of.name,
+                location_type=node.location_type,
+            )
+        )
+        return nir.FieldAccess(name=name, primary=loop_var, location_type=node.location_type)
+
     def visit_NeighborAssignStmt(
         self,
         node: gtir.NeighborAssignStmt,
@@ -122,9 +141,10 @@ class GtirToNir(eve.NodeTranslator):
         **kwargs,
     ):
         symtable = {**symtable, **node.symtable_}
+        name = node.neighbors.name
         hloop_ctx.add_statement(
             nir.NeighborLoop(
-                name=node.neighbors.name,
+                name=name,
                 connectivity=node.neighbors.of.name,
                 body=nir.BlockStmt(
                     declarations=[],
@@ -136,7 +156,13 @@ class GtirToNir(eve.NodeTranslator):
                                 secondary=node.neighbors.name,
                                 location_type=node.location_type,
                             ),
-                            right=self.visit(node.right, symtable=symtable, **kwargs),
+                            right=self.visit(
+                                node.right,
+                                loop_var=name,
+                                symtable=symtable,
+                                hloop_ctx=hloop_ctx,
+                                **kwargs,
+                            ),
                             location_type=node.location_type,
                         )
                     ],

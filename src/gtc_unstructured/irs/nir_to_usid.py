@@ -16,7 +16,7 @@
 
 
 from dataclasses import dataclass, field
-from typing import Dict, Set, Union
+from typing import Dict, Optional, Set, Union
 from devtools import debug  # noqa: F401
 
 import eve  # noqa: F401
@@ -26,8 +26,6 @@ from gtc_unstructured.irs import nir, usid
 class NirToUsid(eve.NodeTranslator):
     @dataclass
     class KernelContext:
-        """"""
-
         primary_composite_name: str
         primary_composite_entries: Set = field(default_factory=set)
         composites: Dict = field(default_factory=dict)
@@ -49,6 +47,14 @@ class NirToUsid(eve.NodeTranslator):
             assert name in self.composites
             self.composites[name].add(entry)
             return self
+
+    @dataclass
+    class NeighborLoopContext:
+        local_index: Optional[str] = None
+
+        def needs_index(self) -> str:
+            self.local_index = "i"
+            return self.local_index
 
     def convert_dimensions(self, dims: nir.Dimensions):
         dimensions = []
@@ -94,6 +100,8 @@ class NirToUsid(eve.NodeTranslator):
         return usid.Literal(value=node.value, vtype=node.vtype, location_type=node.location_type)
 
     def visit_NeighborLoop(self, node: nir.NeighborLoop, kernel_ctx: "KernelContext", **kwargs):
+        neigh_loop_ctx = self.NeighborLoopContext()
+
         primary_sid = kernel_ctx.primary_composite_name
         secondary_sid = node.name
         kernel_ctx.add_sid(secondary_sid)
@@ -104,6 +112,13 @@ class NirToUsid(eve.NodeTranslator):
         acc_mapping = {primary_sid: primary, secondary_sid: secondary}
 
         kernel_ctx.add_primary_entry(usid.SidCompositeEntry(ref=node.connectivity))
+        body = self.visit(
+            node.body,
+            kernel_ctx=kernel_ctx,
+            neigh_loop_ctx=neigh_loop_ctx,
+            acc_mapping=lambda x: acc_mapping[x],
+            **kwargs,
+        )
 
         return usid.NeighborLoop(
             primary_sid=kernel_ctx.primary_composite_name,
@@ -112,9 +127,10 @@ class NirToUsid(eve.NodeTranslator):
             primary=usid.PtrRef(name=primary),
             secondary=usid.PtrRef(name=secondary),
             location_type=node.location_type,
-            body=self.visit(
-                node.body, kernel_ctx=kernel_ctx, acc_mapping=lambda x: acc_mapping[x], **kwargs
-            ),
+            local_index=usid.LocalIndex(name=neigh_loop_ctx.local_index)
+            if neigh_loop_ctx.local_index
+            else None,
+            body=body,
         )
 
     def visit_FieldAccess(
@@ -129,9 +145,18 @@ class NirToUsid(eve.NodeTranslator):
         field_deref = symtable[node.name]
         sid = node.primary
         ref = acc_mapping(sid)
+        name = node.name + usid.TAG_APPENDIX
         if isinstance(field_deref, nir.SparseField):
             kernel_ctx.add_primary_entry(
                 usid.SidCompositeSparseEntry(ref=node.name, connectivity=field_deref.connectivity)
+            )
+        elif isinstance(field_deref, nir.LocalFieldVar):
+            assert "neigh_loop_ctx" in kwargs
+            neigh_loop_ctx = kwargs["neigh_loop_ctx"]
+            return usid.ArrayAccess(
+                name=node.name,
+                subscript=neigh_loop_ctx.needs_index(),
+                location_type=node.location_type,
             )
         else:
             if sid == kernel_ctx.primary_composite_name:
@@ -140,7 +165,7 @@ class NirToUsid(eve.NodeTranslator):
                 kernel_ctx.add_entry(sid, usid.SidCompositeEntry(ref=node.name))
 
         return usid.FieldAccess(
-            name=node.name + usid.TAG_APPENDIX,
+            name=name,
             sid=ref,
             location_type=node.location_type,
         )
@@ -155,19 +180,28 @@ class NirToUsid(eve.NodeTranslator):
             location_type=node.location_type,
         )
 
+    def visit_LocalVar(self, node: nir.LocalVar, **kwargs):
+        return usid.VarDecl(
+            name=node.name,
+            init=usid.Literal(value="0.0", vtype=node.vtype, location_type=node.location_type),
+            vtype=node.vtype,
+            location_type=node.location_type,
+        )
+
+    def visit_LocalFieldVar(self, node: nir.LocalFieldVar, *, symtable, **kwargs):
+        connectivity_deref: nir.Connectivity = symtable[node.connectivity]
+        return usid.StaticArrayDecl(
+            name=node.name,
+            init=self.visit(node.init),
+            vtype=node.init[
+                0
+            ].vtype,  # TODO bad hack, need to check that all are the same and can be deduced
+            size=connectivity_deref.max_neighbors,
+            location_type=node.location_type,
+        )
+
     def visit_BlockStmt(self, node: nir.BlockStmt, **kwargs):
-        statements = []
-        for decl in node.declarations:
-            statements.append(
-                usid.VarDecl(
-                    name=decl.name,
-                    init=usid.Literal(
-                        value="0.0", vtype=decl.vtype, location_type=node.location_type
-                    ),
-                    vtype=decl.vtype,
-                    location_type=node.location_type,
-                )
-            )
+        statements = self.visit(node.declarations, **kwargs)
         for stmt in node.statements:
             statements.append(self.visit(stmt, **kwargs))
         return statements
@@ -185,6 +219,8 @@ class NirToUsid(eve.NodeTranslator):
         secondary_composites = [
             usid.SidComposite(name=name, entries=entries) for name, entries in composites.items()
         ]
+
+        debug(body)
 
         kernel_name = "kernel_" + node.id_
         kernel = usid.Kernel(
