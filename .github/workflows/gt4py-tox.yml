@@ -38,4 +38,4 @@ jobs:
           pyversion_no_dot="${{ matrix.python-version }}"
           pyversion_no_dot="${pyversion_no_dot/./}"
           pip install tox clang-format
-          tox -r -e py${pyversion_no_dot}-cpu
+          tox -r -e py${pyversion_no_dot}-internal-cpu -- -n 4

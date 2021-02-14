@@ -94,6 +94,7 @@ def test_assign_to_ik_fwd():
                                     ),
                                 )
                             ],
+                            declarations=[],
                         ),
                     ],
                 ),
