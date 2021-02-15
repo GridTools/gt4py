@@ -182,7 +182,8 @@ class Decl(LocNode):  # TODO probably Stmt
 
 
 class FieldDecl(Decl):
-    dimensions: Tuple[bool, bool, bool]
+    axes_mask: Tuple[bool, bool, bool]
+    data_dims: List[int]
 
 
 class ScalarDecl(Decl):
