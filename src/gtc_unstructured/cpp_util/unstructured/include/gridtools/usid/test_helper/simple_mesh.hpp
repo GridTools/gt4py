@@ -54,6 +54,7 @@ namespace gridtools {
             struct simple_mesh {
                 static constexpr std::size_t vertices = 9;
                 static constexpr std::size_t edges = 18;
+                static constexpr std::size_t cells = 9;
 
                 auto e2v() {
                     return impl_::make_connectivity_producer<2>({{0, 1}, // 0
@@ -76,7 +77,43 @@ namespace gridtools {
                         {8, 2}});
                 }
 
-                auto c2c() {}
+                auto c2c() {
+                    //constexpr std::size_t max_neighbors = 8;
+                    //std::vector<std::array<int, max_neighbors>> connectivity;
+                    //for (std::size_t i=0; i<3; ++i) {
+                    //    for (std::size_t j=0; j<3; ++j) {
+                    //        std::array<int, max_neighbors> neighbors{};
+                    //        neighbors.fill(-1);
+                    //        std::size_t ci = 0;
+                    //        for (int oi=-1; oi<=1; ++oi) {
+                    //            for (int oj=-1; oj<=1; ++oj) {
+                    //                int ni = i+oi;
+                    //                int nj = j+oj;
+                    //                if (ni==0 && oj == 0) // skip center
+                    //                    continue;
+                    //                if (ni >= 0 && ni < 3 && nj >= 0 && nj < 3)
+                    //                    neighbors[++ci] = 3*ni+nj;
+                    //            }
+                    //        }
+                    //        assert(ci <= max_neighbors);
+                    //        connectivity.push_back(neighbors);
+                    //    }
+                    //}
+                    //return impl_::make_connectivity_producer<8>(connectivity);
+
+                    // todo: fix this is c2e2c
+                    return impl_::make_connectivity_producer<4>({
+                                     {6, 1, 3, 2}, // 0
+                                     {7, 2, 4, 0}, // 1
+                                     {8, 0, 5, 1}, // 2
+                                     {0, 4, 6, 5}, // 3
+                                     {1, 5, 7, 3}, // 4
+                                     {2, 3, 8, 4}, // 5
+                                     {3, 7, 0, 8}, // 6
+                                     {4, 8, 1, 6}, // 7
+                                     {5, 6, 2, 7}  // 8
+                    });
+                }
             };
             //             struct simple_mesh {
             //                 template <class LocationType>

@@ -22,8 +22,9 @@ import eve
 import gtc_unstructured.irs.common as common
 import gtc_unstructured.irs.gtir as gtir
 
+from . import built_in_functions
 from .built_in_types import BuiltInTypeMeta
-from .gtscript import Field, Local, Location, Mesh, TemporaryField
+from .gtscript import Field, Local, Location, Connectivity, TemporaryField, SparseField
 from .gtscript_ast import (
     Argument,
     Assign,
@@ -38,9 +39,11 @@ from .gtscript_ast import (
     LocationSpecification,
     Pass,
     Stencil,
-    SubscriptMultiple,
-    SubscriptSingle,
-    Symbol,
+    Subscript,
+    SymbolRef,
+    SymbolName,
+    External,
+    TemporaryFieldDecl
 )
 
 
@@ -50,7 +53,6 @@ _reduction_mapping = {
     "min": gtir.ReduceOperator.MIN,
     "max": gtir.ReduceOperator.MAX,
 }
-
 
 class SymbolTable:
     """
@@ -110,10 +112,6 @@ class NodeCanonicalizer(eve.NodeTranslator):
     def apply(cls, gt4py_ast: Computation):
         return cls().visit(gt4py_ast)
 
-    def visit_SubscriptSingle(self, node: SubscriptSingle):
-        # TODO(tehrengruber): do canonicalization properly. this should happen in the translation from python to gtscript
-        return self.visit(SubscriptMultiple(value=node.value, indices=[Symbol(name=node.index)]))
-
     def visit_Computation(self, node: Computation):
         # canonicalize nested stencils
         stencils = []
@@ -145,280 +143,205 @@ class NodeCanonicalizer(eve.NodeTranslator):
     def visit_Call(self, node: Call):
         # TODO(tehrengruber): this could be done by the call inliner
         # neighbor accessor canonicalization
-        neighbor_selector_mapping = {
-            "vertices": Symbol(name="Vertex"),  # TODO(tehrengruber): common.LocationType.Vertex,
-            "edges": Symbol(name="Edge"),  # common.LocationType.Edge,
-            "cells": Symbol(name="Cell"),  # common. LocationType.Cell
-        }
-        if node.func in neighbor_selector_mapping:
-            return Call(
-                func="neighbors",
-                args=[self.generic_visit(node.args[0]), neighbor_selector_mapping[node.func]],
-            )
+        #neighbor_selector_mapping = {
+        #    "vertices": Symbol(name="Vertex"),  # TODO(tehrengruber): common.LocationType.Vertex,
+        #    "edges": Symbol(name="Edge"),  # common.LocationType.Edge,
+        #    "cells": Symbol(name="Cell"),  # common. LocationType.Cell
+        #}
+        #if node.func in neighbor_selector_mapping:
+        #    return Call(
+        #        func="neighbors",
+        #        args=[self.generic_visit(node.args[0]), neighbor_selector_mapping[node.func]],
+        #    )
 
         return self.generic_visit(node)
 
 
-# poor mans variable declarations extractor
-# TODO(tehrengruber): first type inference, than symbol table population?
-class VarDeclExtractor(eve.NodeVisitor):
-    """
-    Extract all variable declarations and deduce their type.
-
-     - :class:`Location` - in location comprehensions and stencil iteration specifications
-        .. code-block:: python
-
-            ... for v in vertices(e)
-            with Location(Vertex) as e: ...
-
-    - :class:`Field` - in the stencils arguments
-        .. code-block:: python
-
-            field_1: Field[Edge, dtype]
-            field_2: Field[Edge, dtype]
-            field_3: Field[Edge, dtype]
-
-    - :class:`TemporaryField`: - implicitly by assigning to a previously unknown variable
-        .. code-block:: python
-
-            field_3 = field_1+field_2
-    """
-
-    def __init__(self, symbol_table: SymbolTable, *args, **kwargs):
-        self.symbol_table = symbol_table
-
+class ConstExprEvaluator(eve.NodeVisitor):
     @classmethod
-    def apply(cls, symbol_table: SymbolTable, gt4py_ast: Computation):
-        return cls(symbol_table).visit(gt4py_ast)
+    def apply(cls, symtable, values):
+        instance = cls()
+        return instance.visit(values, symtable=symtable)
 
-    def visit_LocationComprehension(self, node: LocationComprehension):
-        assert node.iterator.func == "neighbors"
-        assert isinstance(node.iterator.args[-1], Symbol)
-        location_type = self.symbol_table.materialize_constant(node.iterator.args[-1].name)
-        self.symbol_table[node.target.name] = Location[location_type]
-        self.generic_visit(node.iterator)
+    def visit_Node(self, node, **kwargs):
+        raise ValueError("Evaluation failed")
 
-    def visit_LocationSpecification(self, node: LocationSpecification):
-        location_type = self.symbol_table.materialize_constant(node.location_type)
-        self.symbol_table[node.name.name] = Location[location_type]
+    def visit_SymbolRef(self, node: SymbolRef, *, symtable, **kwargs):
+        return self.visit(symtable[node.name])
 
-    # def visit_Call(self, node : Call):
-    #    assert isinstance(self.symbol_table[node.func], Callable)
-    #    return self.generic_visit(node)
+    def visit_External(self, node: External, **kwargs):
+        return node.value
 
-    def visit_Argument(self, node: Argument):
-        if node.name not in self.symbol_table:
-            raise ValueError("Argument declarations need to be handled in the frontend.")
+    def visit_Constant(self, node: Constant, **kwargs):
+        return node.value
 
+    def visit_Subscript(self, node: Subscript, **kwargs):
+        return self.visit(node.value, **kwargs)[tuple(self.visit(idx, **kwargs) for idx in node.indices)]
 
-class TemporaryFieldDeclExtractor(eve.NodeVisitor):
-    symbol_table: SymbolTable
-    primary_location: Union[
-        None, BuiltInTypeMeta
-    ]  # TODO(tehrengruber): is there a way to tell mypy this is a Location
+from .built_in_types import LocalField
 
-    # TODO(tehrengruber): enhance to support sparse dimension
-    def __init__(self, symbol_table):
-        self.symbol_table = symbol_table
-        self.primary_location = None
-
+class TypeInference(eve.NodeVisitor):
     @classmethod
-    def apply(cls, symbol_table, gt4py_ast: Computation):
-        return cls(symbol_table).visit(gt4py_ast)
+    def apply(cls, symtable, values):
+        instance = cls()
+        return instance.visit(values, symtable=symtable)
 
-    def visit_LocationSpecification(self, node: LocationSpecification):
-        assert self.primary_location is None
-        self.primary_location = self.symbol_table[node.name.name]
+    def visit_Node(self, node, *, symtable, **kwargs):
+        raise ValueError(f"Type of node {node} not defined.")
 
-    def visit_Assign(self, node: Assign):
-        # extract target symbol
-        if isinstance(node.target, SubscriptMultiple):
-            target = node.target.value
-        elif isinstance(node.target, Symbol):
-            target = node.target
-        assert isinstance(target, Symbol)
+    def visit_Call(self, node: Call, **kwargs):
+        return built_in_functions[node.func].return_type(*self.visit(node.args))
 
-        if target.name not in self.symbol_table:
-            assert self.primary_location is not None
-            location_type = self.primary_location.args[0]
-            self.symbol_table[target.name] = TemporaryField[
-                location_type, self.symbol_table.materialize_constant("dtype")
-            ]
+    def visit_Constant(self, node: Constant, **kwargs):
+        return type(node.value)
 
-    def visit_Stencil(self, node: Stencil):
-        self.primary_location = None
-        self.generic_visit(node)
-        self.primary_location = None
+    def visit_SymbolRef(self, node: SymbolRef, symtable, **kwargs):
+        return self.visit(symtable[node.name], symtable=symtable, **kwargs)
 
+    def visit_External(self, node: External, **kwargs):
+        return type(node.value)
 
-class SymbolResolutionValidation(eve.NodeVisitor):
-    """
-    Ensure all occurring symbols are in the symbol table.
-    """
+    def visit_LocationSpecification(self, node: LocationSpecification, *, symtable, **kwargs):
+        return ConstExprEvaluator.apply(symtable, node.location_type)
 
-    def __init__(self, symbol_table):
-        self.symbol_table = symbol_table
-
-    @classmethod
-    def apply(cls, symbol_table, gt4py_ast: Computation):
-        return cls(symbol_table).visit(gt4py_ast)
-
-    def visit_Argument(self, node: Argument):
-        # we don't visit any arguments, as their types (which are also symbols)
-        #  are parsed in the frontend
-        pass
-
-    def visit_Symbol(self, node: Symbol):
-        # every symbol not yet parsed must be supplied externally
-        if node.name not in self.symbol_table:
-            raise ValueError(f"Reference to undefined symbol `{node.name}`")
+    def visit_Generator(self, node: LocationComprehension, *, symtable, **kwargs):
+        connectivity = symtable[node.generators[0].iterable.value.name].type_.base_connectivity()
+        assert issubclass(connectivity, Connectivity)
+        return LocalField[connectivity]
 
 
 class GTScriptToGTIR(eve.NodeTranslator):
     # TODO(tehrengruber): the current way of passing the location_stack is tidious and error prone
 
-    def __init__(self, symbol_table, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # new scope so copy everything
-        self.symbol_table = copy.deepcopy(symbol_table)
-
     @classmethod
-    def apply(cls, symbol_table, gt4py_ast: Computation):
-        return cls(symbol_table).visit(gt4py_ast)
+    def apply(cls, gt4py_ast: Computation):
+        return cls().visit(gt4py_ast)
 
-    def visit_IterationOrder(self, node: IterationOrder) -> gtir.common.LoopOrder:
+    def visit_IterationOrder(self, node: IterationOrder, **kwargs) -> gtir.common.LoopOrder:
         return gtir.common.LoopOrder[node.order]
 
-    def visit_Interval(self, node: Interval):
+    def visit_Interval(self, node: Interval, **kwargs):
         return None
 
     def visit_LocationSpecification(
-        self, node: LocationSpecification, **kwargs
+        self, node: LocationSpecification, *, symtable, **kwargs
     ) -> gtir.LocationComprehension:
-        loc_type = self.symbol_table.materialize_constant(
-            node.location_type, expected_type=common.LocationType
-        )
-        return gtir.LocationComprehension(
-            name=node.name.name, chain=gtir.NeighborChain(elements=[loc_type]), of=gtir.Domain()
-        )
+        loc_type = ConstExprEvaluator.apply(symtable, node.location_type)
+
+        return gtir.PrimaryLocation(name=node.name, location_type=loc_type)
 
     def visit_LocationComprehension(
-        self, node: LocationComprehension, *, location_stack, **kwargs
+        self, node: LocationComprehension, *, symtable, location_stack, **kwargs
     ) -> gtir.LocationComprehension:
-        if not node.iterator.func == "neighbors":
+        assert isinstance(symtable[node.iterable.value.name], Argument)
+        assert issubclass(symtable[node.iterable.value.name].type_, Connectivity)
+        connectivity_name = node.iterable.value.name
+        connectivity = symtable[connectivity_name].type_.base_connectivity()
+        if not issubclass(connectivity, Connectivity):
+            # todo(tehrengruber): better error message
             raise ValueError(
-                f"Invalid neighbor specification. Expected a call to `neighbors`, but got `{node.iterator.func}`."
+                f"Invalid neighbor specification. Expected a connectivity access."
             )
 
-        of = self.visit(node.iterator.args[0], location_stack=location_stack, **kwargs)
-        if not isinstance(of, gtir.LocationRef):
-            raise ValueError(f"Expected a `LocationRef` node, but got `{type(of)}`")
+        of = self.visit(node.iterable.value, symtable=symtable, location_stack=location_stack, **kwargs)
+        if not isinstance(of, gtir.SymbolRef):
+            raise ValueError(f"Expected a `SymbolRef` node, but got `{type(of)}`")
 
-        src_comprehension = location_stack[-1]
-        assert src_comprehension.name == of.name
-        elements = [src_comprehension.chain.elements[-1]]
-        for loc_type in node.iterator.args[1:]:
-            assert isinstance(loc_type, Symbol)
-            elements.append(
-                self.symbol_table.materialize_constant(
-                    loc_type.name, expected_type=gtir.common.LocationType
-                )
-            )
-        chain = gtir.NeighborChain(elements=elements)
+        return gtir.LocationComprehension(name=node.target, of=gtir.ConnectivityRef(name=of))
 
-        return gtir.LocationComprehension(name=node.target.name, chain=chain, of=of)
-
-    def visit_Call(self, node: Call, *, location_stack, **kwargs):
+    def visit_Call(self, node: Call, *, location_stack, symtable, **kwargs):
         # TODO(tehrengruber): all of this can be done with the symbol table and the call inliner
         # reductions
-        if node.func in _reduction_mapping:
-            if not len(node.args):
-                raise ValueError(
-                    f"Invalid number of arguments specified for function {node.func}. Expected 1, but {len(node.args)} were given."
+        if node.func in built_in_functions.neighbor_reductions:
+            arg_types = list(TypeInference.apply(symtable, arg) for arg in node.args)
+            if any(method.applicable(arg_types) for method in getattr(built_in_functions, node.func).methods):
+                if not len(node.args):
+                    raise ValueError(
+                        f"Invalid number of arguments specified for function {node.func}. Expected 1, but {len(node.args)} were given."
+                    )
+                if not isinstance(node.args[0], Generator) or len(node.args[0].generators) != 1:
+                    raise ValueError("Invalid argument to {node.func}")
+
+                op = _reduction_mapping[node.func]
+                neighbors = self.visit(
+                    node.args[0].generators[0], **{**kwargs, "symtable": symtable, "location_stack": location_stack}
                 )
-            if not isinstance(node.args[0], Generator) or len(node.args[0].generators) != 1:
-                raise ValueError("Invalid argument to {node.func}")
 
-            op = _reduction_mapping[node.func]
-            neighbors = self.visit(
-                node.args[0].generators[0], **{**kwargs, "location_stack": location_stack}
-            )
+                # operand gets new location stack
+                new_location_stack = location_stack + [(node.args[0].generators[0].target, symtable[node.args[0].generators[0].iterable.value.name].type_.secondary_location())]
 
-            # operand gets new location stack
-            new_location_stack = location_stack + [neighbors]
+                operand = self.visit(
+                    node.args[0].elt, **{**kwargs, "symtable": {**symtable, **node.args[0].symtable_}, "location_stack": new_location_stack}
+                )
 
-            operand = self.visit(
-                node.args[0].elt, **{**kwargs, "location_stack": new_location_stack}
-            )
-
-            return gtir.NeighborReduce(
-                op=op,
-                operand=operand,
-                neighbors=neighbors,
-                location_type=location_stack[-1].chain.elements[-1],
-            )
+                return gtir.NeighborReduce(
+                    op=op,
+                    operand=operand,
+                    neighbors=neighbors,
+                    location_type=location_stack[-1][1],
+                )
 
         raise ValueError()
 
     def visit_Constant(self, node: Constant, *, location_stack, **kwargs):
-        py_dtype_to_eve = {  # TODO(tehrengruber): check
+        py_dtype_to_gtir = {  # TODO(tehrengruber): check
             int: common.DataType.INT32,
             float: common.DataType.FLOAT64,
         }
         return gtir.Literal(
             value=str(node.value),
-            vtype=py_dtype_to_eve[type(node.value)],
-            location_type=location_stack[-1].chain.elements[-1],
+            vtype=next(gtir_type for type_, gtir_type in py_dtype_to_gtir.items() if isinstance(node.value, type_)),
+            location_type=location_stack[-1][1],
         )
 
-    def visit_Symbol(self, node: Symbol, *, location_stack):
-        assert node.name in self.symbol_table
-        if issubclass(self.symbol_table[node.name], Field) or issubclass(
-            self.symbol_table[node.name], TemporaryField
-        ):
-            return gtir.FieldAccess(
-                name=node.name,
-                location_type=location_stack[-1].chain.elements[-1],
-                subscript=[gtir.LocationRef(name=location_stack[0].name)],
-            )  # TODO(tehrengruber): just visit the subscript symbol
+    def visit_SymbolRef(self, node: SymbolRef, *, symtable, location_stack, **kwargs):
+        assert node.name in symtable
+        # todo: Argument and TemporaryFieldDecl should have same base class
+        if isinstance(symtable[node.name], Argument) or isinstance(symtable[node.name], TemporaryFieldDecl):
+            if issubclass(symtable[node.name].type_, Field) or issubclass(symtable[node.name].type_, TemporaryField):
+                return gtir.FieldAccess(
+                    name=node.name,
+                    location_type=location_stack[-1][1],
+                    subscript=[gtir.LocationRef(name=location_stack[0][0])],
+                )  # TODO(tehrengruber): just visit the subscript symbol
+            elif issubclass(symtable[node.name].type_, Connectivity):
+                return gtir.SymbolRef(node.name)
         elif issubclass(self.symbol_table[node.name], Location):
             return gtir.LocationRef(name=node.name)
 
         raise ValueError()
 
-    def visit_SubscriptMultiple(self, node: SubscriptMultiple, *, location_stack):
-        assert node.value.name in self.symbol_table
-        if issubclass(self.symbol_table[node.value.name], Field) or issubclass(
-            self.symbol_table[node.value.name], TemporaryField
-        ):
-            assert all(
-                isinstance(index, Symbol) and issubclass(self.symbol_table[index.name], Location)
-                for index in node.indices
-            )
+    def visit_Subscript(self, node: Subscript, *, symtable, location_stack):
+        value_decl = symtable[node.value.name]
+        if isinstance(value_decl, Argument) or isinstance(value_decl, TemporaryFieldDecl) and (
+                issubclass(value_decl.type_, Field) or issubclass(value_decl.type_, TemporaryField) or issubclass(value_decl.type_, SparseField)):
+            assert len(node.indices) in [1, 2]
+            assert all(isinstance(index, SymbolRef) for index in node.indices)
+            assert all(isinstance(symtable[index.name], LocationSpecification) or isinstance(symtable[index.name], LocationComprehension) for index in node.indices)
             # TODO(tehrengruber): just visit the index symbol
             return gtir.FieldAccess(
-                name=node.value.name,
+                name=gtir.SymbolRef(node.value.name),
                 subscript=[
-                    gtir.LocationRef(name=index.name) for index in cast(List[Symbol], node.indices)
+                    gtir.LocationRef(name=index.name) for index in cast(List[SymbolRef], node.indices)
                 ],
-                location_type=location_stack[-1].chain.elements[-1],
+                location_type=location_stack[-1][1],
             )
 
         raise ValueError()
 
-    def visit_Assign(self, node: Assign, *, location_stack, **kwargs) -> gtir.AssignStmt:
+    def visit_Assign(self, node: Assign, *, symtable, location_stack, **kwargs) -> gtir.AssignStmt:
         return gtir.AssignStmt(
-            left=self.visit(node.target, **{"location_stack": location_stack, **kwargs}),
-            right=self.visit(node.value, **{"location_stack": location_stack, **kwargs}),
-            location_type=location_stack[-1].chain.elements[-1],
+            left=self.visit(node.target, **{"symtable": symtable, "location_stack": location_stack, **kwargs}),
+            right=self.visit(node.value, **{"symtable": symtable, "location_stack": location_stack, **kwargs}),
+            location_type=location_stack[-1][1],
         )
 
-    def visit_BinaryOp(self, node: BinaryOp, location_stack, **kwargs):
+    def visit_BinaryOp(self, node: BinaryOp, *, symtable, location_stack, **kwargs):
         return gtir.BinaryOp(
             op=node.op,
-            left=self.visit(node.left, **{"location_stack": location_stack, **kwargs}),
-            right=self.visit(node.right, **{"location_stack": location_stack, **kwargs}),
-            location_type=location_stack[-1].chain.elements[-1],
+            left=self.visit(node.left, **{"symtable": symtable, "location_stack": location_stack, **kwargs}),
+            right=self.visit(node.right, **{"symtable": symtable, "location_stack": location_stack, **kwargs}),
+            location_type=location_stack[-1][1],
         )
 
     def visit_Stencil(self, node: Stencil, **kwargs) -> gtir.Stencil:
@@ -426,10 +349,10 @@ class GTScriptToGTIR(eve.NodeTranslator):
         for it_spec in node.iteration_spec:
             if isinstance(it_spec, IterationOrder):
                 assert loop_order is None
-                loop_order = self.visit(it_spec)
+                loop_order = self.visit(it_spec, **kwargs)
             elif isinstance(it_spec, LocationSpecification):
                 assert primary_location is None
-                primary_location = self.visit(it_spec)
+                primary_location = self.visit(it_spec, **kwargs)
             elif isinstance(it_spec, Interval):
                 # TODO(tehrengruber): implement
                 pass
@@ -438,7 +361,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
         assert loop_order is not None
         assert primary_location is not None
 
-        location_stack = [primary_location]  # TODO(tehrengruber): we should store dimensions here
+        location_stack = [(primary_location.name, primary_location.location_type)]  # TODO(tehrengruber): we should store dimensions here
 
         horizontal_loops = []
         for stmt in node.body:
@@ -455,57 +378,51 @@ class GTScriptToGTIR(eve.NodeTranslator):
             ]
         )
 
-    @staticmethod
-    def _transform_field_type(name, field_type):
-        assert issubclass(field_type, Field) or issubclass(field_type, TemporaryField)
-        (
-            *location_types,
-            vtype,
-        ) = field_type.args
-
-        assert isinstance(vtype, common.DataType)
-
-        if len(location_types) == 1:
-            assert isinstance(location_types[0], common.LocationType)
-            horizontal_dim = gtir.HorizontalDimension(primary=location_types[0])
-        elif len(location_types) == 2:
-            assert isinstance(location_types[0], common.LocationType)
-            assert issubclass(location_types[1], Local) and isinstance(
-                location_types[1].args[0], common.LocationType
-            )
-            horizontal_dim = gtir.HorizontalDimension(
-                primary=location_types[0],
-                secondary=gtir.NeighborChain(elements=[location_types[1].args[0]]),
-            )
-        else:
-            raise ValueError()
-
-        return gtir.UField(
-            name=name,
-            vtype=vtype,
-            dimensions=gtir.Dimensions(horizontal=horizontal_dim),
-        )
-
     def visit_Computation(self, node: Computation) -> gtir.Computation:
-        # parse arguments
-        if not issubclass(self.symbol_table[node.arguments[0].name], Mesh):
-            raise ValueError("First stencil argument must be a gtscript.Mesh")
-
         field_args = []
-        for arg in node.arguments[1:]:
-            field_args.append(self._transform_field_type(arg.name, self.symbol_table[arg.name]))
+        connectivity_args = []
+        temporary_fields = []
 
-        # parse temporary fields
-        temporary_field_decls = []
-        for name, type_ in self.symbol_table.types.items():
-            if issubclass(type_, TemporaryField):
-                temporary_field_decls.append(self._transform_field_type(name, type_))
+        for arg in node.arguments + node.declarations:
+            if issubclass(arg.type_, Field) or issubclass(arg.type_, TemporaryField):
+                field_type = arg.type_
+                loc_type, vtype = field_type.args
+
+                assert isinstance(vtype, common.DataType)
+                assert isinstance(loc_type, common.LocationType)
+
+                dims = gtir.Dimensions(horizontal=gtir.HorizontalDimension(primary=loc_type))
+
+                if issubclass(arg.type_, Field):
+                    field_args.append(gtir.UField(name=arg.name, vtype=field_type.args[1], dimensions=dims))
+                elif issubclass(arg.type_, TemporaryField):
+                    temporary_fields.append(gtir.TemporaryField(name=arg.name, vtype=field_type.args[1], dimensions=dims))
+            elif issubclass(arg.type_, Connectivity):
+                base_connectivty = arg.type_.base_connectivity()
+                connectivity_args.append(gtir.Connectivity(name=arg.name, primary=base_connectivty.primary_location(),
+                                         secondary=base_connectivty.secondary_location(), max_neighbors=base_connectivty.max_neighbors(),
+                                         has_skip_values=base_connectivty.has_skip_values()))
+            elif issubclass(arg.type_, SparseField):
+                connectivity = arg.type_.args[0]
+                assert issubclass(connectivity, Connectivity)
+                # gtir expects the name of the connectivity instead of its type, hence search for the name
+                connectivity_name = None
+                for other_arg in node.arguments:
+                    if issubclass(other_arg.type_, Connectivity) and arg.type_.args[0] == other_arg.type_:
+                        assert connectivity_name is None
+                        connectivity_name = other_arg.name
+
+                # TODO(tehrengruber): check dims argument with hannes
+                dims = gtir.Dimensions(horizontal=gtir.HorizontalDimension(primary=connectivity.base_connectivity().primary_location()))
+
+                field_args.append(gtir.SparseField(name=arg.name, connectivity=gtir.SymbolRef(connectivity_name), vtype=arg.type_.args[1], dimensions=dims))
 
         return gtir.Computation(
             name=node.name,
+            connectivities=connectivity_args,
             params=field_args,
-            stencils=self.visit(node.stencils),
-            declarations=temporary_field_decls,
+            declarations=temporary_fields,
+            stencils=self.visit(node.stencils, symtable=node.symtable_),
         )
 
     def visit_Pass(self, node: Pass):

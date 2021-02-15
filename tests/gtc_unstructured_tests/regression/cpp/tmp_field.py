@@ -6,7 +6,7 @@ import os
 import sys
 
 from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
-from gtc_unstructured.frontend.gtscript import FORWARD, Cell, Field, Mesh, computation, location
+from gtc_unstructured.frontend.gtscript import FORWARD, Cell, Field, computation, location
 from gtc_unstructured.irs.common import DataType
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 
@@ -14,7 +14,7 @@ from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCod
 dtype = DataType.FLOAT64
 
 
-def sten(mesh: Mesh, field_in: Field[Cell, dtype], field_out: Field[Cell, dtype]):
+def sten(field_in: Field[Cell, dtype], field_out: Field[Cell, dtype]):
     with computation(FORWARD), location(Cell):
         tmp = field_in
     with computation(FORWARD), location(Cell):

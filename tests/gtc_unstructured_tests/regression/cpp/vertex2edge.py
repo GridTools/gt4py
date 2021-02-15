@@ -9,28 +9,27 @@
 
 import os
 import sys
+import types
 
 from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
     Edge,
-    Field,
-    Mesh,
     Vertex,
+    Field,
     computation,
+    Connectivity,
     location,
-    vertices,
 )
 from gtc_unstructured.irs.common import DataType
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 
-
+E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
 dtype = DataType.FLOAT64
 
-
-def sten(mesh: Mesh, field_in: Field[Vertex, dtype], field_out: Field[Edge, dtype]):
+def sten(e2v: E2V, field_in: Field[Vertex, dtype], field_out: Field[Edge, dtype]):
     with computation(FORWARD), location(Edge) as e:
-        field_out[e] = sum(field_in[v] for v in vertices(e))
+        field_out[e] = sum(field_in[v] for v in e2v[e])
 
 
 def main():
