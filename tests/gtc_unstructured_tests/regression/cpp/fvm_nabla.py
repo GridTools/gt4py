@@ -23,7 +23,6 @@ from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCod
 
 E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
 V2E = types.new_class("V2E", (Connectivity[Vertex, Edge, 7, True],))
-
 dtype = DataType.FLOAT64
 
 

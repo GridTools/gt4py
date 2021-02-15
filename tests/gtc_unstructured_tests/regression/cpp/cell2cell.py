@@ -10,27 +10,28 @@
 
 import os
 import sys
+import types
 
 from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
     Cell,
     Field,
-    Mesh,
-    cells,
     computation,
+    Connectivity,
     location,
 )
 from gtc_unstructured.irs.common import DataType
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 
+C2C = types.new_class("C2C", (Connectivity[Cell, Cell, 4, False],))
 
 dtype = DataType.FLOAT64
 
 
-def sten(mesh: Mesh, field_in: Field[Cell, dtype], field_out: Field[Cell, dtype]):
+def sten(c2c: C2C, field_in: Field[Cell, dtype], field_out: Field[Cell, dtype]):
     with computation(FORWARD), location(Cell) as c1:
-        field_out[c1] = sum(field_in[c1] + field_in[c2] for c2 in cells(c1))
+        field_out[c1] = sum(field_in[c1] + field_in[c2] for c2 in c2c[c1])
 
 
 def main():

@@ -230,7 +230,6 @@ class GTScriptToGTIR(eve.NodeTranslator):
 
         return gtir.PrimaryLocation(name=node.name, location_type=loc_type)
 
-
     def visit_LocationComprehension(
         self, node: LocationComprehension, *, symtable, location_stack, **kwargs
     ) -> gtir.LocationComprehension:
@@ -272,7 +271,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
                 new_location_stack = location_stack + [(node.args[0].generators[0].target, symtable[node.args[0].generators[0].iterable.value.name].type_.secondary_location())]
 
                 operand = self.visit(
-                    node.args[0].elt, **{**kwargs, "symtable": symtable, "location_stack": new_location_stack}
+                    node.args[0].elt, **{**kwargs, "symtable": {**symtable, **node.args[0].symtable_}, "location_stack": new_location_stack}
                 )
 
                 return gtir.NeighborReduce(
