@@ -116,6 +116,17 @@ def make_compilation_input_and_expected():
             .build(),
             r"",
         ),
+        (
+            ProgramBuilder("test")
+            .add_functor(
+                GTFunctorBuilder("fun").add_apply_method().build(),
+            )
+            .gt_computation(
+                GTComputationCallBuilder().add_stage(GTStage(functor="fun", args=[])).build()
+            )
+            .build(),
+            r"",
+        ),
     ]
 
 

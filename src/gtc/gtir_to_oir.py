@@ -36,7 +36,8 @@ def _create_mask(ctx: "GTIRToOIR.Context", name: str, cond: oir.Expr) -> oir.Tem
                 ),
                 right=cond,
             )
-        ]
+        ],
+        declarations=[],
     )
     ctx.add_horizontal_execution(fill_mask_field)
     return mask_field_decl
@@ -73,6 +74,7 @@ class GTIRToOIR(NodeTranslator):
             oir.HorizontalExecution(
                 body=[oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))],
                 mask=mask,
+                declarations=[],
             ),
         )
 

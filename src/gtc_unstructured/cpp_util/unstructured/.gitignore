@@ -1,0 +1,4 @@
+.clangd/
+.cmakels/
+*.log
+/compile_commands.json

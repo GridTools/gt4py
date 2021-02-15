@@ -1,0 +1,39 @@
+name: gtc_unstructured
+
+on:
+  push:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ghcr.io/gridtools/gridtools-base:${{ matrix.compiler }}
+    strategy:
+      matrix:
+        compiler: [gcc-9-atlas]
+        build_type: [Release]
+
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install eve and dependencies
+        run: |
+          python3 -m pip install .[format]
+          python3 -m pip install -r requirements-dev.txt # TODO remove (once we don't include debugtools)
+      - name: Test cpputil
+        run: |
+          cd src/gtc_unstructured/cpp_util/unstructured
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build . --parallel 2
+          ctest --output-on-failure
+      - name: Test gtc cpp regression
+        run: |
+          cd tests/gtc_unstructured_tests/regression/cpp
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build . --parallel 2
+          ctest --output-on-failure
