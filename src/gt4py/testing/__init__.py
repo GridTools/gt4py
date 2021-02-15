@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+__all__ = ["field", "global_name", "none", "parameter", "StencilTestSuite"]
 try:
     from .input_strategies import field, global_name, none, parameter
     from .suites import StencilTestSuite

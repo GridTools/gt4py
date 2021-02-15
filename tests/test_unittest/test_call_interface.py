@@ -371,3 +371,34 @@ def test_exec_info(backend):
         assert "run_cpp_start_time" in exec_info
         assert "run_cpp_end_time" in exec_info
         assert exec_info["run_cpp_end_time"] > exec_info["run_cpp_start_time"]
+
+
+class TestAxesMismatch:
+    def run_test(self, field_out, match):
+        @gtscript.stencil(backend="debug")
+        def definition(
+            field_out: gtscript.Field[np.float64, gtscript.IJ],
+        ):
+            with computation(FORWARD), interval(...):
+                field_out = 1.0
+
+        with pytest.raises(ValueError, match=match):
+            definition(field_out)
+
+    def test_ndarray(self):
+        self.run_test(
+            np.ndarray((3, 3, 3), np.float64),
+            f"The storage for '.*' has 3 dimensions, but the API signature expects 2",
+        )
+
+    def test_storage(self):
+        self.run_test(
+            gt_storage.empty(
+                shape=(3, 3),
+                mask=[True, False, True],
+                dtype=np.float64,
+                backend="debug",
+                default_origin=(0, 0),
+            ),
+            "The storage for '.*' has mask '\(True, False, True\)', but the API signature expects '\(True, True, False\)'",
+        )

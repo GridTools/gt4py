@@ -44,6 +44,7 @@ INTERNAL_BACKENDS = ["debug", "numpy"] + [name for name in ALL_BACKENDS if name.
 DAWN_BACKENDS = [name for name in ALL_BACKENDS if "dawn:" in name]
 DAWN_CPU_BACKENDS = [name for name in CPU_BACKENDS if "dawn:" in name]
 DAWN_GPU_BACKENDS = [name for name in GPU_BACKENDS if "dawn:" in name]
+OLD_BACKENDS = [name for name in ALL_BACKENDS if not name.startswith("gtc")]
 
 
 @pytest.fixture()

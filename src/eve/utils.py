@@ -54,6 +54,7 @@ from .typingx import (
     Iterable,
     Iterator,
     List,
+    Literal,
     Optional,
     Set,
     Tuple,
@@ -414,6 +415,7 @@ class UIDGenerator:
 # -- Iterators --
 T = TypeVar("T")
 S = TypeVar("S")
+K = TypeVar("K")
 
 
 def as_xiter(iterator_func: Callable[..., Iterator[T]]) -> Callable[..., XIterator[T]]:
@@ -1154,44 +1156,108 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
     @typing.overload
     def reduceby(
         self,
-        bin_op_func: Callable[[Any, T], Any],
+        bin_op_func: Callable[[S, T], S],
         key: str,
-        *other_keys: str,
-        init: Any = NOTHING,
-        as_dict: bool = False,
-    ) -> XIterator[Tuple[Any, Any]]:
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[False],
+    ) -> XIterator[Tuple[str, S]]:
         ...
 
     @typing.overload
     def reduceby(
         self,
-        bin_op_func: Callable[[Any, T], Any],
-        key: List[Any],
-        *,
-        init: Any = NOTHING,
-        as_dict: bool = False,
-    ) -> XIterator[Tuple[Any, Any]]:
-        ...
-
-    @typing.overload
-    def reduceby(
-        self,
-        bin_op_func: Callable[[Any, T], Any],
-        key: Callable[[T], Any],
-        *,
-        init: Any = NOTHING,
-        as_dict: bool = False,
-    ) -> XIterator[Tuple[Any, Any]]:
-        ...
-
-    def reduceby(
-        self,
-        bin_op_func: Callable[[Any, T], Any],
-        key: Union[str, List[Any], Callable[[T], Any]],
+        bin_op_func: Callable[[S, T], S],
+        key: str,
+        __attr_keys1: str,
         *attr_keys: str,
-        init: Any = NOTHING,
+        init: Union[S, NOTHING],
+        as_dict: Literal[False],
+    ) -> XIterator[Tuple[Tuple[str, ...], S]]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: str,
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[True],
+    ) -> Dict[str, S]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: str,
+        __attr_keys1: str,
+        *attr_keys: str,
+        init: Union[S, NOTHING],
+        as_dict: Literal[True],
+    ) -> Dict[Tuple[str, ...], S]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: List[K],
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[False],
+    ) -> XIterator[Tuple[K, S]]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: List[K],
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[True],
+    ) -> Dict[K, S]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: Callable[[T], K],
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[False],
+    ) -> XIterator[Tuple[K, S]]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: Callable[[T], K],
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[True],
+    ) -> Dict[K, S]:
+        ...
+
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: Union[str, List[K], Callable[[T], K]],
+        *attr_keys: str,
+        init: Union[S, NOTHING] = NOTHING,
         as_dict: bool = False,
-    ) -> Union[XIterator[Tuple[Any, Any]], Dict]:
+    ) -> Union[
+        XIterator[Tuple[str, S]],
+        Dict[str, S],
+        XIterator[Tuple[Tuple[str, ...], S]],
+        Dict[Tuple[str, ...], S],
+        XIterator[Tuple[K, S]],
+        Dict[K, S],
+    ]:
         """Group a sequence by a given key and simultaneously perform a reduction inside the groups.
 
         More or less equivalent to ``toolz.itertoolz.reduceby(key, bin_op_func, self, init)``
@@ -1248,10 +1314,10 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         if callable(key):
             groupby_key = key
         elif isinstance(key, list):
-            groupby_key = operator.itemgetter(*key)
+            groupby_key = typing.cast(Callable[[T], K], operator.itemgetter(*key))
         else:
             assert isinstance(key, str)
-            groupby_key = operator.attrgetter(key, *attr_keys)
+            groupby_key = typing.cast(Callable[[T], K], operator.attrgetter(key, *attr_keys))
 
         if init is not NOTHING:
             groups = toolz.itertoolz.reduceby(groupby_key, bin_op_func, self.iterator, init=init)
