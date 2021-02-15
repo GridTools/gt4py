@@ -14,8 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 # todo(tehrengruber): document nodes
+import pydantic
 from pydantic import StrictFloat, StrictInt, StrictStr
-from typing import Any, Dict, List, Union, Optional
+from typing import Any, Dict, List, Type, Union, Optional
 
 from gtc import common as stable_gtc_common
 import gtc_unstructured.irs.common as common
@@ -59,6 +60,7 @@ class Statement(GTScriptASTNode):
 
 class Expr(GTScriptASTNode):
     pass
+
 
 class SymbolRef(Expr):
     name: eve.type_definitions.SymbolRef
@@ -164,17 +166,21 @@ class Pass(Statement):
 class Argument(GTScriptASTNode):
     name: SymbolName
     type_: BuiltInTypeMeta
-    #type_: Union[SymbolRef, Union[Subscript]]
+    # type_: Union[SymbolRef, Union[Subscript]]
     # is_keyword: bool
 
 
 class External(GTScriptASTNode):
     name: SymbolName
-    value: Union[StrictInt, StrictFloat, None, common.LocationType, common.DataType, BuiltInTypeMeta]
+    value: Union[
+        StrictInt, StrictFloat, None, common.LocationType, common.DataType, BuiltInTypeMeta
+    ]
 
     @property
     def type_(self):
-        if issubclass(type(self.value), built_in_types.Type_): # for now type of a type is the type itself
+        if issubclass(
+            type(self.value), built_in_types.Type_
+        ):  # for now type of a type is the type itself
             return self.value
         return type(self.value)
 
@@ -199,7 +205,9 @@ class TemporaryFieldDeclExtractor(eve.NodeVisitor):
         instance.visit(stencils, symtable=symtable)
         return instance.temporary_fields
 
-    def visit_LocationSpecification(self, node: LocationSpecification, *, symtable: Dict[str, Any], **kwargs):
+    def visit_LocationSpecification(
+        self, node: LocationSpecification, *, symtable: Dict[str, Any], **kwargs
+    ):
         assert self.primary_location is None
         self.primary_location = symtable[node.name]
 
@@ -215,9 +223,14 @@ class TemporaryFieldDeclExtractor(eve.NodeVisitor):
             assert self.primary_location is not None
             # todo: infer type of assignment
             from .gtscript_to_gtir import ConstExprEvaluator
+
             args = (self.primary_location.location_type, SymbolRef(name="dtype"))
             args = tuple(ConstExprEvaluator.apply(symtable, arg) for arg in args)
-            self.temporary_fields.append(TemporaryFieldDecl(name=SymbolName(target.name), type_=built_in_types.TemporaryField[args]))
+            self.temporary_fields.append(
+                TemporaryFieldDecl(
+                    name=SymbolName(target.name), type_=built_in_types.TemporaryField[args]
+                )
+            )
 
     def visit_Stencil(self, node: Stencil, **kwargs):
         self.primary_location = None
@@ -235,22 +248,22 @@ class Computation(GTScriptASTNode, SymbolTableTrait):
     stencils: List[Stencil]
     externals: List[External]
 
-    #@pydantic.root_validator(skip_on_failure=True)
-    #def _type_propagate(  # type: ignore  # validators are classmethods
+    # @pydantic.root_validator(skip_on_failure=True)
+    # def _type_propagate(  # type: ignore  # validators are classmethods
     #        cls: Type["Computation"], values: Dict[str, Any]
-    #) -> Dict[str, Any]:
+    # ) -> Dict[str, Any]:
     #    return TypePropagator.apply(values["symtable_"], values)
 
     @pydantic.root_validator(skip_on_failure=True)
     def _extract_temporary_fields(  # type: ignore  # validators are classmethods
-            cls: Type["Computation"], values: Dict[str, Any]
+        cls: Type["Computation"], values: Dict[str, Any]
     ) -> Dict[str, Any]:
-        values["declarations"] = TemporaryFieldDeclExtractor.apply(values["symtable_"], values["stencils"])
+        values["declarations"] = TemporaryFieldDeclExtractor.apply(
+            values["symtable_"], values["stencils"]
+        )
         #  TODO(tehrengruber): use SymbolTableTrait.collect_symbols with new dataclasses
         values["symtable_"] = cls._collect_symbols(values)
         return values
 
     # TODO: fix. currently fails as the symbol table is not built up when the stencils field is visited
-    #_validate_symbol_refs = stable_gtc_common.validate_symbol_refs()
-
-
+    # _validate_symbol_refs = stable_gtc_common.validate_symbol_refs()
