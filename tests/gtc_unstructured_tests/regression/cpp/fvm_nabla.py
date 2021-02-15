@@ -41,9 +41,8 @@ def nabla(
     with computation(FORWARD), interval(0, None):
         with location(Edge) as e:
             zavg = 0.5 * sum(pp[v] for v in e2v[e])
-            zavg1 = sum(pp[v] for v in e2v[e])
-            zavgS_MXX = S_MXX * zavg1
-            zavgS_MYY = S_MYY * zavg1
+            zavgS_MXX = S_MXX * zavg
+            zavgS_MYY = S_MYY * zavg
         with location(Vertex) as v:
             pnabla_MXX = sum(zavgS_MXX[e] * sign[v, e] for e in v2e[v])
             pnabla_MYY = sum(zavgS_MYY[e] * sign[v, e] for e in v2e[v])

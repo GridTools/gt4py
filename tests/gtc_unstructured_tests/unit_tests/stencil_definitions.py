@@ -92,7 +92,6 @@ def fvm_nabla(
     with computation(FORWARD), interval(0, None):
         with location(Edge) as e:
             zavg = 0.5 * sum(pp[v] for v in e2v[e])
-            zavg = sum(pp[v] for v in e2v[e])
             zavgS_MXX = S_MXX * zavg
             zavgS_MYY = S_MYY * zavg
         with location(Vertex) as v:
