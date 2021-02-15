@@ -305,7 +305,7 @@ class ScalarAccess(LocNode):
 class FieldAccess(LocNode):
     name: SymbolRef
     offset: CartesianOffset
-    data_index: Optional[List[int]]
+    data_index: List[int] = [0]
     kind = ExprKind.FIELD
 
     @classmethod
