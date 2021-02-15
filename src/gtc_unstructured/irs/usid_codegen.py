@@ -116,7 +116,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
 
     KernelCall = as_mako(
         """
-        call_kernel<${name}>(${domain}, ${','.join(sids)});
+        call_kernel<${name}>(${domain}, d.k, ${','.join(sids)});
         """
     )
 
@@ -284,15 +284,22 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
             ${ ''.join(kernels) }
 
 
-            inline constexpr auto ${name} = [](domain d, ${','.join(connectivity_params)}) {
+            inline constexpr auto ${name} = [](domain d
+                %if connectivity_params:
+                , ${','.join(connectivity_params)}
+                %endif
+                ) {
                 // TODO assert connectivities are sid
                 return
-                    [d = std::move(d), ${','.join(connectivity_fields)}
+                    [d = std::move(d)
+                    %if connectivity_fields:
+                    , ${','.join(connectivity_fields)}
+                    %endif
                             ](
                         ${','.join(field_params)}
                             ){
                             // TODO assert field params are sids
-                            %if len(temporaries) > 0:
+                            %if temporaries:
                             auto alloc = make_allocator();
                             %endif
                             ${''.join(temporaries)}

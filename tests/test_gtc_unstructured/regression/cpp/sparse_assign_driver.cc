@@ -27,9 +27,10 @@ TEST(regression, vertex2edge) {
     view(i) = 1;
   view(4) = 2;
 
-  auto out = test_helper::make_sparse_field<double>(simple_mesh::edges, 2);
+  auto out = test_helper::make_field<double>(simple_mesh::edges, 2);
 
-  sten({-1, simple_mesh::edges, -1, 1}, simple_mesh{}.e2v())(in, out);
+  sten({-1, simple_mesh::edges, -1, 1}, simple_mesh{}.e2v())(
+      in, sid::rename_dimensions<integral_constant<int, 1>, dim::s>(out));
 
   //   x (1,1) x (1,1) x (1,1)
   // (1,1)   (1,2)   (1,1)
@@ -38,7 +39,7 @@ TEST(regression, vertex2edge) {
   //   x (1,1) x (1,1) x (1,1)
   // (1,1)   (1,1)   (1,1)
 
-  auto out_view = out.m_impl->const_host_view();
+  auto out_view = out->const_host_view();
   for (std::size_t i = 0; i < 18; ++i) {
     if (i == 3 || i == 4 || i == 10 || i == 13)
       continue;
