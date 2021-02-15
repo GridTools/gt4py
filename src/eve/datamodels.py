@@ -110,6 +110,9 @@ class _DevToolsPrettyPrintable(Protocol):
 
 
 class DataModelLike(_AttrClassLike, _DataClassLike, _DevToolsPrettyPrintable, Protocol):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        ...
+
     __datamodel_fields__: ClassVar[utils.FrozenNamespace]
     __datamodel_params__: ClassVar[utils.FrozenNamespace]
     __datamodel_validators__: ClassVar[
@@ -120,6 +123,7 @@ class DataModelLike(_AttrClassLike, _DataClassLike, _DevToolsPrettyPrintable, Pr
 class GenericDataModelLike(DataModelLike, Protocol):
     __args__: ClassVar[Tuple[Union[Type, TypeVar]]]
     __parameters__: ClassVar[Tuple[TypeVar]]
+    __class__: ClassVar[DataModelLike]  # type: ignore[assignment]
 
     @classmethod
     def __class_getitem__(
@@ -938,7 +942,7 @@ def concretize(
     *type_args: Type,
     class_name: Optional[str] = None,
     module: Optional[str] = None,
-    support_pickling: bool = True,
+    support_pickling: bool = True,  # noqa
     overwrite_definition: bool = True,
 ) -> Type[DataModelLike]:
     """Generate a new concrete subclass of a generic Data Model.
@@ -1141,7 +1145,7 @@ def datamodel(
     return _decorator(cls) if cls is not None else _decorator
 
 
-class DataModel:
+class DataModel(DataModelLike):
     """Base class to automatically convert any subclass into a Data Model.
 
     Inheriting from this class is equivalent to apply the :func:`datamodel`

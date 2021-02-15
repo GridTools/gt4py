@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-
 from __future__ import annotations
 
 import dataclasses
@@ -122,7 +121,7 @@ class GenericModelFactory(factory.Factory):
 
 
 @pytest.fixture(params=example_model_factories)
-def example_model_factory(request) -> datamodels.DataModelLike:  # type: ignore
+def example_model_factory(request) -> datamodels.DataModelLike:
     return request.param
 
 
@@ -321,7 +320,7 @@ def test_field_redefinition():
 
     # Redefinition with different type
     class ChildModel2(Model):
-        value: float = 2.2
+        value: float = 2.2  # type: ignore  # redefining value as float on purpose
 
     assert ChildModel2().value == 2.2
 
@@ -659,11 +658,11 @@ def test_info_functions():
     [int, List[float], Tuple[int, ...], Optional[int], Union[int, float]],
 )
 def test_generic_model_instantiation_name(concrete_type: Type):
-    Model = datamodels.concretize(GenericModel, concrete_type)
+    Model = datamodels.concretize(GenericModel, concrete_type)  # type: ignore  # GenericModel is not detected as GenericDataModelLike
     assert Model.__name__.startswith(GenericModel.__name__)
     assert Model.__name__ != GenericModel.__name__
 
-    Model = datamodels.concretize(GenericModel, concrete_type, class_name="MyNewConcreteClass")
+    Model = datamodels.concretize(GenericModel, concrete_type, class_name="MyNewConcreteClass")  # type: ignore  # GenericModel is not detected as GenericDataModelLike
     assert Model.__name__ == "MyNewConcreteClass"
 
 
@@ -672,12 +671,12 @@ def test_generic_model_instantiation_name(concrete_type: Type):
     [int, List[float], Tuple[int, ...], Optional[int], Union[int, float]],
 )
 def test_generic_model_alias(concrete_type: Type):
-    Model = datamodels.concretize(GenericModel, concrete_type)
+    Model = datamodels.concretize(GenericModel, concrete_type)  # type: ignore  # GenericModel is not detected as GenericDataModelLike
 
-    assert GenericModel[concrete_type].__class__ is Model
-    assert typing.get_origin(GenericModel[concrete_type]) is Model
+    assert GenericModel[concrete_type].__class__ is Model  # type: ignore  # using run-time type on purpose
+    assert typing.get_origin(GenericModel[concrete_type]) is Model  # type: ignore  # using run-time type on purpose
 
-    class SubModel(GenericModel[concrete_type]):
+    class SubModel(GenericModel[concrete_type]):  # type: ignore  # using run-time type on purpose
         ...
 
     assert SubModel.__base__ is Model
@@ -726,9 +725,10 @@ def test_basic_generic_field_type_validation():
 # Reuse sample_type_data from test_field_type_hint
 @pytest.mark.parametrize(["type_hint", "valid_values", "wrong_values"], sample_type_data)
 def test_concrete_field_type_validation(
-    type_hint: Type, valid_values: Sequence[Any], wrong_values: Sequence[Any]
+    type_hint: str, valid_values: Sequence[Any], wrong_values: Sequence[Any]
 ):
-    Model = GenericModel[eval(type_hint)].__class__
+    concrete_type: Type = eval(type_hint)
+    Model: Type[datamodels.DataModelLike] = GenericModel[concrete_type].__class__  # type: ignore[valid-type,assignment]
 
     for value in valid_values:
         Model(value=value)

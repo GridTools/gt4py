@@ -1380,7 +1380,7 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
             >>> list(it.reduceby(lambda nvowels, name: nvowels + sum(i in 'aeiou' for i in name), len, init=0))
             [(5, 4), (3, 2), (7, 3)]
 
-        """  # noqa: RST203  # sphinx.napoleon conventions confuse RST validator
+        """  # noqa: RST203, RST301  # sphinx.napoleon conventions confuse RST validator
         if (not callable(key) and not isinstance(key, (int, str, list))) or not all(
             isinstance(i, str) for i in attr_keys
         ):
