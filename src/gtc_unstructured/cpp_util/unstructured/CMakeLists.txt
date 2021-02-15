@@ -34,7 +34,7 @@ if(CMAKE_CUDA_COMPILER)
     add_library(GridTools::usid_gpu ALIAS usid_gpu)
 endif()
 
-find_package(Atlas REQUIRED PATHS $ENV{ATLAS_INSTALL_DIR})
+find_package(Atlas PATHS $ENV{ATLAS_INSTALL_DIR})
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     include(CTest)
