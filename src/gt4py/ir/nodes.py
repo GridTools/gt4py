@@ -379,6 +379,11 @@ class BuiltinLiteral(Literal):
     loc = attribute(of=Location, optional=True)
 
 
+@attribclass
+class AxisIndex(Expr):
+    axis = attribute(of=str)
+
+
 class Ref(Expr):
     pass
 
