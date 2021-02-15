@@ -103,6 +103,7 @@ if(BUILD_TESTING)
 
     add_subdirectory(usid)
     add_subdirectory(gtir)
+    add_subdirectory(fortran)
 
     add_regression_test(cell2cell)
     add_regression_test(vertex2edge)

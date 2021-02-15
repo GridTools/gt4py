@@ -334,15 +334,15 @@ comp = Computation(
         ),
     ],
 )
-debug(comp)
+# debug(comp)
 nir_comp = GtirToNir().visit(comp)
 nir_comp = find_and_merge_horizontal_loops(nir_comp)
-debug(nir_comp)
+# debug(nir_comp)
 usid_comp = NirToUsid().visit(nir_comp)
-debug(usid_comp)
+# debug(usid_comp)
 
 generated_code = UsidGpuCodeGenerator.apply(usid_comp)
-print(generated_code)
+# print(generated_code)
 
 output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_cuda.hpp"
 with open(output_file, "w+") as output:
