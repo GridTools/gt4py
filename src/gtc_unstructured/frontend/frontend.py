@@ -24,11 +24,8 @@ from . import built_in_types
 from .gtscript_ast import External, Argument
 from gtc_unstructured.frontend.gtscript_to_gtir import (
     GTScriptToGTIR,
-    NodeCanonicalizer,
-    SymbolResolutionValidation,
     SymbolTable,
-    TemporaryFieldDeclExtractor,
-    VarDeclExtractor,
+    NodeCanonicalizer
 )
 from gtc_unstructured.frontend.py_to_gtscript import PyToGTScript
 from gtc_unstructured.irs import common
