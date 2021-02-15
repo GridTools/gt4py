@@ -21,7 +21,7 @@ class BuiltInTypeMeta(type):
     """
     Metaclass representing types used inside GTScript code.
 
-    For now only a bare minimum of operations on these types is supported, i.e. (pseudo) subclass checks and extraction
+    For now only a bare minimum of operations on these types is supported, i.e. subclass checks and extraction
     of type arguments.
     """
 
@@ -31,7 +31,8 @@ class BuiltInTypeMeta(type):
 
     def __new__(cls, class_name, bases, namespace, args=None):
         assert bases == () or (len(bases) == 1 and issubclass(bases[0], BuiltInType))
-        assert all(attr[0:2] == "__" for attr in namespace.keys())  # no custom attributes
+        # TODO(tehrengruber): allow only class methods
+        #assert all(attr[0:2] == "__" for attr in namespace.keys())  # no custom attributes
         # TODO(tehrengruber): there might be a better way to do this
         instance = type.__new__(cls, class_name, bases, namespace)
         instance.class_name = class_name
@@ -79,27 +80,31 @@ class BuiltInType(metaclass=BuiltInTypeMeta):
 
 class Connectivity(BuiltInType):
     @classmethod
-    def base_connecitivty(cls):
+    def base_connectivity(cls):
         return next(t for t in cls.__mro__ if issubclass(t, Connectivity) and t.body == Connectivity)
 
     @classmethod
     def primary_location(cls):
-        return cls.base_connecitivty().args[0]
+        return cls.base_connectivity().args[0]
 
     @classmethod
     def secondary_location(cls):
-        return cls.base_connecitivty().args[1]
+        return cls.base_connectivity().args[1]
 
     @classmethod
     def max_neighbors(cls):
-        return cls.base_connecitivty().args[2]
+        return cls.base_connectivity().args[2]
 
     @classmethod
     def has_skip_values(cls):
-        return cls.base_connecitivty().args[3]
+        return cls.base_connectivity().args[3]
 
 
 class Field(BuiltInType):
+    pass
+
+
+class SparseField(BuiltInType):
     pass
 
 
@@ -115,4 +120,6 @@ class Local(BuiltInType):
     """Used as a type argument to :class:`.Field` representing a Local dimension."""
     pass
 
+
+class LocalField(BuiltInType):
     pass

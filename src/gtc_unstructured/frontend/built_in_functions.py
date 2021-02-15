@@ -12,9 +12,8 @@ class Method:
         self.name = name
         self.sig = sig
 
-    def applicable(self, sig: Tuple[Sequence[type], type]):
-        return all(issubclass(arg, method_arg) for arg, method_arg in zip(sig[0], self.sig[0])) \
-                    and issubclass(sig[1], self.sig[1])
+    def applicable(self, arg_sig: Sequence[type]):
+        return all(issubclass(arg, method_arg) for arg, method_arg in zip(arg_sig, self.sig[0]))
 
 class BuiltInFunction:
     name: str
@@ -36,11 +35,11 @@ def declare_built_in_function(name, sig):
 
     globals()[name].methods.append(Method(name, sig))
 
-neighbor_reductions = []  # list of methods for reductions on neighbors
-for reduction_function in ["sum", "product", "min", "max"]:
-    neighbor_reductions.append(declare_built_in_function(reduction_function, ((LocalField,), Number)))
+neighbor_reductions = ["sum", "product", "min", "max"]  # list of methods for reductions on neighbors
+for reduction_function in neighbor_reductions:
+    declare_built_in_function(reduction_function, ((LocalField,), Number))
 
-native_reductions = []  # list of methods for native reductions
-for reduction_function in ["min", "max"]:
+native_reductions = ["min", "max"]  # list of methods for native reductions
+for reduction_function in native_reductions:
     # todo(tehrengruber): varargs
-    native_reductions.append(declare_built_in_function(reduction_function, ((Number, Number), Number)))
+    declare_built_in_function(reduction_function, ((Number, Number), Number))

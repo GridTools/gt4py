@@ -28,29 +28,34 @@ from gtc_unstructured.frontend.gtscript import (
     interval,
     location,
     vertices,
+    SparseField
 )
 from gtc_unstructured.irs import common
 
 
 dtype = common.DataType.FLOAT64
 E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
-V2E = types.new_class("V2E", (Connectivity[Vertex, Edge, 7, False],))
+V2E = types.new_class("V2E", (Connectivity[Vertex, Edge, 7, True],))
 
-valid_stencils = ["copy", "edge_reduction", "sparse_ex", "nested", "temporary_field", "fvm_nabla"]
+valid_stencils = ["copy", "copy2", "edge_reduction", "sparse_ex", "nested", "temporary_field", "fvm_nabla"]
 
 
 def copy(field_in: Field[Vertex, dtype], field_out: Field[Vertex, dtype]):
     with computation(FORWARD), interval(0, None), location(Vertex) as v:
-        field_in = field_out
+        field_out = field_in
+
+
+def copy2(field_in: Field[Vertex, dtype], field_out: Field[Vertex, dtype]):
+    with computation(FORWARD), interval(0, None), location(Vertex) as v:
+        field_in[v] = field_out[v]
 
 
 def edge_reduction(v2e: V2E, edge_field: Field[Edge, dtype], vertex_field: Field[Vertex, dtype]):
     with computation(FORWARD), interval(0, None), location(Edge) as e:
         edge_field = 0.5 * sum(vertex_field[v] for v in v2e[e])
 
-
 def sparse_ex(
-    e2v: E2V, edge_field: Field[Edge, dtype], sparse_field: Field[Edge, Local[Vertex], dtype]
+    e2v: E2V, edge_field: Field[Edge, dtype], sparse_field: SparseField[E2V, dtype]
 ):
     with computation(FORWARD), interval(0, None), location(Edge) as e:
         edge_field = sum(sparse_field[e, v] for v in e2v[e])
@@ -82,7 +87,7 @@ def fvm_nabla(
     pnabla_MXX: Field[Vertex, dtype],
     pnabla_MYY: Field[Vertex, dtype],
     vol: Field[Vertex, dtype],
-    sign: Field[Vertex, Local[Edge], dtype],
+    sign: SparseField[V2E, dtype],
 ):
     with computation(FORWARD), interval(0, None):
         with location(Edge) as e:

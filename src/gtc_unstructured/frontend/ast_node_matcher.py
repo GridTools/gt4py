@@ -13,8 +13,36 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from abc import ABC, abstractmethod
 import ast
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Generic
+
+
+class Transformer(ABC):
+    """
+    Base class to transform a capture.
+
+    Occasionally the python ast has a structure that dosn't map well into the gtscript ast. For example
+    ast.argument.name is a string instead of an ast.name. Such cases are problematic as the description of the grammar
+    by annotations in the gtscript ast in principle mandates them to map to different types. This class provides a
+    clean interface to transform or invert the transformation of a capture mitigating the problem. With respect to the
+    example the name capture of the ast.argument node can be transformed into an ast.name and vice versa.
+
+    .. code-block: python
+        Transformer.invert(Transformer.transform(capture)) == capture
+    """
+
+    @staticmethod
+    @abstractmethod
+    def transform(capture):
+        """Transformation from capture node as given in the original ast."""
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def invert(transformed_captures):
+        """Back-transformation from transformed capture into original capture."""
+        pass
 
 
 class Capture:
@@ -30,11 +58,26 @@ class Capture:
     """
 
     name: str
-    default: Any
+    _default: Any
+    transformer: Any  # TODO(tehrengruber): can we tell mypy that this is a transformer?
 
-    def __init__(self, name, default=None):
+    def __init__(self, name, default=None, transformer=None):
         self.name = name
-        self.default = default
+        self._default = default
+        self.transformer = transformer
+
+    def has_default(self):
+        return self._default is not None
+
+    @property
+    def default(self):
+        default_val = self._default
+        if callable(self._default):
+            default_val = self._default()
+        if self.transformer:
+            default_val = self.transformer.transform(default_val)
+
+        return default_val
 
 
 # just some dummy classes for capturing defaults in lists
@@ -79,7 +122,7 @@ def _check_optional(pattern_node, captures=None) -> bool:
     if captures is None:
         captures = {}
 
-    if isinstance(pattern_node, Capture) and pattern_node.default is not None:
+    if isinstance(pattern_node, Capture) and pattern_node.has_default():
         captures[pattern_node.name] = pattern_node.default
         return True
     elif isinstance(pattern_node, ast.AST):
@@ -115,6 +158,8 @@ def match(concrete_node, pattern_node, captures=None) -> bool:
         captures = {}
 
     if isinstance(pattern_node, Capture):
+        if pattern_node.transformer:
+            concrete_node = pattern_node.transformer.transform(concrete_node)
         captures[pattern_node.name] = concrete_node
         return True
     elif type(concrete_node) != type(pattern_node) and not _is_placeholder_for(

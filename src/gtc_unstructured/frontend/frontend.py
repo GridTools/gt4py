@@ -20,6 +20,8 @@ import textwrap
 
 import devtools
 
+from . import built_in_types
+from .gtscript_ast import External, Argument
 from gtc_unstructured.frontend.gtscript_to_gtir import (
     GTScriptToGTIR,
     NodeCanonicalizer,
@@ -65,19 +67,31 @@ class GTScriptCompilationTask:
         self.gtir = None
         self.cpp_code = None
 
-    def _annotate_args(self):
+    def _get_arguments(self):
         """
         Populate symbol table by extracting the argument types from scope the function is embedded in.
         """
+        #assert self.gtscript_ast is not None
+        args = []
         sig = inspect.signature(self.definition)
         for name, param in sig.parameters.items():
-            self.symbol_table[name] = param.annotation
+            args.append(Argument(name=name, type_=param.annotation))
+        return args
 
     def _generate_gtscript_ast(self):
-        self._annotate_args()
         self.source = textwrap.dedent(inspect.getsource(self.definition))
         self.python_ast = ast.parse(self.source).body[0]
-        self.gtscript_ast = PyToGTScript().transform(self.python_ast)
+        self.gtscript_ast = PyToGTScript().transform(self.python_ast, node_init_args={
+            "externals": [
+                External(name="dtype", value=common.DataType.FLOAT64),
+                External(name="Vertex", value=common.LocationType.Vertex),
+                External(name="Edge", value=common.LocationType.Edge),
+                External(name="Cell", value=common.LocationType.Cell),
+                External(name="Field", value=built_in_types.Field),
+                External(name="Connectivity", value=built_in_types.Connectivity)
+            ],
+            "arguments": self._get_arguments()
+        })
 
         return self.gtscript_ast
 
@@ -86,12 +100,12 @@ class GTScriptCompilationTask:
         NodeCanonicalizer.apply(self.gtscript_ast)
 
         # Populate symbol table
-        VarDeclExtractor.apply(self.symbol_table, self.gtscript_ast)
-        TemporaryFieldDeclExtractor.apply(self.symbol_table, self.gtscript_ast)
-        SymbolResolutionValidation.apply(self.symbol_table, self.gtscript_ast)
+        #VarDeclExtractor.apply(self.symbol_table, self.gtscript_ast)
+        #TemporaryFieldDeclExtractor.apply(self.symbol_table, self.gtscript_ast)
+        #SymbolResolutionValidation.apply(self.symbol_table, self.gtscript_ast)
 
         # Transform into GTIR
-        self.gtir = GTScriptToGTIR.apply(self.symbol_table, self.gtscript_ast)
+        self.gtir = GTScriptToGTIR.apply(self.gtscript_ast)
 
         return self.gtir
 
