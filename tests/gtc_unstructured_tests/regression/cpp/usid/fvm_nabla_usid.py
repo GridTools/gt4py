@@ -309,10 +309,10 @@ comp = Computation(
 )
 
 
-debug(comp)
+# debug(comp)
 
 generated_code = usid_codegen.UsidGpuCodeGenerator.apply(comp)
-print(generated_code)
+# print(generated_code)
 
 output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_cuda.hpp"
 with open(output_file, "w+") as output:
@@ -320,7 +320,7 @@ with open(output_file, "w+") as output:
 
 # TODO
 generated_code = usid_codegen.UsidNaiveCodeGenerator.apply(comp)
-print(generated_code)
+# print(generated_code)
 
 output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_naive.hpp"
 with open(output_file, "w+") as output:
