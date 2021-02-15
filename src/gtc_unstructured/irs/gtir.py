@@ -40,6 +40,29 @@ class Literal(common.Literal, Expr):
     pass
 
 
+class LocationRef(Node):
+    name: SymbolRef  # to PrimaryLocation or LocationComprehension
+
+
+# TODO indirection not needed?
+class ConnectivityRef(Node):
+    name: SymbolRef
+
+
+class NeighborVectorAccess(Expr):
+    exprs: List[Expr]
+    location_ref: LocationRef
+
+    # TODO check that size of list equals connectivity max_neighbors
+
+
+# TODO using a LocalFieldDecl seems natural, but doesn't work with the parallel model (it would live in its own scope)
+# class LocalFieldDecl(Stmt):
+#     name: SymbolName
+#     connectivity: ConnectivityRef
+#     init: List[Expr]
+
+
 @enum.unique
 class ReduceOperator(StrEnum):
     """Reduction operator identifier."""
@@ -53,15 +76,6 @@ class ReduceOperator(StrEnum):
 class PrimaryLocation(Node):
     name: SymbolName
     location_type: common.LocationType
-
-
-# TODO indirection not needed?
-class ConnectivityRef(Node):
-    name: SymbolRef
-
-
-class LocationRef(Node):
-    name: SymbolRef  # to PrimaryLocation or LocationComprehension
 
 
 class LocationComprehension(Node):
@@ -86,6 +100,11 @@ class NeighborReduce(Expr):
 class FieldAccess(Expr):
     name: SymbolRef
     subscript: List[LocationRef]
+
+
+# to SparseField (or TODO LocalField)
+class NeighborAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt, SymbolTableTrait):
+    neighbors: LocationComprehension
 
 
 class AssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
@@ -127,6 +146,10 @@ class TemporaryField(UField):
     pass
 
 
+class TemporarySparseField(SparseField):
+    pass
+
+
 class HorizontalLoop(Node):
     stmt: Stmt
     location: PrimaryLocation
@@ -160,7 +183,7 @@ class Computation(Node, SymbolTableTrait):
     name: Str
     connectivities: List[Connectivity]
     params: List[Union[UField, SparseField]]
-    declarations: Optional[List[TemporaryField]]
+    declarations: Optional[List[Union[TemporaryField, TemporarySparseField]]]
     stencils: List[Stencil]
 
     _validate_symbol_refs = stable_gtc_common.validate_symbol_refs()

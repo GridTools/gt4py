@@ -31,7 +31,7 @@ jobs:
           ctest --output-on-failure
       - name: Test gtc cpp regression
         run: |
-          cd tests/test_gtc_unstructured/regression/cpp
+          cd tests/gtc_unstructured_tests/regression/cpp
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}

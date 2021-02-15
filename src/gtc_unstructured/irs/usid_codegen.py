@@ -31,6 +31,7 @@ from gtc_unstructured.irs.usid import (
     NeighborLoop,
     SidCompositeSparseEntry,
     Temporary,
+    TemporarySparseField,
 )
 
 
@@ -66,7 +67,11 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
             raise ValueError("Doesn't contain a LocationType!")
         return location_type[0]
 
-    headers_ = ["<gridtools/usid/dim.hpp>", "<gridtools/usid/helpers.hpp>"]
+    headers_ = [
+        "<gridtools/common/array.hpp>",
+        "<gridtools/usid/dim.hpp>",
+        "<gridtools/usid/helpers.hpp>",
+    ]
 
     namespace_ = None
 
@@ -111,7 +116,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
 
     KernelCall = as_mako(
         """
-        call_kernel<${name}>(${domain}, ${','.join(sids)});
+        call_kernel<${name}>(${domain}, d.k, ${','.join(sids)});
         """
     )
 
@@ -122,15 +127,24 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
         %>field<${ sid_entry_deref.name }>(${ composite_deref.ptr_name })"""
     )
 
+    ArrayAccess = as_fmt("{name}[{subscript}]")
+
     AssignStmt = as_fmt("{left} = {right};")
 
     BinaryOp = as_fmt("({left} {op} {right})")
 
     PtrRef = as_fmt("{name}")
 
+    LocalIndex = as_fmt("{name}")
+
     def visit_NeighborLoop(self, node: NeighborLoop, symtable, **kwargs):
         primary_sid_deref = symtable[node.primary_sid]
         connectivity_deref = symtable[node.connectivity]
+        indexed = ""
+        index_var = ""
+        if node.local_index:
+            indexed = "_indexed"
+            index_var = f", auto {self.visit(node.local_index)}"
         return self.generic_visit(
             node,
             symtable={
@@ -139,13 +153,15 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
             },  # should be partly bounded (should see only global scope (tags) and current scope)
             primary_sid_deref=primary_sid_deref,
             connectivity_deref=connectivity_deref,
+            indexed=indexed,
+            index_var=index_var,
             **kwargs,
         )
 
     # TODO consider stricter capture
     NeighborLoop = as_mako(
         """
-        foreach_neighbor<${connectivity_deref.tag}>([&](auto &&${primary}, auto &&${secondary}){${''.join(body)}}, ${primary_sid_deref.ptr_name}, ${primary_sid_deref.strides_name}, ${secondary_sid});
+        foreach_neighbor${indexed}<${connectivity_deref.tag}>([&](auto &&${primary}, auto &&${secondary}${index_var}){${''.join(body)}}, ${primary_sid_deref.ptr_name}, ${primary_sid_deref.strides_name}, ${secondary_sid});
         """
     )
 
@@ -159,6 +175,10 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
 
     VarDecl = as_mako(
         "${ _this_generator.DATA_TYPE_TO_STR[_this_node.vtype] } ${ name } = ${ init };"
+    )
+
+    StaticArrayDecl = as_mako(
+        "gridtools::array<${_this_generator.DATA_TYPE_TO_STR[_this_node.vtype]}, ${size}> ${name} = {${','.join(init)}};"
     )
 
     def visit_Connectivity(self, node: Connectivity, **kwargs):
@@ -178,6 +198,24 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
         """
         auto ${ name } = make_simple_tmp_storage<${ c_vtype }>(
             d.${ loctype }, d.k, alloc);"""
+    )
+
+    def visit_TemporarySparseField(self, node: TemporarySparseField, *, symtable, **kwargs):
+        c_vtype = self.DATA_TYPE_TO_STR[node.vtype]
+        loctype = self.visit(self.location_type_from_dimensions(node.dimensions))
+        connectivity_deref = symtable[node.connectivity]
+        return self.generic_visit(
+            node,
+            s_size=connectivity_deref.max_neighbors,
+            c_vtype=c_vtype,
+            loctype=loctype,
+            **kwargs,
+        )
+
+    TemporarySparseField = as_mako(
+        """
+        auto ${ name } = make_simple_sparse_tmp_storage<${ c_vtype }>(
+            d.${ loctype }, d.k, ${s_size}, alloc);"""
     )
 
     def visit_Kernel(self, node: Kernel, symtable, **kwargs):
@@ -246,15 +284,22 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
             ${ ''.join(kernels) }
 
 
-            inline constexpr auto ${name} = [](domain d, ${','.join(connectivity_params)}) {
+            inline constexpr auto ${name} = [](domain d
+                %if connectivity_params:
+                , ${','.join(connectivity_params)}
+                %endif
+                ) {
                 // TODO assert connectivities are sid
                 return
-                    [d = std::move(d), ${','.join(connectivity_fields)}
+                    [d = std::move(d)
+                    %if connectivity_fields:
+                    , ${','.join(connectivity_fields)}
+                    %endif
                             ](
                         ${','.join(field_params)}
                             ){
                             // TODO assert field params are sids
-                            %if len(temporaries) > 0:
+                            %if temporaries:
                             auto alloc = make_allocator();
                             %endif
                             ${''.join(temporaries)}

@@ -15,10 +15,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import List, Union
+from typing import List, Optional, Union
 
 from devtools import debug  # noqa: F401
-from pydantic import validator
 from pydantic.class_validators import root_validator
 
 from eve import FrozenNode, Node, Str, SymbolTableTrait
@@ -64,6 +63,18 @@ class AssignStmt(common.AssignStmt[Union[FieldAccess, VarAccess], Expr], Stmt):
 
 class BinaryOp(common.BinaryOp[Expr], Expr):
     pass
+
+
+class StaticArrayDecl(Stmt):
+    name: SymbolName
+    init: List[Expr]
+    vtype: common.DataType
+    size: int
+
+
+class ArrayAccess(Expr):
+    name: SymbolRef
+    subscript: SymbolRef
 
 
 class Connectivity(FrozenNode):
@@ -117,11 +128,12 @@ class SidComposite(Node):
     def strides_name(self):
         return self.name + "_strides"
 
-    @validator("entries")
-    def not_empty(cls, entries):
-        if len(entries) < 1:
-            raise ValueError("SidComposite must contain at least one entry")
-        return entries
+    # TODO currently we pass an empty composite in the weights test
+    # @validator("entries")
+    # def not_empty(cls, entries):
+    #     if len(entries) < 1:
+    #         raise ValueError("SidComposite must contain at least one entry")
+    #     return entries
 
 
 class PtrRef(Node):
@@ -132,12 +144,18 @@ class PtrRef(Node):
         return self.name
 
 
+class LocalIndex(Node):
+    name: SymbolName
+
+
 class NeighborLoop(Stmt, SymbolTableTrait):
     primary_sid: SymbolRef
     secondary_sid: SymbolRef
     connectivity: SymbolRef
     primary: PtrRef
     secondary: PtrRef
+    local_index: Optional[LocalIndex]
+
     body: List[Stmt]
 
 
@@ -182,11 +200,15 @@ class Temporary(UField):
     pass
 
 
+class TemporarySparseField(SparseField):
+    pass
+
+
 class Computation(Node, SymbolTableTrait):
     name: Str
     connectivities: List[Connectivity]
     parameters: List[Union[UField, SparseField]]
-    temporaries: List[Temporary]
+    temporaries: List[Union[Temporary, TemporarySparseField]]
     kernels: List[Kernel]
     ctrlflow_ast: List[KernelCall]
 

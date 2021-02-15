@@ -46,8 +46,14 @@ class LocalVar(Node):
     location_type: common.LocationType
 
 
+class LocalFieldVar(Stmt):
+    name: SymbolName
+    connectivity: SymbolRef
+    init: List[Expr]
+
+
 class BlockStmt(Stmt):
-    declarations: List[LocalVar]
+    declarations: List[Union[LocalVar, LocalFieldVar]]
     statements: List[Stmt]
 
     @root_validator(pre=True)
@@ -141,6 +147,10 @@ class TemporaryField(UField):
     pass
 
 
+class TemporarySparseField(SparseField):
+    pass
+
+
 class IterationSpace(Node):
     name: SymbolName
     location_type: common.LocationType
@@ -181,6 +191,6 @@ class Computation(Node, SymbolTableTrait):
     connectivities: List[Connectivity]
     params: List[Union[SparseField, UField]]
     stencils: List[Stencil]
-    declarations: List[TemporaryField]
+    declarations: List[Union[TemporaryField, TemporarySparseField]]
 
     _validate_symbol_refs = stable_gtc_common.validate_symbol_refs()

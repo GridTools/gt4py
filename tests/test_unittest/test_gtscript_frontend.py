@@ -75,16 +75,6 @@ def add_external_const(a):
     return a + 10.0 + GLOBAL_CONSTANT
 
 
-@gtscript.function
-def identity(field_in):
-    return field_in
-
-
-@gtscript.function
-def sinus(field_in):
-    return sin(field_in)
-
-
 class TestInlinedExternals:
     def test_all_legal_combinations(self, id_version):
         module = f"TestInlinedExternals_test_module_{id_version}"
@@ -135,113 +125,62 @@ class TestInlinedExternals:
                 definition_func, "test_missing_nested_symbol", module, externals=externals
             )
 
-    def test_undecorated_delay(self, id_version):
-        A = 0
-
-        def undecorated_function():
-            return A
-
-        module = f"TestInlinedExternals_test_undecorated_delay_{id_version}"
-        externals = {"func": undecorated_function}
-
-        A = 1
-
-        # Direct function
-        def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
-            with computation(PARALLEL), interval(...):
-                inout_field = undecorated_function()
-
-        stencil_id, def_ir = compile_definition(
-            definition_func, "test_undecorated_delay", module, externals=externals
-        )
-
-        stmt = def_ir.computations[0].body.stmts[0]
-        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
-
-        # As external
-        def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__externals__ import func
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
-            with computation(PARALLEL), interval(...):
-                inout_field = func()
-
-        stencil_id, def_ir = compile_definition(
-            definition_func, "test_undecorated_delay", module, externals=externals
-        )
-
-        stmt = def_ir.computations[0].body.stmts[0]
-        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
-
-    def test_function_import(self, id_version):
+    def test_recursive_function_imports(self, id_version):
         module = f"TestInlinedExternals_test_recursive_imports_{id_version}"
 
-        def some_function():
+        @gtscript.function
+        def func_deeply_nested():
+            from __externals__ import another_const
+
+            return another_const
+
+        @gtscript.function
+        def func_nested():
             from __externals__ import const
 
-            return const
+            return const + func_deeply_nested()
+
+        @gtscript.function
+        def func():
+            from __externals__ import other_call
+
+            return other_call()
 
         def definition_func(inout_field: gtscript.Field[float]):
             from __externals__ import some_call
 
             with computation(PARALLEL), interval(...):
-                inout_field = some_call()
+                inout_field = func() + some_call()
 
         stencil_id, def_ir = compile_definition(
             definition_func,
             "test_recursive_imports",
             module,
-            externals={"some_call": some_function, "const": GLOBAL_CONSTANT},
+            externals={
+                "some_call": func,
+                "other_call": func_nested,
+                "const": GLOBAL_CONSTANT,
+                "another_const": GLOBAL_CONSTANT,
+            },
         )
         assert set(def_ir.externals.keys()) == {
             "some_call",
             "const",
-        }
-
-    def test_recursive_imports(self, id_version):
-        module = f"TestInlinedExternals_test_recursive_imports_{id_version}"
-
-        def func_nest2():
-            from __externals__ import const
-
-            return const
-
-        def func_nest1():
-            from __externals__ import other
-
-            return other() + func_nest2()
-
-        def definition_func(inout_field: gtscript.Field[float]):
-            from __externals__ import some_call
-
-            with computation(PARALLEL), interval(...):
-                inout_field = func_nest1() + some_call()
-
-        stencil_id, def_ir = compile_definition(
-            definition_func,
-            "test_recursive_imports",
-            module,
-            externals={"some_call": func_nest1, "other": func_nest2, "const": GLOBAL_CONSTANT},
-        )
-        assert set(def_ir.externals.keys()) == {
-            "some_call",
-            "const",
-            "other",
-            "func_nest1",
-            "tests.test_unittest.test_gtscript_frontend.func_nest1.func_nest2",
+            "other_call",
+            "func",
+            "another_const",
+            "tests.test_unittest.test_gtscript_frontend.func_nested.func_deeply_nested",
         }
 
     def test_decorated_freeze(self):
         A = 0
 
         @gtscript.function
-        def undecorated_function():
+        def some_function():
             return A
 
         module = f"TestInlinedExternals_test_undecorated_delay_{id_version}"
-        externals = {"func": undecorated_function}
+        externals = {"func": some_function}
 
         A = 1
 
@@ -249,7 +188,7 @@ class TestInlinedExternals:
             from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
-                inout_field = undecorated_function()
+                inout_field = some_function()
 
         stencil_id, def_ir = compile_definition(
             definition_func, "test_decorated_freeze", module, externals=externals
@@ -273,6 +212,24 @@ class TestInlinedExternals:
 
         with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*WRONG_VALUE_CONSTANT.*"):
             compile_definition(definition_func, "test_wrong_value", module, externals=externals)
+
+
+class TestFunction:
+    def test_error_invalid(self, id_version):
+        module = f"TestFunction_test_module_{id_version}"
+        externals = {}
+
+        def func():
+            return 1.0
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func()
+
+        with pytest.raises(TypeError, match=r"func is not a gtscript function"):
+            compile_definition(definition_func, "test_error_invalid", module, externals=externals)
 
 
 class TestImportedExternals:
@@ -497,6 +454,10 @@ class TestExternalsWithSubroutines:
 
             return lap
 
+        @gtscript.function
+        def identity(field_in):
+            return field_in
+
         def definition_func(
             in_phi: gtscript.Field[np.float64],
             in_gamma: gtscript.Field[np.float64],
@@ -671,6 +632,19 @@ class TestCompileTimeAssertions:
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
         compile_definition(definition, "test_assert_nested_attribute", module)
+
+    def test_inside_func(self, id_version):
+        @gtscript.function
+        def assert_in_func(field):
+            assert __INLINED(GLOBAL_CONSTANT < 2), "An error occurred"
+            return field[0, 0, 0] + GLOBAL_CONSTANT
+
+        def definition(inout_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                inout_field = assert_in_func(inout_field)
+
+        module = f"TestCompileTimeAssertions_test_module_{id_version}"
+        compile_definition(definition, "test_inside_func", module)
 
     def test_runtime_error(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
@@ -1037,6 +1011,10 @@ class TestNativeFunctions:
                 in_field += min(abs(sin(add_external_const(in_field))), -0.5)
 
     def test_native_in_function(self):
+        @gtscript.function
+        def sinus(field_in):
+            return sin(field_in)
+
         @gtscript.stencil(backend="debug")
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
