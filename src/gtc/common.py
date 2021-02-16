@@ -170,28 +170,25 @@ class NativeFunction(StrEnum):
 
 
 NativeFunction.IR_OP_TO_NUM_ARGS = {
-    NativeFunction(k): v  # to avoid type: ignore on every line
-    for k, v in {
-        NativeFunction.ABS: 1,
-        NativeFunction.MIN: 2,
-        NativeFunction.MAX: 2,
-        NativeFunction.MOD: 2,
-        NativeFunction.SIN: 1,
-        NativeFunction.COS: 1,
-        NativeFunction.TAN: 1,
-        NativeFunction.ARCSIN: 1,
-        NativeFunction.ARCCOS: 1,
-        NativeFunction.ARCTAN: 1,
-        NativeFunction.SQRT: 1,
-        NativeFunction.EXP: 1,
-        NativeFunction.LOG: 1,
-        NativeFunction.ISFINITE: 1,
-        NativeFunction.ISINF: 1,
-        NativeFunction.ISNAN: 1,
-        NativeFunction.FLOOR: 1,
-        NativeFunction.CEIL: 1,
-        NativeFunction.TRUNC: 1,
-    }.items()
+    NativeFunction.ABS: 1,
+    NativeFunction.MIN: 2,
+    NativeFunction.MAX: 2,
+    NativeFunction.MOD: 2,
+    NativeFunction.SIN: 1,
+    NativeFunction.COS: 1,
+    NativeFunction.TAN: 1,
+    NativeFunction.ARCSIN: 1,
+    NativeFunction.ARCCOS: 1,
+    NativeFunction.ARCTAN: 1,
+    NativeFunction.SQRT: 1,
+    NativeFunction.EXP: 1,
+    NativeFunction.LOG: 1,
+    NativeFunction.ISFINITE: 1,
+    NativeFunction.ISINF: 1,
+    NativeFunction.ISNAN: 1,
+    NativeFunction.FLOOR: 1,
+    NativeFunction.CEIL: 1,
+    NativeFunction.TRUNC: 1,
 }
 
 
@@ -596,6 +593,33 @@ class AxisBound(Node):
     def end(cls) -> "AxisBound":
         return cls.from_end(0)
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, AxisBound):
+            return False
+        return self.level == other.level and self.offset == other.offset
+
+    def __lt__(self, other: "AxisBound") -> bool:
+        if not isinstance(other, AxisBound):
+            return NotImplemented
+        return (self.level == LevelMarker.START and other.level == LevelMarker.END) or (
+            self.level == other.level and self.offset < other.offset
+        )
+
+    def __le__(self, other: "AxisBound") -> bool:
+        if not isinstance(other, AxisBound):
+            return NotImplemented
+        return self < other or self == other
+
+    def __gt__(self, other: "AxisBound") -> bool:
+        if not isinstance(other, AxisBound):
+            return NotImplemented
+        return not self < other and not self == other
+
+    def __ge__(self, other: "AxisBound") -> bool:
+        if not isinstance(other, AxisBound):
+            return NotImplemented
+        return not self < other
+
 
 def data_type_to_typestr(dtype: DataType) -> str:
 
@@ -604,6 +628,7 @@ def data_type_to_typestr(dtype: DataType) -> str:
         DataType.INT8: "int8",
         DataType.INT16: "int16",
         DataType.INT32: "int32",
+        DataType.INT64: "int64",
         DataType.FLOAT32: "float32",
         DataType.FLOAT64: "float64",
     }

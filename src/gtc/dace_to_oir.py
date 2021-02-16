@@ -22,7 +22,16 @@ def _is_list_of_states(sdfg: dace.SDFG):
 
 def convert(sdfg: dace.SDFG) -> oir.Stencil:
     vertical_loops = list()
-    decls = list()
+    params = list()
+    declared = set()
+
+    array: dace.data.Data
+    for name, array in sdfg.arrays.items():
+        dtype = common.typestr_to_data_type(array.dtype.as_numpy_dtype().str)
+        if isinstance(array, dace.data.Scalar):
+            params.append(oir.ScalarDecl(name=name, dtype=dtype))
+        elif not array.transient:
+            params.append(oir.FieldDecl(name=name, dtype=dtype))
 
     is_correct_node_types = all(
         isinstance(n, (dace.SDFGState, dace.nodes.AccessNode, VerticalLoopLibraryNode))
@@ -40,13 +49,39 @@ def convert(sdfg: dace.SDFG) -> oir.Stencil:
 
         for node in nx.topological_sort(state.nx):
             if isinstance(node, VerticalLoopLibraryNode):
-                vertical_loops.append(node._oir_node)
+                decls = []
+                for edge in state.in_edges(node):
+                    if (
+                        edge.dst_conn is not None
+                        and isinstance(edge.src, dace.nodes.AccessNode)
+                        and edge.src.data not in declared
+                        and edge.src.data not in params
+                        and sdfg.arrays[edge.src.data].transient
+                    ):
+                        declared.add(edge.src.data)
+                        dtype = common.typestr_to_data_type(
+                            sdfg.arrays[edge.src.data].dtype.as_numpy_dtype().str
+                        )
+                        decls.append(oir.FieldDecl(name=edge.src.data, dtype=dtype))
+                for edge in state.out_edges(node):
+                    if (
+                        edge.src_conn is not None
+                        and isinstance(edge.dst, dace.nodes.AccessNode)
+                        and edge.dst.data not in declared
+                        and edge.dst.data not in params
+                        and sdfg.arrays[edge.dst.data].transient
+                    ):
+                        declared.add(edge.dst.data)
+                        dtype = common.typestr_to_data_type(
+                            sdfg.arrays[edge.dst.data].dtype.as_numpy_dtype().str
+                        )
+                        decls.append(oir.FieldDecl(name=edge.dst.data, dtype=dtype))
+                new_node = oir.VerticalLoop(
+                    interval=node._oir_node.interval,
+                    horizontal_executions=node._oir_node.horizontal_executions,
+                    loop_order=node._oir_node.loop_order,
+                    declarations=decls,
+                )
+                vertical_loops.append(new_node)
 
-    array: dace.data.Data
-    for name, array in sdfg.arrays.items():
-        dtype = common.typestr_to_data_type(array.dtype.as_numpy_dtype().str)
-        if isinstance(array, dace.data.Scalar):
-            decls.append(oir.ScalarDecl(name=name, dtype=dtype))
-        else:
-            decls.append(oir.FieldDecl(name=name, dtype=dtype))
-    return oir.Stencil(name=sdfg.name, params=decls, vertical_loops=vertical_loops)
+    return oir.Stencil(name=sdfg.name, params=params, vertical_loops=vertical_loops)
