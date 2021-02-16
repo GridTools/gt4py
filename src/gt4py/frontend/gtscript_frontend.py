@@ -22,7 +22,8 @@ import itertools
 import numbers
 import textwrap
 import types
-from typing import List, Optional, Union
+from typing import List, Optional, Sequence, Union
+import functools
 
 import numpy as np
 
@@ -163,7 +164,7 @@ class AxisIntervalParser(gt_meta.ASTPass):
     @classmethod
     def apply(
         cls,
-        node: Union[ast.Ellipsis, ast.Subscript, ast.Slice],
+        node: Union[ast.Ellipsis, ast.Slice, ast.Subscript, ast.Constant],
         axis_name: str,
         loc: Optional[gt_ir.Location] = None,
     ) -> gt_ir.AxisInterval:
@@ -1236,56 +1237,135 @@ class IRMaker(ast.NodeVisitor):
         ast.copy_location(assignment, node)
         return self.visit_Assign(assignment)
 
+    def _parse_region_intervals(
+        self, node: Union[ast.ExtSlice, ast.Index, ast.Tuple], loc: gt_ir.Location = None
+    ) -> List[gt_ir.AxisInterval]:
+        if isinstance(node, ast.ExtSlice):
+            # Python 3.8 returns an ExtSlice for region[0, :]
+            axes_nodes = node.dims
+        elif isinstance(node, ast.Index):
+            # Python 3.8 wraps a Tuple in an Index for region[0, 1]
+            tuple_node = node.value
+            axes_nodes = tuple_node.elts
+        elif isinstance(node, ast.Tuple):
+            # Python 3.9 directly returns a Tuple for region[0, 1]
+            axes_nodes = node.elts
+        else:
+            raise GTScriptSyntaxError(
+                f"Invalid 'region' index at line {loc.line} (column {loc.column})", loc=loc
+            )
+        axes_names = [axis.name for axis in self.domain.parallel_axes]
+        return [
+            parse_interval_node(axis_node, name) for axis_node, name in zip(axes_nodes, axes_names)
+        ]
+
+    def _interval_to_positional_expr(
+        self, interval: List[gt_ir.AxisInterval], axis_name: str, loc: gt_ir.Location = None
+    ) -> gt_ir.BinOpExpr:
+
+        bounds = (interval.start, interval.end)
+        ops = (gt_ir.BinaryOperator.GE, gt_ir.BinaryOperator.LT)
+
+        conditionals = [
+            gt_ir.BinOpExpr(op=op, lhs=gt_ir.AxisIndex(axis=axis_name), rhs=bound, loc=loc)
+            for bound, op in zip(bounds, ops)
+        ]
+
+        return functools.reduce(
+            lambda x, y: gt_ir.BinOpExpr(op=gt_ir.BinaryOperator.AND, lhs=x, rhs=y, loc=loc),
+            conditionals,
+        )
+
     def visit_With(self, node: ast.With):
         loc = gt_ir.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
             f"Invalid 'with' statement at line {loc.line} (column {loc.column})", loc=loc
         )
 
-        # If we find nested `with` blocks flatten them, i.e. transform
-        #  with computation(PARALLEL):
-        #   with interval(...):
-        #     ...
-        # into
-        #  with computation(PARALLEL), interval(...):
-        #    ...
-        # otherwise just parse the node
-        if self.parsing_context == ParsingContext.CONTROL_FLOW and all(
-            isinstance(child_node, ast.With) for child_node in node.body
+        if (
+            len(node.items) == 1
+            and isinstance(node.items[0].context_expr, ast.Call)
+            and node.items[0].context_expr.func.id == "horizontal"
         ):
-            # Ensure top level `with` specifies the iteration order
-            if not any(
-                with_item.context_expr.func.id == "computation"
-                for with_item in node.items
-                if isinstance(with_item.context_expr, ast.Call)
-            ):
+            call_args = node.items[0].context_expr.args
+            if any(not isinstance(arg, ast.Subscript) for arg in call_args):
+                raise syntax_error
+            if any(arg.value.id != "region" for arg in call_args):
                 raise syntax_error
 
-            # Parse nested `with` blocks
-            compute_blocks = []
-            for with_node in node.body:
-                with_node = copy.deepcopy(with_node)  # Copy to avoid altering original ast
-                # Splice `withItems` of current/primary with statement into nested with
-                with_node.items.extend(node.items)
+            if_stmts = []
+            for arg in call_args:
+                intervals = self._parse_region_intervals(arg.slice, loc)
 
-                compute_blocks.append(self._visit_computation_node(with_node))
-
-            # Validate block specification order
-            #  the nested computation blocks must be specified in their order of execution. The order of execution is
-            #  such that the lowest (highest) interval is processed first if the iteration order is forward (backward).
-            if not self._are_blocks_sorted(compute_blocks):
-                raise GTScriptSyntaxError(
-                    f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
+                condition = functools.reduce(
+                    lambda x, y: gt_ir.BinOpExpr(
+                        op=gt_ir.BinaryOperator.AND, lhs=x, rhs=y, loc=loc
+                    ),
+                    [
+                        self._interval_to_positional_expr(interval, axis.name, loc)
+                        for interval, axis in zip(intervals, self.domain.parallel_axes)
+                    ],
                 )
 
-            return compute_blocks
-        elif self.parsing_context == ParsingContext.CONTROL_FLOW and not any(
-            isinstance(child_node, ast.With) for child_node in node.body
-        ):
-            return self._visit_computation_node(node)
+                body_stmts = gt_utils.flatten(
+                    [gt_utils.listify(self.visit(stmt)) for stmt in node.body]
+                )
+
+                if_stmts.append(
+                    gt_ir.If(
+                        condition=condition,
+                        main_body=gt_ir.BlockStmt(stmts=body_stmts),
+                        loc=loc,
+                    )
+                )
+
+            return if_stmts
         else:
-            # Mixing nested `with` blocks with stmts not allowed
-            raise syntax_error
+            # If we find nested `with` blocks flatten them, i.e. transform
+            #  with computation(PARALLEL):
+            #   with interval(...):
+            #     ...
+            # into
+            #  with computation(PARALLEL), interval(...):
+            #    ...
+            # otherwise just parse the node
+            if self.parsing_context == ParsingContext.CONTROL_FLOW and all(
+                isinstance(child_node, ast.With) for child_node in node.body
+            ):
+                # Ensure top level `with` specifies the iteration order
+                if not any(
+                    with_item.context_expr.func.id == "computation"
+                    for with_item in node.items
+                    if isinstance(with_item.context_expr, ast.Call)
+                ):
+                    raise syntax_error
+
+                # Parse nested `with` blocks
+                compute_blocks = []
+                for with_node in node.body:
+                    with_node = copy.deepcopy(with_node)  # Copy to avoid altering original ast
+                    # Splice `withItems` of current/primary with statement into nested with
+                    with_node.items.extend(node.items)
+
+                    compute_blocks.append(self._visit_computation_node(with_node))
+
+                # Validate block specification order
+                #  the nested computation blocks must be specified in their order of execution. The order of execution is
+                #  such that the lowest (highest) interval is processed first if the iteration order is forward (backward).
+                if not self._are_blocks_sorted(compute_blocks):
+                    raise GTScriptSyntaxError(
+                        f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
+                    )
+
+                return compute_blocks
+            elif self.parsing_context == ParsingContext.CONTROL_FLOW:
+                # and not any(
+                #     isinstance(child_node, ast.With) for child_node in node.body
+                # ):
+                return self._visit_computation_node(node)
+            else:
+                # Mixing nested `with` blocks with stmts not allowed
+                raise syntax_error
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> list:
         blocks = []

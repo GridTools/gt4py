@@ -22,6 +22,7 @@ definitions for the keywords of the DSL.
 
 import collections
 import inspect
+import numbers
 import types
 
 import numpy as np
@@ -71,6 +72,8 @@ builtins = {
     "externals",
     "computation",
     "interval",
+    "horizontal",
+    "region",
     "__gtscript__",
     "__externals__",
     "__INLINED",
@@ -337,15 +340,36 @@ def lazy_stencil(
 
 
 class _AxisOffset:
-    def __init__(self, axis: str, offset: int):
+    def __init__(self, axis: str, index: int, offset: int = 0):
         self.axis = axis
+        self.index = index
         self.offset = offset
 
     def __repr__(self):
-        return f"_AxisOffset(axis={self.axis}, offset={self.offset})"
+        return f"_AxisOffset(axis={self.axis}, index={self.index}, offset={self.offset})"
+
+    def __eq__(self, other):
+        return repr(self) == repr(other)
 
     def __str__(self):
-        return f"{self.axis}[{self.offset}]"
+        return f"{self.axis}[{self.index}] + {self.offset}"
+
+    def __add__(self, offset: int):
+        if not isinstance(offset, numbers.Integral):
+            raise TypeError("Offset should be an integer type")
+        if offset == 0:
+            return self
+        else:
+            return _AxisOffset(self.axis, self.index, self.offset + offset)
+
+    def __radd__(self, offset: int):
+        return self.__add__(offset)
+
+    def __sub__(self, offset: int):
+        return self.__add__(-offset)
+
+    def __rsub__(self, offset: int):
+        return self.__radd__(-offset)
 
 
 class _AxisInterval:
@@ -497,6 +521,21 @@ def computation(order):
 def interval(*args):
     """Define the interval of computation in the 'K' sequential axis."""
     pass
+
+
+def horizontal(*args):
+    """Define a block of code that is restricted to a set of regions in the parallel axes."""
+    pass
+
+
+class _Region:
+    def __getitem__(self, *args):
+        """Define a region in the parallel axes."""
+        pass
+
+
+# Horizontal regions
+region = _Region()
 
 
 def __INLINED(compile_if_expression):
