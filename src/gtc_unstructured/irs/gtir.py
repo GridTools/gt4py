@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
 import enum
 from typing import List, Optional, Union, ClassVar, Dict
 
@@ -25,20 +26,6 @@ from eve.type_definitions import SymbolName, SymbolRef
 from gtc_unstructured.irs import common
 from gtc import common as stable_gtc_common
 
-
-class NativeFuncCall(GenericNode, Generic[ExprT]):
-    func: NativeFunction
-    args: List[ExprT]
-
-    @root_validator(skip_on_failure=True)
-    def arity_check(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        if values["func"].arity != len(values["args"]):
-            raise ValueError(
-                "{} accepts {} arguments, {} where passed.".format(
-                    values["func"], values["func"].arity, len(values["args"])
-                )
-            )
-        return values
 
 @enum.unique
 class NativeFunction(StrEnum):
@@ -94,10 +81,25 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.TRUNC: 1,
 }
 
-
 class Expr(Node):
     location_type: common.LocationType
     pass
+
+
+class NativeFuncCall(Expr):
+    location_type: common.LocationType
+    func: NativeFunction
+    args: List[Expr]
+
+    @root_validator(skip_on_failure=True)
+    def arity_check(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
+        if values["func"].arity != len(values["args"]):
+            raise ValueError(
+                "{} accepts {} arguments, {} where passed.".format(
+                    values["func"], values["func"].arity, len(values["args"])
+                )
+            )
+        return values
 
 
 class Stmt(Node):

@@ -302,16 +302,22 @@ class GTScriptToGTIR(eve.NodeTranslator):
             #print(arg_types)
 
             # TODO(workshop): would be nice if we could use `method.applicable`
+            debug(node)
             if not all(issubclass(arg_type, numbers.Number) for arg_type in arg_types):
                 raise ValueError("Wrong Types")
 
             if len(node.args) != gtir.NativeFunction.IR_OP_TO_NUM_ARGS[node.func]:
                 raise ValueError()
 
-            
-            assert False
-            return gtir.NativeFuncCall(func=, args=)
-            
+
+            native_func_call = gtir.NativeFuncCall(
+                func=gtir.NativeFunction(node.func),
+                args=self.visit(node.args, location_stack=location_stack, symtable=symtable, **kwargs),
+                location_type=location_stack[-1][1]
+            )
+            debug(native_func_call)
+            return native_func_call
+
         elif node.func in built_in_functions.neighbor_reductions:
             arg_types = list(TypeInference.apply(symtable, arg) for arg in node.args)
             if any(method.applicable(arg_types) for method in getattr(built_in_functions, node.func).methods):
