@@ -134,10 +134,6 @@ class LocationComprehension(GTScriptASTNode):
     target: SymbolName
     iterable: Subscript
 
-    @property
-    def type_(self):
-        return Subscript(value=SymbolRef(name="LocalField"), indices=[self.iterable.value])
-
 
 class Generator(Expr, SymbolTableTrait):
     generators: List[LocationComprehension]

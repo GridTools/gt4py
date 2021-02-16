@@ -50,9 +50,9 @@ def copy2(field_in: Field[Vertex, dtype], field_out: Field[Vertex, dtype]):
         field_in[v] = field_out[v]
 
 
-def edge_reduction(v2e: V2E, edge_field: Field[Edge, dtype], vertex_field: Field[Vertex, dtype]):
+def edge_reduction(e2v: E2V, edge_field: Field[Edge, dtype], vertex_field: Field[Vertex, dtype]):
     with computation(FORWARD), interval(0, None), location(Edge) as e:
-        edge_field = 0.5 * sum(vertex_field[v] for v in v2e[e])
+        edge_field = 0.5 * sum(vertex_field[v] for v in e2v[e])
 
 def sparse_ex(
     e2v: E2V, edge_field: Field[Edge, dtype], sparse_field: SparseField[E2V, dtype]

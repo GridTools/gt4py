@@ -217,7 +217,14 @@ class TypeInference(eve.NodeVisitor):
         return type(node.value)
 
     def visit_LocationSpecification(self, node: LocationSpecification, *, symtable, **kwargs):
-        return ConstExprEvaluator.apply(symtable, node.location_type)
+        return Location[ConstExprEvaluator.apply(symtable, node.location_type)]
+
+    def visit_LocationComprehension(self, node: LocationComprehension, *, symtable, **kwargs):
+        connectivity = symtable[node.iterable.value.name].type_
+        index_type = self.visit(node.iterable.indices[0], symtable=symtable, **kwargs)
+        if index_type != Location[connectivity.primary_location()]:
+            raise ValueError(f"You are trying to access a connectivity posed on {connectivity.primary_location()} using a location of type {index_type}")
+        return Location[connectivity.secondary_location()]
 
     def visit_SubscriptCall(self, node: SubscriptCall, *, symtable, **kwargs):
         func = ConstExprEvaluator.apply(symtable, node.func)
@@ -361,6 +368,19 @@ class GTScriptToGTIR(eve.NodeTranslator):
             assert len(node.indices) in [1, 2]
             assert all(isinstance(index, SymbolRef) for index in node.indices)
             assert all(isinstance(symtable[index.name], LocationSpecification) or isinstance(symtable[index.name], LocationComprehension) for index in node.indices)
+
+            # check arguments for consistency
+            # TODO: lower IRs should check this too, currently without this check they just generate invalid code
+            if issubclass(value_decl.type_, SparseField) or issubclass(value_decl.type_, TemporarySparseField):
+                connectivity = value_decl.type_.args[0]
+                assert issubclass(connectivity, Connectivity)
+                expected_index_types = (Location[connectivity.primary_location()], Location[connectivity.secondary_location()])
+            elif issubclass(value_decl.type_, Field) or issubclass(value_decl.type_, TemporaryField):
+                expected_index_types = (Location[value_decl.type_.args[0]],)
+
+            index_types = tuple(TypeInference.apply(symtable, idx) for idx in node.indices)
+            assert index_types == expected_index_types
+
             # TODO(tehrengruber): just visit the index symbol
             return gtir.FieldAccess(
                 name=gtir.SymbolRef(node.value.name),
