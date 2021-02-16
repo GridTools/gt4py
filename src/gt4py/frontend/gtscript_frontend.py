@@ -17,13 +17,13 @@
 import ast
 import copy
 import enum
+import functools
 import inspect
 import itertools
 import numbers
 import textwrap
 import types
 from typing import List, Optional, Sequence, Union
-import functools
 
 import numpy as np
 
