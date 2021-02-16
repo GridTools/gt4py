@@ -24,54 +24,39 @@ from gtc.passes.oir_optimizations.caches import (
 )
 
 from ...oir_utils import (
-    AssignStmtBuilder,
-    FieldDeclBuilder,
-    HorizontalExecutionBuilder,
-    IJCacheBuilder,
-    KCacheBuilder,
-    StencilBuilder,
-    TemporaryBuilder,
-    VerticalLoopBuilder,
-    VerticalLoopSectionBuilder,
+    AssignStmtFactory,
+    HorizontalExecutionFactory,
+    IJCacheFactory,
+    KCacheFactory,
+    StencilFactory,
+    TemporaryFactory,
+    VerticalLoopFactory,
 )
 
 
 def test_ij_cache_detection():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_param(FieldDeclBuilder("baz").build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_section(
-                VerticalLoopSectionBuilder()
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("tmp1", "bar", (1, 0, 0)).build())
-                    .build()
-                )
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("tmp2", "tmp1", (0, 1, 0)).build())
-                    .build()
-                )
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("baz", "tmp2", (0, 0, 1)).build())
-                    .add_stmt(AssignStmtBuilder("tmp3", "baz").build())
-                    .add_stmt(AssignStmtBuilder("foo", "tmp3").build())
-                    .build()
-                )
-                .build()
-            )
-            .add_cache(IJCacheBuilder("tmp3").build())
-            .build()
-        )
-        .add_declaration(TemporaryBuilder(name="tmp1").build())
-        .add_declaration(TemporaryBuilder(name="tmp2").build())
-        .add_declaration(TemporaryBuilder(name="tmp3").build())
-        .build()
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="tmp1", right__offset__i=1)]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="tmp2", right__name="tmp1", right__offset__j=1)]
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="baz", right__name="tmp2", right__offset__k=1),
+                    AssignStmtFactory(left__name="tmp3", right__name="baz"),
+                    AssignStmtFactory(left__name="foo", right__name="tmp3"),
+                ]
+            ),
+        ],
+        vertical_loops__0__caches=[IJCacheFactory(name="tmp3")],
+        declarations=[
+            TemporaryFactory(name="tmp1"),
+            TemporaryFactory(name="tmp2"),
+            TemporaryFactory(name="tmp3"),
+        ],
     )
     transformed = IJCacheDetection().visit(testee)
     caches = transformed.vertical_loops[0].caches
@@ -81,22 +66,32 @@ def test_ij_cache_detection():
 
 
 def test_k_cache_detection_basic():
-    testee = (
-        VerticalLoopBuilder()
-        .loop_order(LoopOrder.FORWARD)
-        .add_section(
-            VerticalLoopSectionBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, 1)).build())
-                .add_stmt(AssignStmtBuilder("bar", "foo", (0, 0, -1)).build())
-                .add_stmt(AssignStmtBuilder("baz", "baz", (1, 0, 1)).build())
-                .add_stmt(AssignStmtBuilder("foo", "baz", (0, 1, -1)).build())
-                .build()
-            )
-            .build()
-        )
-        .build()
+    testee = VerticalLoopFactory(
+        loop_order=LoopOrder.FORWARD,
+        sections__0__horizontal_executions__0__body=[
+            AssignStmtFactory(
+                left__name="foo",
+                right__name="foo",
+                right__offset__k=1,
+            ),
+            AssignStmtFactory(
+                left__name="bar",
+                right__name="foo",
+                right__offset__k=-1,
+            ),
+            AssignStmtFactory(
+                left__name="baz",
+                right__name="baz",
+                right__offset__i=1,
+                right__offset__k=1,
+            ),
+            AssignStmtFactory(
+                left__name="foo",
+                right__name="baz",
+                right__offset__j=1,
+                right__offset__k=-1,
+            ),
+        ],
     )
     transformed = KCacheDetection().visit(testee)
     assert {c.name for c in transformed.caches} == {"foo"}
@@ -104,51 +99,37 @@ def test_k_cache_detection_basic():
 
 
 def test_k_cache_detection_single_access_point():
-    testee = (
-        VerticalLoopBuilder()
-        .loop_order(LoopOrder.FORWARD)
-        .add_section(
-            VerticalLoopSectionBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("foo", "bar").build())
-                .build()
-            )
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("bar", "baz", (0, 0, 1)).build())
-                .build()
-            )
-            .build()
-        )
-        .build()
+    testee = VerticalLoopFactory(
+        loop_order=LoopOrder.FORWARD,
+        sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="foo", right__name="bar")]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="bar", right__name="baz", right__offset__k=1)]
+            ),
+        ],
     )
     transformed = KCacheDetection().visit(testee)
     assert not transformed.caches
 
 
 def test_prune_k_cache_fills_forward():
-    testee = (
-        VerticalLoopBuilder()
-        .loop_order(LoopOrder.FORWARD)
-        .add_section(
-            VerticalLoopSectionBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, 1)).build())
-                .add_stmt(AssignStmtBuilder("bar", "bar", (0, 0, 0)).build())
-                .add_stmt(AssignStmtBuilder("baz", "baz", (0, 0, -1)).build())
-                .add_stmt(AssignStmtBuilder("barbaz", "bar").build())
-                .add_stmt(AssignStmtBuilder("barbaz", "barbaz", (0, 0, -1)).build())
-                .build()
-            )
-            .build()
-        )
-        .add_cache(KCacheBuilder("foo", fill=True).build())
-        .add_cache(KCacheBuilder("bar", fill=True).build())
-        .add_cache(KCacheBuilder("baz", fill=True).build())
-        .add_cache(KCacheBuilder("barbaz", fill=True).build())
-        .build()
+    testee = VerticalLoopFactory(
+        loop_order=LoopOrder.FORWARD,
+        sections__0__horizontal_executions__0__body=[
+            AssignStmtFactory(left__name="foo", right__name="foo", right__offset__k=1),
+            AssignStmtFactory(left__name="bar", right__name="bar"),
+            AssignStmtFactory(left__name="baz", right__name="baz", right__offset__k=-1),
+            AssignStmtFactory(left__name="barbaz", right__name="bar"),
+            AssignStmtFactory(left__name="barbaz", right__name="barbaz", right__offset__k=-1),
+        ],
+        caches=[
+            KCacheFactory(name="foo", fill=True),
+            KCacheFactory(name="bar", fill=True),
+            KCacheFactory(name="baz", fill=True),
+            KCacheFactory(name="barbaz", fill=True),
+        ],
     )
     transformed = PruneKCacheFills().visit(testee)
     cache_dict = {c.name: c for c in transformed.caches}
@@ -159,27 +140,21 @@ def test_prune_k_cache_fills_forward():
 
 
 def test_prune_k_cache_fills_backward():
-    testee = (
-        VerticalLoopBuilder()
-        .loop_order(LoopOrder.BACKWARD)
-        .add_section(
-            VerticalLoopSectionBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, -1)).build())
-                .add_stmt(AssignStmtBuilder("bar", "bar", (0, 0, 0)).build())
-                .add_stmt(AssignStmtBuilder("baz", "baz", (0, 0, 1)).build())
-                .add_stmt(AssignStmtBuilder("barbaz", "bar").build())
-                .add_stmt(AssignStmtBuilder("barbaz", "barbaz", (0, 0, 1)).build())
-                .build()
-            )
-            .build()
-        )
-        .add_cache(KCacheBuilder("foo", fill=True).build())
-        .add_cache(KCacheBuilder("bar", fill=True).build())
-        .add_cache(KCacheBuilder("baz", fill=True).build())
-        .add_cache(KCacheBuilder("barbaz", fill=True).build())
-        .build()
+    testee = VerticalLoopFactory(
+        loop_order=LoopOrder.BACKWARD,
+        sections__0__horizontal_executions__0__body=[
+            AssignStmtFactory(left__name="foo", right__name="foo", right__offset__k=-1),
+            AssignStmtFactory(left__name="bar", right__name="bar", right__offset__k=0),
+            AssignStmtFactory(left__name="baz", right__name="baz", right__offset__k=1),
+            AssignStmtFactory(left__name="barbaz", right__name="bar"),
+            AssignStmtFactory(left__name="barbaz", right__name="barbaz", right__offset__k=1),
+        ],
+        caches=[
+            KCacheFactory(name="foo", fill=True),
+            KCacheFactory(name="bar", fill=True),
+            KCacheFactory(name="baz", fill=True),
+            KCacheFactory(name="barbaz", fill=True),
+        ],
     )
     transformed = PruneKCacheFills().visit(testee)
     cache_dict = {c.name: c for c in transformed.caches}
@@ -190,51 +165,36 @@ def test_prune_k_cache_fills_backward():
 
 
 def test_prune_k_cache_flushes():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_param(FieldDeclBuilder("baz").build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .loop_order(LoopOrder.FORWARD)
-            .add_section(
-                VerticalLoopSectionBuilder()
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("foo", "foo", (0, 0, 1)).build())
-                    .add_stmt(AssignStmtBuilder("bar", "baz", (0, 0, 1)).build())
-                    .add_stmt(AssignStmtBuilder("tmp1", "tmp1", (0, 0, 1)).build())
-                    .add_stmt(AssignStmtBuilder("tmp2", "tmp2", (0, 0, 1)).build())
-                    .build()
-                )
-                .build()
-            )
-            .add_cache(KCacheBuilder("foo", flush=True).build())
-            .add_cache(KCacheBuilder("bar", flush=True).build())
-            .add_cache(KCacheBuilder("baz", flush=True).build())
-            .add_cache(KCacheBuilder("tmp1", flush=True).build())
-            .add_cache(KCacheBuilder("tmp2", flush=True).build())
-            .build()
-        )
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .loop_order(LoopOrder.FORWARD)
-            .add_section(
-                VerticalLoopSectionBuilder()
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("bar", "bar", (0, 0, 1)).build())
-                    .add_stmt(AssignStmtBuilder("tmp1", "tmp1", (0, 0, 1)).build())
-                    .build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .add_declaration(TemporaryBuilder("tmp1").build())
-        .add_declaration(TemporaryBuilder("tmp2").build())
-        .build()
+    testee = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                loop_order=LoopOrder.FORWARD,
+                sections__0__horizontal_executions__0__body=[
+                    AssignStmtFactory(left__name="foo", right__name="foo", right__offset__k=1),
+                    AssignStmtFactory(left__name="bar", right__name="baz", right__offset__k=1),
+                    AssignStmtFactory(left__name="tmp1", right__name="tmp1", right__offset__k=1),
+                    AssignStmtFactory(left__name="tmp2", right__name="tmp2", right__offset__k=1),
+                ],
+                caches=[
+                    KCacheFactory(name="foo", flush=True),
+                    KCacheFactory(name="bar", flush=True),
+                    KCacheFactory(name="baz", flush=True),
+                    KCacheFactory(name="tmp1", flush=True),
+                    KCacheFactory(name="tmp2", flush=True),
+                ],
+            ),
+            VerticalLoopFactory(
+                loop_order=LoopOrder.FORWARD,
+                sections__0__horizontal_executions__0__body=[
+                    AssignStmtFactory(left__name="bar", right__name="bar", right__offset__k=1),
+                    AssignStmtFactory(left__name="tmp1", right__name="tmp1", right__offset__k=1),
+                ],
+            ),
+        ],
+        declarations=[
+            TemporaryFactory(name="tmp1"),
+            TemporaryFactory(name="tmp2"),
+        ],
     )
     transformed = PruneKCacheFlushes().visit(testee)
     cache_dict = {c.name: c for c in transformed.vertical_loops[0].caches}

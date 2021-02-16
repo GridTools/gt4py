@@ -14,39 +14,35 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc import oir
-from gtc.common import DataType
+from gtc import common, oir
 from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
 
 from ...oir_utils import (
-    AssignStmtBuilder,
-    CartesianOffsetBuilder,
-    FieldAccessBuilder,
-    FieldDeclBuilder,
-    HorizontalExecutionBuilder,
-    StencilBuilder,
-    TemporaryBuilder,
-    VerticalLoopBuilder,
-    VerticalLoopSectionBuilder,
+    AssignStmtFactory,
+    FieldAccessFactory,
+    HorizontalExecutionFactory,
+    StencilFactory,
+    TemporaryFactory,
+    VerticalLoopSectionFactory,
 )
 
 
 def test_zero_extent_merging():
-    testee = (
-        VerticalLoopSectionBuilder()
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("baz", "bar").build()).build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "foo").build()).build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "baz").build()).build()
-        )
-        .build()
+    testee = VerticalLoopSectionFactory(
+        horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="foo", right__name="bar")]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="baz", right__name="bar")]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="foo", right__name="foo")]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="foo", right__name="baz")],
+            ),
+        ]
     )
     transformed = GreedyMerging().visit(testee)
     assert len(transformed.horizontal_executions) == 1
@@ -56,26 +52,14 @@ def test_zero_extent_merging():
 
 
 def test_mixed_merging():
-    testee = (
-        VerticalLoopSectionBuilder()
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(
-                AssignStmtBuilder("baz")
-                .right(
-                    FieldAccessBuilder("foo").offset(CartesianOffsetBuilder(i=1).build()).build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("bar", "baz").build()).build()
-        )
-        .build()
+    testee = VerticalLoopSectionFactory(
+        horizontal_executions=[
+            HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="foo")]),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="bar", right__name="foo", right__offset__i=1)]
+            ),
+            HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="bar")]),
+        ]
     )
     transformed = GreedyMerging().visit(testee)
     assert len(transformed.horizontal_executions) == 2
@@ -86,40 +70,26 @@ def test_mixed_merging():
 
 
 def test_write_after_read_with_offset():
-    testee = (
-        VerticalLoopSectionBuilder()
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(AssignStmtBuilder("foo", "bar", (1, 0, 0)).build())
-            .build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("bar", "baz").build()).build()
-        )
-        .build()
+    testee = VerticalLoopSectionFactory(
+        horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(right__name="foo", right__offset__i=1)]
+            ),
+            HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="foo")]),
+        ]
     )
     transformed = GreedyMerging().visit(testee)
     assert transformed == testee
 
 
 def test_nonzero_extent_merging():
-    testee = (
-        VerticalLoopSectionBuilder()
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(
-                AssignStmtBuilder("baz")
-                .right(
-                    FieldAccessBuilder("bar").offset(CartesianOffsetBuilder(i=1).build()).build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .build()
+    testee = VerticalLoopSectionFactory(
+        horizontal_executions=[
+            HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="foo")]),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(right__name="foo", right__offset__j=1)]
+            ),
+        ]
     )
     transformed = GreedyMerging().visit(testee)
     assert len(transformed.horizontal_executions) == 1
@@ -129,30 +99,12 @@ def test_nonzero_extent_merging():
 
 
 def test_on_the_fly_merging_basic():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_section(
-                VerticalLoopSectionBuilder()
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-                    .build()
-                )
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("bar", "tmp").build())
-                    .build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .add_declaration(TemporaryBuilder("tmp").build())
-        .build()
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="tmp")]),
+            HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="tmp")]),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
     )
     transformed = OnTheFlyMerging().visit(testee)
     hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
@@ -163,32 +115,19 @@ def test_on_the_fly_merging_basic():
 
 
 def test_on_the_fly_merging_with_offsets():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_param(FieldDeclBuilder("baz").build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_section(
-                VerticalLoopSectionBuilder()
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-                    .build()
-                )
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("bar", "tmp", (1, 0, 0)).build())
-                    .add_stmt(AssignStmtBuilder("baz", "tmp", (0, 1, 0)).build())
-                    .build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .add_declaration(TemporaryBuilder("tmp").build())
-        .build()
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="tmp", right__name="foo")]
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(right__name="tmp", right__offset__i=1),
+                    AssignStmtFactory(right__name="tmp", right__offset__j=1),
+                ]
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
     )
     transformed = OnTheFlyMerging().visit(testee)
     hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
@@ -202,33 +141,17 @@ def test_on_the_fly_merging_with_offsets():
 
 
 def test_on_the_fly_merging_with_mask():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_param(FieldDeclBuilder("baz").build())
-        .add_param(FieldDeclBuilder("mask", dtype=DataType.BOOL).build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_section(
-                VerticalLoopSectionBuilder()
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-                    .mask(FieldAccessBuilder("mask").dtype(DataType.BOOL).build())
-                    .build()
-                )
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("bar", "tmp").build())
-                    .build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .add_declaration(TemporaryBuilder("tmp").build())
-        .build()
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="tmp")],
+                mask=FieldAccessFactory(name="mask", dtype=common.DataType.BOOL),
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(right__name="tmp")],
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
     )
     transformed = OnTheFlyMerging().visit(testee)
     assert len(transformed.vertical_loops[0].sections[0].horizontal_executions) == 2

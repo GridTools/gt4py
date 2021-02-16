@@ -18,46 +18,33 @@ from gtc.common import DataType
 from gtc.passes.oir_optimizations.utils import Access, AccessCollector
 
 from ...oir_utils import (
-    AssignStmtBuilder,
-    FieldAccessBuilder,
-    FieldDeclBuilder,
-    HorizontalExecutionBuilder,
-    StencilBuilder,
-    TemporaryBuilder,
-    VerticalLoopBuilder,
-    VerticalLoopSectionBuilder,
+    AssignStmtFactory,
+    FieldAccessFactory,
+    HorizontalExecutionFactory,
+    StencilFactory,
+    TemporaryFactory,
 )
 
 
 def test_access_collector():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_param(FieldDeclBuilder("baz").build())
-        .add_param(FieldDeclBuilder("mask", dtype=DataType.BOOL).build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_section(
-                VerticalLoopSectionBuilder()
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("tmp", "foo", (1, 0, 0)).build())
-                    .add_stmt(AssignStmtBuilder("bar", "tmp").build())
-                    .build()
-                )
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .mask(FieldAccessBuilder("mask", (-1, -1, 1)).dtype(DataType.BOOL).build())
-                    .add_stmt(AssignStmtBuilder("baz", "tmp", (0, 1, 0)).build())
-                    .build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .add_declaration(TemporaryBuilder(name="tmp").build())
-        .build()
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="tmp", right__name="foo", right__offset__i=1),
+                    AssignStmtFactory(left__name="bar", right__name="tmp"),
+                ]
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="baz", right__name="tmp", right__offset__j=1),
+                ],
+                mask=FieldAccessFactory(
+                    name="mask", dtype=DataType.BOOL, offset__i=-1, offset__j=-1, offset__k=1
+                ),
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
     )
     read_offsets = {"tmp": {(0, 0, 0), (0, 1, 0)}, "foo": {(1, 0, 0)}, "mask": {(-1, -1, 1)}}
     write_offsets = {"tmp": {(0, 0, 0)}, "bar": {(0, 0, 0)}, "baz": {(0, 0, 0)}}

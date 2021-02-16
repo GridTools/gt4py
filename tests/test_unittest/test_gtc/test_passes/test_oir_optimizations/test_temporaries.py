@@ -21,37 +21,20 @@ from gtc.passes.oir_optimizations.temporaries import (
 )
 
 from ...oir_utils import (
-    AssignStmtBuilder,
-    FieldDeclBuilder,
-    HorizontalExecutionBuilder,
-    StencilBuilder,
-    TemporaryBuilder,
-    VerticalLoopBuilder,
-    VerticalLoopSectionBuilder,
+    AssignStmtFactory,
+    HorizontalExecutionFactory,
+    StencilFactory,
+    TemporaryFactory,
 )
 
 
 def test_local_temporaries_to_scalars_basic():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_section(
-                VerticalLoopSectionBuilder()
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-                    .add_stmt(AssignStmtBuilder("bar", "tmp").build())
-                    .build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .add_declaration(TemporaryBuilder(name="tmp").build())
-        .build()
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions__0__body=[
+            AssignStmtFactory(left__name="tmp"),
+            AssignStmtFactory(right__name="tmp"),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
     )
     transformed = LocalTemporariesToScalars().visit(testee)
     hexec = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
@@ -62,32 +45,17 @@ def test_local_temporaries_to_scalars_basic():
 
 
 def test_local_temporaries_to_scalars_multiexec():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_param(FieldDeclBuilder("baz").build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_section(
-                VerticalLoopSectionBuilder()
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-                    .add_stmt(AssignStmtBuilder("bar", "tmp").build())
-                    .build()
-                )
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("baz", "tmp").build())
-                    .build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .add_declaration(TemporaryBuilder(name="tmp").build())
-        .build()
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="tmp"),
+                    AssignStmtFactory(right__name="tmp"),
+                ]
+            ),
+            HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="tmp")]),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
     )
     transformed = LocalTemporariesToScalars().visit(testee)
     assert "tmp" in {d.name for d in transformed.declarations}
@@ -95,36 +63,28 @@ def test_local_temporaries_to_scalars_multiexec():
 
 
 def test_write_before_read_temporaries_to_scalars():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_section(
-                VerticalLoopSectionBuilder()
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("tmp1", "foo").build())
-                    .add_stmt(AssignStmtBuilder("tmp2", "tmp1").build())
-                    .add_stmt(AssignStmtBuilder("tmp3", "tmp2").build())
-                    .build()
-                )
-                .add_horizontal_execution(
-                    HorizontalExecutionBuilder()
-                    .add_stmt(AssignStmtBuilder("bar", "tmp2").build())
-                    .add_stmt(AssignStmtBuilder("tmp3", "bar").build())
-                    .add_stmt(AssignStmtBuilder("foo", "tmp3").build())
-                    .build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .add_declaration(TemporaryBuilder(name="tmp1").build())
-        .add_declaration(TemporaryBuilder(name="tmp2").build())
-        .add_declaration(TemporaryBuilder(name="tmp3").build())
-        .build()
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="tmp1"),
+                    AssignStmtFactory(left__name="tmp2", right__name="tmp1"),
+                    AssignStmtFactory(left__name="tmp3", right__name="tmp2"),
+                ]
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(right__name="tmp2"),
+                    AssignStmtFactory(left__name="tmp3"),
+                    AssignStmtFactory(left__name="foo", right__name="tmp3"),
+                ]
+            ),
+        ],
+        declarations=[
+            TemporaryFactory(name="tmp1"),
+            TemporaryFactory(name="tmp2"),
+            TemporaryFactory(name="tmp3"),
+        ],
     )
     transformed = WriteBeforeReadTemporariesToScalars().visit(testee)
     hexec0 = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
