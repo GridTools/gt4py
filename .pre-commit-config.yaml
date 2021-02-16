@@ -19,15 +19,15 @@ repos:
   #   args: [--remove]
 #  - id: pretty-format-json
 
-# - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-#   rev: v2.0.0
-#   hooks:
-#   - id: pretty-format-ini
-#     args: [--autofix]
-#   - id: pretty-format-toml
-#     args: [--autofix]
-#   - id: pretty-format-yaml
-#     args: [--autofix, --preserve-quotes, --indent, '2']
+- repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+  rev: v2.0.0
+  hooks:
+  - id: pretty-format-ini
+    args: [--autofix]
+  - id: pretty-format-toml
+    args: [--autofix]
+  - id: pretty-format-yaml
+    args: [--autofix, --preserve-quotes, --indent, '2']
 
 # - repo: https://github.com/Lucas-C/pre-commit-hooks
 #   rev: v1.1.9
