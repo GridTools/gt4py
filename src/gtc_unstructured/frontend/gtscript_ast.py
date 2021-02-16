@@ -113,6 +113,13 @@ class Call(Expr):
     func: str
 
 
+class SubscriptCall(Expr):
+    args: List[Expr]
+    func: Subscript
+
+class List_(Expr):
+    elts: List[Expr]
+
 # TODO(tehrengruber): can be enabled as soon as eve_toolchain#58 lands
 # class Call(Generic[T]):
 #    name: str
@@ -184,6 +191,11 @@ class TemporaryFieldDecl(GTScriptASTNode):
     type_: BuiltInTypeMeta
 
 
+class TemporarySparseFieldDecl(GTScriptASTNode):
+    name: SymbolName
+    type_: BuiltInTypeMeta
+
+
 class TemporaryFieldDeclExtractor(eve.NodeVisitor):
     primary_location: Union[None, LocationSpecification]
     temporary_fields: List[TemporaryFieldDecl]
@@ -212,12 +224,22 @@ class TemporaryFieldDeclExtractor(eve.NodeVisitor):
         assert isinstance(target, SymbolRef)
 
         if target.name not in symtable:
+            from numbers import Number
+            from .gtscript_to_gtir import ConstExprEvaluator, TypeInference
+            value_type = TypeInference.apply(symtable, node.value)
+
             assert self.primary_location is not None
-            # todo: infer type of assignment
-            from .gtscript_to_gtir import ConstExprEvaluator
-            args = (self.primary_location.location_type, SymbolRef(name="dtype"))
-            args = tuple(ConstExprEvaluator.apply(symtable, arg) for arg in args)
-            self.temporary_fields.append(TemporaryFieldDecl(name=SymbolName(target.name), type_=built_in_types.TemporaryField[args]))
+            if issubclass(value_type, built_in_types.LocalField):
+                args = (value_type.args[0], ConstExprEvaluator.apply(symtable, SymbolRef(name="dtype")))
+                self.temporary_fields.append(
+                    TemporarySparseFieldDecl(name=SymbolName(target.name), type_=built_in_types.TemporarySparseField[args]))
+            else: # TODO(tehrengruber): issubclass(value_type, Number)
+                args = (self.primary_location.location_type, SymbolRef(name="dtype"))
+                args = tuple(ConstExprEvaluator.apply(symtable, arg) for arg in args)
+                self.temporary_fields.append(
+                    TemporaryFieldDecl(name=SymbolName(target.name), type_=built_in_types.TemporaryField[args]))
+
+            #raise ValueError()
 
     def visit_Stencil(self, node: Stencil, **kwargs):
         self.primary_location = None
@@ -242,13 +264,25 @@ class Computation(GTScriptASTNode, SymbolTableTrait):
     #    return TypePropagator.apply(values["symtable_"], values)
 
     @pydantic.root_validator(skip_on_failure=True)
+    def _1implicit_connectivity_type_decls(  # type: ignore  # validators are classmethods
+            cls: Type["Computation"], values: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        # TODO(tehrengruber): hacky
+        for arg in values["arguments"]:
+            if issubclass(arg.type_, built_in_types.Connectivity):
+                values["externals"].append(External(name=arg.type_.class_name, value=arg.type_))
+        values["symtable_"] = cls._collect_symbols(values)
+        return values
+
+    @pydantic.root_validator(skip_on_failure=True)
     def _extract_temporary_fields(  # type: ignore  # validators are classmethods
             cls: Type["Computation"], values: Dict[str, Any]
     ) -> Dict[str, Any]:
-        values["declarations"] = TemporaryFieldDeclExtractor.apply(values["symtable_"], values["stencils"])
+        values["declarations"] = values["declarations"] + TemporaryFieldDeclExtractor.apply(values["symtable_"], values["stencils"])
         #  TODO(tehrengruber): use SymbolTableTrait.collect_symbols with new dataclasses
         values["symtable_"] = cls._collect_symbols(values)
         return values
+
 
     # TODO: fix. currently fails as the symbol table is not built up when the stencils field is visited
     #_validate_symbol_refs = stable_gtc_common.validate_symbol_refs()

@@ -23,8 +23,8 @@ import gtc_unstructured.irs.common as common
 import gtc_unstructured.irs.gtir as gtir
 
 from . import built_in_functions
-from .built_in_types import BuiltInTypeMeta
-from .gtscript import Field, Local, Location, Connectivity, TemporaryField, SparseField
+from .built_in_types import BuiltInTypeMeta, BuiltInType
+from .gtscript import Field, Location, Connectivity, TemporaryField, SparseField, TemporarySparseField
 from .gtscript_ast import (
     Argument,
     Assign,
@@ -40,10 +40,12 @@ from .gtscript_ast import (
     Pass,
     Stencil,
     Subscript,
+    SubscriptCall,
     SymbolRef,
     SymbolName,
     External,
-    TemporaryFieldDecl
+    TemporaryFieldDecl,
+    TemporarySparseFieldDecl
 )
 
 
@@ -167,6 +169,8 @@ class ConstExprEvaluator(eve.NodeVisitor):
         raise ValueError("Evaluation failed")
 
     def visit_SymbolRef(self, node: SymbolRef, *, symtable, **kwargs):
+        if not node.name in symtable:
+            bla=1+1
         return self.visit(symtable[node.name])
 
     def visit_External(self, node: External, **kwargs):
@@ -189,8 +193,19 @@ class TypeInference(eve.NodeVisitor):
     def visit_Node(self, node, *, symtable, **kwargs):
         raise ValueError(f"Type of node {node} not defined.")
 
+    def visit_Argument(self, node: Argument, **kwargs):
+        return node.type_
+
+    def visit_TemporaryFieldDecl(self, node: TemporaryFieldDecl, **kwargs):
+        return node.type_
+
+    def visit_TemporarySparseFieldDecl(self, node: TemporarySparseFieldDecl, **kwargs):
+        return node.type_
+
     def visit_Call(self, node: Call, **kwargs):
-        return built_in_functions[node.func].return_type(*self.visit(node.args))
+        # todo: enhance
+        return common.DataType.FLOAT64
+        #return built_in_functions[node.func].return_type(*self.visit(node.args))
 
     def visit_Constant(self, node: Constant, **kwargs):
         return type(node.value)
@@ -203,6 +218,23 @@ class TypeInference(eve.NodeVisitor):
 
     def visit_LocationSpecification(self, node: LocationSpecification, *, symtable, **kwargs):
         return ConstExprEvaluator.apply(symtable, node.location_type)
+
+    def visit_SubscriptCall(self, node: SubscriptCall, *, symtable, **kwargs):
+        func = ConstExprEvaluator.apply(symtable, node.func)
+        if issubclass(func, BuiltInType):
+            return func
+        raise ValueError(f"Type of node {node} not defined.")
+
+    def visit_BinaryOp(self, node: BinaryOp, **kwargs):
+        # todo: enhance
+        return common.DataType.FLOAT64
+
+    def visit_Subscript(self, node: Subscript, *, symtable, **kwargs):
+        # todo: enhance
+        if all(isinstance(symtable[idx.name], LocationSpecification) or isinstance(symtable[idx], LocationComprehension) for idx in node.indices):
+            # todo: use Number
+            return common.DataType.FLOAT64
+        raise ValueError(f"Type of node {node} not defined.")
 
     def visit_Generator(self, node: LocationComprehension, *, symtable, **kwargs):
         connectivity = symtable[node.generators[0].iterable.value.name].type_.base_connectivity()
@@ -283,6 +315,17 @@ class GTScriptToGTIR(eve.NodeTranslator):
 
         raise ValueError()
 
+    def visit_SubscriptCall(self, node: SubscriptCall, symtable, location_stack, inside_sparse_assign, **kwargs):
+        assert inside_sparse_assign
+        func = ConstExprEvaluator.apply(symtable, node.func)
+
+        return gtir.NeighborVectorAccess(
+            exprs=self.visit(node.args[0].elts, **{**kwargs, "symtable": symtable, "location_stack": location_stack}),
+            location_ref=gtir.LocationRef(name=location_stack[-1][0]),
+            location_type=location_stack[0][1],  # wrong
+        )
+
+
     def visit_Constant(self, node: Constant, *, location_stack, **kwargs):
         py_dtype_to_gtir = {  # TODO(tehrengruber): check
             int: common.DataType.INT32,
@@ -311,7 +354,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
 
         raise ValueError()
 
-    def visit_Subscript(self, node: Subscript, *, symtable, location_stack):
+    def visit_Subscript(self, node: Subscript, *, symtable, location_stack, **kwargs):
         value_decl = symtable[node.value.name]
         if isinstance(value_decl, Argument) or isinstance(value_decl, TemporaryFieldDecl) and (
                 issubclass(value_decl.type_, Field) or issubclass(value_decl.type_, TemporaryField) or issubclass(value_decl.type_, SparseField)):
@@ -330,11 +373,22 @@ class GTScriptToGTIR(eve.NodeTranslator):
         raise ValueError()
 
     def visit_Assign(self, node: Assign, *, symtable, location_stack, **kwargs) -> gtir.AssignStmt:
-        return gtir.AssignStmt(
-            left=self.visit(node.target, **{"symtable": symtable, "location_stack": location_stack, **kwargs}),
-            right=self.visit(node.value, **{"symtable": symtable, "location_stack": location_stack, **kwargs}),
-            location_type=location_stack[-1][1],
-        )
+        right_type = TypeInference.apply(symtable, node.value)
+        sparse_assign = issubclass(right_type, LocalField)
+        if sparse_assign:
+            raise NotImplementedError()
+            return gtir.NeighborAssignStmt(
+                left=self.visit(node.target, **{"symtable": symtable, "location_stack": location_stack, **kwargs}),
+                right=self.visit(node.value, **{"symtable": symtable, "location_stack": location_stack,
+                                                "inside_sparse_assign": sparse_assign, **kwargs}),
+                location_type=location_stack[-1][1],
+            )
+        else:
+            return gtir.AssignStmt(
+                left=self.visit(node.target, **{"symtable": symtable, "location_stack": location_stack, **kwargs}),
+                right=self.visit(node.value, **{"symtable": symtable, "location_stack": location_stack, "inside_sparse_assign": sparse_assign, **kwargs}),
+                location_type=location_stack[-1][1],
+            )
 
     def visit_BinaryOp(self, node: BinaryOp, *, symtable, location_stack, **kwargs):
         return gtir.BinaryOp(
@@ -402,7 +456,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
                 connectivity_args.append(gtir.Connectivity(name=arg.name, primary=base_connectivty.primary_location(),
                                          secondary=base_connectivty.secondary_location(), max_neighbors=base_connectivty.max_neighbors(),
                                          has_skip_values=base_connectivty.has_skip_values()))
-            elif issubclass(arg.type_, SparseField):
+            elif issubclass(arg.type_, SparseField) or issubclass(arg.type_, TemporarySparseField):
                 connectivity = arg.type_.args[0]
                 assert issubclass(connectivity, Connectivity)
                 # gtir expects the name of the connectivity instead of its type, hence search for the name
@@ -415,7 +469,12 @@ class GTScriptToGTIR(eve.NodeTranslator):
                 # TODO(tehrengruber): check dims argument with hannes
                 dims = gtir.Dimensions(horizontal=gtir.HorizontalDimension(primary=connectivity.base_connectivity().primary_location()))
 
-                field_args.append(gtir.SparseField(name=arg.name, connectivity=gtir.SymbolRef(connectivity_name), vtype=arg.type_.args[1], dimensions=dims))
+                if issubclass(arg.type_, SparseField):
+                    field_args.append(gtir.SparseField(name=arg.name, connectivity=gtir.SymbolRef(connectivity_name), vtype=arg.type_.args[1], dimensions=dims))
+                elif issubclass(arg.type_, TemporarySparseField):
+                    temporary_fields.append(gtir.TemporarySparseField(name=arg.name, connectivity=gtir.SymbolRef(connectivity_name), vtype=arg.type_.args[1], dimensions=dims))
+
+
 
         return gtir.Computation(
             name=node.name,

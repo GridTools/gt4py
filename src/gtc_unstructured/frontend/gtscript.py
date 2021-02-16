@@ -18,7 +18,7 @@ from typing import Callable
 
 import gtc_unstructured.irs.common as common
 
-from .built_in_types import Field, Local, Location, Connectivity, TemporaryField, SparseField
+from .built_in_types import Field, LocalField, Location, Connectivity, TemporaryField, SparseField, TemporarySparseField
 
 
 # built-in symbols
@@ -41,10 +41,10 @@ _built_in_functions = [
 __all__ = _built_in_functions + [
     "Field",
     "SparseField",
-    "Local",
-    "Location",
+    "LocalField",
     "Connectivity",
     "TemporaryField",
+    "TemporarySparseField",
     "Vertex",
     "Edge",
     "Cell",

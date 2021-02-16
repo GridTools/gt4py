@@ -160,6 +160,10 @@ class PyToGTScript:
 
         Call = ast.Call(args=Capture("args"), func=ast.Name(id=Capture("func")))
 
+        SubscriptCall = ast.Call(args=Capture("args"), func=Capture("func", expected_type=ast.Subscript))
+
+        List_ = ast.List(elts=Capture("elts"))
+
         LocationComprehension = ast.comprehension(
             target=Capture("target"), iter=Capture("iterable")
         )
