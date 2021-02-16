@@ -63,10 +63,6 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
-        "requires_cudatoolkit: mark tests that require compilation of CUDA stencils (assume cupy is installed)",
-    )
-    config.addinivalue_line(
-        "markers",
         "requires_gpu: mark tests that require a Nvidia GPU (assume cupy and cudatoolkit are installed)",
     )
     hyp.settings.load_profile("slow")
