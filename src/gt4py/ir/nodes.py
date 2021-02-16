@@ -218,6 +218,15 @@ class Axis(Node):
     name = attribute(of=str)
 
 
+@enum.unique
+class LevelMarker(enum.Enum):
+    START = 0
+    END = -1
+
+    def __str__(self):
+        return self.name
+
+
 @attribclass
 class Domain(Node):
     parallel_axes = attribute(of=ListOf[Axis])
@@ -413,6 +422,15 @@ class Cast(Expr):
 @attribclass
 class AxisIndex(Expr):
     axis = attribute(of=str)
+    data_type = attribute(of=DataType, default=DataType.INT32)
+
+
+@attribclass
+class AxisOffset(Expr):
+    axis = attribute(of=str)
+    endpt = attribute(of=LevelMarker)
+    offset = attribute(of=int)
+    data_type = attribute(of=DataType, default=DataType.INT32)
 
 
 @enum.unique
@@ -658,15 +676,6 @@ class If(Statement):
 
 # ---- IR: computations ----
 @enum.unique
-class LevelMarker(enum.Enum):
-    START = 0
-    END = -1
-
-    def __str__(self):
-        return self.name
-
-
-@enum.unique
 class IterationOrder(enum.Enum):
     BACKWARD = -1
     PARALLEL = 0
@@ -692,7 +701,7 @@ class IterationOrder(enum.Enum):
 
 
 @attribclass
-class AxisBound(Expr):
+class AxisBound(Node):
     level = attribute(of=UnionOf[LevelMarker, VarRef])
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)

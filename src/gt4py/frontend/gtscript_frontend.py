@@ -1263,7 +1263,10 @@ class IRMaker(ast.NodeVisitor):
         self, interval: List[gt_ir.AxisInterval], axis_name: str, loc: gt_ir.Location = None
     ) -> gt_ir.BinOpExpr:
 
-        bounds = (interval.start, interval.end)
+        bounds = tuple(
+            gt_ir.AxisOffset(axis=axis_name, endpt=bound.level, offset=bound.offset)
+            for bound in (interval.start, interval.end)
+        )
         ops = (gt_ir.BinaryOperator.GE, gt_ir.BinaryOperator.LT)
 
         conditionals = [
