@@ -381,11 +381,6 @@ class BuiltinLiteral(Literal):
     loc = attribute(of=Location, optional=True)
 
 
-@attribclass
-class AxisIndex(Expr):
-    axis = attribute(of=str)
-
-
 class Ref(Expr):
     pass
 
@@ -413,6 +408,11 @@ class Cast(Expr):
     data_type = attribute(of=DataType)
     expr = attribute(of=Expr)
     loc = attribute(of=Location, optional=True)
+
+
+@attribclass
+class AxisIndex(Expr):
+    axis = attribute(of=str)
 
 
 @enum.unique
