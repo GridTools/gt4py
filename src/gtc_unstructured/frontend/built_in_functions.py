@@ -33,13 +33,20 @@ def declare_built_in_function(name, sig):
         globals()[name] = BuiltInFunction(name)
         __all__.append(name)
 
-    globals()[name].methods.append(Method(name, sig))
+    method = Method(name, sig)
+    globals()[name].methods.append(method)
+    return method
 
 neighbor_reductions = ["sum", "product", "min", "max"]  # list of methods for reductions on neighbors
 for reduction_function in neighbor_reductions:
     declare_built_in_function(reduction_function, ((LocalField,), Number))
 
-native_reductions = ["min", "max"]  # list of methods for native reductions
-for reduction_function in native_reductions:
-    # todo(tehrengruber): varargs
-    declare_built_in_function(reduction_function, ((Number, Number), Number))
+# TODO(workshop): add other native functions, log etc
+
+native_functions = {
+    "max": declare_built_in_function("max", ((Number, Number), Number)),
+    "min": declare_built_in_function("min", ((Number, Number), Number)),
+    "mod": declare_built_in_function("mod", ((Number, Number), Number)),
+    "sqrt": declare_built_in_function("sqrt", ((Number), Number)),
+}
+# todo(tehrengruber): varargs

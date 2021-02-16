@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import copy
 from typing import Any, Dict, List, Union, cast
+import numbers
 
 from devtools import debug
 
@@ -291,7 +292,27 @@ class GTScriptToGTIR(eve.NodeTranslator):
     def visit_Call(self, node: Call, *, location_stack, symtable, **kwargs):
         # TODO(tehrengruber): all of this can be done with the symbol table and the call inliner
         # reductions
-        if node.func in built_in_functions.neighbor_reductions:
+
+        # TODO(workshop): Add built-in functions (`sqrt`, etc)
+        # TODO(workshop): Distinguish between `max(1, 2)` vs `max(a[e] for e in v2e[v])` & similar
+        if node.func in built_in_functions.native_functions:
+            method = built_in_functions.native_functions[node.func]
+            arg_types = list(TypeInference.apply(symtable, arg) for arg in node.args)
+            #debug(arg_types)
+            #print(arg_types)
+
+            # TODO(workshop): would be nice if we could use `method.applicable`
+            if not all(issubclass(arg_type, numbers.Number) for arg_type in arg_types):
+                raise ValueError("Wrong Types")
+
+            if len(node.args) != gtir.NativeFunction.IR_OP_TO_NUM_ARGS[node.func]:
+                raise ValueError()
+
+            
+            assert False
+            return gtir.NativeFuncCall(func=, args=)
+            
+        elif node.func in built_in_functions.neighbor_reductions:
             arg_types = list(TypeInference.apply(symtable, arg) for arg in node.args)
             if any(method.applicable(arg_types) for method in getattr(built_in_functions, node.func).methods):
                 if not len(node.args):
