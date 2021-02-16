@@ -284,7 +284,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
             ${ ''.join(kernels) }
 
 
-            inline constexpr auto ${name} = [](domain d
+            auto ${name} = [](domain d
                 %if connectivity_params:
                 , ${','.join(connectivity_params)}
                 %endif
