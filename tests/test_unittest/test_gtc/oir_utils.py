@@ -73,14 +73,21 @@ class IntervalFactory(factory.Factory):
     end = common.AxisBound.end()
 
 
+class VerticalLoopSectionFactory(factory.Factory):
+    class Meta:
+        model = oir.VerticalLoopSection
+
+    interval = factory.SubFactory(IntervalFactory)
+    horizontal_executions = factory.List([factory.SubFactory(HorizontalExecutionFactory)])
+
+
 class VerticalLoopFactory(factory.Factory):
     class Meta:
         model = oir.VerticalLoop
 
-    interval = factory.SubFactory(IntervalFactory)
-    horizontal_executions = factory.List([factory.SubFactory(HorizontalExecutionFactory)])
     loop_order = common.LoopOrder.PARALLEL
-    declarations: List[oir.Temporary] = []
+    sections = factory.List([factory.SubFactory(VerticalLoopSectionFactory)])
+    caches: List[oir.CacheDesc] = []
 
 
 class StencilFactory(factory.Factory):
@@ -89,4 +96,5 @@ class StencilFactory(factory.Factory):
 
     name = identifier(oir.Stencil)
     vertical_loops = factory.List([factory.SubFactory(VerticalLoopFactory)])
+    declarations: List[oir.Temporary] = []
     params = undefined_symbol_list(lambda name: FieldDeclFactory(name=name), "vertical_loops")

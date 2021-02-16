@@ -16,11 +16,11 @@
 
 from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 
-from ...oir_utils import AssignStmtFactory, HorizontalExecutionFactory, VerticalLoopFactory
+from ...oir_utils import AssignStmtFactory, HorizontalExecutionFactory, VerticalLoopSectionFactory
 
 
 def test_zero_extent_merging():
-    testee = VerticalLoopFactory(
+    testee = VerticalLoopSectionFactory(
         horizontal_executions=[
             HorizontalExecutionFactory(
                 body=[AssignStmtFactory(left__name="foo", right__name="bar")]
@@ -44,7 +44,7 @@ def test_zero_extent_merging():
 
 
 def test_mixed_merging():
-    testee = VerticalLoopFactory(
+    testee = VerticalLoopSectionFactory(
         horizontal_executions=[
             HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="foo")]),
             HorizontalExecutionFactory(
@@ -62,7 +62,7 @@ def test_mixed_merging():
 
 
 def test_write_after_read_with_offset():
-    testee = VerticalLoopFactory(
+    testee = VerticalLoopSectionFactory(
         horizontal_executions=[
             HorizontalExecutionFactory(
                 body=[AssignStmtFactory(right__name="foo", right__offset__i=1)]
@@ -75,7 +75,7 @@ def test_write_after_read_with_offset():
 
 
 def test_nonzero_extent_merging():
-    testee = VerticalLoopFactory(
+    testee = VerticalLoopSectionFactory(
         horizontal_executions=[
             HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="foo")]),
             HorizontalExecutionFactory(
