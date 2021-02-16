@@ -14,7 +14,9 @@
 #include "dim.hpp"
 #include "helpers.hpp"
 
-namespace gridtools::usid::naive {
+namespace gridtools {
+namespace usid {
+namespace naive {
     using traits_t = storage::cpu_ifirst;
 
     inline auto make_allocator() { return sid::make_cached_allocator(&std::make_unique<char[]>); }
@@ -33,4 +35,6 @@ namespace gridtools::usid::naive {
     decltype(auto) field(Ptr const &ptr) {
         return *at_key<Tag>(ptr);
     }
-} // namespace gridtools::usid::naive
+}
+}
+}
