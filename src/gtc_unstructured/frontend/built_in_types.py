@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import Any, List, cast
+import inspect
 
 
 class BuiltInTypeMeta(type):
@@ -68,9 +69,10 @@ class BuiltInTypeMeta(type):
 
     def __subclasscheck__(self, other) -> bool:
         # TODO(tehrengruber): enhance
-        for base in other.__mro__:
-            if self == base or (isinstance(base, BuiltInTypeMeta) and self == base.body):
-                return True
+        if inspect.isclass(other):
+            for base in other.__mro__:
+                if self == base or (isinstance(base, BuiltInTypeMeta) and self == base.body):
+                    return True
         return False
 
 
@@ -107,6 +109,9 @@ class Field(BuiltInType):
 class SparseField(BuiltInType):
     pass
 
+
+class TemporarySparseField(BuiltInType):  # TODO(tehrengruber): make this a subtype of Field
+    pass
 
 class TemporaryField(BuiltInType):  # TODO(tehrengruber): make this a subtype of Field
     pass

@@ -20,7 +20,7 @@ from gtc_unstructured.frontend.gtscript import (
     FORWARD,
     Edge,
     Field,
-    Local,
+    LocalField,
     Connectivity,
     Vertex,
     computation,
@@ -99,3 +99,10 @@ def fvm_nabla(
             pnabla_MYY = sum(zavgS_MYY[e] * sign[v, e] for e in v2e[v])
             pnabla_MXX = pnabla_MXX / vol
             pnabla_MYY = pnabla_MYY / vol
+
+
+#def sparse_field_assign(e2v: E2V, in_field: Field[Vertex, dtype], out_field: Field[Vertex, dtype]):
+#    with computation(FORWARD), interval(0, None):
+#        with location(Vertex) as v:
+#            weights = LocalField[E2V, dtype]([2, 1])
+#            out_field = sum(in_field[v]*weights[v] for v in e2v[v])

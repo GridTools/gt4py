@@ -60,11 +60,13 @@ class Capture:
     name: str
     _default: Any
     transformer: Any  # TODO(tehrengruber): can we tell mypy that this is a transformer?
+    expected_type: type
 
-    def __init__(self, name, default=None, transformer=None):
+    def __init__(self, name, default=None, transformer=None, expected_type=None):
         self.name = name
         self._default = default
         self.transformer = transformer
+        self.expected_type = expected_type
 
     def has_default(self):
         return self._default is not None
@@ -158,6 +160,8 @@ def match(concrete_node, pattern_node, captures=None) -> bool:
         captures = {}
 
     if isinstance(pattern_node, Capture):
+        if pattern_node.expected_type and not isinstance(concrete_node, pattern_node.expected_type):
+            return False
         if pattern_node.transformer:
             concrete_node = pattern_node.transformer.transform(concrete_node)
         captures[pattern_node.name] = concrete_node

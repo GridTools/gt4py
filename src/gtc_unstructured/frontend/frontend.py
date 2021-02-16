@@ -85,7 +85,8 @@ class GTScriptCompilationTask:
                 External(name="Edge", value=common.LocationType.Edge),
                 External(name="Cell", value=common.LocationType.Cell),
                 External(name="Field", value=built_in_types.Field),
-                External(name="Connectivity", value=built_in_types.Connectivity)
+                External(name="Connectivity", value=built_in_types.Connectivity),
+                External(name="LocalField", value=built_in_types.LocalField)
             ],
             "arguments": self._get_arguments()
         })
