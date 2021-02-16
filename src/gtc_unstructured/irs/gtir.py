@@ -81,13 +81,13 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.TRUNC: 1,
 }
 
+
 class Expr(Node):
     location_type: common.LocationType
     pass
 
 
 class NativeFuncCall(Expr):
-    location_type: common.LocationType
     func: NativeFunction
     args: List[Expr]
 
