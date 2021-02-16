@@ -14,12 +14,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, List, Set
+from typing import Any, Callable, Dict, List, Set, Tuple
 
 from eve import NodeTranslator
 from gtc import common, oir
 
-from .utils import AccessCollector
+from .utils import AccessCollector, symbol_name_creator
 
 
 class IJCacheDetection(NodeTranslator):
@@ -129,4 +129,168 @@ class PruneKCacheFlushes(NodeTranslator):
             params=self.visit(node.params, **kwargs),
             vertical_loops=vertical_loops,
             declarations=node.declarations,
+        )
+
+
+class FillToLocalKCaches(NodeTranslator):
+    def visit_FieldAccess(
+        self, node: oir.FieldAccess, *, filling_fields: Dict[str, str], **kwargs: Any
+    ) -> oir.FieldAccess:
+        if node.name in filling_fields:
+            return oir.FieldAccess(
+                name=filling_fields[node.name], dtype=node.dtype, offset=node.offset
+            )
+        return self.generic_visit(node, **kwargs)
+
+    def visit_HorizontalExecution(
+        self,
+        node: oir.HorizontalExecution,
+        *,
+        filling_fields: Dict[str, str],
+        fills: List[oir.Stmt],
+        **kwargs: Any,
+    ) -> oir.HorizontalExecution:
+        return oir.HorizontalExecution(
+            body=fills + self.visit(node.body, filling_fields=filling_fields, **kwargs),
+            mask=self.visit(node.mask, filling_fields=filling_fields, **kwargs),
+            declarations=node.declarations,
+        )
+
+    def visit_VerticalLoopSection(
+        self, node: oir.VerticalLoopSection, **kwargs: Any
+    ) -> oir.VerticalLoopSection:
+        if len(node.horizontal_executions) > 1:
+            raise NotImplementedError("Multiple horizontal_executions are not supported")
+        return self.generic_visit(node, **kwargs)
+
+    def visit_VerticalLoop(
+        self,
+        node: oir.VerticalLoop,
+        *,
+        new_tmps: List[oir.Temporary],
+        symtable: Dict[str, Any],
+        new_symbol_name: Callable[[str], str],
+        **kwargs: Any,
+    ) -> oir.VerticalLoop:
+        filling_fields = {
+            c.name: new_symbol_name(c.name)
+            for c in node.caches
+            if isinstance(c, oir.KCache) and c.fill
+        }
+
+        for field_name, tmp_name in filling_fields.items():
+            new_tmps.append(oir.Temporary(name=tmp_name, dtype=symtable[field_name].dtype))
+
+        def directional_k_offset(offset: Tuple[int, int, int]) -> int:
+            i, j, k = offset
+            if not i == j == 0:
+                raise NotImplementedError("Requires zero horizontal offsets")
+            return k if node.loop_order == common.LoopOrder.FORWARD else -k
+
+        def fill_limits(n: oir.VerticalLoopSection) -> Dict[str, Tuple[int, int]]:
+            return {
+                field: (min(k_offs := {directional_k_offset(o) for o in offsets}), max(k_offs))
+                for field, offsets in AccessCollector.apply(n).read_offsets().items()
+                if field in filling_fields
+            }
+
+        def requires_splitting(interval: oir.Interval) -> bool:
+            if interval.start.level != interval.end.level:
+                return True
+            return abs(interval.end.offset - interval.start.offset) > 1
+
+        def split_entry_level(section: oir.VerticalLoopSection) -> List[oir.VerticalLoopSection]:
+            if node.loop_order == common.LoopOrder.FORWARD:
+                bound = common.AxisBound(
+                    level=section.interval.start.level, offset=section.interval.start.offset + 1
+                )
+                entry_interval = oir.Interval(start=section.interval.start, end=bound)
+                rest_interval = oir.Interval(start=bound, end=section.interval.end)
+            else:
+                bound = common.AxisBound(
+                    level=section.interval.stop.level, offset=section.interval.stop.offset - 1
+                )
+                entry_interval = oir.Interval(start=bound, end=section.interval.end)
+                rest_interval = oir.Interval(start=section.interval.start, end=bound)
+            return [
+                oir.VerticalLoopSection(
+                    interval=entry_interval, horizontal_executions=section.horizontal_executions
+                ),
+                oir.VerticalLoopSection(
+                    interval=rest_interval, horizontal_executions=section.horizontal_executions
+                ),
+            ]
+
+        previous_fill = {field: -100000 for field in filling_fields}
+        split_sections = []
+        for section in node.sections:
+            limits = fill_limits(section)
+            max_required_fills = 0
+            for field in filling_fields:
+                lmin, lmax = limits[field]
+                required_fills = lmax - max(lmin, previous_fill[field] + 1) + 1
+                max_required_fills = max(required_fills, max_required_fills)
+                previous_fill[field] = lmax - 1
+            if max_required_fills > 1 and requires_splitting(section.interval):
+                split_sections += split_entry_level(section)
+            else:
+                split_sections.append(section)
+
+        previous_fill = {field: -100000 for field in filling_fields}
+        sections = []
+        for section in split_sections:
+            limits = fill_limits(section)
+            fills = []
+            for field in filling_fields:
+                lmin, lmax = limits[field]
+                for offset in range(max(lmin, previous_fill[field] + 1), lmax + 1):
+                    fills.append(
+                        oir.AssignStmt(
+                            left=oir.FieldAccess(
+                                name=filling_fields[field],
+                                dtype=symtable[field].dtype,
+                                offset=common.CartesianOffset.zero(),
+                            ),
+                            right=oir.FieldAccess(
+                                name=field,
+                                dtype=symtable[field].dtype,
+                                offset=common.CartesianOffset(
+                                    i=0,
+                                    j=0,
+                                    k=offset
+                                    if node.loop_order == common.LoopOrder.FORWARD
+                                    else -offset,
+                                ),
+                            ),
+                        )
+                    )
+                sections.append(
+                    self.visit(section, fills=fills, filling_fields=filling_fields, **kwargs)
+                )
+                previous_fill[field] = lmax - 1
+
+        caches = (
+            [c for c in node.caches if c.name not in filling_fields]
+            + [oir.KCache(name=f, fill=False, flush=False) for f in filling_fields.values()]
+            + [
+                oir.KCache(name=c.name, fill=False, flush=True)
+                for c in node.caches
+                if c.name in filling_fields and c.flush
+            ]
+        )
+
+        return oir.VerticalLoop(loop_order=node.loop_order, sections=sections, caches=caches)
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        new_tmps: List[oir.Temporary] = []
+        return oir.Stencil(
+            name=node.name,
+            params=node.params,
+            vertical_loops=self.visit(
+                node.vertical_loops,
+                new_tmps=new_tmps,
+                symtable=node.symtable_,
+                new_symbol_name=symbol_name_creator(set(node.symtable_)),
+            ),
+            declarations=node.declarations + new_tmps,
         )
