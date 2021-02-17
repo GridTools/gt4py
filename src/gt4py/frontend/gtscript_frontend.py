@@ -1298,6 +1298,10 @@ class IRMaker(ast.NodeVisitor):
             if any(arg.value.id != "region" for arg in call_args):
                 raise syntax_error
 
+            body_stmts = gt_utils.flatten(
+                [gt_utils.listify(self.visit(stmt)) for stmt in node.body]
+            )
+
             if_stmts = []
             for arg in call_args:
                 intervals = self._parse_region_intervals(arg.slice, loc)
@@ -1310,10 +1314,6 @@ class IRMaker(ast.NodeVisitor):
                         self._interval_to_positional_expr(interval, axis.name, loc)
                         for interval, axis in zip(intervals, self.domain.parallel_axes)
                     ],
-                )
-
-                body_stmts = gt_utils.flatten(
-                    [gt_utils.listify(self.visit(stmt)) for stmt in node.body]
                 )
 
                 if_stmts.append(
