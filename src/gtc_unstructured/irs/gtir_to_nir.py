@@ -17,7 +17,7 @@
 
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import ClassVar, List, Mapping
+from typing import ClassVar, List, Mapping, Union
 
 import eve
 from gtc_unstructured.irs import common, gtir, nir
@@ -50,14 +50,13 @@ class GtirToNir(eve.NodeTranslator):
     )
 
     REDUCE_OP_TO_BINOP: ClassVar[
-        Mapping[gtir.ReduceOperator, common.BinaryOperator]
+        Mapping[gtir.ReduceOperator, Union[common.BinaryOperator, common.BuiltInLiteral]]
     ] = MappingProxyType(
         {
             gtir.ReduceOperator.ADD: common.BinaryOperator.ADD,
             gtir.ReduceOperator.MUL: common.BinaryOperator.MUL,
-            # TODO
-            # gtir.ReduceOperator.MIN: nir.BuiltInLiteral.MIN_VALUE,
-            # gtir.ReduceOperator.MAX: nir.BuiltInLiteral.MAX_VALUE,
+            gtir.ReduceOperator.MIN: common.BuiltInLiteral.MIN_VALUE,
+            gtir.ReduceOperator.MAX: common.BuiltInLiteral.MAX_VALUE,
         }
     )
 
@@ -197,17 +196,29 @@ class GtirToNir(eve.NodeTranslator):
             ),
         )
         body_location = connectivity_deref.secondary
+        op = self.REDUCE_OP_TO_BINOP[node.op]
+        if op == common.BuiltInLiteral.MIN_VALUE or op == common.BuiltInLiteral.MAX_VALUE:
+            right = nir.NativeFuncCall(
+                func = nir.NativeFunction.MAX if op == common.BuiltInLiteral.MAX_VALUE else nir.NativeFunction.MIN,
+                args=[
+                    nir.VarAccess(name=reduce_var_name, location_type=body_location),
+                    self.visit(node.operand, in_neighbor_loop=True, **kwargs)
+                ],
+                location_type=body_location,
+            )
+        else:
+            right = nir.BinaryOp(
+                left=nir.VarAccess(name=reduce_var_name, location_type=body_location),
+                op=op,
+                right=self.visit(node.operand, in_neighbor_loop=True, **kwargs),
+                location_type=body_location,
+            )
         body = nir.BlockStmt(
             declarations=[],
             statements=[
                 nir.AssignStmt(
                     left=nir.VarAccess(name=reduce_var_name, location_type=body_location),
-                    right=nir.BinaryOp(
-                        left=nir.VarAccess(name=reduce_var_name, location_type=body_location),
-                        op=self.REDUCE_OP_TO_BINOP[node.op],
-                        right=self.visit(node.operand, in_neighbor_loop=True, **kwargs),
-                        location_type=body_location,
-                    ),
+                    right=right,
                     location_type=body_location,
                 )
             ],

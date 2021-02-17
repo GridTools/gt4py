@@ -293,21 +293,19 @@ class GTScriptToGTIR(eve.NodeTranslator):
         # TODO(tehrengruber): all of this can be done with the symbol table and the call inliner
         # reductions
 
-        # TODO(workshop): Add built-in functions (`sqrt`, etc)
-        # TODO(workshop): Distinguish between `max(1, 2)` vs `max(a[e] for e in v2e[v])` & similar
-        if node.func in built_in_functions.native_functions:
-            method = built_in_functions.native_functions[node.func]
-            arg_types = list(TypeInference.apply(symtable, arg) for arg in node.args)
-            #debug(arg_types)
-            #print(arg_types)
+        args_contain_generator = any(isinstance(arg, Generator) for arg in node.args)
+        arg_types = list(TypeInference.apply(symtable, arg) for arg in node.args)
 
-            # TODO(workshop): would be nice if we could use `method.applicable`
+        # method = built_in_functions.native_functions[node.func]
+        # TODO(workshop): would be nice if we could use `method.applicable`
+
+        if node.func in built_in_functions.native_functions and not args_contain_generator:
+
             if not all(issubclass(arg_type, numbers.Number) for arg_type in arg_types):
                 raise ValueError("Wrong Types")
 
             if len(node.args) != gtir.NativeFunction.IR_OP_TO_NUM_ARGS[node.func]:
                 raise ValueError()
-
 
             native_func_call = gtir.NativeFuncCall(
                 func=gtir.NativeFunction(node.func),
@@ -317,7 +315,6 @@ class GTScriptToGTIR(eve.NodeTranslator):
             return native_func_call
 
         elif node.func in built_in_functions.neighbor_reductions:
-            arg_types = list(TypeInference.apply(symtable, arg) for arg in node.args)
             if any(method.applicable(arg_types) for method in getattr(built_in_functions, node.func).methods):
                 if not len(node.args):
                     raise ValueError(
