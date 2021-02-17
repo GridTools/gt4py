@@ -401,7 +401,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
     def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
         return f"eval.{node.axis.lower()}()"
 
-    def visit_AxisOffset(self, node: gt_ir.AxisIndex) -> str:
+    def visit_AxisOffset(self, node: gt_ir.AxisOffset) -> str:
         return "static_cast<gt::int_t>({endpt}{offset:+d})".format(
             endpt=f"eval(domain_size_{node.axis.upper()}())"
             if node.endpt == gt_ir.LevelMarker.END
