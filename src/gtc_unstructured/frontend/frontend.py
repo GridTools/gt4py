@@ -105,6 +105,7 @@ class GTScriptCompilationTask:
         # Transform into GTIR
         self.gtir = GTScriptToGTIR.apply(self.gtscript_ast)
 
+        devtools.debug(self.gtir)
         return self.gtir
 
     def _generate_cpp(self, *, debug=False, code_generator=UsidGpuCodeGenerator):

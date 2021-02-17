@@ -32,12 +32,12 @@ from gtc_unstructured.frontend.gtscript import (
 )
 from gtc_unstructured.irs import common
 
-
 dtype = common.DataType.FLOAT64
 E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
 V2E = types.new_class("V2E", (Connectivity[Vertex, Edge, 7, True],))
 
-valid_stencils = ["copy", "copy2", "edge_reduction", "sparse_ex", "nested", "temporary_field", "fvm_nabla"]
+valid_stencils = ["copy", "copy2", "edge_reduction", "sparse_ex", "nested", "temporary_field", "fvm_nabla", "weights",
+                  "sparse_field_assign"]
 
 
 def copy(field_in: Field[Vertex, dtype], field_out: Field[Vertex, dtype]):
@@ -101,8 +101,17 @@ def fvm_nabla(
             pnabla_MYY = pnabla_MYY / vol
 
 
-#def sparse_field_assign(e2v: E2V, in_field: Field[Vertex, dtype], out_field: Field[Vertex, dtype]):
-#    with computation(FORWARD), interval(0, None):
-#        with location(Vertex) as v:
-#            weights = LocalField[E2V, dtype]([2, 1])
-#            out_field = sum(in_field[v]*weights[v] for v in e2v[v])
+def weights(e2v: E2V, in_field: Field[Vertex, dtype], out_field: Field[Edge, dtype]):
+    with computation(FORWARD), interval(0, None):
+        with location(Edge) as e:
+            weights = LocalField[E2V, dtype]([2, 1])
+            out_field = sum(in_field[v] * weights[e, v] for v in e2v[e])
+
+
+def sparse_field_assign(e2v: E2V, in_sparse_field: SparseField[E2V, dtype], out_sparse_field: SparseField[E2V, dtype]):
+    with computation(FORWARD), interval(0, None):
+        with location(Edge) as e:
+            # TODO: maybe support slicing for lhs: out_sparse_field[e,:]
+            out_sparse_field = (in_sparse_field[e,v] for v in e2v[e])
+            # TODO: Fix silently generates invalid code
+            # out_sparse_field = in_sparse_field
