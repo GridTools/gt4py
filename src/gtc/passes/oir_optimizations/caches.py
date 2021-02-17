@@ -294,3 +294,105 @@ class FillToLocalKCaches(NodeTranslator):
             ),
             declarations=node.declarations + new_tmps,
         )
+
+
+class FlushToLocalKCaches(NodeTranslator):
+    def visit_FieldAccess(
+        self, node: oir.FieldAccess, *, flushing_fields: Dict[str, str], **kwargs: Any
+    ) -> oir.FieldAccess:
+        if node.name in flushing_fields:
+            return oir.FieldAccess(
+                name=flushing_fields[node.name], dtype=node.dtype, offset=node.offset
+            )
+        return self.generic_visit(node, **kwargs)
+
+    def visit_HorizontalExecution(
+        self,
+        node: oir.HorizontalExecution,
+        *,
+        flushing_fields: Dict[str, str],
+        flushes: List[oir.Stmt],
+        **kwargs: Any,
+    ) -> oir.HorizontalExecution:
+        return oir.HorizontalExecution(
+            body=self.visit(node.body, flushing_fields=flushing_fields, **kwargs) + flushes,
+            mask=self.visit(node.mask, flushing_fields=flushing_fields, **kwargs),
+            declarations=node.declarations,
+        )
+
+    def visit_VerticalLoopSection(
+        self, node: oir.VerticalLoopSection, **kwargs: Any
+    ) -> oir.VerticalLoopSection:
+        if len(node.horizontal_executions) > 1:
+            raise NotImplementedError("Multiple horizontal_executions are not supported")
+        return self.generic_visit(node, **kwargs)
+
+    def visit_VerticalLoop(
+        self,
+        node: oir.VerticalLoop,
+        *,
+        new_tmps: List[oir.Temporary],
+        symtable: Dict[str, Any],
+        new_symbol_name: Callable[[str], str],
+        **kwargs: Any,
+    ) -> oir.VerticalLoop:
+        flushing_fields = {
+            c.name: new_symbol_name(c.name)
+            for c in node.caches
+            if isinstance(c, oir.KCache) and c.flush
+        }
+        if not flushing_fields:
+            return node
+
+        for field_name, tmp_name in flushing_fields.items():
+            new_tmps.append(oir.Temporary(name=tmp_name, dtype=symtable[field_name].dtype))
+
+        sections = []
+        for section in node.sections:
+            flushes = []
+            write_fields = AccessCollector.apply(section).write_fields()
+            for field, cache in flushing_fields.items():
+                if field in write_fields:
+                    flushes.append(
+                        oir.AssignStmt(
+                            left=oir.FieldAccess(
+                                name=field,
+                                dtype=symtable[field].dtype,
+                                offset=common.CartesianOffset.zero(),
+                            ),
+                            right=oir.FieldAccess(
+                                name=cache,
+                                dtype=symtable[field].dtype,
+                                offset=common.CartesianOffset.zero(),
+                            ),
+                        )
+                    )
+            sections.append(
+                self.visit(section, flushes=flushes, flushing_fields=flushing_fields, **kwargs)
+            )
+
+        caches = (
+            [c for c in node.caches if c.name not in flushing_fields]
+            + [oir.KCache(name=f, fill=False, flush=False) for f in flushing_fields.values()]
+            + [
+                oir.KCache(name=c.name, fill=True, flush=False)
+                for c in node.caches
+                if c.name in flushing_fields and c.fill
+            ]
+        )
+
+        return oir.VerticalLoop(loop_order=node.loop_order, sections=sections, caches=caches)
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        new_tmps: List[oir.Temporary] = []
+        return oir.Stencil(
+            name=node.name,
+            params=node.params,
+            vertical_loops=self.visit(
+                node.vertical_loops,
+                new_tmps=new_tmps,
+                symtable=node.symtable_,
+                new_symbol_name=symbol_name_creator(set(node.symtable_)),
+            ),
+            declarations=node.declarations + new_tmps,
+        )

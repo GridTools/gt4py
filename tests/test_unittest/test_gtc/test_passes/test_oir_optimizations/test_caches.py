@@ -18,6 +18,7 @@ from gtc.common import AxisBound, LevelMarker, LoopOrder
 from gtc.oir import IJCache, KCache
 from gtc.passes.oir_optimizations.caches import (
     FillToLocalKCaches,
+    FlushToLocalKCaches,
     IJCacheDetection,
     KCacheDetection,
     PruneKCacheFills,
@@ -412,3 +413,85 @@ def test_fill_to_local_k_caches_section_splitting():
     assert (
         len(vertical_loop.sections[2].horizontal_executions[0].body) == 1
     ), "wrong number of fill stmts"
+
+
+def test_flush_to_local_k_caches_basic():
+    testee = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                loop_order=LoopOrder.FORWARD,
+                sections=[
+                    VerticalLoopSectionFactory(
+                        interval=IntervalFactory(end=AxisBound(level=LevelMarker.START, offset=1)),
+                        horizontal_executions__0__body__0=AssignStmtFactory(
+                            left__name="foo", right__name="foo"
+                        ),
+                    ),
+                    VerticalLoopSectionFactory(
+                        interval=IntervalFactory(
+                            start=AxisBound(level=LevelMarker.START, offset=1)
+                        ),
+                        horizontal_executions__0__body__0=AssignStmtFactory(
+                            left__name="foo", right__name="foo", right__offset__k=-1
+                        ),
+                    ),
+                ],
+                caches=[KCacheFactory(name="foo", fill=False, flush=True)],
+            )
+        ]
+    )
+    transformed = FlushToLocalKCaches().visit(testee)
+    vertical_loop = transformed.vertical_loops[0]
+
+    assert len(vertical_loop.caches) == 1, "wrong number of caches"
+    assert not vertical_loop.caches[0].fill, "cache suddenly fills"
+    assert not vertical_loop.caches[0].flush, "flushing cache was not removed"
+
+    cache_name = vertical_loop.caches[0].name
+    assert cache_name != "foo", "cache name must not be the same as flushing field"
+    assert transformed.declarations[0].name == cache_name, "cache field not found in temporaries"
+
+    assert len(vertical_loop.sections) == 2, "number of vertical sections has changed"
+
+    assert (
+        len(vertical_loop.sections[0].horizontal_executions[0].body) == 2
+    ), "no or too many flush stmts introduced?"
+    assert (
+        vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name
+    ), "wrong field name in cache access"
+    assert (
+        vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == cache_name
+    ), "wrong field name in cache access"
+    assert (
+        vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k == 0
+    ), "wrong offset in cache access"
+    assert (
+        vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == "foo"
+    ), "wrong flush source"
+    assert (
+        vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name
+    ), "wrong flush destination"
+    assert (
+        vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k == 0
+    ), "wrong flush offset"
+    assert (
+        len(vertical_loop.sections[1].horizontal_executions[0].body) == 2
+    ), "no or too many flush stmts introduced?"
+    assert (
+        vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name
+    ), "wrong field name in cache access"
+    assert (
+        vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name
+    ), "wrong field name in cache access"
+    assert (
+        vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == -1
+    ), "wrong offset in cache access"
+    assert (
+        vertical_loop.sections[1].horizontal_executions[0].body[1].left.name == "foo"
+    ), "wrong flush source"
+    assert (
+        vertical_loop.sections[1].horizontal_executions[0].body[1].right.name == cache_name
+    ), "wrong flush destination"
+    assert (
+        vertical_loop.sections[1].horizontal_executions[0].body[1].right.offset.k == 0
+    ), "wrong flush offset"
