@@ -171,8 +171,6 @@ class ConstExprEvaluator(eve.NodeVisitor):
         raise ValueError("Evaluation failed")
 
     def visit_SymbolRef(self, node: SymbolRef, *, symtable, **kwargs):
-        if not node.name in symtable:
-            bla = 1 + 1
         return self.visit(symtable[node.name])
 
     def visit_External(self, node: External, **kwargs):
@@ -208,7 +206,7 @@ class TypeInference(eve.NodeVisitor):
 
     def visit_Call(self, node: Call, **kwargs):
         # todo: enhance
-        return common.DataType.FLOAT64
+        return numbers.Number
         # return built_in_functions[node.func].return_type(*self.visit(node.args))
 
     def visit_Constant(self, node: Constant, **kwargs):
@@ -239,14 +237,14 @@ class TypeInference(eve.NodeVisitor):
 
     def visit_BinaryOp(self, node: BinaryOp, **kwargs):
         # todo: enhance
-        return common.DataType.FLOAT64
+        return numbers.Number
 
     def visit_Subscript(self, node: Subscript, *, symtable, **kwargs):
         # todo: enhance
-        if all(isinstance(symtable[idx.name], LocationSpecification) or isinstance(symtable[idx], LocationComprehension)
+        if all(isinstance(symtable[idx.name], (LocationSpecification, LocationComprehension))
                for idx in node.indices):
             # todo: use Number
-            return common.DataType.FLOAT64
+            return numbers.Number
         raise ValueError(f"Type of node {node} not defined.")
 
     def visit_Generator(self, node: LocationComprehension, *, symtable, **kwargs):
@@ -304,11 +302,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
         # method = built_in_functions.native_functions[node.func]
         # TODO(workshop): would be nice if we could use `method.applicable`
 
-        if node.func in built_in_functions.native_functions and not args_contain_generator:
-
-            if not all(issubclass(arg_type, numbers.Number) for arg_type in arg_types):
-                raise ValueError("Wrong Types")
-
+        if node.func in built_in_functions.native_functions and all(issubclass(arg_type, (numbers.Number, Field)) for arg_type in arg_types):
             if len(node.args) != gtir.NativeFunction.IR_OP_TO_NUM_ARGS[node.func]:
                 raise ValueError()
 
@@ -347,7 +341,8 @@ class GTScriptToGTIR(eve.NodeTranslator):
                     location_type=location_stack[-1][1],
                 )
 
-        raise ValueError()
+        raise ValueError(
+            "Could not resolve call to function `{node.func}. Either the function does not exist or the arguments don't match.`")
 
     def visit_SubscriptCall(self, node: SubscriptCall, symtable, location_stack, inside_sparse_assign,
                             neighbor_vector_access_expr_location_name, **kwargs):

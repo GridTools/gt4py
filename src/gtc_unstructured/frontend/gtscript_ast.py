@@ -202,7 +202,6 @@ class TemporaryFieldDeclExtractor(eve.NodeVisitor):
     primary_location: Union[None, LocationSpecification]
     temporary_fields: List[TemporaryFieldDecl]
 
-    # TODO(tehrengruber): enhance to support sparse dimension
     def __init__(self):
         self.primary_location = None
         self.temporary_fields = []

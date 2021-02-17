@@ -67,6 +67,9 @@ class BuiltInTypeMeta(type):
         # TODO(tehrengruber): implement
         raise RuntimeError("not implemented")
 
+    def __hash__(self):
+        return hash((self.class_name, hash(frozenset(self.namespace.items())), self.args))
+
     def __subclasscheck__(self, other) -> bool:
         # TODO(tehrengruber): enhance
         if inspect.isclass(other):

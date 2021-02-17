@@ -31,7 +31,8 @@ dtype = DataType.FLOAT64
 
 def sten(c2c: C2C, field_in: Field[Cell, dtype], field_out: Field[Cell, dtype]):
     with computation(FORWARD), location(Cell) as c1:
-        field_out[c1] = sum(field_in[c1] + field_in[c2] for c2 in c2c[c1])
+        # TODO: test all native functions seperately
+        field_out[c1] = sqrt(field_in)+max(1, 2)+sum(max(field_in[c1], field_in[c2]) for c2 in c2c[c1])
 
 
 def main():
@@ -48,7 +49,7 @@ def main():
 
     print(generated_code)
     output_file = (
-        os.path.dirname(os.path.realpath(__file__)) + "/generated_cell2cell_" + mode + ".hpp"
+        os.path.dirname(os.path.realpath(__file__)) + "/generated_native_functions_" + mode + ".hpp"
     )
     with open(output_file, "w+") as output:
         output.write(generated_code)
