@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Collection, Union
+from typing import Any, Callable, Collection, Set, Union
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
@@ -37,7 +37,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     AssignStmt = as_fmt("{left} = {right};")
 
     FieldAccess = as_mako(
-        "*${name if not offset else f'sid::multi_shifted<tag::{name}>({name}, m_strides, {offset})'}"
+        """
+        % if name in k_cached_fields:
+            ${k_cache_access(name, _this_node.offset.k)}
+        % elif offset:
+            *sid::multi_shifted<tag::${name}>(${name}, m_strides, ${offset})
+        % else:
+            *${name}
+        % endif
+        """
     )
 
     ScalarAccess = as_fmt("{name}")
@@ -124,7 +132,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_VerticalLoop(
-        self, node: cuir.VerticalLoop, **kwargs: Any
+        self, node: cuir.VerticalLoop, *, ctype: Callable[[str], str], **kwargs: Any
     ) -> Union[str, Collection[str]]:
         def loop_entry(start: str, end: str) -> str:
             if node.loop_order == cuir.LoopOrder.PARALLEL:
@@ -135,17 +143,60 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 return f"for (int k_block = {end} - 1; k_block >= {start}; --k_block)"
             raise AssertionError("Invalid loop order")
 
+        k_cache_limits = (
+            node.iter_tree()
+            .if_isinstance(cuir.FieldAccess)
+            .filter(lambda x: x.name in node.k_cached)
+            .reduceby(
+                lambda minmax, x: (min(minmax[0], x.offset.k), max(minmax[1], x.offset.k)),
+                key="name",
+                init=(10000, -10000),
+                as_dict=True,
+            )
+        )
+
         def loop_shift() -> str:
             if node.loop_order == cuir.LoopOrder.PARALLEL:
                 return ""
-            step = 1 if node.loop_order == cuir.LoopOrder.FORWARD else -1
-            return f"sid::shift(ptr, sid::get_stride<dim::k>(m_strides), {step}_c);"
+            cache_shifts = ""
+            if node.loop_order == cuir.LoopOrder.FORWARD:
+                for cache in node.k_cached:
+                    min_offset, max_offset = k_cache_limits[cache]
+                    for offset in range(min_offset, max_offset):
+                        src = k_cache_access(cache, offset + 1)
+                        dst = k_cache_access(cache, offset)
+                        cache_shifts += f"{dst} = {src};\n"
+                step = 1
+            else:
+                for cache in node.k_cached:
+                    min_offset, max_offset = k_cache_limits[cache]
+                    for offset in range(max_offset, min_offset, -1):
+                        src = k_cache_access(cache, offset - 1)
+                        dst = k_cache_access(cache, offset)
+                        cache_shifts += f"{dst} = {src};\n"
+                step = -1
+            sid_shift = f"sid::shift(ptr, sid::get_stride<dim::k>(m_strides), {step}_c);"
+            return cache_shifts + sid_shift
+
+        def k_cache_access(field: str, k_offset: int) -> str:
+            return field + (f"_p{k_offset}" if k_offset >= 0 else f"_m{-k_offset}")
+
+        k_cache_decls = " ".join(
+            node.iter_tree()
+            .if_isinstance(cuir.FieldAccess)
+            .filter(lambda acc: acc.name in node.k_cached)
+            .map(lambda acc: ctype(acc.name) + " " + k_cache_access(acc.name, acc.offset.k) + ";")
+            .to_set()
+        )
 
         return self.generic_visit(
             node,
             accesses=node.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set(),
             loop_entry=loop_entry,
             loop_shift=loop_shift,
+            k_cache_access=k_cache_access,
+            k_cache_decls=k_cache_decls,
+            k_cached_fields=node.k_cached,
             **kwargs,
         )
 
@@ -182,8 +233,12 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 % endif
 
                 % for acc in accesses:
-                    auto &&${acc} = device::at_key<tag::${acc}>(ptr);
+                    % if acc not in k_cached:
+                        auto &&${acc} = device::at_key<tag::${acc}>(ptr);
+                    % endif
                 % endfor
+
+                ${k_cache_decls}
 
                 % for section in sections:
                     ${section}
@@ -233,6 +288,14 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             end = self.visit(vertical_loop.sections[-1].end)
             return f"({end}) - ({start})"
 
+        def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
+            return (
+                vertical_loop.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
+            )
+
+        def ctype(symbol: str) -> str:
+            return self.visit(node.symtable_[symbol].dtype)
+
         return self.generic_visit(
             node,
             declarations_dtypes=[self.visit(d.dtype, **kwargs) for d in node.declarations],
@@ -240,6 +303,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             loop_start=loop_start,
             is_parallel=is_parallel,
             parallel_loop_size=parallel_loop_size,
+            loop_fields=loop_fields,
+            ctype=ctype,
         )
 
     Program = as_mako(
@@ -256,6 +321,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         #include <gridtools/stencil/common/dim.hpp>
         #include <gridtools/stencil/common/extent.hpp>
         #include <gridtools/stencil/gpu/launch_kernel.hpp>
+        #include <gridtools/stencil/gpu/ij_cache.hpp>
         #include <gridtools/stencil/gpu/shared_allocator.hpp>
         #include <gridtools/stencil/gpu/tmp_storage_sid.hpp>
 
@@ -292,8 +358,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
             auto ${name}(domain_t domain){
                 return [domain](${','.join(f'auto&& {p}' for p in params)}){
-                    auto tmp_alloc = sid::host_device::make_cached_allocator(&cuda_util::cuda_malloc<char[]>);
-                    gpu_backend::shared_allocator shared_alloc;
+                    auto tmp_alloc = sid::device::make_cached_allocator(&cuda_util::cuda_malloc<char[]>);
                     const auto i_size = domain[0];
                     const auto j_size = domain[1];
                     const auto k_size = domain[2];
@@ -315,28 +380,47 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                     % for kernel in _this_node.kernels:
 
                         // kernel ${kernel.id_}
+                        gpu_backend::shared_allocator shared_alloc_${kernel.id_};
 
                         % for vertical_loop in kernel.vertical_loops:
                             // vertical loop ${vertical_loop.id_}
 
-                            auto composite_${vertical_loop.id_} = sid::composite::make<
-                                    ${', '.join(f'tag::{p}' for p in params + declarations)}
-                                >(
-                                    ${', '.join([f'block({p})' for p in params] + list(declarations))}
-                                );
-                            using composite_${vertical_loop.id_}_t = decltype(composite_${vertical_loop.id_});
-                            sid::ptr_diff_type<composite_${vertical_loop.id_}_t> offset_${vertical_loop.id_};
-                            auto strides_${vertical_loop.id_} = sid::get_strides(composite_${vertical_loop.id_});
-                            sid::shift(
-                                offset_${vertical_loop.id_},
-                                sid::get_stride<dim::k>(strides_${vertical_loop.id_}),
-                                ${loop_start(vertical_loop)}
-                            );
                             assert((${loop_start(vertical_loop)}) >= 0 &&
                                    (${loop_start(vertical_loop)}) < k_size);
+                            auto offset_${vertical_loop.id_} = tuple_util::make<hymap::keys<dim::k>::values>(
+                                ${loop_start(vertical_loop)}
+                            );
+
+                            auto composite_${vertical_loop.id_} = sid::composite::make<
+                                    ${', '.join(f'tag::{field}' for field in loop_fields(vertical_loop))}
+                                >(
+                            % for field in loop_fields(vertical_loop):
+                                % if field in params:
+                                    block(sid::shift_sid_origin(
+                                        ${field},
+                                        offset_${vertical_loop.id_}
+                                    ))
+                                % elif field in vertical_loop.ij_cached:
+                                    gpu_backend::make_ij_cache<${ctype(field)}>(
+                                        1_c,
+                                        i_block_size_t(),
+                                        j_block_size_t(),
+                                        ${max_extent}(),
+                                        shared_alloc_${kernel.id_}
+                                    )
+                                % else:
+                                    sid::shift_sid_origin(
+                                        ${field},
+                                        offset_${vertical_loop.id_}
+                                    )
+                                % endif
+                                ${'' if loop.last else ','}
+                            % endfor
+                            );
+                            using composite_${vertical_loop.id_}_t = decltype(composite_${vertical_loop.id_});
                             loop_${vertical_loop.id_}_f<composite_${vertical_loop.id_}_t> loop_${vertical_loop.id_}{
-                                sid::get_origin(composite_${vertical_loop.id_}) + offset_${vertical_loop.id_},
-                                std::move(strides_${vertical_loop.id_}),
+                                sid::get_origin(composite_${vertical_loop.id_}),
+                                sid::get_strides(composite_${vertical_loop.id_}),
                                 k_size
                             };
 
@@ -351,7 +435,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             j_size,
                             ${'k_size' if is_parallel(kernel.vertical_loops[0]) else '1'},
                             kernel_${kernel.id_},
-                            shared_alloc.size());
+                            shared_alloc_${kernel.id_}.size());
                     % endfor
 
                     GT_CUDA_CHECK(cudaDeviceSynchronize());

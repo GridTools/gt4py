@@ -16,7 +16,7 @@
 
 from typing import Any, List, Optional, Union
 
-from eve import Str, SymbolName, SymbolTableTrait
+from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
 from gtc import common
 from gtc.common import AxisBound, DataType, LocNode, LoopOrder
 
@@ -137,6 +137,8 @@ class VerticalLoopSection(LocNode):
 class VerticalLoop(LocNode):
     loop_order: LoopOrder
     sections: List[VerticalLoopSection]
+    ij_cached: List[SymbolRef]
+    k_cached: List[SymbolRef]
 
 
 class Kernel(LocNode):

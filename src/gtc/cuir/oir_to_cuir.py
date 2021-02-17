@@ -94,11 +94,15 @@ class OIRToCUIR(eve.NodeTranslator):
         )
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> cuir.Kernel:
+        assert not any(c.fill or c.flush for c in node.caches if isinstance(c, oir.KCache))
         return cuir.Kernel(
             name=node.id_,
             vertical_loops=[
                 cuir.VerticalLoop(
-                    loop_order=node.loop_order, sections=self.visit(node.sections, **kwargs)
+                    loop_order=node.loop_order,
+                    sections=self.visit(node.sections, **kwargs),
+                    ij_cached=[c.name for c in node.caches if isinstance(c, oir.IJCache)],
+                    k_cached=[c.name for c in node.caches if isinstance(c, oir.KCache)],
                 )
             ],
         )

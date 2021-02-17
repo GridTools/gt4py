@@ -34,8 +34,20 @@ from gtc.cuir import cuir, cuir_codegen, extent_analysis, oir_to_cuir
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
-from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
+from gtc.passes.oir_optimizations.caches import (
+    FillToLocalKCaches,
+    FlushToLocalKCaches,
+    IJCacheDetection,
+    KCacheDetection,
+    PruneKCacheFills,
+    PruneKCacheFlushes,
+)
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
+from gtc.passes.oir_optimizations.temporaries import (
+    LocalTemporariesToScalars,
+    WriteBeforeReadTemporariesToScalars,
+)
+from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 
 
 if TYPE_CHECKING:
@@ -66,7 +78,16 @@ class GTCCudaExtGenerator:
 
     def _optimize_oir(self, oir):
         oir = GreedyMerging().visit(oir)
-        oir = TemporariesToScalars().visit(oir)
+        oir = AdjacentLoopMerging().visit(oir)
+        oir = LocalTemporariesToScalars().visit(oir)
+        oir = WriteBeforeReadTemporariesToScalars().visit(oir)
+        # oir = OnTheFlyMerging().visit(oir)
+        oir = IJCacheDetection().visit(oir)
+        oir = KCacheDetection().visit(oir)
+        oir = PruneKCacheFills().visit(oir)
+        oir = PruneKCacheFlushes().visit(oir)
+        oir = FlushToLocalKCaches().visit(oir)
+        oir = FillToLocalKCaches().visit(oir)
         return oir
 
 
