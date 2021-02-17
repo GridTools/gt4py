@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -221,8 +221,8 @@ class CLIBackendMixin(Backend):
             If the backend does not support the bindings language
 
         """
-        languages = getattr(self, "languages") or {"bindings": {}}
-        name = getattr(self, "name") or ""
+        languages = getattr(self, "languages", {"bindings": {}})
+        name = getattr(self, "name", "")
         if language_name not in languages["bindings"]:
             raise NotImplementedError(
                 f"Backend {name} does not implement bindings for {language_name}"
@@ -316,10 +316,12 @@ class BaseBackend(Backend):
                     else gt_definitions.AccessKind.READ_ONLY
                 )
                 if arg.name not in implementation_ir.unreferenced:
+                    field_decl = implementation_ir.fields[arg.name]
                     data["field_info"][arg.name] = gt_definitions.FieldInfo(
                         access=access,
-                        dtype=implementation_ir.fields[arg.name].data_type.dtype,
                         boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
+                        axes=field_decl.axes,
+                        dtype=field_decl.data_type.dtype,
                     )
                 else:
                     data["field_info"][arg.name] = None

@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -79,8 +79,7 @@ def run_horizontal_diffusion(backend, id_version, domain):
     validate_field_names = ["out_field"]
     origins = {"in_field": (2, 2, 0), "out_field": (0, 0, 0), "coeff": (0, 0, 0)}
     shapes = {
-        name: tuple(domain[i] + 2 * origin[i] for i in range(3))
-        for name, origin in origins.items()
+        name: tuple(domain[i] + 2 * origin[i] for i in range(3)) for name, origin in origins.items()
     }
     name = "horizontal_diffusion"
 
@@ -130,8 +129,7 @@ def run_tridiagonal_solver(backend, id_version, domain):
         "out": (0, 0, 0),
     }
     shapes = {
-        name: tuple(domain[i] + 2 * origin[i] for i in range(3))
-        for name, origin in origins.items()
+        name: tuple(domain[i] + 2 * origin[i] for i in range(3)) for name, origin in origins.items()
     }
     name = "tridiagonal_solver"
 
@@ -232,8 +230,7 @@ def run_large_k_interval(backend, id_version, domain):
     validate_field_names = ["out_field"]
     origins = {"in_field": (0, 0, 0), "out_field": (0, 0, 0)}
     shapes = {
-        name: tuple(domain[i] + 2 * origin[i] for i in range(3))
-        for name, origin in origins.items()
+        name: tuple(domain[i] + 2 * origin[i] for i in range(3)) for name, origin in origins.items()
     }
     name = "large_k_interval"
 

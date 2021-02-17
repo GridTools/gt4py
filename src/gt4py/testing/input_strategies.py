@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -18,7 +18,6 @@ import collections
 import numbers
 import types
 
-import hypothesis as hyp
 import hypothesis.strategies as hyp_st
 import numpy as np
 from hypothesis.extra import numpy as hyp_np
@@ -37,7 +36,6 @@ class _SymbolValueTuple(types.SimpleNamespace):
 
 def global_name(*, singleton=None, symbol=None, one_of=None, in_range=None):
     """Define a *global* symbol."""
-
     if singleton is not None:
         assert symbol is None and one_of is None and in_range is None
         return _SymbolValueTuple(kind="singleton", boundary=None, values=(singleton,))
@@ -64,7 +62,7 @@ def global_name(*, singleton=None, symbol=None, one_of=None, in_range=None):
         )
 
     else:
-        assert False, "Missing value descriptor"
+        raise AssertionError("Missing value descriptor")
 
 
 def field(*, in_range, boundary=None, extent=None):
@@ -99,7 +97,7 @@ def parameter(*, one_of=None, in_range=None):
         )
 
     else:
-        assert False, "Missing value descriptor"
+        raise AssertionError("Missing value descriptor")
 
 
 def none():
@@ -136,12 +134,7 @@ def one_of_values_st(args):
 
 def ndarray_shape_st(sizes):
     """Hypothesis strategy for shapes of `ndims` dimensions and size within `size_range`."""
-    # assert len(size_range) == 2
-    # return hyp_np.array_shapes(
-    #     min_dims=ndims, max_dims=ndims, min_side=size_range[0], max_side=size_range[1]
-    # )
-    tmp = hyp_st.tuples(*[hyp_st.integers(min_size, max_size) for (min_size, max_size) in sizes])
-    return tmp
+    return hyp_st.tuples(*[hyp_st.integers(min_size, max_size) for (min_size, max_size) in sizes])
 
 
 def padded_shape_st(shape_st, extra):
@@ -167,7 +160,6 @@ def ndarray_st(dtype, shape_strategy, value_st_factory):
         elements=value_st_factory(dtype),
         fill=value_st_factory(dtype),
     )
-    # print(id(tmp), id(shape_st), id(value_st_factory))
     return tmp
 
 
