@@ -42,11 +42,6 @@ class ShapedExpr(gt_ir.Expr):
     expr = attribute(of=gt_ir.Expr)
 
 
-@attribclass
-class ShapedCompositeExpr(ShapedExpr, gt_ir.CompositeExpr):
-    pass
-
-
 class NumpyIR(gt_ir.IRNodeMapper):
     @classmethod
     def apply(cls, impl_ir: gt_ir.StencilImplementation):
@@ -163,7 +158,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
     # ---- Visitor handlers ----
     def visit_ShapedExpr(self, node: ShapedExpr) -> str:
         code = self.visit(node.expr)
-        if not isinstance(node, ShapedCompositeExpr) and not isinstance(node.expr, ShapedExpr):
+        if not isinstance(node.expr, ShapedExpr):
             parallel_axes = (
                 self.impl_node.domain.axes
                 if self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
