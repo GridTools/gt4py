@@ -132,29 +132,13 @@ class PruneKCacheFlushes(NodeTranslator):
         )
 
 
-class FillToLocalKCaches(NodeTranslator):
+class _ToLocalKCachesBase(NodeTranslator):
     def visit_FieldAccess(
-        self, node: oir.FieldAccess, *, filling_fields: Dict[str, str], **kwargs: Any
+        self, node: oir.FieldAccess, *, name_map: Dict[str, str], **kwargs: Any
     ) -> oir.FieldAccess:
-        if node.name in filling_fields:
-            return oir.FieldAccess(
-                name=filling_fields[node.name], dtype=node.dtype, offset=node.offset
-            )
-        return self.generic_visit(node, **kwargs)
-
-    def visit_HorizontalExecution(
-        self,
-        node: oir.HorizontalExecution,
-        *,
-        filling_fields: Dict[str, str],
-        fills: List[oir.Stmt],
-        **kwargs: Any,
-    ) -> oir.HorizontalExecution:
-        return oir.HorizontalExecution(
-            body=fills + self.visit(node.body, filling_fields=filling_fields, **kwargs),
-            mask=self.visit(node.mask, filling_fields=filling_fields, **kwargs),
-            declarations=node.declarations,
-        )
+        if node.name in name_map:
+            return oir.FieldAccess(name=name_map[node.name], dtype=node.dtype, offset=node.offset)
+        return node
 
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, **kwargs: Any
@@ -162,6 +146,36 @@ class FillToLocalKCaches(NodeTranslator):
         if len(node.horizontal_executions) > 1:
             raise NotImplementedError("Multiple horizontal_executions are not supported")
         return self.generic_visit(node, **kwargs)
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        new_tmps: List[oir.Temporary] = []
+        return oir.Stencil(
+            name=node.name,
+            params=node.params,
+            vertical_loops=self.visit(
+                node.vertical_loops,
+                new_tmps=new_tmps,
+                symtable=node.symtable_,
+                new_symbol_name=symbol_name_creator(set(node.symtable_)),
+            ),
+            declarations=node.declarations + new_tmps,
+        )
+
+
+class FillToLocalKCaches(_ToLocalKCachesBase):
+    def visit_HorizontalExecution(
+        self,
+        node: oir.HorizontalExecution,
+        *,
+        name_map: Dict[str, str],
+        fills: List[oir.Stmt],
+        **kwargs: Any,
+    ) -> oir.HorizontalExecution:
+        return oir.HorizontalExecution(
+            body=fills + self.visit(node.body, name_map=name_map, **kwargs),
+            mask=self.visit(node.mask, name_map=name_map, **kwargs),
+            declarations=node.declarations,
+        )
 
     def visit_VerticalLoop(
         self,
@@ -264,9 +278,7 @@ class FillToLocalKCaches(NodeTranslator):
                             ),
                         )
                     )
-                sections.append(
-                    self.visit(section, fills=fills, filling_fields=filling_fields, **kwargs)
-                )
+                sections.append(self.visit(section, fills=fills, name_map=filling_fields, **kwargs))
                 previous_fill[field] = lmax - 1
 
         caches = (
@@ -281,51 +293,21 @@ class FillToLocalKCaches(NodeTranslator):
 
         return oir.VerticalLoop(loop_order=node.loop_order, sections=sections, caches=caches)
 
-    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        new_tmps: List[oir.Temporary] = []
-        return oir.Stencil(
-            name=node.name,
-            params=node.params,
-            vertical_loops=self.visit(
-                node.vertical_loops,
-                new_tmps=new_tmps,
-                symtable=node.symtable_,
-                new_symbol_name=symbol_name_creator(set(node.symtable_)),
-            ),
-            declarations=node.declarations + new_tmps,
-        )
 
-
-class FlushToLocalKCaches(NodeTranslator):
-    def visit_FieldAccess(
-        self, node: oir.FieldAccess, *, flushing_fields: Dict[str, str], **kwargs: Any
-    ) -> oir.FieldAccess:
-        if node.name in flushing_fields:
-            return oir.FieldAccess(
-                name=flushing_fields[node.name], dtype=node.dtype, offset=node.offset
-            )
-        return self.generic_visit(node, **kwargs)
-
+class FlushToLocalKCaches(_ToLocalKCachesBase):
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
         *,
-        flushing_fields: Dict[str, str],
+        name_map: Dict[str, str],
         flushes: List[oir.Stmt],
         **kwargs: Any,
     ) -> oir.HorizontalExecution:
         return oir.HorizontalExecution(
-            body=self.visit(node.body, flushing_fields=flushing_fields, **kwargs) + flushes,
-            mask=self.visit(node.mask, flushing_fields=flushing_fields, **kwargs),
+            body=self.visit(node.body, name_map=name_map, **kwargs) + flushes,
+            mask=self.visit(node.mask, name_map=name_map, **kwargs),
             declarations=node.declarations,
         )
-
-    def visit_VerticalLoopSection(
-        self, node: oir.VerticalLoopSection, **kwargs: Any
-    ) -> oir.VerticalLoopSection:
-        if len(node.horizontal_executions) > 1:
-            raise NotImplementedError("Multiple horizontal_executions are not supported")
-        return self.generic_visit(node, **kwargs)
 
     def visit_VerticalLoop(
         self,
@@ -368,7 +350,7 @@ class FlushToLocalKCaches(NodeTranslator):
                         )
                     )
             sections.append(
-                self.visit(section, flushes=flushes, flushing_fields=flushing_fields, **kwargs)
+                self.visit(section, flushes=flushes, name_map=flushing_fields, **kwargs)
             )
 
         caches = (
@@ -382,17 +364,3 @@ class FlushToLocalKCaches(NodeTranslator):
         )
 
         return oir.VerticalLoop(loop_order=node.loop_order, sections=sections, caches=caches)
-
-    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        new_tmps: List[oir.Temporary] = []
-        return oir.Stencil(
-            name=node.name,
-            params=node.params,
-            vertical_loops=self.visit(
-                node.vertical_loops,
-                new_tmps=new_tmps,
-                symtable=node.symtable_,
-                new_symbol_name=symbol_name_creator(set(node.symtable_)),
-            ),
-            declarations=node.declarations + new_tmps,
-        )
