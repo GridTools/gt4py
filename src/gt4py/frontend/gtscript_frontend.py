@@ -1175,10 +1175,11 @@ class IRMaker(ast.NodeVisitor):
             else:
                 raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=target)
 
+            axes = self.fields[t.id].axes
             par_axes_names = [axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes]
             if self.iteration_order == gt_ir.IterationOrder.PARALLEL:
                 par_axes_names.append(gt_ir.Domain.LatLonGrid().sequential_axis.name)
-            if set(par_axes_names) - set(self.fields[t.id].axes):
+            if set(par_axes_names) - set(axes):
                 raise GTScriptSyntaxError(
                     message=f"Cannot assign to field '{node.targets[0].id}' as all parallel axes '{par_axes_names}' are not present.",
                     loc=gt_ir.Location.from_ast_node(t),

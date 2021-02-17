@@ -149,7 +149,7 @@ class StencilObject(abc.ABC):
                 storage_mask = tuple(field.mask)
                 if storage_mask != api_mask:
                     raise ValueError(
-                        f"Storage for '{name}' has mask '{storage_mask}', API signature expects '{api_mask}'"
+                        f"Storage for '{name}' has mask '{storage_mask}' but the API signature expects '{api_mask}'"
                     )
             upper_boundary = self.field_info[name].boundary.upper_indices.filter_mask(api_mask)
             field_domain = Shape(field.shape) - (origin[name] + upper_boundary)
@@ -196,7 +196,7 @@ class StencilObject(abc.ABC):
                 storage_mask = tuple(field.mask)
                 if storage_mask != field_mask:
                     raise ValueError(
-                        f"Storage for '{name}' has mask '{storage_mask}', API signature expects '{field_mask}'"
+                        f"Storage for '{name}' has mask '{storage_mask}' but the API signature expects '{field_mask}'"
                     )
 
                 if not field.is_stencil_view:
@@ -332,7 +332,7 @@ class StencilObject(abc.ABC):
                 api_ndim = len(self.field_info[name].axes)
                 if storage_ndim != api_ndim:
                     raise ValueError(
-                        f"Storage for '{name}' has {storage_ndim} dimensions, API signature expects {api_ndim}"
+                        f"Storage for '{name}' has {storage_ndim} dimensions but the API signature expects {api_ndim}"
                     )
                 origin.setdefault(name, gt_ir.Index(field.default_origin))
 
