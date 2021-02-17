@@ -353,7 +353,7 @@ def test_fill_to_local_k_caches_basic_backward():
     ), "wrong offset in cache access"
 
 
-def test_fill_to_local_k_caches_section_splitting():
+def test_fill_to_local_k_caches_section_splitting_forward():
     testee = StencilFactory(
         vertical_loops=[
             VerticalLoopFactory(
@@ -403,6 +403,70 @@ def test_fill_to_local_k_caches_section_splitting():
         == vertical_loop.sections[2].interval.start.offset
         == -1
         and vertical_loop.sections[2].interval.end.offset == 0
+    ), "wrong interval offsets in split sections"
+    assert (
+        len(vertical_loop.sections[0].horizontal_executions[0].body) == 4
+    ), "wrong number of fill stmts"
+    assert (
+        len(vertical_loop.sections[1].horizontal_executions[0].body) == 3
+    ), "wrong number of fill stmts"
+    assert (
+        len(vertical_loop.sections[2].horizontal_executions[0].body) == 1
+    ), "wrong number of fill stmts"
+
+
+def test_fill_to_local_k_caches_section_splitting_backward():
+    testee = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                loop_order=LoopOrder.BACKWARD,
+                sections=[
+                    VerticalLoopSectionFactory(
+                        interval=IntervalFactory(
+                            start=AxisBound(level=LevelMarker.START, offset=1)
+                        ),
+                        horizontal_executions__0__body=[
+                            AssignStmtFactory(
+                                left__name="foo", right__name="foo", right__offset__k=0
+                            ),
+                            AssignStmtFactory(
+                                left__name="foo", right__name="foo", right__offset__k=-1
+                            ),
+                        ],
+                    ),
+                    VerticalLoopSectionFactory(
+                        interval=IntervalFactory(end=AxisBound(level=LevelMarker.START, offset=1)),
+                        horizontal_executions__0__body__0=AssignStmtFactory(
+                            left__name="foo", right__name="foo"
+                        ),
+                    ),
+                ],
+                caches=[KCacheFactory(name="foo", fill=True, flush=False)],
+            )
+        ]
+    )
+    transformed = FillToLocalKCaches().visit(testee)
+    vertical_loop = transformed.vertical_loops[0]
+    assert len(vertical_loop.sections) == 3, "wrong number of vertical sections"
+    assert (
+        vertical_loop.sections[0].interval.start.level
+        == vertical_loop.sections[0].interval.end.level
+        == vertical_loop.sections[1].interval.end.level
+        == LevelMarker.END
+        and vertical_loop.sections[1].interval.start.level
+        == vertical_loop.sections[2].interval.start.level
+        == vertical_loop.sections[2].interval.end.level
+        == LevelMarker.START
+    ), "wrong interval levels in split sections"
+    assert (
+        vertical_loop.sections[0].interval.end.offset == 0
+        and vertical_loop.sections[0].interval.start.offset
+        == vertical_loop.sections[1].interval.end.offset
+        == -1
+        and vertical_loop.sections[1].interval.start.offset
+        == vertical_loop.sections[2].interval.end.offset
+        == 1
+        and vertical_loop.sections[2].interval.start.offset == 0
     ), "wrong interval offsets in split sections"
     assert (
         len(vertical_loop.sections[0].horizontal_executions[0].body) == 4

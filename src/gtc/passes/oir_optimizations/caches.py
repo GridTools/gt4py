@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Callable, Dict, List, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
 
 from eve import NodeTranslator
 from gtc import common, oir
@@ -177,6 +177,153 @@ class FillToLocalKCaches(_ToLocalKCachesBase):
             declarations=node.declarations,
         )
 
+    @staticmethod
+    def _fill_limits(
+        loop_order: common.LoopOrder, section: oir.VerticalLoopSection
+    ) -> Dict[str, Tuple[int, int]]:
+        """Direction-normalized min and max read accesses for each accessed field.
+
+        Args:
+            loop_order: forward or backward order.
+            section: loop section to split.
+
+        Returns:
+            A dict, mapping field names to min and max read offsets relative to loop order (i.e., positive means in the direction of the loop order).
+
+        """
+
+        def directional_k_offset(offset: Tuple[int, int, int]) -> int:
+            """Positive k-offset for forward loops, negative for backward."""
+            return offset[2] if loop_order == common.LoopOrder.FORWARD else -offset[2]
+
+        read_offsets = AccessCollector.apply(section).read_offsets()
+        return {
+            field: (
+                min(directional_k_offset(o) for o in offsets),
+                max(directional_k_offset(o) for o in offsets),
+            )
+            for field, offsets in read_offsets.items()
+        }
+
+    @staticmethod
+    def _requires_splitting(interval: oir.Interval) -> bool:
+        """Check if an interval is larger than one level and thus may require splitting."""
+        if interval.start.level != interval.end.level:
+            return True
+        return abs(interval.end.offset - interval.start.offset) > 1
+
+    @staticmethod
+    def _split_entry_level(
+        loop_order: common.LoopOrder, section: oir.VerticalLoopSection
+    ) -> Tuple[oir.VerticalLoopSection, oir.VerticalLoopSection]:
+        """Split the entry level of a loop section.
+
+        Args:
+            loop_order: forward or backward order.
+            section: loop section to split.
+
+        Returns:
+            Two loop sections.
+        """
+        assert loop_order in (common.LoopOrder.FORWARD, common.LoopOrder.BACKWARD)
+        if loop_order == common.LoopOrder.FORWARD:
+            bound = common.AxisBound(
+                level=section.interval.start.level, offset=section.interval.start.offset + 1
+            )
+            entry_interval = oir.Interval(start=section.interval.start, end=bound)
+            rest_interval = oir.Interval(start=bound, end=section.interval.end)
+        else:
+            bound = common.AxisBound(
+                level=section.interval.end.level, offset=section.interval.end.offset - 1
+            )
+            entry_interval = oir.Interval(start=bound, end=section.interval.end)
+            rest_interval = oir.Interval(start=section.interval.start, end=bound)
+        return (
+            oir.VerticalLoopSection(
+                interval=entry_interval, horizontal_executions=section.horizontal_executions
+            ),
+            oir.VerticalLoopSection(
+                interval=rest_interval, horizontal_executions=section.horizontal_executions
+            ),
+        )
+
+    @classmethod
+    def _split_section_with_multiple_fills(
+        cls,
+        loop_order: common.LoopOrder,
+        section: oir.VerticalLoopSection,
+        filling_fields: Iterable[str],
+        first_unfilled: Dict[str, int],
+    ) -> Tuple[Tuple[oir.VerticalLoopSection, ...], Dict[str, int]]:
+        """Split loop sections that require multiple fills.
+
+        Args:
+            loop_order: forward or backward order.
+            section: loop section to split.
+            filling_fields: fields that are using fill caches.
+            first_unfilled: direction-normalized offset of the first unfilled cache entry for each field.
+
+        Returns:
+            A list of sections and an updated `first_unfilled` map.
+        """
+        fill_limits = cls._fill_limits(loop_order, section)
+        max_required_fills = 0
+        for field in filling_fields:
+            lmin, lmax = fill_limits[field]
+            required_fills = lmax + 1 - max(lmin, first_unfilled.get(field, lmin))
+            max_required_fills = max(required_fills, max_required_fills)
+            first_unfilled[field] = lmax
+        if max_required_fills > 1 and cls._requires_splitting(section.interval):
+            return cls._split_entry_level(loop_order, section), first_unfilled
+        return (section,), first_unfilled
+
+    @classmethod
+    def _fill_stmts(
+        cls,
+        loop_order: common.LoopOrder,
+        section: oir.VerticalLoopSection,
+        filling_fields: Dict[str, str],
+        first_unfilled: Dict[str, int],
+        symtable: Dict[str, Any],
+    ) -> Tuple[List[oir.AssignStmt], Dict[str, int]]:
+        """Generate fill statements for the given loop section.
+
+        Args:
+            loop_order: forward or backward order.
+            section: loop section to split.
+            filling_fields: mapping from field names to cache names.
+            first_unfilled: direction-normalized offset of the first unfilled cache entry for each field.
+
+        Returns:
+            A list of fill statements and an updated `first_unfilled` map.
+        """
+        fill_limits = cls._fill_limits(loop_order, section)
+        fill_stmts = []
+        for field, cache in filling_fields.items():
+            lmin, lmax = fill_limits[field]
+            lmin = max(lmin, first_unfilled.get(field, lmin))
+            for offset in range(lmin, lmax + 1):
+                fill_stmts.append(
+                    oir.AssignStmt(
+                        left=oir.FieldAccess(
+                            name=cache,
+                            dtype=symtable[field].dtype,
+                            offset=common.CartesianOffset.zero(),
+                        ),
+                        right=oir.FieldAccess(
+                            name=field,
+                            dtype=symtable[field].dtype,
+                            offset=common.CartesianOffset(
+                                i=0,
+                                j=0,
+                                k=offset if loop_order == common.LoopOrder.FORWARD else -offset,
+                            ),
+                        ),
+                    )
+                )
+            first_unfilled[field] = lmax
+        return fill_stmts, first_unfilled
+
     def visit_VerticalLoop(
         self,
         node: oir.VerticalLoop,
@@ -187,100 +334,37 @@ class FillToLocalKCaches(_ToLocalKCachesBase):
         **kwargs: Any,
     ) -> oir.VerticalLoop:
         filling_fields = {
-            c.name: new_symbol_name(c.name)
+            str(c.name): new_symbol_name(c.name)
             for c in node.caches
             if isinstance(c, oir.KCache) and c.fill
         }
 
+        if not filling_fields:
+            return node
+
+        # new temporaries used for caches, declarations are later added to stencil
         for field_name, tmp_name in filling_fields.items():
             new_tmps.append(oir.Temporary(name=tmp_name, dtype=symtable[field_name].dtype))
 
-        def directional_k_offset(offset: Tuple[int, int, int]) -> int:
-            i, j, k = offset
-            if not i == j == 0:
-                raise NotImplementedError("Requires zero horizontal offsets")
-            return k if node.loop_order == common.LoopOrder.FORWARD else -k
-
-        def fill_limits(n: oir.VerticalLoopSection) -> Dict[str, Tuple[int, int]]:
-            return {
-                field: (min(k_offs := {directional_k_offset(o) for o in offsets}), max(k_offs))
-                for field, offsets in AccessCollector.apply(n).read_offsets().items()
-                if field in filling_fields
-            }
-
-        def requires_splitting(interval: oir.Interval) -> bool:
-            if interval.start.level != interval.end.level:
-                return True
-            return abs(interval.end.offset - interval.start.offset) > 1
-
-        def split_entry_level(section: oir.VerticalLoopSection) -> List[oir.VerticalLoopSection]:
-            if node.loop_order == common.LoopOrder.FORWARD:
-                bound = common.AxisBound(
-                    level=section.interval.start.level, offset=section.interval.start.offset + 1
-                )
-                entry_interval = oir.Interval(start=section.interval.start, end=bound)
-                rest_interval = oir.Interval(start=bound, end=section.interval.end)
-            else:
-                bound = common.AxisBound(
-                    level=section.interval.stop.level, offset=section.interval.stop.offset - 1
-                )
-                entry_interval = oir.Interval(start=bound, end=section.interval.end)
-                rest_interval = oir.Interval(start=section.interval.start, end=bound)
-            return [
-                oir.VerticalLoopSection(
-                    interval=entry_interval, horizontal_executions=section.horizontal_executions
-                ),
-                oir.VerticalLoopSection(
-                    interval=rest_interval, horizontal_executions=section.horizontal_executions
-                ),
-            ]
-
-        previous_fill = {field: -100000 for field in filling_fields}
-        split_sections = []
+        # split sections where more than one fill operations are required at the entry level
+        first_unfilled: Dict[str, int] = dict()
+        split_sections: List[oir.VerticalLoopSection] = []
         for section in node.sections:
-            limits = fill_limits(section)
-            max_required_fills = 0
-            for field in filling_fields:
-                lmin, lmax = limits[field]
-                required_fills = lmax - max(lmin, previous_fill[field] + 1) + 1
-                max_required_fills = max(required_fills, max_required_fills)
-                previous_fill[field] = lmax - 1
-            if max_required_fills > 1 and requires_splitting(section.interval):
-                split_sections += split_entry_level(section)
-            else:
-                split_sections.append(section)
+            split_section, previous_fills = self._split_section_with_multiple_fills(
+                node.loop_order, section, filling_fields, first_unfilled
+            )
+            split_sections += split_section
 
-        previous_fill = {field: -100000 for field in filling_fields}
+        # generate cache filling statements
+        first_unfilled = dict()
         sections = []
         for section in split_sections:
-            limits = fill_limits(section)
-            fills = []
-            for field in filling_fields:
-                lmin, lmax = limits[field]
-                for offset in range(max(lmin, previous_fill[field] + 1), lmax + 1):
-                    fills.append(
-                        oir.AssignStmt(
-                            left=oir.FieldAccess(
-                                name=filling_fields[field],
-                                dtype=symtable[field].dtype,
-                                offset=common.CartesianOffset.zero(),
-                            ),
-                            right=oir.FieldAccess(
-                                name=field,
-                                dtype=symtable[field].dtype,
-                                offset=common.CartesianOffset(
-                                    i=0,
-                                    j=0,
-                                    k=offset
-                                    if node.loop_order == common.LoopOrder.FORWARD
-                                    else -offset,
-                                ),
-                            ),
-                        )
-                    )
-                sections.append(self.visit(section, fills=fills, name_map=filling_fields, **kwargs))
-                previous_fill[field] = lmax - 1
+            fills, first_unfilled = self._fill_stmts(
+                node.loop_order, section, filling_fields, first_unfilled, symtable
+            )
+            sections.append(self.visit(section, fills=fills, name_map=filling_fields, **kwargs))
 
+        # replace fill cache declarations
         caches = (
             [c for c in node.caches if c.name not in filling_fields]
             + [oir.KCache(name=f, fill=False, flush=False) for f in filling_fields.values()]
@@ -309,6 +393,44 @@ class FlushToLocalKCaches(_ToLocalKCachesBase):
             declarations=node.declarations,
         )
 
+    @classmethod
+    def _flush_stmts(
+        cls,
+        loop_order: common.LoopOrder,
+        section: oir.VerticalLoopSection,
+        flushing_fields: Dict[str, str],
+        symtable: Dict[str, Any],
+    ) -> List[oir.AssignStmt]:
+        """Generate flush statements for the given loop section.
+
+        Args:
+            loop_order: forward or backward order.
+            section: loop section to split.
+            flushing_fields: mapping from field names to cache names.
+
+        Returns:
+            A list of flush statements.
+        """
+        write_fields = AccessCollector.apply(section).write_fields()
+        flush_stmts = []
+        for field, cache in flushing_fields.items():
+            if field in write_fields:
+                flush_stmts.append(
+                    oir.AssignStmt(
+                        left=oir.FieldAccess(
+                            name=field,
+                            dtype=symtable[field].dtype,
+                            offset=common.CartesianOffset.zero(),
+                        ),
+                        right=oir.FieldAccess(
+                            name=cache,
+                            dtype=symtable[field].dtype,
+                            offset=common.CartesianOffset.zero(),
+                        ),
+                    )
+                )
+        return flush_stmts
+
     def visit_VerticalLoop(
         self,
         node: oir.VerticalLoop,
@@ -319,7 +441,7 @@ class FlushToLocalKCaches(_ToLocalKCachesBase):
         **kwargs: Any,
     ) -> oir.VerticalLoop:
         flushing_fields = {
-            c.name: new_symbol_name(c.name)
+            str(c.name): new_symbol_name(c.name)
             for c in node.caches
             if isinstance(c, oir.KCache) and c.flush
         }
@@ -329,29 +451,15 @@ class FlushToLocalKCaches(_ToLocalKCachesBase):
         for field_name, tmp_name in flushing_fields.items():
             new_tmps.append(oir.Temporary(name=tmp_name, dtype=symtable[field_name].dtype))
 
-        sections = []
-        for section in node.sections:
-            flushes = []
-            write_fields = AccessCollector.apply(section).write_fields()
-            for field, cache in flushing_fields.items():
-                if field in write_fields:
-                    flushes.append(
-                        oir.AssignStmt(
-                            left=oir.FieldAccess(
-                                name=field,
-                                dtype=symtable[field].dtype,
-                                offset=common.CartesianOffset.zero(),
-                            ),
-                            right=oir.FieldAccess(
-                                name=cache,
-                                dtype=symtable[field].dtype,
-                                offset=common.CartesianOffset.zero(),
-                            ),
-                        )
-                    )
-            sections.append(
-                self.visit(section, flushes=flushes, name_map=flushing_fields, **kwargs)
+        sections = [
+            self.visit(
+                section,
+                flushes=self._flush_stmts(node.loop_order, section, flushing_fields, symtable),
+                name_map=flushing_fields,
+                **kwargs,
             )
+            for section in node.sections
+        ]
 
         caches = (
             [c for c in node.caches if c.name not in flushing_fields]
