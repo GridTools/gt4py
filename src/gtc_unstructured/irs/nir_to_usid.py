@@ -180,6 +180,13 @@ class NirToUsid(eve.NodeTranslator):
             location_type=node.location_type,
         )
 
+    def visit_NativeFuncCall(self, node: nir.NativeFuncCall, **kwargs):
+        return usid.NativeFuncCall(
+            func=usid.NativeFunction(node.func.value),
+            args=self.visit(node.args, **kwargs),
+            location_type=node.location_type,
+        )
+
     def visit_LocalVar(self, node: nir.LocalVar, **kwargs):
         return usid.VarDecl(
             name=node.name,

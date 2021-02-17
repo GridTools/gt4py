@@ -14,13 +14,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
 
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, ClassVar
+import enum
 
 from devtools import debug  # noqa: F401
 from pydantic.class_validators import root_validator
 
-from eve import FrozenNode, Node, Str, SymbolTableTrait
+from eve import FrozenNode, Node, Str, SymbolTableTrait, StrEnum
 from eve.type_definitions import SymbolName, SymbolRef
 from gtc_unstructured.irs import common
 from gtc import common as stable_gtc_common
@@ -29,8 +31,78 @@ from gtc import common as stable_gtc_common
 TAG_APPENDIX: str = "_tag"
 
 
+@enum.unique
+class NativeFunction(StrEnum):
+    ABS = "abs"
+    MIN = "min"
+    MAX = "max"
+    MOD = "mod"
+
+    SIN = "sin"
+    COS = "cos"
+    TAN = "tan"
+    ARCSIN = "arcsin"
+    ARCCOS = "arccos"
+    ARCTAN = "arctan"
+
+    SQRT = "sqrt"
+    EXP = "exp"
+    LOG = "log"
+
+    ISFINITE = "isfinite"
+    ISINF = "isinf"
+    ISNAN = "isnan"
+    FLOOR = "floor"
+    CEIL = "ceil"
+    TRUNC = "trunc"
+
+    IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
+
+    @property
+    def arity(self) -> int:
+        return self.IR_OP_TO_NUM_ARGS[self]
+
+
+NativeFunction.IR_OP_TO_NUM_ARGS = {
+    NativeFunction.ABS: 1,
+    NativeFunction.MIN: 2,
+    NativeFunction.MAX: 2,
+    NativeFunction.MOD: 2,
+    NativeFunction.SIN: 1,
+    NativeFunction.COS: 1,
+    NativeFunction.TAN: 1,
+    NativeFunction.ARCSIN: 1,
+    NativeFunction.ARCCOS: 1,
+    NativeFunction.ARCTAN: 1,
+    NativeFunction.SQRT: 1,
+    NativeFunction.EXP: 1,
+    NativeFunction.LOG: 1,
+    NativeFunction.ISFINITE: 1,
+    NativeFunction.ISINF: 1,
+    NativeFunction.ISNAN: 1,
+    NativeFunction.FLOOR: 1,
+    NativeFunction.CEIL: 1,
+    NativeFunction.TRUNC: 1,
+}
+
+
 class Expr(Node):
     location_type: common.LocationType
+
+
+class NativeFuncCall(Expr):
+    func: NativeFunction
+    args: List[Expr]
+
+    @root_validator(skip_on_failure=True)
+    def arity_check(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
+        if values["func"].arity != len(values["args"]):
+            raise ValueError(
+                "{} accepts {} arguments, {} where passed.".format(
+                    values["func"], values["func"].arity, len(values["args"])
+                )
+            )
+        return values
 
 
 class Stmt(Node):

@@ -131,6 +131,8 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
+    NativeFuncCall = as_fmt("{func}({','.join(args)})")
+
     BinaryOp = as_fmt("({left} {op} {right})")
 
     PtrRef = as_fmt("{name}")

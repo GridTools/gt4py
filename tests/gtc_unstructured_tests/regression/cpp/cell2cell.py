@@ -31,8 +31,8 @@ dtype = DataType.FLOAT64
 
 def sten(c2c: C2C, field_in: Field[Cell, dtype], field_out: Field[Cell, dtype]):
     with computation(FORWARD), location(Cell) as c1:
-        field_out[c1] = sqrt(4)
-        # field_out[c1] = max(1, 2)
+        field_out[c1] = sqrt(4.0)
+        field_out[c1] = max(1, 2)
         # field_out[c1] = max(field_in[c1] + field_in[c2] for c2 in c2c[c1])
 
 

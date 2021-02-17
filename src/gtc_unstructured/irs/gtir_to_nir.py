@@ -245,6 +245,16 @@ class GtirToNir(eve.NodeTranslator):
             )
         )
 
+    def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs):
+        debug(node)
+        nir_node = nir.NativeFuncCall(
+            func=nir.NativeFunction(node.func.value),
+            args=self.visit(node.args, **kwargs),
+            location_type=node.location_type
+        )
+        debug(nir_node)
+        return nir_node
+
     def visit_HorizontalLoop(self, node: gtir.HorizontalLoop, **kwargs):
         hloop_ctx = self.HorizontalLoopContext()
         self.visit(
