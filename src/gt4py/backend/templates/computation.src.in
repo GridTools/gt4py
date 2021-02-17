@@ -22,6 +22,7 @@
     - halo_sizes: [int]
     - k_axis: { "n_intervals": int, "offset_limit": int}
     - max_ndim: int
+    - requires_positional: bool
     - multi_stages: [{ "exec": str, "steps": [[str]]]
     - parameters: [{ "name": str, "dtype": str }]
     - stage_functors: {
@@ -45,6 +46,8 @@
     - stencil_unique_name: str
     - tmp_fields: [{ "name": str, "dtype": str }]
 #}
+
+{%- set axes_names = ["I", "J", "K"] -%}
 
 {%- if gt_backend == "cuda" %}
 #define GT_USE_GPU
@@ -145,8 +148,8 @@ make_data_store(const BufferInfo& bi,
 static constexpr gt::uint_t level_offset_limit = {{ k_axis.offset_limit }};
 
 using axis_t =
-    gridtools::axis<{{ k_axis.n_intervals }}, /* NIntervals */
-                    gt::axis_config::offset_limit<level_offset_limit>>;
+    gt::axis<{{ k_axis.n_intervals }}, /* NIntervals */
+             gt::axis_config::offset_limit<level_offset_limit>>;
 
 // These halo sizes are used to determine the sizes of the temporaries
 static constexpr gt::uint_t halo_size_i = {{ halo_sizes[0] }};
@@ -163,6 +166,12 @@ using p_{{ field.name }} = gt::arg<{{ arg_counter + loop.index0 }}, typename sto
 using p_{{ param.name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
 {%- endfor %}
 {% set arg_counter = arg_counter + parameters|length %}
+{%- if requires_positional -%}
+{% for axis_name in axes_names %}
+using p_domain_size_{{ axis_name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_parameter<gt::uint_t>>;
+{%- endfor %}
+{% set arg_counter = arg_counter + axes_names|length %}
+{%- endif -%}
 {% if tmp_fields -%}
 {%- for field in tmp_fields %}
 // All temporaries are 3D storages. For now...
@@ -170,10 +179,6 @@ using p_{{ field.name }} = gt::tmp_arg<{{ arg_counter + loop.index0 }}, typename
 {%- endfor %}
 {% set arg_counter = arg_counter + tmp_fields|length %}
 {%- endif %}
-
-// Computation
-using computation_t =
-    gt::computation<p_{{ (arg_fields|list + parameters|list)|map(attribute='name')|join(", p_")}}>;
 
 
 // Constants
@@ -202,8 +207,15 @@ struct {{ name }}_func {
                                                gt::level<{{ region.interval_end|join(", ") }}, level_offset_limit>>)
     {
 {%- filter indent(width=8) %}
+{%- if region.entry_conditional|length > 0 %}
+if ({{ region.entry_conditional }}) {
+{%- filter indent(width=4) %}
 {{ region.body }}
-
+{%- endfilter %}
+}
+{%- else %}
+{{ region.body }}
+{%- endif %}
 {%- endfilter %}
     }
     {%- endfor %}
@@ -223,14 +235,6 @@ auto make_grid(const std::array<gt::uint_t, MAX_DIM>& compute_domain_shape) {
 }
 
 }  // namespace
-
-
-{% if parameters -%}
-// Global parameters
-{% for param in parameters -%}
-gt::global_parameter<{{ param.dtype }}> {{ param.name }}_param = gt::make_global_parameter<backend_t>({{ param.dtype }}{});
-{%- endfor %}
-{%- endif %}
 
 
 // Run actual computation
@@ -267,14 +271,21 @@ void run(const std::array<gt::uint_t, MAX_DIM>& domain,
     auto ds_{{ field.name }} = make_data_store<{{ field.dtype }}, {{ field.layout_id }}, {{ field.naxes }}>(bi_{{ field.name }}, domain, {{ field.name }}_origin, gt::selector<{{ field.selector | join(", ") | lower }}>{});
 {%- endfor %}
 
-    // Update global parameters
-{%- for param in parameters %}
-    gt::update_global_parameter({{ param.name }}_param, {{ param.name }});
-{%- endfor %}
-
     // Run computation and wait for the synchronization of the output stores
-    computation_t gt_computation = gt::make_computation<backend_t>(
+{%- if requires_positional %}
+    auto gt_computation = gt::make_positional_computation<backend_t>(
+{%- else %}
+    auto gt_computation = gt::make_computation<backend_t>(
+{%- endif %}
         make_grid(domain),
+{%- for param in parameters %}
+        p_{{ param.name }}() = gt::make_global_parameter<{{ param.dtype }}>({{ param.name }}),
+{% endfor -%}
+{%- if requires_positional -%}
+{%- for axis_name in axes_names %}
+        p_domain_size_{{ axis_name }}() = gt::make_global_parameter(domain[{{ loop.index0 }}]),
+{%- endfor -%}
+{%- endif -%}
 
 {%- set multi_comma = joiner(",") %}
 {%- for multi in multi_stages %}
@@ -309,9 +320,6 @@ void run(const std::array<gt::uint_t, MAX_DIM>& domain,
     gt_computation.run({%- set comma = joiner(", ") %}
 {%- for field in arg_fields -%}
                      {{ comma() }}p_{{ field.name }}()=ds_{{ field.name }}
-{%- endfor %}
-{%- for param in parameters -%}
-                     {{ comma() }}p_{{ param.name }}()={{ param.name }}_param
 {%- endfor %});
         // computation_.sync_bound_data_stores();
 }

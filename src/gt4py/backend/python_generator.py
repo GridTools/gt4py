@@ -188,6 +188,15 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
         return source
 
+    def visit_AxisOffset(self, node: gt_ir.AxisOffset) -> str:
+        index = gt_ir.Domain.LatLonGrid().index(node.axis)
+        return "{endpt}{offset:+d}".format(
+            endpt=f"{self.domain_arg_name}[{index}]"
+            if node.endpt == gt_ir.LevelMarker.END
+            else "0",
+            offset=node.offset,
+        )
+
     def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
         call = self.NATIVE_FUNC_TO_PYTHON[node.func]
         args = ",".join(self.visit(arg) for arg in node.args)
@@ -269,6 +278,35 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         self.block_info.iteration_order = iteration_order
         self.block_info.extent = node.compute_extent
         self.var_refs_defined.clear()
+
+        axes_with_indices = tuple(
+            set([axis_index.axis for axis_index in gt_ir.filter_nodes_dfs(node, gt_ir.AxisIndex)])
+        )
+        self.block_info.axes_indices = {}
+        for axis_name in axes_with_indices:
+            all_axes = gt_ir.Domain.LatLonGrid().axes_names
+            array_index = all_axes.index(axis_name)
+            extents = node.compute_extent[array_index]
+            stage_axes = (
+                all_axes
+                if iteration_order == gt_ir.IterationOrder.PARALLEL
+                else [axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes]
+            )
+            newaxis = f"{self.numpy_prefix}.newaxis"
+            shaping_axes = ", ".join(":" if axis == axis_name else newaxis for axis in stage_axes)
+            axis_index_name = f"{axis_name}_{node.name}"
+            self.sources.append(
+                "{name} = {np}.asarray(range({lower}, {domain_array}[{d}] + {upper}))[{shape}]".format(
+                    name=axis_index_name,
+                    np=self.numpy_prefix,
+                    lower=extents[0],
+                    domain_array=self.domain_arg_name,
+                    d=array_index,
+                    upper=extents[1],
+                    shape=shaping_axes,
+                )
+            )
+            self.block_info.axes_indices[axis_name] = axis_index_name
 
         # Create regions and computations
         regions = []

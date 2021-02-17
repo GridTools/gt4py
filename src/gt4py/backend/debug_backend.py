@@ -162,6 +162,9 @@ class DebugSourceGenerator(PythonSourceGenerator):
             body_sources.dedent()
         return ["".join([str(item) for item in line]) for line in body_sources.lines]
 
+    def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
+        return node.axis
+
 
 class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
     def __init__(self):

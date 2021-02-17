@@ -416,6 +416,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
         # return "\n".join(sources)
         return sources
 
+    def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
+        return self.block_info.axes_indices[node.axis]
+
 
 class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
     def __init__(self):

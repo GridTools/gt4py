@@ -398,6 +398,17 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
         return (start_splitter, start_offset), (end_splitter, end_offset)
 
+    def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
+        return f"eval.{node.axis.lower()}()"
+
+    def visit_AxisOffset(self, node: gt_ir.AxisIndex) -> str:
+        return "static_cast<gt::int_t>({endpt}{offset:+d})".format(
+            endpt=f"eval(domain_size_{node.axis.upper()}())"
+            if node.endpt == gt_ir.LevelMarker.END
+            else "0",
+            offset=node.offset,
+        )
+
     def visit_ApplyBlock(
         self, node: gt_ir.ApplyBlock
     ) -> Tuple[Tuple[Tuple[int, int], Tuple[int, int]], str]:
@@ -429,6 +440,14 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 )
                 arg["extent"] = gt_utils.flatten(accessor.extent)
             args.append(arg)
+
+        if len(tuple(gt_ir.filter_nodes_dfs(node, gt_ir.AxisIndex))) > 0:
+            args.extend(
+                [
+                    {"name": f"domain_size_{name}", "access_type": "in", "extent": None}
+                    for name in self.domain.axes_names
+                ]
+            )
 
         # Create regions and computations
         regions = []
@@ -491,6 +510,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             if name not in node.unreferenced
         ]
 
+        requires_positional = len(tuple(gt_ir.filter_nodes_dfs(node, gt_ir.AxisIndex))) > 0
         stage_functors = {}
         for multi_stage in node.multi_stages:
             for group in multi_stage.groups:
@@ -509,6 +529,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             halo_sizes=halo_sizes,
             k_axis=k_axis,
             module_name=self.module_name,
+            requires_positional=requires_positional,
             multi_stages=multi_stages,
             parameters=parameters,
             stage_functors=stage_functors,

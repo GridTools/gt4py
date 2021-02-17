@@ -248,7 +248,7 @@ class AxisIntervalParser(gt_meta.ASTPass):
                 level = gt_ir.LevelMarker.START if value.index >= 0 else gt_ir.LevelMarker.END
                 offset = value.index + value.offset
             elif value is None:
-                LARGE_NUM = np.iinfo(np.int32).max
+                LARGE_NUM = 10000
                 seq_name = gt_ir.Domain.LatLonGrid().sequential_axis.name
                 level = endpt
                 if self.axis_name == seq_name:
@@ -1240,16 +1240,18 @@ class IRMaker(ast.NodeVisitor):
     def _parse_region_intervals(
         self, node: Union[ast.ExtSlice, ast.Index, ast.Tuple], loc: gt_ir.Location = None
     ) -> List[gt_ir.AxisInterval]:
-        if isinstance(node, ast.ExtSlice):
-            # Python 3.8 returns an ExtSlice for region[0, :]
-            axes_nodes = node.dims
-        elif isinstance(node, ast.Index):
+        if isinstance(node, ast.Index):
             # Python 3.8 wraps a Tuple in an Index for region[0, 1]
             tuple_node = node.value
             axes_nodes = tuple_node.elts
-        elif isinstance(node, ast.Tuple):
+        elif isinstance(node, ast.ExtSlice) or isinstance(node, ast.Tuple):
+            # Python 3.8 returns an ExtSlice for region[0, :]
             # Python 3.9 directly returns a Tuple for region[0, 1]
-            axes_nodes = node.elts
+            node_list = node.dims if isinstance(node, ast.ExtSlice) else node.elts
+            axes_nodes = [
+                axis_node.value if isinstance(axis_node, ast.Index) else axis_node
+                for axis_node in node_list
+            ]
         else:
             raise GTScriptSyntaxError(
                 f"Invalid 'region' index at line {loc.line} (column {loc.column})", loc=loc
