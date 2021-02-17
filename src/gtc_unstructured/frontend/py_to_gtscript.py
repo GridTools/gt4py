@@ -187,6 +187,7 @@ class PyToGTScript:
     leaf_map = {
         ast.Mult: gtc_unstructured.irs.common.BinaryOperator.MUL,
         ast.Add: gtc_unstructured.irs.common.BinaryOperator.ADD,
+        ast.Sub: gtc_unstructured.irs.common.BinaryOperator.SUB,
         ast.Div: gtc_unstructured.irs.common.BinaryOperator.DIV,
         ast.Pass: gtscript_ast.Pass,
     }
