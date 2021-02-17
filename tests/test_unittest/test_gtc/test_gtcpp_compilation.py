@@ -23,18 +23,20 @@ from gt4py import (  # TODO(havogt) this is a dependency from gtc tests to gt4py
     config,
     gt_src_manager,
 )
-from gtc.common import DataType
-from gtc.gtcpp.gtcpp import Arg, GTAccessor, GTApplyMethod, GTExtent, GTStage, Intent, Program
+from gtc.gtcpp.gtcpp import GTApplyMethod, Intent, Program
 from gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 
 from .gtcpp_utils import (
-    AssignStmtBuilder,
-    GTApplyMethodBuilder,
-    GTComputationCallBuilder,
-    GTFunctorBuilder,
-    IfStmtBuilder,
-    ProgramBuilder,
+    ArgFactory,
+    FieldDeclFactory,
+    GTAccessorFactory,
+    GTApplyMethodFactory,
+    GTComputationCallFactory,
+    GTFunctorFactory,
+    GTParamListFactory,
+    IfStmtFactory,
+    ProgramFactory,
 )
 from .utils import match
 
@@ -70,61 +72,51 @@ def build_gridtools_test(tmp_path: Path, code: str):
 
 def make_compilation_input_and_expected():
     return [
-        (ProgramBuilder("test").build(), r"auto test"),
+        (ProgramFactory(name="test"), r"auto test"),
         (
-            ProgramBuilder("test").add_functor(GTFunctorBuilder("fun").build()).build(),
+            ProgramFactory(functors__0__name="fun"),
             r"struct fun",
         ),
         (
-            ProgramBuilder("test")
-            .add_functor(
-                GTFunctorBuilder("fun")
-                .add_accessor(
-                    GTAccessor(
-                        name="field",
-                        id=0,
-                        extent=GTExtent(i=(1, 2), j=(-3, -4), k=(10, -10)),
-                        intent=Intent.INOUT,
-                    )
-                )
-                .build()
-            )
-            .build(),
+            ProgramFactory(
+                functors__0__applies=[],
+                functors__0__param_list=GTParamListFactory(
+                    accessors=[
+                        GTAccessorFactory(
+                            id=0,
+                            extent__i=(1, 2),
+                            extent__j=(-3, -4),
+                            extent__k=(10, -10),
+                            intent=Intent.INOUT,
+                        )
+                    ]
+                ),
+            ),
             r"inout_accessor<0, extent<1,\s*2,\s*-3,\s*-4,\s*10,\s*-10>",
         ),
         (
-            ProgramBuilder("test")
-            .add_functor(
-                GTFunctorBuilder("fun").add_apply_method().build(),
-            )
-            .build(),
+            ProgramFactory(),
             r"void\s*apply\(",
         ),
-        (ProgramBuilder("test").add_parameter("my_param", DataType.FLOAT64).build(), r"my_param"),
+        (ProgramFactory(parameters=[FieldDeclFactory(name="my_param")]), r"my_param"),
         (
-            ProgramBuilder("test")
-            .add_parameter("outer_param", DataType.FLOAT64)
-            .add_functor(
-                GTFunctorBuilder("fun").add_apply_method().build(),
-            )
-            .gt_computation(
-                GTComputationCallBuilder()
-                .add_stage(GTStage(functor="fun", args=[Arg(name="outer_param")]))
-                .add_argument(name="outer_param")
-                .build()
-            )
-            .build(),
+            ProgramFactory(
+                parameters=[FieldDeclFactory(name="outer_param")],
+                functors=[GTFunctorFactory(name="fun")],
+                gt_computation=GTComputationCallFactory(
+                    multi_stages__0__stages__0__functor="fun",
+                    multi_stages__0__stages__0__args=[ArgFactory(name="outer_param")],
+                    arguments=[ArgFactory(name="outer_param")],
+                    temporaries=[],
+                ),
+            ),
             r"",
         ),
         (
-            ProgramBuilder("test")
-            .add_functor(
-                GTFunctorBuilder("fun").add_apply_method().build(),
-            )
-            .gt_computation(
-                GTComputationCallBuilder().add_stage(GTStage(functor="fun", args=[])).build()
-            )
-            .build(),
+            ProgramFactory(
+                functors=[GTFunctorFactory(name="fun", applies__0__body=[])],
+                gt_computation=GTComputationCallFactory(multi_stages__0__stages__0__functor="fun"),
+            ),
             r"",
         ),
     ]
@@ -141,27 +133,22 @@ def test_program_compilation_succeeds(tmp_path, gtcpp_program, expected_regex):
 
 def _embed_apply_method_in_program(apply_method: GTApplyMethod):
     accessors = _extract_accessors(apply_method)
-    return (
-        ProgramBuilder("test")
-        .add_functor(
-            GTFunctorBuilder("fun").add_accessors(accessors).add_apply_method(apply_method).build()
-        )
-        .build()
+    return ProgramFactory(
+        functors__0__applies__0=apply_method,
+        functors__0__param_list=GTParamListFactory(accessors=accessors),
     )
 
 
 @pytest.mark.parametrize(
     "apply_method,expected_regex",
     [
-        (GTApplyMethodBuilder().build(), r"apply"),
+        (GTApplyMethodFactory(), r"apply"),
         (
-            GTApplyMethodBuilder().add_stmt(AssignStmtBuilder("a", "b").build()).build(),
-            r"a.*=.*b",
+            GTApplyMethodFactory(body__0__left__name="foo", body__0__right__name="bar"),
+            r"foo.*=.*bar",
         ),
         (
-            GTApplyMethodBuilder()
-            .add_stmt(IfStmtBuilder().true_branch(AssignStmtBuilder().build()).build())
-            .build(),
+            GTApplyMethodFactory(body__0=IfStmtFactory()),
             r"if",
         ),
     ],
