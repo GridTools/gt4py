@@ -1,10 +1,12 @@
 #pragma once
 
-namespace gridtools::usid {
+namespace gridtools {
+namespace usid {
 struct domain {
   int vertex;
   int edge;
   int cell;
   int k;
 };
-} // namespace gridtools::usid
+}
+}

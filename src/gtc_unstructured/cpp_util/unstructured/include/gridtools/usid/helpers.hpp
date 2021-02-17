@@ -19,7 +19,8 @@
 #include "dim.hpp"
 #include "domain.hpp"
 
-namespace gridtools::usid {
+namespace gridtools {
+namespace usid {
     template <class T, class Alloc, class HSize, class KSize>
     auto make_simple_tmp_storage(HSize h_size, KSize k_size, Alloc &alloc) {
         return sid::make_contiguous<T>(alloc, hymap::keys<dim::h, dim::k>::values<HSize, KSize>(h_size, k_size));
@@ -91,4 +92,5 @@ namespace gridtools::usid {
 
     template <class... Tags>
     constexpr make_composite_f<Tags...> make_composite = {};
-} // namespace gridtools::usid
+}
+}
