@@ -1,143 +1,201 @@
 default_language_version:
   python: python3.8
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.5.0
-    hooks:
-      - id: check-json
-      - id: check-toml
-      - id: check-yaml
-      - id: fix-encoding-pragma
+# - repo: meta
+#   hooks:
+#   - id: check-hooks-apply
+#   - id: check-useless-excludes
 
-  - repo: https://github.com/psf/black
-    rev: 20.8b1
-    hooks:
-      - id: black
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v3.4.0
+  hooks:
+  - id: check-case-conflict
+#  - id: check-json
+  - id: check-merge-conflict
+  - id: check-toml
+  - id: check-yaml
+  - id: debug-statements
+  # - id: fix-encoding-pragma
+  #   args: [--remove]
+#  - id: pretty-format-json
 
-  - repo: https://github.com/asottile/seed-isort-config
-    rev: v2.2.0
-    hooks:
-      - id: seed-isort-config
-        args: ["--application-directories=src:tests"]
+- repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+  rev: v2.0.0
+  hooks:
+  - id: pretty-format-ini
+    args: [--autofix]
+  - id: pretty-format-toml
+    args: [--autofix]
+  - id: pretty-format-yaml
+    args: [--autofix, --preserve-quotes, --indent, '2']
 
-  - repo: https://github.com/pre-commit/mirrors-isort
-    rev: v5.6.4
-    hooks:
-      - id: isort
+# - repo: https://github.com/Lucas-C/pre-commit-hooks
+#   rev: v1.1.9
+#   hooks:
+#   - id: insert-license
+#     name: Add license for all GT4Py Python source files
+#     exclude: (^\..*$)|(^.*/gtc(_.*)?/.*$)|(^.*/eve(_.*)?/.*$)
+#     types: [python]
+#     args: [--comment-style, "|#|", --license-filepath, .license_headers/gt4py_license_header.txt, --fuzzy-match-generates-todo]
 
-  - repo: https://gitlab.com/PyCQA/flake8
-    rev: 3.8.4
-    hooks:
-      - id: flake8
-        additional_dependencies:
-          - darglint
-          - flake8-bugbear
-          - flake8-builtins
-          - flake8-debugger
-          - flake8-docstrings
-          - flake8-eradicate
-          - flake8-mutable
-          - flake8-rst-docstrings
-          - pygments
-        exclude: >
-          (?x)^(
-          setup.py |
-          docs/gt4py/conf.py |
-          docs/eve/conf.py |
-          docs/gtc/conf.py |
-          src/gt4py/__gtscript__.py |
-          src/gt4py/__init__.py |
-          src/gt4py/definitions.py |
-          src/gt4py/gtscript.py |
-          src/gt4py/stencil_object.py |
-          src/gt4py/analysis/__init__.py |
-          src/gt4py/analysis/infos.py |
-          src/gt4py/analysis/passes.py |
-          src/gt4py/analysis/transformer.py |
-          src/gt4py/backend/__init__.py |
-          src/gt4py/backend/debug_backend.py |
-          src/gt4py/backend/numpy_backend.py |
-          src/gt4py/backend/pyext_builder.py |
-          src/gt4py/backend/python_generator.py |
-          src/gt4py/frontend/__init__.py |
-          src/gt4py/frontend/gtscript_frontend.py |
-          src/gt4py/ir/__init__.py |
-          src/gt4py/ir/nodes.py |
-          src/gt4py/ir/utils.py |
-          src/gt4py/storage/__init__.py |
-          src/gt4py/storage/storage.py |
-          src/gt4py/storage/utils.py |
-          src/gt4py/utils/__init__.py |
-          src/gt4py/utils/base.py |
-          src/gt4py/utils/attrib.py |
-          src/gt4py/utils/meta.py |
-          src/gtc_unstructured/frontend/gtscript.py |
-          src/gtc_unstructured/frontend/gtscript_to_gtir.py |
-          src/gtc_unstructured/frontend/gtscript_ast.py |
-          src/gtc_unstructured/frontend/ast_node_matcher.py |
-          src/gtc_unstructured/frontend/frontend.py |
-          tests/conftest.py |
-          tests/_disabled/test_iir/iir_stencil_definitions.py |
-          tests/_disabled/test_iir/test_code_generation.py |
-          tests/_disabled/test_iir/test_cpp_regression.py |
-          tests/_disabled/test_iir/test_validation.py |
-          tests/_disabled/test_iir/utils.py |
-          tests/_disabled/test_def_ir/test_cpp_regression.py |
-          tests/_disabled/test_def_ir/test_ir_transformation.py |
-          tests/_disabled/test_def_ir/def_ir_stencil_definitions.py |
-          tests/_disabled/test_def_ir/utils.py |
-          tests/test_integration/stencil_definitions.py |
-          tests/test_integration/test_code_generation.py |
-          tests/test_integration/test_cpp_regression.py |
-          tests/test_integration/utils.py |
-          tests/test_unittest/test_call_interface.py |
-          tests/test_unittest/test_dawn_backends.py |
-          tests/test_unittest/test_gtscript_frontend.py |
-          tests/test_unittest/test_storage.py |
-          tests/gtc_unstructured_tests/.* |
-          )$
+# - repo: https://github.com/Lucas-C/pre-commit-hooks
+#   rev: v1.1.9
+#   hooks:
+#   - id: insert-license
+#     name: Add license for all GTC Python source files
+#     exclude: ^\..*$
+#     files: ^.*/gtc(_.*)?/.*$
+#     types: [python]
+#     args: [--comment-style, "|#|", --license-filepath, .license_headers/gtc_license_header.txt, --fuzzy-match-generates-todo]
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v0.790
-    hooks:
-      - id: mypy
-        exclude: (?x)^(
-          docs/gt4py/conf.py |
-          docs/gtc/conf.py |
-          docs/eve/conf.py |
-          src/gt4py/analysis/infos.py |
-          src/gt4py/analysis/passes.py |
-          src/gt4py/analysis/transformer.py |
-          src/gt4py/backend/debug_backend.py |
-          src/gt4py/backend/numpy_backend.py |
-          src/gt4py/backend/pyext_builder.py |
-          src/gt4py/backend/python_generator.py |
-          src/gt4py/frontend/gtscript_frontend.py |
-          src/gt4py/ir/nodes.py |
-          src/gt4py/ir/utils.py |
-          src/gt4py/stencil_object.py |
-          src/gt4py/utils/meta.py |
-          src/gtc_unstructured/irs/nir_to_usid.py |
-          tests/definitions.py |
-          tests/test_integration/stencil_definitions.py |
-          tests/test_integration/test_code_generation.py |
-          tests/test_unittest/test_call_interface.py |
-          tests/test_unittest/test_gtscript_frontend.py |
-          tests/test_unittest/test_storage.py |
-          tests/test_unittest/test_dawn_backends.py |
-          tests/definition_setup.py |
-          tests/test_unittest/test_gtc/test_common.py |
-          tests/test_unittest/test_gtc/test_oir.py |
-          tests/test_unittest/test_gtc/gtir_utils.py |
-          tests/test_unittest/test_gtc/test_gtir_upcaster.py |
-          tests/test_unittest/test_gtc/test_gtir_to_oir.py |
-          tests/gtc_unstructured_tests/.* |
-          )$
+# - repo: https://github.com/Lucas-C/pre-commit-hooks
+#   rev: v1.1.9
+#   hooks:
+#   - id: insert-license
+#     name: Add license for all Eve Python source files
+#     exclude: ^\..*$
+#     files: ^.*/eve(_.*)?/.*$
+#     types: [python]
+#     args: [--comment-style, "|#|", --license-filepath, .license_headers/eve_license_header.txt, --fuzzy-match-generates-todo]
 
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.3.0
-    hooks:
-      - id: check-json
-      - id: pretty-format-json
-      - id: check-toml
-      - id: check-yaml
+# - repo: https://github.com/asottile/yesqa
+#   rev: v1.2.2
+#   hooks:
+#   - id: yesqa
+#     additional_dependencies:
+#     - flake8==3.8.4
+#     - darglint
+#     - flake8-bugbear
+#     - flake8-builtins
+#     - flake8-debugger
+#     - flake8-docstrings
+#     - flake8-eradicate
+#     - flake8-mutable
+#     - flake8-rst-docstrings
+#     - pygments
+
+- repo: https://github.com/psf/black
+  rev: 20.8b1
+  hooks:
+  - id: black
+
+- repo: https://github.com/asottile/seed-isort-config
+  rev: v2.2.0
+  hooks:
+  - id: seed-isort-config
+    args: ['--application-directories=src:tests']
+
+- repo: https://github.com/pre-commit/mirrors-isort
+  rev: v5.7.0
+  hooks:
+  - id: isort
+
+- repo: https://gitlab.com/PyCQA/flake8
+  rev: 3.8.4
+  hooks:
+  - id: flake8
+    additional_dependencies:
+    - darglint
+    - flake8-bugbear
+    - flake8-builtins
+    - flake8-debugger
+    - flake8-docstrings
+    - flake8-eradicate
+    - flake8-mutable
+    - flake8-rst-docstrings
+    - pygments
+    exclude: |
+      (?x)^(
+      setup.py |
+      docs/gt4py/conf.py |
+      docs/eve/conf.py |
+      docs/gtc/conf.py |
+      src/gt4py/__gtscript__.py |
+      src/gt4py/__init__.py |
+      src/gt4py/definitions.py |
+      src/gt4py/gtscript.py |
+      src/gt4py/stencil_object.py |
+      src/gt4py/analysis/__init__.py |
+      src/gt4py/analysis/infos.py |
+      src/gt4py/analysis/passes.py |
+      src/gt4py/analysis/transformer.py |
+      src/gt4py/backend/__init__.py |
+      src/gt4py/backend/debug_backend.py |
+      src/gt4py/backend/numpy_backend.py |
+      src/gt4py/backend/pyext_builder.py |
+      src/gt4py/backend/python_generator.py |
+      src/gt4py/frontend/__init__.py |
+      src/gt4py/frontend/gtscript_frontend.py |
+      src/gt4py/ir/__init__.py |
+      src/gt4py/ir/nodes.py |
+      src/gt4py/ir/utils.py |
+      src/gt4py/storage/__init__.py |
+      src/gt4py/storage/storage.py |
+      src/gt4py/storage/utils.py |
+      src/gt4py/utils/__init__.py |
+      src/gt4py/utils/base.py |
+      src/gt4py/utils/attrib.py |
+      src/gt4py/utils/meta.py |
+      src/gtc_unstructured/frontend/gtscript.py |
+      src/gtc_unstructured/frontend/gtscript_to_gtir.py |
+      src/gtc_unstructured/frontend/gtscript_ast.py |
+      src/gtc_unstructured/frontend/ast_node_matcher.py |
+      src/gtc_unstructured/frontend/frontend.py |
+      tests/conftest.py |
+      tests/_disabled/test_iir/iir_stencil_definitions.py |
+      tests/_disabled/test_iir/test_code_generation.py |
+      tests/_disabled/test_iir/test_cpp_regression.py |
+      tests/_disabled/test_iir/test_validation.py |
+      tests/_disabled/test_iir/utils.py |
+      tests/_disabled/test_def_ir/test_cpp_regression.py |
+      tests/_disabled/test_def_ir/test_ir_transformation.py |
+      tests/_disabled/test_def_ir/def_ir_stencil_definitions.py |
+      tests/_disabled/test_def_ir/utils.py |
+      tests/test_integration/stencil_definitions.py |
+      tests/test_integration/test_code_generation.py |
+      tests/test_integration/test_cpp_regression.py |
+      tests/test_integration/utils.py |
+      tests/test_unittest/test_call_interface.py |
+      tests/test_unittest/test_dawn_backends.py |
+      tests/test_unittest/test_gtscript_frontend.py |
+      tests/test_unittest/test_storage.py |
+      tests/gtc_unstructured_tests/.* |
+      )$
+
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v0.800
+  hooks:
+  - id: mypy
+    exclude: |
+      (?x)^(
+      docs/gt4py/conf.py |
+      docs/gtc/conf.py |
+      docs/eve/conf.py |
+      src/gt4py/analysis/infos.py |
+      src/gt4py/analysis/passes.py |
+      src/gt4py/analysis/transformer.py |
+      src/gt4py/backend/debug_backend.py |
+      src/gt4py/backend/numpy_backend.py |
+      src/gt4py/backend/pyext_builder.py |
+      src/gt4py/backend/python_generator.py |
+      src/gt4py/frontend/gtscript_frontend.py |
+      src/gt4py/ir/nodes.py |
+      src/gt4py/ir/utils.py |
+      src/gt4py/stencil_object.py |
+      src/gt4py/utils/meta.py |
+      src/gtc_unstructured/irs/nir_to_usid.py |
+      tests/definitions.py |
+      tests/test_integration/stencil_definitions.py |
+      tests/test_integration/test_code_generation.py |
+      tests/test_unittest/test_call_interface.py |
+      tests/test_unittest/test_gtscript_frontend.py |
+      tests/test_unittest/test_storage.py |
+      tests/test_unittest/test_dawn_backends.py |
+      tests/definition_setup.py |
+      tests/test_unittest/test_gtc/test_common.py |
+      tests/test_unittest/test_gtc/test_oir.py |
+      tests/test_unittest/test_gtc/gtir_utils.py |
+      tests/test_unittest/test_gtc/test_gtir_upcaster.py |
+      tests/test_unittest/test_gtc/test_gtir_to_oir.py |
+      tests/gtc_unstructured_tests/.* |
+      )$

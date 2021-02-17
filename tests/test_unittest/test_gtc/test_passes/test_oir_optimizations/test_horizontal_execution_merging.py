@@ -23,7 +23,7 @@ from ...oir_utils import (
     CartesianOffsetBuilder,
     FieldAccessBuilder,
     HorizontalExecutionBuilder,
-    VerticalLoopBuilder,
+    VerticalLoopSectionBuilder,
 )
 
 
@@ -34,7 +34,7 @@ def merger(request):
 
 def test_zero_extent_merging(merger):
     testee = (
-        VerticalLoopBuilder()
+        VerticalLoopSectionBuilder()
         .add_horizontal_execution(
             HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
         )
@@ -58,7 +58,7 @@ def test_zero_extent_merging(merger):
 
 def test_mixed_merging(merger):
     testee = (
-        VerticalLoopBuilder()
+        VerticalLoopSectionBuilder()
         .add_horizontal_execution(
             HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
         )
@@ -88,7 +88,7 @@ def test_mixed_merging(merger):
 
 def test_write_after_read_with_offset(merger):
     testee = (
-        VerticalLoopBuilder()
+        VerticalLoopSectionBuilder()
         .add_horizontal_execution(
             HorizontalExecutionBuilder()
             .add_stmt(AssignStmtBuilder("foo", "bar", (1, 0, 0)).build())
@@ -105,7 +105,7 @@ def test_write_after_read_with_offset(merger):
 
 def test_nonzero_extent_merging(merger):
     testee = (
-        VerticalLoopBuilder()
+        VerticalLoopSectionBuilder()
         .add_horizontal_execution(
             HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
         )

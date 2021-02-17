@@ -1,5 +1,5 @@
 include:
-  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.cscs.yml'
+- remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.cscs.yml'
 
 .py39: &py39
   PYVERSION_PREFIX: py39
@@ -13,10 +13,10 @@ include:
   STATUS_IMAGE: dropd/github-status:latest
 
 stages:
-  - notifystart
-  - image
-  - test
-  - cleanup
+- notifystart
+- image
+- test
+- cleanup
 
 notify_github_pending:
   stage: notifystart
@@ -34,14 +34,14 @@ build py38:
     BUILD_IMAGE: $CSCS_REGISTRY_IMAGE/gt4py-ci:$PYVERSION
     <<: *py38
   script:
-    - docker login -u $CSCS_REGISTRY_USER -p $CSCS_REGISTRY_PASSWORD $CSCS_REGISTRY
-    - docker pull $BUILD_IMAGE || echo "has not been built yet"
-    - docker build --network=host --cache-from $BUILD_IMAGE --build-arg BUILDKIT_INLINE_CACHE=1 --build-arg PYVERSION=$PYVERSION --build-arg CI_PROJECT_DIR=$CI_PROJECT_DIR -t $BUILD_IMAGE .
-    - docker push $BUILD_IMAGE
+  - docker login -u $CSCS_REGISTRY_USER -p $CSCS_REGISTRY_PASSWORD $CSCS_REGISTRY
+  - docker pull $BUILD_IMAGE || echo "has not been built yet"
+  - docker build --network=host --cache-from $BUILD_IMAGE --build-arg BUILDKIT_INLINE_CACHE=1 --build-arg PYVERSION=$PYVERSION --build-arg CI_PROJECT_DIR=$CI_PROJECT_DIR -t $BUILD_IMAGE .
+  - docker push $BUILD_IMAGE
   only:
-    - master
-    - staging
-    - trying
+  - master
+  - staging
+  - trying
 
 build py39:
   allow_failure: true
@@ -52,16 +52,16 @@ build py39:
 test py38:
   extends: .daint
   only:
-    - master
-    - staging
-    - trying
+  - master
+  - staging
+  - trying
   needs: ["build py38"]
   stage: test
   image: $CSCS_REGISTRY_IMAGE/gt4py-ci:$PYVERSION
-  script: 
-    - python -c "import cupy"
-    - pip install clang-format
-    - tox --sitepackages -r -e $PYVERSION_PREFIX-internal-cuda101
+  script:
+  - python -c "import cupy"
+  - pip install clang-format
+  - tox --sitepackages -r -e $PYVERSION_PREFIX-internal-cuda101
   variables:
     CRAY_CUDA_MPS: 1
     PULL_IMAGE: "YES"
