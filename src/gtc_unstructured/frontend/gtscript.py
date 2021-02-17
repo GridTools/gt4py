@@ -25,6 +25,7 @@ from .built_in_types import Field, LocalField, Location, Connectivity, Temporary
 Vertex = common.LocationType.Vertex
 Edge = common.LocationType.Edge
 Cell = common.LocationType.Cell
+K = common.VerticalLocationType.K
 FORWARD = common.LoopOrder.FORWARD
 BACKWARD = common.LoopOrder.BACKWARD
 

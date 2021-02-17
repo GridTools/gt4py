@@ -81,6 +81,12 @@ class LocationType(IntEnum):
     Cell = 2
     NoLocation = 3
 
+@enum.unique
+class VerticalLocationType(IntEnum):
+    NoLocation = -1
+    Horizontal = 0
+    K = 1
+
 
 @enum.unique
 class BuiltInLiteral(IntEnum):

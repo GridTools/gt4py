@@ -377,6 +377,10 @@ class GTScriptToGTIR(eve.NodeTranslator):
                 expected_index_types = (Location[connectivity.primary_location()], Location[connectivity.secondary_location()])
             elif issubclass(value_decl.type_, Field) or issubclass(value_decl.type_, TemporaryField):
                 expected_index_types = (Location[value_decl.type_.args[0]],)
+            else:
+                raise RuntimeError(
+                    f"Invalid symbol '{node.value.name}' in subscript expression ({node})"
+                )
 
             index_types = tuple(TypeInference.apply(symtable, idx) for idx in node.indices)
             assert index_types == expected_index_types
@@ -461,40 +465,108 @@ class GTScriptToGTIR(eve.NodeTranslator):
             if issubclass(arg.type_, Field) or issubclass(arg.type_, TemporaryField):
                 field_type = arg.type_
                 loc_type, vtype = field_type.args
+                if isinstance(loc_type, (common.LocationType, common.VerticalLocationType)):
+                    loc_type = [loc_type]
 
                 assert isinstance(vtype, common.DataType)
-                assert isinstance(loc_type, common.LocationType)
+                assert isinstance(loc_type, list) and all(
+                    isinstance(l, (common.LocationType, common.VerticalLocationType)) for l in loc_type
+                )
 
-                dims = gtir.Dimensions(horizontal=gtir.HorizontalDimension(primary=loc_type))
+                horizontal = None
+                vertical = None
+                new_type_args = [None, vtype]
+                for loc in loc_type:
+                    if isinstance(loc, common.LocationType):
+                        horizontal = gtir.HorizontalDimension(primary=loc)
+                        new_type_args[0] = loc
+                    elif isinstance(loc, common.VerticalLocationType):
+                        vertical = gtir.VerticalDimension()
+                    else:
+                        raise ValueError(f"Invalid field dimension definition '{loc}")
+
+                dims = gtir.Dimensions(horizontal=horizontal, vertical=vertical)
 
                 if issubclass(arg.type_, Field):
-                    field_args.append(gtir.UField(name=arg.name, vtype=field_type.args[1], dimensions=dims))
+                    field_args.append(
+                        gtir.UField(name=arg.name, vtype=field_type.args[1], dimensions=dims)
+                    )
                 elif issubclass(arg.type_, TemporaryField):
-                    temporary_fields.append(gtir.TemporaryField(name=arg.name, vtype=field_type.args[1], dimensions=dims))
+                    temporary_fields.append(
+                        gtir.TemporaryField(
+                            name=arg.name, vtype=field_type.args[1], dimensions=dims
+                        )
+                    )
+
+                # TODO(hackathon): this hack is removing the VerticalLocationType args
+                # TODO: from Field[] to avoid breaking the TypeInference mechanism
+                arg.type_.args = new_type_args
+
             elif issubclass(arg.type_, Connectivity):
                 base_connectivty = arg.type_.base_connectivity()
-                connectivity_args.append(gtir.Connectivity(name=arg.name, primary=base_connectivty.primary_location(),
-                                         secondary=base_connectivty.secondary_location(), max_neighbors=base_connectivty.max_neighbors(),
-                                         has_skip_values=base_connectivty.has_skip_values()))
+                connectivity_args.append(
+                    gtir.Connectivity(
+                        name=arg.name,
+                        primary=base_connectivty.primary_location(),
+                        secondary=base_connectivty.secondary_location(),
+                        max_neighbors=base_connectivty.max_neighbors(),
+                        has_skip_values=base_connectivty.has_skip_values(),
+                    )
+                )
             elif issubclass(arg.type_, SparseField) or issubclass(arg.type_, TemporarySparseField):
                 connectivity = arg.type_.args[0]
-                assert issubclass(connectivity, Connectivity)
+                if not isinstance(connectivity, list):
+                    connectivity = [connectivity]
+
+                horizontal = None
+                vertical = None
+                new_type_args = [None, arg.type_.args[1]]
+                for c in connectivity:
+                    if issubclass(c, Connectivity):
+                        horizontal = gtir.HorizontalDimension(
+                            primary=c.base_connectivity().primary_location()
+                        )
+                        new_type_args[0] = c                        
+                    elif isinstance(c, common.VerticalLocationType):
+                        vertical = gtir.VerticalDimension()
+                    else:
+                        raise ValueError(f"Invalid field dimension definition '{loc}")
+
+                # TODO(hackathon): this hack is removing the VerticalLocationType args
+                # TODO: from Field[] to avoid breaking the TypeInference mechanism
+                arg.type_.args = tuple(new_type_args)
+
                 # gtir expects the name of the connectivity instead of its type, hence search for the name
                 connectivity_name = None
                 for other_arg in node.arguments:
-                    if issubclass(other_arg.type_, Connectivity) and arg.type_.args[0] == other_arg.type_:
+                    if (
+                        issubclass(other_arg.type_, Connectivity)
+                        and arg.type_.args[0] == other_arg.type_
+                    ):
                         assert connectivity_name is None
                         connectivity_name = other_arg.name
 
                 # TODO(tehrengruber): check dims argument with hannes
-                dims = gtir.Dimensions(horizontal=gtir.HorizontalDimension(primary=connectivity.base_connectivity().primary_location()))
+                dims = gtir.Dimensions(horizontal=horizontal, vertical=vertical)
 
                 if issubclass(arg.type_, SparseField):
-                    field_args.append(gtir.SparseField(name=arg.name, connectivity=gtir.SymbolRef(connectivity_name), vtype=arg.type_.args[1], dimensions=dims))
+                    field_args.append(
+                        gtir.SparseField(
+                            name=arg.name,
+                            connectivity=gtir.SymbolRef(connectivity_name),
+                            vtype=arg.type_.args[1],
+                            dimensions=dims,
+                        )
+                    )
                 elif issubclass(arg.type_, TemporarySparseField):
-                    temporary_fields.append(gtir.TemporarySparseField(name=arg.name, connectivity=gtir.SymbolRef(connectivity_name), vtype=arg.type_.args[1], dimensions=dims))
-
-
+                    temporary_fields.append(
+                        gtir.TemporarySparseField(
+                            name=arg.name,
+                            connectivity=gtir.SymbolRef(connectivity_name),
+                            vtype=arg.type_.args[1],
+                            dimensions=dims,
+                        )
+                    )
 
         return gtir.Computation(
             name=node.name,
