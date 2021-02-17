@@ -214,10 +214,10 @@ class AxisIntervalParser(gt_meta.ASTPass):
         self.axis_name = axis_name
         self.loc = loc
 
-        error_msg = "Invalid 'interval' specification"
+        error_msg = "Invalid interval range specification"
 
         if self.loc is not None:
-            error_msg = f"{error_msg} (line: {loc.line}, column: {loc.column})"
+            error_msg = f"{error_msg} at line {loc.line} (column: {loc.column})"
 
         self.interval_error = GTScriptSyntaxError(error_msg)
 
