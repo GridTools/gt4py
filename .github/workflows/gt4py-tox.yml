@@ -3,10 +3,10 @@ name: Tox (CPU only)
 on:
   push:
     branches:
-      - master
+    - master
   pull_request:
     branches:
-      - master
+    - master
 
 jobs:
   build:
@@ -16,26 +16,26 @@ jobs:
         python-version: [3.8]
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Install boost
-        run: |
-          wget https://dl.bintray.com/boostorg/release/1.72.0/source/boost_1_72_0.tar.gz
-          echo c66e88d5786f2ca4dbebb14e06b566fb642a1a6947ad8cc9091f9f445134143f boost_1_72_0.tar.gz > boost_hash.txt
-          sha256sum -c boost_hash.txt
-          tar xzf boost_1_72_0.tar.gz
-          mkdir -p boost/include
-          mv boost_1_72_0/boost boost/include/
-          echo "BOOST_ROOT=${PWD}/boost" >> $GITHUB_ENV
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v1
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install python dependencies
-        run: |
-          python -m pip install --upgrade pip setuptools wheel
-      - name: Test with tox
-        run: |
-          pyversion_no_dot="${{ matrix.python-version }}"
-          pyversion_no_dot="${pyversion_no_dot/./}"
-          pip install tox clang-format
-          tox -r -e py${pyversion_no_dot}-internal-cpu
+    - uses: actions/checkout@v2
+    - name: Install boost
+      run: |
+        wget https://dl.bintray.com/boostorg/release/1.72.0/source/boost_1_72_0.tar.gz
+        echo c66e88d5786f2ca4dbebb14e06b566fb642a1a6947ad8cc9091f9f445134143f boost_1_72_0.tar.gz > boost_hash.txt
+        sha256sum -c boost_hash.txt
+        tar xzf boost_1_72_0.tar.gz
+        mkdir -p boost/include
+        mv boost_1_72_0/boost boost/include/
+        echo "BOOST_ROOT=${PWD}/boost" >> $GITHUB_ENV
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v1
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+    - name: Test with tox
+      run: |
+        pyversion_no_dot="${{ matrix.python-version }}"
+        pyversion_no_dot="${pyversion_no_dot/./}"
+        pip install tox clang-format
+        tox -r -e py${pyversion_no_dot}-internal-cpu
