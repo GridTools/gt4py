@@ -32,7 +32,7 @@ def simple_stencil(field: Field[float]):  # type: ignore
         field += a  # type: ignore
 
 
-def assign_bool_float(f64_field: Field[numpy.float64], bool_field: Field[numpy.bool]):  # type: ignore  # noqa
+def assign_bool_float(f64_field: Field[numpy.float64], bool_field: Field[numpy.bool]):  # type: ignore
     with computation(PARALLEL), interval(...):  # type: ignore
         bool_field = f64_field >= 0  # type: ignore  # noqa
 
