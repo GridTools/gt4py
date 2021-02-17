@@ -22,6 +22,7 @@ import typing
 from typing import Union
 import typing_inspect
 
+from gtc import common as stable_gtc_common
 import gtc_unstructured.irs.common
 from eve import type_definitions
 from eve.utils import UIDGenerator
@@ -84,6 +85,7 @@ class PyToGTScript:
             gtc_unstructured.irs.common.AssignmentKind,
             gtc_unstructured.irs.common.UnaryOperator,
             gtc_unstructured.irs.common.BinaryOperator,
+            stable_gtc_common.UnaryOperator,
         ]:
             # note: other types in gtc_unstructured.irs.common, e.g. gtc_unstructured.irs.common.DataType are not valid leaf nodes here as they
             #  map to symbols in the gtscript ast and are resolved there
@@ -184,12 +186,16 @@ class PyToGTScript:
             name=Capture("name"),
         )
 
+        UnaryOp = ast.UnaryOp(op=Capture("op"), operand=Capture("operand"))
+
     leaf_map = {
         ast.Mult: gtc_unstructured.irs.common.BinaryOperator.MUL,
         ast.Add: gtc_unstructured.irs.common.BinaryOperator.ADD,
         ast.Sub: gtc_unstructured.irs.common.BinaryOperator.SUB,
         ast.Div: gtc_unstructured.irs.common.BinaryOperator.DIV,
         ast.Pass: gtscript_ast.Pass,
+        ast.USub: stable_gtc_common.UnaryOperator.NEG,
+        ast.UAdd: stable_gtc_common.UnaryOperator.POS,
     }
 
     # Some types appearing in the python ast are mapped to different types in the gtscript_ast. This dictionary

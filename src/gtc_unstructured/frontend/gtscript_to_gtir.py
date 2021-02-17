@@ -23,6 +23,7 @@ import eve
 from eve.utils import UIDGenerator
 import gtc_unstructured.irs.common as common
 import gtc_unstructured.irs.gtir as gtir
+from gtc import common as stable_gtc_common
 
 from . import built_in_functions
 from .built_in_types import BuiltInTypeMeta, BuiltInType
@@ -47,7 +48,8 @@ from .gtscript_ast import (
     SymbolName,
     External,
     TemporaryFieldDecl,
-    TemporarySparseFieldDecl
+    TemporarySparseFieldDecl,
+    UnaryOp
 )
 
 _reduction_mapping = {
@@ -144,6 +146,15 @@ class NodeCanonicalizer(eve.NodeTranslator):
 
         return node
 
+    def visit_UnaryOp(self, node: UnaryOp):
+        if isinstance(node.operand, Constant):
+            if node.op == stable_gtc_common.UnaryOperator.NEG:
+                return Constant(value=-node.operand.value)
+            elif node.op == stable_gtc_common.UnaryOperator.POS:
+                return node.operand
+
+        raise NotImplementedError()
+
     def visit_Call(self, node: Call):
         # TODO(tehrengruber): this could be done by the call inliner
         # neighbor accessor canonicalization
@@ -181,6 +192,18 @@ class ConstExprEvaluator(eve.NodeVisitor):
 
     def visit_Subscript(self, node: Subscript, **kwargs):
         return self.visit(node.value, **kwargs)[tuple(self.visit(idx, **kwargs) for idx in node.indices)]
+
+
+class RewriteSparseFieldAccess(eve.NodeTranslator):
+    @classmethod
+    def apply(cls, from_, to, values):
+        instance = cls()
+        return instance.visit(values, from_=from_, to=to)
+
+    def visit_FieldAccess(self, node: gtir.FieldAccess, *, from_, to):
+        if len(node.subscript) == 2 and node.subscript[0].name == from_[0] and node.subscript[1].name == from_[1]:
+            return gtir.FieldAccess(name=node.name, subscript=[gtir.LocationRef(name=to)], location_type=node.location_type)
+        return node
 
 
 from .built_in_types import LocalField
@@ -386,6 +409,13 @@ class GTScriptToGTIR(eve.NodeTranslator):
         value_decl = symtable[node.value.name]
         if isinstance(value_decl, (Argument, TemporaryFieldDecl, TemporarySparseFieldDecl)) and (
                 issubclass(value_decl.type_, (Field, TemporaryField, SparseField, TemporarySparseField))):
+            try:
+                if not all(isinstance(symtable[index.name], LocationSpecification) or isinstance(symtable[index.name],
+                                                                                                 LocationComprehension) for
+                           index in node.indices):
+                    1+1
+            except:
+                bla=1+1
             assert len(node.indices) in [1, 2]
             assert all(isinstance(index, SymbolRef) for index in node.indices)
             assert all(isinstance(symtable[index.name], LocationSpecification) or isinstance(symtable[index.name],
@@ -416,6 +446,9 @@ class GTScriptToGTIR(eve.NodeTranslator):
 
         raise ValueError()
 
+    def visit_Generator(self, node: Generator, *, symtable, **kwargs):
+        return self.generic_visit(node, symtable={**symtable, **node.symtable_}, **kwargs)
+
     def visit_Assign(self, node: Assign, *, symtable, location_stack, **kwargs) -> Union[
         gtir.AssignStmt, gtir.NeighborAssignStmt]:
         right_type = TypeInference.apply(symtable, node.value)
@@ -433,12 +466,24 @@ class GTScriptToGTIR(eve.NodeTranslator):
                     connectivity_name = symbol.name
             assert connectivity_name is not None
             location_name = UIDGenerator.sequential_id(prefix="location")
-            return gtir.NeighborAssignStmt(
-                left=self.visit(node.target, symtable=symtable, location_stack=location_stack, **kwargs),
-                right=self.visit(node.value, symtable=symtable,
+
+            if isinstance(node.value, Generator):
+                # TODO(tehrengruber) hacky, visit the generator
+                new_location_stack = location_stack + [(node.value.generators[0].target, symtable[
+                    node.value.generators[0].iterable.value.name].type_.secondary_location())]
+                assert node.value.generators[0].iterable.value.name == connectivity_name
+                right = self.visit(node.value.elt, symtable={**symtable, **node.value.symtable_}, location_stack=location_stack, **kwargs)
+                right = RewriteSparseFieldAccess.apply((location_stack[0][0], node.value.generators[0].target), location_name, right)
+
+            else:
+                right = self.visit(node.value, symtable=symtable,
                                  location_stack=location_stack,
                                  inside_sparse_assign=sparse_assign,
-                                 neighbor_vector_access_expr_location_name=location_name, **kwargs),
+                                 neighbor_vector_access_expr_location_name=location_name, **kwargs)
+
+            return gtir.NeighborAssignStmt(
+                left=self.visit(node.target, symtable=symtable, location_stack=location_stack, **kwargs),
+                right=right,
                 location_type=location_stack[-1][1],
                 neighbors=gtir.LocationComprehension(name=location_name,
                                                      of=gtir.ConnectivityRef(name=connectivity_name))

@@ -110,6 +110,11 @@ class BinaryOp(Expr):
     right: Expr
 
 
+class UnaryOp(Expr):
+    op: stable_gtc_common.UnaryOperator
+    operand: Expr
+
+
 class Call(Expr):
     args: List[Expr]
     func: str
