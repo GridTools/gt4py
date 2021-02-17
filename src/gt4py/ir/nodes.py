@@ -175,8 +175,8 @@ Implementation IR
 import collections
 import copy
 import enum
-from inspect import stack
 import operator
+from inspect import stack
 from typing import List, Sequence
 
 import numpy as np
