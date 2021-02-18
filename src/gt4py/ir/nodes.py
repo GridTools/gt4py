@@ -178,7 +178,6 @@ import collections
 import copy
 import enum
 import operator
-from inspect import stack
 from typing import List, Sequence
 
 import numpy as np
