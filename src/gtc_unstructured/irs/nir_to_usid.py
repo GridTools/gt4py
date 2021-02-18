@@ -103,13 +103,14 @@ class NirToUsid(eve.NodeTranslator):
         neigh_loop_ctx = self.NeighborLoopContext()
 
         primary_sid = kernel_ctx.primary_composite_name
-        secondary_sid = node.name
+        secondary_sid = kwargs["symtable"][node.connectivity].name + "_sid"  # node.name
         kernel_ctx.add_sid(secondary_sid)
 
         primary = "p"
         secondary = "n"
 
-        acc_mapping = {primary_sid: primary, secondary_sid: secondary}
+        acc_mapping = {primary_sid: primary, node.name: secondary}
+        sid_mapping = {primary_sid: primary_sid, node.name: secondary_sid}
 
         kernel_ctx.add_primary_entry(usid.SidCompositeEntry(ref=node.connectivity))
         body = self.visit(
@@ -117,6 +118,7 @@ class NirToUsid(eve.NodeTranslator):
             kernel_ctx=kernel_ctx,
             neigh_loop_ctx=neigh_loop_ctx,
             acc_mapping=lambda x: acc_mapping[x],
+            sid_mapping=lambda x: sid_mapping[x],
             **kwargs,
         )
 
@@ -139,12 +141,16 @@ class NirToUsid(eve.NodeTranslator):
         *,
         kernel_ctx: "KernelContext",
         acc_mapping=lambda x: x,
+        sid_mapping=lambda x: x,
         **kwargs,
     ):
         symtable = kwargs["symtable"]
         field_deref = symtable[node.name]
-        sid = node.primary
-        ref = acc_mapping(sid)
+        location_deref = symtable[node.primary]
+        # sid = node.primary if isinstance(
+        #     location_deref, nir.IterationSpace) else symtable[location_deref.connectivity].name + "_sid"
+        sid = sid_mapping(node.primary)
+        ref = acc_mapping(node.primary)
         name = node.name + usid.TAG_APPENDIX
         if isinstance(field_deref, nir.SparseField):
             kernel_ctx.add_primary_entry(
@@ -226,8 +232,6 @@ class NirToUsid(eve.NodeTranslator):
         secondary_composites = [
             usid.SidComposite(name=name, entries=entries) for name, entries in composites.items()
         ]
-
-        debug(body)
 
         kernel_name = "kernel_" + node.id_
         kernel = usid.Kernel(
