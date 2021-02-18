@@ -269,7 +269,7 @@ class FillToLocalKCaches(_ToLocalKCachesBase):
         fill_limits = cls._fill_limits(loop_order, section)
         max_required_fills = 0
         for field in filling_fields:
-            lmin, lmax = fill_limits[field]
+            lmin, lmax = fill_limits.get(field, (0, 0))
             required_fills = lmax + 1 - max(lmin, first_unfilled.get(field, lmin))
             max_required_fills = max(required_fills, max_required_fills)
             first_unfilled[field] = lmax
@@ -300,7 +300,7 @@ class FillToLocalKCaches(_ToLocalKCachesBase):
         fill_limits = cls._fill_limits(loop_order, section)
         fill_stmts = []
         for field, cache in filling_fields.items():
-            lmin, lmax = fill_limits[field]
+            lmin, lmax = fill_limits.get(field, (0, 0))
             lmin = max(lmin, first_unfilled.get(field, lmin))
             for offset in range(lmin, lmax + 1):
                 fill_stmts.append(
