@@ -813,6 +813,80 @@ class IRMaker(ast.NodeVisitor):
         # if sorting didn't change anything it was already sorted
         return compute_blocks == compute_blocks_sorted
 
+    def _parse_region_intervals(
+        self, node: Union[ast.ExtSlice, ast.Index, ast.Tuple], loc: gt_ir.Location = None
+    ) -> List[gt_ir.AxisInterval]:
+        if isinstance(node, ast.Index):
+            # Python 3.8 wraps a Tuple in an Index for region[0, 1]
+            tuple_node = node.value
+            axes_nodes = tuple_node.elts
+        elif isinstance(node, ast.ExtSlice) or isinstance(node, ast.Tuple):
+            # Python 3.8 returns an ExtSlice for region[0, :]
+            # Python 3.9 directly returns a Tuple for region[0, 1]
+            node_list = node.dims if isinstance(node, ast.ExtSlice) else node.elts
+            axes_nodes = [
+                axis_node.value if isinstance(axis_node, ast.Index) else axis_node
+                for axis_node in node_list
+            ]
+        else:
+            raise GTScriptSyntaxError(
+                f"Invalid 'region' index at line {loc.line} (column {loc.column})", loc=loc
+            )
+        axes_names = [axis.name for axis in self.domain.parallel_axes]
+        return [
+            parse_interval_node(axis_node, name) for axis_node, name in zip(axes_nodes, axes_names)
+        ]
+
+    def _interval_to_positional_expr(
+        self, interval: List[gt_ir.AxisInterval], axis_name: str, loc: gt_ir.Location = None
+    ) -> gt_ir.BinOpExpr:
+
+        bounds = tuple(
+            gt_ir.AxisOffset(axis=axis_name, endpt=bound.level, offset=bound.offset)
+            for bound in (interval.start, interval.end)
+        )
+        ops = (gt_ir.BinaryOperator.GE, gt_ir.BinaryOperator.LT)
+
+        conditionals = [
+            gt_ir.BinOpExpr(op=op, lhs=gt_ir.AxisIndex(axis=axis_name), rhs=bound, loc=loc)
+            for bound, op in zip(bounds, ops)
+        ]
+
+        return functools.reduce(
+            lambda x, y: gt_ir.BinOpExpr(op=gt_ir.BinaryOperator.AND, lhs=x, rhs=y, loc=loc),
+            conditionals,
+        )
+
+    def _visit_with_horizontal(
+        self, node: ast.withitem, loc: gt_ir.Location
+    ) -> List[gt_ir.Statement]:
+        syntax_error = GTScriptSyntaxError(
+            f"Invalid 'with' statement at line {loc.line} (column {loc.column})", loc=loc
+        )
+
+        call_args = node.context_expr.args
+        if any(not isinstance(arg, ast.Subscript) for arg in call_args):
+            raise syntax_error
+        if any(arg.value.id != "region" for arg in call_args):
+            raise syntax_error
+
+        conditions = []
+        for arg in call_args:
+            intervals = self._parse_region_intervals(arg.slice, loc)
+            conditions.append(
+                functools.reduce(
+                    lambda x, y: gt_ir.BinOpExpr(
+                        op=gt_ir.BinaryOperator.AND, lhs=x, rhs=y, loc=loc
+                    ),
+                    [
+                        self._interval_to_positional_expr(interval, axis.name, loc)
+                        for interval, axis in zip(intervals, self.domain.parallel_axes)
+                    ],
+                )
+            )
+
+        return conditions
+
     def _visit_iteration_order_node(self, node: ast.withitem, loc: gt_ir.Location):
         syntax_error = GTScriptSyntaxError(
             f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
@@ -885,6 +959,7 @@ class IRMaker(ast.NodeVisitor):
         # Parse computation specification, i.e. `withItems` nodes
         iteration_order = None
         interval = None
+        conditions = None
 
         try:
             for item in node.items:
@@ -900,6 +975,11 @@ class IRMaker(ast.NodeVisitor):
                 ):
                     assert interval is None  # only one spec allowed
                     interval = self._visit_interval_node(item, loc)
+                elif (
+                    isinstance(item.context_expr, ast.Call)
+                    and item.context_expr.func.id == "horizontal"
+                ):
+                    conditions = self._visit_with_horizontal(item, loc)
                 else:
                     raise syntax_error
         except AssertionError as e:
@@ -915,11 +995,27 @@ class IRMaker(ast.NodeVisitor):
             stmts.extend(gt_utils.listify(self.visit(stmt)))
         self.parsing_context = ParsingContext.CONTROL_FLOW
 
-        result = gt_ir.ComputationBlock(
-            interval=interval, iteration_order=iteration_order, body=gt_ir.BlockStmt(stmts=stmts)
-        )
+        if conditions:
+            results = [
+                gt_ir.ComputationBlock(
+                    interval=interval,
+                    iteration_order=iteration_order,
+                    body=gt_ir.BlockStmt(
+                        stmts=[gt_ir.If(condition=cond, main_body=gt_ir.BlockStmt(stmts=stmts))]
+                    ),
+                )
+                for cond in conditions
+            ]
+        else:
+            results = [
+                gt_ir.ComputationBlock(
+                    interval=interval,
+                    iteration_order=iteration_order,
+                    body=gt_ir.BlockStmt(stmts=stmts),
+                )
+            ]
 
-        return result
+        return results
 
     # Visitor methods
     # -- Special nodes --
@@ -1237,50 +1333,6 @@ class IRMaker(ast.NodeVisitor):
         ast.copy_location(assignment, node)
         return self.visit_Assign(assignment)
 
-    def _parse_region_intervals(
-        self, node: Union[ast.ExtSlice, ast.Index, ast.Tuple], loc: gt_ir.Location = None
-    ) -> List[gt_ir.AxisInterval]:
-        if isinstance(node, ast.Index):
-            # Python 3.8 wraps a Tuple in an Index for region[0, 1]
-            tuple_node = node.value
-            axes_nodes = tuple_node.elts
-        elif isinstance(node, ast.ExtSlice) or isinstance(node, ast.Tuple):
-            # Python 3.8 returns an ExtSlice for region[0, :]
-            # Python 3.9 directly returns a Tuple for region[0, 1]
-            node_list = node.dims if isinstance(node, ast.ExtSlice) else node.elts
-            axes_nodes = [
-                axis_node.value if isinstance(axis_node, ast.Index) else axis_node
-                for axis_node in node_list
-            ]
-        else:
-            raise GTScriptSyntaxError(
-                f"Invalid 'region' index at line {loc.line} (column {loc.column})", loc=loc
-            )
-        axes_names = [axis.name for axis in self.domain.parallel_axes]
-        return [
-            parse_interval_node(axis_node, name) for axis_node, name in zip(axes_nodes, axes_names)
-        ]
-
-    def _interval_to_positional_expr(
-        self, interval: List[gt_ir.AxisInterval], axis_name: str, loc: gt_ir.Location = None
-    ) -> gt_ir.BinOpExpr:
-
-        bounds = tuple(
-            gt_ir.AxisOffset(axis=axis_name, endpt=bound.level, offset=bound.offset)
-            for bound in (interval.start, interval.end)
-        )
-        ops = (gt_ir.BinaryOperator.GE, gt_ir.BinaryOperator.LT)
-
-        conditionals = [
-            gt_ir.BinOpExpr(op=op, lhs=gt_ir.AxisIndex(axis=axis_name), rhs=bound, loc=loc)
-            for bound, op in zip(bounds, ops)
-        ]
-
-        return functools.reduce(
-            lambda x, y: gt_ir.BinOpExpr(op=gt_ir.BinaryOperator.AND, lhs=x, rhs=y, loc=loc),
-            conditionals,
-        )
-
     def visit_With(self, node: ast.With):
         loc = gt_ir.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
@@ -1292,39 +1344,11 @@ class IRMaker(ast.NodeVisitor):
             and isinstance(node.items[0].context_expr, ast.Call)
             and node.items[0].context_expr.func.id == "horizontal"
         ):
-            call_args = node.items[0].context_expr.args
-            if any(not isinstance(arg, ast.Subscript) for arg in call_args):
-                raise syntax_error
-            if any(arg.value.id != "region" for arg in call_args):
-                raise syntax_error
-
+            conditions = self._visit_with_horizontal(node.items[0], loc)
             body_stmts = gt_utils.flatten(
                 [gt_utils.listify(self.visit(stmt)) for stmt in node.body]
             )
-
-            if_stmts = []
-            for arg in call_args:
-                intervals = self._parse_region_intervals(arg.slice, loc)
-
-                condition = functools.reduce(
-                    lambda x, y: gt_ir.BinOpExpr(
-                        op=gt_ir.BinaryOperator.AND, lhs=x, rhs=y, loc=loc
-                    ),
-                    [
-                        self._interval_to_positional_expr(interval, axis.name, loc)
-                        for interval, axis in zip(intervals, self.domain.parallel_axes)
-                    ],
-                )
-
-                if_stmts.append(
-                    gt_ir.If(
-                        condition=condition,
-                        main_body=gt_ir.BlockStmt(stmts=body_stmts),
-                        loc=loc,
-                    )
-                )
-
-            return if_stmts
+            return [gt_ir.If(condition=cond, main_body=gt_ir.BlockStmt(stmts=body_stmts)) for cond in conditions]
         else:
             # If we find nested `with` blocks flatten them, i.e. transform
             #  with computation(PARALLEL):
