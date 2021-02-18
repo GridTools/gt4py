@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict
+from typing import Any, Dict, Set, Union
 
 import eve
 from gtc import common, oir
@@ -45,7 +45,17 @@ class OIRToCUIR(eve.NodeTranslator):
     def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> cuir.Temporary:
         return cuir.Temporary(name=node.name, dtype=node.dtype)
 
-    def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> cuir.FieldAccess:
+    def visit_FieldAccess(
+        self, node: oir.FieldAccess, *, ij_cached: Set[str], k_cached: Set[str], **kwargs: Any
+    ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
+        if node.name in ij_cached:
+            assert node.offset.k == 0
+            return cuir.IJCacheAccess(
+                name=node.name, offset=(node.offset.i, node.offset.j), dtype=node.dtype
+            )
+        if node.name in k_cached:
+            assert node.offset.i == node.offset.j == 0
+            return cuir.KCacheAccess(name=node.name, offset=node.offset.k, dtype=node.dtype)
         return cuir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
 
     def visit_ScalarAccess(
@@ -98,14 +108,16 @@ class OIRToCUIR(eve.NodeTranslator):
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> cuir.Kernel:
         assert not any(c.fill or c.flush for c in node.caches if isinstance(c, oir.KCache))
+        ij_cached = {c.name for c in node.caches if isinstance(c, oir.IJCache)}
+        k_cached = {c.name for c in node.caches if isinstance(c, oir.KCache)}
         return cuir.Kernel(
             name=node.id_,
             vertical_loops=[
                 cuir.VerticalLoop(
                     loop_order=node.loop_order,
-                    sections=self.visit(node.sections, **kwargs),
-                    ij_cached=[c.name for c in node.caches if isinstance(c, oir.IJCache)],
-                    k_cached=[c.name for c in node.caches if isinstance(c, oir.KCache)],
+                    sections=self.visit(
+                        node.sections, ij_cached=ij_cached, k_cached=k_cached, **kwargs
+                    ),
                 )
             ],
         )

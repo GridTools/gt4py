@@ -68,12 +68,13 @@ class ComputeExtents(NodeTranslator):
                 node.iter_tree()
                 .if_isinstance(cuir.AssignStmt)
                 .getattr("left")
-                .if_isinstance(cuir.FieldAccess)
+                .if_isinstance(cuir.FieldAccess, cuir.IJCacheAccess)
                 .getattr("name")
                 .to_set()
             )
             extent = _extents_union(
-                *(extents_map.get(write, cuir.Extent.zero()) for write in writes)
+                cuir.Extent.zero(),
+                *(extents_map.get(write, cuir.Extent.zero()) for write in writes),
             )
 
             horizontal_executions.append(

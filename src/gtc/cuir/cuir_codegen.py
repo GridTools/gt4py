@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Callable, Collection, Set, Union
+from typing import Any, Collection, Dict, Set, Union
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
@@ -37,15 +37,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     AssignStmt = as_fmt("{left} = {right};")
 
     FieldAccess = as_mako(
-        """
-        % if name in k_cached_fields:
-            ${k_cache_access(name, _this_node.offset.k)}
-        % elif offset:
-            *sid::multi_shifted<tag::${name}>(${name}, m_strides, ${offset})
-        % else:
-            *${name}
-        % endif
-        """
+        "*${f'sid::multi_shifted<tag::{name}>({name}, m_strides, {offset})' if offset else name}"
+    )
+
+    IJCacheAccess = as_mako(
+        "*${f'sid::multi_shifted<tag::{name}>({name}, m_strides, offsets({offset[0]}, {offset[1]}, 0))' if _this_node.offset != (0, 0) else name}"
+    )
+
+    KCacheAccess = as_mako(
+        "${name + (f'_p{_this_node.offset}' if _this_node.offset >= 0 else f'_m{-_this_node.offset}')}"
     )
 
     ScalarAccess = as_fmt("{name}")
@@ -91,7 +91,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             return "float"
         elif dtype == DataType.BOOL:
             return "bool"
-        raise NotImplementedError("Not implemented NativeFunction encountered.")
+        raise NotImplementedError("Not implemented DataType encountered.")
 
     def visit_UnaryOperator(self, op: UnaryOperator, **kwargs: Any) -> str:
         if op == UnaryOperator.NOT:
@@ -126,77 +126,54 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         // ${id_}
         ${loop_entry(start, end)} {
             ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
-            ${loop_shift()}
+            ${loop_shifts}
         }
         """
     )
 
     def visit_VerticalLoop(
-        self, node: cuir.VerticalLoop, *, ctype: Callable[[str], str], **kwargs: Any
+        self, node: cuir.VerticalLoop, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        def loop_entry(start: str, end: str) -> str:
-            if node.loop_order == cuir.LoopOrder.PARALLEL:
-                return f"if (k_block < ({end}) - ({start}))"
+        if node.loop_order == cuir.LoopOrder.PARALLEL:
+            loop_shifts = ""
+            k_cache_decls = ""
+            loop_entry = "if (k_block < ({end}) - ({start}))"
+        else:
             if node.loop_order == cuir.LoopOrder.FORWARD:
-                return f"for (int k_block = {start}; k_block < {end}; ++k_block)"
-            if node.loop_order == cuir.LoopOrder.BACKWARD:
-                return f"for (int k_block = {end} - 1; k_block >= {start}; --k_block)"
-            raise AssertionError("Invalid loop order")
-
-        k_cache_limits = (
-            node.iter_tree()
-            .if_isinstance(cuir.FieldAccess)
-            .filter(lambda x: x.name in node.k_cached)
-            .reduceby(
-                lambda minmax, x: (min(minmax[0], x.offset.k), max(minmax[1], x.offset.k)),
-                key="name",
-                init=(10000, -10000),
-                as_dict=True,
-            )
-        )
-
-        def loop_shift() -> str:
-            if node.loop_order == cuir.LoopOrder.PARALLEL:
-                return ""
-            cache_shifts = ""
-            if node.loop_order == cuir.LoopOrder.FORWARD:
-                for cache in node.k_cached:
-                    min_offset, max_offset = k_cache_limits[cache]
-                    for offset in range(min_offset, max_offset):
-                        src = k_cache_access(cache, offset + 1)
-                        dst = k_cache_access(cache, offset)
-                        cache_shifts += f"{dst} = {src};\n"
                 step = 1
+                loop_entry = "for (int k_block = {start}; k_block < {end}; ++k_block)"
             else:
-                for cache in node.k_cached:
-                    min_offset, max_offset = k_cache_limits[cache]
-                    for offset in range(max_offset, min_offset, -1):
-                        src = k_cache_access(cache, offset - 1)
-                        dst = k_cache_access(cache, offset)
-                        cache_shifts += f"{dst} = {src};\n"
                 step = -1
-            sid_shift = f"sid::shift(ptr, sid::get_stride<dim::k>(m_strides), {step}_c);"
-            return cache_shifts + sid_shift
+                loop_entry = "for (int k_block = {end} - 1; k_block >= {start}; --k_block)"
 
-        def k_cache_access(field: str, k_offset: int) -> str:
-            return field + (f"_p{k_offset}" if k_offset >= 0 else f"_m{-k_offset}")
+            k_cache_accesses = node.iter_tree().if_isinstance(cuir.KCacheAccess)
+            k_cache_decls = ""
+            k_cache_shifts = ""
+            for _, accesses in k_cache_accesses.groupby("name"):
+                unique = sorted(
+                    {x.offset: x for x in accesses}.values(), key=lambda x: step * x.offset
+                )
+                for access in unique:
+                    k_cache_decls += self.visit(
+                        cuir.LocalScalar(name=self.visit(access), dtype=symtable[access.name].dtype)
+                    )
 
-        k_cache_decls = " ".join(
-            node.iter_tree()
-            .if_isinstance(cuir.FieldAccess)
-            .filter(lambda acc: acc.name in node.k_cached)
-            .map(lambda acc: ctype(acc.name) + " " + k_cache_access(acc.name, acc.offset.k) + ";")
-            .to_set()
-        )
+                for dst, src in zip(unique[:-1], unique[1:]):
+                    k_cache_shifts += self.visit(cuir.AssignStmt(left=dst, right=src))
+
+            loop_shifts = (
+                k_cache_shifts + f"sid::shift(ptr, sid::get_stride<dim::k>(m_strides), {step}_c);"
+            )
 
         return self.generic_visit(
             node,
-            accesses=node.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set(),
-            loop_entry=loop_entry,
-            loop_shift=loop_shift,
-            k_cache_access=k_cache_access,
+            fields=node.iter_tree()
+            .if_isinstance(cuir.FieldAccess, cuir.IJCacheAccess)
+            .getattr("name")
+            .to_set(),
+            loop_entry=lambda start, end: loop_entry.format(start=start, end=end),
+            loop_shifts=loop_shifts,
             k_cache_decls=k_cache_decls,
-            k_cached_fields=node.k_cached,
             **kwargs,
         )
 
@@ -232,10 +209,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                            k_block);
                 % endif
 
-                % for acc in accesses:
-                    % if acc not in k_cached:
-                        auto &&${acc} = device::at_key<tag::${acc}>(ptr);
-                    % endif
+                % for field in fields:
+                    auto &&${field} = device::at_key<tag::${field}>(ptr);
                 % endfor
 
                 ${k_cache_decls}
@@ -290,7 +265,10 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
         def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
             return (
-                vertical_loop.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
+                vertical_loop.iter_tree()
+                .if_isinstance(cuir.FieldAccess, cuir.IJCacheAccess)
+                .getattr("name")
+                .to_set()
             )
 
         def ctype(symbol: str) -> str:
@@ -305,6 +283,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             parallel_loop_size=parallel_loop_size,
             loop_fields=loop_fields,
             ctype=ctype,
+            symtable=node.symtable_,
         )
 
     Program = as_mako(
@@ -394,6 +373,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             auto composite_${vertical_loop.id_} = sid::composite::make<
                                     ${', '.join(f'tag::{field}' for field in loop_fields(vertical_loop))}
                                 >(
+
                             % for field in loop_fields(vertical_loop):
                                 % if field in params:
                                     block(sid::shift_sid_origin(

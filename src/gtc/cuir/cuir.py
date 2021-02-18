@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Set, Tuple, Union
 
 from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
 from gtc import common
@@ -51,7 +51,21 @@ class FieldAccess(common.FieldAccess, Expr):  # type: ignore
     pass
 
 
-class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt):
+class IJCacheAccess(Expr):
+    name: SymbolRef
+    offset: Tuple[int, int]
+    kind = common.ExprKind.FIELD
+
+
+class KCacheAccess(Expr):
+    name: SymbolRef
+    offset: int
+    kind = common.ExprKind.FIELD
+
+
+class AssignStmt(
+    common.AssignStmt[Union[ScalarAccess, FieldAccess, IJCacheAccess, KCacheAccess], Expr], Stmt
+):
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
@@ -137,8 +151,10 @@ class VerticalLoopSection(LocNode):
 class VerticalLoop(LocNode):
     loop_order: LoopOrder
     sections: List[VerticalLoopSection]
-    ij_cached: List[SymbolRef]
-    k_cached: List[SymbolRef]
+
+    @property
+    def ij_cached(self) -> Set[str]:
+        return self.iter_tree().if_isinstance(IJCacheAccess).getattr("name").to_set()
 
 
 class Kernel(LocNode):
