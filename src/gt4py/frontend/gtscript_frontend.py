@@ -1348,7 +1348,10 @@ class IRMaker(ast.NodeVisitor):
             body_stmts = gt_utils.flatten(
                 [gt_utils.listify(self.visit(stmt)) for stmt in node.body]
             )
-            return [gt_ir.If(condition=cond, main_body=gt_ir.BlockStmt(stmts=body_stmts)) for cond in conditions]
+            return [
+                gt_ir.If(condition=cond, main_body=gt_ir.BlockStmt(stmts=body_stmts))
+                for cond in conditions
+            ]
         else:
             # If we find nested `with` blocks flatten them, i.e. transform
             #  with computation(PARALLEL):
