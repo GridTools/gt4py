@@ -209,13 +209,13 @@ class TemporaryFieldDeclExtractor(eve.NodeVisitor):
 
     def __init__(self):
         self.primary_location = None
-        self.temporary_fields = []
+        self.temporary_fields = {}
 
     @classmethod
     def apply(cls, symtable, stencils: List[Stencil]):
         instance = cls()
         instance.visit(stencils, symtable=symtable)
-        return instance.temporary_fields
+        return list(instance.temporary_fields.values())
 
     def visit_LocationSpecification(
         self, node: LocationSpecification, *, symtable: Dict[str, Any], **kwargs
@@ -231,7 +231,7 @@ class TemporaryFieldDeclExtractor(eve.NodeVisitor):
             target = node.target
         assert isinstance(target, SymbolRef)
 
-        if target.name not in symtable:
+        if target.name not in symtable and target.name not in self.temporary_fields:
             from numbers import Number
             from .gtscript_to_gtir import ConstExprEvaluator, TypeInference
             value_type = TypeInference.apply(symtable, node.value)
@@ -239,13 +239,11 @@ class TemporaryFieldDeclExtractor(eve.NodeVisitor):
             assert self.primary_location is not None
             if issubclass(value_type, built_in_types.LocalField):
                 args = (value_type.args[0], ConstExprEvaluator.apply(symtable, SymbolRef(name="dtype")))
-                self.temporary_fields.append(
-                    TemporarySparseFieldDecl(name=SymbolName(target.name), type_=built_in_types.TemporarySparseField[args]))
+                self.temporary_fields[target.name] = TemporarySparseFieldDecl(name=SymbolName(target.name), type_=built_in_types.TemporarySparseField[args])
             else: # TODO(tehrengruber): issubclass(value_type, Number)
                 args = (self.primary_location.location_type, SymbolRef(name="dtype"))
                 args = tuple(ConstExprEvaluator.apply(symtable, arg) for arg in args)
-                self.temporary_fields.append(
-                    TemporaryFieldDecl(name=SymbolName(target.name), type_=built_in_types.TemporaryField[args]))
+                self.temporary_fields[target.name] = TemporaryFieldDecl(name=SymbolName(target.name), type_=built_in_types.TemporaryField[args])
 
             #raise ValueError()
 
