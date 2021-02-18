@@ -276,7 +276,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
         return self.generic_visit(
             node,
-            declarations_dtypes=[self.visit(d.dtype, **kwargs) for d in node.declarations],
             max_extent=self.visit(cuir.Extent.union(*node.iter_tree().if_isinstance(cuir.Extent))),
             loop_start=loop_start,
             is_parallel=is_parallel,
@@ -326,7 +325,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             }
 
             namespace tag {
-                % for p in params + declarations:
+                % for p in set().union(*(loop_fields(v) for k in _this_node.kernels for v in k.vertical_loops)):
                     struct ${p} {};
                 % endfor
             }
@@ -344,8 +343,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                     const auto i_blocks = (i_size + i_block_size_t() - 1) / i_block_size_t();
                     const auto j_blocks = (j_size + j_block_size_t() - 1) / j_block_size_t();
 
-                    % for d, dtype in zip(declarations, declarations_dtypes):
-                        auto ${d} = gpu_backend::make_tmp_storage<${dtype}>(
+                    % for tmp in temporaries:
+                        auto ${tmp} = gpu_backend::make_tmp_storage<${ctype(tmp)}>(
                             1_c,
                             i_block_size_t(),
                             j_block_size_t(),
@@ -380,7 +379,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                                         ${field},
                                         offset_${vertical_loop.id_}
                                     ))
-                                % elif field in vertical_loop.ij_cached:
+                                % elif field in {c.name for c in vertical_loop.ij_caches}:
                                     gpu_backend::make_ij_cache<${ctype(field)}>(
                                         1_c,
                                         i_block_size_t(),

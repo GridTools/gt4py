@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, List, Optional, Set, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
 from gtc import common
@@ -115,6 +115,14 @@ class Temporary(Decl):
     pass
 
 
+class IJCacheDecl(Decl):
+    pass
+
+
+class KCacheDecl(Decl):
+    pass
+
+
 class Extent(LocNode):
     iminus: int
     iplus: int
@@ -151,10 +159,8 @@ class VerticalLoopSection(LocNode):
 class VerticalLoop(LocNode):
     loop_order: LoopOrder
     sections: List[VerticalLoopSection]
-
-    @property
-    def ij_cached(self) -> Set[str]:
-        return self.iter_tree().if_isinstance(IJCacheAccess).getattr("name").to_set()
+    ij_caches: List[IJCacheDecl]
+    k_caches: List[KCacheDecl]
 
 
 class Kernel(LocNode):
@@ -165,5 +171,5 @@ class Kernel(LocNode):
 class Program(LocNode, SymbolTableTrait):
     name: Str
     params: List[Decl]
-    declarations: List[Temporary]
+    temporaries: List[Temporary]
     kernels: List[Kernel]

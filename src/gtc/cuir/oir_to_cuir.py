@@ -14,11 +14,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict, Set, Union
+from typing import Any, Callable, Dict, Set, Union
 
 import eve
 from gtc import common, oir
 from gtc.cuir import cuir
+from gtc.passes.oir_optimizations.utils import symbol_name_creator
 
 
 class OIRToCUIR(eve.NodeTranslator):
@@ -46,16 +47,25 @@ class OIRToCUIR(eve.NodeTranslator):
         return cuir.Temporary(name=node.name, dtype=node.dtype)
 
     def visit_FieldAccess(
-        self, node: oir.FieldAccess, *, ij_cached: Set[str], k_cached: Set[str], **kwargs: Any
+        self,
+        node: oir.FieldAccess,
+        *,
+        ij_cached: Dict[str, str],
+        k_cached: Dict[str, str],
+        accessed_fields: Set[str],
+        **kwargs: Any,
     ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
         if node.name in ij_cached:
             assert node.offset.k == 0
             return cuir.IJCacheAccess(
-                name=node.name, offset=(node.offset.i, node.offset.j), dtype=node.dtype
+                name=ij_cached[node.name], offset=(node.offset.i, node.offset.j), dtype=node.dtype
             )
         if node.name in k_cached:
             assert node.offset.i == node.offset.j == 0
-            return cuir.KCacheAccess(name=node.name, offset=node.offset.k, dtype=node.dtype)
+            return cuir.KCacheAccess(
+                name=k_cached[node.name], offset=node.offset.k, dtype=node.dtype
+            )
+        accessed_fields.add(node.name)
         return cuir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
 
     def visit_ScalarAccess(
@@ -106,26 +116,57 @@ class OIRToCUIR(eve.NodeTranslator):
             horizontal_executions=self.visit(node.horizontal_executions, **kwargs),
         )
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> cuir.Kernel:
+    def visit_VerticalLoop(
+        self,
+        node: oir.VerticalLoop,
+        *,
+        symtable: Dict[str, Any],
+        new_symbol_name: Callable[[str], str],
+        **kwargs: Any,
+    ) -> cuir.Kernel:
         assert not any(c.fill or c.flush for c in node.caches if isinstance(c, oir.KCache))
-        ij_cached = {c.name for c in node.caches if isinstance(c, oir.IJCache)}
-        k_cached = {c.name for c in node.caches if isinstance(c, oir.KCache)}
+        ij_cached = {
+            c.name: new_symbol_name(c.name) for c in node.caches if isinstance(c, oir.IJCache)
+        }
+        k_cached = {
+            c.name: new_symbol_name(c.name) for c in node.caches if isinstance(c, oir.KCache)
+        }
         return cuir.Kernel(
             name=node.id_,
             vertical_loops=[
                 cuir.VerticalLoop(
                     loop_order=node.loop_order,
                     sections=self.visit(
-                        node.sections, ij_cached=ij_cached, k_cached=k_cached, **kwargs
+                        node.sections,
+                        ij_cached=ij_cached,
+                        k_cached=k_cached,
+                        symtable=symtable,
+                        **kwargs,
                     ),
+                    ij_caches=[
+                        cuir.IJCacheDecl(name=new_name, dtype=symtable[old_name].dtype)
+                        for old_name, new_name in ij_cached.items()
+                    ],
+                    k_caches=[
+                        cuir.KCacheDecl(name=new_name, dtype=symtable[old_name].dtype)
+                        for old_name, new_name in k_cached.items()
+                    ],
                 )
             ],
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> cuir.Program:
+        accessed_fields: Set[str] = set()
+        kernels = self.visit(
+            node.vertical_loops,
+            symtable=node.symtable_,
+            new_symbol_name=symbol_name_creator(set(node.symtable_)),
+            accessed_fields=accessed_fields,
+        )
+        temporaries = [self.visit(d) for d in node.declarations if d.name in accessed_fields]
         return cuir.Program(
             name=node.name,
             params=self.visit(node.params),
-            declarations=self.visit(node.declarations),
-            kernels=self.visit(node.vertical_loops, symtable=node.symtable_),
+            temporaries=temporaries,
+            kernels=kernels,
         )
