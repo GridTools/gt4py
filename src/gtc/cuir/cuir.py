@@ -16,6 +16,8 @@
 
 from typing import Any, List, Optional, Tuple, Union
 
+from pydantic import validator
+
 from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
 from gtc import common
 from gtc.common import AxisBound, DataType, LocNode, LoopOrder
@@ -167,6 +169,13 @@ class VerticalLoop(LocNode):
 class Kernel(LocNode):
     name: Str
     vertical_loops: List[VerticalLoop]
+
+    @validator("vertical_loops")
+    def check_parallelism(cls, v: List[VerticalLoop]) -> List[VerticalLoop]:
+        parallel = [loop.loop_order == LoopOrder.PARALLEL for loop in v]
+        if any(parallel) and not all(parallel):
+            raise ValueError("Mixed k-parallelism in kernel")
+        return v
 
 
 class Program(LocNode, SymbolTableTrait):
