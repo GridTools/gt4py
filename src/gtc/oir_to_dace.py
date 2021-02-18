@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import dace
 import numpy as np
-from dace import SDFG, InterstateEdge, SDFGState
+from dace import SDFG, SDFGState
 from dace.sdfg.graph import MultiConnectorEdge
 from dace.sdfg.nodes import AccessNode
-from dace.subsets import Subset
 
 import gtc.common as common
 import gtc.oir as oir
-from eve import field
 from eve.visitors import NodeVisitor
 from gtc.dace.nodes import VerticalLoopLibraryNode
 from gtc.passes.oir_optimizations.utils import AccessCollector
@@ -47,7 +45,7 @@ class OirToSDFGVisitor(NodeVisitor):
             self.delete_candidates = forward_context.delete_candidates
 
     def _add_read_edges_forward(self, ln, access_collection, context):
-        vl = ln._oir_node
+        vl = ln.oir_node
         # for reads: add edge from last access node with an overlaping write to LN
         for name in access_collection.read_fields():
             most_recent_write = None

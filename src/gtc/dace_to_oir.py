@@ -77,9 +77,9 @@ def convert(sdfg: dace.SDFG) -> oir.Stencil:
                         )
                         decls.append(oir.FieldDecl(name=edge.dst.data, dtype=dtype))
                 new_node = oir.VerticalLoop(
-                    interval=node._oir_node.interval,
-                    horizontal_executions=node._oir_node.horizontal_executions,
-                    loop_order=node._oir_node.loop_order,
+                    interval=node.oir_node.interval,
+                    horizontal_executions=node.oir_node.horizontal_executions,
+                    loop_order=node.oir_node.loop_order,
                     declarations=decls,
                 )
                 vertical_loops.append(new_node)

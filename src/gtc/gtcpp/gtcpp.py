@@ -164,7 +164,7 @@ class GTExtent(LocNode):
                 k=(min(self.k[0], offset.k), max(self.k[1], offset.k)),
             )
         else:
-            assert "Can only add CartesianOffsets"
+            raise AssertionError("Can only add CartesianOffsets")
 
 
 class GTAccessor(LocNode):
