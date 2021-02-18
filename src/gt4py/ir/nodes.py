@@ -94,11 +94,13 @@ storing a reference to the piece of source code which originated the node.
 
     NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
-    Cast(dtype: DataType, expr: Expr)
+    Cast(expr: Expr, data_type: DataType)
 
-    AxisIndex(axis: str)
+    AxisIndex(axis: str, data_type: DataType)
 
-    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | AxisIndex | InvalidBranch
+    AxisOffset(axis: str, endpt: LevelMarker, offset: int, data_type: DataType)
+
+    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch | AxisIndex | AxisOffset
 
     CompositeExpr   = UnaryOpExpr(op: UnaryOperator, arg: Expr)
                     | BinOpExpr(op: BinaryOperator, lhs: Expr, rhs: Expr)
