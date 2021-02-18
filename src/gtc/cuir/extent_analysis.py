@@ -21,34 +21,13 @@ from eve import NodeTranslator
 from . import cuir
 
 
-def _extents_union(*extents: cuir.Extent) -> cuir.Extent:
-    return cuir.Extent(
-        iminus=min(e.iminus for e in extents),
-        iplus=max(e.iplus for e in extents),
-        jminus=min(e.jminus for e in extents),
-        jplus=max(e.jplus for e in extents),
-    )
-
-
-def _extents_sum(*extents: cuir.Extent) -> cuir.Extent:
-    return cuir.Extent(
-        iminus=sum(e.iminus for e in extents),
-        iplus=sum(e.iplus for e in extents),
-        jminus=sum(e.jminus for e in extents),
-        jplus=sum(e.jplus for e in extents),
-    )
-
-
 def _extents_map(node: cuir.LocNode) -> Dict[str, cuir.Extent]:
     return (
         node.iter_tree()
         .if_isinstance(cuir.FieldAccess)
         .reduceby(
-            lambda ext, acc: _extents_union(
-                ext,
-                cuir.Extent(
-                    iminus=acc.offset.i, iplus=acc.offset.i, jminus=acc.offset.j, jplus=acc.offset.j
-                ),
+            lambda ext, acc: ext.union(
+                cuir.Extent(i=(acc.offset.i, acc.offset.i), j=(acc.offset.j, acc.offset.j)),
             ),
             "name",
             init=cuir.Extent.zero(),
@@ -72,8 +51,7 @@ class ComputeExtents(NodeTranslator):
                 .getattr("name")
                 .to_set()
             )
-            extent = _extents_union(
-                cuir.Extent.zero(),
+            extent = cuir.Extent.zero().union(
                 *(extents_map.get(write, cuir.Extent.zero()) for write in writes),
             )
 
@@ -86,12 +64,10 @@ class ComputeExtents(NodeTranslator):
                 )
             )
 
-            accesses_map = {
-                k: _extents_sum(extent, v) for k, v in _extents_map(horizontal_execution).items()
-            }
+            accesses_map = {k: extent + v for k, v in _extents_map(horizontal_execution).items()}
             extents_map = {
-                k: _extents_union(
-                    extents_map.get(k, cuir.Extent.zero()), accesses_map.get(k, cuir.Extent.zero())
+                k: extents_map.get(k, cuir.Extent.zero()).union(
+                    accesses_map.get(k, cuir.Extent.zero())
                 )
                 for k in set(extents_map.keys()) | set(accesses_map.keys())
             }

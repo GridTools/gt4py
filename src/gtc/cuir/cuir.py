@@ -127,22 +127,24 @@ class KCacheDecl(Decl):
 
 
 class Extent(LocNode):
-    iminus: int
-    iplus: int
-    jminus: int
-    jplus: int
+    i: Tuple[int, int]
+    j: Tuple[int, int]
 
     @classmethod
     def zero(cls) -> "Extent":
-        return cls(iminus=0, iplus=0, jminus=0, jplus=0)
+        return cls(i=(0, 0), j=(0, 0))
 
     @classmethod
     def union(cls, *extents: "Extent") -> "Extent":
         return cls(
-            iminus=min(e.iminus for e in extents),
-            iplus=max(e.iplus for e in extents),
-            jminus=min(e.jminus for e in extents),
-            jplus=max(e.jplus for e in extents),
+            i=(min(e.i[0] for e in extents), max(e.i[1] for e in extents)),
+            j=(min(e.j[0] for e in extents), max(e.j[1] for e in extents)),
+        )
+
+    def __add__(self, other: "Extent") -> "Extent":
+        return Extent(
+            i=(self.i[0] + other.i[0], self.i[1] + other.i[1]),
+            j=(self.j[0] + other.j[0], self.j[1] + other.j[1]),
         )
 
 

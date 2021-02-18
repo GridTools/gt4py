@@ -100,7 +100,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             return "+"
         raise NotImplementedError("Not implemented UnaryOperator encountered.")
 
-    Extent = as_fmt("extent<{iminus}, {iplus}, {jminus}, {jplus}>")
+    Extent = as_fmt("extent<{i[0]}, {i[1]}, {j[0]}, {j[1]}>")
 
     HorizontalExecution = as_mako(
         """
