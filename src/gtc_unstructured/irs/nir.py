@@ -94,7 +94,7 @@ class Access(Expr):
 
 
 class FieldAccess(Access):
-    primary: SymbolRef  # TODO to a PrimaryLocation or a LocationComprehension
+    primary: SymbolRef  # to NeighborLoop or IterationSpace
     secondary: Optional[SymbolRef]  # TODO unused? # to a LocationRef
     # TODO vertical
 
