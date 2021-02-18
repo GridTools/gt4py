@@ -129,27 +129,31 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     VerticalLoopSection = as_mako(
         """
+        <%def name="sid_shift(step)">
+            sid::shift(ptr, sid::get_stride<dim::k>(m_strides), ${step}_c);
+        </%def>
+        <%def name="cache_shift(cache_vars)">
+            % for dst, src in zip(cache_vars[:-1], cache_vars[1:]):
+                ${dst} = ${src};
+            % endfor
+        </%def>
         // ${id_}
         % if order == cuir.LoopOrder.FORWARD:
             for (int k_block = ${start}; k_block < ${end}; ++k_block) {
                 ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
 
-                sid::shift(ptr, sid::get_stride<dim::k>(m_strides), 1_c);
+                ${sid_shift(1)}
                 % for k_cache in k_cache_decls:
-                    % for dst, src in zip(_this_generator.k_cache_vars(k_cache)[:-1], _this_generator.k_cache_vars(k_cache)[1:]):
-                        ${dst} = ${src};
-                    % endfor
+                    ${cache_shift(_this_generator.k_cache_vars(k_cache))}
                 % endfor
             }
         % elif order == cuir.LoopOrder.BACKWARD:
             for (int k_block = ${end} - 1; k_block >= ${start}; --k_block) {
                 ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
 
-                sid::shift(ptr, sid::get_stride<dim::k>(m_strides), -1_c);
+                ${sid_shift(-1)}
                 % for k_cache in k_cache_decls:
-                    % for dst, src in zip(_this_generator.k_cache_vars(k_cache)[:0:-1], _this_generator.k_cache_vars(k_cache)[-2::-1]):
-                        ${dst} = ${src};
-                    % endfor
+                    ${cache_shift(_this_generator.k_cache_vars(k_cache)[::-1])}
                 % endfor
             }
         % else:
