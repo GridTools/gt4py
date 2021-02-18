@@ -587,7 +587,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
 
                 # TODO(hackathon): this hack is removing the VerticalLocationType args
                 # TODO: from Field[] to avoid breaking the TypeInference mechanism
-                arg.type_.args = new_type_args
+                arg.type_.args = tuple(new_type_args)
 
             elif issubclass(arg.type_, Connectivity):
                 base_connectivty = arg.type_.base_connectivity()

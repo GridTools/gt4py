@@ -38,7 +38,7 @@ class BuiltInTypeMeta(type):
         instance = type.__new__(cls, class_name, bases, namespace)
         instance.class_name = class_name
         instance.namespace = namespace
-        instance.args = args if args else []
+        instance.args = args if args else ()
         return instance
 
     @property
