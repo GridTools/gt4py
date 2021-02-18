@@ -31,6 +31,7 @@ from gtc_unstructured.frontend.py_to_gtscript import PyToGTScript
 from gtc_unstructured.irs import common
 from gtc_unstructured.irs.gtir_to_nir import GtirToNir
 from gtc_unstructured.irs.nir_passes.merge_horizontal_loops import find_and_merge_horizontal_loops
+from gtc_unstructured.irs.nir_passes.merge_neighbor_loops import find_and_merge_neighbor_loops
 from gtc_unstructured.irs.nir_to_usid import NirToUsid
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator
 
@@ -112,6 +113,7 @@ class GTScriptCompilationTask:
         # Code generation
         nir_comp = GtirToNir().visit(self.gtir)
         nir_comp = find_and_merge_horizontal_loops(nir_comp)
+        # nir_comp = find_and_merge_neighbor_loops(nir_comp)
         usid_comp = NirToUsid().visit(nir_comp)
 
         if debug:
