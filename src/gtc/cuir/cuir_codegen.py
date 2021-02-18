@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Collection, Dict, Set, Union
+from typing import Any, Collection, Dict, List, Set, Union
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
@@ -44,9 +44,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         "*${f'sid::multi_shifted<tag::{name}>({name}, m_strides, offsets({offset[0]}, {offset[1]}, 0))' if _this_node.offset != (0, 0) else name}"
     )
 
-    KCacheAccess = as_mako(
-        "${name + (f'_p{_this_node.offset}' if _this_node.offset >= 0 else f'_m{-_this_node.offset}')}"
-    )
+    KCacheAccess = as_mako("${_this_generator.k_cache_var(name, _this_node.offset)}")
 
     ScalarAccess = as_fmt("{name}")
 
@@ -121,49 +119,61 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             return f"k_size + {node.offset}"
         raise ValueError("Cannot handle dynamic levels")
 
+    KCacheDecl = as_mako(
+        """
+        % for var in _this_generator.k_cache_vars(_this_node):
+            ${dtype} ${var};
+        % endfor
+        """
+    )
+
     VerticalLoopSection = as_mako(
         """
         // ${id_}
-        ${loop_entry(start, end)} {
-            ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
-            ${loop_shifts}
-        }
+        % if order == cuir.LoopOrder.FORWARD:
+            for (int k_block = ${start}; k_block < ${end}; ++k_block) {
+                ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
+
+                sid::shift(ptr, sid::get_stride<dim::k>(m_strides), 1_c);
+                % for k_cache in k_cache_decls:
+                    % for dst, src in zip(_this_generator.k_cache_vars(k_cache)[:-1], _this_generator.k_cache_vars(k_cache)[1:]):
+                        ${dst} = ${src};
+                    % endfor
+                % endfor
+            }
+        % elif order == cuir.LoopOrder.BACKWARD:
+            for (int k_block = ${end} - 1; k_block >= ${start}; --k_block) {
+                ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
+
+                sid::shift(ptr, sid::get_stride<dim::k>(m_strides), -1_c);
+                % for k_cache in k_cache_decls:
+                    % for dst, src in zip(_this_generator.k_cache_vars(k_cache)[:0:-1], _this_generator.k_cache_vars(k_cache)[-2::-1]):
+                        ${dst} = ${src};
+                    % endfor
+                % endfor
+            }
+        % else:
+            if (k_block < (${end}) - (${start})) {
+                ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
+            }
+        % endif
         """
     )
+
+    @staticmethod
+    def k_cache_var(name: str, offset: int) -> str:
+        return name + (f"p{offset}" if offset >= 0 else f"m{-offset}")
+
+    @classmethod
+    def k_cache_vars(cls, k_cache: cuir.KCacheDecl) -> List[str]:
+        return [
+            cls.k_cache_var(k_cache.name, offset)
+            for offset in range(k_cache.min_offset, k_cache.max_offset + 1)
+        ]
 
     def visit_VerticalLoop(
         self, node: cuir.VerticalLoop, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        if node.loop_order == cuir.LoopOrder.PARALLEL:
-            loop_shifts = ""
-            k_cache_decls = ""
-            loop_entry = "if (k_block < ({end}) - ({start}))"
-        else:
-            if node.loop_order == cuir.LoopOrder.FORWARD:
-                step = 1
-                loop_entry = "for (int k_block = {start}; k_block < {end}; ++k_block)"
-            else:
-                step = -1
-                loop_entry = "for (int k_block = {end} - 1; k_block >= {start}; --k_block)"
-
-            k_cache_accesses = node.iter_tree().if_isinstance(cuir.KCacheAccess)
-            k_cache_decls = ""
-            k_cache_shifts = ""
-            for _, accesses in k_cache_accesses.groupby("name"):
-                unique = sorted(
-                    {x.offset: x for x in accesses}.values(), key=lambda x: step * x.offset
-                )
-                for access in unique:
-                    k_cache_decls += self.visit(
-                        cuir.LocalScalar(name=self.visit(access), dtype=symtable[access.name].dtype)
-                    )
-
-                for dst, src in zip(unique[:-1], unique[1:]):
-                    k_cache_shifts += self.visit(cuir.AssignStmt(left=dst, right=src))
-
-            loop_shifts = (
-                k_cache_shifts + f"sid::shift(ptr, sid::get_stride<dim::k>(m_strides), {step}_c);"
-            )
 
         return self.generic_visit(
             node,
@@ -171,9 +181,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             .if_isinstance(cuir.FieldAccess, cuir.IJCacheAccess)
             .getattr("name")
             .to_set(),
-            loop_entry=lambda start, end: loop_entry.format(start=start, end=end),
-            loop_shifts=loop_shifts,
-            k_cache_decls=k_cache_decls,
+            k_cache_decls=node.k_caches,
+            order=node.loop_order,
             **kwargs,
         )
 
@@ -202,7 +211,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 sid::shift(ptr,
                            sid::get_stride<dim::j>(m_strides),
                            j_block);
-                % if is_parallel(_this_node):
+                % if order == cuir.LoopOrder.PARALLEL:
                 const int k_block = blockIdx.z;
                 sid::shift(ptr,
                            sid::get_stride<dim::k>(m_strides),
@@ -213,7 +222,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                     auto &&${field} = device::at_key<tag::${field}>(ptr);
                 % endfor
 
-                ${k_cache_decls}
+                % for k_cache in k_caches:
+                    ${k_cache}
+                % endfor
 
                 % for section in sections:
                     ${section}
@@ -254,15 +265,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 return self.visit(vertical_loop.sections[0].end) + " - 1"
             return self.visit(vertical_loop.sections[0].start)
 
-        def is_parallel(vertical_loop: cuir.VerticalLoop) -> bool:
-            return vertical_loop.loop_order == cuir.LoopOrder.PARALLEL
-
-        def parallel_loop_size(vertical_loop: cuir.VerticalLoop) -> str:
-            assert vertical_loop.loop_order == cuir.LoopOrder.PARALLEL
-            start = self.visit(vertical_loop.sections[0].start)
-            end = self.visit(vertical_loop.sections[-1].end)
-            return f"({end}) - ({start})"
-
         def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
             return (
                 vertical_loop.iter_tree()
@@ -278,11 +280,10 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             node,
             max_extent=self.visit(cuir.Extent.union(*node.iter_tree().if_isinstance(cuir.Extent))),
             loop_start=loop_start,
-            is_parallel=is_parallel,
-            parallel_loop_size=parallel_loop_size,
             loop_fields=loop_fields,
             ctype=ctype,
             symtable=node.symtable_,
+            cuir=cuir,
         )
 
     Program = as_mako(
@@ -412,7 +413,11 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             i_block_size_t::value, j_block_size_t::value>(
                             i_size,
                             j_size,
-                            ${'k_size' if is_parallel(kernel.vertical_loops[0]) else '1'},
+                            % if kernel.vertical_loops[0].loop_order == cuir.LoopOrder.PARALLEL:
+                                k_size,
+                            % else:
+                                1,
+                            %endif
                             kernel_${kernel.id_},
                             shared_alloc_${kernel.id_}.size());
                     % endfor

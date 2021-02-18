@@ -120,7 +120,8 @@ class IJCacheDecl(Decl):
 
 
 class KCacheDecl(Decl):
-    pass
+    min_offset: int
+    max_offset: int
 
 
 class Extent(LocNode):

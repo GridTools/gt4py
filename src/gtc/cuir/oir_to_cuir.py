@@ -50,21 +50,23 @@ class OIRToCUIR(eve.NodeTranslator):
         self,
         node: oir.FieldAccess,
         *,
-        ij_cached: Dict[str, str],
-        k_cached: Dict[str, str],
+        ij_caches: Dict[str, cuir.IJCacheDecl],
+        k_caches: Dict[str, cuir.KCacheDecl],
         accessed_fields: Set[str],
         **kwargs: Any,
     ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
-        if node.name in ij_cached:
+        if node.name in ij_caches:
             assert node.offset.k == 0
+            cache = ij_caches[node.name]
             return cuir.IJCacheAccess(
-                name=ij_cached[node.name], offset=(node.offset.i, node.offset.j), dtype=node.dtype
+                name=cache.name, offset=(node.offset.i, node.offset.j), dtype=node.dtype
             )
-        if node.name in k_cached:
+        if node.name in k_caches:
             assert node.offset.i == node.offset.j == 0
-            return cuir.KCacheAccess(
-                name=k_cached[node.name], offset=node.offset.k, dtype=node.dtype
-            )
+            cache = k_caches[node.name]
+            cache.min_offset = min(cache.min_offset, node.offset.k)
+            cache.max_offset = max(cache.max_offset, node.offset.k)
+            return cuir.KCacheAccess(name=cache.name, offset=node.offset.k, dtype=node.dtype)
         accessed_fields.add(node.name)
         return cuir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
 
@@ -125,11 +127,20 @@ class OIRToCUIR(eve.NodeTranslator):
         **kwargs: Any,
     ) -> cuir.Kernel:
         assert not any(c.fill or c.flush for c in node.caches if isinstance(c, oir.KCache))
-        ij_cached = {
-            c.name: new_symbol_name(c.name) for c in node.caches if isinstance(c, oir.IJCache)
+        ij_caches = {
+            c.name: cuir.IJCacheDecl(name=new_symbol_name(c.name), dtype=symtable[c.name].dtype)
+            for c in node.caches
+            if isinstance(c, oir.IJCache)
         }
-        k_cached = {
-            c.name: new_symbol_name(c.name) for c in node.caches if isinstance(c, oir.KCache)
+        k_caches = {
+            c.name: cuir.KCacheDecl(
+                name=new_symbol_name(c.name),
+                dtype=symtable[c.name].dtype,
+                min_offset=0,
+                max_offset=0,
+            )
+            for c in node.caches
+            if isinstance(c, oir.KCache)
         }
         return cuir.Kernel(
             name=node.id_,
@@ -138,19 +149,13 @@ class OIRToCUIR(eve.NodeTranslator):
                     loop_order=node.loop_order,
                     sections=self.visit(
                         node.sections,
-                        ij_cached=ij_cached,
-                        k_cached=k_cached,
+                        ij_caches=ij_caches,
+                        k_caches=k_caches,
                         symtable=symtable,
                         **kwargs,
                     ),
-                    ij_caches=[
-                        cuir.IJCacheDecl(name=new_name, dtype=symtable[old_name].dtype)
-                        for old_name, new_name in ij_cached.items()
-                    ],
-                    k_caches=[
-                        cuir.KCacheDecl(name=new_name, dtype=symtable[old_name].dtype)
-                        for old_name, new_name in k_cached.items()
-                    ],
+                    ij_caches=list(ij_caches.values()),
+                    k_caches=list(k_caches.values()),
                 )
             ],
         )
