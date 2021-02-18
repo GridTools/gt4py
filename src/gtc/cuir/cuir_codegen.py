@@ -291,7 +291,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         )
 
     Program = as_mako(
-        """#include <array>
+        """#include <algorithm>
+        #include <array>
         #include <gridtools/common/cuda_util.hpp>
         #include <gridtools/common/gt_math.hpp>
         #include <gridtools/common/host_device.hpp>
@@ -418,7 +419,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             i_size,
                             j_size,
                             % if kernel.vertical_loops[0].loop_order == cuir.LoopOrder.PARALLEL:
-                                k_size,
+                                std::max({
+                                    ${', '.join(f'({_this_generator.visit(vl.sections[-1].end)}) - ({_this_generator.visit(vl.sections[0].start)}) + 1' for vl in kernel.vertical_loops)}
+                                }),
                             % else:
                                 1,
                             %endif
