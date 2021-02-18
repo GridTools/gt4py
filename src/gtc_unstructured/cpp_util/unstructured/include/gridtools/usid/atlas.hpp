@@ -16,5 +16,5 @@ namespace atlas {
             .build();
             };
         }
-    }
-} // namespace namespace
+    } // namespace mesh
+} // namespace atlas
