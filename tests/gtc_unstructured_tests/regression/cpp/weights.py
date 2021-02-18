@@ -28,7 +28,8 @@ dtype = DataType.FLOAT64
 def sten(e2v: E2V, in_field: Field[Vertex, dtype], out_field: Field[Edge, dtype]):
     with computation(FORWARD), interval(0, None):
         with location(Edge) as e:
-            weights = LocalField[E2V, dtype]([-1, 1])
+            # TODO: ints don't work right now
+            weights = LocalField[E2V, dtype]([-1., 1.])
             out_field = sum(in_field[v]*weights[e, v] for v in e2v[e])
 
 def main():

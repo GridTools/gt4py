@@ -4,8 +4,8 @@
 
 #include <gridtools/storage/builder.hpp>
 
-namespace atlas namespace {
-    mesh {
+namespace atlas {
+    namespace mesh {
         template <class Connectivity, class MaxNeighbors>
         auto make_storage_producer(MaxNeighbors max_neighbors, Connectivity const &src) {
             return [&src, max_neighbors](auto traits) {
