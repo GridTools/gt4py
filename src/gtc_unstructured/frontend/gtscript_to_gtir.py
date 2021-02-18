@@ -477,7 +477,8 @@ class GTScriptToGTIR(eve.NodeTranslator):
                     node.value.generators[0].iterable.value.name].type_.secondary_location())]
                 assert node.value.generators[0].iterable.value.name == connectivity_name
                 right = self.visit(node.value.elt, symtable={**symtable, **node.value.symtable_}, location_stack=location_stack, **kwargs)
-                right = RewriteSparseFieldAccess.apply((location_stack[0][0], node.value.generators[0].target), location_name, right)
+                location_name = node.value.generators[0].target
+                #right = RewriteSparseFieldAccess.apply((location_stack[0][0], node.value.generators[0].target), location_name, right)
 
             else:
                 right = self.visit(node.value, symtable=symtable,
