@@ -32,7 +32,7 @@ class OIRToCUIR(eve.NodeTranslator):
         return cuir.ScalarDecl(name=node.name, dtype=node.dtype)
 
     def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> cuir.UnaryOp:
-        return cuir.UnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs))
+        return cuir.UnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs), dtype=node.dtype)
 
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> cuir.BinaryOp:
         return cuir.BinaryOp(
@@ -66,13 +66,16 @@ class OIRToCUIR(eve.NodeTranslator):
         return cuir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> cuir.NativeFuncCall:
-        return cuir.NativeFuncCall(func=node.func, args=self.visit(node.args, **kwargs))
+        return cuir.NativeFuncCall(
+            func=node.func, args=self.visit(node.args, **kwargs), dtype=node.dtype
+        )
 
     def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> cuir.TernaryOp:
         return cuir.TernaryOp(
             cond=self.visit(node.cond, **kwargs),
             true_expr=self.visit(node.true_expr, **kwargs),
             false_expr=self.visit(node.false_expr, **kwargs),
+            dtype=node.dtype,
         )
 
     def visit_HorizontalExecution(

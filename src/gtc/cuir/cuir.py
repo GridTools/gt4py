@@ -22,7 +22,7 @@ from gtc.common import AxisBound, DataType, LocNode, LoopOrder
 
 
 class Expr(common.Expr):
-    dtype: Optional[common.DataType]
+    dtype: common.DataType
 
     # TODO Eve could provide support for making a node abstract
     def __init__(self, *args: Any, **kwargs: Any) -> None:
