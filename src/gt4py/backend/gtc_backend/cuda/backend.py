@@ -70,6 +70,7 @@ class GTCCudaExtGenerator:
         cuir = oir_to_cuir.OIRToCUIR().visit(oir)
         cuir = kernel_fusion.FuseKernels().visit(cuir)
         cuir = extent_analysis.ComputeExtents().visit(cuir)
+        cuir = extent_analysis.CacheExtents().visit(cuir)
         implementation = cuir_codegen.CUIRCodegen.apply(cuir)
         bindings = GTCCudaBindingsCodegen.apply(cuir, module_name=self.module_name)
         return {

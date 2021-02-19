@@ -150,11 +150,11 @@ class KExtent(LocNode):
 
 
 class IJCacheDecl(Decl):
-    pass
+    extent: Optional[IJExtent]
 
 
 class KCacheDecl(Decl):
-    extent: KExtent
+    extent: Optional[KExtent]
 
 
 class HorizontalExecution(LocNode):

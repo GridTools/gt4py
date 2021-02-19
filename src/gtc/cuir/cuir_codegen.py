@@ -41,7 +41,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     )
 
     IJCacheAccess = as_mako(
-        "*${f'sid::multi_shifted<tag::{name}>({name}, m_strides, offsets({offset[0]}, {offset[1]}, 0))' if _this_node.offset != (0, 0) else name}"
+        "${'*' + name if _this_node.offset == (0, 0) else name + '[' + ' + '.join(f'{o} * {d}_stride_{name}' for o, d in zip(_this_node.offset, 'ij') if o != 0) + ']'}"
     )
 
     KCacheAccess = as_mako("${_this_generator.k_cache_var(name, _this_node.offset)}")
@@ -119,6 +119,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             return f"k_size + {node.offset}"
         raise ValueError("Cannot handle dynamic levels")
 
+    IJCacheDecl = as_mako(
+        """
+        __shared__ ${dtype} ${name}_data[(i_block_size_t() + ${-_this_node.extent.i[0] + _this_node.extent.i[1]}) * (j_block_size_t() + ${-_this_node.extent.j[0] + _this_node.extent.j[1]})];
+        constexpr int i_stride_${name} = 1;
+        constexpr int j_stride_${name} = i_block_size_t() + ${-_this_node.extent.i[0] + _this_node.extent.i[1]};
+        ${dtype} *${name} = ${name}_data + (${-_this_node.extent.i[0]} + i_block) * i_stride_${name} + (${-_this_node.extent.j[0]} + j_block) * j_stride_${name};
+        """
+    )
+
     KCacheDecl = as_mako(
         """
         % for var in _this_generator.k_cache_vars(_this_node):
@@ -170,6 +179,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     @classmethod
     def k_cache_vars(cls, k_cache: cuir.KCacheDecl) -> List[str]:
+        assert k_cache.extent
         return [
             cls.k_cache_var(k_cache.name, offset)
             for offset in range(k_cache.extent.k[0], k_cache.extent.k[1] + 1)
@@ -181,10 +191,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
         return self.generic_visit(
             node,
-            fields=node.iter_tree()
-            .if_isinstance(cuir.FieldAccess, cuir.IJCacheAccess)
-            .getattr("name")
-            .to_set(),
+            fields=node.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set(),
             k_cache_decls=node.k_caches,
             order=node.loop_order,
             **kwargs,
@@ -224,6 +231,10 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
                 % for field in fields:
                     auto &&${field} = device::at_key<tag::${field}>(ptr);
+                % endfor
+
+                % for ij_cache in ij_caches:
+                    ${ij_cache}
                 % endfor
 
                 % for k_cache in k_caches:
@@ -271,10 +282,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
         def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
             return (
-                vertical_loop.iter_tree()
-                .if_isinstance(cuir.FieldAccess, cuir.IJCacheAccess)
-                .getattr("name")
-                .to_set()
+                vertical_loop.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
             )
 
         def ctype(symbol: str) -> str:
@@ -307,7 +315,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         #include <gridtools/stencil/common/dim.hpp>
         #include <gridtools/stencil/common/extent.hpp>
         #include <gridtools/stencil/gpu/launch_kernel.hpp>
-        #include <gridtools/stencil/gpu/ij_cache.hpp>
         #include <gridtools/stencil/gpu/shared_allocator.hpp>
         #include <gridtools/stencil/gpu/tmp_storage_sid.hpp>
 
@@ -387,14 +394,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                                         ${field},
                                         offset_${vertical_loop.id_}
                                     ))
-                                % elif field in {c.name for c in vertical_loop.ij_caches}:
-                                    gpu_backend::make_ij_cache<${ctype(field)}>(
-                                        1_c,
-                                        i_block_size_t(),
-                                        j_block_size_t(),
-                                        ${max_extent}(),
-                                        shared_alloc_${kernel.id_}
-                                    )
                                 % else:
                                     sid::shift_sid_origin(
                                         ${field},

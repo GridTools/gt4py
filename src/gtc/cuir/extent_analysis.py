@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from collections import defaultdict
 from typing import Any, Dict
 
 from eve import NodeTranslator
@@ -77,3 +78,51 @@ class ComputeExtents(NodeTranslator):
             end=node.end,
             horizontal_executions=list(reversed(horizontal_executions)),
         )
+
+
+class CacheExtents(NodeTranslator):
+    def visit_IJCacheDecl(
+        self,
+        node: cuir.IJCacheDecl,
+        *,
+        ij_extents: Dict[str, cuir.KExtent],
+        **kwargs: Any,
+    ) -> cuir.IJCacheDecl:
+        return cuir.IJCacheDecl(name=node.name, dtype=node.dtype, extent=ij_extents[node.name])
+
+    def visit_KCacheDecl(
+        self, node: cuir.KCacheDecl, *, k_extents: Dict[str, cuir.KExtent], **kwargs: Any
+    ) -> cuir.KCacheDecl:
+        return cuir.KCacheDecl(name=node.name, dtype=node.dtype, extent=k_extents[node.name])
+
+    def visit_VerticalLoop(self, node: cuir.VerticalLoop) -> cuir.VerticalLoop:
+        ij_extents: Dict[str, cuir.IJExtent] = defaultdict(cuir.IJExtent.zero)
+        for horizontal_execution in node.iter_tree().if_isinstance(cuir.HorizontalExecution):
+            ij_access_extents = (
+                horizontal_execution.iter_tree()
+                .if_isinstance(cuir.IJCacheAccess)
+                .reduceby(
+                    lambda acc, x: acc.union(
+                        cuir.IJExtent(i=(x.offset[0], x.offset[0]), j=(x.offset[1], x.offset[1]))
+                    ),
+                    "name",
+                    init=cuir.IJExtent.zero(),
+                )
+            )
+            for field, ij_access_extent in ij_access_extents:
+                ij_extents[field] = ij_extents[field].union(
+                    ij_access_extent + horizontal_execution.extent
+                )
+
+        k_extents: Dict[str, cuir.KCacheAccess] = (
+            node.iter_tree()
+            .if_isinstance(cuir.KCacheAccess)
+            .reduceby(
+                lambda acc, x: acc.union(cuir.KExtent(k=(x.offset, x.offset))),
+                "name",
+                init=cuir.KExtent.zero(),
+                as_dict=True,
+            )
+        )
+
+        return self.generic_visit(node, ij_extents=ij_extents, k_extents=k_extents)
