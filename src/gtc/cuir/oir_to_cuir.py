@@ -143,7 +143,6 @@ class OIRToCUIR(eve.NodeTranslator):
             if isinstance(c, oir.KCache)
         }
         return cuir.Kernel(
-            name=node.id_,
             vertical_loops=[
                 cuir.VerticalLoop(
                     loop_order=node.loop_order,

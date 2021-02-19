@@ -168,7 +168,6 @@ class VerticalLoop(LocNode):
 
 
 class Kernel(LocNode):
-    name: Str
     vertical_loops: List[VerticalLoop]
 
     @validator("vertical_loops")
