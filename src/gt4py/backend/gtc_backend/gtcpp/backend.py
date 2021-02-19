@@ -61,11 +61,11 @@ class GTCGTExtGenerator:
         dtype_deduced = resolve_dtype(gtir_without_unused_params)
         upcasted = upcast(dtype_deduced)
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
-        oir1 = oir
+
         sdfg = oir_to_dace.OirToSDFGVisitor().visit(oir)
-        sdfg.save("tmp.sdfg")
         oir = dace_to_oir.convert(sdfg)
         oir = self._optimize_oir(oir)
+
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
         bindings = GTCppBindingsCodegen.apply(
@@ -80,7 +80,7 @@ class GTCGTExtGenerator:
     def _optimize_oir(self, oir):
         oir = GreedyMerging().visit(oir)
         oir = TemporariesToScalars().visit(oir)
-        return oir
+        return gtir_to_oir.oir_iteration_space_computation(oir)
 
 
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):

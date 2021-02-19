@@ -25,7 +25,7 @@ class StencilBuilder:
         Stencil definition function, before or after annotation.
 
     backend:
-        Backend class to be instanciated for this build
+        Backend class to be instantiated for this build
 
     options:
         Build options, defaults to name and module of the :code:`definition_func`

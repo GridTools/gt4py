@@ -21,11 +21,11 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import root_validator, validator
 
-from eve import Str, SymbolName, SymbolTableTrait
+from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
 from eve.typingx import RootValidatorValuesType
 from gtc import common
 from gtc.common import AxisBound, LocNode
@@ -94,19 +94,6 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
 
 
-class CartesianIterationOffset(LocNode):
-    i_offsets: Tuple[int, int]
-    j_offsets: Tuple[int, int]
-
-    @validator("i_offsets", "j_offsets")
-    def offsets_ordered(cls, v: Tuple[int, int]) -> Tuple[int, int]:
-        if not v[0] <= v[1]:
-            raise ValueError(
-                "Lower bound of iteration offset must be less or equal to upper bound."
-            )
-        return v
-
-
 class Cast(common.Cast[Expr], Expr):  # type: ignore
     pass
 
@@ -142,11 +129,114 @@ class Temporary(Decl):
     pass
 
 
+class Interval(LocNode):
+    start: AxisBound
+    end: AxisBound
+
+    @root_validator
+    def check(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        start, end = values["start"], values["end"]
+        if start.level == common.LevelMarker.END and end.level == common.LevelMarker.START:
+            raise ValueError("Start level must be smaller or equal end level")
+        if start.level == end.level and not start.offset < end.offset:
+            raise ValueError(
+                "Start offset must be smaller than end offset if start and end levels are equal"
+            )
+        return values
+
+
+class CartesianIterationSpace(LocNode):
+    i_interval: Interval
+    j_interval: Interval
+
+    @validator("i_interval", "j_interval")
+    def minimum_domain(cls, v: Interval) -> Interval:
+        if (
+            v.start.level != common.LevelMarker.START
+            or v.start.offset > 0
+            or v.end.level != common.LevelMarker.END
+            or v.end.offset < 0
+        ):
+            raise ValueError("iteration space must include the whole domain")
+        return v
+
+    @classmethod
+    def domain(cls) -> "CartesianIterationSpace":
+        return CartesianIterationSpace(
+            i_interval=Interval(start=AxisBound.start(), end=AxisBound.end()),
+            j_interval=Interval(start=AxisBound.start(), end=AxisBound.end()),
+        )
+
+    @classmethod
+    def from_offset(cls, offset: common.CartesianOffset) -> "CartesianIterationSpace":
+
+        return CartesianIterationSpace(
+            i_interval=Interval(
+                start=AxisBound.from_start(min(0, offset.i)),
+                end=AxisBound.from_end(max(0, offset.i)),
+            ),
+            j_interval=Interval(
+                start=AxisBound.from_start(min(0, offset.j)),
+                end=AxisBound.from_end(max(0, offset.j)),
+            ),
+        )
+
+    def compose(self, other: "CartesianIterationSpace") -> "CartesianIterationSpace":
+        i_interval = Interval(
+            start=AxisBound.from_start(
+                self.i_interval.start.offset + other.i_interval.start.offset,
+            ),
+            end=AxisBound.from_end(
+                self.i_interval.end.offset + other.i_interval.end.offset,
+            ),
+        )
+        j_interval = Interval(
+            start=AxisBound.from_start(
+                self.j_interval.start.offset + other.j_interval.start.offset,
+            ),
+            end=AxisBound.from_end(
+                self.j_interval.end.offset + other.j_interval.end.offset,
+            ),
+        )
+        return CartesianIterationSpace(i_interval=i_interval, j_interval=j_interval)
+
+    def __or__(self, other: "CartesianIterationSpace") -> "CartesianIterationSpace":
+        i_interval = Interval(
+            start=AxisBound.from_start(
+                min(
+                    self.i_interval.start.offset,
+                    other.i_interval.start.offset,
+                )
+            ),
+            end=AxisBound.from_end(
+                max(
+                    self.i_interval.end.offset,
+                    other.i_interval.end.offset,
+                )
+            ),
+        )
+        j_interval = Interval(
+            start=AxisBound.from_start(
+                min(
+                    self.j_interval.start.offset,
+                    other.j_interval.start.offset,
+                )
+            ),
+            end=AxisBound.from_end(
+                max(
+                    self.j_interval.end.offset,
+                    other.j_interval.end.offset,
+                )
+            ),
+        )
+        return CartesianIterationSpace(i_interval=i_interval, j_interval=j_interval)
+
+
 class HorizontalExecution(LocNode):
     body: List[Stmt]
     mask: Optional[Expr]
     declarations: List[LocalScalar]
-    iteration_space: Optional[CartesianIterationOffset]
+    iteration_space: Optional[CartesianIterationSpace]
 
     @validator("mask")
     def mask_is_boolean_field_expr(cls, v: Optional[Expr]) -> Optional[Expr]:
@@ -156,9 +246,8 @@ class HorizontalExecution(LocNode):
         return v
 
 
-class Interval(LocNode):
-    start: AxisBound
-    end: AxisBound
+class CacheDesc(LocNode):
+    name: SymbolRef
 
     def covers(self, other: "Interval") -> bool:
         outer_starts_lower = self.start < other.start or self.start == other.start
@@ -180,11 +269,46 @@ class Interval(LocNode):
         return values
 
 
-class VerticalLoop(LocNode):
+class IJCache(CacheDesc):
+    pass
+
+
+class KCache(CacheDesc):
+    fill: bool
+    flush: bool
+
+
+class VerticalLoopSection(LocNode):
     interval: Interval
     horizontal_executions: List[HorizontalExecution]
+
+
+class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
-    declarations: List[Temporary]
+    sections: List[VerticalLoopSection]
+    caches: List[CacheDesc]
+
+    @validator("sections")
+    def nonempty_loop(cls, v: List[VerticalLoopSection]) -> List[VerticalLoopSection]:
+        if not v:
+            raise ValueError("Empty vertical loop is not allowed")
+        return v
+
+    @root_validator
+    def valid_section_intervals(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        loop_order, sections = values["loop_order"], values["sections"]
+        starts, ends = zip(*((s.interval.start, s.interval.end) for s in sections))
+        if loop_order == common.LoopOrder.BACKWARD:
+            starts, ends = starts[:-1], ends[1:]
+        else:
+            starts, ends = starts[1:], ends[:-1]
+
+        if not all(
+            start.level == end.level and start.offset == end.offset
+            for start, end in zip(starts, ends)
+        ):
+            raise ValueError("Loop intervals not contiguous or in wrong order")
+        return values
 
 
 class Stencil(LocNode, SymbolTableTrait):
@@ -192,6 +316,7 @@ class Stencil(LocNode, SymbolTableTrait):
     # TODO: fix to be List[Union[ScalarDecl, FieldDecl]]
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
+    declarations: List[Temporary]
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()
