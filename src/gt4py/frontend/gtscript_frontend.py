@@ -1379,7 +1379,7 @@ class IRMaker(ast.NodeVisitor):
                     # Splice `withItems` of current/primary with statement into nested with
                     with_node.items.extend(node.items)
 
-                    compute_blocks.append(self._visit_computation_node(with_node))
+                    compute_blocks.extend(self._visit_computation_node(with_node))
 
                 # Validate block specification order
                 #  the nested computation blocks must be specified in their order of execution. The order of execution is
