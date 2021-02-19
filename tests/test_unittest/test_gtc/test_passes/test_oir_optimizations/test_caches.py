@@ -254,7 +254,9 @@ def test_fill_to_local_k_caches_basic_forward():
         vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == "foo"
     ), "wrong fill source"
     assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k == 1
+        vertical_loop.sections[0].horizontal_executions[0].body[0].left.offset.k
+        == vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k
+        == 1
     ), "wrong fill offset"
     assert (
         vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == cache_name
@@ -327,7 +329,9 @@ def test_fill_to_local_k_caches_basic_backward():
         vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == "foo"
     ), "wrong fill source"
     assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k == -1
+        vertical_loop.sections[0].horizontal_executions[0].body[0].left.offset.k
+        == vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k
+        == -1
     ), "wrong fill offset"
     assert (
         vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == cache_name
@@ -535,7 +539,9 @@ def test_flush_to_local_k_caches_basic():
         vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name
     ), "wrong flush destination"
     assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k == 0
+        vertical_loop.sections[0].horizontal_executions[0].body[1].left.offset.k
+        == vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k
+        == 0
     ), "wrong flush offset"
     assert (
         len(vertical_loop.sections[1].horizontal_executions[0].body) == 2
@@ -592,10 +598,10 @@ def test_fill_flush_to_local_k_caches_basic_forward():
     assert len(body) == 3, "no or too many fill/flush stmts introduced?"
     assert body[0].left.name == cache_name, "wrong fill destination"
     assert body[0].right.name == "foo", "wrong fill source"
-    assert body[0].right.offset.k == 0, "wrong fill offset"
+    assert body[0].left.offset.k == body[0].right.offset.k == 0, "wrong fill offset"
     assert body[1].left.name == cache_name, "wrong field name in cache access"
     assert body[1].right.name == cache_name, "wrong field name in cache access"
-    assert body[1].right.offset.k == 0, "wrong offset in cache access"
+    assert body[1].left.offset.k == body[1].right.offset.k == 0, "wrong offset in cache access"
     assert body[2].left.name == "foo", "wrong flush destination"
     assert body[2].right.name == cache_name, "wrong flush source"
-    assert body[2].right.offset.k == 0, "wrong flush offset"
+    assert body[2].left.offset.k == body[2].right.offset.k == 0, "wrong flush offset"
