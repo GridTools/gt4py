@@ -167,7 +167,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 % endfor
             }
         % else:
-            if (k_block < (${end}) - (${start})) {
+            if (k_block >= ${start} && k_block < ${end}) {
                 ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
             }
         % endif
@@ -277,9 +277,11 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     def visit_Program(self, node: cuir.Program, **kwargs: Any) -> Union[str, Collection[str]]:
         def loop_start(vertical_loop: cuir.VerticalLoop) -> str:
+            if vertical_loop.loop_order == cuir.LoopOrder.FORWARD:
+                return self.visit(vertical_loop.sections[0].start)
             if vertical_loop.loop_order == cuir.LoopOrder.BACKWARD:
                 return self.visit(vertical_loop.sections[0].end) + " - 1"
-            return self.visit(vertical_loop.sections[0].start)
+            return 0
 
         def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
             return (
@@ -421,9 +423,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             i_size,
                             j_size,
                             % if kernel.vertical_loops[0].loop_order == cuir.LoopOrder.PARALLEL:
-                                std::max({
-                                    ${', '.join(f'({_this_generator.visit(vl.sections[-1].end)}) - ({_this_generator.visit(vl.sections[0].start)}) + 1' for vl in kernel.vertical_loops)}
-                                }),
+                                k_size,
                             % else:
                                 1,
                             %endif
