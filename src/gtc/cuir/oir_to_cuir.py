@@ -64,8 +64,7 @@ class OIRToCUIR(eve.NodeTranslator):
         if node.name in k_caches:
             assert node.offset.i == node.offset.j == 0
             cache = k_caches[node.name]
-            cache.min_offset = min(cache.min_offset, node.offset.k)
-            cache.max_offset = max(cache.max_offset, node.offset.k)
+            cache.extent = cache.extent.union(cuir.KExtent(k=(node.offset.k, node.offset.k)))
             return cuir.KCacheAccess(name=cache.name, offset=node.offset.k, dtype=node.dtype)
         accessed_fields.add(node.name)
         return cuir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
@@ -136,8 +135,7 @@ class OIRToCUIR(eve.NodeTranslator):
             c.name: cuir.KCacheDecl(
                 name=new_symbol_name(c.name),
                 dtype=symtable[c.name].dtype,
-                min_offset=0,
-                max_offset=0,
+                extent=cuir.KExtent.zero(),
             )
             for c in node.caches
             if isinstance(c, oir.KCache)

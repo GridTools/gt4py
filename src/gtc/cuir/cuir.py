@@ -117,15 +117,6 @@ class Temporary(Decl):
     pass
 
 
-class IJCacheDecl(Decl):
-    pass
-
-
-class KCacheDecl(Decl):
-    min_offset: int
-    max_offset: int
-
-
 class IJExtent(LocNode):
     i: Tuple[int, int]
     j: Tuple[int, int]
@@ -145,6 +136,25 @@ class IJExtent(LocNode):
             i=(self.i[0] + other.i[0], self.i[1] + other.i[1]),
             j=(self.j[0] + other.j[0], self.j[1] + other.j[1]),
         )
+
+
+class KExtent(LocNode):
+    k: Tuple[int, int]
+
+    @classmethod
+    def zero(cls) -> "KExtent":
+        return cls(k=(0, 0))
+
+    def union(*extents: "KExtent") -> "KExtent":
+        return KExtent(k=(min(e.k[0] for e in extents), max(e.k[1] for e in extents)))
+
+
+class IJCacheDecl(Decl):
+    pass
+
+
+class KCacheDecl(Decl):
+    extent: KExtent
 
 
 class HorizontalExecution(LocNode):

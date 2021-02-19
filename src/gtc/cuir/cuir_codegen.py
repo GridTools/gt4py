@@ -172,7 +172,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     def k_cache_vars(cls, k_cache: cuir.KCacheDecl) -> List[str]:
         return [
             cls.k_cache_var(k_cache.name, offset)
-            for offset in range(k_cache.min_offset, k_cache.max_offset + 1)
+            for offset in range(k_cache.extent.k[0], k_cache.extent.k[1] + 1)
         ]
 
     def visit_VerticalLoop(
