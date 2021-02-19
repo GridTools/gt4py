@@ -48,7 +48,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
 
     BUILTIN_LITERAL_TO_STR: ClassVar[Mapping[common.BuiltInLiteral, str]] = MappingProxyType(
         {
-            common.BuiltInLiteral.MAX_VALUE: "std::numeric_limits<double>::max()", # TODO: datatype
+            common.BuiltInLiteral.MAX_VALUE: "std::numeric_limits<double>::max()",  # TODO: datatype
             common.BuiltInLiteral.MIN_VALUE: "std::numeric_limits<double>::min()",
             common.BuiltInLiteral.ZERO: "0",
             common.BuiltInLiteral.ONE: "1",
@@ -72,6 +72,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
         "<gridtools/common/array.hpp>",
         "<gridtools/usid/dim.hpp>",
         "<gridtools/usid/helpers.hpp>",
+        "<gridtools/common/gt_math.hpp>"
     ]
 
     namespace_ = None
@@ -132,7 +133,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
-    NativeFuncCall = as_fmt("gridtools::math::{func}({','.join(args)})") # TODO: fix func
+    NativeFuncCall = as_fmt("gridtools::math::{func}({','.join(args)})")  # TODO: fix func
 
     BinaryOp = as_fmt("({left} {op} {right})")
 
