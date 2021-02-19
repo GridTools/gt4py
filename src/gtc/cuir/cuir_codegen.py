@@ -100,7 +100,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             return "+"
         raise NotImplementedError("Not implemented UnaryOperator encountered.")
 
-    Extent = as_fmt("extent<{i[0]}, {i[1]}, {j[0]}, {j[1]}>")
+    IJExtent = as_fmt("extent<{i[0]}, {i[1]}, {j[0]}, {j[1]}>")
 
     HorizontalExecution = as_mako(
         """
@@ -282,7 +282,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
         return self.generic_visit(
             node,
-            max_extent=self.visit(cuir.Extent.union(*node.iter_tree().if_isinstance(cuir.Extent))),
+            max_extent=self.visit(
+                cuir.IJExtent.union(*node.iter_tree().if_isinstance(cuir.IJExtent))
+            ),
             loop_start=loop_start,
             loop_fields=loop_fields,
             ctype=ctype,

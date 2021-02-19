@@ -21,16 +21,16 @@ from eve import NodeTranslator
 from . import cuir
 
 
-def _extents_map(node: cuir.LocNode) -> Dict[str, cuir.Extent]:
+def _extents_map(node: cuir.LocNode) -> Dict[str, cuir.IJExtent]:
     return (
         node.iter_tree()
         .if_isinstance(cuir.FieldAccess)
         .reduceby(
             lambda ext, acc: ext.union(
-                cuir.Extent(i=(acc.offset.i, acc.offset.i), j=(acc.offset.j, acc.offset.j)),
+                cuir.IJExtent(i=(acc.offset.i, acc.offset.i), j=(acc.offset.j, acc.offset.j)),
             ),
             "name",
-            init=cuir.Extent.zero(),
+            init=cuir.IJExtent.zero(),
             as_dict=True,
         )
     )
@@ -41,7 +41,7 @@ class ComputeExtents(NodeTranslator):
         self, node: cuir.VerticalLoopSection, **kwargs: Any
     ) -> cuir.VerticalLoopSection:
         horizontal_executions = []
-        extents_map: Dict[str, cuir.Extent] = dict()
+        extents_map: Dict[str, cuir.IJExtent] = dict()
         for horizontal_execution in reversed(node.horizontal_executions):
             writes = (
                 node.iter_tree()
@@ -51,8 +51,8 @@ class ComputeExtents(NodeTranslator):
                 .getattr("name")
                 .to_set()
             )
-            extent = cuir.Extent.zero().union(
-                *(extents_map.get(write, cuir.Extent.zero()) for write in writes),
+            extent = cuir.IJExtent.zero().union(
+                *(extents_map.get(write, cuir.IJExtent.zero()) for write in writes),
             )
 
             horizontal_executions.append(
@@ -66,8 +66,8 @@ class ComputeExtents(NodeTranslator):
 
             accesses_map = {k: extent + v for k, v in _extents_map(horizontal_execution).items()}
             extents_map = {
-                k: extents_map.get(k, cuir.Extent.zero()).union(
-                    accesses_map.get(k, cuir.Extent.zero())
+                k: extents_map.get(k, cuir.IJExtent.zero()).union(
+                    accesses_map.get(k, cuir.IJExtent.zero())
                 )
                 for k in set(extents_map.keys()) | set(accesses_map.keys())
             }

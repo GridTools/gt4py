@@ -126,22 +126,22 @@ class KCacheDecl(Decl):
     max_offset: int
 
 
-class Extent(LocNode):
+class IJExtent(LocNode):
     i: Tuple[int, int]
     j: Tuple[int, int]
 
     @classmethod
-    def zero(cls) -> "Extent":
+    def zero(cls) -> "IJExtent":
         return cls(i=(0, 0), j=(0, 0))
 
-    def union(*extents: "Extent") -> "Extent":
-        return Extent(
+    def union(*extents: "IJExtent") -> "IJExtent":
+        return IJExtent(
             i=(min(e.i[0] for e in extents), max(e.i[1] for e in extents)),
             j=(min(e.j[0] for e in extents), max(e.j[1] for e in extents)),
         )
 
-    def __add__(self, other: "Extent") -> "Extent":
-        return Extent(
+    def __add__(self, other: "IJExtent") -> "IJExtent":
+        return IJExtent(
             i=(self.i[0] + other.i[0], self.i[1] + other.i[1]),
             j=(self.j[0] + other.j[0], self.j[1] + other.j[1]),
         )
@@ -151,7 +151,7 @@ class HorizontalExecution(LocNode):
     body: List[Stmt]
     mask: Optional[Expr]
     declarations: List[LocalScalar]
-    extent: Optional[Extent]
+    extent: Optional[IJExtent]
 
 
 class VerticalLoopSection(LocNode):
