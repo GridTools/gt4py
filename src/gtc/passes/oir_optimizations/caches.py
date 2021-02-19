@@ -288,21 +288,18 @@ class FillFlushToLocalKCaches(NodeTranslator):
             lmin, lmax = fill_limits.get(field, (0, 0))
             lmin = max(lmin, first_unfilled.get(field, lmin))
             for offset in range(lmin, lmax + 1):
+                k_offset = common.CartesianOffset(
+                    i=0,
+                    j=0,
+                    k=offset if loop_order == common.LoopOrder.FORWARD else -offset,
+                )
                 fill_stmts.append(
                     oir.AssignStmt(
                         left=oir.FieldAccess(
-                            name=cache,
-                            dtype=symtable[field].dtype,
-                            offset=common.CartesianOffset.zero(),
+                            name=cache, dtype=symtable[field].dtype, offset=k_offset
                         ),
                         right=oir.FieldAccess(
-                            name=field,
-                            dtype=symtable[field].dtype,
-                            offset=common.CartesianOffset(
-                                i=0,
-                                j=0,
-                                k=offset if loop_order == common.LoopOrder.FORWARD else -offset,
-                            ),
+                            name=field, dtype=symtable[field].dtype, offset=k_offset
                         ),
                     )
                 )
