@@ -17,8 +17,7 @@
 from gtc.common import AxisBound, LevelMarker, LoopOrder
 from gtc.oir import IJCache, KCache
 from gtc.passes.oir_optimizations.caches import (
-    FillToLocalKCaches,
-    FlushToLocalKCaches,
+    FillFlushToLocalKCaches,
     IJCacheDetection,
     KCacheDetection,
     PruneKCacheFills,
@@ -232,7 +231,7 @@ def test_fill_to_local_k_caches_basic_forward():
             )
         ]
     )
-    transformed = FillToLocalKCaches().visit(testee)
+    transformed = FillFlushToLocalKCaches().visit(testee)
     vertical_loop = transformed.vertical_loops[0]
 
     assert len(vertical_loop.caches) == 1, "wrong number of caches"
@@ -305,7 +304,7 @@ def test_fill_to_local_k_caches_basic_backward():
             )
         ]
     )
-    transformed = FillToLocalKCaches().visit(testee)
+    transformed = FillFlushToLocalKCaches().visit(testee)
     vertical_loop = transformed.vertical_loops[0]
 
     assert len(vertical_loop.caches) == 1, "wrong number of caches"
@@ -381,7 +380,7 @@ def test_fill_to_local_k_caches_section_splitting_forward():
             )
         ]
     )
-    transformed = FillToLocalKCaches().visit(testee)
+    transformed = FillFlushToLocalKCaches().visit(testee)
     vertical_loop = transformed.vertical_loops[0]
     assert len(vertical_loop.sections) == 3, "wrong number of vertical sections"
     assert (
@@ -445,7 +444,7 @@ def test_fill_to_local_k_caches_section_splitting_backward():
             )
         ]
     )
-    transformed = FillToLocalKCaches().visit(testee)
+    transformed = FillFlushToLocalKCaches().visit(testee)
     vertical_loop = transformed.vertical_loops[0]
     assert len(vertical_loop.sections) == 3, "wrong number of vertical sections"
     assert (
@@ -504,7 +503,7 @@ def test_flush_to_local_k_caches_basic():
             )
         ]
     )
-    transformed = FlushToLocalKCaches().visit(testee)
+    transformed = FillFlushToLocalKCaches().visit(testee)
     vertical_loop = transformed.vertical_loops[0]
 
     assert len(vertical_loop.caches) == 1, "wrong number of caches"
@@ -559,3 +558,44 @@ def test_flush_to_local_k_caches_basic():
     assert (
         vertical_loop.sections[1].horizontal_executions[0].body[1].right.offset.k == 0
     ), "wrong flush offset"
+
+
+def test_fill_flush_to_local_k_caches_basic_forward():
+    testee = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                loop_order=LoopOrder.FORWARD,
+                sections__0__horizontal_executions__0__body=[
+                    AssignStmtFactory(
+                        left__name="foo",
+                        right__name="foo",
+                    ),
+                ],
+                caches=[KCacheFactory(name="foo", fill=True, flush=True)],
+            )
+        ]
+    )
+    transformed = FillFlushToLocalKCaches().visit(testee)
+    vertical_loop = transformed.vertical_loops[0]
+
+    assert len(vertical_loop.caches) == 1, "wrong number of caches"
+    assert not vertical_loop.caches[0].fill, "filling cache was not removed"
+    assert not vertical_loop.caches[0].flush, "flushing cache was not removed"
+
+    cache_name = vertical_loop.caches[0].name
+    assert cache_name != "foo", "cache name must not be the same as filling field"
+    assert transformed.declarations[0].name == cache_name, "cache field not found in temporaries"
+
+    assert len(vertical_loop.sections) == 1, "number of vertical sections has changed"
+
+    body = vertical_loop.sections[0].horizontal_executions[0].body
+    assert len(body) == 3, "no or too many fill/flush stmts introduced?"
+    assert body[0].left.name == cache_name, "wrong fill destination"
+    assert body[0].right.name == "foo", "wrong fill source"
+    assert body[0].right.offset.k == 0, "wrong fill offset"
+    assert body[1].left.name == cache_name, "wrong field name in cache access"
+    assert body[1].right.name == cache_name, "wrong field name in cache access"
+    assert body[1].right.offset.k == 0, "wrong offset in cache access"
+    assert body[2].left.name == "foo", "wrong flush destination"
+    assert body[2].right.name == cache_name, "wrong flush source"
+    assert body[2].right.offset.k == 0, "wrong flush offset"

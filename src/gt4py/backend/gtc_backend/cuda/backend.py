@@ -35,8 +35,7 @@ from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
 from gtc.passes.oir_optimizations.caches import (
-    FillToLocalKCaches,
-    FlushToLocalKCaches,
+    FillFlushToLocalKCaches,
     IJCacheDetection,
     KCacheDetection,
     PruneKCacheFills,
@@ -83,13 +82,12 @@ class GTCCudaExtGenerator:
         oir = AdjacentLoopMerging().visit(oir)
         oir = LocalTemporariesToScalars().visit(oir)
         oir = WriteBeforeReadTemporariesToScalars().visit(oir)
-        # oir = OnTheFlyMerging().visit(oir)
+        oir = OnTheFlyMerging().visit(oir)
         oir = IJCacheDetection().visit(oir)
         oir = KCacheDetection().visit(oir)
         oir = PruneKCacheFills().visit(oir)
         oir = PruneKCacheFlushes().visit(oir)
-        oir = FlushToLocalKCaches().visit(oir)
-        oir = FillToLocalKCaches().visit(oir)
+        oir = FillFlushToLocalKCaches().visit(oir)
         return oir
 
 
