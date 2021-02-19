@@ -144,6 +144,19 @@ class Interval(LocNode):
             )
         return values
 
+    def covers(self, other: "Interval") -> bool:
+        outer_starts_lower = self.start < other.start or self.start == other.start
+        outer_ends_higher = self.end > other.end or self.end == other.end
+        return outer_starts_lower and outer_ends_higher
+
+    def intersects(self, other: "Interval") -> bool:
+        return not (other.start >= self.end or self.start >= other.end)
+
+    def shift(self, offset: int) -> "Interval":
+        start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
+        end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
+        return Interval(start=start, end=end)
+
 
 class CartesianIterationSpace(LocNode):
     i_interval: Interval
