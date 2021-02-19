@@ -20,7 +20,7 @@ from pydantic import validator
 
 from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
 from gtc import common
-from gtc.common import AxisBound, DataType, LocNode, LoopOrder
+from gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
 
 
 class Expr(common.Expr):
@@ -53,16 +53,24 @@ class FieldAccess(common.FieldAccess, Expr):  # type: ignore
     pass
 
 
-class IJCacheAccess(Expr):
-    name: SymbolRef
-    offset: Tuple[int, int]
-    kind = common.ExprKind.FIELD
+class IJCacheAccess(common.FieldAccess, Expr):
+    ij_cache_is_different_from_field_access = True
+
+    @validator("offset")
+    def zero_k_offset(cls, v: CartesianOffset) -> CartesianOffset:
+        if v.k != 0:
+            raise ValueError("No k-offset allowed")
+        return v
 
 
-class KCacheAccess(Expr):
-    name: SymbolRef
-    offset: int
-    kind = common.ExprKind.FIELD
+class KCacheAccess(common.FieldAccess, Expr):
+    k_cache_is_different_from_field_access = True
+
+    @validator("offset")
+    def zero_ij_offset(cls, v: CartesianOffset) -> CartesianOffset:
+        if not v.i == v.j == 0:
+            raise ValueError("No ij-offset allowed")
+        return v
 
 
 class AssignStmt(
@@ -125,6 +133,10 @@ class IJExtent(LocNode):
     def zero(cls) -> "IJExtent":
         return cls(i=(0, 0), j=(0, 0))
 
+    @classmethod
+    def from_offset(cls, offset: CartesianOffset) -> "IJExtent":
+        return cls(i=(offset.i, offset.i), j=(offset.j, offset.j))
+
     def union(*extents: "IJExtent") -> "IJExtent":
         return IJExtent(
             i=(min(e.i[0] for e in extents), max(e.i[1] for e in extents)),
@@ -144,6 +156,10 @@ class KExtent(LocNode):
     @classmethod
     def zero(cls) -> "KExtent":
         return cls(k=(0, 0))
+
+    @classmethod
+    def from_offset(cls, offset: CartesianOffset) -> "KExtent":
+        return cls(k=(offset.k, offset.k))
 
     def union(*extents: "KExtent") -> "KExtent":
         return KExtent(k=(min(e.k[0] for e in extents), max(e.k[1] for e in extents)))

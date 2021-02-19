@@ -41,10 +41,10 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     )
 
     IJCacheAccess = as_mako(
-        "${'*' + name if _this_node.offset == (0, 0) else name + '[' + ' + '.join(f'{o} * {d}_stride_{name}' for o, d in zip(_this_node.offset, 'ij') if o != 0) + ']'}"
+        "${'*' + name if _this_node.offset.i == _this_node.offset.j == 0 else name + '[' + ' + '.join(f'{o} * {d}_stride_{name}' for o, d in zip([_this_node.offset.i, _this_node.offset.j], 'ij') if o != 0) + ']'}"
     )
 
-    KCacheAccess = as_mako("${_this_generator.k_cache_var(name, _this_node.offset)}")
+    KCacheAccess = as_mako("${_this_generator.k_cache_var(name, _this_node.offset.k)}")
 
     ScalarAccess = as_fmt("{name}")
 
@@ -121,10 +121,11 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     IJCacheDecl = as_mako(
         """
-        __shared__ ${dtype} ${name}_data[(i_block_size_t() + ${-_this_node.extent.i[0] + _this_node.extent.i[1]}) * (j_block_size_t() + ${-_this_node.extent.j[0] + _this_node.extent.j[1]})];
+        constexpr int ${name}_cache_data_size = (i_block_size_t() + ${-_this_node.extent.i[0] + _this_node.extent.i[1]}) * (j_block_size_t() + ${-_this_node.extent.j[0] + _this_node.extent.j[1]});
+        __shared__ ${dtype} ${name}_cache_data[${name}_cache_data_size];
         constexpr int i_stride_${name} = 1;
         constexpr int j_stride_${name} = i_block_size_t() + ${-_this_node.extent.i[0] + _this_node.extent.i[1]};
-        ${dtype} *${name} = ${name}_data + (${-_this_node.extent.i[0]} + i_block) * i_stride_${name} + (${-_this_node.extent.j[0]} + j_block) * j_stride_${name};
+        ${dtype} *${name} = ${name}_cache_data + (${-_this_node.extent.i[0]} + i_block) * i_stride_${name} + (${-_this_node.extent.j[0]} + j_block) * j_stride_${name};
         """
     )
 

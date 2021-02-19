@@ -22,21 +22,6 @@ from eve import NodeTranslator
 from . import cuir
 
 
-def _extents_map(node: cuir.LocNode) -> Dict[str, cuir.IJExtent]:
-    return (
-        node.iter_tree()
-        .if_isinstance(cuir.FieldAccess)
-        .reduceby(
-            lambda ext, acc: ext.union(
-                cuir.IJExtent(i=(acc.offset.i, acc.offset.i), j=(acc.offset.j, acc.offset.j)),
-            ),
-            "name",
-            init=cuir.IJExtent.zero(),
-            as_dict=True,
-        )
-    )
-
-
 class ComputeExtents(NodeTranslator):
     def visit_VerticalLoopSection(
         self, node: cuir.VerticalLoopSection, **kwargs: Any
@@ -65,7 +50,16 @@ class ComputeExtents(NodeTranslator):
                 )
             )
 
-            accesses_map = {k: extent + v for k, v in _extents_map(horizontal_execution).items()}
+            accesses_map = (
+                horizontal_execution.iter_tree()
+                .if_isinstance(cuir.FieldAccess, cuir.IJCacheAccess)
+                .reduceby(
+                    lambda acc, x: acc.union(extent + cuir.IJExtent.from_offset(x.offset)),
+                    "name",
+                    init=cuir.IJExtent.zero(),
+                    as_dict=True,
+                )
+            )
             extents_map = {
                 k: extents_map.get(k, cuir.IJExtent.zero()).union(
                     accesses_map.get(k, cuir.IJExtent.zero())
@@ -102,9 +96,7 @@ class CacheExtents(NodeTranslator):
                 horizontal_execution.iter_tree()
                 .if_isinstance(cuir.IJCacheAccess)
                 .reduceby(
-                    lambda acc, x: acc.union(
-                        cuir.IJExtent(i=(x.offset[0], x.offset[0]), j=(x.offset[1], x.offset[1]))
-                    ),
+                    lambda acc, x: acc.union(cuir.IJExtent.from_offset(x.offset)),
                     "name",
                     init=cuir.IJExtent.zero(),
                 )
@@ -118,7 +110,7 @@ class CacheExtents(NodeTranslator):
             node.iter_tree()
             .if_isinstance(cuir.KCacheAccess)
             .reduceby(
-                lambda acc, x: acc.union(cuir.KExtent(k=(x.offset, x.offset))),
+                lambda acc, x: acc.union(cuir.KExtent.from_offset(x.offset)),
                 "name",
                 init=cuir.KExtent.zero(),
                 as_dict=True,

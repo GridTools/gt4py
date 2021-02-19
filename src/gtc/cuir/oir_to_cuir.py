@@ -56,16 +56,14 @@ class OIRToCUIR(eve.NodeTranslator):
         **kwargs: Any,
     ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
         if node.name in ij_caches:
-            assert node.offset.k == 0
             return cuir.IJCacheAccess(
                 name=ij_caches[node.name].name,
-                offset=(node.offset.i, node.offset.j),
+                offset=node.offset,
                 dtype=node.dtype,
             )
         if node.name in k_caches:
-            assert node.offset.i == node.offset.j == 0
             return cuir.KCacheAccess(
-                name=k_caches[node.name].name, offset=node.offset.k, dtype=node.dtype
+                name=k_caches[node.name].name, offset=node.offset, dtype=node.dtype
             )
         accessed_fields.add(node.name)
         return cuir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
