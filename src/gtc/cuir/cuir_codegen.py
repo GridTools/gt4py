@@ -281,7 +281,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 return self.visit(vertical_loop.sections[0].start)
             if vertical_loop.loop_order == cuir.LoopOrder.BACKWARD:
                 return self.visit(vertical_loop.sections[0].end) + " - 1"
-            return 0
+            return "0"
 
         def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
             return (

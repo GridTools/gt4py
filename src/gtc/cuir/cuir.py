@@ -18,7 +18,7 @@ from typing import Any, List, Optional, Tuple, Union
 
 from pydantic import validator
 
-from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
+from eve import Str, SymbolName, SymbolTableTrait
 from gtc import common
 from gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
 

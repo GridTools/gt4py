@@ -37,7 +37,7 @@ class ComputeExtents(NodeTranslator):
                 .getattr("name")
                 .to_set()
             )
-            extent = cuir.IJExtent.zero().union(
+            extent: cuir.IJExtent = cuir.IJExtent.zero().union(
                 *(extents_map.get(write, cuir.IJExtent.zero()) for write in writes),
             )
 
@@ -50,7 +50,7 @@ class ComputeExtents(NodeTranslator):
                 )
             )
 
-            accesses_map = (
+            accesses_map: Dict[str, cuir.IJExtent] = (
                 horizontal_execution.iter_tree()
                 .if_isinstance(cuir.FieldAccess, cuir.IJCacheAccess)
                 .reduceby(
