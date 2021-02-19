@@ -325,8 +325,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             using namespace stencil;
 
             using domain_t = std::array<unsigned, 3>;
-            using i_block_size_t = integral_constant<int_t, 64>;
-            using j_block_size_t = integral_constant<int_t, 8>;
+            using i_block_size_t = integral_constant<int, 64>;
+            using j_block_size_t = integral_constant<int, 8>;
 
             template <class Storage>
             auto block(Storage storage) {
@@ -353,11 +353,11 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             auto ${name}(domain_t domain){
                 return [domain](${','.join(f'auto&& {p}' for p in params)}){
                     auto tmp_alloc = sid::device::make_cached_allocator(&cuda_util::cuda_malloc<char[]>);
-                    const auto i_size = domain[0];
-                    const auto j_size = domain[1];
-                    const auto k_size = domain[2];
-                    const auto i_blocks = (i_size + i_block_size_t() - 1) / i_block_size_t();
-                    const auto j_blocks = (j_size + j_block_size_t() - 1) / j_block_size_t();
+                    const int i_size = domain[0];
+                    const int j_size = domain[1];
+                    const int k_size = domain[2];
+                    const int i_blocks = (i_size + i_block_size_t() - 1) / i_block_size_t();
+                    const int j_blocks = (j_size + j_block_size_t() - 1) / j_block_size_t();
 
                     % for tmp in temporaries:
                         auto ${tmp} = gpu_backend::make_tmp_storage<${ctype(tmp)}>(
