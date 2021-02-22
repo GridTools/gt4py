@@ -16,9 +16,9 @@
 
 
 from devtools import debug
+from gtc_unstructured.irs import common, nir, usid
 
 import eve
-from gtc_unstructured.irs import common, nir, usid
 
 
 def location_type_from_dimensions(dimensions):

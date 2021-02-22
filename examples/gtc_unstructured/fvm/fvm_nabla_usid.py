@@ -4,8 +4,6 @@
 import os
 
 from devtools import debug
-
-import eve  # noqa: F401
 from gtc_unstructured.irs import common, usid_codegen
 from gtc_unstructured.irs.common import LocationType
 from gtc_unstructured.irs.usid import (
@@ -26,6 +24,8 @@ from gtc_unstructured.irs.usid import (
     UField,
     VerticalDimension,
 )
+
+import eve  # noqa: F401
 
 
 nabla_edge_1_primary_composite = SidComposite(

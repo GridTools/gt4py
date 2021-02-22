@@ -19,9 +19,9 @@ import inspect
 import sys
 import typing
 
+import gtc_unstructured.irs.common
 import typing_inspect
 
-import gtc_unstructured.irs.common
 from eve import type_definitions
 from eve.utils import UIDGenerator
 

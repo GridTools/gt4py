@@ -16,11 +16,11 @@
 import copy
 from typing import Any, Dict, List, Union, cast
 
+import gtc_unstructured.irs.common as common
+import gtc_unstructured.irs.gtir as gtir
 from devtools import debug
 
 import eve
-import gtc_unstructured.irs.common as common
-import gtc_unstructured.irs.gtir as gtir
 
 from .built_in_types import BuiltInTypeMeta
 from .gtscript import Field, Local, Location, Mesh, TemporaryField

@@ -4,8 +4,6 @@
 import os
 
 from devtools import debug
-
-import eve  # noqa: F401
 from gtc_unstructured.irs.common import BinaryOperator, DataType, LocationType, LoopOrder
 from gtc_unstructured.irs.gtir import (
     AssignStmt,
@@ -31,6 +29,8 @@ from gtc_unstructured.irs.gtir_to_nir import GtirToNir
 from gtc_unstructured.irs.nir_passes.merge_horizontal_loops import find_and_merge_horizontal_loops
 from gtc_unstructured.irs.nir_to_usid import NirToUsid
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
+
+import eve  # noqa: F401
 
 
 vertical_loops = []

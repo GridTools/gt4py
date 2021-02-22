@@ -17,11 +17,11 @@
 from typing import List
 
 import networkx as nx
+from gtc_unstructured.irs import nir
+from gtc_unstructured.irs.nir_passes.field_dependency_graph import generate_dependency_graph
 
 import eve
 from eve import Node, NodeTranslator, NodeVisitor
-from gtc_unstructured.irs import nir
-from gtc_unstructured.irs.nir_passes.field_dependency_graph import generate_dependency_graph
 
 
 class _FindMergeCandidatesAnalysis(NodeVisitor):

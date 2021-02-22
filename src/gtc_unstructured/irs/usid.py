@@ -18,10 +18,10 @@
 from typing import List, Optional, Tuple, Union
 
 from devtools import debug  # noqa: F401
+from gtc_unstructured.irs import common
 from pydantic import validator
 
 from eve import FrozenNode, Node, Str
-from gtc_unstructured.irs import common
 
 
 class Expr(Node):

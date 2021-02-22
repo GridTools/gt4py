@@ -18,10 +18,6 @@ from types import MappingProxyType
 from typing import ClassVar, Mapping
 
 from devtools import debug  # noqa: F401
-
-from eve import NodeTranslator, codegen
-from eve.codegen import FormatTemplate as as_fmt
-from eve.codegen import MakoTemplate as as_mako
 from gtc_unstructured.irs import common
 from gtc_unstructured.irs.usid import (
     Computation,
@@ -31,6 +27,10 @@ from gtc_unstructured.irs.usid import (
     SidCompositeNeighborTableEntry,
     Temporary,
 )
+
+from eve import NodeTranslator, codegen
+from eve.codegen import FormatTemplate as as_fmt
+from eve.codegen import MakoTemplate as as_mako
 
 
 class SymbolTblHelper(NodeTranslator):

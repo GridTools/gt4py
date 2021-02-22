@@ -18,10 +18,10 @@ import enum
 from typing import List, Optional, Union
 
 from devtools import debug  # noqa: F401
+from gtc_unstructured.irs import common
 from pydantic import root_validator, validator
 
 from eve import Node, Str, StrEnum
-from gtc_unstructured.irs import common
 
 
 class Expr(Node):

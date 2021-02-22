@@ -17,11 +17,11 @@
 from typing import List, Optional, Tuple, Union
 
 from devtools import debug  # noqa: F401
+from gtc_unstructured.irs import common
 from pydantic import root_validator, validator
 
 from eve import Node, Str
 from eve.concepts import FrozenNode
-from gtc_unstructured.irs import common
 
 
 class Expr(Node):

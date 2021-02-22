@@ -19,7 +19,6 @@ import inspect
 import textwrap
 
 import devtools
-
 from gtc_unstructured.frontend.gtscript_to_gtir import (
     GTScriptToGTIR,
     NodeCanonicalizer,

@@ -17,10 +17,10 @@
 from typing import List
 
 import networkx as nx
+from gtc_unstructured.irs.nir import AssignStmt, FieldAccess, HorizontalLoop
 
 import eve  # noqa: F401
 from eve import NodeVisitor
-from gtc_unstructured.irs.nir import AssignStmt, FieldAccess, HorizontalLoop
 
 
 class _FieldWriteDependencyGraph(NodeVisitor):

@@ -11,7 +11,6 @@
 import os
 
 from devtools import debug
-
 from gtc_unstructured.irs import gtir
 from gtc_unstructured.irs.common import DataType, LocationType, LoopOrder
 from gtc_unstructured.irs.gtir import (
