@@ -484,7 +484,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                     arg_fields.append(field_attributes)
                 else:
                     tmp_fields.append(field_attributes)
-        tmp_fields = sorted(tmp_fields, key=lambda field: field["name"])
+        tmp_fields = list(sorted(tmp_fields, key=lambda field: field["name"]))
 
         parameters = [
             {"name": parameter.name, "dtype": self._make_cpp_type(parameter.data_type)}
