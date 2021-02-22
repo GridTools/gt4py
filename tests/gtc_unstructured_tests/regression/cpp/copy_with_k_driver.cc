@@ -22,12 +22,6 @@ TEST(regression, copy_with_k) {
 
   sten({-1, simple_mesh::edges, -1, k_size})(in, out);
 
-  // x 2 x 2 x 2
-  // 2   3   2
-  // x 3 x 3 x 2
-  // 2   3   2
-  // x 2 x 2 x 2
-  // 2   2   2
   auto out_view = out->const_host_view();
   for (std::size_t i = 0; i < simple_mesh::edges; ++i)
     for (std::size_t k = 0; k < k_size; ++k)

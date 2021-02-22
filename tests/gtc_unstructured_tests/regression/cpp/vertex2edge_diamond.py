@@ -25,8 +25,9 @@ from gtc_unstructured.irs.common import DataType
 from gtc_unstructured.irs.icon_bindings_codegen import IconBindingsCodegen
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 
-E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
+E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 4, False],))
 dtype = DataType.FLOAT64
+
 
 def sten(e2v: E2V, field_in: Field[Vertex, dtype], field_out: Field[Edge, dtype]):
     with computation(FORWARD), location(Edge) as e:
@@ -38,14 +39,14 @@ def main():
 
     if mode == "unaive":
         code_generator = UsidNaiveCodeGenerator
-        extension=".cc"
+        extension = ".cc"
     else:  # 'ugpu':
         code_generator = UsidGpuCodeGenerator
-        extension=".cu"
+        extension = ".cu"
 
     compilation_task = GTScriptCompilationTask(sten)
     generated_code = compilation_task.generate(
-        debug=True, code_generator=code_generator
+        debug=False, code_generator=code_generator
     )
 
     print(generated_code)
@@ -54,7 +55,7 @@ def main():
     )
     with open(output_file, "w+") as output:
         output.write(generated_code)
-    
+
     icon_bindings = IconBindingsCodegen().apply(compilation_task.gtir, generated_code)
     print(icon_bindings)
     output_file = (

@@ -20,8 +20,8 @@ endif()
 
 include(FetchContent)
 FetchContent_Declare(GridTools
-    GIT_REPOSITORY https://github.com/GridTools/gridtools.git
-    GIT_TAG        master
+    GIT_REPOSITORY https://github.com/havogt/gridtools.git
+    GIT_TAG        fortran_array_view_acc_disablable
     # URL https://github.com/GridTools/gridtools/archive/???.tar.gz
 )
 FetchContent_MakeAvailable(GridTools)
@@ -114,6 +114,7 @@ if(BUILD_TESTING)
     add_regression_test(weights_gtir DRIVER weights)
     add_regression_test(weights DRIVER weights)
     add_regression_test(copy_with_k_gtir DRIVER copy_with_k)
+    add_regression_test(copy_with_k DRIVER copy_with_k)
     add_regression_test(tmp_field)
     if(Atlas_FOUND)
         add_regression_test(fvm_nabla ADDITIONAL_LIBRARIES atlas eckit)

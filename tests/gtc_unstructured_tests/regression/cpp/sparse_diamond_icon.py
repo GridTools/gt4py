@@ -10,6 +10,7 @@
 import os
 import sys
 import types
+from gtc_unstructured.frontend.built_in_types import SparseField
 
 from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.frontend.gtscript import (
@@ -25,12 +26,18 @@ from gtc_unstructured.irs.common import DataType
 from gtc_unstructured.irs.icon_bindings_codegen import IconBindingsCodegen
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 
-E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
+E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 4, False],))
 dtype = DataType.FLOAT64
 
-def sten(e2v: E2V, field_in: Field[Vertex, dtype], field_out: Field[Edge, dtype]):
-    with computation(FORWARD), location(Edge) as e:
-        field_out[e] = sum(field_in[v] for v in e2v[e])
+
+def icon_sparse_diamond(
+    e2v: E2V,
+    e_field: Field[Edge, dtype],
+    v_field: Field[Vertex, dtype],
+    primal_normal: SparseField[E2V, dtype],
+):
+    with computation(FORWARD), location(Edge) as edge:
+        e_field[edge] = sum(v_field[v] * primal_normal[edge, v] for v in e2v[edge])
 
 
 def main():
@@ -38,27 +45,28 @@ def main():
 
     if mode == "unaive":
         code_generator = UsidNaiveCodeGenerator
-        extension=".cc"
+        extension = ".cc"
     else:  # 'ugpu':
         code_generator = UsidGpuCodeGenerator
-        extension=".cu"
+        extension = ".cu"
 
-    compilation_task = GTScriptCompilationTask(sten)
+    compilation_task = GTScriptCompilationTask(icon_sparse_diamond)
     generated_code = compilation_task.generate(
-        debug=True, code_generator=code_generator
+        debug=False, code_generator=code_generator
     )
 
     print(generated_code)
     output_file = (
-        os.path.dirname(os.path.realpath(__file__)) + "/generated_vertex2edge_" + mode + ".hpp"
+        os.path.dirname(os.path.realpath(__file__)) +
+        "/generated_icon_sparse_diamond_" + mode + ".hpp"
     )
     with open(output_file, "w+") as output:
         output.write(generated_code)
-    
+
     icon_bindings = IconBindingsCodegen().apply(compilation_task.gtir, generated_code)
     print(icon_bindings)
     output_file = (
-        os.path.dirname(os.path.realpath(__file__)) + "/generated_icon_vertex2edge" + extension
+        os.path.dirname(os.path.realpath(__file__)) + "/generated_icon_sparse_diamond" + extension
     )
     with open(output_file, "w+") as output:
         output.write(icon_bindings)
