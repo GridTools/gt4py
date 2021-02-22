@@ -47,6 +47,8 @@ from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
+from gt4py.ir import StencilDefinition
+
 
 class GTCGTExtGenerator:
     def __init__(self, class_name, module_name, gt_backend_t, options):
@@ -55,7 +57,7 @@ class GTCGTExtGenerator:
         self.gt_backend_t = gt_backend_t
         self.options = options
 
-    def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
+    def __call__(self, definition_ir: StencilDefinition) -> Dict[str, Dict[str, str]]:
         gtir = DefIRToGTIR.apply(definition_ir)
         gtir_without_unused_params = prune_unused_parameters(gtir)
         dtype_deduced = resolve_dtype(gtir_without_unused_params)
@@ -63,6 +65,8 @@ class GTCGTExtGenerator:
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
 
         sdfg = oir_to_dace.OirToSDFGVisitor().visit(oir)
+
+        sdfg.save(definition_ir.name + ".sdfg")
         oir = dace_to_oir.convert(sdfg)
         oir = self._optimize_oir(oir)
 

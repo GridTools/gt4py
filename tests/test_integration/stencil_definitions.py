@@ -222,7 +222,7 @@ def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
 
 @register
 def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3DBool):
-    with computation(PARALLEL), interval(...):
+    with computation(PARALLEL), interval(1, -1):
         diff_23 = 0.0
         if extm and extm[0, 0, -1]:
             a4_2 = a4_1

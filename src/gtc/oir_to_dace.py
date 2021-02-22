@@ -44,7 +44,72 @@ class OirToSDFGVisitor(NodeVisitor):
             self.next_write_accesses = dict()
             self.delete_candidates = forward_context.delete_candidates
 
-    def _add_write_edges_forward(self, ln, access_collections, context):
+    def _access_space_to_subset(self, access_space, access_k_interval, origin):
+        i_subset = "{start}:I{end:+d}".format(
+            start=origin[0] + access_space.i_interval.start.offset,
+            end=origin[0] + access_space.i_interval.end.offset,
+        )
+        j_subset = "{start}:J{end:+d}".format(
+            start=origin[1] + access_space.j_interval.start.offset,
+            end=origin[1] + access_space.j_interval.end.offset,
+        )
+        k_subset = (
+            "K{:+d}:" if access_k_interval.start.level == common.LevelMarker.END else "{:d}:"
+        ) + ("K{:+d}" if access_k_interval.end.level == common.LevelMarker.END else "{:d}")
+        k_subset = k_subset.format(access_k_interval.start.offset, access_k_interval.end.offset)
+        return f"{i_subset},{j_subset},{k_subset}"
+
+    def _access_space_to_shape(self, access_space: oir.CartesianIterationSpace):
+        i_shape = f"I+{access_space.i_interval.end.offset-access_space.i_interval.start.offset}"
+        j_shape = f"J+{access_space.j_interval.end.offset-access_space.j_interval.start.offset}"
+        return (i_shape, j_shape, "K")
+
+    def _get_input_subset(self, node: oir.VerticalLoop, name, origin):
+        access_space = oir.CartesianIterationSpace.domain()
+        access_k_interval = node.sections[0].interval
+
+        for section in node.sections:
+            interval = section.interval
+            for he in section.horizontal_executions:
+                iteration_space = he.iteration_space
+                he_access_space = oir.CartesianIterationSpace.domain()
+                assert he.iteration_space is not None
+                access_collection = AccessCollector.apply(he)
+                if name in access_collection.read_fields():
+                    for offset in access_collection.read_offsets()[name]:
+                        he_access_space = he_access_space | oir.CartesianIterationSpace.from_offset(
+                            common.CartesianOffset(i=offset[0], j=offset[1], k=offset[2])
+                        )
+                        k_interval = interval.shift(offset[2])
+                        access_k_interval = oir.Interval(
+                            start=min(access_k_interval.start, k_interval.start),
+                            end=max(access_k_interval.end, k_interval.end),
+                        )
+                    access_space = access_space | (iteration_space.compose(he_access_space))
+
+        return self._access_space_to_subset(access_space, access_k_interval, origin)
+
+    def _get_output_subset(self, node, name, origin):
+        access_space = oir.CartesianIterationSpace.domain()
+        access_k_interval = node.sections[0].interval
+
+        for section in node.sections:
+            interval = section.interval
+            for he in section.horizontal_executions:
+                iteration_space = he.iteration_space
+                he_access_space = oir.CartesianIterationSpace.domain()
+                assert he.iteration_space is not None
+                access_collection = AccessCollector.apply(he)
+                if name in access_collection.write_fields():
+                    access_k_interval = oir.Interval(
+                        start=min(access_k_interval.start, interval.start),
+                        end=max(access_k_interval.end, interval.end),
+                    )
+                    access_space = access_space | (iteration_space.compose(he_access_space))
+
+        return self._access_space_to_subset(access_space, access_k_interval, origin)
+
+    def _add_write_edges_forward(self, ln, access_collections, context, origins):
         write_fields = set(
             name for collection in access_collections.values() for name in collection.write_fields()
         )
@@ -87,8 +152,15 @@ class OirToSDFGVisitor(NodeVisitor):
                 candidate_node_idx = len(context.accesses[name]) - 1
 
             ln.add_out_connector("OUT_" + name)
-            # TODO fix memlet
-            context.state.add_edge(ln, "OUT_" + name, candidate_node, None, dace.Memlet())
+
+            subset = self._get_output_subset(vl, name, origins[name])
+            context.state.add_edge(
+                ln,
+                "OUT_" + name,
+                candidate_node,
+                None,
+                dace.Memlet.simple(data=name, subset_str=subset),
+            )
             if name not in context.recent_write_accesses:
                 context.recent_write_accesses[name] = oir.IntervalMapping()
             for section in vl.sections:
@@ -97,7 +169,7 @@ class OirToSDFGVisitor(NodeVisitor):
             if candidate_node.access == dace.AccessType.ReadOnly:
                 candidate_node.access = dace.AccessType.ReadWrite
 
-    def _add_read_edges_forward(self, ln, access_collections, context):
+    def _add_read_edges_forward(self, ln, access_collections, context, origins):
         vl = ln.oir_node
         reads = set(
             name for collection in access_collections.values() for name in collection.read_fields()
@@ -151,17 +223,24 @@ class OirToSDFGVisitor(NodeVisitor):
             if access_node.access == dace.AccessType.WriteOnly:
                 access_node.access = dace.AccessType.ReadWrite
             ln.add_in_connector("IN_" + name)
-            # TODO fix memlet
-            context.state.add_edge(access_node, None, ln, "IN_" + name, dace.Memlet())
+
+            subset = self._get_input_subset(vl, name, origins[name])
+            context.state.add_edge(
+                access_node,
+                None,
+                ln,
+                "IN_" + name,
+                dace.Memlet.simple(data=name, subset_str=subset),
+            )
             if name not in context.recent_read_accesses:
                 context.recent_read_accesses[name] = oir.IntervalMapping()
             context.recent_read_accesses[name][interval] = most_recent_write
 
-    def _add_vertical_loop_forward(self, vl, context: "OirToSDFGVisitor.ForwardContext"):
+    def _add_vertical_loop_forward(self, vl, context: "OirToSDFGVisitor.ForwardContext", origins):
         ln = VerticalLoopLibraryNode(oir_node=vl)
         context.state.add_node(ln)
         access_collections = {ls.id_: AccessCollector.apply(ls) for ls in vl.sections}
-        self._add_read_edges_forward(ln, access_collections, context)
+        self._add_read_edges_forward(ln, access_collections, context, origins)
         # for writes: add empty edge from last overlaping write to current LN (check if needed later)
         write_fields = set(
             name for collection in access_collections.values() for name in collection.write_fields()
@@ -179,28 +258,49 @@ class OirToSDFGVisitor(NodeVisitor):
 
         # for writes: add edge to existing last access if None of its reads or writes overlap with the write and
         #   otherwise, add new access node
-        self._add_write_edges_forward(ln, access_collections, context)
+        self._add_write_edges_forward(ln, access_collections, context, origins)
 
-    def visit_Decl(self, node, *, sdfg):
+    def visit_Decl(
+        self,
+        node: oir.Decl,
+        *,
+        sdfg: SDFG,
+        boundaries: Dict[str, oir.CartesianIterationSpace],
+        **kwargs: Any,
+    ):
         dtype = dace.dtypes.typeclass(np.dtype(common.data_type_to_typestr(node.dtype)).name)
-        if isinstance(node, oir.Temporary):
-            sdfg.add_transient(name=node.name, dtype=dtype, shape=())
-        elif isinstance(node, oir.FieldDecl):
-            sdfg.add_array(name=node.name, dtype=dtype, shape=())
-        else:
-            assert isinstance(node, oir.ScalarDecl)
+
+        if isinstance(node, oir.ScalarDecl):
             sdfg.add_scalar(name=node.name, dtype=dtype)
+        else:
+            shape = self._access_space_to_shape(boundaries[node.name])
+            if isinstance(node, oir.Temporary):
+                sdfg.add_transient(name=node.name, dtype=dtype, shape=shape)
+            elif isinstance(node, oir.FieldDecl):
+                sdfg.add_array(name=node.name, dtype=dtype, shape=shape)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> SDFG:
+        from gtc.gtir_to_oir import oir_field_boundary_computation
+
+        boundaries = oir_field_boundary_computation(node)
 
         context = self.ForwardContext(node)
         # add arrays
-        self.generic_visit(node, sdfg=context.sdfg)
+        self.generic_visit(node, sdfg=context.sdfg, context=context, boundaries=boundaries)
+
+        from gtc.gtir_to_oir import oir_field_boundary_computation
+
+        boundaries = oir_field_boundary_computation(node)
+        origins = {
+            k: (-bound.i_interval.start.offset, -bound.j_interval.start.offset, 0)
+            for k, bound in boundaries.items()
+        }
 
         for vl in node.vertical_loops:
-            self._add_vertical_loop_forward(vl, context)
+            self._add_vertical_loop_forward(vl, context, origins)
+        # context = self.BackwardContext(context) # noqa: E800
         # for vl in reversed(node.vertical_loops):
-        #     self._add_vertical_loop_backward() # noqa: E800
+        #     self._add_vertical_loop_backward(vl, context)  # noqa: E800
 
         import networkx as nx
 
