@@ -155,8 +155,8 @@ namespace fvm_nabla_driver_impl_ {
         auto pnabla_MYY = make_output();
 
         nabla({nodes.size(), edges.size(), mesh.cells().size(), k},
-            make_storage_producer(edges_per_node, nodes.edge_connectivity()),
-            make_storage_producer(2_c, edges.node_connectivity()))(make_S_MXX(edges),
+            make_connectivity_producer(edges_per_node, nodes.edge_connectivity()),
+            make_connectivity_producer(2_c, edges.node_connectivity()))(make_S_MXX(edges),
             make_S_MYY(edges),
             make_pp(nodes),
             pnabla_MXX,

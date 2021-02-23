@@ -6,7 +6,7 @@
 
 namespace atlas::mesh {
     template <class Connectivity, class MaxNeighbors>
-    auto make_storage_producer(MaxNeighbors max_neighbors, Connectivity const &src) {
+    auto make_connectivity_producer(MaxNeighbors max_neighbors, Connectivity const &src) {
         return [&src, max_neighbors](auto traits) {
             return gridtools::storage::builder<decltype(traits)>
             .template type<int>()
