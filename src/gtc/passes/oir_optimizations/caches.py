@@ -107,12 +107,12 @@ class PruneKCacheFlushes(NodeTranslator):
             return oir.KCache(name=node.name, fill=node.fill, flush=False)
         return self.generic_visit(node, **kwargs)
 
-    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.KCache:
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         accesses = [AccessCollector.apply(vertical_loop) for vertical_loop in node.vertical_loops]
         vertical_loops = []
         for i, vertical_loop in enumerate(node.vertical_loops):
             flushing_fields = {
-                c.name for c in vertical_loop.caches if isinstance(c, oir.KCache) and c.flush
+                str(c.name) for c in vertical_loop.caches if isinstance(c, oir.KCache) and c.flush
             }
             read_only_fields = flushing_fields & (
                 accesses[i].read_fields() - accesses[i].write_fields()
