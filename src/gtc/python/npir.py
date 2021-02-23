@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Any, List, Optional, Tuple, Union, cast, Dict
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 from pydantic import validator
 
@@ -124,17 +124,27 @@ class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpr
     mask: Optional[VectorExpression]
 
 
-class VerticalPass(common.LocNode):
+class DomainPadding(eve.Node):
+    lower: Tuple[int, int, int]
+    upper: Tuple[int, int, int]
+
+
+class HorizontalExtent(eve.Node):
+    lower: Tuple[int, int]
+    upper: Tuple[int, int]
+
+
+class HorizontalRegion(common.LocNode):
     body: List[VectorAssign]
+    padding: DomainPadding
+
+
+class VerticalPass(common.LocNode):
+    body: List[HorizontalRegion]
     temp_defs: List[VectorAssign]
     lower: common.AxisBound
     upper: common.AxisBound
     direction: common.LoopOrder
-
-
-class DomainPadding(eve.Node):
-    lower: Tuple[int, int, int]
-    upper: Tuple[int, int, int]
 
 
 class Computation(common.LocNode):

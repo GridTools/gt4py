@@ -9,20 +9,40 @@ from .. import common, oir
 from . import npir
 
 
+@dataclass
+class Padding:
+    lower: List[int] = field(default_factory=lambda: [0, 0, 0])
+    upper: List[int] = field(default_factory=lambda: [0, 0, 0])
+
+    def add_offset(self, axis: int, value: int) -> "Padding":
+        if value > 0:
+            current_value = self.upper[axis]
+            self.upper[axis] = max(current_value, value)
+        elif value < 0:
+            current_value = self.lower[axis]
+            self.lower[axis] = max(current_value, abs(value))
+        return self
+
+    def add_offsets(self, i: int, j: int, k: int) -> "Padding":
+        for axis_index, value in enumerate([i, j, k]):
+            self.add_offset(name, axis_index, value)
+        return self
+
+
 class OirToNpir(NodeTranslator):
     """Lower from optimizable IR (OIR) to numpy IR (NPIR)."""
 
     @dataclass
     class ComputationContext:
-        """Context for a VerticalLoop."""
+        """Top Level Context."""
 
         symbol_table: Dict[str, Any] = field(default_factory=lambda: {})
 
-        domain_padding: Dict[str, List] = field(
-            default_factory=lambda: {"lower": [0, 0, 0], "upper": [0, 0, 0]}
+        domain_padding: Padding = field(
+            default_factory=lambda: Padding()
         )
 
-        field_padding: Dict[str, Dict[str, List]] = field(
+        field_padding: Dict[str, Padding] = field(
             default_factory=lambda: {}
         )
 
@@ -31,17 +51,9 @@ class OirToNpir(NodeTranslator):
         )
 
         def add_offset(self, name: str, axis: int, value: int) -> "OirToNpir.ComputationContext":
-            fpad = self.field_padding.setdefault(name, {"lower": [0, 0, 0], "upper": [0, 0, 0]})
-            if value > 0:
-                current_value = self.domain_padding["upper"][axis]
-                self.domain_padding["upper"][axis] = max(current_value, value)
-                current_fval = fpad["upper"][axis]
-                fpad["upper"][axis] = max(current_value, value)
-            elif value < 0:
-                current_value = self.domain_padding["lower"][axis]
-                self.domain_padding["lower"][axis] = max(current_value, abs(value))
-                current_fval = fpad["lower"][axis]
-                fpad["lower"][axis] = max(current_value, abs(value))
+            fpad = self.field_padding.setdefault(name, Padding())
+            self.domain_padding.add_offset(axis, value)
+            fpad.add_offset(axis, value)
             return self
 
         def add_offsets(self, name: str, i: int, j: int, k: int) -> "OirToNpir.ComputationContext":
@@ -56,6 +68,18 @@ class OirToNpir(NodeTranslator):
                     right=npir.EmptyTemp(dtype=temp.dtype),
                 )
 
+    @dataclass
+    class HorizontalContext:
+        """Context for a single HorizontalExecution."""
+
+        padding: Padding = field(default_factory=lambda: Padding())
+
+        def add_offsets(self, i: int, j: int) -> "OirToNpir.ComputationContext":
+            for axis_index, value in enumerate([i, j, 0]):
+                self.padding.add_offset(axis_index, value)
+            return self
+
+
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
         ctx = self.ComputationContext(symbol_table=node.symtable_)
         vertical_passes = [self.visit(vloop, ctx=ctx, **kwargs) for vloop in node.vertical_loops]
@@ -68,12 +92,12 @@ class OirToNpir(NodeTranslator):
                 scalar_names.append(decl.name)
         return npir.Computation(
             field_params=field_names,
-            field_paddings=ctx.field_padding,
+            field_paddings={key: {"lower": val.lower, "upper": val.upper} for key, val in ctx.field_padding.items()},
             params=[decl.name for decl in node.params],
             vertical_passes=vertical_passes,
             domain_padding=npir.DomainPadding(
-                lower=ctx.domain_padding["lower"],
-                upper=ctx.domain_padding["upper"],
+                lower=ctx.domain_padding.lower,
+                upper=ctx.domain_padding.upper,
             ),
         )
 
@@ -89,8 +113,7 @@ class OirToNpir(NodeTranslator):
                 "upper_k": node.interval.end,
             }
         )
-        v_assigns = [self.visit(h_exec, ctx=ctx, **kwargs) for h_exec in node.horizontal_executions]
-        body = [i for j in v_assigns for i in j]
+        body = self.visit(node.horizontal_executions, ctx=ctx, **kwargs)
         undef_temps = [
             temp_def for name, temp_def in ctx.temp_defs.items() if name not in defined_temps
         ]
@@ -103,10 +126,14 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_HorizontalExecution(
-        self, node: oir.HorizontalExecution, *, ctx: Optional[ComputationContext] = None, **kwargs: Any
-    ) -> List[npir.VectorAssign]:
-        mask = self.visit(node.mask, ctx=ctx, **kwargs)
-        return self.visit(node.body, ctx=ctx, mask=mask, **kwargs)
+        self, node: oir.HorizontalExecution, *, ctx: Optional[ComputationContext] = None, h_ctx: Optional[HorizontalContext] = None, **kwargs: Any
+    ) -> npir.HorizontalRegion:
+        h_ctx = h_ctx or self.HorizontalContext()
+        mask = self.visit(node.mask, ctx=ctx, h_ctx=h_ctx, **kwargs)
+        return npir.HorizontalRegion(
+            body=self.visit(node.body, ctx=ctx, h_ctx=h_ctx, mask=mask, **kwargs),
+            padding=npir.DomainPadding(lower=h_ctx.padding.lower, upper=h_ctx.padding.upper)
+        )
 
     def visit_AssignStmt(
         self,
@@ -143,7 +170,7 @@ class OirToNpir(NodeTranslator):
         return cast
 
     def visit_FieldAccess(
-        self, node: oir.FieldAccess, *, ctx: ComputationContext, parallel_k: bool, **kwargs: Any
+        self, node: oir.FieldAccess, *, ctx: ComputationContext, h_ctx: HorizontalContext, parallel_k: bool, **kwargs: Any
     ) -> npir.FieldSlice:
         if not isinstance(ctx.symbol_table.get(node.name, None), oir.Temporary):
             k_offset = node.offset.k
@@ -158,6 +185,7 @@ class OirToNpir(NodeTranslator):
                 else:
                     k_offset = 0
             ctx.add_offsets(str(node.name), node.offset.i, node.offset.j, k_offset)
+            h_ctx.add_offsets(node.offset.i, node.offset.j)
         return npir.FieldSlice(
             name=str(node.name),
             i_offset=npir.AxisOffset.i(node.offset.i),

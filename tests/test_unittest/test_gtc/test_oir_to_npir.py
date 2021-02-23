@@ -82,8 +82,10 @@ def test_vertical_loop_to_vertical_pass():
 
 def test_horizontal_execution_to_vector_assigns():
     horizontal_execution = HorizontalExecutionBuilder().build()
-    vector_assigns = OirToNpir().visit(horizontal_execution)
-    assert vector_assigns == []
+    horizontal_region = OirToNpir().visit(horizontal_execution)
+    assert horizontal_region.body == []
+    assert horizontal_region.padding.lower == (0, 0, 0)
+    assert horizontal_region.padding.upper == (0, 0, 0)
 
 
 def test_assign_stmt_to_vector_assign(parallel_k):
@@ -97,7 +99,9 @@ def test_assign_stmt_to_vector_assign(parallel_k):
     )
 
     ctx = OirToNpir.ComputationContext()
-    v_assign = OirToNpir().visit(assign_stmt, ctx=ctx, parallel_k=parallel_k, mask=None)
+    v_assign = OirToNpir().visit(
+        assign_stmt, ctx=ctx, h_ctx=OirToNpir.HorizontalContext(), parallel_k=parallel_k, mask=None
+    )
     assert isinstance(v_assign, npir.VectorAssign)
     assert v_assign.left.k_offset.parallel is parallel_k
     assert v_assign.right.k_offset.parallel is parallel_k
@@ -114,13 +118,15 @@ def test_temp_assign(parallel_k):
             name="b", offset=common.CartesianOffset(i=-1, j=22, k=0), dtype=common.DataType.FLOAT64
         ),
     )
-    v_ctx = OirToNpir.ComputationContext(
+    ctx = OirToNpir.ComputationContext(
         symbol_table={"a": oir.Temporary(name="a", dtype=common.DataType.FLOAT64)}
     )
-    _ = OirToNpir().visit(assign_stmt, ctx=v_ctx, parallel_k=parallel_k, mask=None)
-    assert len(v_ctx.temp_defs) == 1
-    assert isinstance(v_ctx.temp_defs["a"].left, npir.VectorTemp)
-    assert isinstance(v_ctx.temp_defs["a"].right, npir.EmptyTemp)
+    _ = OirToNpir().visit(
+        assign_stmt, ctx=ctx, h_ctx=OirToNpir.HorizontalContext(), parallel_k=parallel_k, mask=None
+    )
+    assert len(ctx.temp_defs) == 1
+    assert isinstance(ctx.temp_defs["a"].left, npir.VectorTemp)
+    assert isinstance(ctx.temp_defs["a"].right, npir.EmptyTemp)
 
 
 def test_field_access_to_field_slice(parallel_k):
@@ -131,11 +137,16 @@ def test_field_access_to_field_slice(parallel_k):
     )
 
     ctx = OirToNpir.ComputationContext()
-    parallel_field_slice = OirToNpir().visit(field_access, ctx=ctx, parallel_k=parallel_k)
+    h_ctx = OirToNpir.HorizontalContext()
+    parallel_field_slice = OirToNpir().visit(
+        field_access, ctx=ctx, h_ctx=h_ctx, parallel_k=parallel_k
+    )
     assert parallel_field_slice.k_offset.parallel is parallel_k
     assert parallel_field_slice.i_offset.offset.value == -1
-    assert ctx.domain_padding["lower"][0] == 1
-    assert ctx.domain_padding["upper"][1] == 2
+    assert ctx.domain_padding.lower[0] == 1
+    assert ctx.domain_padding.upper[1] == 2
+    assert h_ctx.padding.lower[0] == 1
+    assert h_ctx.padding.upper[1] == 2
 
     # ctx.domain_padding should be correctly extended when visiting another field access
     OirToNpir().visit(
@@ -145,12 +156,17 @@ def test_field_access_to_field_slice(parallel_k):
             dtype=common.DataType.FLOAT64,
         ),
         ctx=ctx,
+        h_ctx=h_ctx,
         parallel_k=parallel_k,
     )
-    assert ctx.domain_padding["lower"][0] == 2
-    assert ctx.domain_padding["lower"][1] == 1
-    assert ctx.domain_padding["upper"][1] == 2
-    assert ctx.domain_padding["upper"][2] == 4
+    assert ctx.domain_padding.lower[0] == 2
+    assert ctx.domain_padding.lower[1] == 1
+    assert h_ctx.padding.lower[0] == 2
+    assert h_ctx.padding.lower[1] == 1
+    assert ctx.domain_padding.upper[1] == 2
+    assert ctx.domain_padding.upper[2] == 4
+    assert h_ctx.padding.upper[1] == 2
+    assert h_ctx.padding.upper[2] == 0  # horizontal context does not contain vertical padding
 
 
 def test_binary_op_to_vector_arithmetic():
@@ -206,5 +222,10 @@ def test_native_func_call():
             ),
         ],
     )
-    result = OirToNpir().visit(oir_node, parallel_k=True, ctx=OirToNpir.ComputationContext())
+    result = OirToNpir().visit(
+        oir_node,
+        parallel_k=True,
+        ctx=OirToNpir.ComputationContext(),
+        h_ctx=OirToNpir.HorizontalContext(),
+    )
     assert isinstance(result, npir.VectorExpression)

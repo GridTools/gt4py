@@ -130,8 +130,45 @@ class NpirGen(TemplatedGenerator):
             ## -- begin vertical region --
             {% for assign in temp_defs %}{{ assign }}
             {% endfor %}k, K = {{ lower }}, {{ upper }}{{ for_loop_line }}
-            {% for assign in body %}{{ assign | indent(body_indent, first=True) }}
+            {% for hregion in body %}{{ hregion | indent(body_indent, first=True) }}
             {% endfor %}## -- end vertical region --
+            """
+        )
+    )
+
+    def visit_HorizontalRegion(
+        self, node: npir.HorizontalRegion, **kwargs
+    ) -> Union[str, Collection[str]]:
+        field_paddings = kwargs.get("c_field_paddings", {})
+        domain_padding = kwargs.get(
+            "c_domain_padding", npir.DomainPadding(lower=(0, 0, 0), upper=(0, 0, 0))
+        )
+        fields = set(node.iter_tree().if_isinstance(npir.FieldSlice).getattr("name"))
+        lower = [
+            domain_padding.lower[0] - node.padding.lower[0],
+            domain_padding.lower[1] - node.padding.lower[1],
+        ]
+        upper = [
+            domain_padding.upper[0] - node.padding.upper[0],
+            domain_padding.upper[1] - node.padding.upper[1],
+        ]
+        for field in fields:
+            if field in field_paddings:
+                lower[0] = min(field_paddings[field]["lower"][0], lower[0])
+                lower[1] = min(field_paddings[field]["lower"][1], lower[1])
+                upper[0] = min(field_paddings[field]["upper"][0], upper[0])
+                upper[1] = min(field_paddings[field]["upper"][1], upper[1])
+        return self.generic_visit(node, h_lower=lower, h_upper=upper, **kwargs)
+
+    HorizontalRegion = JinjaTemplate(
+        textwrap.dedent(
+            """
+            ## --- begin horizontal region --
+            i, I = DOMAIN_i - {{ h_lower[0] }}, DOMAIN_I + {{ h_upper[0] }}
+            j, J = DOMAIN_j - {{ h_lower[1] }}, DOMAIN_J + {{ h_upper[1] }}
+            {% for assign in body %}{{ assign }}
+            {% endfor %}## --- end horizontal region --
+
             """
         )
     )
@@ -140,13 +177,11 @@ class NpirGen(TemplatedGenerator):
         textwrap.dedent(
             """\
             ## -- begin domain padding --
-            i, j, k = {lower[0]}, {lower[1]}, {lower[2]}
+            DOMAIN_i, DOMAIN_j, DOMAIN_k = {lower[0]}, {lower[1]}, {lower[2]}
             _ui, _uj, _uk = {upper[0]}, {upper[1]}, {upper[2]}
             _di, _dj, _dk = _domain_
-            I, J, K = _di + i, _dj + j, _dk + k
-            DOMAIN_k = k
-            DOMAIN_K = K
-            _tmp_shape = (_di + i + _ui, _dj + j + _uj, _dk + k + _uk)
+            DOMAIN_I, DOMAIN_J, DOMAIN_K = _di + DOMAIN_i, _dj + DOMAIN_j, _dk + DOMAIN_k
+            _tmp_shape = (_di + DOMAIN_i + _ui, _dj + DOMAIN_j + _uj, _dk + DOMAIN_k + _uk)
             ## -- end domain padding --
             """
         )
@@ -193,12 +228,18 @@ class NpirGen(TemplatedGenerator):
                     (_origin_["{{ name }}"][1] - __pj):(_origin_["{{ name }}"][1] + _dj + __pJ),
                     (_origin_["{{ name }}"][2] - __pk):(_origin_["{{ name }}"][2] + _dk + __pK)
                 ]
-                {% if not field_paddings[name]['lower'] == lower %}{{ name }}_ = ShimmedView({{ name }}_, (__pi - i, __pj - j, __pk - k))
+                {% if not field_paddings[name]['lower'] == lower %}{{ name }}_ = ShimmedView({{ name }}_, (__pi - DOMAIN_i, __pj - DOMAIN_j, __pk - DOMAIN_k))
                 {% endif %}
                 {% endfor %}# -- end data views --
                 """
             )
-        ).render(field_params=node.field_params, field_paddings=node.field_paddings, lower=node.domain_padding.lower)
+        ).render(
+            field_params=node.field_params,
+            field_paddings=node.field_paddings,
+            lower=node.domain_padding.lower,
+        )
+        kwargs["c_field_paddings"] = node.field_paddings
+        kwargs["c_domain_padding"] = node.domain_padding
         return self.generic_visit(
             node, signature=", ".join(signature), data_views=data_views, **kwargs
         )

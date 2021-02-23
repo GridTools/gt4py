@@ -341,6 +341,11 @@ def test_full_computation_valid(tmp_path) -> None:
                 lower=(2, 2, 0),
                 upper=(0, 3, 1),
             ),
+            field_paddings={
+                "f1": {"lower": (0, 0, 0), "upper": (0, 0, 0)},
+                "f2": {"lower": (2, 2, 0), "upper": (0, 0, 0)},
+                "f3": {"lower": (0, 0, 0), "upper": (0, 3, 1)},
+            },
             params=["f1", "f2", "f3", "s1"],
             field_params=["f1", "f2", "f3"],
             vertical_passes=[
@@ -350,17 +355,25 @@ def test_full_computation_valid(tmp_path) -> None:
                     upper=common.AxisBound.end(),
                     direction=common.LoopOrder.PARALLEL,
                     body=[
-                        npir.VectorAssign(
-                            left=FieldSliceBuilder("f1", parallel_k=True).build(),
-                            right=npir.VectorArithmetic(
-                                op=common.ArithmeticOperator.MUL,
-                                left=FieldSliceBuilder("f2", parallel_k=True)
-                                .offsets(-2, -2, 0)
-                                .build(),
-                                right=FieldSliceBuilder("f3", parallel_k=True)
-                                .offsets(0, 3, 1)
-                                .build(),
+                        npir.HorizontalRegion(
+                            padding=npir.DomainPadding(
+                                lower=(2, 2, 0),
+                                upper=(0, 3, 0),
                             ),
+                            body=[
+                                npir.VectorAssign(
+                                    left=FieldSliceBuilder("f1", parallel_k=True).build(),
+                                    right=npir.VectorArithmetic(
+                                        op=common.ArithmeticOperator.MUL,
+                                        left=FieldSliceBuilder("f2", parallel_k=True)
+                                        .offsets(-2, -2, 0)
+                                        .build(),
+                                        right=FieldSliceBuilder("f3", parallel_k=True)
+                                        .offsets(0, 3, 1)
+                                        .build(),
+                                    ),
+                                ),
+                            ],
                         ),
                     ],
                 ),
@@ -370,16 +383,21 @@ def test_full_computation_valid(tmp_path) -> None:
                     upper=common.AxisBound.from_end(offset=-3),
                     direction=common.LoopOrder.BACKWARD,
                     body=[
-                        npir.VectorAssign(
-                            left=FieldSliceBuilder("f2", parallel_k=False).build(),
-                            right=npir.VectorArithmetic(
-                                op=common.ArithmeticOperator.ADD,
-                                left=FieldSliceBuilder("f2", parallel_k=False).build(),
-                                right=FieldSliceBuilder("f2", parallel_k=False)
-                                .offsets(0, 0, 1)
-                                .build(),
-                            ),
-                        ),
+                        npir.HorizontalRegion(
+                            padding=npir.DomainPadding(lower=(0, 0, 0), upper=(0, 0, 0)),
+                            body=[
+                                npir.VectorAssign(
+                                    left=FieldSliceBuilder("f2", parallel_k=False).build(),
+                                    right=npir.VectorArithmetic(
+                                        op=common.ArithmeticOperator.ADD,
+                                        left=FieldSliceBuilder("f2", parallel_k=False).build(),
+                                        right=FieldSliceBuilder("f2", parallel_k=False)
+                                        .offsets(0, 0, 1)
+                                        .build(),
+                                    ),
+                                ),
+                            ],
+                        )
                     ],
                 ),
             ],
