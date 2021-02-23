@@ -962,21 +962,32 @@ class LowerHorizontalIfPass(TransformPass):
     """Transform HorizontalIf to If."""
 
     class Lower(gt_ir.IRNodeMapper):
-        LARGE_NUM = 10000
-
         @classmethod
         def apply(cls, impl_node: gt_ir.StencilImplementation) -> None:
-            cls().visit(impl_node)
+            cls(impl_node.domain).visit(impl_node)
+
+        def __init__(self, domain: gt_ir.Domain):
+            self.domain = domain
+            self.extent: Optional[gt_ir.Extent] = None
+
+        def visit_Stage(
+            self, path: tuple, node_name: str, node: gt_ir.Stage
+        ) -> Tuple[bool, gt_ir.Stage]:
+            self.extent = node.compute_extent
+            return self.generic_visit(path, node_name, node)
 
         def visit_HorizontalIf(
             self, path: tuple, node_name: str, node: gt_ir.HorizontalIf
-        ) -> gt_ir.If:
+        ) -> Tuple[bool, gt_ir.If]:
+            assert self.extent is not None
+
             conditions = []
             for axis, interval in node.intervals.items():
+                extent = self.extent[self.domain.index(axis)]
                 # start
                 if (
-                    interval.start != gt_ir.LevelMarker.START
-                    or interval.start.offset > -self.LARGE_NUM
+                    interval.start.level != gt_ir.LevelMarker.START
+                    or interval.start.offset > extent[0]
                 ):
                     conditions.append(
                         gt_ir.BinOpExpr(
@@ -989,7 +1000,7 @@ class LowerHorizontalIfPass(TransformPass):
                     )
 
                 # end
-                if interval.end != gt_ir.LevelMarker.END or interval.end.offset < self.LARGE_NUM:
+                if interval.end.level != gt_ir.LevelMarker.END or interval.end.offset < extent[1]:
                     conditions.append(
                         gt_ir.BinOpExpr(
                             op=gt_ir.BinaryOperator.LT,

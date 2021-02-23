@@ -336,7 +336,9 @@ class AxisIntervalParser(gt_meta.ASTPass):
         if not isinstance(node.slice, ast.Index):
             raise self.interval_error
 
-        return self.visit(node.slice.value)
+        return gtscript._AxisOffset(
+            axis=self.axis_name, index=self.visit(node.slice.value), offset=0
+        )
 
 
 parse_interval_node = AxisIntervalParser.apply
