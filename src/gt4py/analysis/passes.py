@@ -895,15 +895,16 @@ class RemoveUnreachedStatementsPass(TransformPass):
         for dom_block in transform_data.blocks:
             for ij_block in dom_block.ij_blocks:
                 for int_block in ij_block.interval_blocks:
-                    stmts = []
-                    for stmt in int_block.stmts:
+                    stmt_infos = []
+                    for stmt_info in int_block.stmts:
+                        stmt = stmt_info.stmt
                         if not isinstance(stmt, gt_ir.HorizontalIf):
-                            stmts.append(stmt)
+                            stmt_infos.append(stmt_info)
                         elif (
-                            compute_extent_diff(stmt.intervals, ij_block.compute_extent) is not None
+                            compute_extent_diff(ij_block.compute_extent, stmt.intervals) is not None
                         ):
-                            stmts.append(stmt)
-                    int_block.stmts = stmts
+                            stmt_infos.append(stmt_info)
+                    int_block.stmts = stmt_infos
 
 
 class ComputeExtentsPass(TransformPass):
