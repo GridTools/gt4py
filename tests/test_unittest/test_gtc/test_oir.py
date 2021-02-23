@@ -17,42 +17,26 @@
 import pytest
 from pydantic.error_wrappers import ValidationError
 
-from gtc.common import AxisBound, CartesianOffset, DataType, ExprKind, LoopOrder
-from gtc.oir import (
-    AssignStmt,
-    Expr,
-    FieldAccess,
-    FieldDecl,
-    HorizontalExecution,
-    Interval,
-    Stencil,
-    Temporary,
-    VerticalLoop,
+from gtc.common import DataType, LoopOrder
+from gtc.oir import Temporary
+
+from .oir_utils import (
+    AssignStmtFactory,
+    FieldAccessFactory,
+    FieldDeclFactory,
+    HorizontalExecutionFactory,
+    StencilFactory,
 )
-
-
-A_ARITHMETIC_TYPE = DataType.INT32
-
-
-class DummyExpr(Expr):
-    """Fake expression for cases where a concrete expression is not needed."""
-
-    kind: ExprKind = ExprKind.FIELD
 
 
 def test_no_horizontal_offset_allowed():
     with pytest.raises(ValidationError, match=r"must not have .*horizontal offset"):
-        AssignStmt(
-            left=FieldAccess(
-                name="foo", dtype=A_ARITHMETIC_TYPE, offset=CartesianOffset(i=1, j=0, k=0)
-            ),
-            right=DummyExpr(dtype=A_ARITHMETIC_TYPE),
-        ),
+        AssignStmtFactory(left__offset__i=1)
 
 
 def test_mask_must_be_bool():
     with pytest.raises(ValidationError, match=r".*must be.* bool.*"):
-        HorizontalExecution(body=[], mask=DummyExpr(dtype=A_ARITHMETIC_TYPE)),
+        HorizontalExecutionFactory(mask=FieldAccessFactory(dtype=DataType.INT32))
 
 
 def test_temporary_default_3d():
@@ -67,36 +51,17 @@ def test_assign_to_ik_fwd():
     out_name = "ik_field"
     in_name = "other_ik_field"
     with pytest.raises(ValidationError, match=r"Not allowed to assign to ik-field"):
-        Stencil(
-            name="assign_to_ik_fwd",
+        StencilFactory(
             params=[
-                FieldDecl(name=out_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)),
-                FieldDecl(name=in_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)),
-            ],
-            vertical_loops=[
-                VerticalLoop(
-                    interval=Interval(start=AxisBound.start(), end=AxisBound.end()),
-                    loop_order=LoopOrder.FORWARD,
-                    declarations=[],
-                    horizontal_executions=[
-                        HorizontalExecution(
-                            body=[
-                                AssignStmt(
-                                    left=FieldAccess(
-                                        name=out_name,
-                                        dtype=DataType.FLOAT32,
-                                        offset=CartesianOffset.zero(),
-                                    ),
-                                    right=FieldAccess(
-                                        name=in_name,
-                                        dtype=DataType.FLOAT32,
-                                        offset=CartesianOffset.zero(),
-                                    ),
-                                )
-                            ],
-                            declarations=[],
-                        ),
-                    ],
+                FieldDeclFactory(
+                    name=out_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)
                 ),
+                FieldDeclFactory(
+                    name=in_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)
+                ),
+            ],
+            vertical_loops__0__loop_order=LoopOrder.FORWARD,
+            vertical_loops__0__sections__0__horizontal_executions__0__body=[
+                AssignStmtFactory(left__name=out_name, righ__name=in_name)
             ],
         )
