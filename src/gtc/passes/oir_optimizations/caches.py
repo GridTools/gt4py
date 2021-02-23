@@ -130,6 +130,13 @@ class PruneKCacheFills(NodeTranslator):
 
 
 class PruneKCacheFlushes(NodeTranslator):
+    """Prunes unneeded k-cache flushes.
+
+    A flush is classified as unneeded under the following conditions:
+    * All accesses to the field are read-only in the current vertical loop.
+    * There are no read accesses to the field in a following loop.
+    """
+
     def visit_KCache(self, node: oir.KCache, *, pruneable: Set[str], **kwargs: Any) -> oir.KCache:
         if node.name in pruneable:
             return oir.KCache(name=node.name, fill=node.fill, flush=False)
@@ -161,6 +168,16 @@ class PruneKCacheFlushes(NodeTranslator):
 
 
 class FillFlushToLocalKCaches(NodeTranslator):
+    """Converts fill and flush k-caches to local k-caches.
+
+    For each cached field, the following actions are performed:
+    1. A new locally-k-cached temporary is introduced.
+    2. All accesses to the original field are replaced by accesses to this temporary.
+    3. Loop sections are split where necessary to allow single-level loads whereever possible.
+    3. Fill statements from the original field to the temporary are introduced.
+    4. Flush statements from the temporary to the original field are introduced.
+    """
+
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, name_map: Dict[str, str], **kwargs: Any
     ) -> oir.FieldAccess:
