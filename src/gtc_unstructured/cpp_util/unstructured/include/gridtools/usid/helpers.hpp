@@ -25,6 +25,12 @@ namespace gridtools::usid {
         return sid::make_contiguous<T>(alloc, hymap::keys<dim::h, dim::k>::values<HSize, KSize>(h_size, k_size));
     }
 
+    template <class T, class Alloc, class HSize, class KSize, class SparseSize>
+    auto make_simple_sparse_tmp_storage(HSize h_size, KSize k_size, SparseSize s_size, Alloc &alloc) {
+        return sid::make_contiguous<T>(
+            alloc, hymap::keys<dim::h, dim::k, dim::s>::values<HSize, KSize, SparseSize>(h_size, k_size, s_size));
+    }
+
     template <int_t N, bool HasSkipValues>
     struct connectivity {
         using max_neighbors_t = integral_constant<int_t, N>;
@@ -46,63 +52,25 @@ namespace gridtools::usid {
     template <class Connectivity, class Fun, class Ptr, class Strides, class Neighbors>
     GT_FUNCTION void foreach_neighbor(Fun &&fun, Ptr &&ptr, Strides &&strides, Neighbors &&neighbors) {
         sid::make_loop<Connectivity>(typename Connectivity::max_neighbors_t())([&](auto const &ptr, auto &&) {
-            auto i = *host_device::at_key<Connectivity>(ptr);
+            auto i_glob = *host_device::at_key<Connectivity>(ptr);
             if constexpr (Connectivity::has_skip_values_t::value)
-                if (i < 0)
+                if (i_glob < 0)
                     return;
-            fun(ptr, sid::shifted(neighbors.first, neighbors.second, i));
+            fun(ptr, sid::shifted(neighbors.first, neighbors.second, i_glob));
         })(wstd::forward<decltype(ptr)>(ptr), strides);
     }
 
-    template <class T, class Connectivity, class F, class Init, class G, class Ptr, class Strides, class Neighbors>
-    GT_FUNCTION T fold_neighbors(F f, Init init, G g, Ptr &&ptr, Strides &&strides, Neighbors &&neighbors) {
-        T acc = init(meta::lazy::id<T>());
+    template <class Connectivity, class Fun, class Ptr, class Strides, class Neighbors>
+    GT_FUNCTION void foreach_neighbor_indexed(Fun &&fun, Ptr &&ptr, Strides &&strides, Neighbors &&neighbors) {
+        int i_local = 0;
         sid::make_loop<Connectivity>(typename Connectivity::max_neighbors_t())([&](auto const &ptr, auto &&) {
-            auto i = *host_device::at_key<Connectivity>(ptr);
+            auto i_glob = *host_device::at_key<Connectivity>(ptr);
             if constexpr (Connectivity::has_skip_values_t::value)
-                if (i < 0)
+                if (i_glob < 0)
                     return;
-            acc = f(acc, g(ptr, sid::shifted(neighbors.first, neighbors.second, i)));
+            fun(ptr, sid::shifted(neighbors.first, neighbors.second, i_glob), i_local);
+            i_local++;
         })(wstd::forward<decltype(ptr)>(ptr), strides);
-        return acc;
-    }
-
-    template <class T, class Connectivity, class F, class... Args>
-    GT_FUNCTION T sum_neighbors(F f, Args &&...args) {
-        return fold_neighbors<T, Connectivity>([](auto x, auto y) { return x + y; },
-            [](auto z) -> typename decltype(z)::type { return 0; },
-            f,
-            wstd::forward<Args>(args)...);
-    }
-
-    template <class T, class Connectivity, class F, class... Args>
-    GT_FUNCTION T product_neighbors(F f, Args &&...args) {
-        return fold_neighbors<T, Connectivity>([](auto x, auto y) { return x * y; },
-            [](auto z) -> typename decltype(z)::type { return 1; },
-            f,
-            wstd::forward<Args>(args)...);
-    }
-
-    template <class T, class Connectivity, class F, class... Args>
-    GT_FUNCTION T min_neighbors(F f, Args &&...args) {
-        return fold_neighbors<T, Connectivity>([](auto x, auto y) { return x < y ? x : y; },
-            [](auto z) -> typename decltype(z)::type {
-                constexpr auto res = std::numeric_limits<typename decltype(z)::type>::max();
-                return res;
-            },
-            f,
-            wstd::forward<Args>(args)...);
-    }
-
-    template <class T, class Connectivity, class F, class... Args>
-    GT_FUNCTION T max_neighbors(F f, Args &&...args) {
-        return fold_neighbors<T, Connectivity>([](auto x, auto y) { return x > y ? x : y; },
-            [](auto z) -> typename decltype(z)::type {
-                constexpr auto res = std::numeric_limits<typename decltype(z)::type>::min();
-                return res;
-            },
-            f,
-            wstd::forward<Args>(args)...);
     }
 
     template <class Tag, class Val>
