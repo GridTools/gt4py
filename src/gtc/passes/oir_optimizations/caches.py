@@ -121,7 +121,10 @@ class PruneKCacheFills(NodeTranslator):
                     return True
                 if node.loop_order == common.LoopOrder.BACKWARD and min(k_offsets) < 0:
                     return True
-                return next(a.is_read for a in center_accesses if a.field == field)
+                try:
+                    return next(a.is_read for a in center_accesses if a.field == field)
+                except StopIteration:
+                    return False
 
             return {field for field in filling_fields if not requires_fill(field)}
 
