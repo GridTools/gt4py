@@ -23,7 +23,7 @@ import itertools
 import numbers
 import textwrap
 import types
-from typing import List, Optional, Sequence, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 
@@ -859,6 +859,30 @@ class IRMaker(ast.NodeVisitor):
 
     def _visit_with_horizontal(
         self, node: ast.withitem, loc: gt_ir.Location
+    ) -> Dict[str, gt_ir.AxisInterval]:
+        syntax_error = GTScriptSyntaxError(
+            f"Invalid 'with' statement at line {loc.line} (column {loc.column})", loc=loc
+        )
+
+        call_args = node.context_expr.args
+        if any(not isinstance(arg, ast.Subscript) for arg in call_args):
+            raise syntax_error
+        if any(arg.value.id != "region" for arg in call_args):
+            raise syntax_error
+
+        parallel_axes_names = tuple(axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes)
+
+        blocks = []
+        for arg in call_args:
+            intervals = self._parse_region_intervals(arg.slice, loc)
+            blocks.append(
+                {axis: interval for axis, interval in zip(parallel_axes_names, intervals)}
+            )
+
+        return blocks
+
+    def _visit_with_horizontal_old(
+        self, node: ast.withitem, loc: gt_ir.Location
     ) -> List[gt_ir.Statement]:
         syntax_error = GTScriptSyntaxError(
             f"Invalid 'with' statement at line {loc.line} (column {loc.column})", loc=loc
@@ -979,7 +1003,7 @@ class IRMaker(ast.NodeVisitor):
                     isinstance(item.context_expr, ast.Call)
                     and item.context_expr.func.id == "horizontal"
                 ):
-                    conditions = self._visit_with_horizontal(item, loc)
+                    intervals_dicts = self._visit_with_horizontal(item, loc)
                 else:
                     raise syntax_error
         except AssertionError as e:
@@ -995,16 +1019,20 @@ class IRMaker(ast.NodeVisitor):
             stmts.extend(gt_utils.listify(self.visit(stmt)))
         self.parsing_context = ParsingContext.CONTROL_FLOW
 
-        if conditions:
+        if intervals_dicts:
             results = [
                 gt_ir.ComputationBlock(
                     interval=interval,
                     iteration_order=iteration_order,
                     body=gt_ir.BlockStmt(
-                        stmts=[gt_ir.If(condition=cond, main_body=gt_ir.BlockStmt(stmts=stmts))]
+                        stmts=[
+                            gt_ir.HorizontalIf(
+                                intervals=intervals_dict, body=gt_ir.BlockStmt(stmts=stmts)
+                            )
+                        ]
                     ),
                 )
-                for cond in conditions
+                for intervals_dict in intervals_dicts
             ]
         else:
             results = [
