@@ -161,51 +161,44 @@ class GTScriptToGTIR(eve.NodeTranslator):
         return gtir.LocationComprehension(name=node.target, of=gtir.ConnectivityRef(name=of))
 
     def visit_Call(self, node: Call, *, location_stack, symtable, **kwargs):
-        # TODO(tehrengruber): all of this can be done with the symbol table and the call inliner
+        # resolve call
+        func = symtable[node.func.name].value
+        method = func.find(*(deduce_type(symtable, arg) for arg in node.args))
 
-        arg_types = list(deduce_type(symtable, arg) for arg in node.args)
-
-        # method = built_in_functions.native_functions[node.func]
-        # TODO(workshop): would be nice if we could use `method.applicable`
-
-        if node.func in built_in_functions.native_functions and all(issubclass(arg_type, (numbers.Number, Field)) for arg_type in arg_types):
-            if len(node.args) != gtir.NativeFunction.IR_OP_TO_NUM_ARGS[node.func]:
-                raise ValueError()
+        #if node.func in built_in_functions.native_functions and all(issubclass(arg_type, (numbers.Number, Field)) for arg_type in arg_types):
+        if method in built_in_functions._native_functions:
+            assert len(node.args) == gtir.NativeFunction.IR_OP_TO_NUM_ARGS[method.name]
 
             native_func_call = gtir.NativeFuncCall(
-                func=gtir.NativeFunction(node.func),
+                func=gtir.NativeFunction(method.name),
                 args=self.visit(node.args, location_stack=location_stack, symtable=symtable, **kwargs),
                 location_type=location_stack[-1][1]
             )
             return native_func_call
 
-        elif node.func in built_in_functions.neighbor_reductions:
-            if any(method.applicable(arg_types) for method in getattr(built_in_functions, node.func).methods):
-                if not len(node.args):
-                    raise ValueError(
-                        f"Invalid number of arguments specified for function {node.func}. Expected 1, but {len(node.args)} were given."
-                    )
-                if not isinstance(node.args[0], Generator) or len(node.args[0].generators) != 1:
-                    raise ValueError("Invalid argument to {node.func}")
+        elif method in built_in_functions._neighbor_reductions:
+            assert len(node.args) == 1
+            if not isinstance(node.args[0], Generator) or len(node.args[0].generators) != 1:
+                raise ValueError("Invalid argument to {node.func}")
 
-                op = _reduction_mapping[node.func]
-                neighbors = self.visit(
-                    node.args[0].generators[0], **{**kwargs, "symtable": symtable, "location_stack": location_stack}
-                )
+            op = _reduction_mapping[method.name]
+            neighbors = self.visit(
+                node.args[0].generators[0], **{**kwargs, "symtable": symtable, "location_stack": location_stack}
+            )
 
-                # operand gets new location stack
-                new_location_stack = location_stack + [(node.args[0].generators[0].target, symtable[node.args[0].generators[0].iterable.value.name].type_.secondary_location())]
+            # operand gets new location stack
+            new_location_stack = location_stack + [(node.args[0].generators[0].target, symtable[node.args[0].generators[0].iterable.value.name].type_.secondary_location())]
 
-                operand = self.visit(
-                    node.args[0].elt, **{**kwargs, "symtable": {**symtable, **node.args[0].symtable_}, "location_stack": new_location_stack}
-                )
+            operand = self.visit(
+                node.args[0].elt, **{**kwargs, "symtable": {**symtable, **node.args[0].symtable_}, "location_stack": new_location_stack}
+            )
 
-                return gtir.NeighborReduce(
-                    op=op,
-                    operand=operand,
-                    neighbors=neighbors,
-                    location_type=location_stack[-1][1],
-                )
+            return gtir.NeighborReduce(
+                op=op,
+                operand=operand,
+                neighbors=neighbors,
+                location_type=location_stack[-1][1],
+            )
 
         raise ValueError(
             "Could not resolve call to function `{node.func}. Either the function does not exist or the arguments don't match.`")
