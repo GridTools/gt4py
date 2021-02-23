@@ -22,6 +22,33 @@ from gtc import common, oir
 from .utils import AccessCollector, symbol_name_creator
 
 
+"""Utilities for cache detection and modifications on the OIR level.
+
+Caches in GridTools terminology (with roots in STELLA) are local replacements
+of temporary fields, which are usually stored as full fields in global memory,
+by smaller buffers with more reuse (and faster memory on GPUs) or by registers.
+
+Ij-caches are used in purely horizontal k-parallel stencils and replace the
+fully 3D temporary field by 2D buffers (in block-local shared memory on GPUs
+and thread-local memory on CPUs).
+
+K-caches are used in vertical sweeps, most notably tridiagonal solvers. They
+cache values from vertical accesses in a ring buffer, that is shifted on each
+loop iteration. K-cache values can optionally be filled with values from global
+memory or flushed to global memory, then acting like normal temporary fields,
+but only requiring one read operation per loop iteration, independent of the
+number of vertical accesses. In cases, where a field is always written before
+read, the fill is not required. Similar, if a field is not read later, the
+flushes can be omitted. When fills and flushes are omitted, all field accesses
+are replaced by just a few registers.
+
+Note that filling and flushing k-caches can always be replaced by a local
+(non-filling or flushing) k-cache plus additional filling and flushing
+statements.
+
+"""
+
+
 class IJCacheDetection(NodeTranslator):
     def visit_VerticalLoop(
         self, node: oir.VerticalLoop, *, temporaries: List[oir.Temporary], **kwargs: Any
