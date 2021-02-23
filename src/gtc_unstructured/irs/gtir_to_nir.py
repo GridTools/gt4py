@@ -19,7 +19,7 @@ import copy
 from types import MappingProxyType
 from typing import ClassVar, Dict, List, Mapping
 
-import eve  # noqa: F401
+import eve
 from gtc_unstructured.irs import common, gtir, nir
 
 

@@ -3,7 +3,7 @@
 
 import os
 
-from devtools import debug  # noqa: F401
+from devtools import debug
 
 import eve  # noqa: F401
 from gtc_unstructured.irs.common import BinaryOperator, DataType, LocationType, LoopOrder
