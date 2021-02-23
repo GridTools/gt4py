@@ -266,7 +266,10 @@ class Model:
     )
     Model = context["Model"]
 
-    assert eval(Model.__datamodel_fields__.value.type) == eval(type_hint)
+    field_type = Model.__datamodel_fields__.value.type
+    if isinstance(field_type, str):
+        field_type = eval(field_type)
+    assert field_type == eval(type_hint)
 
     for value in valid_values:
         Model(value=value)

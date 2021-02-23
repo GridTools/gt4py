@@ -101,7 +101,7 @@ class _AttrClassLike(Protocol):
 
 
 class _DataClassLike(Protocol):
-    __dataclass_fields__: ClassVar[Tuple[dataclasses.Field, ...]]
+    __dataclass_fields__: ClassVar[Dict[str, dataclasses.Field]]
 
     def __post_init__(self) -> None:
         ...
@@ -140,6 +140,16 @@ BoundValidator = Callable[[attr.Attribute, T], None]
 
 RootValidatorFunc = Callable[[Type[DataModelLike], DataModelLike], None]
 BoundRootValidator = Callable[[DataModelLike], None]
+
+
+@typing.runtime_checkable
+class TypeWithAttrValidator(Protocol):
+    """Protocol for classes defining its own custom validator (when used as fields)."""
+
+    @property
+    @abc.abstractmethod
+    def __type_attr_validator__(self) -> attr._ValidatorType:
+        ...
 
 
 class GenericDataModelAlias(typing._GenericAlias, _root=True):  # type: ignore[name-defined]  # typing._GenericAlias not visible
@@ -199,14 +209,6 @@ class GenericDataModelAlias(typing._GenericAlias, _root=True):  # type: ignore[n
         return self.__origin__
 
 
-@typing.runtime_checkable
-class TypeWithAttrValidator(Protocol):
-    @property
-    @abc.abstractmethod
-    def __attr_type_validator__(self) -> attr._ValidatorType:
-        ...
-
-
 # Implementation
 _FIELD_VALIDATOR_TAG = "_FIELD_VALIDATOR_TAG"
 _MODEL_FIELDS = "__datamodel_fields__"
@@ -215,12 +217,41 @@ _ROOT_VALIDATOR_TAG = "__ROOT_VALIDATOR_TAG"
 _ROOT_VALIDATORS = "__datamodel_validators__"
 
 
-class _SENTINEL:
-    ...
+def _canonicalize_forwardref_type_hint(type_hint: Union[str, Type]) -> Type:
+    "Return the type hint without modifications or as a ForwardReference."
+    if isinstance(type_hint, ForwardRef):
+        return type_hint
+
+    base_hint = type_hint if isinstance(type_hint, str) else str(type_hint)
+    modified = False
+
+    while "ForwardRef(" in base_hint:
+        modified = True
+        start = base_hint.find("ForwardRef(")
+        offset = len("ForwardRef(")
+        nested = 0
+        for i, c in enumerate(base_hint[start + offset :]):
+            if c == ")":
+                if nested == 0:
+                    end = start + offset + i
+                    break
+                else:
+                    nested -= 1
+            elif c == "(":
+                nested += 1
+
+        content = (base_hint[start + offset : end]).strip(" \n\r\t\"'")
+        base_hint = base_hint[:start] + content + base_hint[end + 1 :]
+
+    return ForwardRef(base_hint) if modified else type_hint
 
 
-def _safe_get_class_type_hints(cls: Type) -> Dict[str, Type]:
-    """Resolve type_hints of a class keeping forward references if they are currently undefined.
+def _get_canonical_type_hints(cls: Type) -> Dict[str, Type]:
+    """Resolve class annotations returning forward references for partially undefined ones.
+
+    The canonicalization consists in returning either a fully-specified type
+    annotation or a :class:`typing.ForwarRef` instance with the type definition
+    for not fully-specified types.
 
     Based on :func:`typing.get_type_hints` implementation.
     """
@@ -238,48 +269,30 @@ def _safe_get_class_type_hints(cls: Type) -> Dict[str, Type]:
             try:
                 value = typing._eval_type(value, base_globals, None)  # type: ignore[attr-defined]  # typing._eval_type not public
             except NameError as e:
-                if "ForwardRef" not in repr(value):
+                if "ForwardRef(" not in repr(value):
                     raise e
+            if not isinstance(value, ForwardRef) and "ForwardRef(" in repr(value):
+                value = _canonicalize_forwardref_type_hint(value)
 
             hints[name] = value
 
     return hints
 
 
-@dataclasses.dataclass
-class _ValidatableForwardRef:
-    ref: ForwardRef
-
-    @property
-    def __attr_type_validator__(self) -> attr._ValidatorType:
-        return _ForwardRefAttrValidator(self.ref)
-
-
 # -- Validators --
-class LazyAttrValidator:
-    """Implementation of ``attr.s`` validator composing multiple validators together using OR."""
+@dataclasses.dataclass
+class _ForwardRefValidator:
+    validator: Optional[attr._ValidatorType] = None
 
     def __call__(self, instance: _AttrClassLike, attribute: attr.Attribute, value: Any) -> None:
-        self.make_validator(instance, attribute)(instance, attribute, value)
+        if self.validator is None:
+            model_cls = instance.__class__
+            update_forward_refs(model_cls)
+            self.validator = strict_type_attrs_validator(
+                getattr(getattr(model_cls, _MODEL_FIELDS), attribute.name).type
+            )
 
-    @abc.abstractmethod
-    def make_validator(
-        self, instance: _AttrClassLike, attribute: attr.Attribute
-    ) -> attr._ValidatorType:
-        ...
-
-
-@dataclasses.dataclass
-class _ForwardRefAttrValidator(LazyAttrValidator):
-    ref: ForwardRef
-
-    @abc.abstractmethod
-    def make_validator(
-        self, instance: _AttrClassLike, attribute: attr.Attribute
-    ) -> attr._ValidatorType:
-        return strict_type_attrs_validator(
-            self.ref._evaluate(sys.modules[instance.__module__].__dict__, None)
-        )
+        self.validator(instance, attribute, value)
 
 
 @dataclasses.dataclass
@@ -375,6 +388,15 @@ def instance_of_int_attrs_validator() -> attr._ValidatorType:
     return _int_validator
 
 
+def forwardref_type_attrs_validator() -> attr._ValidatorType:
+    """Create an ``attr.s`` strict type validator for ``ForwardRef`` typings.
+
+    The generated validator will resolve the field type to an actual type
+    the first time is called.
+    """
+    return _ForwardRefValidator()
+
+
 def or_attrs_validator(
     *validators: attr._ValidatorType, error_type: Type[Exception]
 ) -> attr._ValidatorType:
@@ -426,12 +448,10 @@ def strict_type_attrs_validator(
 ) -> attr._ValidatorType:
     """Create an ``attr.s`` strict type validator for a specific typing hint."""
 
-    if isinstance(type_hint, ForwardRef):
-        type_hint = _ValidatableForwardRef(type_hint)
-
-    origin_type = typing.get_origin(type_hint)
     type_args = typing.get_args(type_hint)
+    origin_type = typing.get_origin(type_hint)
 
+    # Non-generic types
     if isinstance(type_hint, type) and type_hint is not type(  # noqa: E721  # use isinstance()
         None
     ):
@@ -440,29 +460,35 @@ def strict_type_attrs_validator(
             return instance_of_int_attrs_validator()
         else:
             return attr.validators.instance_of(type_hint)
-    elif isinstance(type_hint, typing.TypeVar):
+    if isinstance(type_hint, typing.TypeVar):
         if type_hint.__bound__:
             return attr.validators.instance_of(type_hint.__bound__)
         else:
             return empty_attrs_validator()
-    elif type_hint is Any:
+    if isinstance(type_hint, ForwardRef):
+        return forwardref_type_attrs_validator()
+    if type_hint is Any:
         return empty_attrs_validator()
-    elif origin_type is typing.Literal:
+
+    # Generic and parametrized type hints
+    origin_type = typing.get_origin(type_hint)
+
+    if origin_type is typing.Literal:
         return literal_type_attrs_validator(*type_args)
-    elif origin_type is typing.Union:
+    if origin_type is typing.Union:
         return union_type_attrs_validator(*type_args)
-    elif isinstance(origin_type, type):
+    if isinstance(origin_type, type):
         # Deal with generic collections
         if issubclass(origin_type, tuple):
             return tuple_type_attrs_validator(*type_args, tuple_type=origin_type)
-        elif issubclass(origin_type, (collections.abc.Sequence, collections.abc.Set)):
+        if issubclass(origin_type, (collections.abc.Sequence, collections.abc.Set)):
             assert len(type_args) == 1
             member_type_hint = type_args[0]
             return attr.validators.deep_iterable(
                 member_validator=strict_type_attrs_validator(member_type_hint),
                 iterable_validator=attr.validators.instance_of(origin_type),
             )
-        elif issubclass(origin_type, collections.abc.Mapping):
+        if issubclass(origin_type, collections.abc.Mapping):
             assert len(type_args) == 2
             key_type_hint, value_type_hint = type_args
             return attr.validators.deep_mapping(
@@ -470,7 +496,8 @@ def strict_type_attrs_validator(
                 value_validator=strict_type_attrs_validator(value_type_hint),
                 mapping_validator=attr.validators.instance_of(origin_type),
             )
-    elif isinstance(type_hint, TypeWithAttrValidator):
+
+    if isinstance(type_hint, TypeWithAttrValidator):
         return type_hint.__attr_type_validator__
     else:
         raise TypeError(f"Type description '{type_hint}' is not supported.")
@@ -666,13 +693,13 @@ def _make_datamodel(
         cls.__annotations__ = {}
     annotations = cls.__dict__["__annotations__"]
     mro_bases: Tuple[Type, ...] = cls.__mro__[1:]
-    resolved_annotations = _safe_get_class_type_hints(cls)
+    canonicalized_annotations = _get_canonical_type_hints(cls)
 
     # Create attrib definitions with automatic type validators (and converters)
     # for the annotated fields. The original annotations are used for iteration
     # since the resolved annotations may also contain superclasses' annotations
     for key in annotations:
-        type_hint = resolved_annotations[key]
+        type_hint = annotations[key] = canonicalized_annotations[key]
         if typing.get_origin(type_hint) is not ClassVar:
             type_validator = strict_type_attrs_validator(type_hint)
             if key not in cls.__dict__:
@@ -695,7 +722,7 @@ def _make_datamodel(
     # All fields should be annotated with type hints
     for key, value in cls.__dict__.items():
         if isinstance(value, attr._make._CountingAttr) and (  # type: ignore  # attr._make is not visible for mypy
-            key not in annotations or typing.get_origin(resolved_annotations[key]) is ClassVar
+            key not in annotations or typing.get_origin(canonicalized_annotations[key]) is ClassVar
         ):
             raise TypeError(f"Missing type annotation in '{key}' field.")
 
@@ -1007,6 +1034,42 @@ def astuple(
         recurse=True,
         retain_collection_types=retain_collection_types,
     )
+
+
+def update_forward_refs(
+    model: Union[DataModelLike, Type[DataModelLike]], *, fields: Optional[List[str]] = None
+) -> None:
+    """Update Data Model class meta-information with the actual types for forwarded type annotations."""
+    if not fields:
+        fields = list(model.__datamodel_fields__.keys())
+
+    datamodel_fields_ns = getattr(model, _MODEL_FIELDS)
+    updated_fields: Dict[str, attr.Attribute] = {}
+
+    try:
+        for field_name in fields:
+            field_attr = getattr(datamodel_fields_ns, field_name)
+            if "ForwardRef(" in repr(field_attr.type):
+                actual_type = field_attr.type
+                while "ForwardRef(" in repr(actual_type):
+                    actual_type = typing._eval_type(
+                        actual_type,
+                        sys.modules[model.__module__].__dict__,
+                        {"typing": sys.modules["typing"], "NoneType": type(None)},
+                    )
+                new_attr = field_attr.evolve(type=actual_type)
+                object.__setattr__(datamodel_fields_ns, field_name, new_attr)
+                updated_fields[field_name] = new_attr
+    except Exception as e:
+        raise TypeError(
+            f"Unexpected error trying to solve '{field_name}' field annotation ('{field_attr.type}')"
+        ) from e
+
+    if updated_fields:
+        model.__attrs_attrs__ = tuple(updated_fields.get(a.name, a) for a in model.__attrs_attrs__)
+        for f_name, f_info in model.__dataclass_fields__.items():
+            if f_name in updated_fields:
+                f_info.type = updated_fields[f_name].type
 
 
 def concretize(
