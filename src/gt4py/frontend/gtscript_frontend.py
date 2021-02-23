@@ -17,7 +17,6 @@
 import ast
 import copy
 import enum
-import functools
 import inspect
 import itertools
 import numbers
