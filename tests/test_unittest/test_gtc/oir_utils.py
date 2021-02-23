@@ -20,12 +20,16 @@ from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
 from gtc.oir import (
     AssignStmt,
     AxisBound,
+    CacheDesc,
     Decl,
     Expr,
     FieldAccess,
     FieldDecl,
     HorizontalExecution,
+    IJCache,
     Interval,
+    KCache,
+    LocalScalar,
     ScalarAccess,
     ScalarDecl,
     Stencil,
@@ -33,6 +37,7 @@ from gtc.oir import (
     SymbolName,
     Temporary,
     VerticalLoop,
+    VerticalLoopSection,
 )
 
 
@@ -84,6 +89,15 @@ class FieldAccessBuilder:
         return FieldAccess(name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind)
 
 
+class LocalScalarBuilder:
+    def __init__(self, name: SymbolName = None, dtype: DataType = None) -> None:
+        self._name = name
+        self._dtype = DataType.FLOAT32 if dtype is None else dtype
+
+    def build(self) -> LocalScalar:
+        return LocalScalar(name=self._name, dtype=self._dtype)
+
+
 class TemporaryBuilder:
     def __init__(self, name: SymbolName = None, dtype: DataType = None) -> None:
         self._name = name
@@ -115,11 +129,19 @@ class FieldDeclBuilder:
 class HorizontalExecutionBuilder:
     def __init__(self) -> None:
         self._body: List[Stmt] = []
-        self._mask = None
+        self._mask: Optional[Expr] = None
         self._declarations: List[ScalarDecl] = []
 
     def add_stmt(self, stmt: Stmt) -> "HorizontalExecutionBuilder":
         self._body.append(stmt)
+        return self
+
+    def mask(self, mask: Expr) -> "HorizontalExecutionBuilder":
+        self._mask = mask
+        return self
+
+    def add_declaration(self, decl: ScalarDecl) -> "HorizontalExecutionBuilder":
+        self._declarations.append(decl)
         return self
 
     def build(self) -> HorizontalExecution:
@@ -128,29 +150,46 @@ class HorizontalExecutionBuilder:
         )
 
 
-class VerticalLoopBuilder:
+class VerticalLoopSectionBuilder:
     def __init__(self) -> None:
         self._interval = Interval(start=AxisBound.start(), end=AxisBound.end())
         self._horizontal_executions: List[HorizontalExecution] = []
-        self._loop_order = LoopOrder.PARALLEL
-        self._declarations: List[Temporary] = []
 
     def add_horizontal_execution(
         self, horizontal_execution: HorizontalExecution
-    ) -> "VerticalLoopBuilder":
+    ) -> "VerticalLoopSectionBuilder":
         self._horizontal_executions.append(horizontal_execution)
         return self
 
-    def add_declaration(self, declaration: Temporary) -> "VerticalLoopBuilder":
-        self._declarations.append(declaration)
+    def build(self) -> VerticalLoopSection:
+        return VerticalLoopSection(
+            interval=self._interval, horizontal_executions=self._horizontal_executions
+        )
+
+
+class VerticalLoopBuilder:
+    def __init__(self) -> None:
+        self._loop_order = LoopOrder.PARALLEL
+        self._sections: List[VerticalLoopSection] = []
+        self._caches: List[CacheDesc] = []
+
+    def loop_order(self, loop_order: LoopOrder) -> "VerticalLoopBuilder":
+        self._loop_order = loop_order
+        return self
+
+    def add_section(self, section: VerticalLoopSection) -> "VerticalLoopBuilder":
+        self._sections.append(section)
+        return self
+
+    def add_cache(self, cache: CacheDesc) -> "VerticalLoopBuilder":
+        self._caches.append(cache)
         return self
 
     def build(self) -> VerticalLoop:
         return VerticalLoop(
-            interval=self._interval,
-            horizontal_executions=self._horizontal_executions,
+            sections=self._sections,
             loop_order=self._loop_order,
-            declarations=self._declarations,
+            caches=self._caches,
         )
 
 
@@ -159,6 +198,7 @@ class StencilBuilder:
         self._name: str = name
         self._params: List[Decl] = []
         self._vertical_loops: List[VerticalLoop] = []
+        self._declarations: List[Temporary] = []
 
     def add_param(self, param: Decl) -> "StencilBuilder":
         self._params.append(param)
@@ -168,9 +208,32 @@ class StencilBuilder:
         self._vertical_loops.append(vertical_loop)
         return self
 
+    def add_declaration(self, declaration: Temporary) -> "StencilBuilder":
+        self._declarations.append(declaration)
+        return self
+
     def build(self) -> Stencil:
         return Stencil(
             name=self._name,
             params=self._params,
             vertical_loops=self._vertical_loops,
+            declarations=self._declarations,
         )
+
+
+class IJCacheBuilder:
+    def __init__(self, name):
+        self._name = name
+
+    def build(self) -> IJCache:
+        return IJCache(name=self._name)
+
+
+class KCacheBuilder:
+    def __init__(self, name, fill=True, flush=True):
+        self._name = name
+        self._fill = fill
+        self._flush = flush
+
+    def build(self) -> KCache:
+        return KCache(name=self._name, fill=self._fill, flush=self._flush)
