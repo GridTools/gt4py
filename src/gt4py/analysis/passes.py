@@ -17,6 +17,7 @@
 """Definitions and utilities used by all the analysis pipeline components.
 """
 
+import functools
 import itertools
 import warnings
 from typing import (
@@ -312,6 +313,19 @@ class InitInfoPass(TransformPass):
                 outputs |= stmt_info.outputs
             cond_info = self.visit(node.condition)
             inputs = self._merge_extents(list(inputs.items()) + cond_info)
+
+            result = StatementInfo(self.data.id_generator.new, node, inputs, outputs)
+
+            return result
+
+        def visit_HorizontalIf(self, node: gt_ir.HorizontalIf):
+            inputs = {}
+            outputs = set()
+
+            for stmt in node.body.stmts:
+                stmt_info = self.visit(stmt)
+                inputs = self._merge_extents(list(inputs.items()) + list(stmt_info.inputs.items()))
+                outputs |= stmt_info.outputs
 
             result = StatementInfo(self.data.id_generator.new, node, inputs, outputs)
 
@@ -829,8 +843,74 @@ class MergeBlocksPass(TransformPass):
         transform_data.blocks = merged_blocks
 
 
+def overlap_with_extent(
+    interval: gt_ir.AxisInterval, axis_extent: Tuple[int, int]
+) -> Optional[Tuple[int, int]]:
+    """Return a tuple of the distances to the edge of the compute domain, if overlapping."""
+    LARGE_NUM = 10000
+
+    if interval.start.level == gt_ir.LevelMarker.START:
+        start_diff = axis_extent[0] - interval.start.offset
+    else:
+        start_diff = None
+
+    if interval.end.level == gt_ir.LevelMarker.END:
+        end_diff = axis_extent[1] - interval.end.offset
+    else:
+        end_diff = None
+
+    if start_diff is not None and start_diff > 0 and end_diff is None:
+        if interval.end.offset <= axis_extent[0]:
+            return None
+    elif end_diff is not None and end_diff < 0 and start_diff is None:
+        if interval.start.offset > axis_extent[1]:
+            return None
+
+    start_diff = min(start_diff, 0) if start_diff is not None else -LARGE_NUM
+    end_diff = max(end_diff, 0) if end_diff is not None else LARGE_NUM
+    return (start_diff, end_diff)
+
+
+def compute_extent_diff(
+    compute_extent: gt_ir.Extent, intervals: Dict[str, gt_ir.AxisInterval]
+) -> Optional[Extent]:
+    parallel_axes_names = tuple(axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes)
+
+    diffs = []
+    for axis, extent in zip(parallel_axes_names, compute_extent):
+        interval = intervals[axis]
+        diff = overlap_with_extent(interval, extent)
+        if not diff:
+            return None
+        else:
+            diffs.append(diff)
+    return Extent(diffs)
+
+
+class RemoveUnreachedStatementsPass(TransformPass):
+    """Remove unreached HorizontalIf statements."""
+
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        for dom_block in transform_data.blocks:
+            for ij_block in dom_block.ij_blocks:
+                for int_block in ij_block.interval_blocks:
+                    stmts = []
+                    for stmt in int_block.stmts:
+                        if not isinstance(stmt, gt_ir.HorizontalIf):
+                            stmts.append(stmt)
+                        elif (
+                            compute_extent_diff(stmt.intervals, ij_block.compute_extent) is not None
+                        ):
+                            stmts.append(stmt)
+                    int_block.stmts = stmts
+
+
 class ComputeExtentsPass(TransformPass):
     """Loop over blocks backwards and accumulate extents.
+
+    This includes computing extents for the HorizontalIf blocks, and marking these
+    for deletion if they are unused.
 
     Note
     ----
@@ -860,16 +940,80 @@ class ComputeExtentsPass(TransformPass):
                 for name in ij_block.outputs:
                     ij_block.compute_extent |= access_extents[name]
                 for int_block in ij_block.interval_blocks:
-                    for name, extent in int_block.inputs.items():
-                        extent = Extent(
-                            list(extent[:seq_axis]) + [(0, 0)]
-                        )  # exclude sequential axis
-                        accumulated_extent = ij_block.compute_extent + extent
-                        access_extents[name] |= accumulated_extent
+                    for stmt_info in int_block.stmts:
+                        for name, extent in stmt_info.inputs.items():
+                            if isinstance(stmt_info.stmt, gt_ir.HorizontalIf):
+                                diffs = compute_extent_diff(extent, stmt_info.stmt.intervals)
+                                horiz_extent = Extent(extent[:seq_axis]) - diffs
+                            else:
+                                horiz_extent = extent[:seq_axis]
+                            extent = Extent(
+                                list(horiz_extent) + [(0, 0)]
+                            )  # exclude sequential axis
+                            accumulated_extent = ij_block.compute_extent + extent
+                            access_extents[name] |= accumulated_extent
 
         transform_data.implementation_ir.fields_extents = {
             name: Extent(extent) for name, extent in access_extents.items()
         }
+
+
+class LowerHorizontalIfPass(TransformPass):
+    """Transform HorizontalIf to If."""
+
+    class Lower(gt_ir.IRNodeMapper):
+        LARGE_NUM = 10000
+
+        @classmethod
+        def apply(cls, impl_node: gt_ir.StencilImplementation) -> None:
+            cls().visit(impl_node)
+
+        def visit_HorizontalIf(
+            self, path: tuple, node_name: str, node: gt_ir.HorizontalIf
+        ) -> gt_ir.If:
+            conditions = []
+            for axis, interval in node.intervals.items():
+                # start
+                if (
+                    interval.start != gt_ir.LevelMarker.START
+                    or interval.start.offset > -self.LARGE_NUM
+                ):
+                    conditions.append(
+                        gt_ir.BinOpExpr(
+                            op=gt_ir.BinaryOperator.GE,
+                            lhs=gt_ir.AxisIndex(axis=axis),
+                            rhs=gt_ir.AxisOffset(
+                                axis=axis, endpt=interval.start.level, offset=interval.start.offset
+                            ),
+                        )
+                    )
+
+                # end
+                if interval.end != gt_ir.LevelMarker.END or interval.end.offset < self.LARGE_NUM:
+                    conditions.append(
+                        gt_ir.BinOpExpr(
+                            op=gt_ir.BinaryOperator.LT,
+                            lhs=gt_ir.AxisIndex(axis=axis),
+                            rhs=gt_ir.AxisOffset(
+                                axis=axis, endpt=interval.end.level, offset=interval.end.offset
+                            ),
+                        )
+                    )
+
+            return (
+                True,
+                gt_ir.If(
+                    condition=functools.reduce(
+                        lambda x, y: gt_ir.BinOpExpr(op=gt_ir.BinaryOperator.AND, lhs=x, rhs=y),
+                        conditions,
+                    ),
+                    main_body=node.body,
+                ),
+            )
+
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        cls.Lower.apply(transform_data.implementation_ir)
 
 
 class DataTypePass(TransformPass):
