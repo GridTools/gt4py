@@ -6,15 +6,15 @@
 namespace gridtools::usid::naive::nabla_impl_ {
     struct v2e_tag : connectivity<7, true> {};
     struct e2v_tag : connectivity<2, false> {};
-    struct S_MXX_tag;
-    struct S_MYY_tag;
-    struct zavgS_MXX_tag;
-    struct zavgS_MYY_tag;
-    struct pnabla_MXX_tag;
-    struct pnabla_MYY_tag;
-    struct vol_tag;
+    struct S_MXX_tag {};
+    struct S_MYY_tag {};
+    struct zavgS_MXX_tag {};
+    struct zavgS_MYY_tag {};
+    struct pnabla_MXX_tag {};
+    struct pnabla_MYY_tag {};
+    struct vol_tag {};
     struct sign_tag : sparse_field<v2e_tag> {};
-    struct pp_tag;
+    struct pp_tag {};
     struct kernel_0 {
         GT_FUNCTION auto operator()() const {
             return [](auto &&ptr, auto &&strides, auto &&neighbors) {
@@ -53,7 +53,6 @@ namespace gridtools::usid::naive::nabla_impl_ {
             };
         }
     };
-
     inline constexpr auto nabla = [](domain d, auto &&v2e, auto &&e2v) {
         static_assert(is_sid<decltype(v2e(traits_t()))>());
         static_assert(is_sid<decltype(e2v(traits_t()))>());
@@ -74,19 +73,18 @@ namespace gridtools::usid::naive::nabla_impl_ {
                 auto zavgS_MYY = make_simple_tmp_storage<double>(d.edge, d.k, alloc);
                 call_kernel<kernel_0>(d.edge,
                     d.k,
-                    sid::composite::make<e2v_tag, S_MXX_tag, S_MYY_tag, zavgS_MXX_tag, zavgS_MYY_tag>(
+                    make_composite<e2v_tag, S_MXX_tag, S_MYY_tag, zavgS_MXX_tag, zavgS_MYY_tag>(
                         e2v, S_MXX, S_MYY, zavgS_MXX, zavgS_MYY),
-                    sid::composite::make<pp_tag>(pp));
+                    make_composite<pp_tag>(pp));
                 call_kernel<kernel_1>(d.vertex,
                     d.k,
-                    sid::composite::make<v2e_tag, pnabla_MXX_tag, pnabla_MYY_tag, sign_tag>(
-                        v2e, pnabla_MXX, pnabla_MYY, sid::rename_dimensions<dim::s, v2e_tag>(sign)),
-                    sid::composite::make<zavgS_MXX_tag, zavgS_MYY_tag>(zavgS_MXX, zavgS_MYY));
+                    make_composite<v2e_tag, pnabla_MXX_tag, pnabla_MYY_tag, sign_tag>(
+                        v2e, pnabla_MXX, pnabla_MYY, sign),
+                    make_composite<zavgS_MXX_tag, zavgS_MYY_tag>(zavgS_MXX, zavgS_MYY));
                 // TODO pole edge computation
                 call_kernel<kernel_2>(d.vertex,
                     d.k,
-                    sid::composite::make<v2e_tag, pnabla_MXX_tag, pnabla_MYY_tag, vol_tag>(
-                        v2e, pnabla_MXX, pnabla_MYY, vol));
+                    make_composite<v2e_tag, pnabla_MXX_tag, pnabla_MYY_tag, vol_tag>(v2e, pnabla_MXX, pnabla_MYY, vol));
             };
     };
 
