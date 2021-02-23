@@ -57,7 +57,8 @@ namespace gridtools {
                 static constexpr std::size_t cells = 9;
 
                 auto e2v() {
-                    return impl_::make_connectivity_producer<2>({{0, 1}, // 0
+                    return impl_::make_connectivity_producer<2>({//
+                        {0, 1},                                  // 0
                         {1, 2},
                         {2, 0},
                         {3, 4},
@@ -78,9 +79,9 @@ namespace gridtools {
                 }
 
                 auto c2c() {
-                    //constexpr std::size_t max_neighbors = 8;
-                    //std::vector<std::array<int, max_neighbors>> connectivity;
-                    //for (std::size_t i=0; i<3; ++i) {
+                    // constexpr std::size_t max_neighbors = 8;
+                    // std::vector<std::array<int, max_neighbors>> connectivity;
+                    // for (std::size_t i=0; i<3; ++i) {
                     //    for (std::size_t j=0; j<3; ++j) {
                     //        std::array<int, max_neighbors> neighbors{};
                     //        neighbors.fill(-1);
@@ -99,19 +100,19 @@ namespace gridtools {
                     //        connectivity.push_back(neighbors);
                     //    }
                     //}
-                    //return impl_::make_connectivity_producer<8>(connectivity);
+                    // return impl_::make_connectivity_producer<8>(connectivity);
 
                     // todo: fix this is c2e2c
                     return impl_::make_connectivity_producer<4>({
-                                     {6, 1, 3, 2}, // 0
-                                     {7, 2, 4, 0}, // 1
-                                     {8, 0, 5, 1}, // 2
-                                     {0, 4, 6, 5}, // 3
-                                     {1, 5, 7, 3}, // 4
-                                     {2, 3, 8, 4}, // 5
-                                     {3, 7, 0, 8}, // 6
-                                     {4, 8, 1, 6}, // 7
-                                     {5, 6, 2, 7}  // 8
+                        {6, 1, 3, 2}, // 0
+                        {7, 2, 4, 0}, // 1
+                        {8, 0, 5, 1}, // 2
+                        {0, 4, 6, 5}, // 3
+                        {1, 5, 7, 3}, // 4
+                        {2, 3, 8, 4}, // 5
+                        {3, 7, 0, 8}, // 6
+                        {4, 8, 1, 6}, // 7
+                        {5, 6, 2, 7}  // 8
                     });
                 }
             };

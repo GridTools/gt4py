@@ -94,9 +94,7 @@ comp = gtir.Computation(name="sten", params=[field_in, field_out], stencils=[ste
 # debug(comp)
 
 nir_comp = GtirToNir().visit(comp)
-debug(nir_comp)
 usid_comp = NirToUsid().visit(nir_comp)
-debug(usid_comp)
 
 generated_code = UsidGpuCodeGenerator.apply(usid_comp)
 print(generated_code)

@@ -97,9 +97,7 @@ def main():
 
     nir_comp = GtirToNir().visit(comp)
     nir_comp = find_and_merge_horizontal_loops(nir_comp)
-    debug(nir_comp)
     usid_comp = NirToUsid().visit(nir_comp)
-    debug(usid_comp)
 
     if mode == "unaive":
         code_generator = UsidNaiveCodeGenerator

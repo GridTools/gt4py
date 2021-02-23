@@ -77,18 +77,6 @@ def main():
         )
     ]
 
-    # hloop0 = HorizontalLoop(
-    #     stmt=LocalFieldDecl(
-    #         name="weights",
-    #         connectivity=ConnectivityRef(name="e2v"),
-    #         init=[
-    #             Literal(value="-1", vtype=dtype, location_type=LocationType.Vertex),
-    #             Literal(value="1", vtype=dtype, location_type=LocationType.Vertex),
-    #         ],
-    #         location_type=LocationType.Edge,
-    #     ),
-    #     location=PrimaryLocation(name="edge", location_type=LocationType.Edge),
-    # )
     hloop0 = HorizontalLoop(
         stmt=NeighborAssignStmt(
             left=FieldAccess(
@@ -104,7 +92,7 @@ def main():
                 location_ref=LocationRef(name="v_neighs_of_e"),
                 location_type=LocationType.Edge,  # wrong
             ),
-            neighbors=LocationComprehension(name="v_neighs_of_e", of=ConnectivityRef(name="e2v")),
+            neighbors=LocationComprehension(name="other_v_of_e", of=ConnectivityRef(name="e2v")),
             location_type=LocationType.Edge,
         ),
         location=PrimaryLocation(name="edge", location_type=LocationType.Edge),
@@ -161,9 +149,7 @@ def main():
 
     nir_comp = GtirToNir().visit(comp)
     nir_comp = find_and_merge_horizontal_loops(nir_comp)
-    debug(nir_comp)
     usid_comp = NirToUsid().visit(nir_comp)
-    debug(usid_comp)
 
     if mode == "unaive":
         code_generator = UsidNaiveCodeGenerator
