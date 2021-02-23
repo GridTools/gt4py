@@ -123,7 +123,7 @@ class OnTheFlyMerging(NodeTranslator):
         1. Get output fields of the first horizontal execution.
         2. Check in which following h. execs. the outputs are read.
         3. Duplicate the body of the first h. exec. for each read access (with corresponding offset) and prepend it to the depending h. execs.
-        4. Recursve on the resulting h. execs.
+        4. Recurse on the resulting h. execs.
         """
         if len(horizontal_executions) <= 1:
             return horizontal_executions
