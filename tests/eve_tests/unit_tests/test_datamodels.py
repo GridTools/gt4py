@@ -121,7 +121,7 @@ class GenericModelFactory(factory.Factory):
 
 
 @pytest.fixture(params=example_model_factories)
-def example_model_factory(request) -> datamodels.DataModelLike:
+def example_model_factory(request) -> datamodels.DataModelTp:
     return request.param
 
 
@@ -502,7 +502,7 @@ class ChildModelWithRootValidators(ModelWithRootValidators):
 
 
 @pytest.mark.parametrize("model_class", [ModelWithRootValidators, ChildModelWithRootValidators])
-def test_root_validators(model_class: Type[datamodels.DataModelLike]):
+def test_root_validators(model_class: Type[datamodels.DataModelTp]):
     model_class(int_value=0, float_value=1.1, str_value="")
     with pytest.raises(ValueError, match="float_value"):
         model_class(int_value=1, float_value=1.0, str_value="")
@@ -661,11 +661,11 @@ def test_info_functions():
     [int, List[float], Tuple[int, ...], Optional[int], Union[int, float]],
 )
 def test_generic_model_instantiation_name(concrete_type: Type):
-    Model = datamodels.concretize(GenericModel, concrete_type)  # type: ignore  # GenericModel is not detected as GenericDataModelLike
+    Model = datamodels.concretize(GenericModel, concrete_type)  # type: ignore[misc]  # GenericModel is not detected as GenericDataModelTp
     assert Model.__name__.startswith(GenericModel.__name__)
     assert Model.__name__ != GenericModel.__name__
 
-    Model = datamodels.concretize(GenericModel, concrete_type, class_name="MyNewConcreteClass")  # type: ignore  # GenericModel is not detected as GenericDataModelLike
+    Model = datamodels.concretize(GenericModel, concrete_type, class_name="MyNewConcreteClass")  # type: ignore[misc]  # GenericModel is not detected as GenericDataModelTp
     assert Model.__name__ == "MyNewConcreteClass"
 
 
@@ -674,12 +674,12 @@ def test_generic_model_instantiation_name(concrete_type: Type):
     [int, List[float], Tuple[int, ...], Optional[int], Union[int, float]],
 )
 def test_generic_model_alias(concrete_type: Type):
-    Model = datamodels.concretize(GenericModel, concrete_type)  # type: ignore  # GenericModel is not detected as GenericDataModelLike
+    Model = datamodels.concretize(GenericModel, concrete_type)  # type: ignore[misc]  # GenericModel is not detected as GenericDataModelTp
 
-    assert GenericModel[concrete_type].__class__ is Model  # type: ignore  # using run-time type on purpose
-    assert typing.get_origin(GenericModel[concrete_type]) is Model  # type: ignore  # using run-time type on purpose
+    assert GenericModel[concrete_type].__class__ is Model  # type: ignore[valid-type]  # using run-time type on purpose
+    assert typing.get_origin(GenericModel[concrete_type]) is Model  # type: ignore[valid-type]  # using run-time type on purpose
 
-    class SubModel(GenericModel[concrete_type]):  # type: ignore  # using run-time type on purpose
+    class SubModel(GenericModel[concrete_type]):  # type: ignore[valid-type]  # using run-time type on purpose
         ...
 
     assert SubModel.__base__ is Model
@@ -731,7 +731,7 @@ def test_concrete_field_type_validation(
     type_hint: str, valid_values: Sequence[Any], wrong_values: Sequence[Any]
 ):
     concrete_type: Type = eval(type_hint)
-    Model: Type[datamodels.DataModelLike] = GenericModel[concrete_type].__class__  # type: ignore[valid-type,assignment]
+    Model: Type[datamodels.DataModelTp] = GenericModel[concrete_type].__class__  # type: ignore[valid-type,assignment]
 
     for value in valid_values:
         Model(value=value)

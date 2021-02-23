@@ -60,7 +60,6 @@ from __future__ import annotations
 import abc
 import collections
 import dataclasses
-import functools
 import sys
 import typing
 import warnings
@@ -96,11 +95,11 @@ T = TypeVar("T")
 V = TypeVar("V")
 
 
-class _AttrClassLike(Protocol):
+class _AttrClassTp(Protocol):
     __attrs_attrs__: ClassVar[Tuple[attr.Attribute, ...]]
 
 
-class _DataClassLike(Protocol):
+class _DataClassTp(Protocol):
     __dataclass_fields__: ClassVar[Dict[str, dataclasses.Field]]
 
     def __post_init__(self) -> None:
@@ -112,34 +111,34 @@ class _DevToolsPrettyPrintable(Protocol):
         ...
 
 
-class DataModelLike(_AttrClassLike, _DataClassLike, _DevToolsPrettyPrintable, Protocol):
+class DataModelTp(_AttrClassTp, _DataClassTp, _DevToolsPrettyPrintable, Protocol):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         ...
 
     __datamodel_fields__: ClassVar[utils.FrozenNamespace]
     __datamodel_params__: ClassVar[utils.FrozenNamespace]
     __datamodel_validators__: ClassVar[
-        Tuple[NonDataDescriptor[DataModelLike, BoundRootValidator], ...]
+        Tuple[NonDataDescriptor[DataModelTp, BoundRootValidator], ...]
     ]
 
 
-class GenericDataModelLike(DataModelLike, Protocol):
+class GenericDataModelTp(DataModelTp, Protocol):
     __args__: ClassVar[Tuple[Union[Type, TypeVar]]]
     __parameters__: ClassVar[Tuple[TypeVar]]
-    __class__: ClassVar[DataModelLike]  # type: ignore[assignment]
+    __class__: ClassVar[DataModelTp]  # type: ignore[assignment]
 
     @classmethod
     def __class_getitem__(
-        cls: Type[GenericDataModelLike], args: Union[Type, Tuple[Type]]
+        cls: Type[GenericDataModelTp], args: Union[Type, Tuple[Type]]
     ) -> GenericDataModelAlias:
         ...
 
 
-ValidatorFunc = Callable[[DataModelLike, attr.Attribute, T], None]
+ValidatorFunc = Callable[[DataModelTp, attr.Attribute, T], None]
 BoundValidator = Callable[[attr.Attribute, T], None]
 
-RootValidatorFunc = Callable[[Type[DataModelLike], DataModelLike], None]
-BoundRootValidator = Callable[[DataModelLike], None]
+RootValidatorFunc = Callable[[Type[DataModelTp], DataModelTp], None]
+BoundRootValidator = Callable[[DataModelTp], None]
 
 
 @typing.runtime_checkable
@@ -152,7 +151,7 @@ class TypeWithAttrValidator(Protocol):
         ...
 
 
-class GenericDataModelAlias(typing._GenericAlias, _root=True):  # type: ignore[name-defined]  # typing._GenericAlias not visible
+class GenericDataModelAlias(typing._GenericAlias, _root=True):  # type: ignore[call-arg,name-defined]  # typing._GenericAlias not visible
     """Custom class alias compatible with aliases created by ``typing.Generic``.
 
     This class emulates the :class:`typing._GenericAlias` behavior, to be
@@ -195,14 +194,14 @@ class GenericDataModelAlias(typing._GenericAlias, _root=True):  # type: ignore[n
             - https://www.python.org/dev/peps/pep-0560/
     """
 
-    __origin__: Type[GenericDataModelLike]
+    __origin__: Type[GenericDataModelTp]
 
     def __getitem__(self, args: Union[Type, Tuple[Type]]) -> GenericDataModelAlias:
-        origin_model: Type[GenericDataModelLike] = self.__origin__
+        origin_model: Type[GenericDataModelTp] = self.__origin__
         assert isinstance(origin_model, type) and is_generic(origin_model)
         return origin_model.__class_getitem__(args)  # equivalent to: self.__origin__[args]
 
-    @property  # type: ignore  # Read-only property cannot override read-write property
+    @property  # type: ignore[misc]  # Read-only property cannot override read-write property
     def __class__(self) -> Type:
         """Return the concrete class represented by this instance."""
         assert isinstance(self.__origin__, type)
@@ -217,14 +216,15 @@ _ROOT_VALIDATOR_TAG = "__ROOT_VALIDATOR_TAG"
 _ROOT_VALIDATORS = "__datamodel_validators__"
 
 
-def _canonicalize_forwardref_type_hint(type_hint: Union[str, Type]) -> Type:
-    "Return the type hint without modifications or as a ForwardReference."
+def _canonicalize_forwardref_type_hint(
+    type_hint: Union[Type, ForwardRef]
+) -> Union[Type, ForwardRef]:
+    """Return the type hint without modifications or as a ForwardReference."""
     if isinstance(type_hint, ForwardRef):
         return type_hint
 
-    base_hint = type_hint if isinstance(type_hint, str) else str(type_hint)
+    base_hint = str(type_hint)
     modified = False
-
     while "ForwardRef(" in base_hint:
         modified = True
         start = base_hint.find("ForwardRef(")
@@ -246,7 +246,7 @@ def _canonicalize_forwardref_type_hint(type_hint: Union[str, Type]) -> Type:
     return ForwardRef(base_hint) if modified else type_hint
 
 
-def _get_canonical_type_hints(cls: Type) -> Dict[str, Type]:
+def _get_canonical_type_hints(cls: Type) -> Dict[str, Union[Type, ForwardRef]]:
     """Resolve class annotations returning forward references for partially undefined ones.
 
     The canonicalization consists in returning either a fully-specified type
@@ -255,7 +255,7 @@ def _get_canonical_type_hints(cls: Type) -> Dict[str, Type]:
 
     Based on :func:`typing.get_type_hints` implementation.
     """
-    hints: Dict[str, Type] = {}
+    hints: Dict[str, Union[Type, ForwardRef]] = {}
 
     for base in reversed(cls.__mro__):
         base_globals = sys.modules[base.__module__].__dict__
@@ -284,7 +284,7 @@ def _get_canonical_type_hints(cls: Type) -> Dict[str, Type]:
 class _ForwardRefValidator:
     validator: Optional[attr._ValidatorType] = None
 
-    def __call__(self, instance: _AttrClassLike, attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, instance: DataModelTp, attribute: attr.Attribute, value: Any) -> None:
         if self.validator is None:
             model_cls = instance.__class__
             update_forward_refs(model_cls)
@@ -304,7 +304,7 @@ class _TupleValidator:
     #: Class used in the container ``isintance()`` check.
     tuple_type: Type[Tuple]
 
-    def __call__(self, instance: _AttrClassLike, attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, instance: _AttrClassTp, attribute: attr.Attribute, value: Any) -> None:
         if not isinstance(value, self.tuple_type):
             raise TypeError(
                 f"In '{attribute.name}' validation, got '{value}' that is a {type(value)} instead of {self.tuple_type}."
@@ -334,7 +334,7 @@ class _OrValidator:
     #: Exception class for validation errors.
     error_type: Type[Exception]
 
-    def __call__(self, instance: _AttrClassLike, attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, instance: _AttrClassTp, attribute: attr.Attribute, value: Any) -> None:
         passed = False
         for v in self.validators:
             try:
@@ -356,7 +356,7 @@ class _LiteralValidator:
 
     literal: Any
 
-    def __call__(self, instance: _AttrClassLike, attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, instance: _AttrClassTp, attribute: attr.Attribute, value: Any) -> None:
         if isinstance(self.literal, bool):
             valid = value is self.literal
         else:
@@ -370,7 +370,7 @@ class _LiteralValidator:
 def empty_attrs_validator() -> attr._ValidatorType:
     """Create an ``attr.s`` empty validator which always succeeds."""
 
-    def _empty_validator(instance: _AttrClassLike, attribute: attr.Attribute, value: Any) -> None:
+    def _empty_validator(instance: _AttrClassTp, attribute: attr.Attribute, value: Any) -> None:
         pass
 
     return _empty_validator
@@ -379,7 +379,7 @@ def empty_attrs_validator() -> attr._ValidatorType:
 def instance_of_int_attrs_validator() -> attr._ValidatorType:
     """Create an ``attr.s`` validator for ``int`` values which fails with ``bool`` values."""
 
-    def _int_validator(instance: _AttrClassLike, attribute: attr.Attribute, value: Any) -> None:
+    def _int_validator(instance: _AttrClassTp, attribute: attr.Attribute, value: Any) -> None:
         if not isinstance(value, int) or isinstance(value, bool):
             raise TypeError(
                 f"'{attribute.name}' must be {int} (got '{value}' that is a {type(value)})."
@@ -447,7 +447,6 @@ def strict_type_attrs_validator(
     type_hint: Any, *, forward_eval_module: Optional[str] = None
 ) -> attr._ValidatorType:
     """Create an ``attr.s`` strict type validator for a specific typing hint."""
-
     type_args = typing.get_args(type_hint)
     origin_type = typing.get_origin(type_hint)
 
@@ -498,7 +497,7 @@ def strict_type_attrs_validator(
             )
 
     if isinstance(type_hint, TypeWithAttrValidator):
-        return type_hint.__attr_type_validator__
+        return type_hint.__type_attr_validator__
     else:
         raise TypeError(f"Type description '{type_hint}' is not supported.")
 
@@ -578,21 +577,21 @@ def _make_counting_attr_from_attribute(
     if include_type:
         members.append("type")
 
-    return attr.ib(**{key: getattr(field_attrib, key) for key in members}, **kwargs)  # type: ignore  # too hard for mypy
+    return attr.ib(**{key: getattr(field_attrib, key) for key in members}, **kwargs)  # type: ignore[call-overload]  # too hard for mypy
 
 
 def _make_dataclass_field_from_attr(field_attrib: attr.Attribute) -> dataclasses.Field:
     MISSING = getattr(dataclasses, "MISSING", NOTHING)
     default = MISSING
     default_factory = MISSING
-    if isinstance(field_attrib.default, attr.Factory):  # type: ignore  # attr.s lies on purpose in some typings
-        default_factory = field_attrib.default.factory  # type: ignore  # attr.s lies on purpose in some typings
+    if isinstance(field_attrib.default, attr.Factory):  # type: ignore[arg-type]  # attr.s lies on purpose in some typings
+        default_factory = field_attrib.default.factory  # type: ignore[union-attr]  # attr.s lies on purpose in some typings
     elif field_attrib.default is not attr.NOTHING:
         default = field_attrib.default
 
     assert field_attrib.eq == field_attrib.order  # dataclasses.compare == (attr.eq and attr.order)
 
-    dataclasses_field = dataclasses.Field(  # type: ignore  # dataclasses.Field signature seems invisible to mypy
+    dataclasses_field = dataclasses.Field(  # type: ignore[call-arg,var-annotated]  # dataclasses.Field signature seems invisible to mypy
         default=default,
         default_factory=default_factory,
         init=field_attrib.init,
@@ -610,26 +609,26 @@ def _make_dataclass_field_from_attr(field_attrib: attr.Attribute) -> dataclasses
 
 
 def _make_non_instantiable_init() -> Callable[..., None]:
-    def __init__(self: DataModelLike, *args: Any, **kwargs: Any) -> None:
+    def __init__(self: DataModelTp, *args: Any, **kwargs: Any) -> None:
         raise TypeError(f"Trying to instantiate '{type(self).__name__}' abstract class.")
 
     return __init__
 
 
-def _make_post_init(has_post_init: bool) -> Callable[[DataModelLike], None]:
+def _make_post_init(has_post_init: bool) -> Callable[[DataModelTp], None]:
     # Duplicated code to facilitate the source inspection of the generated `__init__()` method
     if has_post_init:
 
-        def __attrs_post_init__(self: DataModelLike) -> None:
-            if attr._config._run_validators is True:  # type: ignore  # attr._config is not visible for mypy
+        def __attrs_post_init__(self: DataModelTp) -> None:
+            if attr._config._run_validators is True:  # type: ignore[attr-defined]  # attr._config is not visible for mypy
                 for validator in type(self).__datamodel_validators__:
                     validator.__get__(self)(self)
                 self.__post_init__()
 
     else:
 
-        def __attrs_post_init__(self: DataModelLike) -> None:
-            if attr._config._run_validators is True:  # type: ignore  # attr._config is not visible for mypy
+        def __attrs_post_init__(self: DataModelTp) -> None:
+            if attr._config._run_validators is True:  # type: ignore[attr-defined]  # attr._config is not visible for mypy
                 for validator in type(self).__datamodel_validators__:
                     validator.__get__(self)(self)
 
@@ -637,10 +636,10 @@ def _make_post_init(has_post_init: bool) -> Callable[[DataModelLike], None]:
 
 
 def _make_devtools_pretty() -> Callable[
-    [DataModelLike, Callable[[Any], Any]], Generator[Any, None, None]
+    [DataModelTp, Callable[[Any], Any]], Generator[Any, None, None]
 ]:
     def __pretty__(
-        self: DataModelLike, fmt: Callable[[Any], Any], **kwargs: Any
+        self: DataModelTp, fmt: Callable[[Any], Any], **kwargs: Any
     ) -> Generator[Any, None, None]:
         """Provide a human readable representation for `devtools <https://python-devtools.helpmanual.io/>`.
 
@@ -662,7 +661,7 @@ def _make_devtools_pretty() -> Callable[
 
 def _make_data_model_class_getitem() -> classmethod:
     def __class_getitem__(
-        cls: Type[GenericDataModelLike], args: Union[Type, Tuple[Type]]
+        cls: Type[GenericDataModelTp], args: Union[Type, Tuple[Type]]
     ) -> GenericDataModelAlias:
         """Return an instance compatible with aliases created by :class:`typing.Generic` classes.
 
@@ -704,7 +703,7 @@ def _make_datamodel(
             type_validator = strict_type_attrs_validator(type_hint)
             if key not in cls.__dict__:
                 setattr(cls, key, attr.ib(validator=type_validator))
-            elif not isinstance(cls.__dict__[key], attr._make._CountingAttr):  # type: ignore  # attr._make is not visible for mypy
+            elif not isinstance(cls.__dict__[key], attr._make._CountingAttr):  # type: ignore[attr-defined]  # attr._make is not visible for mypy
                 setattr(cls, key, attr.ib(default=cls.__dict__[key], validator=type_validator))
             else:
                 # A field() function has been used to customize the definition:
@@ -712,7 +711,7 @@ def _make_datamodel(
                 cls.__dict__[key]._validator = (
                     type_validator
                     if cls.__dict__[key]._validator is None
-                    else attr._make.and_(type_validator, cls.__dict__[key]._validator)  # type: ignore  # attr._make is not visible for mypy
+                    else attr._make.and_(type_validator, cls.__dict__[key]._validator)  # type: ignore[attr-defined]  # attr._make is not visible for mypy
                 )
 
                 # TODO(egparedes): implement type coercing
@@ -721,7 +720,7 @@ def _make_datamodel(
 
     # All fields should be annotated with type hints
     for key, value in cls.__dict__.items():
-        if isinstance(value, attr._make._CountingAttr) and (  # type: ignore  # attr._make is not visible for mypy
+        if isinstance(value, attr._make._CountingAttr) and (  # type: ignore[attr-defined]  # attr._make is not visible for mypy
             key not in annotations or typing.get_origin(canonicalized_annotations[key]) is ClassVar
         ):
             raise TypeError(f"Missing type annotation in '{key}' field.")
@@ -747,7 +746,7 @@ def _make_datamodel(
                 raise TypeError(f"Validator assigned to non existing '{field_name}' field.")
 
         # Add field validator using field_attr.validator
-        assert isinstance(field_c_attr, attr._make._CountingAttr)  # type: ignore  # attr._make is not visible for mypy
+        assert isinstance(field_c_attr, attr._make._CountingAttr)  # type: ignore[attr-defined]  # attr._make is not visible for mypy
         field_c_attr.validator(field_validator)
 
     setattr(cls, _ROOT_VALIDATORS, tuple(root_validators))
@@ -768,7 +767,7 @@ def _make_datamodel(
 
     attr_settings = {"auto_attribs": True, "slots": False, "kw_only": True}
     hash_arg = None if not unsafe_hash else True
-    new_cls = attr.define(  # type: ignore  # attr.define is not visible for mypy
+    new_cls = attr.define(  # type: ignore[attr-defined]  # attr.define is not visible for mypy
         **attr_settings,
         init=instantiable,
         repr=repr,
@@ -811,11 +810,11 @@ def _make_datamodel(
 
 @utils.optional_lru_cache(maxsize=None, typed=True)
 def _make_concrete_with_cache(
-    datamodel_cls: Type[GenericDataModelLike],
+    datamodel_cls: Type[GenericDataModelTp],
     *type_args: Type,
     class_name: Optional[str] = None,
     module: Optional[str] = None,
-) -> Type[DataModelLike]:
+) -> Type[DataModelTp]:
     if not is_generic(datamodel_cls):
         raise TypeError(f"'{datamodel_cls.__name__}' is not a generic model class.")
     for t in type_args:
@@ -890,7 +889,7 @@ def is_datamodel(obj: Any) -> bool:
     return hasattr(cls, _MODEL_FIELDS)
 
 
-def is_generic(model: Union[DataModelLike, Type[DataModelLike]]) -> bool:
+def is_generic(model: Union[DataModelTp, Type[DataModelTp]]) -> bool:
     """Return True if `model` is a generic Data Model class or an instance of a generic Data Model."""
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
@@ -898,7 +897,7 @@ def is_generic(model: Union[DataModelLike, Type[DataModelLike]]) -> bool:
     return len(getattr(model, "__parameters__", [])) > 0
 
 
-def is_instantiable(model: Type[DataModelLike]) -> bool:
+def is_instantiable(model: Type[DataModelTp]) -> bool:
     """Return True if `model` is a instantiable Data Model class or an instance of a instantiable Data Model."""
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
@@ -910,20 +909,20 @@ def is_instantiable(model: Type[DataModelLike]) -> bool:
 
 @typing.overload
 def get_fields(
-    model: Union[DataModelLike, Type[DataModelLike]], *, as_dataclass: Literal[False] = False
+    model: Union[DataModelTp, Type[DataModelTp]], *, as_dataclass: Literal[False] = False
 ) -> utils.FrozenNamespace:
     ...
 
 
 @typing.overload
 def get_fields(
-    model: Union[DataModelLike, Type[DataModelLike]], *, as_dataclass: Literal[True]
+    model: Union[DataModelTp, Type[DataModelTp]], *, as_dataclass: Literal[True]
 ) -> Tuple[dataclasses.Field, ...]:
     ...
 
 
 def get_fields(
-    model: Union[DataModelLike, Type[DataModelLike]], *, as_dataclass: bool = False
+    model: Union[DataModelTp, Type[DataModelTp]], *, as_dataclass: bool = False
 ) -> Union[utils.FrozenNamespace, Tuple[dataclasses.Field, ...]]:
     """Return the field meta-information of a Data Model.
 
@@ -968,7 +967,7 @@ fields = get_fields
 
 
 def asdict(
-    instance: DataModelLike,
+    instance: DataModelTp,
     *,
     dict_factory: Type[Mapping[Any, Any]] = dict,
     retain_collection_types: bool = False,
@@ -1002,7 +1001,7 @@ def asdict(
 
 
 def astuple(
-    instance: DataModelLike,
+    instance: DataModelTp,
     *,
     tuple_factory: Type[Sequence[Any]] = tuple,
     retain_collection_types: bool = False,
@@ -1037,9 +1036,14 @@ def astuple(
 
 
 def update_forward_refs(
-    model: Union[DataModelLike, Type[DataModelLike]], *, fields: Optional[List[str]] = None
+    model: Union[DataModelTp, Type[DataModelTp]], *, fields: Optional[List[str]] = None
 ) -> None:
     """Update Data Model class meta-information with the actual types for forwarded type annotations."""
+    if not is_datamodel(model):
+        raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
+    if not isinstance(model, type):
+        model = model.__class__
+
     if not fields:
         fields = list(model.__datamodel_fields__.keys())
 
@@ -1052,7 +1056,7 @@ def update_forward_refs(
             if "ForwardRef(" in repr(field_attr.type):
                 actual_type = field_attr.type
                 while "ForwardRef(" in repr(actual_type):
-                    actual_type = typing._eval_type(
+                    actual_type = typing._eval_type(  # type: ignore[attr-defined]  # typing._eval_type is not visible for mypy
                         actual_type,
                         sys.modules[model.__module__].__dict__,
                         {"typing": sys.modules["typing"], "NoneType": type(None)},
@@ -1060,6 +1064,7 @@ def update_forward_refs(
                 new_attr = field_attr.evolve(type=actual_type)
                 object.__setattr__(datamodel_fields_ns, field_name, new_attr)
                 updated_fields[field_name] = new_attr
+
     except Exception as e:
         raise TypeError(
             f"Unexpected error trying to solve '{field_name}' field annotation ('{field_attr.type}')"
@@ -1069,18 +1074,20 @@ def update_forward_refs(
         model.__attrs_attrs__ = tuple(updated_fields.get(a.name, a) for a in model.__attrs_attrs__)
         for f_name, f_info in model.__dataclass_fields__.items():
             if f_name in updated_fields:
-                f_info.type = updated_fields[f_name].type
+                actual_type = updated_fields[f_name].type
+                assert actual_type is not None
+                f_info.type = actual_type
 
 
 def concretize(
-    datamodel_cls: Type[GenericDataModelLike],
+    datamodel_cls: Type[GenericDataModelTp],
     /,
     *type_args: Type,
     class_name: Optional[str] = None,
     module: Optional[str] = None,
     support_pickling: bool = True,  # noqa
     overwrite_definition: bool = True,
-) -> Type[DataModelLike]:
+) -> Type[DataModelTp]:
     """Generate a new concrete subclass of a generic Data Model.
 
     Arguments:
@@ -1213,7 +1220,7 @@ def field(
     if default_factory is not NOTHING:
         defaults_kwargs["factory"] = default_factory
 
-    return attr.ib(  # type: ignore  # attr.s lies on purpose in some typings
+    return attr.ib(  # type: ignore[call-overload]  # attr.s lies on purpose in some typings
         **defaults_kwargs,
         init=init,
         repr=repr,
@@ -1281,7 +1288,7 @@ def datamodel(
     return _decorator(cls) if cls is not None else _decorator
 
 
-class DataModel(DataModelLike):
+class DataModel(DataModelTp):
     """Base class to automatically convert any subclass into a Data Model.
 
     Inheriting from this class is equivalent to apply the :func:`datamodel`
@@ -1305,7 +1312,7 @@ class DataModel(DataModelLike):
         instantiable: bool = True,
         **kwargs: Any,
     ) -> None:
-        super().__init_subclass__(**kwargs)  # type: ignore  # super() does not need to be object
+        super().__init_subclass__(**kwargs)  # type: ignore[call-arg]  # super() does not need to be object
         _make_datamodel(
             cls,
             repr=repr,
