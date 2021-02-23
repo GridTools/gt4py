@@ -576,9 +576,6 @@ def validate_lvalue_dims() -> RootValidatorType:
     """Validate lvalue dimensions using the root node symbol table."""
 
     class _LvalueDimsValidator(NodeVisitor):
-        def __init__(self, root_symtable: Dict[str, Any]):
-            self.root_symtable = root_symtable
-
         def visit_Node(self, node: Node, symtable: Dict[str, Any], **kwargs: Any) -> None:
             if hasattr(node, "loop_order"):
                 kwargs["loop_order"] = node.loop_order
@@ -609,7 +606,7 @@ def validate_lvalue_dims() -> RootValidatorType:
         cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
     ) -> RootValidatorValuesType:
         vertical_loops = values["vertical_loops"]
-        _LvalueDimsValidator(symbols).visit(vertical_loops, symtable=values["symtable_"])
+        _LvalueDimsValidator().visit(vertical_loops, symtable=values["symtable_"])
         return values
 
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
