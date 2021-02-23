@@ -107,12 +107,12 @@ class PruneKCacheFlushes(NodeTranslator):
             return oir.KCache(name=node.name, fill=node.fill, flush=False)
         return self.generic_visit(node, **kwargs)
 
-    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.KCache:
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         accesses = [AccessCollector.apply(vertical_loop) for vertical_loop in node.vertical_loops]
         vertical_loops = []
         for i, vertical_loop in enumerate(node.vertical_loops):
             flushing_fields = {
-                c.name for c in vertical_loop.caches if isinstance(c, oir.KCache) and c.flush
+                str(c.name) for c in vertical_loop.caches if isinstance(c, oir.KCache) and c.flush
             }
             read_only_fields = flushing_fields & (
                 accesses[i].read_fields() - accesses[i].write_fields()
@@ -120,7 +120,7 @@ class PruneKCacheFlushes(NodeTranslator):
             future_reads: Set[str] = set()
             future_reads = future_reads.union(*(acc.read_fields() for acc in accesses[i + 1 :]))
             tmps_without_reuse = (
-                flushing_fields & {d.name for d in node.declarations}
+                flushing_fields & {str(d.name) for d in node.declarations}
             ) - future_reads
             pruneable = read_only_fields | tmps_without_reuse
             vertical_loops.append(self.visit(vertical_loop, pruneable=pruneable, **kwargs))
@@ -132,7 +132,7 @@ class PruneKCacheFlushes(NodeTranslator):
         )
 
 
-class _ToLocalKCachesBase(NodeTranslator):
+class FillFlushToLocalKCaches(NodeTranslator):
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, name_map: Dict[str, str], **kwargs: Any
     ) -> oir.FieldAccess:
@@ -147,32 +147,17 @@ class _ToLocalKCachesBase(NodeTranslator):
             raise NotImplementedError("Multiple horizontal_executions are not supported")
         return self.generic_visit(node, **kwargs)
 
-    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        new_tmps: List[oir.Temporary] = []
-        return oir.Stencil(
-            name=node.name,
-            params=node.params,
-            vertical_loops=self.visit(
-                node.vertical_loops,
-                new_tmps=new_tmps,
-                symtable=node.symtable_,
-                new_symbol_name=symbol_name_creator(set(node.symtable_)),
-            ),
-            declarations=node.declarations + new_tmps,
-        )
-
-
-class FillToLocalKCaches(_ToLocalKCachesBase):
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
         *,
         name_map: Dict[str, str],
         fills: List[oir.Stmt],
+        flushes: List[oir.Stmt],
         **kwargs: Any,
     ) -> oir.HorizontalExecution:
         return oir.HorizontalExecution(
-            body=fills + self.visit(node.body, name_map=name_map, **kwargs),
+            body=fills + self.visit(node.body, name_map=name_map, **kwargs) + flushes,
             mask=self.visit(node.mask, name_map=name_map, **kwargs),
             declarations=node.declarations,
         )
@@ -269,7 +254,7 @@ class FillToLocalKCaches(_ToLocalKCachesBase):
         fill_limits = cls._fill_limits(loop_order, section)
         max_required_fills = 0
         for field in filling_fields:
-            lmin, lmax = fill_limits[field]
+            lmin, lmax = fill_limits.get(field, (0, 0))
             required_fills = lmax + 1 - max(lmin, first_unfilled.get(field, lmin))
             max_required_fills = max(required_fills, max_required_fills)
             first_unfilled[field] = lmax
@@ -300,98 +285,26 @@ class FillToLocalKCaches(_ToLocalKCachesBase):
         fill_limits = cls._fill_limits(loop_order, section)
         fill_stmts = []
         for field, cache in filling_fields.items():
-            lmin, lmax = fill_limits[field]
+            lmin, lmax = fill_limits.get(field, (0, 0))
             lmin = max(lmin, first_unfilled.get(field, lmin))
             for offset in range(lmin, lmax + 1):
+                k_offset = common.CartesianOffset(
+                    i=0,
+                    j=0,
+                    k=offset if loop_order == common.LoopOrder.FORWARD else -offset,
+                )
                 fill_stmts.append(
                     oir.AssignStmt(
                         left=oir.FieldAccess(
-                            name=cache,
-                            dtype=symtable[field].dtype,
-                            offset=common.CartesianOffset.zero(),
+                            name=cache, dtype=symtable[field].dtype, offset=k_offset
                         ),
                         right=oir.FieldAccess(
-                            name=field,
-                            dtype=symtable[field].dtype,
-                            offset=common.CartesianOffset(
-                                i=0,
-                                j=0,
-                                k=offset if loop_order == common.LoopOrder.FORWARD else -offset,
-                            ),
+                            name=field, dtype=symtable[field].dtype, offset=k_offset
                         ),
                     )
                 )
             first_unfilled[field] = lmax
         return fill_stmts, first_unfilled
-
-    def visit_VerticalLoop(
-        self,
-        node: oir.VerticalLoop,
-        *,
-        new_tmps: List[oir.Temporary],
-        symtable: Dict[str, Any],
-        new_symbol_name: Callable[[str], str],
-        **kwargs: Any,
-    ) -> oir.VerticalLoop:
-        filling_fields = {
-            str(c.name): new_symbol_name(c.name)
-            for c in node.caches
-            if isinstance(c, oir.KCache) and c.fill
-        }
-
-        if not filling_fields:
-            return node
-
-        # new temporaries used for caches, declarations are later added to stencil
-        for field_name, tmp_name in filling_fields.items():
-            new_tmps.append(oir.Temporary(name=tmp_name, dtype=symtable[field_name].dtype))
-
-        # split sections where more than one fill operations are required at the entry level
-        first_unfilled: Dict[str, int] = dict()
-        split_sections: List[oir.VerticalLoopSection] = []
-        for section in node.sections:
-            split_section, previous_fills = self._split_section_with_multiple_fills(
-                node.loop_order, section, filling_fields, first_unfilled
-            )
-            split_sections += split_section
-
-        # generate cache filling statements
-        first_unfilled = dict()
-        sections = []
-        for section in split_sections:
-            fills, first_unfilled = self._fill_stmts(
-                node.loop_order, section, filling_fields, first_unfilled, symtable
-            )
-            sections.append(self.visit(section, fills=fills, name_map=filling_fields, **kwargs))
-
-        # replace fill cache declarations
-        caches = (
-            [c for c in node.caches if c.name not in filling_fields]
-            + [oir.KCache(name=f, fill=False, flush=False) for f in filling_fields.values()]
-            + [
-                oir.KCache(name=c.name, fill=False, flush=True)
-                for c in node.caches
-                if c.name in filling_fields and c.flush
-            ]
-        )
-
-        return oir.VerticalLoop(loop_order=node.loop_order, sections=sections, caches=caches)
-
-
-class FlushToLocalKCaches(_ToLocalKCachesBase):
-    def visit_HorizontalExecution(
-        self,
-        node: oir.HorizontalExecution,
-        *,
-        name_map: Dict[str, str],
-        flushes: List[oir.Stmt],
-        **kwargs: Any,
-    ) -> oir.HorizontalExecution:
-        return oir.HorizontalExecution(
-            body=self.visit(node.body, name_map=name_map, **kwargs) + flushes,
-            mask=self.visit(node.mask, name_map=name_map, **kwargs),
-            declarations=node.declarations,
-        )
 
     @classmethod
     def _flush_stmts(
@@ -440,35 +353,75 @@ class FlushToLocalKCaches(_ToLocalKCachesBase):
         new_symbol_name: Callable[[str], str],
         **kwargs: Any,
     ) -> oir.VerticalLoop:
-        flushing_fields = {
-            str(c.name): new_symbol_name(c.name)
+        filling_fields: Dict[str, str] = {
+            c.name: new_symbol_name(c.name)
+            for c in node.caches
+            if isinstance(c, oir.KCache) and c.fill
+        }
+        flushing_fields: Dict[str, str] = {
+            c.name: filling_fields[c.name] if c.name in filling_fields else new_symbol_name(c.name)
             for c in node.caches
             if isinstance(c, oir.KCache) and c.flush
         }
-        if not flushing_fields:
-            return node
 
-        for field_name, tmp_name in flushing_fields.items():
-            new_tmps.append(oir.Temporary(name=tmp_name, dtype=symtable[field_name].dtype))
-
-        sections = [
-            self.visit(
-                section,
-                flushes=self._flush_stmts(node.loop_order, section, flushing_fields, symtable),
-                name_map=flushing_fields,
-                **kwargs,
-            )
-            for section in node.sections
-        ]
-
-        caches = (
-            [c for c in node.caches if c.name not in flushing_fields]
-            + [oir.KCache(name=f, fill=False, flush=False) for f in flushing_fields.values()]
-            + [
-                oir.KCache(name=c.name, fill=True, flush=False)
-                for c in node.caches
-                if c.name in flushing_fields and c.fill
-            ]
+        filling_or_flushing_fields = dict(
+            set(filling_fields.items()) | set(flushing_fields.items())
         )
 
+        if not filling_or_flushing_fields:
+            return node
+
+        # new temporaries used for caches, declarations are later added to stencil
+        for field_name, tmp_name in filling_or_flushing_fields.items():
+            new_tmps.append(oir.Temporary(name=tmp_name, dtype=symtable[field_name].dtype))
+
+        if filling_fields:
+            # split sections where more than one fill operations are required at the entry level
+            first_unfilled: Dict[str, int] = dict()
+            split_sections: List[oir.VerticalLoopSection] = []
+            for section in node.sections:
+                split_section, previous_fills = self._split_section_with_multiple_fills(
+                    node.loop_order, section, filling_fields, first_unfilled
+                )
+                split_sections += split_section
+        else:
+            split_sections = node.sections
+
+        # generate cache fill and flush statements
+        first_unfilled = dict()
+        sections = []
+        for section in split_sections:
+            fills, first_unfilled = self._fill_stmts(
+                node.loop_order, section, filling_fields, first_unfilled, symtable
+            )
+            flushes = self._flush_stmts(node.loop_order, section, flushing_fields, symtable)
+            sections.append(
+                self.visit(
+                    section,
+                    fills=fills,
+                    flushes=flushes,
+                    name_map=filling_or_flushing_fields,
+                    **kwargs,
+                )
+            )
+
+        # replace cache declarations
+        caches = [c for c in node.caches if c.name not in filling_or_flushing_fields] + [
+            oir.KCache(name=f, fill=False, flush=False) for f in filling_or_flushing_fields.values()
+        ]
+
         return oir.VerticalLoop(loop_order=node.loop_order, sections=sections, caches=caches)
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        new_tmps: List[oir.Temporary] = []
+        return oir.Stencil(
+            name=node.name,
+            params=node.params,
+            vertical_loops=self.visit(
+                node.vertical_loops,
+                new_tmps=new_tmps,
+                symtable=node.symtable_,
+                new_symbol_name=symbol_name_creator(set(node.symtable_)),
+            ),
+            declarations=node.declarations + new_tmps,
+        )
