@@ -21,14 +21,16 @@ namespace gridtools::usid::cuda {
 
     inline auto make_allocator() { return sid::device::make_cached_allocator(&cuda_util::cuda_malloc<char[]>); }
 
-    template <class Kernel, class Ptr, class Strides, class... Neighbors>
-    __global__ void kernel(int h_size, int k_size, Ptr ptr_holder, Strides strides, Neighbors... neighbors) {
+    template <class Kernel, class KLoop, class Ptr, class Strides, class... Neighbors>
+    __global__ void kernel(int h_size, KLoop kloop, Ptr ptr_holder, Strides strides, Neighbors... neighbors) {
         auto h = blockIdx.x * blockDim.x + threadIdx.x;
         if (h >= h_size)
             return;
 
-        sid::make_loop<dim::k>(k_size)([&](auto &ptr, auto const &strides) {
-            Kernel()()(ptr, strides, tuple_util::device::make<pair>(neighbors.first(), neighbors.second)...);
+        kloop([neighbors_tuple = tuple_util::device::make<tuple>(tuple_util::device::make<pair>(
+                   neighbors.first(), neighbors.second)...)](auto &ptr, auto const &strides) {
+            tuple_util::device::apply(
+                Kernel()(), tuple_util::device::concat(tuple_util::device::make<tuple>(ptr, strides), neighbors_tuple));
         })(sid::shifted(ptr_holder(), device::at_key<dim::h>(strides), h), strides);
     }
 
@@ -37,7 +39,7 @@ namespace gridtools::usid::cuda {
         int threads_per_block = 32;
         int blocks = (h_size + threads_per_block - 1) / threads_per_block;
         kernel<Kernel><<<blocks, threads_per_block>>>(h_size,
-            k_size,
+            sid::make_loop<dim::k>(k_size),
             sid::get_origin(fields),
             sid::get_strides(fields),
             tuple_util::make<pair>(
