@@ -22,19 +22,54 @@ from gtc import common, oir
 from .utils import AccessCollector, symbol_name_creator
 
 
+"""Utilities for cache detection and modifications on the OIR level.
+
+Caches in GridTools terminology (with roots in STELLA) are local replacements
+of temporary fields, which are usually stored as full fields in global memory,
+by smaller buffers with more reuse (and faster memory on GPUs) or by registers.
+
+Ij-caches are used in purely horizontal k-parallel stencils and replace the
+fully 3D temporary field by 2D buffers (in block-local shared memory on GPUs
+and thread-local memory on CPUs).
+
+K-caches are used in vertical sweeps, most notably tridiagonal solvers. They
+cache values from vertical accesses in a ring buffer, that is shifted on each
+loop iteration. K-cache values can optionally be filled with values from global
+memory or flushed to global memory, then acting like normal temporary fields,
+but only requiring one read operation per loop iteration, independent of the
+number of vertical accesses. In cases, where a field is always written before
+read, the fill is not required. Similar, if a field is not read later, the
+flushes can be omitted. When fills and flushes are omitted, all field accesses
+are replaced by just a few registers.
+
+Note that filling and flushing k-caches can always be replaced by a local
+(non-filling or flushing) k-cache plus additional filling and flushing
+statements.
+
+"""
+
+
 class IJCacheDetection(NodeTranslator):
     def visit_VerticalLoop(
         self, node: oir.VerticalLoop, *, temporaries: List[oir.Temporary], **kwargs: Any
     ) -> oir.VerticalLoop:
         if node.loop_order != common.LoopOrder.PARALLEL:
             return self.generic_visit(node, **kwargs)
+
+        def is_tmp(field: str) -> bool:
+            return field in {tmp.name for tmp in temporaries}
+
+        def already_cached(field: str) -> bool:
+            return field in {c.name for c in node.caches}
+
+        def has_vertical_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
+            return any(offset[2] != 0 for offset in offsets)
+
         accesses = AccessCollector.apply(node).offsets()
         cacheable = {
             field
             for field, offsets in accesses.items()
-            if field in {tmp.name for tmp in temporaries}
-            and field not in {c.name for c in node.caches}
-            and all(o[2] == 0 for o in offsets)
+            if is_tmp(field) and not already_cached(field) and not has_vertical_offset(offsets)
         }
         caches = self.visit(node.caches, **kwargs) + [
             oir.IJCache(name=field) for field in cacheable
@@ -53,14 +88,24 @@ class KCacheDetection(NodeTranslator):
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
         if node.loop_order == common.LoopOrder.PARALLEL:
             return self.generic_visit(node, **kwargs)
-        accesses = AccessCollector.apply(node).offsets()
+
+        def accessed_more_than_once(offsets: Set[Any]) -> bool:
+            return len(offsets) > 1
+
+        def already_cached(field: str) -> bool:
+            return field in {c.name for c in node.caches}
+
         # TODO: k-caches with non-zero ij offsets?
+        def has_horizontal_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
+            return any(offset[:2] != (0, 0) for offset in offsets)
+
+        accesses = AccessCollector.apply(node).offsets()
         cacheable = {
             field
             for field, offsets in accesses.items()
-            if field not in {c.name for c in node.caches}
-            and len(offsets) > 1
-            and all(o[:2] == (0, 0) for o in offsets)
+            if not already_cached(field)
+            and accessed_more_than_once(offsets)
+            and not has_horizontal_offset(offsets)
         }
         caches = self.visit(node.caches, **kwargs) + [
             oir.KCache(name=field, fill=True, flush=True) for field in cacheable
@@ -73,6 +118,14 @@ class KCacheDetection(NodeTranslator):
 
 
 class PruneKCacheFills(NodeTranslator):
+    """Prunes unneeded k-cache fills.
+
+    A fill is classified as required if at least one of the two following conditions holds in any of the loop sections:
+    * There is a read with offset in the direction of looping.
+    * The first centered access is a read access.
+    If none of the conditions holds for any loop section, the fill is considered as unneeded.
+    """
+
     def visit_KCache(self, node: oir.KCache, *, pruneable: Set[str], **kwargs: Any) -> oir.KCache:
         if node.name in pruneable:
             return oir.KCache(name=node.name, fill=False, flush=node.flush)
@@ -84,24 +137,36 @@ class PruneKCacheFills(NodeTranslator):
             return self.generic_visit(node, **kwargs)
         assert node.loop_order != common.LoopOrder.PARALLEL
 
-        accesses = AccessCollector.apply(node)
-        offsets = accesses.offsets()
-        center_accesses = [a for a in accesses.ordered_accesses() if a.offset == (0, 0, 0)]
+        def pruneable_fields(section: oir.VerticalLoopSection) -> Set[str]:
+            accesses = AccessCollector.apply(section)
+            offsets = accesses.offsets()
+            center_accesses = [a for a in accesses.ordered_accesses() if a.offset == (0, 0, 0)]
 
-        def requires_fill(field: str) -> bool:
-            k_offsets = (o[2] for o in offsets[field])
-            if node.loop_order == common.LoopOrder.FORWARD and max(k_offsets) > 0:
-                return True
-            if node.loop_order == common.LoopOrder.BACKWARD and min(k_offsets) < 0:
-                return True
-            return next(a.is_read for a in center_accesses if a.field == field)
+            def requires_fill(field: str) -> bool:
+                k_offsets = (o[2] for o in offsets[field])
+                if node.loop_order == common.LoopOrder.FORWARD and max(k_offsets) > 0:
+                    return True
+                if node.loop_order == common.LoopOrder.BACKWARD and min(k_offsets) < 0:
+                    return True
+                try:
+                    return next(a.is_read for a in center_accesses if a.field == field)
+                except StopIteration:
+                    return False
 
-        pruneable = {field for field in filling_fields if not requires_fill(field)}
+            return {field for field in filling_fields if not requires_fill(field)}
 
+        pruneable = set.intersection(*(pruneable_fields(section) for section in node.sections))
         return self.generic_visit(node, pruneable=pruneable, **kwargs)
 
 
 class PruneKCacheFlushes(NodeTranslator):
+    """Prunes unneeded k-cache flushes.
+
+    A flush is classified as unneeded under the following conditions:
+    * All accesses to the field are read-only in the current vertical loop.
+    * There are no read accesses to the field in a following loop.
+    """
+
     def visit_KCache(self, node: oir.KCache, *, pruneable: Set[str], **kwargs: Any) -> oir.KCache:
         if node.name in pruneable:
             return oir.KCache(name=node.name, fill=node.fill, flush=False)
@@ -133,6 +198,16 @@ class PruneKCacheFlushes(NodeTranslator):
 
 
 class FillFlushToLocalKCaches(NodeTranslator):
+    """Converts fill and flush k-caches to local k-caches.
+
+    For each cached field, the following actions are performed:
+    1. A new locally-k-cached temporary is introduced.
+    2. All accesses to the original field are replaced by accesses to this temporary.
+    3. Loop sections are split where necessary to allow single-level loads whereever possible.
+    3. Fill statements from the original field to the temporary are introduced.
+    4. Flush statements from the temporary to the original field are introduced.
+    """
+
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, name_map: Dict[str, str], **kwargs: Any
     ) -> oir.FieldAccess:
