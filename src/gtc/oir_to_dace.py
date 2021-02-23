@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import dace
 import numpy as np
@@ -64,13 +64,14 @@ class OirToSDFGVisitor(NodeVisitor):
         j_shape = f"J+{access_space.j_interval.end.offset-access_space.j_interval.start.offset}"
         return (i_shape, j_shape, "K")
 
-    def _get_input_subset(self, node: oir.VerticalLoop, name, origin):
+    def _get_input_subset(self, sections: Tuple[oir.Interval, SDFG], name, origin):
         access_space = oir.CartesianIterationSpace.domain()
-        access_k_interval = node.sections[0].interval
+        access_k_interval = sections[0][0]
+        import networkx as nx
 
-        for section in node.sections:
-            interval = section.interval
-            for he in section.horizontal_executions:
+        for interval, sdfg in sections:
+            for ln in nx.topological_sort(sdfg.states()[0].nx):
+                he = ln.oir_node
                 iteration_space = he.iteration_space
                 he_access_space = oir.CartesianIterationSpace.domain()
                 assert he.iteration_space is not None
@@ -89,13 +90,14 @@ class OirToSDFGVisitor(NodeVisitor):
 
         return self._access_space_to_subset(access_space, access_k_interval, origin)
 
-    def _get_output_subset(self, node, name, origin):
+    def _get_output_subset(self, sections: Tuple[oir.Interval, SDFG], name, origin):
         access_space = oir.CartesianIterationSpace.domain()
-        access_k_interval = node.sections[0].interval
+        access_k_interval = sections[0][0]
+        import networkx as nx
 
-        for section in node.sections:
-            interval = section.interval
-            for he in section.horizontal_executions:
+        for interval, sdfg in sections:
+            for ln in nx.topological_sort(sdfg.states()[0].nx):
+                he = ln.oir_node
                 iteration_space = he.iteration_space
                 he_access_space = oir.CartesianIterationSpace.domain()
                 assert he.iteration_space is not None
@@ -109,11 +111,10 @@ class OirToSDFGVisitor(NodeVisitor):
 
         return self._access_space_to_subset(access_space, access_k_interval, origin)
 
-    def _add_write_edges_forward(self, ln, access_collections, context, origins):
+    def _add_write_edges_forward(self, ln, vl, access_collections, context, origins):
         write_fields = set(
             name for collection in access_collections.values() for name in collection.write_fields()
         )
-        vl = ln.oir_node
         for name in write_fields:
 
             recent_read_node = None
@@ -153,7 +154,7 @@ class OirToSDFGVisitor(NodeVisitor):
 
             ln.add_out_connector("OUT_" + name)
 
-            subset = self._get_output_subset(vl, name, origins[name])
+            subset = self._get_output_subset(ln.sections, name, origins[name])
             context.state.add_edge(
                 ln,
                 "OUT_" + name,
@@ -170,17 +171,16 @@ class OirToSDFGVisitor(NodeVisitor):
                 candidate_node.access = dace.AccessType.ReadWrite
 
     def _add_read_edges_forward(self, ln, access_collections, context, origins):
-        vl = ln.oir_node
         reads = set(
             name for collection in access_collections.values() for name in collection.read_fields()
         )
         # for reads: add edge from last access node with an overlaping write to LN
         for name in reads:
             most_recent_write = None
-            for section in vl.sections:
-                access_collection = access_collections[section.id_]
+            for section_interval, section_sdfg in ln.sections:
+                access_collection = access_collections[section_sdfg.name]
                 for offset in access_collection.read_offsets()[name]:
-                    interval = section.interval.shift(offset[2])
+                    interval = section_interval.shift(offset[2])
                     if (
                         name in context.recent_write_accesses
                         and len(context.recent_write_accesses[name][interval]) > 0
@@ -224,7 +224,7 @@ class OirToSDFGVisitor(NodeVisitor):
                 access_node.access = dace.AccessType.ReadWrite
             ln.add_in_connector("IN_" + name)
 
-            subset = self._get_input_subset(vl, name, origins[name])
+            subset = self._get_input_subset(ln.sections, name, origins[name])
             context.state.add_edge(
                 access_node,
                 None,
@@ -258,7 +258,7 @@ class OirToSDFGVisitor(NodeVisitor):
 
         # for writes: add edge to existing last access if None of its reads or writes overlap with the write and
         #   otherwise, add new access node
-        self._add_write_edges_forward(ln, access_collections, context, origins)
+        self._add_write_edges_forward(ln, vl, access_collections, context, origins)
 
     def visit_Decl(
         self,
