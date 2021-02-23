@@ -94,11 +94,11 @@ class IRTransformer:
         # Turn compute units into atomic execution units
         NormalizeBlocksPass.apply(self.transform_data)
 
-        # Remove HorizontalIf statements that do not have an effect
-        RemoveUnreachedStatementsPass.apply(self.transform_data)
-
         # Compute stage extents
         ComputeExtentsPass.apply(self.transform_data)
+
+        # Remove HorizontalIf statements that do not have an effect
+        RemoveUnreachedStatementsPass.apply(self.transform_data)
 
         # Merge compatible blocks
         MergeBlocksPass.apply(self.transform_data)

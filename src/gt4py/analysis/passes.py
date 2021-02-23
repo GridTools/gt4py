@@ -945,14 +945,17 @@ class ComputeExtentsPass(TransformPass):
                         for name, extent in stmt_info.inputs.items():
                             if isinstance(stmt_info.stmt, gt_ir.HorizontalIf):
                                 diffs = compute_extent_diff(extent, stmt_info.stmt.intervals)
-                                horiz_extent = Extent(extent[:seq_axis]) - diffs
+                                overlaps = diffs is not None
                             else:
-                                horiz_extent = extent[:seq_axis]
-                            extent = Extent(
-                                list(horiz_extent) + [(0, 0)]
-                            )  # exclude sequential axis
-                            accumulated_extent = ij_block.compute_extent + extent
-                            access_extents[name] |= accumulated_extent
+                                diffs = Extent.zeros()
+                                overlaps = True
+                            if overlaps:
+                                horiz_extent = extent[:seq_axis] - diffs
+                                extent = Extent(
+                                    list(horiz_extent) + [(0, 0)]
+                                )  # exclude sequential axis
+                                accumulated_extent = ij_block.compute_extent + extent
+                                access_extents[name] |= accumulated_extent
 
         transform_data.implementation_ir.fields_extents = {
             name: Extent(extent) for name, extent in access_extents.items()
