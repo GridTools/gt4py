@@ -24,7 +24,6 @@ from . import built_in_types
 from .gtscript_ast import External, Argument
 from gtc_unstructured.frontend.gtscript_to_gtir import (
     GTScriptToGTIR,
-    SymbolTable,
     NodeCanonicalizer
 )
 from gtc_unstructured.frontend.py_to_gtscript import PyToGTScript
@@ -41,23 +40,6 @@ from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator
 #  the meantime.
 class GTScriptCompilationTask:
     def __init__(self, definition):
-        self.symbol_table = SymbolTable(
-            types={
-                "dtype": common.DataType,
-                "Vertex": common.LocationType,
-                "Edge": common.LocationType,
-                "Cell": common.LocationType,
-            },
-            constants={
-                "dtype": common.DataType.FLOAT64,
-                "Vertex": common.LocationType.Vertex,
-                "Edge": common.LocationType.Edge,
-                "Cell": common.LocationType.Cell,
-                # "Field": Field,
-                # "Mesh": Mesh
-            },
-        )
-
         self.definition = definition
         self.source = None
         self.python_ast = None
@@ -97,11 +79,6 @@ class GTScriptCompilationTask:
     def _generate_gtir(self):
         # Canonicalization
         NodeCanonicalizer.apply(self.gtscript_ast)
-
-        # Populate symbol table
-        #VarDeclExtractor.apply(self.symbol_table, self.gtscript_ast)
-        #TemporaryFieldDeclExtractor.apply(self.symbol_table, self.gtscript_ast)
-        #SymbolResolutionValidation.apply(self.symbol_table, self.gtscript_ast)
 
         # Transform into GTIR
         self.gtir = GTScriptToGTIR.apply(self.gtscript_ast)

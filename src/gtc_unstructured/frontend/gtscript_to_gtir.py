@@ -27,7 +27,7 @@ from gtc import common as stable_gtc_common
 
 from . import built_in_functions
 from .built_in_types import BuiltInTypeMeta, BuiltInType
-from .gtscript import Field, Location, Connectivity, TemporaryField, SparseField, TemporarySparseField
+from .gtscript import Field, Location, Connectivity, TemporaryField, SparseField, TemporarySparseField, LocalField
 from .gtscript_ast import (
     Argument,
     Assign,
@@ -51,6 +51,8 @@ from .gtscript_ast import (
     TemporarySparseFieldDecl,
     UnaryOp
 )
+from .passes.const_expr_evaluator import evaluate_const_expr
+from .passes.type_deduction import deduce_type
 
 _reduction_mapping = {
     "sum": gtir.ReduceOperator.ADD,
@@ -58,59 +60,6 @@ _reduction_mapping = {
     "min": gtir.ReduceOperator.MIN,
     "max": gtir.ReduceOperator.MAX,
 }
-
-
-class SymbolTable:
-    """
-    A simple symbol table containing all the types of all symbols and potentially their values if known at compile
-    time
-    """
-
-    def __init__(self, types: Dict[str, Any], constants: Dict[str, Any]):
-        # Currently supported types: BuiltInType, LocationType, DataType
-        self.types = types
-        self.constants = constants
-
-    def __contains__(self, symbol: str) -> bool:
-        return symbol in self.types
-
-    def __getitem__(self, symbol: str) -> Any:
-        return self.types[symbol]
-
-    def __setitem__(self, symbol: str, val: Any):
-        if symbol in self.types:
-            if (
-                    self.types[symbol] == val
-            ):  # TODO(tehrengruber): just a workaround. remove when symbol table has proper scope!
-                return self.types[symbol]
-            raise ValueError(f"Symbol `{symbol}` already in symbol table.")
-
-        self.types[symbol] = val
-        return self.types[symbol]
-
-    # todo(tehrengruber): decide on constant folding: what, when, how?
-    def materialize_constant(self, symbol: str, expected_type=None):
-        """
-        Materialize constant `symbol`, i.e. return the value of that symbol.
-
-        Currently the only constants are types, but this is currently the place where constant folding would happen,
-        hence the name.
-
-        Example:
-        .. code-block:: python
-
-            self._materialize_constant("Vertex") == LocationType.Vertex
-        """
-        if symbol not in self.types:
-            raise ValueError(f"Symbol {symbol} not found")
-        if symbol not in self.constants:
-            raise ValueError(f"Symbol {symbol} : {self.types[symbol]} is not a constant")
-        val = self.constants[symbol]
-        if expected_type is not None and not isinstance(val, expected_type):
-            raise ValueError(
-                f"Expected a symbol {symbol} of type {expected_type}, but got {self.types[symbol]}"
-            )
-        return val
 
 
 class NodeCanonicalizer(eve.NodeTranslator):
@@ -172,110 +121,6 @@ class NodeCanonicalizer(eve.NodeTranslator):
         return self.generic_visit(node)
 
 
-class ConstExprEvaluator(eve.NodeVisitor):
-    @classmethod
-    def apply(cls, symtable, values):
-        instance = cls()
-        return instance.visit(values, symtable=symtable)
-
-    def visit_Node(self, node, **kwargs):
-        raise ValueError("Evaluation failed")
-
-    def visit_SymbolRef(self, node: SymbolRef, *, symtable, **kwargs):
-        return self.visit(symtable[node.name])
-
-    def visit_External(self, node: External, **kwargs):
-        return node.value
-
-    def visit_Constant(self, node: Constant, **kwargs):
-        return node.value
-
-    def visit_Subscript(self, node: Subscript, **kwargs):
-        return self.visit(node.value, **kwargs)[tuple(self.visit(idx, **kwargs) for idx in node.indices)]
-
-
-class RewriteSparseFieldAccess(eve.NodeTranslator):
-    @classmethod
-    def apply(cls, from_, to, values):
-        instance = cls()
-        return instance.visit(values, from_=from_, to=to)
-
-    def visit_FieldAccess(self, node: gtir.FieldAccess, *, from_, to):
-        if len(node.subscript) == 2 and node.subscript[0].name == from_[0] and node.subscript[1].name == from_[1]:
-            return gtir.FieldAccess(name=node.name, subscript=[gtir.LocationRef(name=to)], location_type=node.location_type)
-        return node
-
-
-from .built_in_types import LocalField
-
-
-class TypeInference(eve.NodeVisitor):
-    @classmethod
-    def apply(cls, symtable, values):
-        instance = cls()
-        return instance.visit(values, symtable=symtable)
-
-    def visit_Node(self, node, *, symtable, **kwargs):
-        raise ValueError(f"Type of node {node} not defined.")
-
-    def visit_Argument(self, node: Argument, **kwargs):
-        return node.type_
-
-    def visit_TemporaryFieldDecl(self, node: TemporaryFieldDecl, **kwargs):
-        return node.type_
-
-    def visit_TemporarySparseFieldDecl(self, node: TemporarySparseFieldDecl, **kwargs):
-        return node.type_
-
-    def visit_Call(self, node: Call, **kwargs):
-        # todo: enhance
-        return numbers.Number
-        # return built_in_functions[node.func].return_type(*self.visit(node.args))
-
-    def visit_Constant(self, node: Constant, **kwargs):
-        return type(node.value)
-
-    def visit_SymbolRef(self, node: SymbolRef, symtable, **kwargs):
-        return self.visit(symtable[node.name], symtable=symtable, **kwargs)
-
-    def visit_External(self, node: External, **kwargs):
-        return type(node.value)
-
-    def visit_LocationSpecification(self, node: LocationSpecification, *, symtable, **kwargs):
-        return Location[ConstExprEvaluator.apply(symtable, node.location_type)]
-
-    def visit_LocationComprehension(self, node: LocationComprehension, *, symtable, **kwargs):
-        connectivity = symtable[node.iterable.value.name].type_
-        index_type = self.visit(node.iterable.indices[0], symtable=symtable, **kwargs)
-        if index_type != Location[connectivity.primary_location()]:
-            raise ValueError(
-                f"You are trying to access a connectivity posed on {connectivity.primary_location()} using a location of type {index_type}")
-        return Location[connectivity.secondary_location()]
-
-    def visit_SubscriptCall(self, node: SubscriptCall, *, symtable, **kwargs):
-        func = ConstExprEvaluator.apply(symtable, node.func)
-        if issubclass(func, BuiltInType):
-            return func
-        raise ValueError(f"Type of node {node} not defined.")
-
-    def visit_BinaryOp(self, node: BinaryOp, **kwargs):
-        # todo: enhance
-        return numbers.Number
-
-    def visit_Subscript(self, node: Subscript, *, symtable, **kwargs):
-        # todo: enhance
-        if all(isinstance(symtable[idx.name], (LocationSpecification, LocationComprehension))
-               for idx in node.indices):
-            # todo: use Number
-            return numbers.Number
-        raise ValueError(f"Type of node {node} not defined.")
-
-    def visit_Generator(self, node: LocationComprehension, *, symtable, **kwargs):
-        connectivity = symtable[node.generators[0].iterable.value.name].type_
-        assert issubclass(connectivity, Connectivity)
-        return LocalField[connectivity]
-
-
 class GTScriptToGTIR(eve.NodeTranslator):
     # TODO(tehrengruber): the current way of passing the location_stack is tidious and error prone
 
@@ -292,7 +137,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
     def visit_LocationSpecification(
             self, node: LocationSpecification, *, symtable, **kwargs
     ) -> gtir.LocationComprehension:
-        loc_type = ConstExprEvaluator.apply(symtable, node.location_type)
+        loc_type = evaluate_const_expr(symtable, node.location_type)
 
         return gtir.PrimaryLocation(name=node.name, location_type=loc_type)
 
@@ -317,10 +162,8 @@ class GTScriptToGTIR(eve.NodeTranslator):
 
     def visit_Call(self, node: Call, *, location_stack, symtable, **kwargs):
         # TODO(tehrengruber): all of this can be done with the symbol table and the call inliner
-        # reductions
 
-        args_contain_generator = any(isinstance(arg, Generator) for arg in node.args)
-        arg_types = list(TypeInference.apply(symtable, arg) for arg in node.args)
+        arg_types = list(deduce_type(symtable, arg) for arg in node.args)
 
         # method = built_in_functions.native_functions[node.func]
         # TODO(workshop): would be nice if we could use `method.applicable`
@@ -370,7 +213,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
     def visit_SubscriptCall(self, node: SubscriptCall, symtable, location_stack, inside_sparse_assign,
                             neighbor_vector_access_expr_location_name, **kwargs):
         assert inside_sparse_assign
-        func = ConstExprEvaluator.apply(symtable, node.func)
+        func = evaluate_const_expr(symtable, node.func)
 
         return gtir.NeighborVectorAccess(
             exprs=self.visit(node.args[0].elts, **{**kwargs, "symtable": symtable, "location_stack": location_stack}),
@@ -436,7 +279,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
                     f"Invalid symbol '{node.value.name}' in subscript expression ({node})"
                 )
 
-            index_types = tuple(TypeInference.apply(symtable, idx) for idx in node.indices)
+            index_types = tuple(deduce_type(symtable, idx) for idx in node.indices)
             assert index_types == expected_index_types
 
             # TODO(tehrengruber): just visit the index symbol
@@ -455,7 +298,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
 
     def visit_Assign(self, node: Assign, *, symtable, location_stack, **kwargs) -> Union[
         gtir.AssignStmt, gtir.NeighborAssignStmt]:
-        right_type = TypeInference.apply(symtable, node.value)
+        right_type = deduce_type(symtable, node.value)
         sparse_assign = issubclass(right_type, LocalField)
         if sparse_assign:
             location_type = symtable[node.target.name].type_.args[0]
@@ -478,7 +321,6 @@ class GTScriptToGTIR(eve.NodeTranslator):
                 assert node.value.generators[0].iterable.value.name == connectivity_name
                 right = self.visit(node.value.elt, symtable={**symtable, **node.value.symtable_}, location_stack=location_stack, **kwargs)
                 location_name = node.value.generators[0].target
-                #right = RewriteSparseFieldAccess.apply((location_stack[0][0], node.value.generators[0].target), location_name, right)
 
             else:
                 right = self.visit(node.value, symtable=symtable,
@@ -587,7 +429,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
                     )
 
                 # TODO(hackathon): this hack is removing the VerticalLocationType args
-                # TODO: from Field[] to avoid breaking the TypeInference mechanism
+                # TODO: from Field[] to avoid breaking the TypeDeduction mechanism
                 arg.type_.args = tuple(new_type_args)
 
             elif issubclass(arg.type_, Connectivity):

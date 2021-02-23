@@ -51,7 +51,7 @@ class SubscriptTransformer(Transformer):
 
     @staticmethod
     def invert(transformed_capture):
-        if len(transformed_captures) > 1:
+        if len(transformed_capture) > 1:
             return ast.Tuple(elts=transformed_capture)
         return transformed_capture
 

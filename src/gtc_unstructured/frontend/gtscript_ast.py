@@ -203,56 +203,6 @@ class TemporarySparseFieldDecl(GTScriptASTNode):
     type_: BuiltInTypeMeta
 
 
-class TemporaryFieldDeclExtractor(eve.NodeVisitor):
-    primary_location: Union[None, LocationSpecification]
-    temporary_fields: List[TemporaryFieldDecl]
-
-    def __init__(self):
-        self.primary_location = None
-        self.temporary_fields = {}
-
-    @classmethod
-    def apply(cls, symtable, stencils: List[Stencil]):
-        instance = cls()
-        instance.visit(stencils, symtable=symtable)
-        return list(instance.temporary_fields.values())
-
-    def visit_LocationSpecification(
-        self, node: LocationSpecification, *, symtable: Dict[str, Any], **kwargs
-    ):
-        assert self.primary_location is None
-        self.primary_location = symtable[node.name]
-
-    def visit_Assign(self, node: Assign, *, symtable: Dict[str, Any], **kwargs):
-        # extract target symbol
-        if isinstance(node.target, Subscript):
-            target = node.target.value
-        elif isinstance(node.target, SymbolRef):
-            target = node.target
-        assert isinstance(target, SymbolRef)
-
-        if target.name not in symtable and target.name not in self.temporary_fields:
-            from numbers import Number
-            from .gtscript_to_gtir import ConstExprEvaluator, TypeInference
-            value_type = TypeInference.apply(symtable, node.value)
-
-            assert self.primary_location is not None
-            if issubclass(value_type, built_in_types.LocalField):
-                args = (value_type.args[0], ConstExprEvaluator.apply(symtable, SymbolRef(name="dtype")))
-                self.temporary_fields[target.name] = TemporarySparseFieldDecl(name=SymbolName(target.name), type_=built_in_types.TemporarySparseField[args])
-            else: # TODO(tehrengruber): issubclass(value_type, Number)
-                args = (self.primary_location.location_type, SymbolRef(name="dtype"))
-                args = tuple(ConstExprEvaluator.apply(symtable, arg) for arg in args)
-                self.temporary_fields[target.name] = TemporaryFieldDecl(name=SymbolName(target.name), type_=built_in_types.TemporaryField[args])
-
-            #raise ValueError()
-
-    def visit_Stencil(self, node: Stencil, **kwargs):
-        self.primary_location = None
-        self.generic_visit(node, **kwargs)
-        self.primary_location = None
-
-
 class Computation(GTScriptASTNode, SymbolTableTrait):
     # TODO(tehrengruber): use the following as soon as nodes support type parameters:
     #  stencils: List[Union[Stencil[Stencil[Statement]], Stencil[Statement]]]
@@ -270,7 +220,7 @@ class Computation(GTScriptASTNode, SymbolTableTrait):
     #    return TypePropagator.apply(values["symtable_"], values)
 
     @pydantic.root_validator(skip_on_failure=True)
-    def _1implicit_connectivity_type_decls(  # type: ignore  # validators are classmethods
+    def _implicit_connectivity_type_decls(  # type: ignore  # validators are classmethods
             cls: Type["Computation"], values: Dict[str, Any]
     ) -> Dict[str, Any]:
         # TODO(tehrengruber): hacky
@@ -284,6 +234,7 @@ class Computation(GTScriptASTNode, SymbolTableTrait):
     def _extract_temporary_fields(  # type: ignore  # validators are classmethods
         cls: Type["Computation"], values: Dict[str, Any]
     ) -> Dict[str, Any]:
+        from .passes.temporary_field_decl_extractor import TemporaryFieldDeclExtractor
         values["declarations"] = values["declarations"] + TemporaryFieldDeclExtractor.apply(values["symtable_"],
                                                                                             values["stencils"])
         #  TODO(tehrengruber): use SymbolTableTrait.collect_symbols with new dataclasses
