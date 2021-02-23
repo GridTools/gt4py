@@ -947,10 +947,10 @@ class ComputeExtentsPass(TransformPass):
                                 diffs = compute_extent_diff(extent, stmt_info.stmt.intervals)
                                 overlaps = diffs is not None
                             else:
-                                diffs = Extent.zeros()
+                                diffs = Extent.zeros()[:seq_axis]
                                 overlaps = True
                             if overlaps:
-                                horiz_extent = extent[:seq_axis] - diffs
+                                horiz_extent = Extent(extent[:seq_axis]) - diffs
                                 extent = Extent(
                                     list(horiz_extent) + [(0, 0)]
                                 )  # exclude sequential axis
