@@ -28,13 +28,21 @@ class IJCacheDetection(NodeTranslator):
     ) -> oir.VerticalLoop:
         if node.loop_order != common.LoopOrder.PARALLEL:
             return self.generic_visit(node, **kwargs)
+
+        def is_tmp(field: str) -> bool:
+            return field in {tmp.name for tmp in temporaries}
+
+        def already_cached(field: str) -> bool:
+            return field in {c.name for c in node.caches}
+
+        def has_vertical_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
+            return any(offset[2] != 0 for offset in offsets)
+
         accesses = AccessCollector.apply(node).offsets()
         cacheable = {
             field
             for field, offsets in accesses.items()
-            if field in {tmp.name for tmp in temporaries}
-            and field not in {c.name for c in node.caches}
-            and all(o[2] == 0 for o in offsets)
+            if is_tmp(field) and not already_cached(field) and not has_vertical_offset(offsets)
         }
         caches = self.visit(node.caches, **kwargs) + [
             oir.IJCache(name=field) for field in cacheable
@@ -53,14 +61,24 @@ class KCacheDetection(NodeTranslator):
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
         if node.loop_order == common.LoopOrder.PARALLEL:
             return self.generic_visit(node, **kwargs)
-        accesses = AccessCollector.apply(node).offsets()
+
+        def accessed_more_than_once(offsets: Set[Any]) -> bool:
+            return len(offsets) > 1
+
+        def already_cached(field: str) -> bool:
+            return field in {c.name for c in node.caches}
+
         # TODO: k-caches with non-zero ij offsets?
+        def has_horizontal_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
+            return any(offset[:2] != (0, 0) for offset in offsets)
+
+        accesses = AccessCollector.apply(node).offsets()
         cacheable = {
             field
             for field, offsets in accesses.items()
-            if field not in {c.name for c in node.caches}
-            and len(offsets) > 1
-            and all(o[:2] == (0, 0) for o in offsets)
+            if not already_cached(field)
+            and accessed_more_than_once(offsets)
+            and not has_horizontal_offset(offsets)
         }
         caches = self.visit(node.caches, **kwargs) + [
             oir.KCache(name=field, fill=True, flush=True) for field in cacheable
