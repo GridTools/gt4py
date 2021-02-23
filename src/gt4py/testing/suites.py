@@ -605,3 +605,4 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 raise RuntimeError("Wrong function got from implementations_db cache!")
 
             self._run_test_implementation(parameters_dict, implementation)
+

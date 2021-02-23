@@ -1,11 +1,216 @@
 # -*- coding: utf-8 -*-
-from typing import List, Tuple
+from abc import ABC, abstractclassmethod, abstractmethod
+from typing import TYPE_CHECKING, List, Tuple, Union
 
 import dace.properties
+import networkx as nx
 from dace import SDFG, library
 
-from gtc.common import LoopOrder
-from gtc.oir import CacheDesc, HorizontalExecution, Interval, VerticalLoop, VerticalLoopSection
+from gtc.common import AxisBound, LoopOrder
+from gtc.oir import (
+    CacheDesc,
+    CartesianIterationSpace,
+    HorizontalExecution,
+    Interval,
+    IntervalMapping,
+    Stencil,
+    VerticalLoop,
+    VerticalLoopSection,
+)
+from gtc.passes.oir_optimizations.utils import AccessCollector
+
+
+class OirSDFGBuilder(ABC):
+    def __init__(self, name, origins, dtypes):
+        self._mode = "FORWARD"
+        self._sdfg = SDFG(name)
+        self._state = self._sdfg.add_state(name + "_state")
+        self._origins = origins
+
+        self._recent_write_acc = dict()
+        self._next_read_acc = dict()
+        self._next_write_acc = dict()
+
+        self._access_collection_cache = dict()
+        self._source_nodes = dict()
+        self._sink_nodes = dict()
+        self._delete_candidates = list()
+
+    @abstractmethod
+    def _get_read_subset(self, node):
+        pass
+
+    @abstractmethod
+    def _get_write_subset(self, node):
+        pass
+
+    def _get_access_collection(self, node):
+        if node.id_ not in self._access_collection_cache:
+            self._access_collection_cache[node.id_] = AccessCollector.apply(node)
+        return self._access_collection_cache[node.id_]
+
+    def _get_recent_writes(self, name, interval):
+        return []
+
+    def _get_next_writes(self, name, interval):
+        return []
+
+    def _get_next_reads(self, name, interval):
+        return []
+
+    def _set_read(self, name, interval, node):
+        pass
+
+    def _set_write_backward(self, name, interval, node):
+        assert self._mode == "BACKWARD"
+        candidates = self._get_next_reads(name, interval)
+        if len(candidates) == 0:
+            res = self._get_sink_node(name)
+        else:
+            res = candidates[0]
+            for cand in candidates:
+                if nx.has_path(self._state.nx, cand, res):
+                    res = cand
+
+        self._next_write_acc[name][interval] = res
+        return res
+
+    def _set_write_forward(self, name, interval):
+        assert self._mode == "FORWARD"
+        res = ...
+        self._recent_write_acc[name][interval] = res
+
+    def _add_read_edges(self, node, collections):
+        recent_accesses = dict()
+        for interval, access_collection in collections:
+
+            for name in access_collection.read_fields():
+                for offset in access_collection.read_offsets[name]:
+                    read_interval = interval.shift(offset[2])
+                    for candidate_access in self._get_recent_writes(name, read_interval):
+                        if name not in recent_accesses is None or nx.has_path(
+                            self._state.nx, recent_accesses[name], candidate_access
+                        ):
+                            # candidate_access is downstream from recent_access, therefore candidate is more recent
+                            recent_accesses[name] = candidate_access
+        for name, recent_access in recent_accesses.items():
+            subset_str = self._get_read_subset(node, name)
+            self._state.add_edge(
+                recent_access,
+                None,
+                node,
+                "IN_" + name,
+                dace.memlet.Memlet.simple(data=name, subset_str=subset_str),
+            )
+
+    def _add_write_edges(self, node, sections):
+        access_collection = self._get_access_collection(node)
+
+        # write edges ()
+        for name in access_collection.write_fields():
+            access_node = self._set_write(name, interval, node)
+            subset_str = self._get_write_subset(node, name)
+            self._state.add_edge(
+                node,
+                "OUT_" + name,
+                access_node,
+                None,
+                dace.memlet.Memlet.simple(data=name, subset_str=subset_str),
+            )
+
+    def add_write_after_read_edges(self, node):
+        pass
+        # access_collection = self._get_access_collection(node)
+        # # read-write dependency edges (LN to LN)
+        # for name in access_collection.write_fields():
+        #     next_access = self._get_next_writes(name, interval)
+        #     self._delete_candidates.append(
+        #         self._state.add_edge(node, None, next_access, None, dace.memlet.Memlet())
+        #     )
+
+    def add_node(self, node):
+        self._state.add_node(node)
+
+    # def add_oir_node(self, node: 'Union[HorizontalExecutionLibraryNode, VerticalLoopLibraryNode]'):
+    #
+    #     if isinstance(node, HorizontalExecutionLibraryNode):
+    #         nodes = [(Interval(start=AxisBound.start(), end=AxisBound.end()), node)]
+    #     else:
+    #         assert isinstance(node, VerticalLoop)
+    #         nodes = [(n.interval, n) for n in node.sections]
+    #     if self._mode == "FORWARD":
+    #         for interval, n in nodes:
+    #             self._state.add_node(n)
+    #             self._edges_oir_node_forward(n, interval)
+    #     else:
+    #         assert self._mode == "BACKWARD"
+    #         for interval, n in reversed(nodes):
+    #             self._edges_oir_node_backward(n, interval)
+
+    def get_sdfg(self):
+        self._mode = "FINAL"
+        for edge in self._delete_candidates:
+            self._state.remove_edge(edge)
+            if not nx.has_path(self._state.nx, edge.src, edge.dst):
+                self._state.add_edge(edge.src, edge.src_conn, edge.dst, edge.dst_conn, edge.data)
+        return self._sdfg
+
+    @abstractmethod
+    def add_read_edges(self, node):
+        pass
+
+    @abstractmethod
+    def add_write_edges(self, node):
+        pass
+
+    @classmethod
+    def build(cls, name, nodes, origins, dtypes):
+        builder = cls(name, origins, dtypes)
+
+        for n in nodes:
+            builder.add_node(n)
+        for n in nodes:
+            builder.add_read_edges(n)
+        for n in reversed(nodes):
+            builder.add_write_edges(n)
+        # for n in nodes:
+        #     builder.add_write_after_write_edges(n)
+        # for n in reversed(nodes):
+        #     builder.add_write_after_read_edges(n)
+        return builder.get_sdfg()
+
+
+class VerticalLoopOirSDFGBuilder(OirSDFGBuilder):
+
+    def _get_collection_from_sections(self, sections):
+        res = []
+        for interval, sdfg in sections:
+            collector = AccessCollector()
+            collection = AccessCollector.Result([])
+            for node in sdfg.states()[0].nodes():
+                if isinstance(node, HorizontalExecutionLibraryNode)
+                    collector.visit(node.oir_node, accesses=collection._ordered_accesses)
+            res.append((interval, collection))
+        return res
+
+    def add_read_edges(self, node):
+        collections = self._get_collection_from_sections(node.sections)
+        return self._add_read_edges(node, collections)
+
+    def add_write_edges(self, node):
+        collections = self._get_collection_from_sections(node.sections)
+        return self._add_write_edges(node, collections)
+
+class HorizontalExecutionOirSDFGBuilder(OirSDFGBuilder):
+
+    def add_read_edges(self, node):
+        interval = Interval(start=AxisBound.start(), end=AxisBound.end())
+        return self._add_read_edges(node, [(interval, self._get_access_collection(node))])
+
+    def add_write_edges(self, node):
+        interval = Interval(start=AxisBound.start(), end=AxisBound.end())
+        return self._add_write_edges(node, [(interval, self._get_access_collection(node))])
+
 
 
 def get_vertical_loop_section_sdfg(section: "VerticalLoopSection") -> SDFG:
