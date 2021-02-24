@@ -20,7 +20,7 @@ from gtc.common import ArithmeticOperator, ComparisonOperator, DataType, ExprKin
 from gtc.gtir import BinaryOp, Cast, Expr, NativeFuncCall, ParAssignStmt, TernaryOp
 from gtc.passes.gtir_upcaster import _GTIRUpcasting
 
-from .gtir_utils import FieldAccessBuilder, make_Literal
+from .gtir_utils import FieldAccessFactory, LiteralFactory
 
 
 class Placeholder(Expr):
@@ -30,10 +30,10 @@ class Placeholder(Expr):
     dtype = DataType.AUTO  # unused
 
 
-A_BOOL_LITERAL = make_Literal("", dtype=DataType.BOOL)
-A_INT64_LITERAL = make_Literal("", dtype=DataType.INT64)
-A_FLOAT64_LITERAL = make_Literal("", dtype=DataType.FLOAT64)
-AN_UNIMPORTANT_LITERAL = make_Literal("", dtype=DataType.DEFAULT)
+A_BOOL_LITERAL = LiteralFactory(value="True", dtype=DataType.BOOL)
+A_INT64_LITERAL = LiteralFactory(value="42", dtype=DataType.INT64)
+A_FLOAT64_LITERAL = LiteralFactory(value="42.0", dtype=DataType.FLOAT64)
+AN_UNIMPORTANT_LITERAL = LiteralFactory(value="", dtype=DataType.DEFAULT)
 
 
 def contains_cast_node(cast_node, expr):
@@ -91,9 +91,7 @@ def test_upcast_NativeFuncCall():
 
 
 def test_upcast_ParAssignStmt():
-    testee = ParAssignStmt(
-        left=FieldAccessBuilder("out").dtype(DataType.FLOAT64).build(), right=A_INT64_LITERAL
-    )
+    testee = ParAssignStmt(left=FieldAccessFactory(dtype=DataType.FLOAT64), right=A_INT64_LITERAL)
     upcast_and_validate(testee, [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)])
 
 

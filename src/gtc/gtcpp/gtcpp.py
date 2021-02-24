@@ -241,14 +241,23 @@ class GTStage(LocNode):
     args: List[Arg]
 
 
-class IJCache(LocNode):
+class Cache(LocNode):
     name: SymbolRef  # symbol ref to GTComputation params or temporaries
+
+
+class IJCache(Cache):
+    pass
+
+
+class KCache(Cache):
+    fill: bool
+    flush: bool
 
 
 class GTMultiStage(LocNode):
     loop_order: common.LoopOrder
     stages: List[GTStage]
-    caches: List[Union[IJCache]]
+    caches: List[Cache]
 
 
 class GTComputationCall(LocNode, SymbolTableTrait):

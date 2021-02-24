@@ -14,71 +14,46 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import pytest
-
 from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 
-from ...oir_utils import (
-    AssignStmtBuilder,
-    CartesianOffsetBuilder,
-    FieldAccessBuilder,
-    HorizontalExecutionBuilder,
-    VerticalLoopBuilder,
-)
+from ...oir_utils import AssignStmtFactory, HorizontalExecutionFactory, VerticalLoopSectionFactory
 
 
-@pytest.fixture(params=[GreedyMerging()])
-def merger(request):
-    return request.param
-
-
-def test_zero_extent_merging(merger):
-    testee = (
-        VerticalLoopBuilder()
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("baz", "bar").build()).build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "foo").build()).build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "baz").build()).build()
-        )
-        .build()
+def test_zero_extent_merging():
+    testee = VerticalLoopSectionFactory(
+        horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="foo", right__name="bar")]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="baz", right__name="bar")]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="foo", right__name="foo")]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="foo", right__name="baz")],
+            ),
+        ]
     )
-    transformed = merger.visit(testee)
+    transformed = GreedyMerging().visit(testee)
     assert len(transformed.horizontal_executions) == 1
     assert transformed.horizontal_executions[0].body == sum(
         (he.body for he in testee.horizontal_executions), []
     )
 
 
-def test_mixed_merging(merger):
-    testee = (
-        VerticalLoopBuilder()
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(
-                AssignStmtBuilder("baz")
-                .right(
-                    FieldAccessBuilder("foo").offset(CartesianOffsetBuilder(i=1).build()).build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("bar", "baz").build()).build()
-        )
-        .build()
+def test_mixed_merging():
+    testee = VerticalLoopSectionFactory(
+        horizontal_executions=[
+            HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="foo")]),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="bar", right__name="foo", right__offset__i=1)]
+            ),
+            HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="bar")]),
+        ]
     )
-    transformed = merger.visit(testee)
+    transformed = GreedyMerging().visit(testee)
     assert len(transformed.horizontal_executions) == 2
     assert transformed.horizontal_executions[0].body == testee.horizontal_executions[0].body
     assert transformed.horizontal_executions[1].body == sum(
@@ -86,43 +61,29 @@ def test_mixed_merging(merger):
     )
 
 
-def test_write_after_read_with_offset(merger):
-    testee = (
-        VerticalLoopBuilder()
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(AssignStmtBuilder("foo", "bar", (1, 0, 0)).build())
-            .build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("bar", "baz").build()).build()
-        )
-        .build()
+def test_write_after_read_with_offset():
+    testee = VerticalLoopSectionFactory(
+        horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(right__name="foo", right__offset__i=1)]
+            ),
+            HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="foo")]),
+        ]
     )
-    transformed = merger.visit(testee)
+    transformed = GreedyMerging().visit(testee)
     assert transformed == testee
 
 
-def test_nonzero_extent_merging(merger):
-    testee = (
-        VerticalLoopBuilder()
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder().add_stmt(AssignStmtBuilder("foo", "bar").build()).build()
-        )
-        .add_horizontal_execution(
-            HorizontalExecutionBuilder()
-            .add_stmt(
-                AssignStmtBuilder("baz")
-                .right(
-                    FieldAccessBuilder("bar").offset(CartesianOffsetBuilder(i=1).build()).build()
-                )
-                .build()
-            )
-            .build()
-        )
-        .build()
+def test_nonzero_extent_merging():
+    testee = VerticalLoopSectionFactory(
+        horizontal_executions=[
+            HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="foo")]),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(right__name="foo", right__offset__j=1)]
+            ),
+        ]
     )
-    transformed = merger.visit(testee)
+    transformed = GreedyMerging().visit(testee)
     assert len(transformed.horizontal_executions) == 1
     assert transformed.horizontal_executions[0].body == sum(
         (he.body for he in testee.horizontal_executions), []
