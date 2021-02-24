@@ -9,7 +9,7 @@ namespace gridtools::usid {
     using namespace gridtools::usid::test_helper;
 
     TEST(regression, cell2cell) {
-        std::size_t k_size = 1;
+        int k_size = 1;
 
         auto in = test_helper::make_field<double>(simple_mesh::cells, k_size);
 
@@ -18,9 +18,9 @@ namespace gridtools::usid {
         // 1 2 1
         // 1 1 1
         for (std::size_t i = 0; i < simple_mesh::cells; ++i)
-            for (std::size_t k = 0; k < k_size; ++k)
+            for (int k = 0; k < k_size; ++k)
                 view(i, k) = 1;
-        for (std::size_t k = 0; k < k_size; ++k)
+        for (int k = 0; k < k_size; ++k)
             view(4, k) = 2;
 
         auto out = test_helper::make_field<double>(simple_mesh::cells, k_size);

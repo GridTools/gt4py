@@ -10,8 +10,6 @@ namespace gridtools::usid {
     using namespace gridtools::usid::test_helper;
 
     TEST(regression, temporary) {
-        test_helper::simple_mesh mesh;
-
         auto in = test_helper::make_field<double>(simple_mesh::cells, 1);
 
         auto view = in->host_view();
