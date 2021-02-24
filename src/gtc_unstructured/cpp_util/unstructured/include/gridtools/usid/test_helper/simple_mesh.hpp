@@ -33,193 +33,65 @@ using storage_trait = gridtools::storage::gpu;
 using storage_trait = gridtools::storage::cpu_ifirst;
 #endif
 
-namespace gridtools {
-    namespace usid {
-        namespace test_helper {
-            namespace impl_ {
+namespace gridtools::usid::test_helper {
+    namespace impl_ {
 
-                template <std::size_t MaxNeighbors>
-                auto make_connectivity_producer(std::vector<std::array<int, MaxNeighbors>> const &tbl) {
-                    return [tbl](auto traits) {
-                        return gridtools::storage::builder<decltype(traits)>
+        template <std::size_t MaxNeighbors>
+        auto make_connectivity_producer(std::vector<std::array<int, MaxNeighbors>> const &tbl) {
+            return [tbl](auto traits) {
+                return gridtools::storage::builder<decltype(traits)>
                                 .template type<int>()
                                 .dimensions(tbl.size(), std::integral_constant<std::size_t,MaxNeighbors>{})
                                 .initializer([&tbl](std::size_t p, std::size_t n){
                                     return tbl[p][n];})
                                 .build();
-                    };
-                }
-
-            } // namespace impl_
-            struct simple_mesh {
-                static constexpr std::size_t vertices = 9;
-                static constexpr std::size_t edges = 18;
-                static constexpr std::size_t cells = 9;
-
-                auto e2v() {
-                    return impl_::make_connectivity_producer<2>({//
-                        {0, 1},                                  // 0
-                        {1, 2},
-                        {2, 0},
-                        {3, 4},
-                        {4, 5},
-                        {5, 3},
-                        {6, 7},
-                        {7, 8},
-                        {8, 6},
-                        {0, 3}, // 9
-                        {1, 4},
-                        {2, 5},
-                        {3, 6},
-                        {4, 7},
-                        {5, 8},
-                        {6, 0},
-                        {7, 1},
-                        {8, 2}});
-                }
-
-                auto c2c() {
-                    // constexpr std::size_t max_neighbors = 8;
-                    // std::vector<std::array<int, max_neighbors>> connectivity;
-                    // for (std::size_t i=0; i<3; ++i) {
-                    //    for (std::size_t j=0; j<3; ++j) {
-                    //        std::array<int, max_neighbors> neighbors{};
-                    //        neighbors.fill(-1);
-                    //        std::size_t ci = 0;
-                    //        for (int oi=-1; oi<=1; ++oi) {
-                    //            for (int oj=-1; oj<=1; ++oj) {
-                    //                int ni = i+oi;
-                    //                int nj = j+oj;
-                    //                if (ni==0 && oj == 0) // skip center
-                    //                    continue;
-                    //                if (ni >= 0 && ni < 3 && nj >= 0 && nj < 3)
-                    //                    neighbors[++ci] = 3*ni+nj;
-                    //            }
-                    //        }
-                    //        assert(ci <= max_neighbors);
-                    //        connectivity.push_back(neighbors);
-                    //    }
-                    //}
-                    // return impl_::make_connectivity_producer<8>(connectivity);
-
-                    // todo: fix this is c2e2c
-                    return impl_::make_connectivity_producer<4>({
-                        {6, 1, 3, 2}, // 0
-                        {7, 2, 4, 0}, // 1
-                        {8, 0, 5, 1}, // 2
-                        {0, 4, 6, 5}, // 3
-                        {1, 5, 7, 3}, // 4
-                        {2, 3, 8, 4}, // 5
-                        {3, 7, 0, 8}, // 6
-                        {4, 8, 1, 6}, // 7
-                        {5, 6, 2, 7}  // 8
-                    });
-                }
             };
-            //             struct simple_mesh {
-            //                 template <class LocationType>
-            //                 struct primary_connectivity {
-            //                     std::size_t size_;
+        }
 
-            //                     GT_FUNCTION friend std::size_t connectivity_size(primary_connectivity const &conn) {
-            //                         return conn.size_;
-            //                     }
-            //                 };
+    } // namespace impl_
+    struct simple_mesh {
+        static constexpr std::size_t vertices = 9;
+        static constexpr std::size_t edges = 18;
+        static constexpr std::size_t cells = 9;
 
-            //                 template <class LocationType, std::size_t MaxNeighbors>
-            //                 struct regular_connectivity {
-            //                     struct builder {
-            //                         auto operator()(std::size_t size) {
-            //                             return gridtools::storage::builder<storage_trait>.template
-            //                             type<int>().template layout<0, 1>().template dimensions(
-            //                     size, std::integral_constant<std::size_t, MaxNeighbors>{});
-            //                         }
-            //                     };
+        auto e2v() {
+            return impl_::make_connectivity_producer<2>({//
+                {0, 1},                                  // 0
+                {1, 2},
+                {2, 0},
+                {3, 4},
+                {4, 5},
+                {5, 3},
+                {6, 7},
+                {7, 8},
+                {8, 6},
+                {0, 3}, // 9
+                {1, 4},
+                {2, 5},
+                {3, 6},
+                {4, 7},
+                {5, 8},
+                {6, 0},
+                {7, 1},
+                {8, 2}});
+        }
 
-            //                     decltype(builder{}(0)()) tbl_;
-            //                     std::size_t size_;
-            //                     static constexpr gridtools::int_t missing_value_ = -1;
-
-            //                     regular_connectivity(std::vector<std::array<int, MaxNeighbors>> tbl)
-            //                         : tbl_{builder{}(tbl.size()).initializer([&tbl](std::size_t primary, std::size_t
-            //                         neigh) {
-            //                               return tbl[primary][neigh];
-            //                           })()},
-            //                           size_{tbl.size()} {}
-
-            //                     GT_FUNCTION friend std::size_t connectivity_size(regular_connectivity const &conn) {
-            //                         return conn.size_;
-            //                     }
-
-            //                     GT_FUNCTION friend std::integral_constant<std::size_t, MaxNeighbors>
-            //                     connectivity_max_neighbors(
-            //                         regular_connectivity const &) {
-            //                         return {};
-            //                     }
-
-            //                     GT_FUNCTION friend int connectivity_skip_value(regular_connectivity const &conn) {
-            //                         return conn.missing_value_;
-            //                     }
-
-            //                     friend auto connectivity_neighbor_table(regular_connectivity const &conn) {
-            //                         return gridtools::sid::rename_numbered_dimensions<LocationType,
-            //                         neighbor>(conn.tbl_);
-            //                     }
-            //                 };
-
-            //                 template <template <class...> class L>
-            //                 friend decltype(auto) mesh_connectivity(L<vertex>, simple_mesh const &) {
-            //                     return primary_connectivity<vertex>{9};
-            //                 }
-            //                 template <template <class...> class L>
-            //                 friend decltype(auto) mesh_connectivity(L<edge>, simple_mesh const &) {
-            //                     return primary_connectivity<edge>{18};
-            //                 }
-            //                 template <template <class...> class L>
-            //                 friend decltype(auto) mesh_connectivity(L<cell>, simple_mesh const &) {
-            //                     return primary_connectivity<cell>{9};
-            //                 }
-            //                 template <template <class...> class L>
-            //                 friend decltype(auto) mesh_connectivity(L<cell, cell>, simple_mesh const &) {
-            //                     return regular_connectivity<cell, 4>{{
-            //                         {6, 1, 3, 2}, // 0
-            //                         {7, 2, 4, 0}, // 1
-            //                         {8, 0, 5, 1}, // 2
-            //                         {0, 4, 6, 5}, // 3
-            //                         {1, 5, 7, 3}, // 4
-            //                         {2, 3, 8, 4}, // 5
-            //                         {3, 7, 0, 8}, // 6
-            //                         {4, 8, 1, 6}, // 7
-            //                         {5, 6, 2, 7}  // 8
-            //                     }};
-            //                 }
-            //                 template <template <class...> class L>
-            //                 friend decltype(auto) mesh_connectivity(L<edge, vertex>, simple_mesh const &) {
-            //                     return regular_connectivity<edge, 2>{{
-            //                         {0, 1}, // 0
-            //                         {1, 2},
-            //                         {2, 0},
-            //                         {3, 4},
-            //                         {4, 5},
-            //                         {5, 3},
-            //                         {6, 7},
-            //                         {7, 8},
-            //                         {8, 6},
-            //                         {0, 3}, // 9
-            //                         {1, 4},
-            //                         {2, 5},
-            //                         {3, 6},
-            //                         {4, 7},
-            //                         {5, 8},
-            //                         {6, 0},
-            //                         {7, 1},
-            //                         {8, 2},
-            //                     }};
-            //                 }
-            //             };
-        } // namespace test_helper
-    }     // namespace usid
-} // namespace gridtools
+        auto c2c() {
+            // todo: fix this is c2e2c
+            return impl_::make_connectivity_producer<4>({
+                {6, 1, 3, 2}, // 0
+                {7, 2, 4, 0}, // 1
+                {8, 0, 5, 1}, // 2
+                {0, 4, 6, 5}, // 3
+                {1, 5, 7, 3}, // 4
+                {2, 3, 8, 4}, // 5
+                {3, 7, 0, 8}, // 6
+                {4, 8, 1, 6}, // 7
+                {5, 6, 2, 7}  // 8
+            });
+        }
+    };
+} // namespace gridtools::usid::test_helper
 
 /**
  * TODO maybe later: Simple 2x2 Cartesian hand-made mesh, non periodic, one halo line.
