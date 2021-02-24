@@ -93,8 +93,8 @@ class MergeNeighborLoops(NodeTranslator):
         groups: List[List[nir.NeighborLoop]] = merge_groups[node.id_]
 
         # the target neighbor loops where groups will be merged
-        heads: List[str] = [group[0].id_ for group in groups]  
-        
+        heads: List[str] = [group[0].id_ for group in groups]
+
         # mapping from NeighborLoop.id_ to its target loop where it should be merged
         # (only for non targets)
         targets: Dict[str, nir.NeighborLoop] = {}
@@ -107,7 +107,7 @@ class MergeNeighborLoops(NodeTranslator):
         stmt_statements = []
 
         num_stmts = len(node.stmt.statements)
-        for i, hl_stmt in enumerate(node.stmt.statements):                
+        for i, hl_stmt in enumerate(node.stmt.statements):
             # Traverse all the statements in the horizontal loop
             if isinstance(hl_stmt, nir.NeighborLoop):
                 if hl_stmt.id_ in heads:

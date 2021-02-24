@@ -19,9 +19,10 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import ClassVar, List, Mapping, Union
 
+from devtools import debug
+
 import eve
 from gtc_unstructured.irs import common, gtir, nir
-from devtools import debug
 
 
 class GtirToNir(eve.NodeTranslator):

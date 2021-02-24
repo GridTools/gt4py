@@ -15,16 +15,17 @@ import types
 from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
+    Connectivity,
     Edge,
-    Vertex,
     Field,
     SparseField,
+    Vertex,
     computation,
-    Connectivity,
     location,
 )
 from gtc_unstructured.irs.common import DataType
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
+
 
 E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
 

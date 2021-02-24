@@ -16,13 +16,14 @@ from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
     Cell,
+    Connectivity,
     Field,
     computation,
-    Connectivity,
     location,
 )
 from gtc_unstructured.irs.common import DataType
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
+
 
 C2C = types.new_class("C2C", (Connectivity[Cell, Cell, 4, False],))
 
@@ -32,7 +33,9 @@ dtype = DataType.FLOAT64
 def sten(c2c: C2C, field_in: Field[Cell, dtype], field_out: Field[Cell, dtype]):
     with computation(FORWARD), location(Cell) as c1:
         # TODO: test all native functions seperately
-        field_out[c1] = sqrt(field_in)+max(1, 2)+sum(max(field_in[c1], field_in[c2]) for c2 in c2c[c1])
+        field_out[c1] = (
+            sqrt(field_in) + max(1, 2) + sum(max(field_in[c1], field_in[c2]) for c2 in c2c[c1])
+        )
 
 
 def main():

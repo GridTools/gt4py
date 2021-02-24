@@ -16,16 +16,17 @@ from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
     Cell,
-    K,
+    Connectivity,
     Field,
+    K,
     SparseField,
     computation,
-    Connectivity,
     location,
 )
 from gtc_unstructured.frontend.gtscript_ast import GTScriptASTNode
 from gtc_unstructured.irs.common import DataType
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
+
 
 C2C = types.new_class("C2C", (Connectivity[Cell, Cell, 4, False],))
 

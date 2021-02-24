@@ -81,6 +81,7 @@ class LocationType(IntEnum):
     Cell = 2
     NoLocation = 3
 
+
 @enum.unique
 class VerticalLocationType(IntEnum):
     NoLocation = -1

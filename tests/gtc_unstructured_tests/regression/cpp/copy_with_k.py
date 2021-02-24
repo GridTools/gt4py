@@ -14,18 +14,20 @@ import types
 from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
-    Edge,
-    Vertex,
-    Field,
-    computation,
     Connectivity,
+    Edge,
+    Field,
+    Vertex,
+    computation,
     location,
 )
 from gtc_unstructured.irs.common import DataType
 from gtc_unstructured.irs.icon_bindings_codegen import IconBindingsCodegen
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 
+
 dtype = DataType.FLOAT64
+
 
 def sten(field_in: Field[Edge, dtype], field_out: Field[Edge, dtype]):
     with computation(FORWARD), location(Edge) as e:
@@ -43,9 +45,7 @@ def main():
         extension = ".cu"
 
     compilation_task = GTScriptCompilationTask(sten)
-    generated_code = compilation_task.generate(
-        debug=True, code_generator=code_generator
-    )
+    generated_code = compilation_task.generate(debug=True, code_generator=code_generator)
 
     # print(generated_code)
     output_file = (
@@ -53,7 +53,7 @@ def main():
     )
     with open(output_file, "w+") as output:
         output.write(generated_code)
-    
+
     icon_bindings = IconBindingsCodegen().apply(compilation_task.gtir, generated_code)
     print(icon_bindings)
     output_file = (

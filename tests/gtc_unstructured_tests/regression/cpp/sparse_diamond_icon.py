@@ -10,21 +10,22 @@
 import os
 import sys
 import types
-from gtc_unstructured.frontend.built_in_types import SparseField
 
+from gtc_unstructured.frontend.built_in_types import SparseField
 from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
-    Edge,
-    Vertex,
-    Field,
-    computation,
     Connectivity,
+    Edge,
+    Field,
+    Vertex,
+    computation,
     location,
 )
 from gtc_unstructured.irs.common import DataType
 from gtc_unstructured.irs.icon_bindings_codegen import IconBindingsCodegen
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
+
 
 E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 4, False],))
 dtype = DataType.FLOAT64
@@ -51,14 +52,14 @@ def main():
         extension = ".cu"
 
     compilation_task = GTScriptCompilationTask(icon_sparse_diamond)
-    generated_code = compilation_task.generate(
-        debug=False, code_generator=code_generator
-    )
+    generated_code = compilation_task.generate(debug=False, code_generator=code_generator)
 
     print(generated_code)
     output_file = (
-        os.path.dirname(os.path.realpath(__file__)) +
-        "/generated_icon_sparse_diamond_" + mode + ".hpp"
+        os.path.dirname(os.path.realpath(__file__))
+        + "/generated_icon_sparse_diamond_"
+        + mode
+        + ".hpp"
     )
     with open(output_file, "w+") as output:
         output.write(generated_code)

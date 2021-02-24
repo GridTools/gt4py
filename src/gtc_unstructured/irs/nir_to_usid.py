@@ -17,6 +17,7 @@
 
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Set, Union
+
 from devtools import debug  # noqa: F401
 
 import eve  # noqa: F401

@@ -16,16 +16,17 @@ from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
     Cell,
-    K,
+    Connectivity,
     Field,
+    K,
     SparseField,
     computation,
-    Connectivity,
     location,
 )
 from gtc_unstructured.irs.common import DataType
 from gtc_unstructured.irs.icon_bindings_codegen import IconBindingsCodegen
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
+
 
 C2C = types.new_class("C2C", (Connectivity[Cell, Cell, 4, False],))
 
@@ -50,15 +51,13 @@ def main():
 
     if mode == "unaive":
         code_generator = UsidNaiveCodeGenerator
-        extension = '.cc'
+        extension = ".cc"
     else:  # 'ugpu':
         code_generator = UsidGpuCodeGenerator
-        extension = '.cu'
+        extension = ".cu"
 
     compilation_task = GTScriptCompilationTask(sten)
-    generated_code = compilation_task.generate(
-        debug=True, code_generator=code_generator
-    )
+    generated_code = compilation_task.generate(debug=True, code_generator=code_generator)
 
     print(generated_code)
     output_file = (

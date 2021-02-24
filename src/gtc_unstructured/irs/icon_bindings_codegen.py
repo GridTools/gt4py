@@ -1,4 +1,3 @@
-
 from types import MappingProxyType
 from typing import ClassVar, Mapping
 
@@ -7,16 +6,10 @@ from devtools import debug  # noqa: F401
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
-from gtc_unstructured.irs.gtir import (
-    Computation,
-    Connectivity,
-    UField,
-    SparseField
-)
+from gtc_unstructured.irs.gtir import Computation, Connectivity, SparseField, UField
 
 
 class IconBindingsCodegen(codegen.TemplatedGenerator):
-
     @classmethod
     def apply(cls, root, stencil_code: str, **kwargs) -> str:
         # generated_code = super().apply(root, **kwargs)
@@ -31,7 +24,8 @@ class IconBindingsCodegen(codegen.TemplatedGenerator):
             return ""
 
     UField = as_fmt(
-        "gridtools::fortran_array_view<T, {len(dimensionality[name])}, field_kind<{','.join(str(i) for i in dimensionality[name])}>> {name}")
+        "gridtools::fortran_array_view<T, {len(dimensionality[name])}, field_kind<{','.join(str(i) for i in dimensionality[name])}>> {name}"
+    )
 
     def visit_SparseField(self, node: SparseField, **kwargs):
         if node.name in kwargs["dimensionality"]:
@@ -40,7 +34,8 @@ class IconBindingsCodegen(codegen.TemplatedGenerator):
             return ""
 
     SparseField = as_fmt(
-        "gridtools::fortran_array_view<T,{len(dimensionality[name])}, field_kind<{','.join(str(i) for i in dimensionality[name])}>> {name}")  # TODO
+        "gridtools::fortran_array_view<T,{len(dimensionality[name])}, field_kind<{','.join(str(i) for i in dimensionality[name])}>> {name}"
+    )  # TODO
 
     Connectivity = as_fmt("neigh_tbl_t {name}")
 
@@ -65,14 +60,21 @@ class IconBindingsCodegen(codegen.TemplatedGenerator):
 
             if renames:
                 param_names.append(
-                    "gridtools::sid::rename_dimensions<" +
-                    ','.join(
-                        f"gridtools::integral_constant<int,{old}>, gridtools::integral_constant<int,{new}>>" for old, new in renames.items()) + f"({name})")
+                    "gridtools::sid::rename_dimensions<"
+                    + ",".join(
+                        f"gridtools::integral_constant<int,{old}>, gridtools::integral_constant<int,{new}>>"
+                        for old, new in renames.items()
+                    )
+                    + f"({name})"
+                )
             else:
                 param_names.append(name)
-        return self.generic_visit(node, param_names=param_names, dimensionality=dimensionality, **kwargs)
+        return self.generic_visit(
+            node, param_names=param_names, dimensionality=dimensionality, **kwargs
+        )
 
-    Computation = as_mako("""
+    Computation = as_mako(
+        """
     # include <cpp_bindgen/export.hpp>
     # include <gridtools/storage/adapter/fortran_array_view.hpp>
     # include <gridtools/storage/sid.hpp>
@@ -107,4 +109,5 @@ class IconBindingsCodegen(codegen.TemplatedGenerator):
     BINDGEN_EXPORT_GENERIC_BINDING_WRAPPED(${1+len(params)}, ${name}, ${name}_impl,
                                             (double));
     }
-    """)
+    """
+    )

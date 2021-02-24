@@ -15,16 +15,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
+
 import enum
-from typing import List, Optional, Union, ClassVar, Dict
+from typing import ClassVar, Dict, List, Optional, Union
 
 from devtools import debug  # noqa: F401
 from pydantic import root_validator
 
 from eve import Node, Str, StrEnum, SymbolTableTrait
 from eve.type_definitions import SymbolName, SymbolRef
-from gtc_unstructured.irs import common
 from gtc import common as stable_gtc_common
+from gtc_unstructured.irs import common
 
 
 @enum.unique

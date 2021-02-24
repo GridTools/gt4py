@@ -8,14 +8,12 @@
 # ```
 
 import os
-import sys
 import pathlib
+import sys
+
+from devtools import debug
 
 from gtc_unstructured.irs.common import DataType, LocationType, LoopOrder
-from gtc_unstructured.irs.gtir_to_nir import GtirToNir
-from gtc_unstructured.irs.nir_to_usid import NirToUsid
-from gtc_unstructured.irs.nir_passes.merge_horizontal_loops import find_and_merge_horizontal_loops
-from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 from gtc_unstructured.irs.gtir import (
     AssignStmt,
     Computation,
@@ -36,8 +34,11 @@ from gtc_unstructured.irs.gtir import (
     UField,
     VerticalLoop,
 )
+from gtc_unstructured.irs.gtir_to_nir import GtirToNir
+from gtc_unstructured.irs.nir_passes.merge_horizontal_loops import find_and_merge_horizontal_loops
+from gtc_unstructured.irs.nir_to_usid import NirToUsid
+from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 
-from devtools import debug
 
 dtype = DataType.FLOAT64
 

@@ -16,16 +16,16 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Union, Dict, ClassVar
 import enum
+from typing import ClassVar, Dict, List, Optional, Union
 
 from devtools import debug  # noqa: F401
 from pydantic.class_validators import root_validator
 
-from eve import FrozenNode, Node, Str, SymbolTableTrait, StrEnum
+from eve import FrozenNode, Node, Str, StrEnum, SymbolTableTrait
 from eve.type_definitions import SymbolName, SymbolRef
-from gtc_unstructured.irs import common
 from gtc import common as stable_gtc_common
+from gtc_unstructured.irs import common
 
 
 TAG_APPENDIX: str = "_tag"
