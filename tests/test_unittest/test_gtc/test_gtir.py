@@ -125,7 +125,12 @@ def test_no_horizontal_offset_allowed(assign_stmt_with_offset):
 
 def test_symbolref_without_decl():
     with pytest.raises(ValidationError, match=r"Symbols.*not found"):
-        StencilFactory(params=[])
+        StencilFactory(
+            params=[],
+            vertical_loops__0__body__0=ParAssignStmtFactory(
+                left__name="out_field", right__name="in_field"
+            ),
+        )
 
 
 @pytest.mark.parametrize(
