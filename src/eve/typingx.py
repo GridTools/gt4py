@@ -21,10 +21,10 @@
 
 from __future__ import annotations
 
+import sys
+import typing
 from typing import *
 from typing import IO, BinaryIO, TextIO
-
-from typing_extensions import *  # type: ignore
 
 
 AnyCallable = Callable[..., Any]
@@ -34,22 +34,117 @@ AnyNoArgCallable = Callable[[], Any]
 
 T = TypeVar("T")
 V = TypeVar("V")
+T_contra = TypeVar("T_contra", contravariant=True)
+V_co = TypeVar("V_co", covariant=True)
 
 
-class NonDataDescriptor(Protocol[T, V]):  # type: ignore
+class NonDataDescriptor(Protocol[T_contra, V_co]):
     @overload
-    def __get__(self, _instance: None, _owner_type: Type[T]) -> NonDataDescriptor:
+    def __get__(self, _instance: None, _owner_type: Type[T_contra]) -> NonDataDescriptor:
         ...
 
     @overload
-    def __get__(self, _instance: T, _owner_type: Optional[Type[T]] = None) -> V:
+    def __get__(self, _instance: T_contra, _owner_type: Optional[Type[T_contra]] = None) -> V_co:
         ...
 
 
-class DataDescriptor(NonDataDescriptor[T, V], Protocol):  # type: ignore
+class DataDescriptor(NonDataDescriptor[T_contra, V], Protocol):
     def __set__(self, _instance: T, _value: V) -> None:
         ...
 
 
 RootValidatorValuesType = Dict[str, Any]
 RootValidatorType = Callable[[Type, RootValidatorValuesType], RootValidatorValuesType]
+
+
+def canonicalize_forward_ref(type_hint: Union[Type, ForwardRef]) -> Union[Type, ForwardRef]:
+    """Return the original type hint or a ``ForwardRef``s without nested ``ForwardRef``s."""
+    if isinstance(type_hint, ForwardRef) or not (type_args := typing.get_args(type_hint)):
+        return type_hint
+    else:
+        new_type_args = tuple(canonicalize_forward_ref(t) for t in type_args)
+        if not any(isinstance(t, ForwardRef) for t in new_type_args):
+            return type_hint
+        else:
+            assert isinstance(type_hint, typing._GenericAlias)  # type: ignore[attr-defined]  # typing._GenericAlias is not public
+            return ForwardRef(
+                type_hint.copy_with(
+                    tuple(
+                        t.__forward_arg__ if isinstance(t, ForwardRef) else t for t in new_type_args
+                    )
+                )
+            )
+
+
+def get_canonical_type_hints(cls: Type) -> Dict[str, Union[Type, ForwardRef]]:
+    """Extract class type annotations returning forward references for partially undefined types.
+
+    The canonicalization consists in returning either a fully-specified type
+    annotation or a :class:`typing.ForwarRef` instance with the type annotation
+    for not fully-specified types.
+
+    Based on :func:`typing.get_type_hints` implementation.
+    """
+    hints: Dict[str, Union[Type, ForwardRef]] = {}
+
+    for base in reversed(cls.__mro__):
+        base_globals = sys.modules[base.__module__].__dict__
+        ann = base.__dict__.get("__annotations__", {})
+        for name, value in ann.items():
+            if value is None:
+                value = type(None)
+            elif isinstance(value, str):
+                value = ForwardRef(value, is_argument=False)
+
+            try:
+                value = typing._eval_type(value, base_globals, None)  # type: ignore[attr-defined]  # typing._eval_type is not public
+            except NameError as e:
+                if "ForwardRef(" not in repr(value):
+                    raise e
+            if not isinstance(value, ForwardRef) and "ForwardRef(" in repr(value):
+                value = canonicalize_forward_ref(value)
+
+            hints[name] = value
+
+    return hints
+
+
+@typing.overload
+def resolve_forward_ref(
+    type_int: Any, global_ns: Optional[Dict[str, Any]] = None, *, allow_partial: Literal[False]
+) -> Type:
+    ...
+
+
+@typing.overload
+def resolve_forward_ref(
+    type_int: Any, global_ns: Optional[Dict[str, Any]] = None, *, allow_partial: Literal[True]
+) -> Union[Type, ForwardRef]:
+    ...
+
+
+def resolve_forward_ref(
+    type_int: Any, global_ns: Optional[Dict[str, Any]] = None, *, allow_partial: bool = False
+) -> Union[Type, ForwardRef]:
+    """Resolve forward references in type annotations.
+
+    Arguments:
+        global_ns: globals dict used in the evaluation of the annotations.
+        allow_partial: if ``True``, the resolution is allowed to fail and
+            a :class:`typing.ForwardRef` will be returned.
+    """
+    actual_type = ForwardRef(type_int) if isinstance(type_int, str) else type_int
+    while "ForwardRef(" in repr(actual_type):
+        try:
+            actual_type = typing._eval_type(  # type: ignore[attr-defined]  # typing._eval_type is not visible for mypy
+                actual_type,
+                global_ns,
+                {"typing": sys.modules["typing"], "NoneType": type(None)},
+            )
+        except Exception as e:
+            if allow_partial:
+                actual_type = canonicalize_forward_ref(actual_type)
+            else:
+                raise e
+
+    return actual_type

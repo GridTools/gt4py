@@ -294,7 +294,7 @@ def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
     interpreter reboots) and it does not use hash customizations on user
     classes (it uses `pickle` internally to get a byte stream).
 
-    Args:
+    Arguments:
         hash_algorithm: object implementing the `hash algorithm` interface
             from :mod:`hashlib` or canonical name (`str`) of the
             hash algorithm as defined in :mod:`hashlib`.

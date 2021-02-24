@@ -84,10 +84,9 @@ from typing import (
 
 import attr
 
+from eve import typingx, utils
+from eve.concepts import NOTHING
 from eve.typingx import NonDataDescriptor
-
-from . import utils
-from .concepts import NOTHING
 
 
 # Typing
@@ -216,72 +215,12 @@ _ROOT_VALIDATOR_TAG = "__ROOT_VALIDATOR_TAG"
 _ROOT_VALIDATORS = "__datamodel_validators__"
 
 
-def _canonicalize_forwardref_type_hint(
-    type_hint: Union[Type, ForwardRef]
-) -> Union[Type, ForwardRef]:
-    """Return the type hint without modifications or as a ForwardReference."""
-    if isinstance(type_hint, ForwardRef):
-        return type_hint
-
-    base_hint = str(type_hint)
-    modified = False
-    while "ForwardRef(" in base_hint:
-        modified = True
-        start = base_hint.find("ForwardRef(")
-        offset = len("ForwardRef(")
-        nested = 0
-        for i, c in enumerate(base_hint[start + offset :]):
-            if c == ")":
-                if nested == 0:
-                    end = start + offset + i
-                    break
-                else:
-                    nested -= 1
-            elif c == "(":
-                nested += 1
-
-        content = (base_hint[start + offset : end]).strip(" \n\r\t\"'")
-        base_hint = base_hint[:start] + content + base_hint[end + 1 :]
-
-    return ForwardRef(base_hint) if modified else type_hint
-
-
-def _get_canonical_type_hints(cls: Type) -> Dict[str, Union[Type, ForwardRef]]:
-    """Resolve class annotations returning forward references for partially undefined ones.
-
-    The canonicalization consists in returning either a fully-specified type
-    annotation or a :class:`typing.ForwarRef` instance with the type definition
-    for not fully-specified types.
-
-    Based on :func:`typing.get_type_hints` implementation.
-    """
-    hints: Dict[str, Union[Type, ForwardRef]] = {}
-
-    for base in reversed(cls.__mro__):
-        base_globals = sys.modules[base.__module__].__dict__
-        ann = base.__dict__.get("__annotations__", {})
-        for name, value in ann.items():
-            if value is None:
-                value = type(None)
-            elif isinstance(value, str):
-                value = ForwardRef(value, is_argument=False)
-
-            try:
-                value = typing._eval_type(value, base_globals, None)  # type: ignore[attr-defined]  # typing._eval_type not public
-            except NameError as e:
-                if "ForwardRef(" not in repr(value):
-                    raise e
-            if not isinstance(value, ForwardRef) and "ForwardRef(" in repr(value):
-                value = _canonicalize_forwardref_type_hint(value)
-
-            hints[name] = value
-
-    return hints
-
-
 # -- Validators --
 @dataclasses.dataclass
 class _ForwardRefValidator:
+    """Implementation of ``attr.s`` type validator for ``ForwardRef`` typings."""
+
+    #: Actual type validators created after resolving the forward references.
     validator: Optional[attr._ValidatorType] = None
 
     def __call__(self, instance: DataModelTp, attribute: attr.Attribute, value: Any) -> None:
@@ -376,6 +315,15 @@ def empty_attrs_validator() -> attr._ValidatorType:
     return _empty_validator
 
 
+def forward_ref_type_attrs_validator() -> attr._ValidatorType:
+    """Create an ``attr.s`` strict type validator for ``ForwardRef`` typings.
+
+    The generated validator will resolve the field type to an actual type
+    the first time is called.
+    """
+    return _ForwardRefValidator()
+
+
 def instance_of_int_attrs_validator() -> attr._ValidatorType:
     """Create an ``attr.s`` validator for ``int`` values which fails with ``bool`` values."""
 
@@ -386,15 +334,6 @@ def instance_of_int_attrs_validator() -> attr._ValidatorType:
             )
 
     return _int_validator
-
-
-def forwardref_type_attrs_validator() -> attr._ValidatorType:
-    """Create an ``attr.s`` strict type validator for ``ForwardRef`` typings.
-
-    The generated validator will resolve the field type to an actual type
-    the first time is called.
-    """
-    return _ForwardRefValidator()
 
 
 def or_attrs_validator(
@@ -448,7 +387,6 @@ def strict_type_attrs_validator(
 ) -> attr._ValidatorType:
     """Create an ``attr.s`` strict type validator for a specific typing hint."""
     type_args = typing.get_args(type_hint)
-    origin_type = typing.get_origin(type_hint)
 
     # Non-generic types
     if isinstance(type_hint, type) and type_hint is not type(  # noqa: E721  # use isinstance()
@@ -465,7 +403,7 @@ def strict_type_attrs_validator(
         else:
             return empty_attrs_validator()
     if isinstance(type_hint, ForwardRef):
-        return forwardref_type_attrs_validator()
+        return forward_ref_type_attrs_validator()
     if type_hint is Any:
         return empty_attrs_validator()
 
@@ -692,7 +630,7 @@ def _make_datamodel(
         cls.__annotations__ = {}
     annotations = cls.__dict__["__annotations__"]
     mro_bases: Tuple[Type, ...] = cls.__mro__[1:]
-    canonicalized_annotations = _get_canonical_type_hints(cls)
+    canonicalized_annotations = typingx.get_canonical_type_hints(cls)
 
     # Create attrib definitions with automatic type validators (and converters)
     # for the annotated fields. The original annotations are used for iteration
@@ -1038,7 +976,7 @@ def astuple(
 def update_forward_refs(
     model: Union[DataModelTp, Type[DataModelTp]], *, fields: Optional[List[str]] = None
 ) -> None:
-    """Update Data Model class meta-information with the actual types for forwarded type annotations."""
+    """Update Data Model class meta-information replacing forwarded type annotations with actual types."""
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
     if not isinstance(model, type):
@@ -1054,13 +992,7 @@ def update_forward_refs(
         for field_name in fields:
             field_attr = getattr(datamodel_fields_ns, field_name)
             if "ForwardRef(" in repr(field_attr.type):
-                actual_type = field_attr.type
-                while "ForwardRef(" in repr(actual_type):
-                    actual_type = typing._eval_type(  # type: ignore[attr-defined]  # typing._eval_type is not visible for mypy
-                        actual_type,
-                        sys.modules[model.__module__].__dict__,
-                        {"typing": sys.modules["typing"], "NoneType": type(None)},
-                    )
+                actual_type = typingx.resolve_forward_ref(field_attr.type, allow_partial=False)
                 new_attr = field_attr.evolve(type=actual_type)
                 object.__setattr__(datamodel_fields_ns, field_name, new_attr)
                 updated_fields[field_name] = new_attr
@@ -1074,8 +1006,7 @@ def update_forward_refs(
         model.__attrs_attrs__ = tuple(updated_fields.get(a.name, a) for a in model.__attrs_attrs__)
         for f_name, f_info in model.__dataclass_fields__.items():
             if f_name in updated_fields:
-                actual_type = updated_fields[f_name].type
-                assert actual_type is not None
+                actual_type = updated_fields[f_name].type  # type: ignore[assignment]  # updated_fiels[...].type is never None
                 f_info.type = actual_type
 
 
@@ -1325,17 +1256,17 @@ class DataModel(DataModelTp):
 
 
 # TODO(egparedes): implement type coercing
-# TODO:  def _make_type_coercer(type_hint: Type[T]) -> Callable[[Any], T]:
-# TODO:      return type_hint if isinstance(type_hint, type) else lambda x: x  # type: ignore
+# TODO: def _make_type_coercer(type_hint: Type[T]) -> Callable[[Any], T]:
+# TODO:     return type_hint if isinstance(type_hint, type) else lambda x: x  # type: ignore
 
 
 # TODO(egparedes): implement full instance freezing
-# TODO: def _frozen_setattr(instance, attribute, value):
+# TODO: def _frozen_setattr(instance, attribute, value):    # noqa: E800
 # TODO:      raise attr.exceptions.FrozenAttributeError(
 # TODO:         f"Trying to modify immutable '{attribute.name}' attribute in '{type(instance).__name__}' instance."
 # TODO:      )
 
 
 # TODO(egparedes): implement validation on attribute assignment
-# TODO:  def _valid_setattr(instance, attribute, value):
-# TODO:      print("SET", attribute, value)
+# TODO: def _valid_setattr(instance, attribute, value):
+# TODO:     print("SET", attribute, value)
