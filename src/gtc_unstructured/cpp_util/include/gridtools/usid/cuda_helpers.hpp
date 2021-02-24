@@ -42,7 +42,7 @@ namespace gridtools::usid::cuda {
             sid::get_origin(fields),
             sid::get_strides(fields),
             tuple_util::make<pair>(
-                sid::get_origin(neighbor_fields), at_key<dim::h>(sid::get_strides(neighbor_fields)))...);
+                sid::get_origin(neighbor_fields), sid::get_stride<dim::h>(sid::get_strides(neighbor_fields)))...);
         GT_CUDA_CHECK(cudaGetLastError());
     }
 
