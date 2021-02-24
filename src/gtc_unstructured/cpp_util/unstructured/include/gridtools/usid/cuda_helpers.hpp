@@ -1,6 +1,5 @@
 #pragma once
 
-#include <tuple>
 #ifndef __CUDACC__
 #error Tried to compile CUDA code with a regular C++ compiler.
 #endif
