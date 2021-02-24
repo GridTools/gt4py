@@ -42,6 +42,7 @@ function(add_regression_test_executable)
 
     # generate c++ from gtscript
     set(STENCIL_IMPL_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/generated_${ARG_NAME}.hpp)
+    set(BACKEND ${ARG_MODE})
     add_custom_command(OUTPUT ${STENCIL_IMPL_SOURCE}
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT} ${ARG_MODE}
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT})
