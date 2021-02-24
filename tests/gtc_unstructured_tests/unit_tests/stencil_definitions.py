@@ -21,6 +21,7 @@ from gtc_unstructured.frontend.gtscript import (
     FORWARD,
     Connectivity,
     Edge,
+    Cell,
     Field,
     LocalField,
     SparseField,
@@ -37,6 +38,7 @@ from gtc_unstructured.irs import common
 dtype = common.DataType.FLOAT64
 E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
 V2E = types.new_class("V2E", (Connectivity[Vertex, Edge, 7, True],))
+C2C = types.new_class("C2C", (Connectivity[Cell, Cell, 4, False],))
 
 valid_stencils = [
     "copy",
@@ -48,6 +50,7 @@ valid_stencils = [
     "fvm_nabla",
     "weights",
     "sparse_field_assign",
+    "native_functions"
 ]
 
 
@@ -92,7 +95,7 @@ def fvm_nabla(
     v2e: V2E,
     e2v: E2V,
     S_MXX: Field[Edge, dtype],
-    S_MYY: Field[Edge, dtype],
+    S_MYY: Field[Edge, dtype],native_functions
     pp: Field[Vertex, dtype],
     pnabla_MXX: Field[Vertex, dtype],
     pnabla_MYY: Field[Vertex, dtype],
@@ -127,3 +130,7 @@ def sparse_field_assign(
             out_sparse_field = (in_sparse_field[e, v] for v in e2v[e])
             # TODO: Fix silently generates invalid code
             # out_sparse_field = in_sparse_field
+
+def native_functions(c2c: C2C, field_in: Field[Cell, dtype], field_out: Field[Cell, dtype]):
+    with computation(FORWARD), location(Cell) as c1:
+        field_out[c1] = sqrt(field_in)+max(1, 2)+sum(max(field_in[c1], field_in[c2]) for c2 in c2c[c1])

@@ -160,7 +160,7 @@ class PyToGTScript:
 
         BinaryOp = ast.BinOp(op=Capture("op"), left=Capture("left"), right=Capture("right"))
 
-        Call = ast.Call(args=Capture("args"), func=ast.Name(id=Capture("func")))
+        Call = ast.Call(args=Capture("args"), func=Capture("func", expected_type=ast.Name))
 
         SubscriptCall = ast.Call(args=Capture("args"), func=Capture("func", expected_type=ast.Subscript))
 

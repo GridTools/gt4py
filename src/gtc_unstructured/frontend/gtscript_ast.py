@@ -26,6 +26,7 @@ from eve import Node, Str, StrEnum, SymbolTableTrait
 from eve.type_definitions import SymbolName
 from . import built_in_types
 from .built_in_types import BuiltInTypeMeta
+from .built_in_functions import BuiltInFunction
 
 __all__ = [
     "GTScriptASTNode",
@@ -117,7 +118,7 @@ class UnaryOp(Expr):
 
 class Call(Expr):
     args: List[Expr]
-    func: str
+    func: SymbolRef
 
 
 class SubscriptCall(Expr):
@@ -181,8 +182,11 @@ class Argument(GTScriptASTNode):
 class External(GTScriptASTNode):
     name: SymbolName
     value: Union[
-        StrictInt, StrictFloat, None, common.LocationType, common.DataType, BuiltInTypeMeta
+        StrictInt, StrictFloat, None, common.LocationType, common.DataType, BuiltInTypeMeta, BuiltInFunction
     ]
+
+    class Config:
+        arbitrary_types_allowed = True
 
     @property
     def type_(self):

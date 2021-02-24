@@ -4,7 +4,7 @@ from numbers import Number
 import eve
 
 from ..built_in_types import BuiltInType
-from ..gtscript import LocalField, Location, Connectivity
+from ..gtscript import LocalField, Location, Connectivity, Field
 from ..gtscript_ast import GTScriptASTNode, Argument, TemporaryFieldDecl, TemporarySparseFieldDecl, Call, Constant, SymbolRef, External, \
     LocationSpecification, LocationComprehension, SubscriptCall, Subscript, BinaryOp, Generator
 from .const_expr_evaluator import evaluate_const_expr
@@ -19,13 +19,18 @@ class TypeDeduction(eve.NodeVisitor):
         raise ValueError(f"Type of node {node} not defined.")
 
     def visit_Argument(self, node: Argument, **kwargs):
-        return node.type_
+        if issubclass(node.type_, Field):
+            return Number
+        elif issubclass(node.type_, Connectivity):
+            return node.type_
+
+        raise ValueError()
 
     def visit_TemporaryFieldDecl(self, node: TemporaryFieldDecl, **kwargs):
-        return node.type_
+        return Number
 
     def visit_TemporarySparseFieldDecl(self, node: TemporarySparseFieldDecl, **kwargs):
-        return node.type_
+        return Number
 
     def visit_Call(self, node: Call, **kwargs):
         # todo: enhance
@@ -66,7 +71,6 @@ class TypeDeduction(eve.NodeVisitor):
         # todo: enhance
         if all(isinstance(symtable[idx.name], (LocationSpecification, LocationComprehension))
                for idx in node.indices):
-            # todo: use Number
             return Number
         raise ValueError(f"Type of node {node} not defined.")
 

@@ -21,6 +21,7 @@ import textwrap
 import devtools
 
 from . import built_in_types
+from . import built_in_functions
 from .gtscript_ast import External, Argument
 from gtc_unstructured.frontend.gtscript_to_gtir import (
     GTScriptToGTIR,
@@ -59,18 +60,20 @@ class GTScriptCompilationTask:
         return args
 
     def _generate_gtscript_ast(self):
+        externals = [
+            External(name="dtype", value=common.DataType.FLOAT64),
+            External(name="Vertex", value=common.LocationType.Vertex),
+            External(name="Edge", value=common.LocationType.Edge),
+            External(name="Cell", value=common.LocationType.Cell),
+            External(name="Field", value=built_in_types.Field),
+            External(name="Connectivity", value=built_in_types.Connectivity),
+            External(name="LocalField", value=built_in_types.LocalField)
+        ] + [External(name=name, value=getattr(built_in_functions, name)) for name in built_in_functions.__all__]
+
         self.source = textwrap.dedent(inspect.getsource(self.definition))
         self.python_ast = ast.parse(self.source).body[0]
         self.gtscript_ast = PyToGTScript().transform(self.python_ast, node_init_args={
-            "externals": [
-                External(name="dtype", value=common.DataType.FLOAT64),
-                External(name="Vertex", value=common.LocationType.Vertex),
-                External(name="Edge", value=common.LocationType.Edge),
-                External(name="Cell", value=common.LocationType.Cell),
-                External(name="Field", value=built_in_types.Field),
-                External(name="Connectivity", value=built_in_types.Connectivity),
-                External(name="LocalField", value=built_in_types.LocalField)
-            ],
+            "externals": externals,
             "arguments": self._get_arguments()
         })
 
