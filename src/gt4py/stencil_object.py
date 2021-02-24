@@ -172,7 +172,7 @@ class StencilObject(abc.ABC):
                     ),
                 ):
                     raise ValueError(
-                        f"The layout of the field '{name}' is not compatible with the backend."
+                        f"Storage for '{name}' has layout which is incompatible with the backend."
                     )
 
             if (
@@ -345,7 +345,7 @@ class StencilObject(abc.ABC):
                 api_ndim = len(self.field_info[name].axes)
                 if storage_ndim != api_ndim:
                     raise ValueError(
-                        f"The storage for '{name}' has {storage_ndim} dimensions, but the API signature expects {api_ndim}"
+                        f"Storage for '{name}' has {storage_ndim} dimensions but the API signature expects {api_ndim}"
                     )
                 origin.setdefault(
                     name,

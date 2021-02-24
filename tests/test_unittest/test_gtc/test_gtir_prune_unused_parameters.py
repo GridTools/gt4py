@@ -14,25 +14,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc import common
-from gtc.gtir import FieldDecl, ScalarDecl
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 
-from .gtir_utils import ParAssignStmtBuilder, StencilBuilder
-
-
-A_ARITHMETIC_TYPE = common.DataType.FLOAT32
+from .gtir_utils import FieldDeclFactory, ParAssignStmtFactory, ScalarDeclFactory, StencilFactory
 
 
 def test_all_parameters_used():
-    field_param = FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE)
-    scalar_param = ScalarDecl(name="scalar", dtype=A_ARITHMETIC_TYPE)
-    testee = (
-        StencilBuilder()
-        .add_param(field_param)
-        .add_param(scalar_param)
-        .add_par_assign_stmt(ParAssignStmtBuilder("field", "scalar").build())
-        .build()
+    field_param = FieldDeclFactory()
+    scalar_param = ScalarDeclFactory()
+    testee = StencilFactory(
+        params=[field_param, scalar_param],
+        vertical_loops__0__body__0=ParAssignStmtFactory(
+            left__name=field_param.name, right__name=scalar_param.name
+        ),
     )
     expected_params = [field_param, scalar_param]
 
@@ -42,18 +36,15 @@ def test_all_parameters_used():
 
 
 def test_unused_are_removed():
-    field_param = FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE)
-    unused_field_param = FieldDecl(name="unused_field", dtype=A_ARITHMETIC_TYPE)
-    scalar_param = ScalarDecl(name="scalar", dtype=A_ARITHMETIC_TYPE)
-    unused_scalar_param = ScalarDecl(name="unused_scalar", dtype=A_ARITHMETIC_TYPE)
-    testee = (
-        StencilBuilder()
-        .add_param(field_param)
-        .add_param(unused_field_param)
-        .add_param(scalar_param)
-        .add_param(unused_scalar_param)
-        .add_par_assign_stmt(ParAssignStmtBuilder("field", "scalar").build())
-        .build()
+    field_param = FieldDeclFactory()
+    unused_field_param = FieldDeclFactory()
+    scalar_param = ScalarDeclFactory()
+    unused_scalar_param = ScalarDeclFactory()
+    testee = StencilFactory(
+        params=[field_param, unused_field_param, scalar_param, unused_scalar_param],
+        vertical_loops__0__body__0=ParAssignStmtFactory(
+            left__name=field_param.name, right__name=scalar_param.name
+        ),
     )
     expected_params = [field_param, scalar_param]
 

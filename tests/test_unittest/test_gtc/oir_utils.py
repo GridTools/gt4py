@@ -14,153 +14,87 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Optional, Tuple, Union
+from typing import List
 
-from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
-from gtc.oir import (
-    AssignStmt,
-    AxisBound,
-    Decl,
-    Expr,
-    FieldAccess,
-    FieldDecl,
-    HorizontalExecution,
-    Interval,
-    ScalarAccess,
-    ScalarDecl,
-    Stencil,
-    Stmt,
-    SymbolName,
-    Temporary,
-    VerticalLoop,
-)
+import factory
+
+from gtc import common, oir
+
+from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
 
 
-class AssignStmtBuilder:
-    def __init__(self, left_name=None, right_name=None, right_offset=None) -> None:
-        self._left = FieldAccessBuilder(left_name).build() if left_name else None
-        self._right = (
-            FieldAccessBuilder(right_name, offset=right_offset).build() if right_name else None
-        )
+class FieldAccessFactory(factory.Factory):
+    class Meta:
+        model = oir.FieldAccess
 
-    def left(self, access: Union[ScalarAccess, FieldAccess]) -> "AssignStmtBuilder":
-        self._left = access
-        return self
-
-    def right(self, expr: Expr) -> "AssignStmtBuilder":
-        self._right = expr
-        return self
-
-    def build(self) -> AssignStmt:
-        return AssignStmt(left=self._left, right=self._right)
+    name = identifier(oir.FieldAccess)
+    offset = factory.SubFactory(CartesianOffsetFactory)
+    dtype = common.DataType.FLOAT32
 
 
-class CartesianOffsetBuilder:
-    def __init__(self, i=None, j=None, k=None) -> None:
-        self._i = i if i else 0
-        self._j = j if j else 0
-        self._k = k if k else 0
+class AssignStmtFactory(factory.Factory):
+    class Meta:
+        model = oir.AssignStmt
 
-    def build(self) -> CartesianOffset:
-        return CartesianOffset(i=self._i, j=self._j, k=self._k)
+    left = factory.SubFactory(FieldAccessFactory)
+    right = factory.SubFactory(FieldAccessFactory)
 
 
-class FieldAccessBuilder:
-    def __init__(self, name: str, offset: Optional[Tuple[int, int, int]] = None) -> None:
-        self._name = name
-        self._offset = CartesianOffsetBuilder(*(offset if offset else [])).build()
-        self._kind = ExprKind.FIELD
-        self._dtype = DataType.FLOAT32
+class TemporaryFactory(factory.Factory):
+    class Meta:
+        model = oir.Temporary
 
-    def offset(self, offset: CartesianOffset) -> "FieldAccessBuilder":
-        self._offset = offset
-        return self
-
-    def dtype(self, dtype: DataType) -> "FieldAccessBuilder":
-        self._dtype = dtype
-        return self
-
-    def build(self) -> FieldAccess:
-        return FieldAccess(name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind)
+    name = identifier(oir.Temporary)
+    dtype = common.DataType.FLOAT32
 
 
-class TemporaryBuilder:
-    def __init__(self, name: SymbolName = None, dtype: DataType = None) -> None:
-        self._name = name
-        self._dtype = DataType.FLOAT32 if dtype is None else dtype
+class FieldDeclFactory(factory.Factory):
+    class Meta:
+        model = oir.FieldDecl
 
-    def build(self) -> Temporary:
-        return Temporary(name=self._name, dtype=self._dtype)
-
-
-class FieldDeclBuilder:
-    def __init__(self, name: SymbolName = None, dtype: DataType = None) -> None:
-        self._name = name
-        self._dtype = DataType.FLOAT32 if dtype is None else dtype
-
-    def build(self) -> FieldDecl:
-        return FieldDecl(name=self._name, dtype=self._dtype)
+    name = identifier(oir.FieldDecl)
+    dtype = common.DataType.FLOAT32
 
 
-class HorizontalExecutionBuilder:
-    def __init__(self) -> None:
-        self._body: List[Stmt] = []
-        self._mask = None
-        self._declarations: List[ScalarDecl] = []
+class HorizontalExecutionFactory(factory.Factory):
+    class Meta:
+        model = oir.HorizontalExecution
 
-    def add_stmt(self, stmt: Stmt) -> "HorizontalExecutionBuilder":
-        self._body.append(stmt)
-        return self
-
-    def build(self) -> HorizontalExecution:
-        return HorizontalExecution(
-            body=self._body, mask=self._mask, declarations=self._declarations
-        )
+    body = factory.List([factory.SubFactory(AssignStmtFactory)])
+    mask = None
+    declarations: List[oir.LocalScalar] = []
 
 
-class VerticalLoopBuilder:
-    def __init__(self) -> None:
-        self._interval = Interval(start=AxisBound.start(), end=AxisBound.end())
-        self._horizontal_executions: List[HorizontalExecution] = []
-        self._loop_order = LoopOrder.PARALLEL
-        self._declarations: List[Temporary] = []
+class IntervalFactory(factory.Factory):
+    class Meta:
+        model = oir.Interval
 
-    def add_horizontal_execution(
-        self, horizontal_execution: HorizontalExecution
-    ) -> "VerticalLoopBuilder":
-        self._horizontal_executions.append(horizontal_execution)
-        return self
-
-    def add_declaration(self, declaration: Temporary) -> "VerticalLoopBuilder":
-        self._declarations.append(declaration)
-        return self
-
-    def build(self) -> VerticalLoop:
-        return VerticalLoop(
-            interval=self._interval,
-            horizontal_executions=self._horizontal_executions,
-            loop_order=self._loop_order,
-            declarations=self._declarations,
-        )
+    start = common.AxisBound.start()
+    end = common.AxisBound.end()
 
 
-class StencilBuilder:
-    def __init__(self, name="foo") -> None:
-        self._name: str = name
-        self._params: List[Decl] = []
-        self._vertical_loops: List[VerticalLoop] = []
+class VerticalLoopSectionFactory(factory.Factory):
+    class Meta:
+        model = oir.VerticalLoopSection
 
-    def add_param(self, param: Decl) -> "StencilBuilder":
-        self._params.append(param)
-        return self
+    interval = factory.SubFactory(IntervalFactory)
+    horizontal_executions = factory.List([factory.SubFactory(HorizontalExecutionFactory)])
 
-    def add_vertical_loop(self, vertical_loop: VerticalLoop) -> "StencilBuilder":
-        self._vertical_loops.append(vertical_loop)
-        return self
 
-    def build(self) -> Stencil:
-        return Stencil(
-            name=self._name,
-            params=self._params,
-            vertical_loops=self._vertical_loops,
-        )
+class VerticalLoopFactory(factory.Factory):
+    class Meta:
+        model = oir.VerticalLoop
+
+    loop_order = common.LoopOrder.PARALLEL
+    sections = factory.List([factory.SubFactory(VerticalLoopSectionFactory)])
+    caches: List[oir.CacheDesc] = []
+
+
+class StencilFactory(factory.Factory):
+    class Meta:
+        model = oir.Stencil
+
+    name = identifier(oir.Stencil)
+    vertical_loops = factory.List([factory.SubFactory(VerticalLoopFactory)])
+    declarations: List[oir.Temporary] = []
+    params = undefined_symbol_list(lambda name: FieldDeclFactory(name=name), "vertical_loops")

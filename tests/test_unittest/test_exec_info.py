@@ -38,7 +38,7 @@ class TestExecInfo:
         in_phi: gtscript.Field[float],  # type: ignore
         in_u: gtscript.Field[float],  # type: ignore
         in_v: gtscript.Field[float],  # type: ignore
-        out_phi: gtscript.Field[float],  # type: ignore  # noqa
+        out_phi: gtscript.Field[float],  # type: ignore
     ):
         with computation(PARALLEL), interval(...):  # type: ignore  # noqa
             u = 0.5 * (in_u[-1, 0, 0] + in_u[0, 0, 0])  # type: ignore
@@ -55,7 +55,7 @@ class TestExecInfo:
 
     @staticmethod
     def diffusion_def(
-        in_phi: gtscript.Field[float], out_phi: gtscript.Field[float], *, alpha: float  # type: ignore  # noqa
+        in_phi: gtscript.Field[float], out_phi: gtscript.Field[float], *, alpha: float  # type: ignore
     ):
         with computation(PARALLEL), interval(...):  # type: ignore  # noqa
             lap1 = (
@@ -65,11 +65,11 @@ class TestExecInfo:
                 + in_phi[0, -1, 0]  # type: ignore
                 + in_phi[0, 1, 0]  # type: ignore
             )
-            lap2 = (  # noqa
+            lap2 = (
                 -4 * lap1[0, 0, 0] + lap1[-1, 0, 0] + lap1[1, 0, 0] + lap1[0, -1, 0] + lap1[0, 1, 0]
             )
-            flux_x = lap2[1, 0, 0] - lap2[0, 0, 0]  # noqa
-            flux_y = lap2[0, 1, 0] - lap2[0, 0, 0]  # noqa
+            flux_x = lap2[1, 0, 0] - lap2[0, 0, 0]
+            flux_y = lap2[0, 1, 0] - lap2[0, 0, 0]
             out_phi = in_phi + alpha * (  # noqa
                 flux_x[0, 0, 0] - flux_x[-1, 0, 0] + flux_y[0, 0, 0] - flux_y[0, -1, 0]
             )

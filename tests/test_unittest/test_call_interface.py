@@ -389,9 +389,22 @@ class TestAxesMismatch:
     def test_ndarray(self):
         self.run_test(
             np.ndarray((3, 3, 3), np.float64),
-            f"The storage for '.*' has 3 dimensions, but the API signature expects 2",
+            f"Storage for '.*' has 3 dimensions but the API signature expects 2",
         )
 
     @pytest.mark.skip("Need dims of __gt_data_interface__ support")
     def test_gt_data_interface(self):
         raise NotImplementedError
+
+    @pytest.mark.skip("Need dims of __gt_data_interface__ support")
+    def test_storage(self):
+        self.run_test(
+            gt_storage.empty(
+                shape=(3, 3),
+                mask=[True, False, True],
+                dtype=np.float64,
+                backend="debug",
+                default_origin=(0, 0),
+            ),
+            "Storage for '.*' has mask '\(True, False, True\)' but the API signature expects '\(True, True, False\)'",
+        )
