@@ -319,15 +319,10 @@ class InitInfoPass(TransformPass):
             return result
 
         def visit_HorizontalIf(self, node: gt_ir.HorizontalIf):
-            inputs = {}
-            outputs = set()
-
-            for stmt in node.body.stmts:
-                stmt_info = self.visit(stmt)
-                inputs = self._merge_extents(list(inputs.items()) + list(stmt_info.inputs.items()))
-                outputs |= stmt_info.outputs
-
-            result = StatementInfo(self.data.id_generator.new, node, inputs, outputs)
+            body_info = self.visit(node.body)
+            result = StatementInfo(
+                self.data.id_generator.new, node, body_info.inputs, body_info.outputs
+            )
 
             return result
 
@@ -898,10 +893,10 @@ class RemoveUnreachedStatementsPass(TransformPass):
                     stmt_infos = []
                     for stmt_info in int_block.stmts:
                         stmt = stmt_info.stmt
-                        if not isinstance(stmt, gt_ir.HorizontalIf):
-                            stmt_infos.append(stmt_info)
-                        elif (
-                            compute_extent_diff(ij_block.compute_extent, stmt.intervals) is not None
+                        if not isinstance(stmt, gt_ir.HorizontalIf) or (
+                            isinstance(stmt, gt_ir.HorizontalIf)
+                            and compute_extent_diff(ij_block.compute_extent, stmt.intervals)
+                            is not None
                         ):
                             stmt_infos.append(stmt_info)
                     int_block.stmts = stmt_infos
@@ -933,13 +928,14 @@ class ComputeExtentsPass(TransformPass):
         access_extents = {}
         for name in transform_data.symbols:
             access_extents[name] = Extent.zeros()
+        compute_extent = Extent.zeros()
 
         blocks = transform_data.blocks
         for dom_block in reversed(blocks):
             for ij_block in reversed(dom_block.ij_blocks):
                 ij_block.compute_extent = Extent.zeros()
                 for name in ij_block.outputs:
-                    ij_block.compute_extent |= access_extents[name]
+                    ij_block.compute_extent |= compute_extent
                 for int_block in ij_block.interval_blocks:
                     for stmt_info in int_block.stmts:
                         for name, extent in stmt_info.inputs.items():
@@ -950,12 +946,17 @@ class ComputeExtentsPass(TransformPass):
                                 diffs = Extent.zeros()[:seq_axis]
                                 overlaps = True
                             if overlaps:
-                                horiz_extent = Extent(extent[:seq_axis]) - diffs
-                                extent = Extent(
-                                    list(horiz_extent) + [(0, 0)]
-                                )  # exclude sequential axis
-                                accumulated_extent = ij_block.compute_extent + extent
-                                access_extents[name] |= accumulated_extent
+                                # Track maximum offset on each field
+                                input_offset_extent = Extent(list(extent[:seq_axis]) + [(0, 0)])
+                                access_extents[name] |= (
+                                    ij_block.compute_extent + input_offset_extent
+                                )
+
+                                # Track maximum compute extent
+                                input_compute_extent = Extent(
+                                    list(Extent(extent[:seq_axis]) - diffs) + [(0, 0)]
+                                )
+                                compute_extent |= ij_block.compute_extent + input_compute_extent
 
         transform_data.implementation_ir.fields_extents = {
             name: Extent(extent) for name, extent in access_extents.items()
