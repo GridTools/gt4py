@@ -522,9 +522,9 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 patched_f[patching_slices] = f
                 inputs[k] = gt_storage.storage(
                     patched_f,
-                    dtype=parameters_dict["definition"].__annotations__[k],
+                    dtype=f.dtype,
                     halo=patched_origin,
-                    defaults=parameters_dict["backend"],
+                    defaults=implementation.backend,
                 )
 
             else:
