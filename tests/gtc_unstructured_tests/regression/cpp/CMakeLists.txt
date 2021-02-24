@@ -21,13 +21,13 @@ endif()
 include(FetchContent)
 FetchContent_Declare(GridTools
     GIT_REPOSITORY https://github.com/havogt/gridtools.git
-    GIT_TAG        fortran_array_view_acc_disablable
+    GIT_TAG        master
     # URL https://github.com/GridTools/gridtools/archive/???.tar.gz
 )
 FetchContent_MakeAvailable(GridTools)
 
 FetchContent_Declare(cpputil_usid
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../src/gtc_unstructured/cpp_util/unstructured/
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../src/gtc_unstructured/cpp_util
 )
 FetchContent_MakeAvailable(cpputil_usid)
 
