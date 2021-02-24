@@ -189,8 +189,8 @@ class GenericDataModelAlias(typing._GenericAlias, _root=True):  # type: ignore[c
     Notes:
         For the full picture check also related PEPs:
 
-            - https://www.python.org/dev/peps/pep-0526/
-            - https://www.python.org/dev/peps/pep-0560/
+            - `PEP 526 - Syntax for Variable Annotations <https://www.python.org/dev/peps/pep-0526>`_
+            - `PEP 560 - Core support for typing module and generic types <https://www.python.org/dev/peps/pep-0560>`_
     """
 
     __origin__: Type[GenericDataModelTp]
@@ -579,10 +579,10 @@ def _make_devtools_pretty() -> Callable[
     def __pretty__(
         self: DataModelTp, fmt: Callable[[Any], Any], **kwargs: Any
     ) -> Generator[Any, None, None]:
-        """Provide a human readable representation for `devtools <https://python-devtools.helpmanual.io/>`.
+        """Provide a human readable representation for `devtools <https://python-devtools.helpmanual.io/>`_.
 
         Note:
-            Adapted from `pydantic <https://github.com/samuelcolvin/pydantic>`.
+            Adapted from `pydantic <https://github.com/samuelcolvin/pydantic>`_.
         """
         yield self.__class__.__name__ + "("
         yield 1
