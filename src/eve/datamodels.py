@@ -974,9 +974,21 @@ def astuple(
 
 
 def update_forward_refs(
-    model: Union[DataModelTp, Type[DataModelTp]], *, fields: Optional[List[str]] = None
+    model: Union[DataModelTp, Type[DataModelTp]],
+    local_ns: Optional[Dict[str, Any]] = None,
+    *,
+    fields: Optional[List[str]] = None,
 ) -> None:
-    """Update Data Model class meta-information replacing forwarded type annotations with actual types."""
+    """Update Data Model class meta-information replacing forwarded type annotations with actual types.
+
+    Arguments:
+        local_ns: locals dict used in the evaluation of the annotations
+            (globals are automatically taken from model.__module__).
+
+    Keyword Arguments:
+        fields: list with the names of the fields to be updated. If none provide,
+            all fields will be checked.
+    """
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
     if not isinstance(model, type):
@@ -987,19 +999,24 @@ def update_forward_refs(
 
     datamodel_fields_ns = getattr(model, _MODEL_FIELDS)
     updated_fields: Dict[str, attr.Attribute] = {}
-
     try:
+        field_attr = None
         for field_name in fields:
             field_attr = getattr(datamodel_fields_ns, field_name)
             if "ForwardRef(" in repr(field_attr.type):
-                actual_type = typingx.resolve_forward_ref(field_attr.type, allow_partial=False)
+                actual_type = typingx.resolve_forward_ref(
+                    field_attr.type,
+                    sys.modules[model.__module__].__dict__,
+                    local_ns,
+                    allow_partial=False,
+                )
                 new_attr = field_attr.evolve(type=actual_type)
                 object.__setattr__(datamodel_fields_ns, field_name, new_attr)
                 updated_fields[field_name] = new_attr
 
     except Exception as e:
         raise TypeError(
-            f"Unexpected error trying to solve '{field_name}' field annotation ('{field_attr.type}')"
+            f"Unexpected error trying to solve '{field_name}' field annotation ('{getattr(field_attr, 'type', None)}')"
         ) from e
 
     if updated_fields:

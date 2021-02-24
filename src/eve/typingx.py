@@ -111,35 +111,56 @@ def get_canonical_type_hints(cls: Type) -> Dict[str, Union[Type, ForwardRef]]:
 
 @typing.overload
 def resolve_forward_ref(
-    type_int: Any, global_ns: Optional[Dict[str, Any]] = None, *, allow_partial: Literal[False]
+    type_int: Any,
+    global_ns: Optional[Dict[str, Any]] = None,
+    local_ns: Optional[Dict[str, Any]] = None,
+    *,
+    allow_partial: Literal[False],
 ) -> Type:
     ...
 
 
 @typing.overload
 def resolve_forward_ref(
-    type_int: Any, global_ns: Optional[Dict[str, Any]] = None, *, allow_partial: Literal[True]
+    type_int: Any,
+    global_ns: Optional[Dict[str, Any]] = None,
+    local_ns: Optional[Dict[str, Any]] = None,
+    *,
+    allow_partial: Literal[True],
 ) -> Union[Type, ForwardRef]:
     ...
 
 
 def resolve_forward_ref(
-    type_int: Any, global_ns: Optional[Dict[str, Any]] = None, *, allow_partial: bool = False
+    type_int: Any,
+    global_ns: Optional[Dict[str, Any]] = None,
+    local_ns: Optional[Dict[str, Any]] = None,
+    *,
+    allow_partial: bool = False,
 ) -> Union[Type, ForwardRef]:
     """Resolve forward references in type annotations.
 
     Arguments:
         global_ns: globals dict used in the evaluation of the annotations.
+        local_ns: locals dict used in the evaluation of the annotations.
+
+    Keyword Arguments:
         allow_partial: if ``True``, the resolution is allowed to fail and
             a :class:`typing.ForwardRef` will be returned.
     """
     actual_type = ForwardRef(type_int) if isinstance(type_int, str) else type_int
     while "ForwardRef(" in repr(actual_type):
         try:
+            if local_ns:
+                safe_local_ns = {**local_ns}
+                safe_local_ns.setdefault("typing", sys.modules["typing"])
+                safe_local_ns.setdefault("NoneType", type(None))
+            else:
+                safe_local_ns = {"typing": sys.modules["typing"], "NoneType": type(None)}
             actual_type = typing._eval_type(  # type: ignore[attr-defined]  # typing._eval_type is not visible for mypy
                 actual_type,
                 global_ns,
-                {"typing": sys.modules["typing"], "NoneType": type(None)},
+                safe_local_ns,
             )
         except Exception as e:
             if allow_partial:

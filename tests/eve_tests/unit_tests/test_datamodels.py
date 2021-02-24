@@ -26,6 +26,7 @@ from typing import (
     Callable,
     ClassVar,
     Dict,
+    ForwardRef,
     Generic,
     List,
     MutableSequence,
@@ -307,6 +308,79 @@ def test_custom_class_type_hint():
         Model1(value=AnotherClass())
     with pytest.raises(TypeError, match="value"):
         Model2(value=AnotherClass())
+
+
+@datamodels.datamodel
+class GlobalRecursiveModel:
+    int_value: int
+    list_value: List[GlobalRecursiveModel]
+
+
+def test_deferred_class_type_hint():
+    # Model defined in a module global context
+    assert isinstance(GlobalRecursiveModel.__datamodel_fields__.list_value.type, ForwardRef)
+    datamodels.update_forward_refs(GlobalRecursiveModel)
+    assert (
+        GlobalRecursiveModel.__datamodel_fields__.list_value.type.__args__[0]
+        == GlobalRecursiveModel
+    )
+
+    m1 = GlobalRecursiveModel(int_value=1, list_value=[])
+    m2 = GlobalRecursiveModel(int_value=1, list_value=[m1])
+    GlobalRecursiveModel(int_value=1, list_value=[m1, m2])
+
+    # Models defined in a non-global context
+    @datamodels.datamodel
+    class RecursiveModel:
+        int_value: int
+        list_value: List[RecursiveModel]
+
+    assert isinstance(RecursiveModel.__datamodel_fields__.list_value.type, ForwardRef)
+    datamodels.update_forward_refs(
+        RecursiveModel, {"RecursiveModel": RecursiveModel}, fields=["list_value"]
+    )
+    assert RecursiveModel.__datamodel_fields__.list_value.type.__args__[0] == RecursiveModel
+
+    m1 = RecursiveModel(int_value=1, list_value=[])
+    m2 = RecursiveModel(int_value=1, list_value=[m1])
+    RecursiveModel(int_value=1, list_value=[m1, m2])
+
+    with pytest.raises(TypeError, match="list_value"):
+        RecursiveModel(int_value=1, list_value=["wrong_value"])
+
+    @datamodels.datamodel
+    class CollectorModel:
+        value1: NotYetDefinedModel1
+        value2: NotYetDefinedModel2
+
+    @datamodels.datamodel
+    class NotYetDefinedModel1:
+        int_value: int
+
+    @datamodels.datamodel
+    class NotYetDefinedModel2:
+        int_value: int
+
+    assert isinstance(CollectorModel.__datamodel_fields__.value1.type, ForwardRef)
+    assert isinstance(CollectorModel.__datamodel_fields__.value2.type, ForwardRef)
+    datamodels.update_forward_refs(
+        CollectorModel,
+        {"NotYetDefinedModel1": NotYetDefinedModel1, "NotYetDefinedModel2": NotYetDefinedModel2},
+        fields=["value1"],
+    )
+    assert CollectorModel.__datamodel_fields__.value1.type == NotYetDefinedModel1
+    # value2 field should have not been updated
+    assert isinstance(CollectorModel.__datamodel_fields__.value2.type, ForwardRef)
+
+    datamodels.update_forward_refs(
+        CollectorModel,
+        {"NotYetDefinedModel1": NotYetDefinedModel1, "NotYetDefinedModel2": NotYetDefinedModel2},
+    )
+    assert CollectorModel.__datamodel_fields__.value2.type == NotYetDefinedModel2
+
+    CollectorModel(value1=NotYetDefinedModel1(int_value=1), value2=NotYetDefinedModel2(int_value=2))
+    with pytest.raises(TypeError, match="value2"):
+        CollectorModel(value1=NotYetDefinedModel1(int_value=1), value2=2)
 
 
 def test_field_redefinition():
