@@ -221,7 +221,9 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_FieldRef(self, node: FieldRef):
-        return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))
+        return gtir.FieldAccess(
+            name=node.name, offset=transform_offset(node.offset), data_index=node.data_index
+        )
 
     def visit_If(self, node: If):
         cond = self.visit(node.condition)
@@ -266,7 +268,10 @@ class DefIRToGTIR(IRNodeVisitor):
         dimensions = [axis in node.axes for axis in domain_axes]
         # datatype conversion works via same ID
         return gtir.FieldDecl(
-            name=node.name, dtype=common.DataType(int(node.data_type.value)), dimensions=dimensions
+            name=node.name,
+            dtype=common.DataType(int(node.data_type.value)),
+            dimensions=dimensions,
+            data_dims=node.data_dims,
         )
 
     def visit_VarDecl(self, node: VarDecl):
