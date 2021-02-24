@@ -1,8 +1,11 @@
-from typing import List, Tuple, Sequence
 from numbers import Number
+from typing import List, Sequence, Tuple
+
 from .built_in_types import LocalField
 
+
 __all__ = []
+
 
 class Method:
     name: str
@@ -16,8 +19,12 @@ class Method:
         return all(issubclass(arg, method_arg) for arg, method_arg in zip(arg_sig, self.sig[0]))
 
     def __repr__(self):
-        arg_sig_str = ", ".join(f"arg_{i}: {arg_type.__module__}.{arg_type.__name__}" for i, arg_type in enumerate(self.sig[0]))
+        arg_sig_str = ", ".join(
+            f"arg_{i}: {arg_type.__module__}.{arg_type.__name__}"
+            for i, arg_type in enumerate(self.sig[0])
+        )
         return f"{self.name}({arg_sig_str}) -> {self.sig[1].__module__}.{self.sig[1].__name__}"
+
 
 class BuiltInFunction:
     name: str
@@ -40,6 +47,7 @@ class BuiltInFunction:
             raise TypeError(msg)
         return applicable_methods[0]
 
+
 def declare_built_in_function(name, sig):
     """Given the `name` of a built in function define a method with the given signature.
 
@@ -54,9 +62,12 @@ def declare_built_in_function(name, sig):
     globals()[name].methods.append(method)
     return method
 
+
 _neighbor_reductions = []
 for reduction_function in ["sum", "product", "min", "max"]:
-    _neighbor_reductions.append(declare_built_in_function(reduction_function, ((LocalField,), Number)))
+    _neighbor_reductions.append(
+        declare_built_in_function(reduction_function, ((LocalField,), Number))
+    )
 
 # TODO(workshop): add other native functions, log etc
 # TODO(tehrengruber): varargs

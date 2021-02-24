@@ -200,9 +200,9 @@ class GtirToNir(eve.NodeTranslator):
         op = self.REDUCE_OP_TO_BINOP[node.op]
         if op == common.BuiltInLiteral.MIN_VALUE or op == common.BuiltInLiteral.MAX_VALUE:
             right = nir.NativeFuncCall(
-                func=nir.NativeFunction.MAX
+                func=common.NativeFunction.MAX
                 if op == common.BuiltInLiteral.MAX_VALUE
-                else nir.NativeFunction.MIN,
+                else common.NativeFunction.MIN,
                 args=[
                     nir.VarAccess(name=reduce_var_name, location_type=body_location),
                     self.visit(node.operand, in_neighbor_loop=True, **kwargs),

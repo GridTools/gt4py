@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import enum
-from typing import ClassVar, Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 from devtools import debug  # noqa: F401
 from pydantic import root_validator

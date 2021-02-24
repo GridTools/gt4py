@@ -20,13 +20,7 @@ import textwrap
 
 import devtools
 
-from . import built_in_types
-from . import built_in_functions
-from .gtscript_ast import External, Argument
-from gtc_unstructured.frontend.gtscript_to_gtir import (
-    GTScriptToGTIR,
-    NodeCanonicalizer
-)
+from gtc_unstructured.frontend.gtscript_to_gtir import GTScriptToGTIR, NodeCanonicalizer
 from gtc_unstructured.frontend.py_to_gtscript import PyToGTScript
 from gtc_unstructured.irs import common
 from gtc_unstructured.irs.gtir_to_nir import GtirToNir
@@ -34,6 +28,9 @@ from gtc_unstructured.irs.nir_passes.merge_horizontal_loops import find_and_merg
 from gtc_unstructured.irs.nir_passes.merge_neighbor_loops import find_and_merge_neighbor_loops
 from gtc_unstructured.irs.nir_to_usid import NirToUsid
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator
+
+from . import built_in_functions, built_in_types
+from .gtscript_ast import Argument, External
 
 
 # todo(tehrengruber): the frontend as written here will disappear at some point as the `PassManager` in Eve and
@@ -52,7 +49,7 @@ class GTScriptCompilationTask:
         """
         Populate symbol table by extracting the argument types from scope the function is embedded in.
         """
-        #assert self.gtscript_ast is not None
+        # assert self.gtscript_ast is not None
         args = []
         sig = inspect.signature(self.definition)
         for name, param in sig.parameters.items():
@@ -67,15 +64,18 @@ class GTScriptCompilationTask:
             External(name="Cell", value=common.LocationType.Cell),
             External(name="Field", value=built_in_types.Field),
             External(name="Connectivity", value=built_in_types.Connectivity),
-            External(name="LocalField", value=built_in_types.LocalField)
-        ] + [External(name=name, value=getattr(built_in_functions, name)) for name in built_in_functions.__all__]
+            External(name="LocalField", value=built_in_types.LocalField),
+        ] + [
+            External(name=name, value=getattr(built_in_functions, name))
+            for name in built_in_functions.__all__
+        ]
 
         self.source = textwrap.dedent(inspect.getsource(self.definition))
         self.python_ast = ast.parse(self.source).body[0]
-        self.gtscript_ast = PyToGTScript().transform(self.python_ast, node_init_args={
-            "externals": externals,
-            "arguments": self._get_arguments()
-        })
+        self.gtscript_ast = PyToGTScript().transform(
+            self.python_ast,
+            node_init_args={"externals": externals, "arguments": self._get_arguments()},
+        )
 
         return self.gtscript_ast
 

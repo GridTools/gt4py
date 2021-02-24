@@ -18,7 +18,15 @@ from typing import Callable
 
 import gtc_unstructured.irs.common as common
 
-from .built_in_types import Field, LocalField, Location, Connectivity, TemporaryField, SparseField, TemporarySparseField
+from .built_in_types import (
+    Connectivity,
+    Field,
+    LocalField,
+    Location,
+    SparseField,
+    TemporaryField,
+    TemporarySparseField,
+)
 
 
 # built-in symbols

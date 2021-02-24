@@ -75,7 +75,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
         "<gridtools/common/gt_math.hpp>",
     ]
 
-    namespace_ = None
+    namespace_ = ""
 
     preface_ = ""
 

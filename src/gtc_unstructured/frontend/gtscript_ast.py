@@ -14,19 +14,22 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 # todo(tehrengruber): document nodes
+from typing import Any, Dict, List, Optional, Type, Union
+
 import pydantic
 from pydantic import StrictFloat, StrictInt, StrictStr
-from typing import Any, Dict, List, Type, Union, Optional
 
-from gtc import common as stable_gtc_common
-import gtc_unstructured.irs.common as common
 import eve
 import eve.type_definitions
+import gtc_unstructured.irs.common as common
 from eve import Node, Str, StrEnum, SymbolTableTrait
 from eve.type_definitions import SymbolName
+from gtc import common as stable_gtc_common
+
 from . import built_in_types
-from .built_in_types import BuiltInTypeMeta
 from .built_in_functions import BuiltInFunction
+from .built_in_types import BuiltInTypeMeta
+
 
 __all__ = [
     "GTScriptASTNode",
@@ -125,8 +128,10 @@ class SubscriptCall(Expr):
     args: List[Expr]
     func: Subscript
 
+
 class List_(Expr):
     elts: List[Expr]
+
 
 # TODO(tehrengruber): can be enabled as soon as eve_toolchain#58 lands
 # class Call(Generic[T]):
@@ -182,7 +187,13 @@ class Argument(GTScriptASTNode):
 class External(GTScriptASTNode):
     name: SymbolName
     value: Union[
-        StrictInt, StrictFloat, None, common.LocationType, common.DataType, BuiltInTypeMeta, BuiltInFunction
+        StrictInt,
+        StrictFloat,
+        None,
+        common.LocationType,
+        common.DataType,
+        BuiltInTypeMeta,
+        BuiltInFunction,
     ]
 
     class Config:
@@ -225,7 +236,7 @@ class Computation(GTScriptASTNode, SymbolTableTrait):
 
     @pydantic.root_validator(skip_on_failure=True)
     def _implicit_connectivity_type_decls(  # type: ignore  # validators are classmethods
-            cls: Type["Computation"], values: Dict[str, Any]
+        cls: Type["Computation"], values: Dict[str, Any]
     ) -> Dict[str, Any]:
         # TODO(tehrengruber): hacky
         for arg in values["arguments"]:
@@ -239,12 +250,13 @@ class Computation(GTScriptASTNode, SymbolTableTrait):
         cls: Type["Computation"], values: Dict[str, Any]
     ) -> Dict[str, Any]:
         from .passes.temporary_field_decl_extractor import TemporaryFieldDeclExtractor
-        values["declarations"] = values["declarations"] + TemporaryFieldDeclExtractor.apply(values["symtable_"],
-                                                                                            values["stencils"])
+
+        values["declarations"] = values["declarations"] + TemporaryFieldDeclExtractor.apply(
+            values["symtable_"], values["stencils"]
+        )
         #  TODO(tehrengruber): use SymbolTableTrait.collect_symbols with new dataclasses
         values["symtable_"] = cls._collect_symbols(values)
         return values
 
-
     # TODO: fix. currently fails as the symbol table is not built up when the stencils field is visited
-    #_validate_symbol_refs = stable_gtc_common.validate_symbol_refs()
+    # _validate_symbol_refs = stable_gtc_common.validate_symbol_refs()

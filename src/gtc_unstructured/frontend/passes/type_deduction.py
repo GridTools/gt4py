@@ -1,13 +1,28 @@
-from typing import Any, Dict
 from numbers import Number
+from typing import Any, Dict
 
 import eve
 
 from ..built_in_types import BuiltInType
-from ..gtscript import LocalField, Location, Connectivity, Field
-from ..gtscript_ast import GTScriptASTNode, Argument, TemporaryFieldDecl, TemporarySparseFieldDecl, Call, Constant, SymbolRef, External, \
-    LocationSpecification, LocationComprehension, SubscriptCall, Subscript, BinaryOp, Generator
+from ..gtscript import Connectivity, Field, LocalField, Location
+from ..gtscript_ast import (
+    Argument,
+    BinaryOp,
+    Call,
+    Constant,
+    External,
+    Generator,
+    GTScriptASTNode,
+    LocationComprehension,
+    LocationSpecification,
+    Subscript,
+    SubscriptCall,
+    SymbolRef,
+    TemporaryFieldDecl,
+    TemporarySparseFieldDecl,
+)
 from .const_expr_evaluator import evaluate_const_expr
+
 
 class TypeDeduction(eve.NodeVisitor):
     @classmethod
@@ -54,7 +69,8 @@ class TypeDeduction(eve.NodeVisitor):
         index_type = self.visit(node.iterable.indices[0], symtable=symtable, **kwargs)
         if index_type != Location[connectivity.primary_location()]:
             raise ValueError(
-                f"You are trying to access a connectivity posed on {connectivity.primary_location()} using a location of type {index_type}")
+                f"You are trying to access a connectivity posed on {connectivity.primary_location()} using a location of type {index_type}"
+            )
         return Location[connectivity.secondary_location()]
 
     def visit_SubscriptCall(self, node: SubscriptCall, *, symtable, **kwargs):
@@ -69,8 +85,10 @@ class TypeDeduction(eve.NodeVisitor):
 
     def visit_Subscript(self, node: Subscript, *, symtable, **kwargs):
         # todo: enhance
-        if all(isinstance(symtable[idx.name], (LocationSpecification, LocationComprehension))
-               for idx in node.indices):
+        if all(
+            isinstance(symtable[idx.name], (LocationSpecification, LocationComprehension))
+            for idx in node.indices
+        ):
             return Number
         raise ValueError(f"Type of node {node} not defined.")
 
@@ -78,6 +96,7 @@ class TypeDeduction(eve.NodeVisitor):
         connectivity = symtable[node.generators[0].iterable.value.name].type_
         assert issubclass(connectivity, Connectivity)
         return LocalField[connectivity]
+
 
 def deduce_type(symtable: Dict[Any, eve.Node], node: GTScriptASTNode):
     return TypeDeduction.apply(symtable, node)

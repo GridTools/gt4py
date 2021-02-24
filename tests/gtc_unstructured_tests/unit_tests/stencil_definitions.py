@@ -19,9 +19,9 @@ import types
 
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
+    Cell,
     Connectivity,
     Edge,
-    Cell,
     Field,
     LocalField,
     SparseField,
@@ -50,7 +50,7 @@ valid_stencils = [
     "fvm_nabla",
     "weights",
     "sparse_field_assign",
-    "native_functions"
+    "native_functions",
 ]
 
 
@@ -95,7 +95,7 @@ def fvm_nabla(
     v2e: V2E,
     e2v: E2V,
     S_MXX: Field[Edge, dtype],
-    S_MYY: Field[Edge, dtype],native_functions
+    S_MYY: Field[Edge, dtype],
     pp: Field[Vertex, dtype],
     pnabla_MXX: Field[Vertex, dtype],
     pnabla_MYY: Field[Vertex, dtype],
@@ -131,6 +131,9 @@ def sparse_field_assign(
             # TODO: Fix silently generates invalid code
             # out_sparse_field = in_sparse_field
 
+
 def native_functions(c2c: C2C, field_in: Field[Cell, dtype], field_out: Field[Cell, dtype]):
     with computation(FORWARD), location(Cell) as c1:
-        field_out[c1] = sqrt(field_in)+max(1, 2)+sum(max(field_in[c1], field_in[c2]) for c2 in c2c[c1])
+        field_out[c1] = (
+            sqrt(field_in) + max(1, 2) + sum(max(field_in[c1], field_in[c2]) for c2 in c2c[c1])
+        )

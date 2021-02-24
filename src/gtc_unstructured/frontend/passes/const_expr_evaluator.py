@@ -1,7 +1,9 @@
-from typing import Dict, Any
+from typing import Any, Dict
+
 import eve
 
-from ..gtscript_ast import GTScriptASTNode, SymbolRef, External, Constant, Subscript
+from ..gtscript_ast import Constant, External, GTScriptASTNode, Subscript, SymbolRef
+
 
 class ConstExprEvaluator(eve.NodeVisitor):
     @classmethod
@@ -22,7 +24,10 @@ class ConstExprEvaluator(eve.NodeVisitor):
         return node.value
 
     def visit_Subscript(self, node: Subscript, **kwargs):
-        return self.visit(node.value, **kwargs)[tuple(self.visit(idx, **kwargs) for idx in node.indices)]
+        return self.visit(node.value, **kwargs)[
+            tuple(self.visit(idx, **kwargs) for idx in node.indices)
+        ]
+
 
 def evaluate_const_expr(symtable: Dict[Any, GTScriptASTNode], node: GTScriptASTNode):
     return ConstExprEvaluator.apply(symtable, node)

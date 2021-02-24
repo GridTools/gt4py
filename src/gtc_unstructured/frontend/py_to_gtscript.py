@@ -16,20 +16,22 @@
 import ast
 import enum
 import inspect
-from pydantic import StrictFloat, StrictInt, StrictStr
 import sys
 import typing
 from typing import Union
-import typing_inspect
 
-from gtc import common as stable_gtc_common
+import typing_inspect
+from pydantic import StrictFloat, StrictInt, StrictStr
+
 import gtc_unstructured.irs.common
 from eve import type_definitions
 from eve.utils import UIDGenerator
+from gtc import common as stable_gtc_common
 
 from . import ast_node_matcher as anm
 from . import gtscript_ast
 from .ast_node_matcher import Capture, Transformer
+
 
 class StrToSymbolTransformer(Transformer):
     @staticmethod
@@ -40,6 +42,7 @@ class StrToSymbolTransformer(Transformer):
     def invert(transformed_capture: ast.Name):
         assert isinstance(transformed_capture, ast.Name)
         return transformed_capture.id
+
 
 class SubscriptTransformer(Transformer):
     @staticmethod
@@ -146,23 +149,24 @@ class PyToGTScript:
         )
 
         LocationSpecification = ast.withitem(
-            context_expr=ast.Call(
-                func=ast.Name(id="location"), args=[Capture("location_type")]
-            ),
+            context_expr=ast.Call(func=ast.Name(id="location"), args=[Capture("location_type")]),
             optional_vars=Capture(
                 "name", default=lambda: ast.Name(id=UIDGenerator.sequential_id(prefix="location"))
             ),
         )
 
         Subscript = ast.Subscript(
-            value=Capture("value"), slice=ast.Index(Capture("indices", transformer=SubscriptTransformer))
+            value=Capture("value"),
+            slice=ast.Index(Capture("indices", transformer=SubscriptTransformer)),
         )
 
         BinaryOp = ast.BinOp(op=Capture("op"), left=Capture("left"), right=Capture("right"))
 
         Call = ast.Call(args=Capture("args"), func=Capture("func", expected_type=ast.Name))
 
-        SubscriptCall = ast.Call(args=Capture("args"), func=Capture("func", expected_type=ast.Subscript))
+        SubscriptCall = ast.Call(
+            args=Capture("args"), func=Capture("func", expected_type=ast.Subscript)
+        )
 
         List_ = ast.List(elts=Capture("elts"))
 
@@ -178,10 +182,12 @@ class PyToGTScript:
 
         Pass = ast.Pass()
 
-        Argument = ast.arg(arg=Capture("name", transformer=StrToSymbolTransformer), annotation=Capture("type_"))
+        Argument = ast.arg(
+            arg=Capture("name", transformer=StrToSymbolTransformer), annotation=Capture("type_")
+        )
 
         Computation = ast.FunctionDef(
-            #args=ast.arguments(args=Capture("arguments")),
+            # args=ast.arguments(args=Capture("arguments")),
             body=Capture("stencils"),
             name=Capture("name"),
         )
@@ -205,7 +211,7 @@ class PyToGTScript:
     pseudo_polymorphic_types = {
         str: set([type_definitions.SymbolRef, StrictStr]),
         int: set([StrictInt]),
-        float: set([StrictFloat])
+        float: set([StrictFloat]),
     }
 
     # todo(tehrengruber): enhance docstring describing the algorithm
@@ -267,12 +273,12 @@ class PyToGTScript:
                                 capture, eligible_capture_types
                             )
 
-                    assert len(args)+len(transformed_kwargs) == len(captures)
+                    assert len(args) + len(transformed_kwargs) == len(captures)
 
                     try:
                         node_type(*args, **transformed_kwargs)
                     except:
-                        bla=1+1
+                        bla = 1 + 1
 
                     return node_type(*args, **transformed_kwargs)
 
@@ -283,11 +289,15 @@ class PyToGTScript:
                 )
         elif type(node) in eligible_node_types:
             return node
-        elif type(node) in self.pseudo_polymorphic_types and len(self.pseudo_polymorphic_types[type(node)] & set(eligible_node_types)) > 0:
+        elif (
+            type(node) in self.pseudo_polymorphic_types
+            and len(self.pseudo_polymorphic_types[type(node)] & set(eligible_node_types)) > 0
+        ):
             valid_types = self.pseudo_polymorphic_types[type(node)] & set(eligible_node_types)
             if len(valid_types) > 1:
                 raise RuntimeError(
-                    "Invalid gtscript ast specification. The node {node} has multiple valid types in the gtscript ast: {valid_types}")
+                    "Invalid gtscript ast specification. The node {node} has multiple valid types in the gtscript ast: {valid_types}"
+                )
             return next(iter(valid_types))(node)
 
         raise ValueError(

@@ -14,8 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, List, cast
 import inspect
+from typing import Any, List, cast
 
 
 class BuiltInTypeMeta(type):
@@ -33,7 +33,7 @@ class BuiltInTypeMeta(type):
     def __new__(cls, class_name, bases, namespace, args=None):
         assert bases == () or (len(bases) == 1 and issubclass(bases[0], BuiltInType))
         # TODO(tehrengruber): allow only class methods
-        #assert all(attr[0:2] == "__" for attr in namespace.keys())  # no custom attributes
+        # assert all(attr[0:2] == "__" for attr in namespace.keys())  # no custom attributes
         # TODO(tehrengruber): there might be a better way to do this
         instance = type.__new__(cls, class_name, bases, namespace)
         instance.class_name = class_name
@@ -86,7 +86,9 @@ class BuiltInType(metaclass=BuiltInTypeMeta):
 class Connectivity(BuiltInType):
     @classmethod
     def base_connectivity(cls):
-        return next(t for t in cls.__mro__ if issubclass(t, Connectivity) and t.body == Connectivity)
+        return next(
+            t for t in cls.__mro__ if issubclass(t, Connectivity) and t.body == Connectivity
+        )
 
     @classmethod
     def primary_location(cls):
@@ -116,6 +118,7 @@ class SparseField(BuiltInType):
 class TemporarySparseField(BuiltInType):  # TODO(tehrengruber): make this a subtype of Field
     pass
 
+
 class TemporaryField(BuiltInType):  # TODO(tehrengruber): make this a subtype of Field
     pass
 
@@ -126,6 +129,7 @@ class Location(BuiltInType):
 
 class Local(BuiltInType):
     """Used as a type argument to :class:`.Field` representing a Local dimension."""
+
     pass
 
 

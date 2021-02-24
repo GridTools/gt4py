@@ -14,13 +14,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import enum
-from typing import ClassVar, Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 from devtools import debug  # noqa: F401
 from pydantic import root_validator
 
-from eve import Node, Str, StrEnum, SymbolTableTrait
+from eve import Node, Str, SymbolTableTrait
 from eve.type_definitions import SymbolName, SymbolRef
 from eve.typingx import RootValidatorValuesType
 from gtc import common as stable_gtc_common

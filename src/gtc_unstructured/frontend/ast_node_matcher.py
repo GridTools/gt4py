@@ -13,9 +13,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from abc import ABC, abstractmethod
 import ast
-from typing import Any, Dict, List, Union, Generic
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Generic, List, Union
 
 
 class Transformer(ABC):
@@ -185,7 +185,11 @@ def match(concrete_node, pattern_node, captures=None) -> bool:
 
                 # workaround for python >= 3.9 falsely returning some ast fields, e.g. ast.arg.annotation, as set even
                 # if they don't. note that this prevents specification of default values for these fields
-                if hasattr(concrete_node, fieldname) and getattr(concrete_node, fieldname) is None and pattern_val is None:
+                if (
+                    hasattr(concrete_node, fieldname)
+                    and getattr(concrete_node, fieldname) is None
+                    and pattern_val is None
+                ):
                     is_opt = True
 
                 if is_opt:
