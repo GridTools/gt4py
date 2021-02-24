@@ -15,9 +15,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from devtools import debug  # noqa: F401
+from devtools import debug
 
-import eve  # noqa: F401
+import eve
 from gtc_unstructured.irs import common, nir, usid
 
 

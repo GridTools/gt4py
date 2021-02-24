@@ -63,7 +63,9 @@ class GreedyMerging(NodeTranslator):
                 self.visit(node.mask, accesses=reads)
             return reads, writes
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
+    def visit_VerticalLoopSection(
+        self, node: oir.VerticalLoop, **kwargs: Any
+    ) -> oir.VerticalLoopSection:
         if not node.horizontal_executions:
             raise GTCPreconditionError(expected="non-empty vertical loop")
         result = self.generic_visit(node, **kwargs)

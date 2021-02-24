@@ -18,10 +18,17 @@ from typing import Dict
 
 from gtc import common
 from gtc.common import DataType
-from gtc.gtir import FieldDecl, Literal, ParAssignStmt, Stencil
+from gtc.gtir import FieldDecl, Stencil
 from gtc.passes.gtir_dtype_resolver import _GTIRPropagateDtypeToAccess, resolve_dtype
 
-from .gtir_utils import FieldAccessBuilder, StencilBuilder, VerticalLoopBuilder
+from .gtir_utils import (
+    FieldAccessFactory,
+    FieldDeclFactory,
+    LiteralFactory,
+    ParAssignStmtFactory,
+    StencilFactory,
+    VerticalLoopFactory,
+)
 
 
 A_ARITHMETIC_TYPE = common.DataType.FLOAT32
@@ -31,7 +38,7 @@ def test_propagate_dtype_to_FieldAccess():
     name = "foo"
     decl = FieldDecl(name=name, dtype=A_ARITHMETIC_TYPE)
 
-    testee = FieldAccessBuilder(name).build()
+    testee = FieldAccessFactory(name=name)
 
     result = _GTIRPropagateDtypeToAccess().visit(testee, symtable={name: decl})
 
@@ -58,16 +65,11 @@ def resolve_dtype_and_validate(testee: Stencil, expected_dtypes: Dict[str, commo
 
 
 def test_resolve_dtype_to_FieldAccess():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE))
-        .add_par_assign_stmt(
-            ParAssignStmt(
-                left=FieldAccessBuilder("field").dtype(None).build(),
-                right=FieldAccessBuilder("field").dtype(None).build(),
-            )
-        )
-        .build()
+    testee = StencilFactory(
+        params=[FieldDeclFactory(name="field", dtype=A_ARITHMETIC_TYPE)],
+        vertical_loops__0__body__0=ParAssignStmtFactory(
+            left__name="field", left__dtype=None, right__name="field", right__dtype=None
+        ),
     )
     resolve_dtype_and_validate(
         testee,
@@ -76,67 +78,53 @@ def test_resolve_dtype_to_FieldAccess():
 
 
 def test_resolve_AUTO_from_literal_to_temporary():
-    testee = (
-        StencilBuilder()
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_temporary("tmp", DataType.AUTO)
-            .add_stmt(
-                ParAssignStmt(
-                    left=FieldAccessBuilder("tmp").dtype(None).build(),
-                    right=Literal(value="0", dtype=A_ARITHMETIC_TYPE),
+    testee = StencilFactory(
+        vertical_loops__0=VerticalLoopFactory(
+            temporaries=[FieldDeclFactory(name="tmp", dtype=DataType.AUTO)],
+            body=[
+                ParAssignStmtFactory(
+                    left__name="tmp",
+                    left__dtype=None,
+                    right=LiteralFactory(value="0", dtype=A_ARITHMETIC_TYPE),
                 )
-            )
-            .build()
+            ],
         )
-        .build()
     )
     resolve_dtype_and_validate(testee, {"tmp": A_ARITHMETIC_TYPE})
 
 
 def test_resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE))
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_temporary("tmp", DataType.AUTO)
-            .add_stmt(
-                ParAssignStmt(
-                    left=FieldAccessBuilder("tmp").dtype(None).build(),
-                    right=FieldAccessBuilder("field").dtype(None).build(),
+    testee = StencilFactory(
+        params=[FieldDeclFactory(name="field", dtype=A_ARITHMETIC_TYPE)],
+        vertical_loops__0=VerticalLoopFactory(
+            temporaries=[FieldDeclFactory(name="tmp", dtype=DataType.AUTO)],
+            body=[
+                ParAssignStmtFactory(
+                    left__name="tmp", left__dtype=None, right__name="field", right__dtype=None
                 )
-            )
-            .build()
-        )
-        .build()
+            ],
+        ),
     )
     resolve_dtype_and_validate(testee, {"field": A_ARITHMETIC_TYPE, "tmp": A_ARITHMETIC_TYPE})
 
 
 def test_resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary_to_FieldAccess_to_temporary():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDecl(name="field", dtype=A_ARITHMETIC_TYPE))
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_temporary("tmp1", DataType.AUTO)
-            .add_temporary("tmp2", DataType.AUTO)
-            .add_stmt(
-                ParAssignStmt(
-                    left=FieldAccessBuilder("tmp1").dtype(None).build(),
-                    right=FieldAccessBuilder("field").dtype(None).build(),
-                )
-            )
-            .add_stmt(
-                ParAssignStmt(
-                    left=FieldAccessBuilder("tmp2").dtype(None).build(),
-                    right=FieldAccessBuilder("tmp1").dtype(None).build(),
+    testee = StencilFactory(
+        params=[FieldDeclFactory(name="field", dtype=A_ARITHMETIC_TYPE)],
+        vertical_loops__0=VerticalLoopFactory(
+            temporaries=[
+                FieldDeclFactory(name="tmp1", dtype=DataType.AUTO),
+                FieldDeclFactory(name="tmp2", dtype=DataType.AUTO),
+            ],
+            body=[
+                ParAssignStmtFactory(
+                    left__name="tmp1", left__dtype=None, right__name="field", right__dtype=None
                 ),
-            )
-            .build()
-        )
-        .build()
+                ParAssignStmtFactory(
+                    left__name="tmp2", left__dtype=None, right__name="tmp1", right__dtype=None
+                ),
+            ],
+        ),
     )
     resolve_dtype_and_validate(
         testee, {"field": A_ARITHMETIC_TYPE, "tmp1": A_ARITHMETIC_TYPE, "tmp2": A_ARITHMETIC_TYPE}

@@ -322,7 +322,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
     def visit_Cast(self, node: gt_ir.Cast) -> str:
         expr = self.visit(node.expr)
-        dtype = self.DATA_TYPE_TO_CPP[node.dtype]
+        dtype = self.DATA_TYPE_TO_CPP[node.data_type]
         return f"static_cast<{dtype}>({expr})"
 
     def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral) -> str:
@@ -484,6 +484,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                     arg_fields.append(field_attributes)
                 else:
                     tmp_fields.append(field_attributes)
+        tmp_fields = list(sorted(tmp_fields, key=lambda field: field["name"]))
 
         parameters = [
             {"name": parameter.name, "dtype": self._make_cpp_type(parameter.data_type)}
