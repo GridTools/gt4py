@@ -27,7 +27,7 @@ V2E = types.new_class("V2E", (Connectivity[Vertex, Edge, 7, True],))
 dtype = DataType.FLOAT64
 
 
-def nabla(
+def sten(
     v2e: V2E,
     e2v: E2V,
     S_MXX: Field[Edge, dtype],
@@ -58,7 +58,7 @@ def main():
     else:  # 'ugpu':
         code_generator = UsidGpuCodeGenerator
 
-    generated_code = GTScriptCompilationTask(nabla).generate(
+    generated_code = GTScriptCompilationTask(sten).generate(
         debug=False, code_generator=code_generator
     )
 

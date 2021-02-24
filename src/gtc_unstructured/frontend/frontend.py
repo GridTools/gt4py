@@ -22,7 +22,7 @@ import devtools
 
 from gtc_unstructured.frontend.gtscript_to_gtir import GTScriptToGTIR, NodeCanonicalizer
 from gtc_unstructured.frontend.py_to_gtscript import PyToGTScript
-from gtc_unstructured.irs import common
+from gtc_unstructured.irs import common, gtir
 from gtc_unstructured.irs.gtir_to_nir import GtirToNir
 from gtc_unstructured.irs.nir_passes.merge_horizontal_loops import find_and_merge_horizontal_loops
 from gtc_unstructured.irs.nir_passes.merge_neighbor_loops import find_and_merge_neighbor_loops
@@ -86,7 +86,6 @@ class GTScriptCompilationTask:
         # Transform into GTIR
         self.gtir = GTScriptToGTIR.apply(self.gtscript_ast)
 
-        devtools.debug(self.gtir)
         return self.gtir
 
     def _generate_cpp(self, *, debug=False, code_generator=UsidGpuCodeGenerator):
@@ -108,8 +107,13 @@ class GTScriptCompilationTask:
         """
         Generate c++ code of the stencil.
         """
-        self._generate_gtscript_ast()
-        self._generate_gtir()
+        if isinstance(self.definition, gtir.Computation):
+            # accept GTIR as input
+            self.gtir = self.definition
+        else:
+            # default case, assume a gtscript function definition is passed
+            self._generate_gtscript_ast()
+            self._generate_gtir()
         self._generate_cpp(debug=debug, code_generator=code_generator)
 
         return self.cpp_code

@@ -43,58 +43,57 @@ from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCod
 dtype = DataType.FLOAT64
 
 
-def main():
-    conn = Connectivity(
-        name="e2v",
-        primary=LocationType.Edge,
-        secondary=LocationType.Vertex,
-        max_neighbors=2,
-        has_skip_values=False,
-    )
+conn = Connectivity(
+    name="e2v",
+    primary=LocationType.Edge,
+    secondary=LocationType.Vertex,
+    max_neighbors=2,
+    has_skip_values=False,
+)
 
-    params = [
-        UField(
-            name="in_field",
-            vtype=dtype,
-            dimensions=Dimensions(horizontal=HorizontalDimension(primary=LocationType.Vertex)),
-        ),
-        SparseField(
+params = [
+    UField(
+        name="in_field",
+        vtype=dtype,
+        dimensions=Dimensions(horizontal=HorizontalDimension(primary=LocationType.Vertex)),
+    ),
+    SparseField(
+        name="out_field",
+        connectivity="e2v",
+        vtype=dtype,
+        dimensions=Dimensions(horizontal=HorizontalDimension(primary=LocationType.Edge)),
+    ),
+]
+
+hloop = HorizontalLoop(
+    stmt=NeighborAssignStmt(
+        left=FieldAccess(
             name="out_field",
-            connectivity="e2v",
-            vtype=dtype,
-            dimensions=Dimensions(horizontal=HorizontalDimension(primary=LocationType.Edge)),
-        ),
-    ]
-
-    hloop = HorizontalLoop(
-        stmt=NeighborAssignStmt(
-            left=FieldAccess(
-                name="out_field",
-                subscript=[LocationRef(name="edge")],
-                location_type=LocationType.Edge,
-            ),
-            right=FieldAccess(
-                name="in_field",
-                subscript=[LocationRef(name="v_neighs_of_e")],
-                location_type=LocationType.Edge,
-            ),
-            neighbors=LocationComprehension(name="v_neighs_of_e", of=ConnectivityRef(name="e2v")),
+            subscript=[LocationRef(name="edge")],
             location_type=LocationType.Edge,
         ),
-        location=PrimaryLocation(name="edge", location_type=LocationType.Edge),
-    )
+        right=FieldAccess(
+            name="in_field",
+            subscript=[LocationRef(name="v_neighs_of_e")],
+            location_type=LocationType.Edge,
+        ),
+        neighbors=LocationComprehension(name="v_neighs_of_e", of=ConnectivityRef(name="e2v")),
+        location_type=LocationType.Edge,
+    ),
+    location=PrimaryLocation(name="edge", location_type=LocationType.Edge),
+)
 
-    stencils = [
-        Stencil(
-            vertical_loops=[VerticalLoop(horizontal_loops=[hloop], loop_order=LoopOrder.FORWARD)]
-        )
-    ]
+stencils = [
+    Stencil(vertical_loops=[VerticalLoop(horizontal_loops=[hloop], loop_order=LoopOrder.FORWARD)])
+]
 
-    comp = Computation(name="sten", connectivities=[conn], params=params, stencils=stencils)
+sten = Computation(name="sten", connectivities=[conn], params=params, stencils=stencils)
 
+
+def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "unaive"
 
-    nir_comp = GtirToNir().visit(comp)
+    nir_comp = GtirToNir().visit(sten)
     nir_comp = find_and_merge_horizontal_loops(nir_comp)
     usid_comp = NirToUsid().visit(nir_comp)
 

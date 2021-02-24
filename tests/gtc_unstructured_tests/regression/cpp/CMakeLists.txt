@@ -44,8 +44,8 @@ function(add_regression_test_executable)
     set(STENCIL_IMPL_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/generated_${ARG_NAME}.hpp)
     set(BACKEND ${ARG_MODE})
     add_custom_command(OUTPUT ${STENCIL_IMPL_SOURCE}
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT} ${ARG_MODE}
-        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT})
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/generator.py ${ARG_INPUT} ${CMAKE_CURRENT_SOURCE_DIR} ${ARG_MODE}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT}.py)
     add_custom_target(generated_${ARG_NAME} DEPENDS ${STENCIL_IMPL_SOURCE})
 
 
@@ -84,10 +84,10 @@ function(add_regression_test name)
     set(libraries GridTools::gridtools gtest gtest_main gmock)
     list (APPEND libraries ${ARG_ADDITIONAL_LIBRARIES})
 
-    add_regression_test_executable(NAME ${name}_unaive INPUT ${name}.py MODE unaive SOURCES ${_sources} LIBRARIES usid_cpu ${libraries})
+    add_regression_test_executable(NAME ${name}_unaive INPUT ${name} MODE unaive SOURCES ${_sources} LIBRARIES usid_cpu ${libraries})
 
     if(TARGET GridTools::stencil_gpu)
-        add_regression_test_executable(NAME ${name}_ugpu INPUT ${name}.py MODE ugpu SOURCES ${_sources} LIBRARIES ${libraries} usid_gpu GridTools::stencil_gpu)
+        add_regression_test_executable(NAME ${name}_ugpu INPUT ${name} MODE ugpu SOURCES ${_sources} LIBRARIES ${libraries} usid_gpu GridTools::stencil_gpu)
         gridtools_setup_target(${name}_ugpu CUDA_ARCH sm_50)
     endif()
 endfunction()

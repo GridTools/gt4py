@@ -90,7 +90,6 @@ class GtirToNir(eve.NodeTranslator):
         secondary = None
 
         decls = [symtable[ref.name] for ref in location_refs]
-        debug(decls)
 
         for decl in decls:
             if not primary:

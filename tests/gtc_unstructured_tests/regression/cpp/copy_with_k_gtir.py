@@ -42,53 +42,52 @@ from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCod
 dtype = DataType.FLOAT64
 
 
-def main():
-    params = [
-        UField(
-            name="in_field",
-            vtype=dtype,
-            dimensions=Dimensions(
-                horizontal=HorizontalDimension(primary=LocationType.Vertex),
-                vertical=VerticalDimension(),
-            ),
+params = [
+    UField(
+        name="in_field",
+        vtype=dtype,
+        dimensions=Dimensions(
+            horizontal=HorizontalDimension(primary=LocationType.Vertex),
+            vertical=VerticalDimension(),
         ),
-        UField(
+    ),
+    UField(
+        name="out_field",
+        vtype=dtype,
+        dimensions=Dimensions(
+            horizontal=HorizontalDimension(primary=LocationType.Edge),
+            vertical=VerticalDimension(),
+        ),
+    ),
+]
+
+hloop = HorizontalLoop(
+    stmt=AssignStmt(
+        left=FieldAccess(
             name="out_field",
-            vtype=dtype,
-            dimensions=Dimensions(
-                horizontal=HorizontalDimension(primary=LocationType.Edge),
-                vertical=VerticalDimension(),
-            ),
+            subscript=[LocationRef(name="edge")],
+            location_type=LocationType.Edge,
         ),
-    ]
-
-    hloop = HorizontalLoop(
-        stmt=AssignStmt(
-            left=FieldAccess(
-                name="out_field",
-                subscript=[LocationRef(name="edge")],
-                location_type=LocationType.Edge,
-            ),
-            right=FieldAccess(
-                name="in_field",
-                subscript=[LocationRef(name="edge")],
-                location_type=LocationType.Edge,
-            ),
+        right=FieldAccess(
+            name="in_field",
+            subscript=[LocationRef(name="edge")],
+            location_type=LocationType.Edge,
         ),
-        location=PrimaryLocation(name="edge", location_type=LocationType.Edge),
-    )
+    ),
+    location=PrimaryLocation(name="edge", location_type=LocationType.Edge),
+)
 
-    stencils = [
-        Stencil(
-            vertical_loops=[VerticalLoop(horizontal_loops=[hloop], loop_order=LoopOrder.FORWARD)]
-        )
-    ]
+stencils = [
+    Stencil(vertical_loops=[VerticalLoop(horizontal_loops=[hloop], loop_order=LoopOrder.FORWARD)])
+]
 
-    comp = Computation(name="sten", connectivities=[], params=params, stencils=stencils)
+sten = Computation(name="sten", connectivities=[], params=params, stencils=stencils)
 
+
+def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "unaive"
 
-    nir_comp = GtirToNir().visit(comp)
+    nir_comp = GtirToNir().visit(sten)
     nir_comp = find_and_merge_horizontal_loops(nir_comp)
     usid_comp = NirToUsid().visit(nir_comp)
 
