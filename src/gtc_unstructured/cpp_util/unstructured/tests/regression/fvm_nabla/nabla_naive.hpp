@@ -54,15 +54,6 @@ namespace gridtools::usid::naive::nabla_impl_ {
         }
     };
 
-    struct kernel_2 {
-        GT_FUNCTION auto operator()() const {
-            return [](auto &&ptr, auto &&strides) {
-                field<pnabla_MXX_tag>(ptr) = field<pnabla_MXX_tag>(ptr) / field<vol_tag>(ptr);
-                field<pnabla_MYY_tag>(ptr) = field<pnabla_MYY_tag>(ptr) / field<vol_tag>(ptr);
-            };
-        }
-    };
-
     inline constexpr auto nabla = [](domain d, auto &&v2e, auto &&e2v) {
         static_assert(is_sid<decltype(v2e(traits_t()))>());
         static_assert(is_sid<decltype(e2v(traits_t()))>());

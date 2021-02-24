@@ -51,6 +51,7 @@ namespace gridtools::usid::cuda::nabla_impl_ {
             };
         }
     };
+
     inline constexpr auto nabla = [](domain d, auto &&v2e, auto &&e2v) {
         static_assert(is_sid<decltype(v2e(traits_t()))>());
         static_assert(is_sid<decltype(e2v(traits_t()))>());
