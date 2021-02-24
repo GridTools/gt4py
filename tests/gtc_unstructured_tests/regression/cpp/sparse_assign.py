@@ -31,11 +31,11 @@ E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
 dtype = DataType.FLOAT64
 
 
-def sten(e2v: E2V, in_field: SparseField[E2V, dtype], out_field: SparseField[E2V, dtype]):
+def sten(e2v: E2V, in_field: Field[Vertex, dtype], out_field: SparseField[E2V, dtype]):
     with computation(FORWARD), interval(0, None):
         with location(Edge) as e:
             # TODO: maybe support slicing for lhs: out_sparse_field[e,:]
-            out_field = (in_field[e,v] for v in e2v[e])
+            out_field = (in_field[v] for v in e2v[e])
             # TODO: Fix silently generates invalid code
             # out_sparse_field = in_sparse_field
 
