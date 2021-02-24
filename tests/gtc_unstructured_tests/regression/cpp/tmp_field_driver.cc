@@ -14,8 +14,6 @@ namespace gridtools::usid {
 
         auto in = test_helper::make_field<double>(simple_mesh::cells, 1);
 
-        // TODO discuss with anstaf what an unstructured field should be, here I steal
-        // the data_store from a SID
         auto view = in->host_view();
         //  1   2   3
         //  4   5   6
