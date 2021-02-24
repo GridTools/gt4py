@@ -24,6 +24,7 @@ from pydantic import root_validator
 
 from eve import Node, Str, StrEnum, SymbolTableTrait
 from eve.type_definitions import SymbolName, SymbolRef
+from eve.typingx import RootValidatorValuesType
 from gtc import common as stable_gtc_common
 from gtc_unstructured.irs import common
 
@@ -128,13 +129,6 @@ class NeighborVectorAccess(Expr):
     # TODO check that size of list equals connectivity max_neighbors
 
 
-# TODO using a LocalFieldDecl seems natural, but doesn't work with the parallel model (it would live in its own scope)
-# class LocalFieldDecl(Stmt):
-#     name: SymbolName
-#     connectivity: ConnectivityRef
-#     init: List[Expr]
-
-
 @enum.unique
 class ReduceOperator(StrEnum):
     """Reduction operator identifier."""
@@ -162,11 +156,12 @@ class NeighborReduce(Expr):
 
     # TODO to validate we would need to lookup the connectivity,
     # i.e. can only be done when symbols are resolvable
-    # @root_validator(pre=True)
-    # def check_location_type(cls, values):
-    #     if values["neighbors"].chain.elements[-1] != values["operand"].location_type:
-    #         raise ValueError("Location type mismatch")
-    #     return values
+
+    # TODO @root_validator(pre=True)
+    # TODO def check_location_type(cls, values):
+    # TODO     if values["neighbors"].chain.elements[-1] != values["operand"].location_type:
+    # TODO         raise ValueError("Location type mismatch")
+    # TODO     return values
 
 
 class FieldAccess(Expr):

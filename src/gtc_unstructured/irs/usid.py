@@ -24,6 +24,7 @@ from pydantic.class_validators import root_validator
 
 from eve import FrozenNode, Node, Str, StrEnum, SymbolTableTrait
 from eve.type_definitions import SymbolName, SymbolRef
+from eve.typingx import RootValidatorValuesType
 from gtc import common as stable_gtc_common
 from gtc_unstructured.irs import common
 
@@ -201,11 +202,11 @@ class SidComposite(Node):
         return self.name + "_strides"
 
     # TODO currently we pass an empty composite in the weights test
-    # @validator("entries")
-    # def not_empty(cls, entries):
-    #     if len(entries) < 1:
-    #         raise ValueError("SidComposite must contain at least one entry")
-    #     return entries
+    # TODO @validator("entries")
+    # TODO def not_empty(cls, entries):
+    # TODO     if len(entries) < 1:
+    # TODO         raise ValueError("SidComposite must contain at least one entry")
+    # TODO     return entries
 
 
 class PtrRef(Node):

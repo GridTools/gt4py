@@ -15,10 +15,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import ClassVar, Dict, List, Optional, Tuple, Union
+from typing import ClassVar, Dict, List, Optional, Union
 
 from devtools import debug  # noqa: F401
-from pydantic import root_validator, validator
+from pydantic import root_validator
 
 from eve import Node, Str, StrEnum, SymbolTableTrait
 from eve.type_definitions import SymbolName, SymbolRef
@@ -154,11 +154,11 @@ class NeighborLoop(Stmt):
     connectivity: SymbolRef
     body: BlockStmt
 
-    # @root_validator(pre=True)
-    # def check_location_type(cls, values):
-    #     if values["neighbors"].elements[-1] != values["body"].location_type:
-    #         raise ValueError("Location type mismatch")
-    #     return values
+    # TODO @root_validator(pre=True)
+    # TODO def check_location_type(cls, values):
+    # TODO     if values["neighbors"].elements[-1] != values["body"].location_type:
+    # TODO         raise ValueError("Location type mismatch")
+    # TODO     return values
 
 
 class Access(Expr):
@@ -169,10 +169,6 @@ class FieldAccess(Access):
     primary: SymbolRef  # to NeighborLoop or IterationSpace
     secondary: Optional[SymbolRef]  # TODO unused? # to a LocationRef
     # TODO vertical
-
-    # @property
-    # def extent(self):
-    #     return len(self.primary.elements) > 1
 
 
 class VarAccess(Access):
@@ -193,7 +189,6 @@ class VerticalDimension(Node):
 
 class HorizontalDimension(Node):
     primary: common.LocationType
-    # secondary_connectivity: SymbolRef
 
 
 class Dimensions(Node):

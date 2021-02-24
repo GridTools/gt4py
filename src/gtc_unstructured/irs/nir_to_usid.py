@@ -62,8 +62,8 @@ class NirToUsid(eve.NodeTranslator):
         if dims.horizontal:
             horizontal = dims.horizontal
             dimensions.append(horizontal.primary)
-            # if horizontal.secondary:
-            #     dimensions.append(self.visit(horizontal.secondary))
+            # TODO if horizontal.secondary:
+            # TODO    dimensions.append(self.visit(horizontal.secondary))
         if dims.vertical:
             dimensions.append(self.visit(dims.vertical))
         return dimensions
@@ -147,9 +147,6 @@ class NirToUsid(eve.NodeTranslator):
     ):
         symtable = kwargs["symtable"]
         field_deref = symtable[node.name]
-        location_deref = symtable[node.primary]
-        # sid = node.primary if isinstance(
-        #     location_deref, nir.IterationSpace) else symtable[location_deref.connectivity].name + "_sid"
         sid = sid_mapping(node.primary)
         ref = acc_mapping(node.primary)
         name = node.name + usid.TAG_APPENDIX

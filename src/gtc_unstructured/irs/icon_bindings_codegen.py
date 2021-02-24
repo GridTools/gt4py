@@ -1,18 +1,14 @@
-from types import MappingProxyType
-from typing import ClassVar, Mapping
-
 from devtools import debug  # noqa: F401
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
-from gtc_unstructured.irs.gtir import Computation, Connectivity, SparseField, UField
+from gtc_unstructured.irs.gtir import Computation, SparseField, UField
 
 
 class IconBindingsCodegen(codegen.TemplatedGenerator):
     @classmethod
     def apply(cls, root, stencil_code: str, **kwargs) -> str:
-        # generated_code = super().apply(root, **kwargs)
         generated_code = cls().visit(root, stencil_code=stencil_code)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code

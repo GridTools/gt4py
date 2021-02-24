@@ -15,18 +15,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
-import networkx as nx
-from devtools import debug
+from devtools import debug  # noqa: unused
 
 import eve  # noqa: F401
-from eve import Node, NodeTranslator, NodeVisitor
+from eve import Node, NodeTranslator
 from eve.type_definitions import SymbolName, SymbolRef
-from gtc_unstructured.frontend.built_in_types import Connectivity
 from gtc_unstructured.irs import nir
-from gtc_unstructured.irs.common import AssignStmt
-from gtc_unstructured.irs.nir_passes.field_dependency_graph import generate_dependency_graph
 
 
 def _find_merge_candidates(h_loop: nir.HorizontalLoop) -> List[List[nir.NeighborLoop]]:
@@ -39,7 +35,6 @@ def _find_merge_candidates(h_loop: nir.HorizontalLoop) -> List[List[nir.Neighbor
     max_len = len(neighbor_loops)
     while outer < len(neighbor_loops):
         target_connectivity = neighbor_loops[outer].connectivity
-        target_name = neighbor_loops[outer].name
         i = outer + 1
         while i < max_len and neighbor_loops[i].connectivity == target_connectivity:
             i += 1

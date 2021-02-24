@@ -243,7 +243,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
             GT_FUNCTION auto operator()() const {
                 return [](${primary_signature}${secondary_signature}){
                     ${''.join(body)}
-                }; 
+                };
             }
         };
         """
@@ -315,7 +315,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
             };
         }
 
-        using ${ name }_impl_::${name}; 
+        using ${ name }_impl_::${name};
         """
     )
 
