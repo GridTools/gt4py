@@ -18,7 +18,7 @@ from typing import List
 
 import networkx as nx
 
-import eve  # noqa: F401
+import eve
 from eve import Node, NodeTranslator, NodeVisitor
 from gtc_unstructured.irs import nir
 from gtc_unstructured.irs.nir_passes.field_dependency_graph import generate_dependency_graph
@@ -107,7 +107,7 @@ class MergeHorizontalLoops(NodeTranslator):
                 declarations += loop.stmt.declarations
                 statements += loop.stmt.statements
 
-            node.horizontal_loops[first_index : last_index + 1] = [  # noqa: E203
+            node.horizontal_loops[first_index : last_index + 1] = [
                 nir.HorizontalLoop(
                     stmt=nir.BlockStmt(
                         declarations=declarations,
