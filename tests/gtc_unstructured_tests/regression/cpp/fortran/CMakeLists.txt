@@ -17,6 +17,8 @@ add_executable(vertex2edge_ftn_driver driver.f90)
 target_link_libraries(vertex2edge_ftn_driver vertex2edge_lib_fortran)
 set_target_properties(vertex2edge_ftn_driver PROPERTIES LINKER_LANGUAGE Fortran)
 
+add_test(NAME vertex2edge_ftn_driver COMMAND $<TARGET_FILE:vertex2edge_ftn_driver>)
+
 
 if(OpenACC_Fortran_FOUND AND TARGET GridTools::stencil_gpu)
     bindgen_add_library(vertex2edge_cuda_lib SOURCES vertex2edge_wrapper.cu FORTRAN_MODULE_NAME vertex2edge_lib)
@@ -26,4 +28,6 @@ if(OpenACC_Fortran_FOUND AND TARGET GridTools::stencil_gpu)
     add_executable(vertex2edge_ftn_cuda_driver driver.f90)
     target_link_libraries(vertex2edge_ftn_cuda_driver vertex2edge_cuda_lib_fortran OpenACC::OpenACC_Fortran)
     set_target_properties(vertex2edge_ftn_cuda_driver PROPERTIES LINKER_LANGUAGE Fortran)
+
+    add_test(NAME vertex2edge_ftn_cuda_driver COMMAND $<TARGET_FILE:vertex2edge_ftn_cuda_driver>)
 endif()

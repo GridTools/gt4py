@@ -8,13 +8,15 @@
 #include <tuple>
 
 namespace icon {
+using namespace gridtools;
 
 struct default_kind {};
 
 using neigh_tbl_t = fortran_array_view<int, 2, default_kind, false>;
 
 auto alloc_stencil_impl(int n_edges, neigh_tbl_t tbl) {
-  return sten({-1, n_edges, -1, 1}, make_connectivity_producer<2>(tbl));
+  return sten({-1, n_edges, -1, 1},
+              make_connectivity_producer(integral_constant<int, 2>{}, tbl));
 }
 
 using stencil_t = decltype(alloc_stencil_impl(int{}, neigh_tbl_t{{}}));
