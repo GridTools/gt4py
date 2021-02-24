@@ -293,7 +293,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
                 , ${','.join(connectivity_params)}
                 %endif
                 ) {
-                // TODO assert connectivities are sid
+                ${ ''.join(f"static_assert(is_sid<decltype({c.name}(traits_t()))>());" for c in _this_node.connectivities)}
                 return
                     [d = std::move(d)
                     %if connectivity_fields:
@@ -302,7 +302,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
                             ](
                         ${','.join(field_params)}
                             ){
-                            // TODO assert field params are sids
+                            ${ ''.join(f"static_assert(is_sid<decltype({p.name})>());" for p in _this_node.parameters)}
                             %if temporaries:
                             auto alloc = make_allocator();
                             %endif
