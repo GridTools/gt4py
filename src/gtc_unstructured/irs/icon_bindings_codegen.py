@@ -31,7 +31,7 @@ class IconBindingsCodegen(codegen.TemplatedGenerator):
 
     SparseField = as_fmt(
         "gridtools::fortran_array_view<T,{len(dimensionality[name])}, field_kind<{','.join(str(i) for i in dimensionality[name])}>> {name}"
-    )  # TODO
+    )
 
     Connectivity = as_fmt("neigh_tbl_t {name}")
 
@@ -46,7 +46,7 @@ class IconBindingsCodegen(codegen.TemplatedGenerator):
             if not isinstance(p, SparseField):
                 dimensionality[p.name].remove(2)
 
-        param_names = []  # [p.name for p in node.params]
+        param_names = []
         for name, dims in dimensionality.items():
             renames = {}
             for index in range(0, 3):
