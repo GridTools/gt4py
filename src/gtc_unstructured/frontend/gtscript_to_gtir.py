@@ -169,11 +169,11 @@ class GTScriptToGTIR(eve.NodeTranslator):
         # TODO(workshop): would be nice if we could use `method.applicable`
 
         if node.func in built_in_functions.native_functions and all(issubclass(arg_type, (numbers.Number, Field)) for arg_type in arg_types):
-            if len(node.args) != gtir.NativeFunction.IR_OP_TO_NUM_ARGS[node.func]:
+            if len(node.args) != common.NativeFunction.IR_OP_TO_NUM_ARGS[node.func]:
                 raise ValueError()
 
             native_func_call = gtir.NativeFuncCall(
-                func=gtir.NativeFunction(node.func),
+                func=common.NativeFunction(node.func),
                 args=self.visit(node.args, location_stack=location_stack, symtable=symtable, **kwargs),
                 location_type=location_stack[-1][1]
             )

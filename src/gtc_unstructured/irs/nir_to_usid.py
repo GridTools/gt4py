@@ -186,7 +186,7 @@ class NirToUsid(eve.NodeTranslator):
 
     def visit_NativeFuncCall(self, node: nir.NativeFuncCall, **kwargs):
         return usid.NativeFuncCall(
-            func=usid.NativeFunction(node.func.value),
+            func=node.func,
             args=self.visit(node.args, **kwargs),
             location_type=node.location_type,
         )
