@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy
-from typing import Dict, List
+from typing import Dict, List, cast
 
 from devtools import debug  # noqa: unused
 
@@ -30,7 +30,9 @@ def _find_merge_candidates(h_loop: nir.HorizontalLoop) -> List[List[nir.Neighbor
     # It will only work for naive cases where neighbor loops are contiguous
     # and they do not need to be reordered.
     merge_groups = []
-    neighbor_loops = eve.iter_tree(h_loop).if_isinstance(nir.NeighborLoop).to_list()
+    neighbor_loops = cast(
+        List[nir.NeighborLoop], eve.iter_tree(h_loop).if_isinstance(nir.NeighborLoop).to_list()
+    )
     outer = 0
     max_len = len(neighbor_loops)
     while outer < len(neighbor_loops):

@@ -55,7 +55,7 @@ def main():
     with open(output_file, "w+") as output:
         output.write(generated_code)
 
-    icon_bindings = IconBindingsCodegen().apply(compilation_task.gtir, generated_code)
+    icon_bindings = IconBindingsCodegen().apply(compilation_task.gtir, stencil_code=generated_code)
     print(icon_bindings)
     output_file = (
         os.path.dirname(os.path.realpath(__file__)) + "/generated_icon_vertex2edge" + extension

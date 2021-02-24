@@ -11,18 +11,18 @@
 import os
 import sys
 import types
-from gtc_unstructured.frontend.built_in_types import LocalField
 
+from gtc_unstructured.frontend.built_in_types import LocalField
 from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
-    Edge,
-    Vertex,
-    K,
-    Field,
-    SparseField,
-    computation,
     Connectivity,
+    Edge,
+    Field,
+    K,
+    SparseField,
+    Vertex,
+    computation,
     location,
 )
 from gtc_unstructured.irs.common import DataType
@@ -95,7 +95,7 @@ def main():
     with open(output_file, "w+") as output:
         output.write(generated_code)
 
-    icon_bindings = IconBindingsCodegen().apply(compilation_task.gtir, generated_code)
+    icon_bindings = IconBindingsCodegen().apply(compilation_task.gtir, stencil_code=generated_code)
     print(icon_bindings)
     output_file = (
         os.path.dirname(os.path.realpath(__file__)) + "/generated_icon_stencil_05" + extension

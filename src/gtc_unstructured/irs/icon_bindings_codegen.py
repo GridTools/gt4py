@@ -8,8 +8,9 @@ from gtc_unstructured.irs.gtir import Computation, SparseField, UField
 
 class IconBindingsCodegen(codegen.TemplatedGenerator):
     @classmethod
-    def apply(cls, root, stencil_code: str, **kwargs) -> str:
-        generated_code = cls().visit(root, stencil_code=stencil_code)
+    def apply(cls, root, **kwargs) -> str:
+        assert "stencil_code" in kwargs
+        generated_code = cls().visit(root, stencil_code=kwargs["stencil_code"])
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
 
