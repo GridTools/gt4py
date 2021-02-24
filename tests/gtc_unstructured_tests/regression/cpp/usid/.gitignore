@@ -1,2 +1,2 @@
-nabla_naive.hpp
-nabla_cuda.hpp
+nabla_unaive.hpp
+nabla_ugpu.hpp

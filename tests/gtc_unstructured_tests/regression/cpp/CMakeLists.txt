@@ -20,7 +20,7 @@ endif()
 
 include(FetchContent)
 FetchContent_Declare(GridTools
-    GIT_REPOSITORY https://github.com/havogt/gridtools.git
+    GIT_REPOSITORY https://github.com/GridTools/gridtools.git
     GIT_TAG        master
     # URL https://github.com/GridTools/gridtools/archive/???.tar.gz
 )
@@ -110,14 +110,14 @@ if(BUILD_TESTING)
     add_regression_test(vertex2edge)
     add_regression_test(vertex2edge_gtir DRIVER vertex2edge)
     add_regression_test(sparse_assign_gtir DRIVER sparse_assign)
-    add_regression_test(sparse_assign DRIVER sparse_assign)
+    add_regression_test(sparse_assign DRIVER sparse_assign) 
     add_regression_test(weights_gtir DRIVER weights)
     add_regression_test(weights DRIVER weights)
     add_regression_test(copy_with_k_gtir DRIVER copy_with_k)
     add_regression_test(copy_with_k DRIVER copy_with_k)
     add_regression_test(tmp_field)
     if(Atlas_FOUND)
-        add_regression_test(fvm_nabla ADDITIONAL_LIBRARIES atlas eckit)
+        add_regression_test(fvm_nabla ADDITIONAL_LIBRARIES atlas)
     endif()
     add_regression_test(native_functions)
 endif()

@@ -2,11 +2,16 @@
 # Eve toolchain
 
 import os
+import sys
 
 from devtools import debug
 
 import eve  # noqa: F401
-from gtc_unstructured.irs import common, usid_codegen
+from gtc_unstructured.irs import common
+from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
+from gtc_unstructured.irs.gtir_to_nir import GtirToNir
+from gtc_unstructured.irs.nir_to_usid import NirToUsid
+from gtc_unstructured.irs.nir_passes.merge_horizontal_loops import find_and_merge_horizontal_loops
 from gtc_unstructured.irs.common import LocationType
 from gtc_unstructured.irs.usid import (
     AssignStmt,
@@ -309,19 +314,20 @@ comp = Computation(
 )
 
 
-# debug(comp)
+def main():
+    mode = sys.argv[1] if len(sys.argv) > 1 else "unaive"
 
-generated_code = usid_codegen.UsidGpuCodeGenerator.apply(comp)
-# print(generated_code)
+    if mode == "unaive":
+        code_generator = UsidNaiveCodeGenerator
+    else:  # 'ugpu':
+        code_generator = UsidGpuCodeGenerator
 
-output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_cuda.hpp"
-with open(output_file, "w+") as output:
-    output.write(generated_code)
+    generated_code = code_generator.apply(comp)
 
-# TODO
-generated_code = usid_codegen.UsidNaiveCodeGenerator.apply(comp)
-# print(generated_code)
+    output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_" + mode + ".hpp"
+    with open(output_file, "w+") as output:
+        output.write(generated_code)
 
-output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_naive.hpp"
-with open(output_file, "w+") as output:
-    output.write(generated_code)
+
+if __name__ == "__main__":
+    main()

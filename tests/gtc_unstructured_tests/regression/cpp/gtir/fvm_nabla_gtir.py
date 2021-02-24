@@ -2,6 +2,7 @@
 # Eve toolchain
 
 import os
+import sys
 
 from devtools import debug
 
@@ -334,21 +335,26 @@ comp = Computation(
         ),
     ],
 )
-# debug(comp)
-nir_comp = GtirToNir().visit(comp)
-nir_comp = find_and_merge_horizontal_loops(nir_comp)
-# debug(nir_comp)
-usid_comp = NirToUsid().visit(nir_comp)
-# debug(usid_comp)
 
-generated_code = UsidGpuCodeGenerator.apply(usid_comp)
-# print(generated_code)
 
-output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_cuda.hpp"
-with open(output_file, "w+") as output:
-    output.write(generated_code)
+def main():
+    mode = sys.argv[1] if len(sys.argv) > 1 else "unaive"
 
-generated_code = UsidNaiveCodeGenerator.apply(usid_comp)
-output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_naive.hpp"
-with open(output_file, "w+") as output:
-    output.write(generated_code)
+    if mode == "unaive":
+        code_generator = UsidNaiveCodeGenerator
+    else:  # 'ugpu':
+        code_generator = UsidGpuCodeGenerator
+
+    nir_comp = GtirToNir().visit(comp)
+    nir_comp = find_and_merge_horizontal_loops(nir_comp)
+    usid_comp = NirToUsid().visit(nir_comp)
+
+    generated_code = code_generator.apply(usid_comp)
+
+    output_file = os.path.dirname(os.path.realpath(__file__)) + "/nabla_" + mode + ".hpp"
+    with open(output_file, "w+") as output:
+        output.write(generated_code)
+
+
+if __name__ == "__main__":
+    main()

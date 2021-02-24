@@ -199,10 +199,12 @@ class GtirToNir(eve.NodeTranslator):
         op = self.REDUCE_OP_TO_BINOP[node.op]
         if op == common.BuiltInLiteral.MIN_VALUE or op == common.BuiltInLiteral.MAX_VALUE:
             right = nir.NativeFuncCall(
-                func = nir.NativeFunction.MAX if op == common.BuiltInLiteral.MAX_VALUE else nir.NativeFunction.MIN,
+                func=nir.NativeFunction.MAX
+                if op == common.BuiltInLiteral.MAX_VALUE
+                else nir.NativeFunction.MIN,
                 args=[
                     nir.VarAccess(name=reduce_var_name, location_type=body_location),
-                    self.visit(node.operand, in_neighbor_loop=True, **kwargs)
+                    self.visit(node.operand, in_neighbor_loop=True, **kwargs),
                 ],
                 location_type=body_location,
             )
@@ -261,7 +263,7 @@ class GtirToNir(eve.NodeTranslator):
         nir_node = nir.NativeFuncCall(
             func=nir.NativeFunction(node.func.value),
             args=self.visit(node.args, **kwargs),
-            location_type=node.location_type
+            location_type=node.location_type,
         )
         debug(nir_node)
         return nir_node
@@ -292,7 +294,6 @@ class GtirToNir(eve.NodeTranslator):
         )
 
     def visit_Connectivity(self, node: gtir.Connectivity, **kwargs):
-        debug(node)
         return nir.Connectivity(
             name=node.name,
             primary=node.primary,

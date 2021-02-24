@@ -72,7 +72,7 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
         "<gridtools/common/array.hpp>",
         "<gridtools/usid/dim.hpp>",
         "<gridtools/usid/helpers.hpp>",
-        "<gridtools/common/gt_math.hpp>"
+        "<gridtools/common/gt_math.hpp>",
     ]
 
     namespace_ = None
