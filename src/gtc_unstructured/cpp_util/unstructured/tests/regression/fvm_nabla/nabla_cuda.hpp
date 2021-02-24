@@ -4,15 +4,15 @@
 namespace gridtools::usid::cuda::nabla_impl_ {
     struct v2e_tag : connectivity<7, true> {};
     struct e2v_tag : connectivity<2, false> {};
-    struct S_MXX_tag;
-    struct S_MYY_tag;
-    struct zavgS_MXX_tag;
-    struct zavgS_MYY_tag;
-    struct pnabla_MXX_tag;
-    struct pnabla_MYY_tag;
-    struct vol_tag;
+    struct S_MXX_tag {};
+    struct S_MYY_tag {};
+    struct zavgS_MXX_tag {};
+    struct zavgS_MYY_tag {};
+    struct pnabla_MXX_tag {};
+    struct pnabla_MYY_tag {};
+    struct vol_tag {};
     struct sign_tag : sparse_field<v2e_tag> {};
-    struct pp_tag;
+    struct pp_tag {};
     struct kernel_0 {
         GT_FUNCTION auto operator()() const {
             return [](auto &&ptr, auto &&strides, auto &&neighbors) {
@@ -27,16 +27,18 @@ namespace gridtools::usid::cuda::nabla_impl_ {
     struct kernel_1 {
         GT_FUNCTION auto operator()() const {
             return [](auto &&ptr, auto &&strides, auto &&neighbors) {
-                field<pnabla_MXX_tag>(ptr) = 0.0;
-                field<pnabla_MYY_tag>(ptr) = 0.0;
+                double acc_x = 0.0;
+                double acc_y = 0.0;
                 foreach_neighbor<v2e_tag>(
-                    [](auto &&p, auto &&n) {
-                        field<pnabla_MXX_tag>(p) += field<zavgS_MXX_tag>(n) * field<sign_tag>(p);
-                        field<pnabla_MYY_tag>(p) += field<zavgS_MYY_tag>(n) * field<sign_tag>(p);
+                    [&](auto &&p, auto &&n) {
+                        acc_x += field<zavgS_MXX_tag>(n) * field<sign_tag>(p);
+                        acc_y += field<zavgS_MYY_tag>(n) * field<sign_tag>(p);
                     },
                     ptr,
                     strides,
                     neighbors);
+                field<pnabla_MXX_tag>(ptr) = acc_x;
+                field<pnabla_MYY_tag>(ptr) = acc_y;
             };
         }
     };
@@ -68,17 +70,19 @@ namespace gridtools::usid::cuda::nabla_impl_ {
                 auto zavgS_MXX = make_simple_tmp_storage<double>(d.edge, d.k, alloc);
                 auto zavgS_MYY = make_simple_tmp_storage<double>(d.edge, d.k, alloc);
                 call_kernel<kernel_0>(d.edge,
-                    sid::composite::make<e2v_tag, S_MXX_tag, S_MYY_tag, zavgS_MXX_tag, zavgS_MYY_tag>(
+                    d.k,
+                    make_composite<e2v_tag, S_MXX_tag, S_MYY_tag, zavgS_MXX_tag, zavgS_MYY_tag>(
                         e2v, S_MXX, S_MYY, zavgS_MXX, zavgS_MYY),
-                    sid::composite::make<pp_tag>(pp));
+                    make_composite<pp_tag>(pp));
                 call_kernel<kernel_1>(d.vertex,
-                    sid::composite::make<v2e_tag, pnabla_MXX_tag, pnabla_MYY_tag, sign_tag>(
-                        v2e, pnabla_MXX, pnabla_MYY, sid::rename_dimensions<dim::s, v2e_tag>(sign)),
-                    sid::composite::make<zavgS_MXX_tag, zavgS_MYY_tag>(zavgS_MXX, zavgS_MYY));
+                    d.k,
+                    make_composite<v2e_tag, pnabla_MXX_tag, pnabla_MYY_tag, sign_tag>(
+                        v2e, pnabla_MXX, pnabla_MYY, sign),
+                    make_composite<zavgS_MXX_tag, zavgS_MYY_tag>(zavgS_MXX, zavgS_MYY));
                 // TODO pole edge computation
                 call_kernel<kernel_2>(d.vertex,
-                    sid::composite::make<v2e_tag, pnabla_MXX_tag, pnabla_MYY_tag, vol_tag>(
-                        v2e, pnabla_MXX, pnabla_MYY, vol));
+                    d.k,
+                    make_composite<v2e_tag, pnabla_MXX_tag, pnabla_MYY_tag, vol_tag>(v2e, pnabla_MXX, pnabla_MYY, vol));
             };
     };
 } // namespace gridtools::usid::cuda::nabla_impl_
