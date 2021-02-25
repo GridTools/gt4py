@@ -105,9 +105,10 @@ if(BUILD_TESTING)
         add_subdirectory(usid)
         add_subdirectory(gtir)
     endif()
-    add_subdirectory(fortran)
+    # add_subdirectory(fortran) # TODO
     
     add_regression_test(cell2cell)
+    # add_regression_test(cell2cell_sparse_gtir DRIVER cell2cell) # TODO different driver?!
     add_regression_test(vertex2edge)
     add_regression_test(vertex2edge_gtir DRIVER vertex2edge)
     add_regression_test(sparse_assign_gtir DRIVER sparse_assign)
@@ -121,4 +122,5 @@ if(BUILD_TESTING)
         add_regression_test(fvm_nabla ADDITIONAL_LIBRARIES atlas)
     endif()
     add_regression_test(native_functions)
+    # add_regression_test(k_fields) #TODO
 endif()

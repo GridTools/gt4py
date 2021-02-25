@@ -8,11 +8,8 @@
 #     field1 = sum(f[c1] * f[c2] for c2 in cells(c1))
 # ```
 
-import os
-import sys
 import types
 
-from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
     Connectivity,
@@ -24,7 +21,6 @@ from gtc_unstructured.frontend.gtscript import (
     location,
 )
 from gtc_unstructured.irs.common import DataType
-from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 
 
 E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
@@ -41,25 +37,7 @@ def sten(e2v: E2V, in_field: Field[Vertex, dtype], out_field: SparseField[E2V, d
             # out_sparse_field = in_sparse_field
 
 
-def main():
-    mode = sys.argv[1] if len(sys.argv) > 1 else "unaive"
-
-    if mode == "unaive":
-        code_generator = UsidNaiveCodeGenerator
-    else:  # 'ugpu':
-        code_generator = UsidGpuCodeGenerator
-
-    generated_code = GTScriptCompilationTask(sten).generate(
-        debug=True, code_generator=code_generator
-    )
-
-    print(generated_code)
-    output_file = (
-        os.path.dirname(os.path.realpath(__file__)) + "/generated_sparse_assign_" + mode + ".hpp"
-    )
-    with open(output_file, "w+") as output:
-        output.write(generated_code)
-
-
 if __name__ == "__main__":
-    main()
+    import generator
+
+    generator.default_main(sten)

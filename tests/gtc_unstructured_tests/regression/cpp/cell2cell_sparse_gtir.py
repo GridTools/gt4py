@@ -8,32 +8,24 @@
 #     field1 = sum(f[c1,c2] for c2 in cells(c1))
 # ```
 
-import os
-
-from devtools import debug
+# TODO fix
 
 from gtc_unstructured.irs import gtir
 from gtc_unstructured.irs.common import DataType, LocationType, LoopOrder
 from gtc_unstructured.irs.gtir import (
     AssignStmt,
     Dimensions,
-    Domain,
     FieldAccess,
     HorizontalDimension,
     HorizontalLoop,
     LocationComprehension,
     LocationRef,
-    NeighborChain,
     NeighborReduce,
     ReduceOperator,
     Stencil,
     UField,
     VerticalLoop,
 )
-from gtc_unstructured.irs.gtir_to_nir import GtirToNir
-from gtc_unstructured.irs.nir_to_usid import NirToUsid
-from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator
-
 
 field_in = UField(
     name="field_in",
@@ -74,7 +66,7 @@ assign_c2c_red = AssignStmt(
 )
 
 
-sten = Stencil(
+stencil = Stencil(
     vertical_loops=[
         VerticalLoop(
             loop_order=LoopOrder.FORWARD,
@@ -90,15 +82,9 @@ sten = Stencil(
     ],
 )
 
-comp = gtir.Computation(name="sten", params=[field_in, field_out], stencils=[sten])
-# debug(comp)
+sten = gtir.Computation(name="sten", params=[field_in, field_out], stencils=[stencil])
 
-nir_comp = GtirToNir().visit(comp)
-usid_comp = NirToUsid().visit(nir_comp)
+if __name__ == "__main__":
+    import generator
 
-generated_code = UsidGpuCodeGenerator.apply(usid_comp)
-print(generated_code)
-
-output_file = os.path.dirname(os.path.realpath(__file__)) + "/generated_cell2cell_sparse.hpp"
-with open(output_file, "w+") as output:
-    output.write(generated_code)
+    generator.default_main(sten)
