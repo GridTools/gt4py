@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from eve import NodeTranslator
@@ -81,8 +82,17 @@ class GreedyMerging(NodeTranslator):
         return result
 
 
+@dataclass
 class OnTheFlyMerging(NodeTranslator):
-    """Merges consecutive horizontal executions inside parallel vertical loops by introducing redundant computations."""
+    """Merges consecutive horizontal executions inside parallel vertical loops by introducing redundant computations.
+
+    Limitations:
+    * Works on the level of whole horizontal executions, no full dependency analysis is performed (common subexpression and dead code eliminitation at a later stage can work around this limitation).
+    * The chosen default merge limits are totally arbitrary.
+    """
+
+    max_horizontal_execution_body_size: int = 100
+    allow_expensive_function_duplication: bool = False
 
     def visit_CartesianOffset(
         self,
@@ -130,12 +140,46 @@ class OnTheFlyMerging(NodeTranslator):
         first, *others = horizontal_executions
         first_accesses = AccessCollector.apply(first)
         other_accesses = AccessCollector.apply(others)
+
+        def first_fields_rewritten_later() -> bool:
+            return bool(first_accesses.fields() & other_accesses.write_fields())
+
+        def first_output_used_in_later_mask() -> bool:
+            empty_str_set: Set[str] = set()
+            return bool(
+                first_accesses.write_fields()
+                & empty_str_set.union(
+                    *(AccessCollector.apply(o.mask, is_write=False).fields() for o in others)
+                )
+            )
+
+        def first_has_large_body() -> bool:
+            return len(first.body) > self.max_horizontal_execution_body_size
+
+        def first_has_expensive_function_call() -> bool:
+            if self.allow_expensive_function_duplication:
+                return False
+            nf = common.NativeFunction
+            expensive_calls = {
+                nf.SIN,
+                nf.COS,
+                nf.TAN,
+                nf.ARCSIN,
+                nf.ARCCOS,
+                nf.ARCTAN,
+                nf.SQRT,
+                nf.EXP,
+                nf.LOG,
+            }
+            calls = first.iter_tree().if_isinstance(oir.NativeFuncCall).getattr("func")
+            return any(call in expensive_calls for call in calls)
+
         if (
             first.mask is not None
-            or first_accesses.fields() & other_accesses.write_fields()
-            or first_accesses.write_fields()
-            & set().union(*(AccessCollector.apply(o.mask, is_write=False).fields() for o in others))  # type: ignore
-            # TODO: fix type ignore with set[str]().union(...) in Python >= 3.9
+            or first_fields_rewritten_later()
+            or first_output_used_in_later_mask()
+            or first_has_large_body()
+            or first_has_expensive_function_call()
         ):
             return [first] + self._merge(others, symtable, tmps_to_remove, new_symbol_name)
 
