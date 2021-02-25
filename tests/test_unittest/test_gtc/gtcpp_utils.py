@@ -14,198 +14,169 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Optional
+from typing import List
 
-from gtc.common import CartesianOffset, DataType, ExprKind, LoopOrder
-from gtc.gtcpp.gtcpp import (
-    AccessorRef,
-    ApiParamDecl,
-    Arg,
-    AssignStmt,
-    Expr,
-    FieldDecl,
-    GTAccessor,
-    GTApplyMethod,
-    GTComputationCall,
-    GTExtent,
-    GTFunctor,
-    GTInterval,
-    GTLevel,
-    GTMultiStage,
-    GTParamList,
-    GTStage,
-    IfStmt,
-    Intent,
-    Literal,
-    LocalVarDecl,
-    Program,
-    Stmt,
-    Temporary,
-)
+import factory
+
+from gtc import common
+from gtc.gtcpp import gtcpp
+
+from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
 
 
-class AccessorRefBuilder:
-    def __init__(self, name) -> None:
-        self._name = name
-        self._offset = CartesianOffset.zero()
-        self._kind = ExprKind.FIELD
-        self._dtype = DataType.FLOAT32
+class AccessorRefFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.AccessorRef
 
-    def offset(self, offset: CartesianOffset) -> "AccessorRefBuilder":
-        self._offset = offset
-        return self
-
-    def dtype(self, dtype: DataType) -> "AccessorRefBuilder":
-        self._dtype = dtype
-        return self
-
-    def build(self) -> AccessorRef:
-        return AccessorRef(name=self._name, offset=self._offset, dtype=self._dtype, kind=self._kind)
+    name = identifier(gtcpp.AccessorRef)
+    offset = factory.SubFactory(CartesianOffsetFactory)
+    dtype = common.DataType.FLOAT32
 
 
-class AssignStmtBuilder:
-    def __init__(self, left: str = "left", right: str = "right") -> None:
-        self._left = AccessorRefBuilder(left).build()
-        self._right = AccessorRefBuilder(right).build()
+class AssignStmtFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.AssignStmt
 
-    def build(self) -> AssignStmt:
-        return AssignStmt(left=self._left, right=self._right)
-
-
-class GTIntervalBuilder:
-    def __init__(self) -> None:
-        self._from_level = GTLevel(splitter=0, offset=1)
-        self._to_level = GTLevel(splitter=1, offset=-1)
-
-    def build(self) -> GTInterval:
-        return GTInterval(from_level=self._from_level, to_level=self._to_level)
+    left = factory.SubFactory(AccessorRefFactory)
+    right = factory.SubFactory(AccessorRefFactory)
 
 
-class GTApplyMethodBuilder:
-    def __init__(self) -> None:
-        self._interval = GTIntervalBuilder().build()
-        self._body: List[Stmt] = []
-        self._local_variables: List[LocalVarDecl] = []
+class GTLevelFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.GTLevel
 
-    def add_stmt(self, stmt: Stmt) -> "GTApplyMethodBuilder":
-        self._body.append(stmt)
-        return self
-
-    def build(self) -> GTApplyMethod:
-        return GTApplyMethod(
-            interval=self._interval, body=self._body, local_variables=self._local_variables
-        )
+    splitter = 0
+    offset = 0
 
 
-class IfStmtBuilder:
-    def __init__(self) -> None:
-        self._cond = Literal(value="true", dtype=DataType.BOOL)
-        self._true_branch: Optional[Expr] = None
-        self._false_branch: Optional[Expr] = None
+class GTIntervalFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.GTInterval
 
-    def true_branch(self, stmt: Stmt) -> "IfStmtBuilder":
-        self._true_branch = stmt
-        return self
-
-    def build(self) -> IfStmt:
-        return IfStmt(
-            cond=self._cond, true_branch=self._true_branch, false_branch=self._false_branch
-        )
+    from_level = factory.SubFactory(GTLevelFactory, splitter=0, offset=1)
+    to_level = factory.SubFactory(GTLevelFactory, splitter=1, offset=-1)
 
 
-class GTAccessorBuilder:
-    def __init__(self, name, id) -> None:  # noqa: A002  # shadowing python builtin
-        self._name = name
-        self._id = id
-        self._intent = Intent.INOUT
-        self._extent = GTExtent.zero()
+class GTApplyMethodFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.GTApplyMethod
 
-    def build(self) -> GTAccessor:
-        return GTAccessor(name=self._name, id=self._id, intent=self._intent, extent=self._extent)
+    interval = factory.SubFactory(GTIntervalFactory)
+    body = factory.List([factory.SubFactory(AssignStmtFactory)])
+    local_variables: List[gtcpp.LocalVarDecl] = []
 
 
-class GTFunctorBuilder:
-    def __init__(self, name) -> None:
-        self._name = name
-        self._applies: List[GTApplyMethod] = []
-        self._param_list_accessors: List[GTAccessor] = []
+class LiteralFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.Literal
 
-    def add_accessors(self, accessors: List[GTAccessor]) -> "GTFunctorBuilder":
-        self._param_list_accessors.extend(accessors)
-        return self
-
-    def add_accessor(self, accessor: GTAccessor) -> "GTFunctorBuilder":
-        self._param_list_accessors.append(accessor)
-        return self
-
-    def add_apply_method(
-        self, apply_method: GTApplyMethod = GTApplyMethodBuilder().build()
-    ) -> "GTFunctorBuilder":
-        self._applies.append(apply_method)
-        return self
-
-    def build(self) -> GTFunctor:
-        return GTFunctor(
-            name=self._name,
-            applies=self._applies,
-            param_list=GTParamList(accessors=self._param_list_accessors),
-        )
+    value = "42.0"
+    dtype = common.DataType.FLOAT32
 
 
-class GTComputationCallBuilder:
-    def __init__(self) -> None:
-        self._arguments: List[Arg] = []
-        self._temporaries: List[Temporary] = []
-        self._multi_stages: List[GTMultiStage] = []
+class BlockStmtFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.BlockStmt
 
-    def add_stage(self, stage: GTStage) -> "GTComputationCallBuilder":
-        if len(self._multi_stages) == 0:
-            self._multi_stages.append(
-                GTMultiStage(loop_order=LoopOrder.PARALLEL, stages=[], caches=[])
-            )
-        mss = self._multi_stages[-1]
-        stages = mss.stages
-        stages.append(stage)
-        self._multi_stages[-1] = GTMultiStage(
-            loop_order=mss.loop_order, stages=stages, caches=mss.caches
-        )
-        return self
-
-    def add_argument(self, name: str) -> "GTComputationCallBuilder":
-        self._arguments.append(Arg(name=name))
-        return self
-
-    def build(self) -> GTComputationCall:
-        return GTComputationCall(
-            arguments=self._arguments,
-            temporaries=self._temporaries,
-            multi_stages=self._multi_stages,
-        )
+    body: List[gtcpp.Stmt] = []
 
 
-class ProgramBuilder:
-    def __init__(self, name) -> None:
-        self._name = name
-        self._parameters: List[ApiParamDecl] = []
-        self._functors: List[GTFunctor] = []
-        self._gt_computation = GTComputationCallBuilder().build()
+class IfStmtFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.IfStmt
 
-    def add_functor(self, functor: GTFunctor) -> "ProgramBuilder":
-        self._functors.append(functor)
-        return self
+    cond = factory.SubFactory(LiteralFactory, value="true", dtype=common.DataType.BOOL)
+    true_branch = factory.SubFactory(BlockStmtFactory)
+    false_branch = None
 
-    def add_parameter(self, name: str, dtype: DataType) -> "ProgramBuilder":
-        self._parameters.append(FieldDecl(name=name, dtype=dtype))
-        return self
 
-    def gt_computation(self, gt_computation: GTComputationCall) -> "ProgramBuilder":
-        self._gt_computation = gt_computation
-        return self
+class GTExtentFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.GTExtent
 
-    def build(self) -> Program:
-        return Program(
-            name=self._name,
-            parameters=self._parameters,
-            functors=self._functors,
-            gt_computation=self._gt_computation,
-        )
+    i = (0, 0)
+    j = (0, 0)
+    k = (0, 0)
+
+
+class GTAccessorFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.GTAccessor
+
+    name = identifier(gtcpp.GTAccessor)
+    id = factory.Sequence(lambda i: i)  # noqa: A003
+    intent = gtcpp.Intent.INOUT
+    extent = factory.SubFactory(GTExtentFactory)
+
+
+class GTParamListFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.GTParamList
+
+    accessors: List[gtcpp.GTAccessor] = []
+
+
+class GTFunctorFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.GTFunctor
+
+    name = identifier(gtcpp.GTFunctor)
+    applies = factory.List([factory.SubFactory(GTApplyMethodFactory)])
+    param_list = undefined_symbol_list(
+        lambda name: GTAccessorFactory(name=name),
+        "applies",
+        list_creator=lambda l: GTParamListFactory(accessors=l),
+    )
+
+
+class ArgFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.Arg
+
+    name = identifier(gtcpp.Arg)
+
+
+class GTStageFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.GTStage
+
+    functor = identifier(gtcpp.GTStage)
+    args: List[gtcpp.Arg] = []
+
+
+class GTMultiStageFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.GTMultiStage
+
+    loop_order = common.LoopOrder.PARALLEL
+    stages = factory.List([factory.SubFactory(GTStageFactory)])
+    caches: List[gtcpp.IJCache] = []
+
+
+class GTComputationCallFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.GTComputationCall
+
+    arguments: List[gtcpp.Arg] = []
+    multi_stages = factory.List([factory.SubFactory(GTMultiStageFactory)])
+    temporaries = undefined_symbol_list(lambda name: FieldDeclFactory(name=name), "multi_stages")
+
+
+class FieldDeclFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.FieldDecl
+
+    name = identifier(gtcpp.FieldDecl)
+    dtype = common.DataType.FLOAT32
+
+
+class ProgramFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.Program
+
+    name = identifier(gtcpp.Program)
+    functors = factory.List([factory.SubFactory(GTFunctorFactory)])
+    gt_computation = factory.SubFactory(GTComputationCallFactory)
+    parameters = undefined_symbol_list(
+        lambda name: FieldDeclFactory(name=name), "functors", "gt_computation"
+    )
