@@ -52,6 +52,7 @@ from .typingx import (
     Callable,
     Collection,
     Dict,
+    Generic,
     Iterable,
     Iterator,
     List,
@@ -71,6 +72,8 @@ try:
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
     import toolz  # noqa: F401  # imported but unused
+
+T = TypeVar("T")
 
 
 def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
@@ -418,7 +421,7 @@ class CaseStyleConverter:
         return name.split("-")
 
 
-class FrozenNamespace(types.SimpleNamespace):
+class FrozenNamespace(types.SimpleNamespace, Generic[T]):
     """An immutable `types.SimpleNamespace`-like class.
 
     Examples:
@@ -435,16 +438,16 @@ class FrozenNamespace(types.SimpleNamespace):
         [('a', 10), ('b', 'hello')]
     """
 
-    def __setattr__(self, _name: str, _value: Any) -> None:
+    def __setattr__(self, _name: str, _value: T) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
 
-    def items(self) -> Iterable[Tuple[str, Any]]:
+    def items(self) -> Iterable[Tuple[str, T]]:
         return self.__dict__.items()
 
     def keys(self) -> Iterable[str]:
         return self.__dict__.keys()
 
-    def values(self) -> Iterable[Any]:
+    def values(self) -> Iterable[T]:
         return self.__dict__.values()
 
 
@@ -487,7 +490,6 @@ class UIDGenerator:
 
 
 # -- Iterators --
-T = TypeVar("T")
 S = TypeVar("S")
 K = TypeVar("K")
 

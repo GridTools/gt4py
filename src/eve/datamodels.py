@@ -110,14 +110,17 @@ class _DevToolsPrettyPrintable(Protocol):
         ...
 
 
+Attribute = attr.Attribute
+
+
 class DataModelTp(_AttrClassTp, _DataClassTp, _DevToolsPrettyPrintable, Protocol):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         ...
 
-    __datamodel_fields__: ClassVar[utils.FrozenNamespace]
-    __datamodel_params__: ClassVar[utils.FrozenNamespace]
+    __datamodel_fields__: ClassVar[utils.FrozenNamespace[Attribute]]
+    __datamodel_params__: ClassVar[utils.FrozenNamespace[Type]]
     __datamodel_validators__: ClassVar[
-        Tuple[NonDataDescriptor[DataModelTp, BoundRootValidator], ...]
+        Tuple[NonDataDescriptor[DataModelTp, BoundRootValidatorType], ...]
     ]
 
 
@@ -133,20 +136,20 @@ class GenericDataModelTp(DataModelTp, Protocol):
         ...
 
 
-ValidatorFunc = Callable[[DataModelTp, attr.Attribute, T], None]
-BoundValidator = Callable[[attr.Attribute, T], None]
+ValidatorType = Callable[[DataModelTp, Attribute, T], None]
+BoundValidatorType = Callable[[Attribute, T], None]
 
-RootValidatorFunc = Callable[[Type[DataModelTp], DataModelTp], None]
-BoundRootValidator = Callable[[DataModelTp], None]
+RootValidatorType = Callable[[Type[DataModelTp], DataModelTp], None]
+BoundRootValidatorType = Callable[[DataModelTp], None]
 
 
 @typing.runtime_checkable
-class TypeWithAttrValidator(Protocol):
+class TypeWithAttrValidatorTp(Protocol):
     """Protocol for classes defining its own custom validator (when used as fields)."""
 
-    @property
+    @classmethod
     @abc.abstractmethod
-    def __type_attr_validator__(self) -> attr._ValidatorType:
+    def __type_validator__(self) -> ValidatorType:
         ...
 
 
@@ -221,9 +224,9 @@ class _ForwardRefValidator:
     """Implementation of ``attr.s`` type validator for ``ForwardRef`` typings."""
 
     #: Actual type validators created after resolving the forward references.
-    validator: Optional[attr._ValidatorType] = None
+    validator: Optional[ValidatorType] = None
 
-    def __call__(self, instance: DataModelTp, attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, instance: DataModelTp, attribute: Attribute, value: Any) -> None:
         if self.validator is None:
             model_cls = instance.__class__
             update_forward_refs(model_cls)
@@ -239,11 +242,11 @@ class _TupleValidator:
     """Implementation of ``attr.s`` type validator for ``Tuple`` typings."""
 
     #: Collection of validators.
-    validators: Tuple[attr._ValidatorType, ...]
+    validators: Tuple[ValidatorType, ...]
     #: Class used in the container ``isintance()`` check.
     tuple_type: Type[Tuple]
 
-    def __call__(self, instance: _AttrClassTp, attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, instance: DataModelTp, attribute: Attribute, value: Any) -> None:
         if not isinstance(value, self.tuple_type):
             raise TypeError(
                 f"In '{attribute.name}' validation, got '{value}' that is a {type(value)} instead of {self.tuple_type}."
@@ -269,11 +272,11 @@ class _OrValidator:
     """Implementation of ``attr.s`` validator composing multiple validators together using OR."""
 
     #: Collection of validators.
-    validators: Tuple[attr._ValidatorType, ...]
+    validators: Tuple[ValidatorType, ...]
     #: Exception class for validation errors.
     error_type: Type[Exception]
 
-    def __call__(self, instance: _AttrClassTp, attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, instance: DataModelTp, attribute: Attribute, value: Any) -> None:
         passed = False
         for v in self.validators:
             try:
@@ -295,7 +298,7 @@ class _LiteralValidator:
 
     literal: Any
 
-    def __call__(self, instance: _AttrClassTp, attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, instance: DataModelTp, attribute: Attribute, value: Any) -> None:
         if isinstance(self.literal, bool):
             valid = value is self.literal
         else:
@@ -306,16 +309,16 @@ class _LiteralValidator:
             )
 
 
-def empty_attrs_validator() -> attr._ValidatorType:
+def empty_attrs_validator() -> ValidatorType:
     """Create an ``attr.s`` empty validator which always succeeds."""
 
-    def _empty_validator(instance: _AttrClassTp, attribute: attr.Attribute, value: Any) -> None:
+    def _empty_validator(instance: DataModelTp, attribute: Attribute, value: Any) -> None:
         pass
 
     return _empty_validator
 
 
-def forward_ref_type_attrs_validator() -> attr._ValidatorType:
+def forward_ref_type_attrs_validator() -> ValidatorType:
     """Create an ``attr.s`` strict type validator for ``ForwardRef`` typings.
 
     The generated validator will resolve the field type to an actual type
@@ -324,10 +327,10 @@ def forward_ref_type_attrs_validator() -> attr._ValidatorType:
     return _ForwardRefValidator()
 
 
-def instance_of_int_attrs_validator() -> attr._ValidatorType:
+def instance_of_int_attrs_validator() -> ValidatorType:
     """Create an ``attr.s`` validator for ``int`` values which fails with ``bool`` values."""
 
-    def _int_validator(instance: _AttrClassTp, attribute: attr.Attribute, value: Any) -> None:
+    def _int_validator(instance: DataModelTp, attribute: Attribute, value: Any) -> None:
         if not isinstance(value, int) or isinstance(value, bool):
             raise TypeError(
                 f"'{attribute.name}' must be {int} (got '{value}' that is a {type(value)})."
@@ -336,9 +339,7 @@ def instance_of_int_attrs_validator() -> attr._ValidatorType:
     return _int_validator
 
 
-def or_attrs_validator(
-    *validators: attr._ValidatorType, error_type: Type[Exception]
-) -> attr._ValidatorType:
+def or_attrs_validator(*validators: ValidatorType, error_type: Type[Exception]) -> ValidatorType:
     """Create an ``attr.s`` validator combinator where only one of the validators needs to pass."""
     if len(validators) == 1:
         return validators[0]
@@ -346,12 +347,12 @@ def or_attrs_validator(
         return _OrValidator(validators, error_type=error_type)
 
 
-def literal_type_attrs_validator(*type_args: Type) -> attr._ValidatorType:
+def literal_type_attrs_validator(*type_args: Type) -> ValidatorType:
     """Create an ``attr.s`` strict type validator for ``Literal`` typings."""
     return or_attrs_validator(*(_LiteralValidator(t) for t in type_args), error_type=ValueError)
 
 
-def tuple_type_attrs_validator(*type_args: Type, tuple_type: Type = tuple) -> attr._ValidatorType:
+def tuple_type_attrs_validator(*type_args: Type, tuple_type: Type = tuple) -> ValidatorType:
     """Create an ``attr.s`` strict type validator for ``Tuple`` typings."""
     if len(type_args) == 2 and (type_args[1] is Ellipsis):
         # Tuple as an immutable sequence type: Tuple[int, ...]
@@ -370,7 +371,7 @@ def tuple_type_attrs_validator(*type_args: Type, tuple_type: Type = tuple) -> at
         )
 
 
-def union_type_attrs_validator(*type_args: Type) -> attr._ValidatorType:
+def union_type_attrs_validator(*type_args: Type) -> ValidatorType:
     """Create an ``attr.s`` strict type validator for Union typings."""
     if len(type_args) == 2 and (type_args[1] is type(None)):  # noqa: E721  # use isinstance()
         non_optional_validator = strict_type_attrs_validator(type_args[0])
@@ -384,9 +385,13 @@ def union_type_attrs_validator(*type_args: Type) -> attr._ValidatorType:
 
 def strict_type_attrs_validator(
     type_hint: Any, *, forward_eval_module: Optional[str] = None
-) -> attr._ValidatorType:
+) -> ValidatorType:
     """Create an ``attr.s`` strict type validator for a specific typing hint."""
     type_args = typing.get_args(type_hint)
+
+    # Custom type validator
+    if isinstance(type_hint, TypeWithAttrValidatorTp):
+        return type_hint.__type_validator__()
 
     # Non-generic types
     if isinstance(type_hint, type) and type_hint is not type(  # noqa: E721  # use isinstance()
@@ -434,16 +439,11 @@ def strict_type_attrs_validator(
                 mapping_validator=attr.validators.instance_of(origin_type),
             )
 
-    if isinstance(type_hint, TypeWithAttrValidator):
-        return type_hint.__type_attr_validator__
-    else:
-        raise TypeError(f"Type description '{type_hint}' is not supported.")
-
-    assert False  # noqa
+    raise TypeError(f"Type description '{type_hint}' is not supported.")
 
 
 # -- DataModel --
-def _collect_field_validators(cls: Type, *, delete_tag: bool = True) -> Dict[str, ValidatorFunc]:
+def _collect_field_validators(cls: Type, *, delete_tag: bool = True) -> Dict[str, ValidatorType]:
     result = {}
     for member in cls.__dict__.values():
         if hasattr(member, _FIELD_VALIDATOR_TAG):
@@ -455,7 +455,7 @@ def _collect_field_validators(cls: Type, *, delete_tag: bool = True) -> Dict[str
     return result
 
 
-def _collect_root_validators(cls: Type, *, delete_tag: bool = True) -> List[RootValidatorFunc]:
+def _collect_root_validators(cls: Type, *, delete_tag: bool = True) -> List[RootValidatorType]:
     result = []
     for base in reversed(cls.__mro__[1:]):
         for validator in getattr(base, _ROOT_VALIDATORS, []):
@@ -473,13 +473,13 @@ def _collect_root_validators(cls: Type, *, delete_tag: bool = True) -> List[Root
 
 def _get_attribute_from_bases(
     name: str, mro: Tuple[Type, ...], annotations: Optional[Dict[str, Any]] = None
-) -> Optional[attr.Attribute]:
+) -> Optional[Attribute]:
     for base in mro:
         for base_field_attrib in getattr(base, "__attrs_attrs__", []):
             if base_field_attrib.name == name:
                 if annotations is not None:
                     annotations[name] = base.__annotations__[name]
-                return typing.cast(attr.Attribute, base_field_attrib)
+                return typing.cast(Attribute, base_field_attrib)
 
     return None
 
@@ -497,7 +497,7 @@ def _substitute_typevars(
 
 
 def _make_counting_attr_from_attribute(
-    field_attrib: attr.Attribute, *, include_type: bool = False, **kwargs: Any
+    field_attrib: Attribute, *, include_type: bool = False, **kwargs: Any
 ) -> Any:  # attr.s lies on purpose in some typings
     members = [
         "default",
@@ -518,7 +518,7 @@ def _make_counting_attr_from_attribute(
     return attr.ib(**{key: getattr(field_attrib, key) for key in members}, **kwargs)  # type: ignore[call-overload]  # too hard for mypy
 
 
-def _make_dataclass_field_from_attr(field_attrib: attr.Attribute) -> dataclasses.Field:
+def _make_dataclass_field_from_attr(field_attrib: Attribute) -> dataclasses.Field:
     MISSING = getattr(dataclasses, "MISSING", NOTHING)
     default = MISSING
     default_factory = MISSING
@@ -869,7 +869,7 @@ def get_fields(
 
     Keyword Arguments:
         as_dataclass: If ``True`` (the default is ``False``), field information is returned
-            as :class:`dataclass.Field` instances instead of :class:`attr.Attribute`.
+            as :class:`dataclass.Field` instances instead of :class:`Attribute`.
 
     Examples:
         >>> from typing import List
@@ -998,7 +998,7 @@ def update_forward_refs(
         fields = list(model.__datamodel_fields__.keys())
 
     datamodel_fields_ns = getattr(model, _MODEL_FIELDS)
-    updated_fields: Dict[str, attr.Attribute] = {}
+    updated_fields: Dict[str, Attribute] = {}
     try:
         field_attr = None
         for field_name in fields:

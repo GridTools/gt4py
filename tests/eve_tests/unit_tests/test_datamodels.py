@@ -310,24 +310,49 @@ def test_custom_class_type_hint():
         Model2(value=AnotherClass())
 
 
+class MyType:
+    def __init__(self, value: Any) -> None:
+        self.value = value
+
+    def add(self, something) -> None:
+        return self.value + something
+
+    @classmethod
+    def __type_validator__(cls) -> datamodels.ValidatorType:
+        def _custom_validator(
+            instance: datamodels.DataModelTp, attribute: datamodels.Attribute, value: Any
+        ) -> None:
+            if not (hasattr(value, "value") and hasattr(value, "add")):
+                raise TypeError("Invalid value type for '{attribute.name}' field.")
+
+        return _custom_validator
+
+
+def test_custom_type_hint_validator():
+    @datamodels.datamodel
+    class Model:
+        value: MyType
+
+    Model(value=types.SimpleNamespace(value=32, add=22))
+
+    with pytest.raises(TypeError, match="value"):
+        Model(value=types.SimpleNamespace(value=32))
+
+
 @datamodels.datamodel
 class GlobalRecursiveModel:
-    int_value: int
-    list_value: List[GlobalRecursiveModel]
+    value: Optional[GlobalRecursiveModel] = None
 
 
 def test_deferred_class_type_hint():
     # Model defined in a module global context
-    assert isinstance(GlobalRecursiveModel.__datamodel_fields__.list_value.type, ForwardRef)
+    assert isinstance(GlobalRecursiveModel.__datamodel_fields__.value.type, ForwardRef)
     datamodels.update_forward_refs(GlobalRecursiveModel)
-    assert (
-        GlobalRecursiveModel.__datamodel_fields__.list_value.type.__args__[0]
-        == GlobalRecursiveModel
-    )
+    assert GlobalRecursiveModel.__datamodel_fields__.value.type.__args__[0] == GlobalRecursiveModel
 
-    m1 = GlobalRecursiveModel(int_value=1, list_value=[])
-    m2 = GlobalRecursiveModel(int_value=1, list_value=[m1])
-    GlobalRecursiveModel(int_value=1, list_value=[m1, m2])
+    m1 = GlobalRecursiveModel()
+    m2 = GlobalRecursiveModel(value=m1)
+    GlobalRecursiveModel(value=m2)
 
     # Models defined in a non-global context
     @datamodels.datamodel
