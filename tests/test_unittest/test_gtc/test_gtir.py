@@ -166,8 +166,9 @@ def test_assign_to_ij_par():
                 FieldDecl(name=out_name, dtype=DataType.FLOAT32, dimensions=(True, True, False)),
                 FieldDecl(name=in_name, dtype=DataType.FLOAT32, dimensions=(True, True, True)),
             ],
-            vertical_loops__0__body_0=ParAssignStmtFactory(
-                left__name=out_name, right__name=in_name
+            vertical_loops__0=VerticalLoopFactory(
+                loop_order=LoopOrder.PARALLEL,
+                body=[ParAssignStmtFactory(left__name=out_name, right__name=in_name)],
             ),
         )
 
