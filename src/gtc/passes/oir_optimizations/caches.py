@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
 
 from eve import NodeTranslator
@@ -84,7 +85,10 @@ class IJCacheDetection(NodeTranslator):
         return self.generic_visit(node, temporaries=node.declarations, **kwargs)
 
 
+@dataclass
 class KCacheDetection(NodeTranslator):
+    max_cacheable_offset: int = 5
+
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
         if node.loop_order == common.LoopOrder.PARALLEL:
             return self.generic_visit(node, **kwargs)
@@ -99,6 +103,9 @@ class KCacheDetection(NodeTranslator):
         def has_horizontal_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
             return any(offset[:2] != (0, 0) for offset in offsets)
 
+        def offsets_within_limits(offsets: Set[Tuple[int, int, int]]) -> bool:
+            return all(abs(offset[2]) <= self.max_cacheable_offset for offset in offsets)
+
         accesses = AccessCollector.apply(node).offsets()
         cacheable = {
             field
@@ -106,6 +113,7 @@ class KCacheDetection(NodeTranslator):
             if not already_cached(field)
             and accessed_more_than_once(offsets)
             and not has_horizontal_offset(offsets)
+            and offsets_within_limits(offsets)
         }
         caches = self.visit(node.caches, **kwargs) + [
             oir.KCache(name=field, fill=True, flush=True) for field in cacheable
