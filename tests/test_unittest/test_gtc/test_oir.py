@@ -26,6 +26,8 @@ from .oir_utils import (
     FieldDeclFactory,
     HorizontalExecutionFactory,
     StencilFactory,
+    VerticalLoopFactory,
+    VerticalLoopSectionFactory,
 )
 
 
@@ -64,4 +66,32 @@ def test_assign_to_ik_fwd():
             vertical_loops__0__sections__0__horizontal_executions__0__body=[
                 AssignStmtFactory(left__name=out_name, righ__name=in_name)
             ],
+        )
+
+
+def test_assign_to_ik_fwd():
+    out_name = "ik_field"
+    in_name = "other_ik_field"
+    with pytest.raises(ValidationError, match=r"Not allowed to assign to ik-field"):
+        StencilFactory(
+            params=[
+                FieldDeclFactory(
+                    name=out_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)
+                ),
+                FieldDeclFactory(
+                    name=in_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)
+                ),
+            ],
+            vertical_loops__0=VerticalLoopFactory(
+                loop_order=LoopOrder.FORWARD,
+                sections=[
+                    VerticalLoopSectionFactory(
+                        horizontal_executions=[
+                            HorizontalExecutionFactory(
+                                body=[AssignStmtFactory(left__name=out_name, right__name=in_name)]
+                            )
+                        ]
+                    )
+                ],
+            ),
         )

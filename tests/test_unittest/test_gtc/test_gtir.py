@@ -138,12 +138,20 @@ def test_assign_to_ik_fwd():
     in_name = "other_ik_field"
     with pytest.raises(ValidationError, match=r"Not allowed to assign to ik-field"):
         StencilFactory(
-            FieldDeclFactory(name=out_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)),
-            FieldDeclFactory(name=in_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)),
-            vertical_loop__loop_order=LoopOrder.FORWARD,
-            vertical_loop__0__body=[
-                ParAssignStmtFactory(left__name=out_name, right__name=in_name),
+            params=[
+                FieldDeclFactory(
+                    name=out_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)
+                ),
+                FieldDeclFactory(
+                    name=in_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)
+                ),
             ],
+            vertical_loops__0=VerticalLoopFactory(
+                loop_order=LoopOrder.FORWARD,
+                body=[
+                    ParAssignStmtFactory(left__name=out_name, right__name=in_name),
+                ],
+            ),
         )
 
 
