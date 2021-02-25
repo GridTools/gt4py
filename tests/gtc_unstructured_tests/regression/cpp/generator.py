@@ -3,7 +3,6 @@ import importlib
 import os
 
 from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
-from gtc_unstructured.irs import gtir
 from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.irs.icon_bindings_codegen import IconBindingsCodegen
 

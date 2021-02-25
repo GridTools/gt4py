@@ -8,7 +8,6 @@
 # ```
 
 import types
-import importlib
 
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
