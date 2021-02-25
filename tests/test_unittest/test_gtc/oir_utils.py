@@ -32,6 +32,22 @@ class FieldAccessFactory(factory.Factory):
     dtype = common.DataType.FLOAT32
 
 
+class ScalarAccessFactory(factory.Factory):
+    class Meta:
+        model = oir.ScalarAccess
+
+    name = identifier(oir.ScalarAccess)
+    dtype = common.DataType.FLOAT32
+
+
+class LiteralFactory(factory.Factory):
+    class Meta:
+        model = oir.Literal
+
+    value = "42"
+    dtype = common.DataType.FLOAT32
+
+
 class AssignStmtFactory(factory.Factory):
     class Meta:
         model = oir.AssignStmt
@@ -45,6 +61,14 @@ class TemporaryFactory(factory.Factory):
         model = oir.Temporary
 
     name = identifier(oir.Temporary)
+    dtype = common.DataType.FLOAT32
+
+
+class LocalScalarFactory(factory.Factory):
+    class Meta:
+        model = oir.LocalScalar
+
+    name = identifier(oir.LocalScalar)
     dtype = common.DataType.FLOAT32
 
 

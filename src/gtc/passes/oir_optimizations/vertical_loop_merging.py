@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import warnings
 from typing import Any
 
 from eve import NodeTranslator
@@ -38,10 +39,12 @@ class AdjacentLoopMerging(NodeTranslator):
     @staticmethod
     def _merge(a: oir.VerticalLoop, b: oir.VerticalLoop) -> oir.VerticalLoop:
         sections = a.sections + b.sections
+        if a.caches or b.caches:
+            warnings.warn("AdjacentLoopMerging pass removed previously declared caches")
         return oir.VerticalLoop(
             loop_order=a.loop_order,
             sections=sections,
-            caches=[],  # TODO: add support for cache merging?
+            caches=[],
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
