@@ -21,6 +21,7 @@ from ...oir_utils import (
     AssignStmtFactory,
     FieldAccessFactory,
     HorizontalExecutionFactory,
+    NativeFuncCallFactory,
     StencilFactory,
     TemporaryFactory,
     VerticalLoopSectionFactory,
@@ -156,3 +157,48 @@ def test_on_the_fly_merging_with_mask():
     transformed = OnTheFlyMerging().visit(testee)
     assert len(transformed.vertical_loops[0].sections[0].horizontal_executions) == 2
     assert len(transformed.declarations) == 1
+
+
+def test_on_the_fly_merging_with_expensive_function():
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(
+                        left__name="tmp",
+                        right=NativeFuncCallFactory(func=common.NativeFunction.SIN),
+                    )
+                ]
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(right__name="tmp", right__offset__i=1),
+                    AssignStmtFactory(right__name="tmp", right__offset__j=1),
+                ]
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
+    )
+    transformed = OnTheFlyMerging(allow_expensive_function_duplication=False).visit(testee)
+    hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs) == 2
+
+
+def test_on_the_fly_merging_body_size_limit():
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="tmp", right__name="foo")]
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(right__name="tmp", right__offset__i=1),
+                    AssignStmtFactory(right__name="tmp", right__offset__j=1),
+                ]
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
+    )
+    transformed = OnTheFlyMerging(max_horizontal_execution_body_size=0).visit(testee)
+    hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs) == 2

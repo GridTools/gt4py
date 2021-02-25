@@ -56,6 +56,14 @@ class AssignStmtFactory(factory.Factory):
     right = factory.SubFactory(FieldAccessFactory)
 
 
+class NativeFuncCallFactory(factory.Factory):
+    class Meta:
+        model = oir.NativeFuncCall
+
+    func = common.NativeFunction.ABS
+    args = factory.List([factory.SubFactory(FieldAccessFactory)])
+
+
 class TemporaryFactory(factory.Factory):
     class Meta:
         model = oir.Temporary
