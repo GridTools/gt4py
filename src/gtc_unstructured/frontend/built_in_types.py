@@ -31,7 +31,10 @@ class BuiltInTypeMeta(type):
     args: List[Any]
 
     def __new__(cls, class_name, bases, namespace, args=None):
-        assert bases == () or (len(bases) == 1 and issubclass(bases[0], BuiltInType))
+        if not bases:
+            bases = (object,)  # cannonicalization
+
+        assert bases == (object,) or (len(bases) == 1 and issubclass(bases[0], BuiltInType))
         # TODO(tehrengruber): allow only class methods
         # assert all(attr[0:2] == "__" for attr in namespace.keys())  # no custom attributes
         # TODO(tehrengruber): there might be a better way to do this
@@ -44,7 +47,7 @@ class BuiltInTypeMeta(type):
     @property
     def body(self):
         """Return type function body (name borrowed from polymorphism theory)."""
-        return self.__class__(self.class_name, (), self.namespace, args=[])
+        return self.__class__(self.class_name, self.__bases__, self.namespace, args=[])
 
     def __eq__(self, other) -> bool:
         if (

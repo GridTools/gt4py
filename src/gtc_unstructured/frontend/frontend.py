@@ -115,5 +115,4 @@ class GTScriptCompilationTask:
             self._generate_gtscript_ast()
             self._generate_gtir()
         self._generate_cpp(debug=debug, code_generator=code_generator)
-
         return self.cpp_code
