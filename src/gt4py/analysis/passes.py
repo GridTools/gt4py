@@ -938,7 +938,9 @@ class ComputeExtentsPass(TransformPass):
                 for int_block in ij_block.interval_blocks:
                     for stmt_info in int_block.stmts:
                         if isinstance(stmt_info.stmt, gt_ir.HorizontalIf):
-                            diffs = compute_extent_diff(extent, stmt_info.stmt.intervals)
+                            diffs = compute_extent_diff(
+                                ij_block.compute_extent, stmt_info.stmt.intervals
+                            )
                             overlaps = diffs is not None
                         else:
                             diffs = Extent.zeros()[:seq_axis]
