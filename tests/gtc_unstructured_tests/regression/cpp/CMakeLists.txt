@@ -41,10 +41,11 @@ function(add_regression_test_executable)
     message(STATUS "${ARG_NAME}")
 
     # generate c++ from gtscript
-    set(STENCIL_IMPL_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/generated_${ARG_NAME}.hpp)
+    set(STENCIL_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR})
+    set(STENCIL_IMPL_SOURCE ${STENCIL_OUTPUT_DIR}/generated_${ARG_NAME}.hpp)
     set(BACKEND ${ARG_MODE})
     add_custom_command(OUTPUT ${STENCIL_IMPL_SOURCE}
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/generator.py ${ARG_INPUT} ${CMAKE_CURRENT_SOURCE_DIR} ${ARG_MODE}
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/generator.py ${ARG_INPUT} ${STENCIL_OUTPUT_DIR} ${ARG_MODE}
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT}.py)
     add_custom_target(generated_${ARG_NAME} DEPENDS ${STENCIL_IMPL_SOURCE})
 
