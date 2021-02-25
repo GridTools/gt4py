@@ -347,12 +347,14 @@ class GlobalRecursiveModel:
 def test_deferred_class_type_hint():
     # Model defined in a module global context
     assert isinstance(GlobalRecursiveModel.__datamodel_fields__.value.type, ForwardRef)
-    datamodels.update_forward_refs(GlobalRecursiveModel)
-    assert GlobalRecursiveModel.__datamodel_fields__.value.type.__args__[0] == GlobalRecursiveModel
 
     m1 = GlobalRecursiveModel()
     m2 = GlobalRecursiveModel(value=m1)
     GlobalRecursiveModel(value=m2)
+
+    with pytest.raises(TypeError, match="value"):
+        GlobalRecursiveModel(value="wrong_value")
+    assert GlobalRecursiveModel.__datamodel_fields__.value.type.__args__[0] == GlobalRecursiveModel
 
     # Models defined in a non-global context
     @datamodels.datamodel
