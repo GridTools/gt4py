@@ -151,6 +151,8 @@ class PruneKCacheFills(NodeTranslator):
             center_accesses = [a for a in accesses.ordered_accesses() if a.offset == (0, 0, 0)]
 
             def requires_fill(field: str) -> bool:
+                if field not in offsets:
+                    return False
                 k_offsets = (o[2] for o in offsets[field])
                 if node.loop_order == common.LoopOrder.FORWARD and max(k_offsets) > 0:
                     return True
