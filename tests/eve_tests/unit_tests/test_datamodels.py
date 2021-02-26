@@ -29,6 +29,7 @@ from typing import (
     ForwardRef,
     Generic,
     List,
+    Literal,
     MutableSequence,
     Optional,
     Sequence,
@@ -342,19 +343,31 @@ def test_custom_type_hint_validator():
 @datamodels.datamodel
 class GlobalRecursiveModel:
     value: Optional[GlobalRecursiveModel] = None
+    others: Optional[Dict[Literal["A", "B"], Union[str, GlobalRecursiveModel]]] = None
 
 
 def test_deferred_class_type_hint():
     # Model defined in a module global context
     assert isinstance(GlobalRecursiveModel.__datamodel_fields__.value.type, ForwardRef)
+    assert isinstance(GlobalRecursiveModel.__datamodel_fields__.others.type, ForwardRef)
 
     m1 = GlobalRecursiveModel()
     m2 = GlobalRecursiveModel(value=m1)
-    GlobalRecursiveModel(value=m2)
+    m3 = GlobalRecursiveModel(value=m2)
+    GlobalRecursiveModel(value=m2, others={"A": m3, "B": "something"})
 
     with pytest.raises(TypeError, match="value"):
         GlobalRecursiveModel(value="wrong_value")
+    with pytest.raises(TypeError, match="others"):
+        GlobalRecursiveModel(others={"A": -1})
+    with pytest.raises(ValueError, match="others"):
+        GlobalRecursiveModel(others={"a": "wrong"})
+
     assert GlobalRecursiveModel.__datamodel_fields__.value.type.__args__[0] == GlobalRecursiveModel
+    assert (
+        GlobalRecursiveModel.__datamodel_fields__.others.type.__args__[0].__args__[1].__args__[1]
+        == GlobalRecursiveModel
+    )
 
     # Models defined in a non-global context
     @datamodels.datamodel
@@ -683,6 +696,9 @@ def test_frozen():
 def test_hash():
     string_value = "this is a really long string to avoid string interning 1234567890 +:?.!"
 
+    # Explanation of expected hash() behavior in Python:
+    #   https://hynek.me/articles/hashes-and-equality/
+
     # Safe mutable case: no hash
     @datamodels.datamodel
     class MutableModel:
@@ -700,7 +716,7 @@ def test_hash():
     hash_value = hash(mutable_model)
     assert hash_value == hash(MutableModelWithHash(value=string_value))
 
-    # This is the (expected) wrong behaviour with a 'unsafe_hash=True',
+    # This is the (expected) wrong behaviour with 'unsafe_hash=True',
     # because hash value should not change during lifetime of an object
     mutable_model.value = 42
     assert hash_value != hash(mutable_model)

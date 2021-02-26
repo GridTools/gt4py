@@ -183,11 +183,24 @@ class GenericDataModelAlias(typing._GenericAlias, _root=True):  # type: ignore[c
         >>> @datamodel
         ... class Model(Generic[T]):
         ...     value: T
+        ...
+        >>> print(Model.__parameters__)
+        (~T,)
+        >>> hasattr(Model, '__args__')
+        False
+
         >>> assert isinstance(Model[int], GenericDataModelAlias)
         >>> assert issubclass(get_origin(Model[int]), Model)
         >>> assert Model[int].__class__ is get_origin(Model[int])
         >>> print(Model[int].__class__.__name__)
         Model__int
+
+        >>> print(Model[int].__parameters__)
+        ()
+        >>> hasattr(Model[int], '__args__')
+        True
+        >>> print(Model[int].__args__)
+        (<class 'int'>,)
 
     Notes:
         For the full picture check also related PEPs:
@@ -394,9 +407,7 @@ def strict_type_attrs_validator(
         return type_hint.__type_validator__()
 
     # Non-generic types
-    if isinstance(type_hint, type) and type_hint is not type(  # noqa: E721  # use isinstance()
-        None
-    ):
+    if isinstance(type_hint, type) and type_hint is not type(None):  # noqa: E721  # use isinstance
         assert not type_args
         if type_hint is int:
             return instance_of_int_attrs_validator()
@@ -1211,7 +1222,8 @@ def datamodel(
         unsafe_hash: If ``False``, a ``__hash__()`` method is generated in a safe way
             according to how ``eq`` and ``frozen`` are set, or set to ``None`` (disabled)
             otherwise. If ``True``, a ``__hash__()`` method is generated anyway
-            (use with care). See :func:`dataclasses.dataclass` for the complete explanation.
+            (use with care). See :func:`dataclasses.dataclass` for the complete explanation
+            (or other sources like: `<https://hynek.me/articles/hashes-and-equality/>`_).
         frozen: If ``True``, assigning to fields will generate an exception.
             This emulates read-only frozen instances. The ``__setattr__()`` and
             ``__delattr__()`` methods should not be defined in the class.
