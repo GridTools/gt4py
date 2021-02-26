@@ -70,12 +70,24 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:
+        if func == NativeFunction.ABS:
+            return "math::abs"
+        if func == NativeFunction.MIN:
+            return "math::min"
+        if func == NativeFunction.MAX:
+            return "math::max"
+        if func == NativeFunction.MOD:
+            return "math::fmod"
         if func == NativeFunction.SQRT:
             return "math::sqrt"
-        elif func == NativeFunction.MIN:
-            return "math::min"
-        elif func == NativeFunction.MAX:
-            return "math::max"
+        if func == NativeFunction.POW:
+            return "math::pow"
+        if func == NativeFunction.EXP:
+            return "math::exp"
+        if func == NativeFunction.LOG:
+            return "math::log"
+        if func == NativeFunction.TRUNC:
+            return "math::trunc"
         raise NotImplementedError("Not implemented NativeFunction encountered.")
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
