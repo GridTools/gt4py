@@ -142,6 +142,7 @@ class NativeFunction(StrEnum):
     MIN = "min"
     MAX = "max"
     MOD = "mod"
+    POW = "pow"
 
     SIN = "sin"
     COS = "cos"
@@ -173,6 +174,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.MIN: 2,
     NativeFunction.MAX: 2,
     NativeFunction.MOD: 2,
+    NativeFunction.POW: 2,
     NativeFunction.SIN: 1,
     NativeFunction.COS: 1,
     NativeFunction.TAN: 1,

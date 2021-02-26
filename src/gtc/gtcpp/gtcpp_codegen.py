@@ -103,6 +103,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "gridtools::math::min"
         elif func == NativeFunction.MAX:
             return "gridtools::math::max"
+        elif func == NativeFunction.POW:
+            return "gridtools::math::pow"
         raise NotImplementedError("Not implemented NativeFunction encountered.")
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
