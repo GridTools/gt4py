@@ -150,7 +150,7 @@ class TypeWithAttrValidatorTp(Protocol):
     @classmethod
     @abc.abstractmethod
     def __type_validator__(self) -> ValidatorType:
-        ...
+        raise NotImplementedError()
 
 
 class GenericDataModelAlias(typing._GenericAlias, _root=True):  # type: ignore[call-arg,name-defined]  # typing._GenericAlias not visible
@@ -1005,7 +1005,7 @@ def update_forward_refs(
         for field_name in fields:
             field_attr = getattr(datamodel_fields_ns, field_name)
             if "ForwardRef(" in repr(field_attr.type):
-                actual_type = typingx.resolve_forward_ref(
+                actual_type = typingx.resolve_type(
                     field_attr.type,
                     sys.modules[model.__module__].__dict__,
                     local_ns,

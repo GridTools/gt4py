@@ -147,8 +147,8 @@ def get_canonical_type_hints(cls: Type) -> Dict[str, Union[Type, ForwardRef]]:
 
 
 @typing.overload
-def resolve_forward_ref(
-    type_int: Any,
+def resolve_type(
+    type_hint: Any,
     global_ns: Optional[Dict[str, Any]] = None,
     local_ns: Optional[Dict[str, Any]] = None,
     *,
@@ -158,8 +158,8 @@ def resolve_forward_ref(
 
 
 @typing.overload
-def resolve_forward_ref(
-    type_int: Any,
+def resolve_type(
+    type_hint: Any,
     global_ns: Optional[Dict[str, Any]] = None,
     local_ns: Optional[Dict[str, Any]] = None,
     *,
@@ -168,8 +168,8 @@ def resolve_forward_ref(
     ...
 
 
-def resolve_forward_ref(
-    type_int: Any,
+def resolve_type(
+    type_hint: Any,
     global_ns: Optional[Dict[str, Any]] = None,
     local_ns: Optional[Dict[str, Any]] = None,
     *,
@@ -187,11 +187,13 @@ def resolve_forward_ref(
 
     Examples:
         >>> import typing
-        >>> resolve_forward_ref(typing.ForwardRef('typing.List[int]'))
-        typing.List[int]
+        >>> resolve_type(
+        ...     typing.Dict[typing.ForwardRef('str'), 'typing.Tuple["int", typing.ForwardRef("float")]']
+        ... )
+        typing.Dict[str, typing.Tuple[int, float]]
 
     """
-    actual_type = ForwardRef(type_int) if isinstance(type_int, str) else type_int
+    actual_type = ForwardRef(type_hint) if isinstance(type_hint, str) else type_hint
     while "ForwardRef(" in repr(actual_type):
         try:
             if local_ns:
