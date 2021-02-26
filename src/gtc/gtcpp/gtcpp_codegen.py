@@ -111,8 +111,6 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "gridtools::math::pow"
         if func == NativeFunction.EXP:
             return "gridtools::math::exp"
-        if func == NativeFunction.EXP:
-            return "gridtools::math::exp"
         if func == NativeFunction.LOG:
             return "gridtools::math::log"
         if func == NativeFunction.TRUNC:
