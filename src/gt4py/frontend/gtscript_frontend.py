@@ -1590,6 +1590,16 @@ class GTScriptParser(ast.NodeVisitor):
                     message=f"Invalid definition of argument '{arg_info.name}': {arg_annotation}",
                 ) from e
 
+        for i in range(1, len(api_signature)):
+            if isinstance(api_annotations[i], gtscript._FieldDescriptor) and not isinstance(
+                api_annotations[i - 1], gtscript._FieldDescriptor
+            ):
+                raise GTScriptDefinitionError(
+                    name=api_signature[i].name,
+                    value=api_annotations[i],
+                    message=f"Invalid argument order: parameter '{api_signature[i - 1].name}' before field '{api_signature[i].name}'",
+                )
+
         for item in itertools.chain(fields_decls.values(), parameter_decls.values()):
             if item.data_type is gt_ir.DataType.INVALID:
                 raise GTScriptDataTypeError(name=item.name, data_type=item.data_type)
