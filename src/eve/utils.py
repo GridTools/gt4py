@@ -457,6 +457,7 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         # Forward special methods to wrapped iterator
         if name.startswith("__") and name.endswith("__"):
             return getattr(self.iterator, name)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name: str, value: Any) -> None:
         raise TypeError(f"{type(self).__name__} is immutable.")

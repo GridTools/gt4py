@@ -141,7 +141,7 @@ class GTStageFactory(factory.Factory):
         model = gtcpp.GTStage
 
     functor = identifier(gtcpp.GTStage)
-    args: List[gtcpp.Arg] = []
+    args: List[gtcpp.Arg] = factory.List([factory.SubFactory(ArgFactory)])
 
 
 class GTMultiStageFactory(factory.Factory):
