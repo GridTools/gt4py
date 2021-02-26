@@ -27,12 +27,12 @@ from ..definitions import ALL_BACKENDS, CPU_BACKENDS, DAWN_CPU_BACKENDS
 
 def stencil_def(
     out: Field[float],  # type: ignore
-    pa: float,
     fa: Field[float],  # type: ignore
-    pb: float = None,
     fb: Field[float] = None,  # type: ignore
-    pc: float = None,
     fc: Field[float] = None,  # type: ignore
+    pa: float = None,
+    pb: float = None,
+    pc: float = None,
 ):
     from __externals__ import MODE
 
