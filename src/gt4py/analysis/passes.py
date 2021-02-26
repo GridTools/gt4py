@@ -603,6 +603,8 @@ class MultiStageMergingWrapper:
             return False
         if candidate.has_write_after_read_with_offset(graph):
             return False
+        if candidate.has_disallowed_read_after_write_in(self):
+            return False
         return True
 
     def merge_with(self, candidate: "MultiStageMergingWrapper") -> None:
@@ -644,6 +646,11 @@ class MultiStageMergingWrapper:
                         return True
 
         return False
+
+    def has_disallowed_read_after_write_in(self, target: "MultiStageMergingWrapper") -> bool:
+        if not self.k_offset_extends_domain:
+            return False
+        return any(extent[-1] != (0, 0) for extent in self.read_after_write_extents_in(target))
 
     def has_reads_with_offset(self, *, restrict_to: Optional[Set[str]]) -> bool:
         checked_axes = slice(None) if self.k_offset_extends_domain else slice(None, -1)
@@ -1443,6 +1450,11 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
     This may occur because these can be local variables in the scope, and
     therefore do not need to be fields.
+
+    A field can be demoted when it is a temporary field that:
+    1. is assigned to in every stage that it is read from
+    2. is never used with an offset
+    3. is never assigned to in a HorizontalIf
     """
 
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
@@ -1451,32 +1463,56 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             collector = cls()
             return collector(node)
 
+        def stage_iter(self, node: gt_ir.StencilImplementation):
+            for ms in node.multi_stages:
+                for sg in ms.groups:
+                    for stage in sg.stages:
+                        yield stage
+
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
-            self.demotables: Dict[str, Optional[str]] = {
-                temp_field: None for temp_field in node.temporary_fields
-            }
-            """Dictionary mapping temporaries to their most recently referenced stage."""
+            self.demotables = set(node.temporary_fields)
+
+            for stage in self.stage_iter(node):
+                in_field_accessors = {
+                    accessor.symbol: accessor
+                    for accessor in stage.accessors
+                    if isinstance(accessor, gt_ir.FieldAccessor)
+                    and accessor.intent == gt_ir.AccessIntent.READ_ONLY
+                }
+                out_field_accessors = {
+                    accessor.symbol: accessor
+                    for accessor in stage.accessors
+                    if isinstance(accessor, gt_ir.FieldAccessor)
+                    and accessor.intent == gt_ir.AccessIntent.READ_WRITE
+                }
+
+                # 1. is assigned to in every stage that it is read from
+                assigned_where_used = (
+                    lambda tmp: tmp not in in_field_accessors or tmp in out_field_accessors
+                )
+                self.demotables = set(filter(assigned_where_used, self.demotables))
+
+                # 2. is never used with an offset
+                never_used_with_offset = lambda tmp: tmp not in in_field_accessors or (
+                    in_field_accessors[tmp].extent == Extent.zeros()
+                )
+                self.demotables = set(filter(never_used_with_offset, self.demotables))
+
+            # 3. is never assigned to in a HorizontalIf
             self.visit(node)
-            return set(self.demotables.keys())
 
-        def visit_Stage(self, node: gt_ir.Stage, **kwargs: Any) -> None:
-            kwargs["stage_name"] = node.name
-            self.generic_visit(node, **kwargs)
+            return self.demotables
 
-        def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
-            self.visit(node.value, **kwargs)
-            if node.target.name in self.demotables:
-                self.demotables[node.target.name] = kwargs["stage_name"]
+        def visit_HorizontalIf(self, node: gt_ir.HorizontalIf) -> None:
+            self.visit(node.body, inside_horizontal_if=True)
 
-        def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> None:
-            field_name = node.name
-            if field_name in self.demotables:
-                assert self.demotables[field_name], f"Temporary {field_name} has no stage."
-                if kwargs["stage_name"] != self.demotables[field_name] or any(
-                    val != 0 for val in node.offset.values()
-                ):
-                    self.demotables.pop(field_name)
+        def visit_Assign(self, node: gt_ir.Assign, **kwargs) -> None:
+            self.visit(node.target, **kwargs)
+
+        def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs) -> None:
+            if kwargs.get("inside_horizontal_if", False):
+                self.demotables.discard(node.name)
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
         @classmethod
