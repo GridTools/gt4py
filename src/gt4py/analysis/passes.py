@@ -584,9 +584,7 @@ class MultiStageMergingWrapper:
             return False
         if candidate.iteration_order != self.iteration_order:
             return False
-        if candidate.has_disallowed_read_after_write_in(self):
-            return False
-        if candidate.has_disallowed_write_after_read_in(self):
+        if candidate.has_cycle_with_parallel_axis_offset(self):
             return False
         return True
 
@@ -601,12 +599,7 @@ class MultiStageMergingWrapper:
             else:
                 self._multi_stage.inputs[name] = extent
 
-    def has_disallowed_read_after_write_in(self, target: "MultiStageMergingWrapper") -> bool:
-        if not self.k_offset_extends_domain:
-            return False
-        return any(extent[-1] != (0, 0) for extent in self.read_after_write_extents_in(target))
-
-    def has_disallowed_write_after_read_in(self, target: "MultiStageMergingWrapper") -> bool:
+    def has_cycle_with_parallel_axis_offset(self, target: "MultiStageMergingWrapper") -> bool:
         stmts = []
         for ms in (self._multi_stage, target._multi_stage):
             for ij_block in ms.ij_blocks:
