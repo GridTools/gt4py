@@ -64,9 +64,10 @@ class GTCGTExtGenerator:
         upcasted = upcast(dtype_deduced)
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
 
-        sdfg = oir_to_dace.OirToSDFGVisitor().visit(oir)
+        from gtc.dace.nodes import OirSDFGBuilder
 
-        sdfg.save(definition_ir.name + ".sdfg")
+        sdfg = OirSDFGBuilder.build(oir.name, oir)
+        sdfg.save(oir.name + ".sdfg")
         oir = dace_to_oir.convert(sdfg)
         oir = self._optimize_oir(oir)
 
