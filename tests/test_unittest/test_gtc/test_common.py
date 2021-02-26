@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 import pytest
 from pydantic import ValidationError
@@ -325,6 +325,64 @@ def test_symbolref_validation_for_valid_tree():
             )
         ]
     )
+
+
+class MultiDimDecl(SymbolChildNode):
+    dimensions: Tuple[int, int, int] = (0, 0, 0)
+
+
+class MultiDimRef(DummyExpr, SymbolRefChildNode):
+    kind = ExprKind.FIELD
+
+
+class MultiDimLoop(eve.Node):
+    loop_order: common.LoopOrder
+    assigns: List[AssignStmt]
+
+
+class MultiDimRoot(eve.Node, eve.SymbolTableTrait):
+    decls: List[MultiDimDecl]
+    loops: List[MultiDimLoop]
+
+    _lvalue_dims_validator = common.validate_lvalue_dims()
+
+
+def construct_dims_assignment(dimensions: Tuple[int, int, int], direction: common.LoopOrder):
+    in_name = "in"
+    out_name = "out"
+    MultiDimRoot(
+        decls=[
+            MultiDimDecl(name=out_name, dimensions=dimensions),
+            MultiDimDecl(name=in_name, dimensions=dimensions),
+        ],
+        loops=[
+            MultiDimLoop(
+                loop_order=direction,
+                assigns=[
+                    AssignStmt(left=MultiDimRef(name=out_name), right=MultiDimRef(name=in_name)),
+                ],
+            ),
+        ],
+    )
+
+
+def test_lvalue_dims_validation():
+    # assigning to ik in forward direction not allowed
+    with pytest.raises(ValidationError, match=r"Not allowed to assign to ik-field"):
+        construct_dims_assignment(
+            dimensions=(True, False, True), direction=common.LoopOrder.FORWARD
+        )
+
+    # assigning to ij in forward direction ok
+    construct_dims_assignment(dimensions=(True, True, False), direction=common.LoopOrder.FORWARD)
+
+    # assigning to ij in parallel direction not allowed
+    with pytest.raises(
+        ValidationError, match=r"Not allowed to assign to ij-field `out` in PARALLEL"
+    ):
+        construct_dims_assignment(
+            dimensions=(True, True, False), direction=common.LoopOrder.PARALLEL
+        )
 
 
 # For pydantic, nodes are the same (convertible to each other) if all fields are same.
