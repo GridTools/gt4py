@@ -151,6 +151,7 @@ class NativeFunction(StrEnum):
     ARCTAN = "arctan"
 
     SQRT = "sqrt"
+    POW = "pow"
     EXP = "exp"
     LOG = "log"
 
@@ -180,6 +181,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.ARCCOS: 1,
     NativeFunction.ARCTAN: 1,
     NativeFunction.SQRT: 1,
+    NativeFunction.POW: 2,
     NativeFunction.EXP: 1,
     NativeFunction.LOG: 1,
     NativeFunction.ISFINITE: 1,

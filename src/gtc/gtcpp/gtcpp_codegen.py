@@ -97,13 +97,20 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:
-        if func == NativeFunction.SQRT:
-            return "gridtools::math::sqrt"
-        elif func == NativeFunction.MIN:
-            return "gridtools::math::min"
-        elif func == NativeFunction.MAX:
-            return "gridtools::math::max"
-        raise NotImplementedError("Not implemented NativeFunction encountered.")
+        try:
+            return {
+                NativeFunction.ABS: "gridtools::math::abs",
+                NativeFunction.MIN: "gridtools::math::min",
+                NativeFunction.MAX: "gridtools::math::max",
+                NativeFunction.MOD: "gridtools::math::fmod",
+                NativeFunction.SQRT: "gridtools::math::sqrt",
+                NativeFunction.POW: "gridtools::math::pow",
+                NativeFunction.EXP: "gridtools::math::exp",
+                NativeFunction.LOG: "gridtools::math::log",
+                NativeFunction.TRUNC: "gridtools::math::trunc",
+            }[func]
+        except KeyError as error:
+            raise NotImplementedError("Not implemented NativeFunction encountered.") from error
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
@@ -136,6 +143,11 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     GTStage = as_mako(".stage(${functor}(), ${','.join(args)})")
 
     GTMultiStage = as_mako("execute_${ loop_order }()${''.join(caches)}${''.join(stages)}")
+
+    IJCache = as_fmt(".ij_cached({name})")
+    KCache = as_mako(
+        ".k_cached(${'cache_io_policy::fill(), ' if _this_node.fill else ''}${'cache_io_policy::flush(), ' if _this_node.flush else ''}${name})"
+    )
 
     def visit_LoopOrder(self, looporder: LoopOrder, **kwargs: Any) -> str:
         return {

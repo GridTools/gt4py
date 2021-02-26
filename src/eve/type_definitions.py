@@ -31,7 +31,7 @@ from pydantic import NegativeFloat, NegativeInt, PositiveFloat, PositiveInt  # n
 from pydantic import StrictBool as Bool  # noqa: F401
 from pydantic import StrictFloat as Float  # noqa: F401
 from pydantic import StrictInt as Int  # noqa: F401
-from pydantic import StrictStr as Str  # noqa: F401
+from pydantic import StrictStr as Str
 from pydantic.types import ConstrainedStr
 
 from .typingx import Any, Callable, Generator, Type, Union
@@ -48,7 +48,7 @@ PydanticCallableGenerator = Generator[Callable[..., Any], None, None]
 
 
 #: :class:`bytes subclass for strict field definition
-Bytes = bytes  # noqa: F401
+Bytes = bytes
 
 
 class Enum(enum.Enum):

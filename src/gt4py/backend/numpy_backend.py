@@ -41,14 +41,6 @@ class ShapedExpr(gt_ir.Expr):
     axes = attribute(of=SetOf[str])
     expr = attribute(of=gt_ir.Expr)
 
-    def __getattr__(self, name):
-        return getattr(self.expr, name)
-
-
-@attribclass
-class ShapedCompositeExpr(ShapedExpr, gt_ir.CompositeExpr):
-    pass
-
 
 class NumpyIR(gt_ir.IRNodeMapper):
     @classmethod
@@ -64,37 +56,6 @@ class NumpyIR(gt_ir.IRNodeMapper):
         self, path: tuple, node_name: str, node: gt_ir.FieldRef
     ) -> Tuple[bool, ShapedExpr]:
         return True, ShapedExpr(axes=set(self.fields[node.name].axes), expr=node)
-
-    def visit_VarRef(
-        self, path: tuple, node_name: str, node: gt_ir.FieldRef
-    ) -> Tuple[bool, gt_ir.VarRef]:
-        """VarRefs cannot be shaped."""
-        return True, node
-
-    def visit_Literal(
-        self, path: tuple, node_name: str, node: gt_ir.Literal
-    ) -> Tuple[bool, gt_ir.Literal]:
-        """Literals cannot be shaped."""
-        return True, node
-
-    def visit_Expr(self, path: tuple, node_name: str, node: gt_ir.Expr) -> Tuple[bool, gt_ir.Expr]:
-        """Conditionally change the gt_ir.Expr node to a ShapedExpr."""
-        keep_node, new_node = self.generic_visit(path, node_name, node)
-        assert keep_node, "This should not remove nodes"
-
-        axes = set()
-        axes_from_children = [
-            value.axes
-            for name, value in gt_ir.nodes.iter_attributes(new_node)
-            if isinstance(value, ShapedExpr)
-        ]
-        axes = set().union(*axes_from_children)
-
-        final_class = ShapedCompositeExpr if isinstance(node, gt_ir.CompositeExpr) else ShapedExpr
-        if not axes:
-            return True, new_node
-        else:
-            return True, final_class(axes=axes, expr=new_node)
 
 
 class NumPySourceGenerator(PythonSourceGenerator):
@@ -200,24 +161,22 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
     # ---- Visitor handlers ----
     def visit_ShapedExpr(self, node: ShapedExpr) -> str:
-        is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
-
-        if is_parallel:
-            req_axes = self.impl_node.domain.axes_names
-        else:
-            req_axes = [axis.name for axis in self.impl_node.domain.parallel_axes]
-
         code = self.visit(node.expr)
-
-        leftover_axes = [ax for ax in req_axes if ax not in node.axes]
-        if leftover_axes and not isinstance(node, ShapedCompositeExpr):
-            view = ", ".join(
-                "{np}.newaxis".format(np=self.numpy_prefix) if axis not in node.axes else ":"
-                for axis in req_axes
+        if not isinstance(node.expr, ShapedExpr):
+            parallel_axes = (
+                self.impl_node.domain.axes
+                if self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
+                else self.impl_node.domain.parallel_axes
             )
-            return f"({code})[{view}]"
-        else:
-            return code
+            parallel_axes_names = [axis.name for axis in parallel_axes]
+            leftover_axes = set(parallel_axes_names) - set(node.axes)
+            if leftover_axes:
+                np_newaxis = "{np}.newaxis".format(np=self.numpy_prefix)
+                view = ", ".join(
+                    ":" if axis in node.axes else np_newaxis for axis in parallel_axes_names
+                )
+                code = f"({code})[{view}]"
+        return code
 
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
         assert node.name in self.block_info.accessors

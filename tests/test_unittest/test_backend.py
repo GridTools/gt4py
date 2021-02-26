@@ -26,7 +26,7 @@ from ..definitions import ALL_BACKENDS, CPU_BACKENDS, DAWN_CPU_BACKENDS
 
 
 def stencil_def(
-    out: Field[float],  # type: ignore  # noqa
+    out: Field[float],  # type: ignore
     pa: float,
     fa: Field[float],  # type: ignore
     pb: float = None,
@@ -38,9 +38,9 @@ def stencil_def(
 
     with computation(PARALLEL), interval(...):
         if __INLINED(MODE == 0):
-            out = pa * fa  # type: ignore  # noqa
+            out = pa * fa  # type: ignore
         elif __INLINED(MODE == 1):
-            out = pa * fa + pb * fb  # type: ignore  # noqa
+            out = pa * fa + pb * fb  # type: ignore
         else:
             out = pa * fa + pb * fb - pc * fc  # type: ignore  # noqa
 

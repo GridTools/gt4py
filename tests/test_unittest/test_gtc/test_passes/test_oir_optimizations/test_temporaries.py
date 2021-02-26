@@ -18,65 +18,42 @@ from gtc import oir
 from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
 
 from ...oir_utils import (
-    AssignStmtBuilder,
-    FieldDeclBuilder,
-    HorizontalExecutionBuilder,
-    StencilBuilder,
-    TemporaryBuilder,
-    VerticalLoopBuilder,
+    AssignStmtFactory,
+    HorizontalExecutionFactory,
+    StencilFactory,
+    TemporaryFactory,
 )
 
 
 def test_temporaries_to_scalars_basic():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-                .add_stmt(AssignStmtBuilder("bar", "tmp").build())
-                .build()
-            )
-            .add_declaration(TemporaryBuilder(name="tmp").build())
-            .build()
-        )
-        .build()
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions__0__body=[
+            AssignStmtFactory(left__name="tmp"),
+            AssignStmtFactory(right__name="tmp"),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
     )
     transformed = TemporariesToScalars().visit(testee)
-    hexec = transformed.vertical_loops[0].horizontal_executions[0]
+    hexec = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
     assert isinstance(hexec.body[0].left, oir.ScalarAccess)
     assert isinstance(hexec.body[1].right, oir.ScalarAccess)
-    assert not transformed.vertical_loops[0].declarations
-    assert hexec.declarations[0].name == "tmp"
+    assert not transformed.declarations
+    assert len(hexec.declarations) == 1
 
 
 def test_temporaries_to_scalars_multiexec():
-    testee = (
-        StencilBuilder()
-        .add_param(FieldDeclBuilder("foo").build())
-        .add_param(FieldDeclBuilder("bar").build())
-        .add_param(FieldDeclBuilder("baz").build())
-        .add_vertical_loop(
-            VerticalLoopBuilder()
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("tmp", "foo").build())
-                .add_stmt(AssignStmtBuilder("bar", "tmp").build())
-                .build()
-            )
-            .add_horizontal_execution(
-                HorizontalExecutionBuilder()
-                .add_stmt(AssignStmtBuilder("baz", "tmp").build())
-                .build()
-            )
-            .add_declaration(TemporaryBuilder(name="tmp").build())
-            .build()
-        )
-        .build()
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="tmp"),
+                    AssignStmtFactory(right__name="tmp"),
+                ]
+            ),
+            HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="tmp")]),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
     )
     transformed = TemporariesToScalars().visit(testee)
-    assert "tmp" in {d.name for d in transformed.vertical_loops[0].declarations}
+    assert "tmp" in {d.name for d in transformed.declarations}
     assert not transformed.iter_tree().if_isinstance(oir.ScalarAccess).to_list()

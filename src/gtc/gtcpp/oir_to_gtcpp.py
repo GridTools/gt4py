@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import itertools
 from dataclasses import dataclass, field
 from typing import Any, List, Set, Union
 
@@ -24,8 +25,6 @@ from gtc import common, oir
 from gtc.common import CartesianOffset
 from gtc.gtcpp import gtcpp
 
-
-# TODO(havogt) between oir and gtcpp we should consider grouping oir.VerticalLoops
 
 # - Each HorizontalExecution is a Functor (and a Stage)
 # - Each VerticalLoop is MultiStage
@@ -209,18 +208,29 @@ class OIRToGTCpp(eve.NodeTranslator):
         comp_ctx: GTComputationContext,
         **kwargs: Any,
     ) -> gtcpp.GTMultiStage:
-        assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
-        comp_ctx.add_temporaries(self.visit(node.declarations))
         # the following visit assumes that temporaries are already available in comp_ctx
-        stages = self.visit(
-            node.horizontal_executions,
-            interval=node.interval,
-            default=([], []),
-            comp_ctx=comp_ctx,
-            **kwargs,
+        stages = list(
+            itertools.chain(
+                *(
+                    self.visit(
+                        section.horizontal_executions,
+                        interval=section.interval,
+                        default=([], []),
+                        comp_ctx=comp_ctx,
+                        **kwargs,
+                    )
+                    for section in node.sections
+                )
+            )
         )
-        caches: List[Union[gtcpp.IJCache]] = []  # TODO(havogt): caches are not implemented
+        caches = self.visit(node.caches)
         return gtcpp.GTMultiStage(loop_order=node.loop_order, stages=stages, caches=caches)
+
+    def visit_IJCache(self, node: oir.IJCache, **kwargs: Any) -> gtcpp.IJCache:
+        return gtcpp.IJCache(name=node.name, loc=node.loc)
+
+    def visit_KCache(self, node: oir.KCache, **kwargs: Any) -> gtcpp.KCache:
+        return gtcpp.KCache(name=node.name, fill=node.fill, flush=node.flush, loc=node.loc)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> gtcpp.FieldDecl:
         return gtcpp.FieldDecl(name=node.name, dtype=node.dtype)
@@ -234,6 +244,10 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> gtcpp.Program:
         prog_ctx = self.ProgramContext()
         comp_ctx = self.GTComputationContext()
+
+        assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
+        comp_ctx.add_temporaries(self.visit(node.declarations))
+
         multi_stages = self.visit(
             node.vertical_loops,
             stencil_symtable=node.symtable_,
