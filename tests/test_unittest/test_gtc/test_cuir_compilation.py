@@ -27,7 +27,7 @@ from gt4py.backend import pyext_builder
 from gtc.cuir import cuir
 from gtc.cuir.cuir_codegen import CUIRCodegen
 
-from .cuir_utils import ProgramFactory
+from .cuir_utils import KernelFactory, ProgramFactory
 from .utils import match
 
 
@@ -67,9 +67,11 @@ def build_gridtools_test(tmp_path: Path, code: str):
 def make_compilation_input_and_expected():
     return [
         (ProgramFactory(name="test", kernels=[]), r"auto test"),
+        (ProgramFactory(name="test", kernels__0=KernelFactory()), r"struct kernel"),
     ]
 
 
+@pytest.mark.requires_gpu
 @pytest.mark.parametrize("cuir_program,expected_regex", make_compilation_input_and_expected())
 def test_program_compilation_succeeds(tmp_path, cuir_program, expected_regex):
     assert isinstance(cuir_program, cuir.Program)

@@ -197,7 +197,9 @@ class Kernel(LocNode):
     vertical_loops: List[VerticalLoop]
 
     @validator("vertical_loops")
-    def check_parallelism(cls, v: List[VerticalLoop]) -> List[VerticalLoop]:
+    def check_loops(cls, v: List[VerticalLoop]) -> List[VerticalLoop]:
+        if not v:
+            raise ValueError("At least one loop required")
         parallel = [loop.loop_order == LoopOrder.PARALLEL for loop in v]
         if any(parallel) and not all(parallel):
             raise ValueError("Mixed k-parallelism in kernel")

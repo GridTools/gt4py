@@ -18,7 +18,7 @@ import factory
 
 from gtc.cuir import cuir
 
-from .common_utils import identifier, undefined_symbol_list
+from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
 
 
 class FieldDeclFactory(factory.Factory):
@@ -27,6 +27,67 @@ class FieldDeclFactory(factory.Factory):
 
     name = identifier(cuir.FieldDecl)
     dtype = cuir.DataType.FLOAT32
+
+
+class IJExtentFactory(factory.Factory):
+    class Meta:
+        model = cuir.IJExtent
+
+    i = (0, 0)
+    j = (0, 0)
+
+
+class FieldAccessFactory(factory.Factory):
+    class Meta:
+        model = cuir.FieldAccess
+
+    name = identifier(cuir.FieldAccess)
+    offset = factory.SubFactory(CartesianOffsetFactory)
+    dtype = cuir.DataType.FLOAT32
+
+
+class AssignStmtFactory(factory.Factory):
+    class Meta:
+        model = cuir.AssignStmt
+
+    left = factory.SubFactory(FieldAccessFactory)
+    right = factory.SubFactory(FieldAccessFactory)
+
+
+class HorizontalExecutionFactory(factory.Factory):
+    class Meta:
+        model = cuir.HorizontalExecution
+
+    body = factory.List([factory.SubFactory(AssignStmtFactory)])
+    mask = None
+    declarations = factory.List([])
+    extent = factory.SubFactory(IJExtentFactory)
+
+
+class VerticalLoopSectionFactory(factory.Factory):
+    class Meta:
+        model = cuir.VerticalLoopSection
+
+    start = cuir.AxisBound.start()
+    end = cuir.AxisBound.end()
+    horizontal_executions = factory.List([factory.SubFactory(HorizontalExecutionFactory)])
+
+
+class VerticalLoopFactory(factory.Factory):
+    class Meta:
+        model = cuir.VerticalLoop
+
+    loop_order = cuir.LoopOrder.PARALLEL
+    sections = factory.List([factory.SubFactory(VerticalLoopSectionFactory)])
+    ij_caches = factory.List([])
+    k_caches = factory.List([])
+
+
+class KernelFactory(factory.Factory):
+    class Meta:
+        model = cuir.Kernel
+
+    vertical_loops = factory.List([factory.SubFactory(VerticalLoopFactory)])
 
 
 class ProgramFactory(factory.Factory):
@@ -38,4 +99,4 @@ class ProgramFactory(factory.Factory):
         lambda name: FieldDeclFactory(name=name), "kernels", "temporaries"
     )
     temporaries = factory.List([])
-    kernels = factory.List([])
+    kernels = factory.List([factory.SubFactory(KernelFactory)])
