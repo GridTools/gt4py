@@ -57,7 +57,7 @@ RootValidatorValuesType = Dict[str, Any]
 RootValidatorType = Callable[[Type, RootValidatorValuesType], RootValidatorValuesType]
 
 
-def canonicalize_forward_ref(type_hint: Union[Type, ForwardRef]) -> Union[Type, ForwardRef]:
+def canonicalize_forward_ref(type_hint: Union[str, Type, ForwardRef]) -> Union[Type, ForwardRef]:
     """Return the original type hint or a ``ForwardRef``s without nested ``ForwardRef``s.
 
     Examples:
@@ -88,7 +88,6 @@ def canonicalize_forward_ref(type_hint: Union[Type, ForwardRef]) -> Union[Type, 
                             nested -= 1
                     elif c == "(":
                         nested += 1
-
                 content = (new_hint[start + offset : end]).strip(" \n\r\t\"'")
                 new_hint = new_hint[:start] + content + new_hint[end + 1 :]
 
@@ -99,7 +98,6 @@ def canonicalize_forward_ref(type_hint: Union[Type, ForwardRef]) -> Union[Type, 
 
     assert isinstance(type_hint, typing._GenericAlias)  # type: ignore[attr-defined]  # typing._GenericAlias is not public
     new_type_args = tuple(canonicalize_forward_ref(t) for t in type_args)
-    # print(f"{type_hint=}, {new_type_args=}")
     if not any(isinstance(t, ForwardRef) for t in new_type_args):
         return type_hint
 
