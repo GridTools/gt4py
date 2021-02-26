@@ -210,6 +210,7 @@ def resolve_type(
         except Exception as e:
             if allow_partial:
                 actual_type = canonicalize_forward_ref(actual_type)
+                break
             else:
                 raise e
 
