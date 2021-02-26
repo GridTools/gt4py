@@ -335,7 +335,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     condition=condition,
                     target=target,
                     then_expr=value,
-                    else_expr=target if is_possible_else else "np.nan",
+                    else_expr=target if is_possible_else else f"{self.numpy_prefix}.nan",
                 )
             )
 

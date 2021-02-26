@@ -520,6 +520,7 @@ class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
 
     def __call__(self, *args):
         self.graph = nx.DiGraph()
+        self.stmt_index = 0
         for node in args:
             self.visit(node)
         return self.graph
@@ -546,10 +547,12 @@ class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
         self.visit(node.value)
 
         for value_field, offsets in self.field_refs.items():
-            self.graph.add_edge(target_name, value_field, offsets=offsets)
+            self.graph.add_edge(target_name, value_field, offsets=offsets, index=self.stmt_index)
 
         for value_ref in self.var_refs:
-            self.graph.add_edge(target_name, value_ref)
+            self.graph.add_edge(target_name, value_ref, index=self.stmt_index)
+
+        self.stmt_index += 1
 
 
 create_field_dependency_graph = FieldDependencyGraphCreator.apply
@@ -561,9 +564,20 @@ def _check_graph_for_race(graph, fail_if) -> Tuple[str]:
         full_cycle = cycle + [cycle[0]]
         for source, target in zip(full_cycle[:-1], full_cycle[1:]):
             offsets = graph.get_edge_data(source, target).get("offsets", [])
-            if any([fail_if(offset) for offset in offsets]):
+            if any(fail_if(offset) for offset in offsets):
                 race_fields.append(cycle[0])
     return tuple(race_fields)
+
+
+def _make_dependency_graph_from_multistages(*args):
+    """Make a dependency graph from the multistages in args"""
+    stmts = []
+    for ms in args:
+        for ij_block in ms.ij_blocks:
+            for int_block in ij_block.interval_blocks:
+                for stmt_info in int_block.stmts:
+                    stmts.append(stmt_info.stmt)
+    return create_field_dependency_graph(*stmts)
 
 
 class MultiStageMergingWrapper:
@@ -580,11 +594,14 @@ class MultiStageMergingWrapper:
         return [cls(block, parent) for block in items]
 
     def can_merge_with(self, candidate: "MultiStageMergingWrapper") -> bool:
+        graph = _make_dependency_graph_from_multistages(self._multi_stage, candidate._multi_stage)
         if self.parent != candidate.parent:
             return False
         if candidate.iteration_order != self.iteration_order:
             return False
-        if candidate.has_cycle_with_parallel_axis_offset(self):
+        if candidate.has_cycle_with_parallel_axis_offset(graph):
+            return False
+        if candidate.has_write_after_read_with_offset(graph):
             return False
         return True
 
@@ -599,20 +616,34 @@ class MultiStageMergingWrapper:
             else:
                 self._multi_stage.inputs[name] = extent
 
-    def has_cycle_with_parallel_axis_offset(self, target: "MultiStageMergingWrapper") -> bool:
-        stmts = []
-        for ms in (self._multi_stage, target._multi_stage):
-            for ij_block in ms.ij_blocks:
-                for int_block in ij_block.interval_blocks:
-                    for stmt_info in int_block.stmts:
-                        stmts.append(stmt_info.stmt)
-        graph = create_field_dependency_graph(*stmts)
+    @property
+    def offset_check(self) -> Callable[[Dict[str, int]], bool]:
         if self.k_offset_extends_domain:
-            check = lambda offset: offset["I"] != 0 or offset["J"] != 0 or offset["K"] != 0
+            check = lambda offset: any(offset[axis] != 0 for axis in ("I", "J", "K"))
         else:
-            check = lambda offset: offset["I"] != 0 or offset["J"] != 0
-        fields = _check_graph_for_race(graph, check)
+            check = lambda offset: any(offset[axis] != 0 for axis in ("I", "J"))
+        return check
+
+    def has_cycle_with_parallel_axis_offset(self, graph: nx.DiGraph) -> bool:
+        fields = _check_graph_for_race(graph, self.offset_check)
         return len(fields) != 0
+
+    def has_write_after_read_with_offset(self, graph: nx.DiGraph) -> bool:
+        # Check for incoming edges with nonzero offset and outgoing edges with zero offset
+        for node in graph.nodes:
+            offset_read_index = 10000000
+            for this_node, other_node, attrib in graph.in_edges(nbunch=node, data=True, default={}):
+                offsets_list = attrib.get("offsets", [])
+                if any(self.offset_check(offsets) for offsets in offsets_list):
+                    offset_read_index = min(offset_read_index, attrib["index"])
+            if offset_read_index >= 0:
+                for this_node, other_node, attrib in graph.out_edges(
+                    nbunch=node, data=True, default={}
+                ):
+                    if attrib["index"] > offset_read_index:
+                        return True
+
+        return False
 
     def has_reads_with_offset(self, *, restrict_to: Optional[Set[str]]) -> bool:
         checked_axes = slice(None) if self.k_offset_extends_domain else slice(None, -1)
