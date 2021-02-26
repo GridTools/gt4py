@@ -884,9 +884,10 @@ def get_fields(
  numbers=Attribute(name='numbers', default=NOTHING, ...))
 
         >>> fields(Model, as_dataclass=True)  # doctest:+ELLIPSIS
-        (Field(name='amount',type='int',default=1,default_factory=...),\
- Field(name='name',type='str',default=...),\
- Field(name='numbers',type='List[float]',default=...))
+        (Field(name='amount',type=<class 'int'>,default=1,default_factory=...),\
+ Field(name='name',type=<class 'str'>,default=...),\
+ Field(name='numbers',type=typing.List[float],default=...))
+
     """  # noqa: RST201  # doctest conventions confuse RST validator
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")

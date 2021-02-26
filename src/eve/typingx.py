@@ -58,22 +58,61 @@ RootValidatorType = Callable[[Type, RootValidatorValuesType], RootValidatorValue
 
 
 def canonicalize_forward_ref(type_hint: Union[Type, ForwardRef]) -> Union[Type, ForwardRef]:
-    """Return the original type hint or a ``ForwardRef``s without nested ``ForwardRef``s."""
-    if isinstance(type_hint, ForwardRef) or not (type_args := typing.get_args(type_hint)):
+    """Return the original type hint or a ``ForwardRef``s without nested ``ForwardRef``s.
+
+    Examples:
+        >>> import typing
+        >>> canonicalize_forward_ref(typing.List[typing.ForwardRef('my_type')])
+        ForwardRef('List[my_type]')
+        >>> canonicalize_forward_ref("List[typing.ForwardRef('my_type')]")
+        ForwardRef('List[my_type]')
+        >>> canonicalize_forward_ref(typing.ForwardRef("typing.List[typing.ForwardRef('my_type')]"))
+        ForwardRef('typing.List[my_type]')
+
+    """
+    if isinstance(type_hint, ForwardRef):
+        return canonicalize_forward_ref(type_hint.__forward_arg__)
+    if isinstance(type_hint, str):
+        new_hint = type_hint
+        for pattern in ("typing.ForwardRef(", "ForwardRef("):
+            offset = len(pattern)
+            while pattern in new_hint:
+                start = new_hint.find(pattern)
+                nested = 0
+                for i, c in enumerate(new_hint[start + offset :]):
+                    if c == ")":
+                        if nested == 0:
+                            end = start + offset + i
+                            break
+                        else:
+                            nested -= 1
+                    elif c == "(":
+                        nested += 1
+
+                content = (new_hint[start + offset : end]).strip(" \n\r\t\"'")
+                new_hint = new_hint[:start] + content + new_hint[end + 1 :]
+
+        return ForwardRef(new_hint)
+
+    if not (type_args := typing.get_args(type_hint)):
         return type_hint
-    else:
-        new_type_args = tuple(canonicalize_forward_ref(t) for t in type_args)
-        if not any(isinstance(t, ForwardRef) for t in new_type_args):
-            return type_hint
+
+    assert isinstance(type_hint, typing._GenericAlias)  # type: ignore[attr-defined]  # typing._GenericAlias is not public
+    new_type_args = tuple(canonicalize_forward_ref(t) for t in type_args)
+    # print(f"{type_hint=}, {new_type_args=}")
+    if not any(isinstance(t, ForwardRef) for t in new_type_args):
+        return type_hint
+
+    str_args = []
+    for t in new_type_args:
+        if isinstance(t, str):
+            str_args.append(t)
+        elif isinstance(t, ForwardRef):
+            str_args.append(t.__forward_arg__)
         else:
-            assert isinstance(type_hint, typing._GenericAlias)  # type: ignore[attr-defined]  # typing._GenericAlias is not public
-            return ForwardRef(
-                type_hint.copy_with(
-                    tuple(
-                        t.__forward_arg__ if isinstance(t, ForwardRef) else t for t in new_type_args
-                    )
-                )
-            )
+            str_args.append(repr(t))
+
+    return ForwardRef(f"{type_hint._name}[{','.join(str_args)}]")
 
 
 def get_canonical_type_hints(cls: Type) -> Dict[str, Union[Type, ForwardRef]]:
@@ -147,6 +186,12 @@ def resolve_forward_ref(
     Keyword Arguments:
         allow_partial: if ``True``, the resolution is allowed to fail and
             a :class:`typing.ForwardRef` will be returned.
+
+    Examples:
+        >>> import typing
+        >>> resolve_forward_ref(typing.ForwardRef('typing.List[int]'))
+        typing.List[int]
+
     """
     actual_type = ForwardRef(type_int) if isinstance(type_int, str) else type_int
     while "ForwardRef(" in repr(actual_type):
