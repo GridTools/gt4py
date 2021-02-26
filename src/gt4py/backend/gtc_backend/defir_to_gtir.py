@@ -188,7 +188,9 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_BinOpExpr(self, node: BinOpExpr) -> gtir.BinaryOp:
         if node.op == BinaryOperator.POW:
-            return gtir.NativeFuncCall(func=common.NativeFunction.POW, args=[self.visit(node.lhs), self.visit(node.rhs)])
+            return gtir.NativeFuncCall(
+                func=common.NativeFunction.POW, args=[self.visit(node.lhs), self.visit(node.rhs)]
+            )
 
         return gtir.BinaryOp(
             left=self.visit(node.lhs),
