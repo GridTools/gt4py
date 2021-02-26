@@ -97,12 +97,26 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:
+        if func == NativeFunction.ABS:
+            return "gridtools::math::abs"
+        if func == NativeFunction.MIN:
+            return "gridtools::math::min"
+        if func == NativeFunction.MAX:
+            return "gridtools::math::max"
+        if func == NativeFunction.MOD:
+            return "gridtools::math::fmod"
         if func == NativeFunction.SQRT:
             return "gridtools::math::sqrt"
-        elif func == NativeFunction.MIN:
-            return "gridtools::math::min"
-        elif func == NativeFunction.MAX:
-            return "gridtools::math::max"
+        if func == NativeFunction.POW:
+            return "gridtools::math::pow"
+        if func == NativeFunction.EXP:
+            return "gridtools::math::exp"
+        if func == NativeFunction.EXP:
+            return "gridtools::math::exp"
+        if func == NativeFunction.LOG:
+            return "gridtools::math::log"
+        if func == NativeFunction.TRUNC:
+            return "gridtools::math::trunc"
         raise NotImplementedError("Not implemented NativeFunction encountered.")
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
