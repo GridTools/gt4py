@@ -35,6 +35,8 @@ from typing import (
     Union,
 )
 
+import networkx as nx
+
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.analysis import (
@@ -504,6 +506,66 @@ class NormalizeBlocksPass(TransformPass):
         transform_data.blocks = cls.SplitBlocksVisitor().visit(transform_data)
 
 
+class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
+    @classmethod
+    def apply(cls, *args):
+        return cls()(*args)
+
+    def _reset_refs(self):
+        self.field_refs = {}
+        self.var_refs = []
+
+    def __init__(self):
+        self._reset_refs()
+
+    def __call__(self, *args):
+        self.graph = nx.DiGraph()
+        for node in args:
+            self.visit(node)
+        return self.graph
+
+    def visit_FieldRef(self, node: gt_ir.FieldRef):
+        if node.name not in self.graph.nodes:
+            self.graph.add_node(node.name)
+
+        if node.name in self.field_refs:
+            self.field_refs[node.name].append(node.offset)
+        else:
+            self.field_refs[node.name] = [node.offset]
+
+    def visit_VarRef(self, node: gt_ir.VarRef):
+        if node.name not in self.graph.nodes:
+            self.graph.add_node(node.name)
+
+        self.var_refs.append(node.name)
+
+    def visit_Assign(self, node: gt_ir.Assign):
+        target_name = node.target.name
+
+        self._reset_refs()
+        self.visit(node.value)
+
+        for value_field, offsets in self.field_refs.items():
+            self.graph.add_edge(target_name, value_field, offsets=offsets)
+
+        for value_ref in self.var_refs:
+            self.graph.add_edge(target_name, value_ref)
+
+
+create_field_dependency_graph = FieldDependencyGraphCreator.apply
+
+
+def _check_graph_for_race(graph, fail_if) -> Tuple[str]:
+    race_fields = []
+    for cycle in nx.simple_cycles(graph):
+        full_cycle = cycle + [cycle[0]]
+        for source, target in zip(full_cycle[:-1], full_cycle[1:]):
+            offsets = graph.get_edge_data(source, target).get("offsets", [])
+            if any([fail_if(offset) for offset in offsets]):
+                race_fields.append(cycle[0])
+    return tuple(race_fields)
+
+
 class MultiStageMergingWrapper:
     """Wrapper for :class:`DomainBlockInfo` containing the logic required to merge or not merge."""
 
@@ -545,13 +607,19 @@ class MultiStageMergingWrapper:
         return any(extent[-1] != (0, 0) for extent in self.read_after_write_extents_in(target))
 
     def has_disallowed_write_after_read_in(self, target: "MultiStageMergingWrapper") -> bool:
-        write_after_read_fields = self.write_after_read_fields_in(target)
-        return write_after_read_fields and (
-            self.has_reads_with_offset(restrict_to=write_after_read_fields)
-            or target.has_reads_with_offset(restrict_to=write_after_read_fields)
-            or self.has_extended_domain
-            or target.has_extended_domain
-        )
+        stmts = []
+        for ms in (self._multi_stage, target._multi_stage):
+            for ij_block in ms.ij_blocks:
+                for int_block in ij_block.interval_blocks:
+                    for stmt_info in int_block.stmts:
+                        stmts.append(stmt_info.stmt)
+        graph = create_field_dependency_graph(*stmts)
+        if self.k_offset_extends_domain:
+            check = lambda offset: offset["I"] != 0 or offset["J"] != 0 or offset["K"] != 0
+        else:
+            check = lambda offset: offset["I"] != 0 or offset["J"] != 0
+        fields = _check_graph_for_race(graph, check)
+        return len(fields) != 0
 
     def has_reads_with_offset(self, *, restrict_to: Optional[Set[str]]) -> bool:
         checked_axes = slice(None) if self.k_offset_extends_domain else slice(None, -1)
