@@ -306,7 +306,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         return self.generic_visit(
             node,
             max_extent=self.visit(
-                cuir.IJExtent.union(*node.iter_tree().if_isinstance(cuir.IJExtent))
+                cuir.IJExtent.zero().union(*node.iter_tree().if_isinstance(cuir.IJExtent))
             ),
             loop_start=loop_start,
             loop_fields=loop_fields,
