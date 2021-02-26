@@ -60,57 +60,58 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     Cast = as_fmt("static_cast<{dtype}>({expr})")
 
+    BUILTIN_LITERAL_TO_CODE = {
+        BuiltInLiteral.TRUE: "true",
+        BuiltInLiteral.FALSE: "false",
+    }
+
     def visit_BuiltInLiteral(self, builtin: BuiltInLiteral, **kwargs: Any) -> str:
-        if builtin == BuiltInLiteral.TRUE:
-            return "true"
-        elif builtin == BuiltInLiteral.FALSE:
-            return "false"
-        raise NotImplementedError("Not implemented BuiltInLiteral encountered.")
+        try:
+            return self.BUILTIN_LITERAL_TO_CODE[builtin]
+        except KeyError as error:
+            raise NotImplementedError("Not implemented BuiltInLiteral encountered.") from error
 
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
+    NATIVE_FUNCTION_TO_CODE = {
+        NativeFunction.ABS: "math::abs",
+        NativeFunction.MIN: "math::min",
+        NativeFunction.MAX: "math::max",
+        NativeFunction.MOD: "math::fmod",
+        NativeFunction.SQRT: "math::sqrt",
+        NativeFunction.POW: "math::pow",
+        NativeFunction.EXP: "math::exp",
+        NativeFunction.LOG: "math::log",
+        NativeFunction.TRUNC: "math::trunc",
+    }
+
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:
-        if func == NativeFunction.ABS:
-            return "math::abs"
-        if func == NativeFunction.MIN:
-            return "math::min"
-        if func == NativeFunction.MAX:
-            return "math::max"
-        if func == NativeFunction.MOD:
-            return "math::fmod"
-        if func == NativeFunction.SQRT:
-            return "math::sqrt"
-        if func == NativeFunction.POW:
-            return "math::pow"
-        if func == NativeFunction.EXP:
-            return "math::exp"
-        if func == NativeFunction.LOG:
-            return "math::log"
-        if func == NativeFunction.TRUNC:
-            return "math::trunc"
-        raise NotImplementedError("Not implemented NativeFunction encountered.")
+        try:
+            return self.NATIVE_FUNCTION_TO_CODE[func]
+        except KeyError as error:
+            raise NotImplementedError("Not implemented NativeFunction encountered.") from error
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
-    def visit_DataType(self, dtype: DataType, **kwargs: Any) -> str:
-        if dtype == DataType.INT64:
-            return "long long"
-        elif dtype == DataType.FLOAT64:
-            return "double"
-        elif dtype == DataType.FLOAT32:
-            return "float"
-        elif dtype == DataType.BOOL:
-            return "bool"
-        raise NotImplementedError("Not implemented DataType encountered.")
+    DATA_TYPE_TO_CODE = {
+        DataType.BOOL: "bool",
+        DataType.INT8: "std::int8_t",
+        DataType.INT16: "std::int16_t",
+        DataType.INT32: "std::int32_t",
+        DataType.INT64: "std::int64_t",
+        DataType.FLOAT32: "float",
+        DataType.FLOAT64: "double",
+    }
 
-    def visit_UnaryOperator(self, op: UnaryOperator, **kwargs: Any) -> str:
-        if op == UnaryOperator.NOT:
-            return "!"
-        elif op == UnaryOperator.NEG:
-            return "-"
-        elif op == UnaryOperator.POS:
-            return "+"
-        raise NotImplementedError("Not implemented UnaryOperator encountered.")
+    DataType = as_fmt("{_this_generator.DATA_TYPE_TO_CODE[_this_node]}")
+
+    UNARY_OPERATOR_TO_CODE = {
+        UnaryOperator.NOT: "!",
+        UnaryOperator.NEG: "-",
+        UnaryOperator.POS: "+",
+    }
+
+    UnaryOperator = as_fmt("{_this_generator.UNARY_OPERATOR_TO_CODE[_this_node]}")
 
     IJExtent = as_fmt("extent<{i[0]}, {i[1]}, {j[0]}, {j[1]}>")
 
@@ -318,6 +319,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     Program = as_mako(
         """#include <algorithm>
         #include <array>
+        #include <cstdint>
         #include <gridtools/common/cuda_util.hpp>
         #include <gridtools/common/gt_math.hpp>
         #include <gridtools/common/host_device.hpp>
