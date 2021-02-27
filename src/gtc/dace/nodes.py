@@ -1,21 +1,21 @@
 # -*- coding: utf-8 -*-
-from abc import ABC, abstractclassmethod, abstractmethod
-from typing import TYPE_CHECKING, List, Tuple, Union
+from abc import ABC, abstractmethod
+from typing import Dict, List, Tuple, Union
 
-import numpy as np
 import dace.properties
 import networkx as nx
+import numpy as np
 from dace import SDFG, library
 
 from gtc.common import AxisBound, LoopOrder, data_type_to_typestr
 from gtc.oir import (
-    ScalarDecl, Temporary,
     CacheDesc,
-    CartesianIterationSpace,
     HorizontalExecution,
     Interval,
     IntervalMapping,
+    ScalarDecl,
     Stencil,
+    Temporary,
     VerticalLoop,
     VerticalLoopSection,
 )
@@ -59,8 +59,6 @@ class BaseOirSDFGBuilder(ABC):
         if name not in self._access_nodes:
             self._access_nodes[name] = []
         self._access_nodes[name].append(res)
-        if len(self._access_nodes[name]) == 1:
-            self._source_nodes[name] = res
         return res
 
     def _get_current_sink(self, name):
@@ -92,11 +90,15 @@ class BaseOirSDFGBuilder(ABC):
                 res._ordered_accesses.extend(collection._ordered_accesses)
             return res
 
+    def _get_recent_reads(self, name, interval):
+        if name not in self._recent_read_acc:
+            self._recent_read_acc[name] = IntervalMapping()
+        return self._recent_read_acc[name][interval]
+
     def _get_recent_writes(self, name, interval):
         if name not in self._recent_write_acc:
             self._recent_write_acc[name] = IntervalMapping()
         return self._recent_write_acc[name][interval]
-
 
     def _set_read(self, name, interval, node):
         if name not in self._recent_read_acc:
@@ -112,7 +114,7 @@ class BaseOirSDFGBuilder(ABC):
         self._recent_write_acc = dict()
 
     def _add_read_edges(self, node, collections: List[Tuple[Interval, AccessCollector.Result]]):
-        read_accesses = dict()
+        read_accesses: Dict[str, dace.nodes.AccessNode] = dict()
         for interval, access_collection in collections:
 
             for name in access_collection.read_fields():
@@ -149,9 +151,9 @@ class BaseOirSDFGBuilder(ABC):
             for name in access_collection.write_fields():
                 access_node = self._get_current_sink(name)
                 if (
-                    name not in write_accesses
+                    access_node is None
                     or access_node in self._get_recent_reads(name, interval)
-                    or access_node in self._get_recent_writes(self, name, interval)
+                    or access_node in self._get_recent_writes(name, interval)
                 ):
                     write_accesses[name] = self._get_new_sink(name)
                 else:
@@ -185,48 +187,30 @@ class BaseOirSDFGBuilder(ABC):
                 for offset in collection.read_offsets()[name]:
                     read_interval = interval.shift(offset[2])
                     for dst in self._get_recent_writes(name, read_interval):
-                        self._state.add_edge(node, None, dst, None, dace.Memlet())
+                        edge = self._state.add_edge(node, None, dst, None, dace.Memlet())
+                        self._delete_candidates.append(edge)
 
         for interval, collection in collections:
             for name in collection.write_fields():
                 self._set_write(name, interval, node)
 
-        # access_collection = self._get_access_collection(node)
-        # # read-write dependency edges (LN to LN)
-        # for name in access_collection.write_fields():
-        #     next_access = self._get_next_writes(name, interval)
-        #     self._delete_candidates.append(
-        #         self._state.add_edge(node, None, next_access, None, dace.memlet.Memlet())
-        #     )
-
     def add_node(self, node):
         self._state.add_node(node)
 
-    # def add_oir_node(self, node: 'Union[HorizontalExecutionLibraryNode, VerticalLoopLibraryNode]'):
-    #
-    #     if isinstance(node, HorizontalExecutionLibraryNode):
-    #         nodes = [(Interval(start=AxisBound.start(), end=AxisBound.end()), node)]
-    #     else:
-    #         assert isinstance(node, VerticalLoop)
-    #         nodes = [(n.interval, n) for n in node.sections]
-    #     if self._mode == "FORWARD":
-    #         for interval, n in nodes:
-    #             self._state.add_node(n)
-    #             self._edges_oir_node_forward(n, interval)
-    #     else:
-    #         assert self._mode == "BACKWARD"
-    #         for interval, n in reversed(nodes):
-    #             self._edges_oir_node_backward(n, interval)
-
     def _get_sdfg(self):
         for edge in self._delete_candidates:
+            assert edge.src_conn is None
+            assert edge.dst_conn is None
             self._state.remove_edge(edge)
             if not nx.has_path(self._state.nx, edge.src, edge.dst):
+                import os
+
+                os.makedirs("_nodelete_sdfgs", exist_ok=True)
                 self._state.add_edge(edge.src, edge.src_conn, edge.dst, edge.dst_conn, edge.data)
+                self._sdfg.save(f"_nodelete_sdfgs/{self._sdfg.name}")
 
         self.add_subsets()
         self.add_arrays()
-        self._sdfg.save(self._sdfg.name + ".sdfg")
         self._sdfg.validate()
         return self._sdfg
 
@@ -255,7 +239,7 @@ class BaseOirSDFGBuilder(ABC):
         pass
 
     @classmethod
-    def build(cls, name, stencil: Stencil, nodes):
+    def _build(cls, name, stencil: Stencil, nodes):
         from gtc.gtir_to_oir import oir_field_boundary_computation
 
         extents = dict()
@@ -276,7 +260,7 @@ class BaseOirSDFGBuilder(ABC):
 
 class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
     def add_arrays(self):
-        for decl in self._stencil.params+self._stencil.declarations:
+        for decl in self._stencil.params + self._stencil.declarations:
             name = decl.name
             dtype = dace.dtypes.typeclass(np.dtype(data_type_to_typestr(self._dtypes[name])).name)
             if isinstance(decl, ScalarDecl):
@@ -285,7 +269,12 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
                 assert name in self._dtypes
                 di = self._extents[name][0][1] - self._extents[name][0][0]
                 dj = self._extents[name][1][1] - self._extents[name][1][0]
-                self._sdfg.add_array(name, dtype=dtype, shape=(f"I{di:+d}", f"J{dj:+d}", "K"), transient=isinstance(decl, Temporary))
+                self._sdfg.add_array(
+                    name,
+                    dtype=dtype,
+                    shape=(f"I{di:+d}", f"J{dj:+d}", "K"),
+                    transient=isinstance(decl, Temporary),
+                )
 
     def add_subsets(self):
         pass
@@ -313,13 +302,12 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
     @classmethod
     def build(cls, name, stencil: Stencil, node: VerticalLoopSection):
         nodes = [HorizontalExecutionLibraryNode(oir_node=he) for he in node.horizontal_executions]
-        return super().build(name, stencil, nodes)
+        return super()._build(name, stencil, nodes)
 
 
 class OirSDFGBuilder(BaseOirSDFGBuilder):
-
     def add_arrays(self):
-        for decl in self._stencil.params+self._stencil.declarations:
+        for decl in self._stencil.params + self._stencil.declarations:
             name = decl.name
             dtype = dace.dtypes.typeclass(np.dtype(data_type_to_typestr(self._dtypes[name])).name)
             if isinstance(decl, ScalarDecl):
@@ -328,7 +316,12 @@ class OirSDFGBuilder(BaseOirSDFGBuilder):
                 assert name in self._dtypes
                 di = self._extents[name][0][1] - self._extents[name][0][0]
                 dj = self._extents[name][1][1] - self._extents[name][1][0]
-                self._sdfg.add_array(name, dtype=dtype, shape=(f"I{di:+d}", f"J{dj:+d}", "K"), transient=isinstance(decl, Temporary))
+                self._sdfg.add_array(
+                    name,
+                    dtype=dtype,
+                    shape=(f"I{di:+d}", f"J{dj:+d}", "K"),
+                    transient=isinstance(decl, Temporary),
+                )
 
     def add_subsets(self):
         pass
@@ -361,7 +354,7 @@ class OirSDFGBuilder(BaseOirSDFGBuilder):
         nodes = [
             VerticalLoopLibraryNode(stencil=stencil, oir_node=vl) for vl in stencil.vertical_loops
         ]
-        return super().build(name, stencil, nodes)
+        return super()._build(name, stencil, nodes)
 
 
 def get_vertical_loop_section_sdfg(section: "VerticalLoopSection") -> SDFG:
