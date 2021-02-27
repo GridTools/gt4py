@@ -1,5 +1,4 @@
----
-Language:        Cpp
+Language: Cpp
 # BasedOnStyle:  LLVM
 AccessModifierOffset: -2
 ConstructorInitializerIndentWidth: 4
@@ -17,7 +16,7 @@ BreakBeforeTernaryOperators: true
 BreakConstructorInitializersBeforeComma: false
 BinPackParameters: false
 BinPackArguments: false
-ColumnLimit:     120
+ColumnLimit: 120
 ConstructorInitializerAllOnOneLineOrOnePerLine: false
 DerivePointerAlignment: false
 ExperimentalAutoDetectBinPacking: false
@@ -38,23 +37,21 @@ PenaltyReturnTypeOnItsOwnLine: 60
 PointerAlignment: Right
 SpacesBeforeTrailingComments: 1
 Cpp11BracedListStyle: true
-Standard:        Cpp11
-IndentWidth:     4
-TabWidth:        8
-UseTab:          Never
+Standard: Cpp11
+IndentWidth: 4
+TabWidth: 8
+UseTab: Never
 BreakBeforeBraces: Attach
 SpacesInParentheses: false
-SpacesInAngles:  false
+SpacesInAngles: false
 SpaceInEmptyParentheses: false
 SpacesInCStyleCastParentheses: false
 SpacesInContainerLiterals: true
 SpaceBeforeAssignmentOperators: true
 ContinuationIndentWidth: 4
-CommentPragmas:  '*'
-ForEachMacros:   [ foreach, Q_FOREACH, BOOST_FOREACH ]
+CommentPragmas: '*'
+ForEachMacros: [foreach, Q_FOREACH, BOOST_FOREACH]
 SpaceBeforeParens: ControlStatements
-DisableFormat:   false
+DisableFormat: false
 AlignAfterOpenBracket: false
 AlignEscapedNewlinesLeft: true
-...
-
