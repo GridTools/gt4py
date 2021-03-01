@@ -7,9 +7,10 @@ import networkx as nx
 import numpy as np
 from dace import SDFG, library
 
-from gtc.common import AxisBound, LoopOrder, data_type_to_typestr
+from gtc.common import AxisBound, CartesianOffset, LevelMarker, LoopOrder, data_type_to_typestr
 from gtc.oir import (
     CacheDesc,
+    CartesianIterationSpace,
     HorizontalExecution,
     Interval,
     IntervalMapping,
@@ -39,6 +40,19 @@ class BaseOirSDFGBuilder(ABC):
         self._source_nodes = dict()
         self._sink_nodes = dict()
         self._delete_candidates = list()
+
+    def _access_space_to_subset(self, name, access_space):
+        extent = self._extents[name]
+        origin = (-extent[0][0], -extent[1][0])
+        i_subset = "{start}:I{end:+d}".format(
+            start=origin[0] + access_space.i_interval.start.offset,
+            end=origin[0] + access_space.i_interval.end.offset,
+        )
+        j_subset = "{start}:J{end:+d}".format(
+            start=origin[1] + access_space.j_interval.start.offset,
+            end=origin[1] + access_space.j_interval.end.offset,
+        )
+        return f"{i_subset},{j_subset}"
 
     def _are_nodes_ordered(self, name, node1, node2):
         assert name in self._access_nodes
@@ -212,14 +226,12 @@ class BaseOirSDFGBuilder(ABC):
         self.add_subsets()
         self.add_arrays()
         self._sdfg.validate()
+        for acc in self._sink_nodes.values():
+            acc.access = dace.AccessType.WriteOnly
         return self._sdfg
 
     @abstractmethod
-    def add_subsets(self):
-        pass
-
-    @abstractmethod
-    def add_arrays(self):
+    def get_k_size(self, name):
         pass
 
     @abstractmethod
@@ -237,6 +249,25 @@ class BaseOirSDFGBuilder(ABC):
     @abstractmethod
     def add_write_after_write_edges(self, node):
         pass
+
+    def add_arrays(self):
+        for decl in self._stencil.params + self._stencil.declarations:
+            name = decl.name
+            dtype = dace.dtypes.typeclass(np.dtype(data_type_to_typestr(self._dtypes[name])).name)
+            if isinstance(decl, ScalarDecl):
+                self._sdfg.add_scalar(name, dtype=dtype)
+            else:
+                if name not in self._get_access_collection(self._sdfg).offsets():
+                    continue
+                assert name in self._dtypes
+                di = self._extents[name][0][1] - self._extents[name][0][0]
+                dj = self._extents[name][1][1] - self._extents[name][1][0]
+                self._sdfg.add_array(
+                    name,
+                    dtype=dtype,
+                    shape=(f"I{di:+d}", f"J{dj:+d}", self.get_k_size(name)),
+                    transient=isinstance(decl, Temporary),
+                )
 
     @classmethod
     def _build(cls, name, stencil: Stencil, nodes):
@@ -257,27 +288,59 @@ class BaseOirSDFGBuilder(ABC):
             builder.add_write_after_read_edges(n)
         return builder._get_sdfg()
 
-
-class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
-    def add_arrays(self):
-        for decl in self._stencil.params + self._stencil.declarations:
-            name = decl.name
-            dtype = dace.dtypes.typeclass(np.dtype(data_type_to_typestr(self._dtypes[name])).name)
-            if isinstance(decl, ScalarDecl):
-                self._sdfg.add_scalar(name, dtype=dtype)
-            else:
-                assert name in self._dtypes
-                di = self._extents[name][0][1] - self._extents[name][0][0]
-                dj = self._extents[name][1][1] - self._extents[name][1][0]
-                self._sdfg.add_array(
-                    name,
-                    dtype=dtype,
-                    shape=(f"I{di:+d}", f"J{dj:+d}", "K"),
-                    transient=isinstance(decl, Temporary),
-                )
+    @abstractmethod
+    def get_k_subsets(self, node):
+        pass
 
     def add_subsets(self):
-        pass
+        for node in self._state.nodes():
+            if isinstance(node, dace.nodes.LibraryNode):
+                access_spaces_input, access_spaces_output = self.get_access_spaces(node)
+                k_subset_strs_input, k_subset_strs_output = self.get_k_subsets(node)
+                for edge in self._state.in_edges(node) + self._state.out_edges(node):
+                    if edge.dst_conn is not None:
+                        name = edge.src.data
+                        access_space = access_spaces_input[name]
+                        subset_str_k = k_subset_strs_input[name]
+                    elif edge.src_conn is not None:
+                        name = edge.dst.data
+                        access_space = access_spaces_output[name]
+                        subset_str_k = k_subset_strs_output[name]
+                    else:
+                        continue
+                    subset_str_ij = self._access_space_to_subset(name, access_space)
+                    edge.data = dace.Memlet.simple(
+                        data=name, subset_str=subset_str_ij + "," + subset_str_k
+                    )
+
+
+class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
+    def get_k_size(self, name):
+        collection = self._get_access_collection(self._sdfg)
+        min_k = min(o[2] for o in collection.offsets()[name])
+        max_k = max(o[2] for o in collection.offsets()[name])
+
+        return f"{max_k-min_k+1}"
+
+    def get_k_subsets(self, node):
+        assert isinstance(node, HorizontalExecutionLibraryNode)
+        collection = self._get_access_collection(node)
+        write_subsets = dict()
+        read_subsets = dict()
+        k_origins = dict()
+        for name, offsets in collection.offsets().items():
+            k_origins[name] = -min(o[2] for o in offsets)
+        for name, offsets in collection.read_offsets().items():
+            read_subsets[name] = "{}:{}".format(
+                k_origins[name] + min(o[2] for o in offsets),
+                k_origins[name] + max(o[2] for o in offsets) + 1,
+            )
+        for name in collection.write_fields():
+            write_subsets[name] = "{}:{}".format(
+                k_origins[name],
+                k_origins[name] + 1,
+            )
+        return read_subsets, write_subsets
 
     def add_read_edges(self, node):
         interval = Interval(start=AxisBound.start(), end=AxisBound.end())
@@ -304,27 +367,112 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         nodes = [HorizontalExecutionLibraryNode(oir_node=he) for he in node.horizontal_executions]
         return super()._build(name, stencil, nodes)
 
+    def get_access_spaces(self, node):
+        assert isinstance(node, HorizontalExecutionLibraryNode)
+        input_spaces = dict()
+        output_spaces = dict()
+
+        iteration_space = node.oir_node.iteration_space
+        assert iteration_space is not None
+        collection = self._get_access_collection(node)
+        for name in collection.read_fields():
+            access_space = CartesianIterationSpace.domain()
+            for offset in collection.read_offsets()[name]:
+                access_space = access_space | CartesianIterationSpace.from_offset(
+                    CartesianOffset(i=offset[0], j=offset[1], k=offset[2])
+                )
+            input_spaces[name] = access_space.compose(iteration_space)
+        for name in collection.write_fields():
+            access_space = CartesianIterationSpace.domain()
+            for offset in collection.write_offsets()[name]:
+                access_space = access_space | CartesianIterationSpace.from_offset(
+                    CartesianOffset(i=offset[0], j=offset[1], k=offset[2])
+                )
+            output_spaces[name] = access_space.compose(iteration_space)
+        return input_spaces, output_spaces
+
 
 class OirSDFGBuilder(BaseOirSDFGBuilder):
-    def add_arrays(self):
-        for decl in self._stencil.params + self._stencil.declarations:
-            name = decl.name
-            dtype = dace.dtypes.typeclass(np.dtype(data_type_to_typestr(self._dtypes[name])).name)
-            if isinstance(decl, ScalarDecl):
-                self._sdfg.add_scalar(name, dtype=dtype)
-            else:
-                assert name in self._dtypes
-                di = self._extents[name][0][1] - self._extents[name][0][0]
-                dj = self._extents[name][1][1] - self._extents[name][1][0]
-                self._sdfg.add_array(
-                    name,
-                    dtype=dtype,
-                    shape=(f"I{di:+d}", f"J{dj:+d}", "K"),
-                    transient=isinstance(decl, Temporary),
-                )
+    def get_k_size(self, name):
+        return "K"
 
-    def add_subsets(self):
-        pass
+    def get_k_subsets(self, node):
+        assert isinstance(node, VerticalLoopLibraryNode)
+
+        write_intervals = dict()
+        read_intervals = dict()
+        for interval, sdfg in node.sections:
+            collection = self._get_access_collection(sdfg)
+            for name, offsets in collection.read_offsets().items():
+                for offset in offsets:
+                    read_interval = interval.shift(offset[2])
+                    read_intervals.setdefault(name, read_interval)
+                    read_intervals[name] = Interval(
+                        start=min(read_intervals[name].start, read_interval.start),
+                        end=max(read_intervals[name].end, read_interval.end),
+                    )
+
+            for name in collection.write_fields():
+                write_intervals.setdefault(name, interval)
+                write_intervals[name] = Interval(
+                    start=min(write_intervals[name].start, interval.start),
+                    end=max(write_intervals[name].end, interval.end),
+                )
+        write_subsets = dict()
+        for name, interval in write_intervals.items():
+            write_subsets[name] = "{}{:+d}:{}{:+d}".format(
+                "K" if interval.start.level == LevelMarker.END else "",
+                interval.start.offset,
+                "K" if interval.end.level == LevelMarker.END else "",
+                interval.end.offset,
+            )
+        read_subsets = dict()
+        for name, interval in read_intervals.items():
+            read_subsets[name] = "{}{:+d}:{}{:+d}".format(
+                "K" if interval.start.level == LevelMarker.END else "",
+                interval.start.offset,
+                "K" if interval.end.level == LevelMarker.END else "",
+                interval.end.offset,
+            )
+        return read_subsets, write_subsets
+
+    def get_access_spaces(self, node):
+        assert isinstance(node, VerticalLoopLibraryNode)
+        input_spaces = dict()
+        output_spaces = dict()
+        for _, sdfg in node.sections:
+            for n in sdfg.states()[0].nodes():
+
+                if not isinstance(n, HorizontalExecutionLibraryNode):
+                    continue
+                iteration_space = n.oir_node.iteration_space
+                assert iteration_space is not None
+                collection = self._get_access_collection(n)
+                for name in collection.read_fields():
+                    access_space = CartesianIterationSpace.domain()
+                    for offset in collection.read_offsets()[name]:
+                        access_space = access_space | CartesianIterationSpace.from_offset(
+                            CartesianOffset(i=offset[0], j=offset[1], k=offset[2])
+                        )
+                    if name not in input_spaces:
+                        input_spaces[name] = access_space.compose(iteration_space)
+                    else:
+                        input_spaces[name] = input_spaces[name] | access_space.compose(
+                            iteration_space
+                        )
+                for name in collection.write_fields():
+                    access_space = CartesianIterationSpace.domain()
+                    for offset in collection.write_offsets()[name]:
+                        access_space = access_space | CartesianIterationSpace.from_offset(
+                            CartesianOffset(i=offset[0], j=offset[1], k=offset[2])
+                        )
+                    if name not in output_spaces:
+                        output_spaces[name] = access_space.compose(iteration_space)
+                    else:
+                        output_spaces[name] = output_spaces[name] | access_space.compose(
+                            iteration_space
+                        )
+        return input_spaces, output_spaces
 
     def _get_collection_from_sections(self, sections):
         res = []
@@ -412,6 +560,11 @@ class VerticalLoopLibraryNode(dace.nodes.LibraryNode):
             self.caches = oir_node.caches
 
         super().__init__(name=name, *args, **kwargs)
+
+    def validate(self, *args, **kwargs):
+        for _, sdfg in self.sections:
+            sdfg.validate()
+        super().validate(*args, **kwargs)
 
 
 @library.node

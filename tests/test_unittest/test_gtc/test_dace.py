@@ -35,8 +35,8 @@ def stencil_def_to_oir(stencil_def, externals):
 
 
 def edge_match(edge1, edge2):
-    edge1 = edge1[0]
-    edge2 = edge2[0]
+    edge1 = next(iter(edge1.values()))
+    edge2 = next(iter(edge2.values()))
     try:
         if edge1["src_conn"] is not None:
             assert edge2["src_conn"] is not None
@@ -91,8 +91,7 @@ def assert_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG):
     nx.set_node_attributes(state1.nx, {n: n for n in state1.nx.nodes}, "node")
     nx.set_node_attributes(state2.nx, {n: n for n in state2.nx.nodes}, "node")
 
-    matcher = nx.is_isomorphic(state1.nx, state2.nx, edge_match=edge_match, node_match=node_match)
-    assert matcher.is_isomorphic()
+    assert nx.is_isomorphic(state1.nx, state2.nx, edge_match=edge_match, node_match=node_match)
 
     for name in sdfg1.arrays.keys():
         assert isinstance(sdfg1.arrays[name], type(sdfg2.arrays[name]))
