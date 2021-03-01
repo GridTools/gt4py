@@ -1045,25 +1045,16 @@ class ComputeExtentsPass(TransformPass):
                             overlaps = True
                         if overlaps:
                             for name, extent in stmt_info.inputs.items():
-                                # Track maximum offset on each field
-                                input_offset_extent = Extent(list(extent[:seq_axis]) + [(0, 0)])
-                                field_access_extents[name] |= (
-                                    ij_block.compute_extent + input_offset_extent
-                                )
-
-                                # Track maximum compute extent
-                                input_compute_extent = Extent(
+                                compute_extent = ij_block.compute_extent | Extent(
                                     list(Extent(extent[:seq_axis]) - diffs) + [(0, 0)]
                                 )
-                                compute_domain_extents[name] |= (
-                                    ij_block.compute_extent + input_compute_extent
-                                )
+                                compute_domain_extents[name] |= compute_extent
 
                             for name in stmt_info.outputs:
                                 compute_domain_extents[name] |= ij_block.compute_extent
 
         transform_data.implementation_ir.fields_extents = {
-            name: Extent(extent) for name, extent in field_access_extents.items()
+            name: Extent(extent) for name, extent in compute_domain_extents.items()
         }
 
 
@@ -1479,7 +1470,10 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
                 }
 
                 # 1. is never used with an offset
-                never_used_with_offset = lambda tmp: field_accessors[tmp].extent == Extent.zeros()
+                never_used_with_offset = (
+                    lambda tmp: tmp in field_accessors
+                    and field_accessors[tmp].extent == Extent.zeros()
+                )
                 self.demotables = set(filter(never_used_with_offset, self.demotables))
 
             self.visit(node)
