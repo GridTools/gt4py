@@ -1451,9 +1451,9 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
     therefore do not need to be fields.
 
     A field can be demoted when it is a temporary field that:
-    1. is assigned to in every stage that it is read from
+    1. for all stages: cannot be an inout accessor unless it is also an in accessor
     2. is never used with an offset
-    3. is never assigned to in a HorizontalIf
+    3. is never assigned to in a HorizontalIf (this may need to be relaxed)
     """
 
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
@@ -1479,18 +1479,18 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
                     if isinstance(accessor, gt_ir.FieldAccessor)
                     and accessor.intent == gt_ir.AccessIntent.READ_ONLY
                 }
-                out_field_accessors = {
+                inout_field_accessors = {
                     accessor.symbol: accessor
                     for accessor in stage.accessors
                     if isinstance(accessor, gt_ir.FieldAccessor)
                     and accessor.intent == gt_ir.AccessIntent.READ_WRITE
                 }
 
-                # 1. is assigned to in every stage that it is read from
-                assigned_where_used = (
-                    lambda tmp: tmp not in in_field_accessors or tmp in out_field_accessors
+                # 1. for all stages: cannot be an inout accessor unless it is also an in accessor
+                if_inout_also_in = (
+                    lambda tmp: tmp not in inout_field_accessors or tmp in in_field_accessors
                 )
-                self.demotables = set(filter(assigned_where_used, self.demotables))
+                self.demotables = set(filter(if_inout_also_in, self.demotables))
 
                 # 2. is never used with an offset
                 never_used_with_offset = lambda tmp: tmp not in in_field_accessors or (
