@@ -6,6 +6,8 @@ import networkx as nx
 import pytest
 
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
+from gtc.dace_to_oir import convert
+from gtc.oir_to_dace import OirSDFGBuilder
 
 from ...test_integration.stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from ...test_integration.stencil_definitions import REGISTRY as stencil_registry
@@ -103,8 +105,6 @@ def assert_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG):
 
 @pytest.mark.parametrize("stencil_name", stencil_registry.keys())
 def test_stencils_roundtrip(stencil_name):
-    from gtc.dace.nodes import OirSDFGBuilder
-    from gtc.dace_to_oir import convert
 
     stencil_def = stencil_registry[stencil_name]
     externals = externals_registry[stencil_name]

@@ -36,8 +36,8 @@ from gt4py.backend.gt_backends import (
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
-from gtc.dace.nodes import OirSDFGBuilder
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
+from gtc.oir_to_dace import OirSDFGBuilder
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
