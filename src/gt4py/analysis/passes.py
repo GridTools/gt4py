@@ -1487,7 +1487,7 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             return self.demotables
 
         def visit_Stage(self, node: gt_ir.Stage) -> None:
-            self.temp_read_from: Dict[str, bool] = {}
+            self.temp_read_from: Dict[str, bool] = {name: False for name in self.demotables}
             self.generic_visit(node)
 
         def visit_Assign(self, node: gt_ir.Assign, **kwargs) -> None:
@@ -1496,10 +1496,11 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs) -> None:
             # 2. is never read before assigned to
-            if kwargs.get("is_value", False) and node.name in self.demotables:
+            if kwargs.get("is_value", False) and node.name in self.temp_read_from:
                 self.temp_read_from[node.name] = True
             if kwargs.get("is_target", False) and self.temp_read_from.get(node.name, False):
                 self.demotables.discard(node.name)
+                del self.temp_read_from[node.name]
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
         @classmethod
