@@ -1451,9 +1451,8 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
     therefore do not need to be fields.
 
     A field can be demoted when it is a temporary field that:
-    1. for all stages: cannot be an inout accessor unless it is also an in accessor
-    2. is never used with an offset
-    3. is never assigned to in a HorizontalIf (this may need to be relaxed)
+    1. is never used with an offset
+    2. is never read before assigned to in any stage
     """
 
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
@@ -1473,44 +1472,33 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             self.demotables = set(node.temporary_fields)
 
             for stage in self.stage_iter(node):
-                in_field_accessors = {
+                field_accessors = {
                     accessor.symbol: accessor
                     for accessor in stage.accessors
                     if isinstance(accessor, gt_ir.FieldAccessor)
-                    and accessor.intent == gt_ir.AccessIntent.READ_ONLY
-                }
-                inout_field_accessors = {
-                    accessor.symbol: accessor
-                    for accessor in stage.accessors
-                    if isinstance(accessor, gt_ir.FieldAccessor)
-                    and accessor.intent == gt_ir.AccessIntent.READ_WRITE
                 }
 
-                # 1. for all stages: cannot be an inout accessor unless it is also an in accessor
-                if_inout_also_in = (
-                    lambda tmp: tmp not in inout_field_accessors or tmp in in_field_accessors
-                )
-                self.demotables = set(filter(if_inout_also_in, self.demotables))
-
-                # 2. is never used with an offset
-                never_used_with_offset = lambda tmp: tmp not in in_field_accessors or (
-                    in_field_accessors[tmp].extent == Extent.zeros()
-                )
+                # 1. is never used with an offset
+                never_used_with_offset = lambda tmp: field_accessors[tmp].extent == Extent.zeros()
                 self.demotables = set(filter(never_used_with_offset, self.demotables))
 
-            # 3. is never assigned to in a HorizontalIf
             self.visit(node)
 
             return self.demotables
 
-        def visit_HorizontalIf(self, node: gt_ir.HorizontalIf) -> None:
-            self.visit(node.body, inside_horizontal_if=True)
+        def visit_Stage(self, node: gt_ir.Stage) -> None:
+            self.temp_read_from: Dict[str, bool] = {}
+            self.generic_visit(node)
 
         def visit_Assign(self, node: gt_ir.Assign, **kwargs) -> None:
-            self.visit(node.target, **kwargs)
+            self.visit(node.value, **kwargs, is_value=True)
+            self.visit(node.target, **kwargs, is_target=True)
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs) -> None:
-            if kwargs.get("inside_horizontal_if", False):
+            # 2. is never read before assigned to
+            if kwargs.get("is_value", False) and node.name in self.demotables:
+                self.temp_read_from[node.name] = True
+            if kwargs.get("is_target", False) and self.temp_read_from.get(node.name, False):
                 self.demotables.discard(node.name)
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
