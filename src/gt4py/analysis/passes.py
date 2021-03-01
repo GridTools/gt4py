@@ -36,6 +36,7 @@ from typing import (
 )
 
 import networkx as nx
+import numpy as np
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
@@ -569,17 +570,6 @@ def _check_graph_for_race(graph, fail_if) -> Tuple[str]:
     return tuple(race_fields)
 
 
-def _make_dependency_graph_from_multistages(*args):
-    """Make a dependency graph from the multistages in args"""
-    stmts = []
-    for ms in args:
-        for ij_block in ms.ij_blocks:
-            for int_block in ij_block.interval_blocks:
-                for stmt_info in int_block.stmts:
-                    stmts.append(stmt_info.stmt)
-    return create_field_dependency_graph(*stmts)
-
-
 class MultiStageMergingWrapper:
     """Wrapper for :class:`DomainBlockInfo` containing the logic required to merge or not merge."""
 
@@ -593,8 +583,17 @@ class MultiStageMergingWrapper:
     ) -> List["MultiStageMergingWrapper"]:
         return [cls(block, parent) for block in items]
 
+    def _stmt_iter(self, *args):
+        for ms in args:
+            for ij_block in ms.ij_blocks:
+                for int_block in ij_block.interval_blocks:
+                    for stmt_info in int_block.stmts:
+                        yield stmt_info.stmt
+
     def can_merge_with(self, candidate: "MultiStageMergingWrapper") -> bool:
-        graph = _make_dependency_graph_from_multistages(self._multi_stage, candidate._multi_stage)
+        graph = create_field_dependency_graph(
+            *self._stmt_iter(self._multi_stage, candidate._multi_stage)
+        )
         if self.parent != candidate.parent:
             return False
         if candidate.iteration_order != self.iteration_order:
@@ -621,9 +620,9 @@ class MultiStageMergingWrapper:
     @property
     def offset_check(self) -> Callable[[Dict[str, int]], bool]:
         if self.k_offset_extends_domain:
-            check = lambda offset: any(offset[axis] != 0 for axis in ("I", "J", "K"))
+            check = lambda offset: any(offset.get(axis, 0) != 0 for axis in ("I", "J", "K"))
         else:
-            check = lambda offset: any(offset[axis] != 0 for axis in ("I", "J"))
+            check = lambda offset: any(offset.get(axis, 0) != 0 for axis in ("I", "J"))
         return check
 
     def has_cycle_with_parallel_axis_offset(self, graph: nx.DiGraph) -> bool:
@@ -633,7 +632,7 @@ class MultiStageMergingWrapper:
     def has_write_after_read_with_offset(self, graph: nx.DiGraph) -> bool:
         # Check for incoming edges with nonzero offset and outgoing edges with zero offset
         for node in graph.nodes:
-            offset_read_index = 10000000
+            offset_read_index = np.iinfo(np.int32).max
             for this_node, other_node, attrib in graph.in_edges(nbunch=node, data=True, default={}):
                 offsets_list = attrib.get("offsets", [])
                 if any(self.offset_check(offsets) for offsets in offsets_list):
