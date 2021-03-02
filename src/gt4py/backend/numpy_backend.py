@@ -284,19 +284,19 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         super().visit_StencilImplementation(node)
 
-    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr) -> str:
+    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr, **kwargs) -> str:
 
         if node.op is gt_ir.UnaryOperator.NOT:
-            source = "np.logical_not({expr})".format(expr=self.visit(node.arg))
+            source = "np.logical_not({expr})".format(expr=self.visit(node.arg, **kwargs))
         else:
             fmt = "({})" if isinstance(node.arg, gt_ir.CompositeExpr) else "{}"
             source = "{op}{expr}".format(
-                op=self.OP_TO_PYTHON[node.op], expr=fmt.format(self.visit(node.arg))
+                op=self.OP_TO_PYTHON[node.op], expr=fmt.format(self.visit(node.arg, **kwargs))
             )
 
         return source
 
-    def visit_BinOpExpr(self, node: gt_ir.BinOpExpr) -> str:
+    def visit_BinOpExpr(self, node: gt_ir.BinOpExpr, **kwargs) -> str:
         if node.op is gt_ir.BinaryOperator.AND:
             source = "np.logical_and({lhs}, {rhs})".format(
                 lhs=self.visit(node.lhs), rhs=self.visit(node.rhs)
@@ -309,27 +309,27 @@ class NumPySourceGenerator(PythonSourceGenerator):
             lhs_fmt = "({})" if isinstance(node.lhs, gt_ir.CompositeExpr) else "{}"
             rhs_fmt = "({})" if isinstance(node.rhs, gt_ir.CompositeExpr) else "{}"
             source = "{lhs} {op} {rhs}".format(
-                lhs=lhs_fmt.format(self.visit(node.lhs)),
+                lhs=lhs_fmt.format(self.visit(node.lhs, **kwargs)),
                 op=self.OP_TO_PYTHON[node.op],
-                rhs=rhs_fmt.format(self.visit(node.rhs)),
+                rhs=rhs_fmt.format(self.visit(node.rhs, **kwargs)),
             )
 
         return source
 
-    def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr) -> str:
+    def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr, **kwargs) -> str:
         then_fmt = "({})" if isinstance(node.then_expr, gt_ir.CompositeExpr) else "{}"
         else_fmt = "({})" if isinstance(node.else_expr, gt_ir.CompositeExpr) else "{}"
 
         source = "{np}.where({condition}, {then_expr}, {else_expr})".format(
             np=self.numpy_prefix,
-            condition=self.visit(node.condition),
-            then_expr=then_fmt.format(self.visit(node.then_expr)),
-            else_expr=else_fmt.format(self.visit(node.else_expr)),
+            condition=self.visit(node.condition, **kwargs),
+            then_expr=then_fmt.format(self.visit(node.then_expr, **kwargs)),
+            else_expr=else_fmt.format(self.visit(node.else_expr, **kwargs)),
         )
 
         return source
 
-    def _visit_branch_stmt(self, stmt: gt_ir.Statement) -> List[str]:
+    def _visit_branch_stmt(self, stmt: gt_ir.Statement, **kwargs) -> List[str]:
         sources = []
         if isinstance(stmt, gt_ir.Assign):
             condition = "__condition_1"
@@ -340,8 +340,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     inner_condition="__condition_{level}".format(level=i + 1),
                 )
 
-            target = self.visit(stmt.target)
-            value = self.visit(stmt.value)
+            target = self.visit(stmt.target, **kwargs)
+            value = self.visit(stmt.value, **kwargs)
 
             # Check if this temporary variable / field already contains written information.
             # If it does, it needs to be the else expression of the where, otherwise we set the else to nan.
@@ -366,7 +366,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 self.var_refs_defined.add(target_expr.name)
 
         else:
-            stmt_sources = self.visit(stmt)
+            stmt_sources = self.visit(stmt, **kwargs)
             if isinstance(stmt_sources, list):
                 sources.extend(stmt_sources)
             else:
@@ -374,12 +374,12 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return sources
 
-    def visit_If(self, node: gt_ir.If) -> List[str]:
+    def visit_If(self, node: gt_ir.If, **kwargs) -> List[str]:
         sources = []
         self.conditions_depth += 1
         sources.append(
             "__condition_{level} = {condition}".format(
-                level=self.conditions_depth, condition=self.visit(node.condition)
+                level=self.conditions_depth, condition=self.visit(node.condition, **kwargs)
             )
         )
 
@@ -388,11 +388,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
         if node.else_body is not None:
             sources.append(
                 "__condition_{level} = np.logical_not(__condition_{level})".format(
-                    level=self.conditions_depth, condition=self.visit(node.condition)
+                    level=self.conditions_depth, condition=self.visit(node.condition, **kwargs)
                 )
             )
             for stmt in node.else_body.stmts:
-                sources.extend(self._visit_branch_stmt(stmt))
+                sources.extend(self._visit_branch_stmt(stmt, **kwargs))
 
         self.conditions_depth -= 1
         # return "\n".join(sources)
@@ -400,9 +400,6 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
     def visit_HorizontalIf(self, node: gt_ir.HorizontalIf) -> List[str]:
         return [self.visit(stmt, intervals=node.intervals) for stmt in node.body.stmts]
-
-    def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
-        return self.block_info.axes_indices[node.axis]
 
 
 class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
