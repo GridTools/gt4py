@@ -1204,13 +1204,13 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
             return self.demotables
 
-        def visit_Stage(self, node: gt_ir.Stage) -> None:
+        def visit_Stage(self, node: gt_ir.Stage, **kwargs) -> None:
             self.temp_read_from: Dict[str, bool] = {name: False for name in self.demotables}
             self.generic_visit(node)
 
         def visit_Assign(self, node: gt_ir.Assign, **kwargs) -> None:
-            self.visit(node.value, **kwargs, is_value=True)
-            self.visit(node.target, **kwargs, is_target=True)
+            self.visit(node.value, is_value=True)
+            self.visit(node.target, is_target=True)
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs) -> None:
             # is never used with an offset
