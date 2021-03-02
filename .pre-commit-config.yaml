@@ -185,6 +185,7 @@ repos:
       src/gt4py/utils/meta.py |
       src/gtc_unstructured/irs/nir_to_usid.py |
       tests/definitions.py |
+      tests/eve_tests/definitions.py |
       tests/test_integration/stencil_definitions.py |
       tests/test_integration/test_code_generation.py |
       tests/test_unittest/test_call_interface.py |
