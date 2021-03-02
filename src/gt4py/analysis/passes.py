@@ -507,69 +507,6 @@ class NormalizeBlocksPass(TransformPass):
         transform_data.blocks = cls.SplitBlocksVisitor().visit(transform_data)
 
 
-class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
-    @classmethod
-    def apply(cls, *args):
-        return cls()(*args)
-
-    def _reset_refs(self):
-        self.field_refs = {}
-        self.var_refs = []
-
-    def __init__(self):
-        self._reset_refs()
-
-    def __call__(self, *args):
-        self.graph = nx.DiGraph()
-        self.stmt_index = 0
-        for node in args:
-            self.visit(node)
-        return self.graph
-
-    def visit_FieldRef(self, node: gt_ir.FieldRef):
-        if node.name not in self.graph.nodes:
-            self.graph.add_node(node.name)
-
-        if node.name in self.field_refs:
-            self.field_refs[node.name].append(node.offset)
-        else:
-            self.field_refs[node.name] = [node.offset]
-
-    def visit_VarRef(self, node: gt_ir.VarRef):
-        if node.name not in self.graph.nodes:
-            self.graph.add_node(node.name)
-
-        self.var_refs.append(node.name)
-
-    def visit_Assign(self, node: gt_ir.Assign):
-        target_name = node.target.name
-
-        self._reset_refs()
-        self.visit(node.value)
-
-        for value_field, offsets in self.field_refs.items():
-            self.graph.add_edge(target_name, value_field, offsets=offsets, index=self.stmt_index)
-
-        for value_ref in self.var_refs:
-            self.graph.add_edge(target_name, value_ref, index=self.stmt_index)
-
-        self.stmt_index += 1
-
-
-create_field_dependency_graph = FieldDependencyGraphCreator.apply
-
-
-def _check_graph_for_race(graph, fail_if) -> Tuple[str]:
-    race_fields = []
-    for cycle in nx.simple_cycles(graph):
-        full_cycle = cycle + [cycle[0]]
-        for source, target in zip(full_cycle[:-1], full_cycle[1:]):
-            offsets = graph.get_edge_data(source, target).get("offsets", [])
-            if any(fail_if(offset) for offset in offsets):
-                race_fields.append(cycle[0])
-    return tuple(race_fields)
-
-
 class MultiStageMergingWrapper:
     """Wrapper for :class:`DomainBlockInfo` containing the logic required to merge or not merge."""
 
@@ -583,26 +520,14 @@ class MultiStageMergingWrapper:
     ) -> List["MultiStageMergingWrapper"]:
         return [cls(block, parent) for block in items]
 
-    def _stmt_iter(self, *args):
-        for ms in args:
-            for ij_block in ms.ij_blocks:
-                for int_block in ij_block.interval_blocks:
-                    for stmt_info in int_block.stmts:
-                        yield stmt_info.stmt
-
     def can_merge_with(self, candidate: "MultiStageMergingWrapper") -> bool:
-        graph = create_field_dependency_graph(
-            *self._stmt_iter(self._multi_stage, candidate._multi_stage)
-        )
         if self.parent != candidate.parent:
             return False
         if candidate.iteration_order != self.iteration_order:
             return False
-        if candidate.has_cycle_with_parallel_axis_offset(graph):
-            return False
-        if candidate.has_write_after_read_with_offset(graph):
-            return False
         if candidate.has_disallowed_read_after_write_in(self):
+            return False
+        if candidate.has_disallowed_write_after_read_in(self):
             return False
         return True
 
@@ -617,39 +542,19 @@ class MultiStageMergingWrapper:
             else:
                 self._multi_stage.inputs[name] = extent
 
-    @property
-    def offset_check(self) -> Callable[[Dict[str, int]], bool]:
-        if self.k_offset_extends_domain:
-            check = lambda offset: any(offset.get(axis, 0) != 0 for axis in ("I", "J", "K"))
-        else:
-            check = lambda offset: any(offset.get(axis, 0) != 0 for axis in ("I", "J"))
-        return check
-
-    def has_cycle_with_parallel_axis_offset(self, graph: nx.DiGraph) -> bool:
-        fields = _check_graph_for_race(graph, self.offset_check)
-        return len(fields) != 0
-
-    def has_write_after_read_with_offset(self, graph: nx.DiGraph) -> bool:
-        # Check for incoming edges with nonzero offset and outgoing edges with zero offset
-        for node in graph.nodes:
-            offset_read_index = np.iinfo(np.int32).max
-            for this_node, other_node, attrib in graph.in_edges(nbunch=node, data=True, default={}):
-                offsets_list = attrib.get("offsets", [])
-                if any(self.offset_check(offsets) for offsets in offsets_list):
-                    offset_read_index = min(offset_read_index, attrib["index"])
-            if offset_read_index >= 0:
-                for this_node, other_node, attrib in graph.out_edges(
-                    nbunch=node, data=True, default={}
-                ):
-                    if attrib["index"] > offset_read_index:
-                        return True
-
-        return False
-
     def has_disallowed_read_after_write_in(self, target: "MultiStageMergingWrapper") -> bool:
         if not self.k_offset_extends_domain:
             return False
         return any(extent[-1] != (0, 0) for extent in self.read_after_write_extents_in(target))
+
+    def has_disallowed_write_after_read_in(self, target: "MultiStageMergingWrapper") -> bool:
+        write_after_read_fields = self.write_after_read_fields_in(target)
+        return write_after_read_fields and (
+            self.has_reads_with_offset(restrict_to=write_after_read_fields)
+            or target.has_reads_with_offset(restrict_to=write_after_read_fields)
+            or self.has_extended_domain
+            or target.has_extended_domain
+        )
 
     def has_reads_with_offset(self, *, restrict_to: Optional[Set[str]]) -> bool:
         checked_axes = slice(None) if self.k_offset_extends_domain else slice(None, -1)
@@ -1440,10 +1345,6 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
     This may occur because these can be local variables in the scope, and
     therefore do not need to be fields.
-
-    A field can be demoted when it is a temporary field that:
-    1. is never used with an offset
-    2. is never read before assigned to in any stage
     """
 
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
@@ -1452,49 +1353,32 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             collector = cls()
             return collector(node)
 
-        def stage_iter(self, node: gt_ir.StencilImplementation):
-            for ms in node.multi_stages:
-                for sg in ms.groups:
-                    for stage in sg.stages:
-                        yield stage
-
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
-            self.demotables = set(node.temporary_fields)
-
-            for stage in self.stage_iter(node):
-                field_accessors = {
-                    accessor.symbol: accessor
-                    for accessor in stage.accessors
-                    if isinstance(accessor, gt_ir.FieldAccessor)
-                }
-
-                # 1. is never used with an offset
-                never_used_with_offset = (
-                    lambda tmp: tmp in field_accessors
-                    and field_accessors[tmp].extent == Extent.zeros()
-                )
-                self.demotables = set(filter(never_used_with_offset, self.demotables))
-
+            self.demotables: Dict[str, Optional[str]] = {
+                temp_field: None for temp_field in node.temporary_fields
+            }
+            """Dictionary mapping temporaries to their most recently referenced stage."""
             self.visit(node)
+            return set(self.demotables.keys())
 
-            return self.demotables
+        def visit_Stage(self, node: gt_ir.Stage, **kwargs: Any) -> None:
+            kwargs["stage_name"] = node.name
+            self.generic_visit(node, **kwargs)
 
-        def visit_Stage(self, node: gt_ir.Stage) -> None:
-            self.temp_read_from: Dict[str, bool] = {name: False for name in self.demotables}
-            self.generic_visit(node)
+        def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
+            self.visit(node.value, **kwargs)
+            if node.target.name in self.demotables:
+                self.demotables[node.target.name] = kwargs["stage_name"]
 
-        def visit_Assign(self, node: gt_ir.Assign, **kwargs) -> None:
-            self.visit(node.value, **kwargs, is_value=True)
-            self.visit(node.target, **kwargs, is_target=True)
-
-        def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs) -> None:
-            # 2. is never read before assigned to
-            if kwargs.get("is_value", False) and node.name in self.temp_read_from:
-                self.temp_read_from[node.name] = True
-            if kwargs.get("is_target", False) and self.temp_read_from.get(node.name, False):
-                self.demotables.discard(node.name)
-                del self.temp_read_from[node.name]
+        def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> None:
+            field_name = node.name
+            if field_name in self.demotables:
+                assert self.demotables[field_name], f"Temporary {field_name} has no stage."
+                if kwargs["stage_name"] != self.demotables[field_name] or any(
+                    val != 0 for val in node.offset.values()
+                ):
+                    self.demotables.pop(field_name)
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
         @classmethod
