@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import numpy as np
 
@@ -162,8 +162,46 @@ class DebugSourceGenerator(PythonSourceGenerator):
             body_sources.dedent()
         return ["".join([str(item) for item in line]) for line in body_sources.lines]
 
-    def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
-        return node.axis
+    def _make_base_offset(self, bound: gt_ir.AxisBound, index: int) -> str:
+        if bound.level == gt_ir.LevelMarker.START:
+            return "{:d}".format(bound.offset)
+        else:
+            return "{:s}[:d] {:+d}".format(self.domain_arg_name, index, bound.offset)
+
+    def _create_horizontal_conditional(
+        self, axis_name: str, index: int, interval: gt_ir.AxisInterval
+    ) -> str:
+        extent = self.block_info.extent[index]
+        if (
+            interval.start.level == interval.end.level
+            and interval.start.offset == interval.end.offset - 1
+        ):
+            return f"{axis_name} == {self._make_base_offset(interval.start, index)}"
+        else:
+            conditions = ""
+            if interval.start.level != gt_ir.LevelMarker.START or interval.start.offset > extent[0]:
+                conditions.append(f"{axis_name} >= {self._make_base_offset(interval.start, index)}")
+            if interval.end.level != gt_ir.LevelMarker.END or interval.end.offset < extent[1]:
+                conditions.append(f"{axis_name} < {self._make_base_offset(interval.end, index)}")
+            return " and ".join(conditions)
+
+    def visit_HorizontalIf(self, node: gt_ir.HorizontalIf) -> List[str]:
+        source = gt_text.TextBlock()
+
+        conditions = [
+            self._create_horizontal_conditional(axis_name, index, node.intervals[axis_name])
+            for index, axis_name in enumerate(
+                (axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes)
+            )
+        ]
+
+        source.append("if " + " and ".join([cond for cond in conditions if cond != ""]) + ":")
+
+        source.indent()
+        for stmt in node.body.stmts:
+            source.extend(self.visit(stmt))
+
+        return ["".join([str(item) for item in line]) for line in source.lines]
 
 
 class DebugModuleGenerator(gt_backend.BaseModuleGenerator):

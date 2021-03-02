@@ -30,7 +30,6 @@ from .passes import (
     DemoteLocalTemporariesToVariablesPass,
     HousekeepingPass,
     InitInfoPass,
-    LowerHorizontalIfPass,
     MergeBlocksPass,
     NormalizeBlocksPass,
     RemoveUnreachedStatementsPass,
@@ -115,9 +114,6 @@ class IRTransformer:
         # turn temporary fields that are only written and read within the same function
         # into local scalars
         DemoteLocalTemporariesToVariablesPass.apply(self.transform_data)
-
-        # Lower HorizontalIf statements to If statements
-        LowerHorizontalIfPass.apply(self.transform_data)
 
         # prune some stages that don't have effect
         HousekeepingPass.apply(self.transform_data)

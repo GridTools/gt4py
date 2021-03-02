@@ -139,25 +139,25 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     def generic_visit(self, node: gt_ir.Node, **kwargs):
         raise RuntimeError("Invalid IR node: {}".format(node))
 
-    def visit_Cast(self, node: gt_ir.Cast):
+    def visit_Cast(self, node: gt_ir.Cast, **kwargs):
         return self.visit(node.expr)
 
-    def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral):
+    def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral, **kwargs):
         return self.BUILTIN_TO_PYTHON[node.value]
 
-    def visit_Decl(self, node: gt_ir.Decl):
+    def visit_Decl(self, node: gt_ir.Decl, **kwargs):
         raise NotImplementedError()
 
     def visit_Statement(self, node: gt_ir.Statement):
         raise NotImplementedError()
 
-    def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral):
+    def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral, **kwargs):
         return str(node.value)
 
-    def visit_FieldRef(self, node: gt_ir.FieldRef):
+    def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
         raise NotImplementedError()
 
-    def visit_VarRef(self, node: gt_ir.VarRef):
+    def visit_VarRef(self, node: gt_ir.VarRef, **kwargs):
         assert (
             node.name in self.block_info.symbols or node.name in self.param_names
         ), "Unknown variable '{}'".format(node.name)
@@ -169,53 +169,44 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
         return source
 
-    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr):
+    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr, **kwargs):
         fmt = "({})" if isinstance(node.arg, gt_ir.CompositeExpr) else "{}"
         source = "{op} {expr}".format(
-            op=self.OP_TO_PYTHON[node.op], expr=fmt.format(self.visit(node.arg))
+            op=self.OP_TO_PYTHON[node.op], expr=fmt.format(self.visit(node.arg, **kwargs))
         )
 
         return source
 
-    def visit_BinOpExpr(self, node: gt_ir.BinOpExpr):
+    def visit_BinOpExpr(self, node: gt_ir.BinOpExpr, **kwargs):
         lhs_fmt = "({})" if isinstance(node.lhs, gt_ir.CompositeExpr) else "{}"
         rhs_fmt = "({})" if isinstance(node.rhs, gt_ir.CompositeExpr) else "{}"
         source = "{lhs} {op} {rhs}".format(
-            lhs=lhs_fmt.format(self.visit(node.lhs)),
+            lhs=lhs_fmt.format(self.visit(node.lhs, **kwargs)),
             op=self.OP_TO_PYTHON[node.op],
-            rhs=rhs_fmt.format(self.visit(node.rhs)),
+            rhs=rhs_fmt.format(self.visit(node.rhs, **kwargs)),
         )
 
         return source
-
-    def visit_AxisOffset(self, node: gt_ir.AxisOffset) -> str:
-        index = gt_ir.Domain.LatLonGrid().index(node.axis)
-        return "{endpt}{offset:+d}".format(
-            endpt=f"{self.domain_arg_name}[{index}]"
-            if node.endpt == gt_ir.LevelMarker.END
-            else "0",
-            offset=node.offset,
-        )
 
     def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
         call = self.NATIVE_FUNC_TO_PYTHON[node.func]
         args = ",".join(self.visit(arg) for arg in node.args)
         return f"{call}({args})"
 
-    def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr):
+    def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr, **kwargs):
         then_fmt = "({})" if isinstance(node.then_expr, gt_ir.CompositeExpr) else "{}"
         else_fmt = "({})" if isinstance(node.else_expr, gt_ir.CompositeExpr) else "{}"
         source = "({then_expr} if {condition} else {else_expr})".format(
             condition=self.visit(node.condition),
-            then_expr=then_fmt.format(self.visit(node.then_expr)),
-            else_expr=else_fmt.format(self.visit(node.else_expr)),
+            then_expr=then_fmt.format(self.visit(node.then_expr, **kwargs)),
+            else_expr=else_fmt.format(self.visit(node.else_expr, **kwargs)),
         )
 
         return source
 
-    def visit_Assign(self, node: gt_ir.Assign):
-        lhs = self.visit(node.target)
-        rhs = self.visit(node.value)
+    def visit_Assign(self, node: gt_ir.Assign, **kwargs):
+        lhs = self.visit(node.target, **kwargs)
+        rhs = self.visit(node.value, **kwargs)
 
         source = "{lhs} = {rhs}".format(lhs=lhs, rhs=rhs)
 
@@ -280,35 +271,6 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         self.block_info.iteration_order = iteration_order
         self.block_info.extent = node.compute_extent
         self.var_refs_defined.clear()
-
-        axes_with_indices = tuple(
-            set([axis_index.axis for axis_index in gt_ir.filter_nodes_dfs(node, gt_ir.AxisIndex)])
-        )
-        self.block_info.axes_indices = {}
-        for axis_name in axes_with_indices:
-            all_axes = gt_ir.Domain.LatLonGrid().axes_names
-            array_index = all_axes.index(axis_name)
-            extents = node.compute_extent[array_index]
-            stage_axes = (
-                all_axes
-                if iteration_order == gt_ir.IterationOrder.PARALLEL
-                else [axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes]
-            )
-            newaxis = f"{self.numpy_prefix}.newaxis"
-            shaping_axes = ", ".join(":" if axis == axis_name else newaxis for axis in stage_axes)
-            axis_index_name = f"{axis_name}_{node.name}"
-            self.sources.append(
-                "{name} = {np}.asarray(range({lower}, {domain_array}[{d}] + {upper}))[{shape}]".format(
-                    name=axis_index_name,
-                    np=self.numpy_prefix,
-                    lower=extents[0],
-                    domain_array=self.domain_arg_name,
-                    d=array_index,
-                    upper=extents[1],
-                    shape=shaping_axes,
-                )
-            )
-            self.block_info.axes_indices[axis_name] = axis_index_name
 
         # Create regions and computations
         regions = []

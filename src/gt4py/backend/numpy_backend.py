@@ -156,8 +156,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return source_lines
 
     # ---- Visitor handlers ----
-    def visit_ShapedExpr(self, node: ShapedExpr) -> str:
-        code = self.visit(node.expr)
+    def visit_ShapedExpr(self, node: ShapedExpr, **kwargs) -> str:
+        code = self.visit(node.expr, **kwargs)
         if not isinstance(node.expr, ShapedExpr):
             parallel_axes = (
                 self.impl_node.domain.axes
@@ -174,39 +174,62 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 code = f"({code})[{view}]"
         return code
 
-    def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
+    def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs) -> str:
+        intervals = kwargs.get("intervals", None)
         assert node.name in self.block_info.accessors
 
         is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
-        extent = self.block_info.extent
-        lower_extent = list(extent.lower_indices)
-        upper_extent = list(extent.upper_indices)
         parallel_axes_dims = [
             self.impl_node.domain.index(axis)
             for axis in self.impl_node.fields[node.name].axes
             if axis != self.domain.sequential_axis.name
         ]
 
-        for d, ax in enumerate(self.domain.axes_names):
-            idx = node.offset.get(ax, 0)
-            if idx:
-                lower_extent[d] += idx
-                upper_extent[d] += idx
+        lower_indices = self.block_info.extent.lower_indices
+        upper_indices = self.block_info.extent.upper_indices
 
         index = []
         for fd, d in enumerate(parallel_axes_dims):
-            start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
-            size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
-            size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
-            index.append(
-                "{name}{marker}[{fd}]{start}: {name}{marker}[{fd}] + {size}".format(
-                    name=node.name,
-                    start=start_expr,
-                    marker=self.origin_marker,
-                    fd=fd,
-                    size=size_expr,
+            ax = self.domain.axes_names[d]
+            ax_offset = node.offset.get(ax, 0)
+
+            if intervals:
+                restricted_interval = intervals[ax]
+                start_offset = (
+                    max(lower_indices[d], restricted_interval.start.offset)
+                    if restricted_interval.start.level == gt_ir.LevelMarker.START
+                    else restricted_interval.start.offset
                 )
-            )
+                end_offset = (
+                    min(upper_indices[d], restricted_interval.end.offset)
+                    if restricted_interval.end.level == gt_ir.LevelMarker.END
+                    else restricted_interval.end.offset
+                )
+                axis_interval = gt_ir.AxisInterval(
+                    start=gt_ir.AxisBound(
+                        level=restricted_interval.start.level, offset=start_offset
+                    ),
+                    end=gt_ir.AxisBound(level=restricted_interval.end.level, offset=end_offset),
+                )
+            else:
+                axis_interval = gt_ir.AxisInterval(
+                    start=gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=lower_indices[d]),
+                    end=gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=upper_indices[d]),
+                )
+
+            origin_expr = f"{node.name}{self.origin_marker}[{fd}]"
+            level_to_expr = {
+                gt_ir.LevelMarker.START: origin_expr,
+                gt_ir.LevelMarker.END: f"{origin_expr} + {self.domain_arg_name}[{fd}]",
+            }
+
+            indices = []
+            for bound in (axis_interval.start, axis_interval.end):
+                total_offset = bound.offset + ax_offset
+                total_offset_expr = " {:+d}".format(total_offset) if total_offset != 0 else ""
+                indices.append(f"{level_to_expr[bound.level]}{total_offset_expr}")
+
+            index.append(f"{indices[0]} : {indices[1]}")
 
         k_ax = self.domain.sequential_axis.name
         if k_ax in self.impl_node.fields[node.name].axes:
@@ -374,6 +397,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
         self.conditions_depth -= 1
         # return "\n".join(sources)
         return sources
+
+    def visit_HorizontalIf(self, node: gt_ir.HorizontalIf) -> List[str]:
+        return [self.visit(stmt, intervals=node.intervals) for stmt in node.body.stmts]
 
     def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
         return self.block_info.axes_indices[node.axis]
