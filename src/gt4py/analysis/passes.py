@@ -1197,30 +1197,9 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             collector = cls()
             return collector(node)
 
-        def stage_iter(self, node: gt_ir.StencilImplementation):
-            for ms in node.multi_stages:
-                for sg in ms.groups:
-                    for stage in sg.stages:
-                        yield stage
-
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.demotables = set(node.temporary_fields)
-
-            for stage in self.stage_iter(node):
-                field_accessors = {
-                    accessor.symbol: accessor
-                    for accessor in stage.accessors
-                    if isinstance(accessor, gt_ir.FieldAccessor)
-                }
-
-                # 1. is never used with an offset
-                never_used_with_offset = (
-                    lambda tmp: tmp in field_accessors
-                    and field_accessors[tmp].extent == Extent.zeros()
-                )
-                self.demotables = set(filter(never_used_with_offset, self.demotables))
-
             self.visit(node)
 
             return self.demotables
@@ -1234,6 +1213,10 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             self.visit(node.target, **kwargs, is_target=True)
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs) -> None:
+            # is never used with an offset
+            if any(val != 0 for val in node.offset.values()):
+                self.demotables.discard(node.name)
+
             # 2. is never read before assigned to
             if kwargs.get("is_value", False) and node.name in self.temp_read_from:
                 self.temp_read_from[node.name] = True
