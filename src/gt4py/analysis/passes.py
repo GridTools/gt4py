@@ -17,7 +17,6 @@
 """Definitions and utilities used by all the analysis pipeline components.
 """
 
-import functools
 import itertools
 import warnings
 from typing import (
@@ -501,21 +500,18 @@ class NormalizeBlocksPass(TransformPass):
 
 class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
     @classmethod
-    def apply(cls, *args):
-        return cls()(*args)
+    def apply(cls, node_or_iterable):
+        return cls()(node_or_iterable)
 
     def _reset_refs(self):
         self.field_refs = {}
         self.var_refs = []
 
-    def __init__(self):
-        self._reset_refs()
-
-    def __call__(self, *args):
+    def __call__(self, node_or_iterable):
         self.graph = nx.DiGraph()
+        self._reset_refs()
         self.stmt_index = 0
-        for node in args:
-            self.visit(node)
+        self.visit(node_or_iterable)
         return self.graph
 
     def visit_FieldRef(self, node: gt_ir.FieldRef):
@@ -551,17 +547,6 @@ class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
 create_field_dependency_graph = FieldDependencyGraphCreator.apply
 
 
-def _check_graph_for_race(graph, fail_if) -> Tuple[str]:
-    race_fields = []
-    for cycle in nx.simple_cycles(graph):
-        full_cycle = cycle + [cycle[0]]
-        for source, target in zip(full_cycle[:-1], full_cycle[1:]):
-            offsets = graph.get_edge_data(source, target).get("offsets", [])
-            if any(fail_if(offset) for offset in offsets):
-                race_fields.append(cycle[0])
-    return tuple(race_fields)
-
-
 class MultiStageMergingWrapper:
     """Wrapper for :class:`DomainBlockInfo` containing the logic required to merge or not merge."""
 
@@ -575,26 +560,18 @@ class MultiStageMergingWrapper:
     ) -> List["MultiStageMergingWrapper"]:
         return [cls(block, parent) for block in items]
 
-    def _stmt_iter(self, *args):
-        for ms in args:
-            for ij_block in ms.ij_blocks:
-                for int_block in ij_block.interval_blocks:
-                    for stmt_info in int_block.stmts:
-                        yield stmt_info.stmt
-
     def can_merge_with(self, candidate: "MultiStageMergingWrapper") -> bool:
-        graph = create_field_dependency_graph(
-            *self._stmt_iter(self._multi_stage, candidate._multi_stage)
-        )
+        all_stmts = tuple(self.statements_in_multistages(self._multi_stage, candidate._multi_stage))
+        graph = create_field_dependency_graph(all_stmts)
         if self.parent != candidate.parent:
             return False
         if candidate.iteration_order != self.iteration_order:
             return False
+        if candidate.has_disallowed_read_after_write_in(self):
+            return False
         if candidate.has_cycle_with_parallel_axis_offset(graph):
             return False
         if candidate.has_write_after_read_with_offset(graph):
-            return False
-        if candidate.has_disallowed_read_after_write_in(self):
             return False
         return True
 
@@ -618,8 +595,15 @@ class MultiStageMergingWrapper:
         return check
 
     def has_cycle_with_parallel_axis_offset(self, graph: nx.DiGraph) -> bool:
-        fields = _check_graph_for_race(graph, self.offset_check)
-        return len(fields) != 0
+        """Check the field dependency graph for a cycle with non-zero offset."""
+        race_fields = []
+        for cycle in nx.simple_cycles(graph):
+            full_cycle = cycle + [cycle[0]]
+            for source, target in zip(full_cycle[:-1], full_cycle[1:]):
+                offsets = graph.get_edge_data(source, target).get("offsets", [])
+                if any(self.offset_check(offset) for offset in offsets):
+                    race_fields.append(cycle[0])
+        return len(race_fields) != 0
 
     def has_write_after_read_with_offset(self, graph: nx.DiGraph) -> bool:
         # Check for incoming edges with nonzero offset and outgoing edges with zero offset
@@ -629,12 +613,11 @@ class MultiStageMergingWrapper:
                 offsets_list = attrib.get("offsets", [])
                 if any(self.offset_check(offsets) for offsets in offsets_list):
                     offset_read_index = min(offset_read_index, attrib["index"])
-            if offset_read_index >= 0:
-                for this_node, other_node, attrib in graph.out_edges(
-                    nbunch=node, data=True, default={}
-                ):
-                    if attrib["index"] > offset_read_index:
-                        return True
+            for this_node, other_node, attrib in graph.out_edges(
+                nbunch=node, data=True, default={}
+            ):
+                if attrib["index"] > offset_read_index:
+                    return True
 
         return False
 
@@ -669,6 +652,15 @@ class MultiStageMergingWrapper:
         for extent in extents:
             full_extent |= extent
         return full_extent
+
+    @staticmethod
+    def statements_in_multistages(*multi_stages):
+        """Iterator over statements in the multistages, in the order passed."""
+        for ms in multi_stages:
+            for ij_block in ms.ij_blocks:
+                for int_block in ij_block.interval_blocks:
+                    for stmt_info in int_block.stmts:
+                        yield stmt_info.stmt
 
     @property
     def extents(self) -> Iterator[Extent]:
