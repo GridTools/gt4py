@@ -99,7 +99,7 @@ class KCacheDetection(NodeTranslator):
         def already_cached(field: str) -> bool:
             return field in {c.name for c in node.caches}
 
-        # TODO: k-caches with non-zero ij offsets?
+        # TODO(fthaler): k-caches with non-zero ij offsets?
         def has_horizontal_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
             return any(offset[:2] != (0, 0) for offset in offsets)
 
