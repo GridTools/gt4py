@@ -29,7 +29,7 @@ Caches in GridTools terminology (with roots in STELLA) are local replacements
 of temporary fields, which are usually stored as full fields in global memory,
 by smaller buffers with more reuse (and faster memory on GPUs) or by registers.
 
-Ij-caches are used in purely horizontal k-parallel stencils and replace the
+IJ-caches are used in purely horizontal k-parallel stencils and replace the
 fully 3D temporary field by 2D buffers (in block-local shared memory on GPUs
 and thread-local memory on CPUs).
 
