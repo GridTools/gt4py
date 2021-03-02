@@ -1189,6 +1189,7 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
     A field can be demoted when it is a temporary field that:
     1. is never used with an offset
     2. is never read before assigned to in any stage
+    3. is never assigned to in a horizontal region
     """
 
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
@@ -1208,12 +1209,15 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             self.temp_read_from: Dict[str, bool] = {name: False for name in self.demotables}
             self.generic_visit(node)
 
+        def visit_HorizontalIf(self, node: gt_ir.HorizontalIf, **kwargs) -> None:
+            self.visit(node.body, **kwargs, is_horizontal_if=True)
+
         def visit_Assign(self, node: gt_ir.Assign, **kwargs) -> None:
-            self.visit(node.value, is_value=True)
-            self.visit(node.target, is_target=True)
+            self.visit(node.value, **kwargs, is_value=True)
+            self.visit(node.target, **kwargs, is_target=True)
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs) -> None:
-            # is never used with an offset
+            # 1. is never used with an offset
             if any(val != 0 for val in node.offset.values()):
                 self.demotables.discard(node.name)
 
@@ -1223,6 +1227,10 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             if kwargs.get("is_target", False) and self.temp_read_from.get(node.name, False):
                 self.demotables.discard(node.name)
                 del self.temp_read_from[node.name]
+
+            # 3. is never assigned to in a horizontal region
+            if kwargs.get("is_horizontal_if", False) and kwargs.get("is_target", False):
+                self.demotables.discard(node.name)
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
         @classmethod
