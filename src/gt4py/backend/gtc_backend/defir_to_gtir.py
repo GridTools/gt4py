@@ -186,7 +186,11 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_UnaryOpExpr(self, node: UnaryOpExpr) -> gtir.UnaryOp:
         return gtir.UnaryOp(op=self.GT4PY_UNARYOP_TO_GTIR[node.op], expr=self.visit(node.arg))
 
-    def visit_BinOpExpr(self, node: BinOpExpr) -> gtir.BinaryOp:
+    def visit_BinOpExpr(self, node: BinOpExpr) -> Union[gtir.BinaryOp, gtir.NativeFuncCall]:
+        if node.op == BinaryOperator.POW:
+            return gtir.NativeFuncCall(
+                func=common.NativeFunction.POW, args=[self.visit(node.lhs), self.visit(node.rhs)]
+            )
         return gtir.BinaryOp(
             left=self.visit(node.lhs),
             right=self.visit(node.rhs),
