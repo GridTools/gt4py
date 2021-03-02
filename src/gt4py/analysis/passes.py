@@ -1185,6 +1185,10 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
     This may occur because these can be local variables in the scope, and
     therefore do not need to be fields.
+
+    A field can be demoted when it is a temporary field that:
+    1. is never used with an offset
+    2. is never read before assigned to in any stage
     """
 
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
@@ -1193,32 +1197,49 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             collector = cls()
             return collector(node)
 
+        def stage_iter(self, node: gt_ir.StencilImplementation):
+            for ms in node.multi_stages:
+                for sg in ms.groups:
+                    for stage in sg.stages:
+                        yield stage
+
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
-            self.demotables: Dict[str, Optional[str]] = {
-                temp_field: None for temp_field in node.temporary_fields
-            }
-            """Dictionary mapping temporaries to their most recently referenced stage."""
+            self.demotables = set(node.temporary_fields)
+
+            for stage in self.stage_iter(node):
+                field_accessors = {
+                    accessor.symbol: accessor
+                    for accessor in stage.accessors
+                    if isinstance(accessor, gt_ir.FieldAccessor)
+                }
+
+                # 1. is never used with an offset
+                never_used_with_offset = (
+                    lambda tmp: tmp in field_accessors
+                    and field_accessors[tmp].extent == Extent.zeros()
+                )
+                self.demotables = set(filter(never_used_with_offset, self.demotables))
+
             self.visit(node)
-            return set(self.demotables.keys())
 
-        def visit_Stage(self, node: gt_ir.Stage, **kwargs: Any) -> None:
-            kwargs["stage_name"] = node.name
-            self.generic_visit(node, **kwargs)
+            return self.demotables
 
-        def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
-            self.visit(node.value, **kwargs)
-            if node.target.name in self.demotables:
-                self.demotables[node.target.name] = kwargs["stage_name"]
+        def visit_Stage(self, node: gt_ir.Stage) -> None:
+            self.temp_read_from: Dict[str, bool] = {name: False for name in self.demotables}
+            self.generic_visit(node)
 
-        def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> None:
-            field_name = node.name
-            if field_name in self.demotables:
-                assert self.demotables[field_name], f"Temporary {field_name} has no stage."
-                if kwargs["stage_name"] != self.demotables[field_name] or any(
-                    val != 0 for val in node.offset.values()
-                ):
-                    self.demotables.pop(field_name)
+        def visit_Assign(self, node: gt_ir.Assign, **kwargs) -> None:
+            self.visit(node.value, **kwargs, is_value=True)
+            self.visit(node.target, **kwargs, is_target=True)
+
+        def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs) -> None:
+            # 2. is never read before assigned to
+            if kwargs.get("is_value", False) and node.name in self.temp_read_from:
+                self.temp_read_from[node.name] = True
+            if kwargs.get("is_target", False) and self.temp_read_from.get(node.name, False):
+                self.demotables.discard(node.name)
+                del self.temp_read_from[node.name]
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
         @classmethod
