@@ -1130,35 +1130,3 @@ class TestAnnotations:
         assert "wb" in annotations
         assert annotations["wb"] == int
         assert len(annotations) == 6
-
-
-class TestInputOrder:
-    def test_legal_input_order(self):
-        def definition_func(
-            in_field: gtscript.Field[float],
-            out_field: gtscript.Field[float],
-            param: float,
-        ):
-            with computation(PARALLEL), interval(...):
-                out_field = in_field + param
-
-        module = "TestInputOrder_test_module"
-        compile_definition(definition_func, "test_legal_input_order", module)
-
-    def test_illegal_input_order(self):
-        def definition_func(
-            in_field: gtscript.Field[float],
-            param: float,
-            out_field: gtscript.Field[float],
-        ):
-            with computation(PARALLEL), interval(...):
-                out_field = in_field + param
-
-        module = "TestInputOrder_test_module"
-
-        with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r"Invalid argument order.*"):
-            compile_definition(
-                definition_func,
-                "test_illegal_input_order",
-                module,
-            )
