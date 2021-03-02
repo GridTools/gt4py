@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Tuple
+from typing import List
 
 import factory
 
@@ -46,7 +46,7 @@ class TemporaryFactory(factory.Factory):
 
     name = identifier(oir.Temporary)
     dtype = common.DataType.FLOAT32
-    dimensions: Tuple[bool, bool, bool] = (True, True, True)
+    dimensions = common.DimensionFlags(value=(True, True, True))
 
 
 class FieldDeclFactory(factory.Factory):
@@ -55,7 +55,7 @@ class FieldDeclFactory(factory.Factory):
 
     name = identifier(oir.FieldDecl)
     dtype = common.DataType.FLOAT32
-    dimensions: Tuple[bool, bool, bool] = (True, True, True)
+    dimensions = common.DimensionFlags(value=(True, True, True))
 
 
 class HorizontalExecutionFactory(factory.Factory):

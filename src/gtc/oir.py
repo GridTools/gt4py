@@ -21,7 +21,7 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import root_validator, validator
 
@@ -112,7 +112,7 @@ class Decl(LocNode):
 
 
 class FieldDecl(Decl):
-    dimensions: Tuple[bool, bool, bool] = (True, True, True)
+    dimensions: common.DimensionFlags = common.DimensionFlags(value=(True, True, True))
 
 
 class ScalarDecl(Decl):

@@ -105,10 +105,10 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             if kwargs["external_arg"]:
                 return "py::buffer {name}, std::array<gt::uint_t,{ndim}> {name}_origin".format(
                     name=node.name,
-                    ndim=node.dimensions.count(True),
+                    ndim=node.dimensions.value.count(True),
                 )
             else:
-                num_dims = node.dimensions.count(True)
+                num_dims = node.dimensions.value.count(True)
                 sid_def = """gt::as_{sid_type}<{dtype}, {num_dims},
                     std::integral_constant<int, {unique_index}>>({name})""".format(
                     sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
@@ -120,7 +120,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                 if num_dims != 3:
                     gt_dims = [
                         f"gt::stencil::dim::{dim}"
-                        for dim in gtc_utils.mask_to_dims(node.dimensions)
+                        for dim in gtc_utils.dimension_flags_to_names(node.dimensions.value)
                     ]
                     sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
                         gt_dims=", ".join(gt_dims), sid_def=sid_def

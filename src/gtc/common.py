@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, ClassVar, Dict, Generic, List, Optional, Type, TypeVar, Union, cast
+from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union, cast
 
 import pydantic
 from pydantic import validator
@@ -34,7 +34,7 @@ from eve import (
 from eve import exceptions as eve_exceptions
 from eve.type_definitions import SymbolRef
 from eve.typingx import RootValidatorType, RootValidatorValuesType
-from gtc.utils import flatten_list, mask_to_dims
+from gtc.utils import dimension_flags_to_names, flatten_list
 
 
 class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
@@ -205,6 +205,11 @@ class ExprKind(IntEnum):
 
 class LocNode(Node):
     loc: Optional[SourceLocation]
+
+
+class DimensionFlags(LocNode):
+
+    value: Tuple[bool, bool, bool]
 
 
 class Expr(LocNode):
@@ -576,30 +581,56 @@ def validate_lvalue_dims() -> RootValidatorType:
     """Validate lvalue dimensions using the root node symbol table."""
 
     class _LvalueDimsValidator(NodeVisitor):
-        def visit_Node(self, node: Node, symtable: Dict[str, Any], **kwargs: Any) -> None:
-            if hasattr(node, "loop_order"):
-                kwargs["loop_order"] = node.loop_order
+        def visit_Node(
+            self,
+            node: Node,
+            *,
+            symtable: Dict[str, Any],
+            loop_order: Optional[LoopOrder] = None,
+            **kwargs: Any,
+        ) -> None:
+            loop_order = self._extract_single_child_of_type(node, LoopOrder) or loop_order
             if isinstance(node, SymbolTableTrait):
                 symtable = {**symtable, **node.symtable_}
-            self.generic_visit(node, symtable=symtable, **kwargs)
+            self.generic_visit(node, symtable=symtable, loop_order=loop_order, **kwargs)
 
         def visit_AssignStmt(
-            self, node: AssignStmt, *, loop_order: LoopOrder, **kwargs: Any
+            self,
+            node: AssignStmt,
+            *,
+            loop_order: LoopOrder,
+            symtable: Dict[str, Any],
+            **kwargs: Any,
         ) -> None:
-            symtable = kwargs["symtable"]
-            allowed_masks = [(True, True, True)]  # ijk always allowed
-            if loop_order is not LoopOrder.PARALLEL:
-                allowed_masks.append((True, True, False))  # ij only allowed in FORWARD and BACKWARD
-            name = node.left.name
-            if name in symtable and hasattr(symtable[name], "dimensions"):
-                mask = symtable[name].dimensions
-            else:
-                mask = (True, True, True)
-            if mask not in allowed_masks:
-                dims = mask_to_dims(mask)
+            allowed_flags = self._allowed_flags(loop_order)
+            flags = self._get_declared_flags(node.left.name, symtable)
+            if flags not in allowed_flags:
+                dims = dimension_flags_to_names(flags)
                 raise ValueError(
-                    f"Not allowed to assign to {dims}-field `{name}` in {loop_order.name}."
+                    f"Not allowed to assign to {dims}-field `{node.left.name}` in {loop_order.name}."
                 )
+            return None
+
+        def _allowed_flags(self, loop_order: LoopOrder) -> List[Tuple[bool, bool, bool]]:
+            allowed_flags = [(True, True, True)]  # ijk always allowed
+            if loop_order is not LoopOrder.PARALLEL:
+                allowed_flags.append((True, True, False))  # ij only allowed in FORWARD and BACKWARD
+            return allowed_flags
+
+        def _get_declared_flags(
+            self, name: SymbolRef, symtable: Dict[str, Any]
+        ) -> Tuple[bool, bool, bool]:
+            flags = self._extract_single_child_of_type(symtable[name], DimensionFlags)
+            if not flags:
+                flags = DimensionFlags(value=(True, True, True))
+            return flags.value
+
+        def _extract_single_child_of_type(self, node: Node, type_: type) -> Any:
+            children = [child for _, child in node.iter_children() if isinstance(child, type_)]
+            if len(children) == 1:
+                return children[0]
+            elif len(children) > 1:
+                raise ValueError(f"Node {node} has more than one child of type {type_}")
             return None
 
     def _impl(
