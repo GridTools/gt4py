@@ -345,7 +345,7 @@ class MultiDimRoot(eve.Node, eve.SymbolTableTrait):
     decls: List[MultiDimDecl]
     loops: List[MultiDimLoop]
 
-    _lvalue_dims_validator = common.validate_lvalue_dims()
+    _lvalue_dims_validator = common.validate_lvalue_dims(MultiDimLoop, MultiDimDecl)
 
 
 def construct_dims_assignment(dimensions: Tuple[bool, bool, bool], direction: common.LoopOrder):

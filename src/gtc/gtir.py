@@ -269,4 +269,4 @@ class Stencil(LocNode, SymbolTableTrait):
         return [p.name for p in self.params]
 
     _validate_symbol_refs = common.validate_symbol_refs()
-    _validate_lvalue_dims = common.validate_lvalue_dims()
+    _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)

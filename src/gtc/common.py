@@ -577,7 +577,13 @@ def validate_symbol_refs() -> RootValidatorType:
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
 
 
-def validate_lvalue_dims() -> RootValidatorType:
+# TODO(ricoh) consider making gtir.Decl & oir.Decl common
+# TODO(ricoh) and / or adding a VerticalLoop baseclass in common
+# TODO(ricoh) instead of passing type arguments
+# TODO(ricoh) in that case, simplify the below by relying on attribute names
+def validate_lvalue_dims(
+    vertical_loop_type: Type[Node], decl_type: Type[Node]
+) -> RootValidatorType:
     """Validate lvalue dimensions using the root node symbol table."""
 
     class _LvalueDimsValidator(NodeVisitor):
@@ -589,7 +595,8 @@ def validate_lvalue_dims() -> RootValidatorType:
             loop_order: Optional[LoopOrder] = None,
             **kwargs: Any,
         ) -> None:
-            loop_order = self._extract_single_child_of_type(node, LoopOrder) or loop_order
+            if isinstance(node, vertical_loop_type):
+                loop_order = self._extract_single_child_of_type(node, LoopOrder)
             if isinstance(node, SymbolTableTrait):
                 symtable = {**symtable, **node.symtable_}
             self.generic_visit(node, symtable=symtable, loop_order=loop_order, **kwargs)
@@ -620,10 +627,13 @@ def validate_lvalue_dims() -> RootValidatorType:
         def _get_declared_flags(
             self, name: SymbolRef, symtable: Dict[str, Any]
         ) -> Tuple[bool, bool, bool]:
-            flags = self._extract_single_child_of_type(symtable[name], DimensionFlags)
-            if not flags:
-                flags = DimensionFlags(value=(True, True, True))
-            return flags.value
+            node = symtable[name]
+            if isinstance(node, decl_type):
+                flags = self._extract_single_child_of_type(symtable[name], DimensionFlags)
+                return flags.value
+            raise ValueError(
+                f"Symtable declaration of type {decl_type} has no DimensionFlags attribute"
+            )
 
         def _extract_single_child_of_type(self, node: Node, type_: type) -> Any:
             children = [child for _, child in node.iter_children() if isinstance(child, type_)]
