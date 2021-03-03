@@ -888,21 +888,23 @@ def compute_extent_diff(
 class RemoveUnreachedStatementsPass(TransformPass):
     """Remove unreached HorizontalIf statements."""
 
+    @staticmethod
+    def filter_domain_block(dom_block: DomainBlockInfo) -> None:
+        for ij_block in dom_block.ij_blocks:
+            for int_block in ij_block.interval_blocks:
+                stmt_infos = []
+                for stmt_info in int_block.stmts:
+                    stmt = stmt_info.stmt
+                    if not isinstance(stmt, gt_ir.HorizontalIf) or (
+                        compute_extent_diff(ij_block.compute_extent, stmt.intervals) is not None
+                    ):
+                        stmt_infos.append(stmt_info)
+                int_block.stmts = stmt_infos
+
     @classmethod
     def apply(cls, transform_data: TransformData) -> None:
         for dom_block in transform_data.blocks:
-            for ij_block in dom_block.ij_blocks:
-                for int_block in ij_block.interval_blocks:
-                    stmt_infos = []
-                    for stmt_info in int_block.stmts:
-                        stmt = stmt_info.stmt
-                        if not isinstance(stmt, gt_ir.HorizontalIf) or (
-                            isinstance(stmt, gt_ir.HorizontalIf)
-                            and compute_extent_diff(ij_block.compute_extent, stmt.intervals)
-                            is not None
-                        ):
-                            stmt_infos.append(stmt_info)
-                    int_block.stmts = stmt_infos
+            cls.filter_domain_block(dom_block)
 
 
 class ComputeExtentsPass(TransformPass):
