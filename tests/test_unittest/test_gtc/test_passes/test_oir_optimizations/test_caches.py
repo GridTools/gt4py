@@ -39,26 +39,43 @@ from ...oir_utils import (
 
 def test_ij_cache_detection():
     testee = StencilFactory(
-        vertical_loops__0__sections__0__horizontal_executions=[
-            HorizontalExecutionFactory(
-                body=[AssignStmtFactory(left__name="tmp1", right__offset__i=1)]
+        vertical_loops=[
+            VerticalLoopFactory(
+                sections__0__horizontal_executions=[
+                    HorizontalExecutionFactory(
+                        body=[AssignStmtFactory(left__name="tmp1", right__offset__i=1)]
+                    ),
+                    HorizontalExecutionFactory(
+                        body=[
+                            AssignStmtFactory(
+                                left__name="tmp2", right__name="tmp1", right__offset__j=1
+                            )
+                        ]
+                    ),
+                    HorizontalExecutionFactory(
+                        body=[
+                            AssignStmtFactory(
+                                left__name="baz", right__name="tmp2", right__offset__k=1
+                            ),
+                            AssignStmtFactory(left__name="tmp3", right__name="baz"),
+                            AssignStmtFactory(left__name="foo", right__name="tmp3"),
+                            AssignStmtFactory(left__name="tmp4", right__name="tmp3"),
+                        ]
+                    ),
+                ],
+                caches=[IJCacheFactory(name="tmp3")],
             ),
-            HorizontalExecutionFactory(
-                body=[AssignStmtFactory(left__name="tmp2", right__name="tmp1", right__offset__j=1)]
-            ),
-            HorizontalExecutionFactory(
-                body=[
-                    AssignStmtFactory(left__name="baz", right__name="tmp2", right__offset__k=1),
-                    AssignStmtFactory(left__name="tmp3", right__name="baz"),
-                    AssignStmtFactory(left__name="foo", right__name="tmp3"),
+            VerticalLoopFactory(
+                sections__0__horizontal_executions__0__body=[
+                    AssignStmtFactory(left__name="baz", right__name="tmp4")
                 ]
             ),
         ],
-        vertical_loops__0__caches=[IJCacheFactory(name="tmp3")],
         declarations=[
             TemporaryFactory(name="tmp1"),
             TemporaryFactory(name="tmp2"),
             TemporaryFactory(name="tmp3"),
+            TemporaryFactory(name="tmp4"),
         ],
     )
     transformed = IJCacheDetection().visit(testee)
@@ -66,6 +83,7 @@ def test_ij_cache_detection():
     assert len(caches) == 2
     assert {cache.name for cache in caches} == {"tmp1", "tmp3"}
     assert all(isinstance(cache, IJCache) for cache in caches)
+    assert not transformed.vertical_loops[1].caches
 
 
 def test_k_cache_detection_basic():

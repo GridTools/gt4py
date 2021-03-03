@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import collections
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
 
@@ -52,16 +53,13 @@ statements.
 
 class IJCacheDetection(NodeTranslator):
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, temporaries: List[oir.Temporary], **kwargs: Any
+        self, node: oir.VerticalLoop, *, local_tmps: Set[str], **kwargs: Any
     ) -> oir.VerticalLoop:
-        if node.loop_order != common.LoopOrder.PARALLEL:
-            return self.generic_visit(node, **kwargs)
-
-        def is_tmp(field: str) -> bool:
-            return field in {tmp.name for tmp in temporaries}
+        if node.loop_order != common.LoopOrder.PARALLEL or not local_tmps:
+            return node
 
         def already_cached(field: str) -> bool:
-            return field in {c.name for c in node.caches}
+            return any(c.name == field for c in node.caches)
 
         def has_vertical_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
             return any(offset[2] != 0 for offset in offsets)
@@ -70,7 +68,9 @@ class IJCacheDetection(NodeTranslator):
         cacheable = {
             field
             for field, offsets in accesses.items()
-            if is_tmp(field) and not already_cached(field) and not has_vertical_offset(offsets)
+            if field in local_tmps
+            and not already_cached(field)
+            and not has_vertical_offset(offsets)
         }
         caches = self.visit(node.caches, **kwargs) + [
             oir.IJCache(name=field) for field in cacheable
@@ -82,7 +82,22 @@ class IJCacheDetection(NodeTranslator):
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        return self.generic_visit(node, temporaries=node.declarations, **kwargs)
+        vertical_loops = node.iter_tree().if_isinstance(oir.VerticalLoop)
+        counts: collections.Counter = sum(
+            (
+                collections.Counter(
+                    vertical_loop.iter_tree()
+                    .if_isinstance(oir.FieldAccess)
+                    .getattr("name")
+                    .if_in({tmp.name for tmp in node.declarations})
+                    .to_set()
+                )
+                for vertical_loop in vertical_loops
+            ),
+            collections.Counter(),
+        )
+        local_tmps = {tmp for tmp, count in counts.items() if count == 1}
+        return self.generic_visit(node, local_tmps=local_tmps, **kwargs)
 
 
 @dataclass
