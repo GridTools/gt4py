@@ -299,11 +299,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
     def visit_BinOpExpr(self, node: gt_ir.BinOpExpr, **kwargs) -> str:
         if node.op is gt_ir.BinaryOperator.AND:
             source = "np.logical_and({lhs}, {rhs})".format(
-                lhs=self.visit(node.lhs), rhs=self.visit(node.rhs)
+                lhs=self.visit(node.lhs, **kwargs), rhs=self.visit(node.rhs, **kwargs)
             )
         elif node.op is gt_ir.BinaryOperator.OR:
             source = "np.logical_or({lhs}, {rhs})".format(
-                lhs=self.visit(node.lhs), rhs=self.visit(node.rhs)
+                lhs=self.visit(node.lhs, **kwargs), rhs=self.visit(node.rhs, **kwargs)
             )
         else:
             lhs_fmt = "({})" if isinstance(node.lhs, gt_ir.CompositeExpr) else "{}"
@@ -384,7 +384,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         )
 
         for stmt in node.main_body.stmts:
-            sources.extend(self._visit_branch_stmt(stmt))
+            sources.extend(self._visit_branch_stmt(stmt, **kwargs))
         if node.else_body is not None:
             sources.append(
                 "__condition_{level} = np.logical_not(__condition_{level})".format(
@@ -399,7 +399,14 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return sources
 
     def visit_HorizontalIf(self, node: gt_ir.HorizontalIf) -> List[str]:
-        return [self.visit(stmt, intervals=node.intervals) for stmt in node.body.stmts]
+        sources = []
+        for stmt in node.body.stmts:
+            stmt_source = self.visit(stmt, intervals=node.intervals)
+            if isinstance(stmt_source, list):
+                sources.extend(stmt_source)
+            else:
+                sources.append(stmt_source)
+        return sources
 
 
 class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):

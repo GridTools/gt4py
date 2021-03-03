@@ -1324,13 +1324,18 @@ class IRMaker(ast.NodeVisitor):
             and node.items[0].context_expr.func.id == "horizontal"
         ):
             intervals_dicts = self._visit_with_horizontal(node.items[0], loc)
-            body_stmts = gt_utils.flatten(
-                [gt_utils.listify(self.visit(stmt)) for stmt in node.body]
+            all_stmts = gt_utils.flatten([gt_utils.listify(self.visit(stmt)) for stmt in node.body])
+            stmts = list(filter(lambda stmt: isinstance(stmt, gt_ir.Decl), all_stmts))
+            body_block = gt_ir.BlockStmt(
+                stmts=list(filter(lambda stmt: not isinstance(stmt, gt_ir.Decl), all_stmts))
             )
-            return [
-                gt_ir.HorizontalIf(intervals=intervals_dict, body=gt_ir.BlockStmt(stmts=body_stmts))
-                for intervals_dict in intervals_dicts
-            ]
+            stmts.extend(
+                [
+                    gt_ir.HorizontalIf(intervals=intervals_dict, body=body_block)
+                    for intervals_dict in intervals_dicts
+                ]
+            )
+            return stmts
         else:
             # If we find nested `with` blocks flatten them, i.e. transform
             #  with computation(PARALLEL):
