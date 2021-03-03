@@ -128,19 +128,6 @@ class Temporary(Decl):
     pass
 
 
-class HorizontalExecution(LocNode):
-    body: List[Stmt]
-    mask: Optional[Expr]
-    declarations: List[LocalScalar]
-
-    @validator("mask")
-    def mask_is_boolean_field_expr(cls, v: Optional[Expr]) -> Optional[Expr]:
-        if v:
-            if v.dtype != common.DataType.BOOL:
-                raise ValueError("Mask must be a boolean expression.")
-        return v
-
-
 class Interval(LocNode):
     start: AxisBound
     end: AxisBound
@@ -155,6 +142,107 @@ class Interval(LocNode):
                 "Start offset must be smaller than end offset if start and end levels are equal"
             )
         return values
+
+
+class CartesianIterationSpace(LocNode):
+    i_interval: Interval
+    j_interval: Interval
+
+    @validator("i_interval", "j_interval")
+    def minimum_domain(cls, v: Interval) -> Interval:
+        if (
+            v.start.level != common.LevelMarker.START
+            or v.start.offset > 0
+            or v.end.level != common.LevelMarker.END
+            or v.end.offset < 0
+        ):
+            raise ValueError("iteration space must include the whole domain")
+        return v
+
+    @classmethod
+    def domain(cls) -> "CartesianIterationSpace":
+        return CartesianIterationSpace(
+            i_interval=Interval(start=AxisBound.start(), end=AxisBound.end()),
+            j_interval=Interval(start=AxisBound.start(), end=AxisBound.end()),
+        )
+
+    @classmethod
+    def from_offset(cls, offset: common.CartesianOffset) -> "CartesianIterationSpace":
+
+        return CartesianIterationSpace(
+            i_interval=Interval(
+                start=AxisBound.from_start(min(0, offset.i)),
+                end=AxisBound.from_end(max(0, offset.i)),
+            ),
+            j_interval=Interval(
+                start=AxisBound.from_start(min(0, offset.j)),
+                end=AxisBound.from_end(max(0, offset.j)),
+            ),
+        )
+
+    def compose(self, other: "CartesianIterationSpace") -> "CartesianIterationSpace":
+        i_interval = Interval(
+            start=AxisBound.from_start(
+                self.i_interval.start.offset + other.i_interval.start.offset,
+            ),
+            end=AxisBound.from_end(
+                self.i_interval.end.offset + other.i_interval.end.offset,
+            ),
+        )
+        j_interval = Interval(
+            start=AxisBound.from_start(
+                self.j_interval.start.offset + other.j_interval.start.offset,
+            ),
+            end=AxisBound.from_end(
+                self.j_interval.end.offset + other.j_interval.end.offset,
+            ),
+        )
+        return CartesianIterationSpace(i_interval=i_interval, j_interval=j_interval)
+
+    def __or__(self, other: "CartesianIterationSpace") -> "CartesianIterationSpace":
+        i_interval = Interval(
+            start=AxisBound.from_start(
+                min(
+                    self.i_interval.start.offset,
+                    other.i_interval.start.offset,
+                )
+            ),
+            end=AxisBound.from_end(
+                max(
+                    self.i_interval.end.offset,
+                    other.i_interval.end.offset,
+                )
+            ),
+        )
+        j_interval = Interval(
+            start=AxisBound.from_start(
+                min(
+                    self.j_interval.start.offset,
+                    other.j_interval.start.offset,
+                )
+            ),
+            end=AxisBound.from_end(
+                max(
+                    self.j_interval.end.offset,
+                    other.j_interval.end.offset,
+                )
+            ),
+        )
+        return CartesianIterationSpace(i_interval=i_interval, j_interval=j_interval)
+
+
+class HorizontalExecution(LocNode):
+    body: List[Stmt]
+    mask: Optional[Expr]
+    declarations: List[LocalScalar]
+    iteration_space: Optional[CartesianIterationSpace]
+
+    @validator("mask")
+    def mask_is_boolean_field_expr(cls, v: Optional[Expr]) -> Optional[Expr]:
+        if v:
+            if v.dtype != common.DataType.BOOL:
+                raise ValueError("Mask must be a boolean expression.")
+        return v
 
 
 class CacheDesc(LocNode):
