@@ -52,8 +52,9 @@ def test_merge_write_after_read_ij_extended(
     transform_data = merge_blocks_pass(transform_data)
     # not allowed to be merged: race condition independent of iteration order
     # write after read with extended compute domain
-    assert len(transform_data.blocks) == 1
+    assert len(transform_data.blocks) == 2
     assert len(transform_data.blocks[0].ij_blocks) == 2
+    assert len(transform_data.blocks[1].ij_blocks) == 1
 
 
 def test_merge_write_after_read_ij_offset(

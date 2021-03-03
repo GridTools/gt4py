@@ -571,7 +571,7 @@ class MultiStageMergingWrapper:
             return False
         if candidate.has_cycle_with_parallel_axis_offset(graph):
             return False
-        if candidate.has_write_after_read_with_offset(graph):
+        if candidate.has_disallowed_write_after_read_in(self, graph):
             return False
         return True
 
@@ -605,7 +605,18 @@ class MultiStageMergingWrapper:
                     race_fields.append(cycle[0])
         return len(race_fields) != 0
 
-    def has_write_after_read_with_offset(self, graph: nx.DiGraph) -> bool:
+    def has_disallowed_write_after_read_in(
+        self, target: "MultiStageMergingWrapper", graph: nx.DiGraph
+    ) -> bool:
+        write_after_read_fields = self.write_after_read_fields_in(target)
+        if write_after_read_fields and (
+            self.has_reads_with_offset(restrict_to=write_after_read_fields)
+            or target.has_reads_with_offset(restrict_to=write_after_read_fields)
+            or self.has_extended_domain
+            or target.has_extended_domain
+        ):
+            return True
+
         # Check for incoming edges with nonzero offset and outgoing edges with zero offset
         for node in graph.nodes:
             offset_read_index = np.iinfo(np.int32).max
