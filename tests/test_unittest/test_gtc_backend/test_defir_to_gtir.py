@@ -152,4 +152,4 @@ def test_field_decl(defir_to_gtir):
 def test_field_decl_dims(defir_to_gtir, axes, expected_mask):
     field_decl = FieldDecl(name="a", data_type=DataType.INT64, axes=axes, is_api=True)
     gtir_decl = defir_to_gtir.visit_FieldDecl(field_decl)
-    assert gtir_decl.dimensions == expected_mask
+    assert gtir_decl.dimensions.value == expected_mask

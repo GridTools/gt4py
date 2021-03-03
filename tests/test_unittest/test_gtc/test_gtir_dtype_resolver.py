@@ -36,7 +36,11 @@ A_ARITHMETIC_TYPE = common.DataType.FLOAT32
 
 def test_propagate_dtype_to_FieldAccess():
     name = "foo"
-    decl = FieldDecl(name=name, dtype=A_ARITHMETIC_TYPE, dimensions=(True, True, True))
+    decl = FieldDecl(
+        name=name,
+        dtype=A_ARITHMETIC_TYPE,
+        dimensions=common.DimensionFlags(value=(True, True, True)),
+    )
 
     testee = FieldAccessFactory(name=name)
 

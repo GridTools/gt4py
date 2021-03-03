@@ -17,18 +17,10 @@
 import pytest
 from pydantic.error_wrappers import ValidationError
 
-from gtc.common import DataType, LoopOrder
+from gtc.common import DataType, DimensionFlags
 from gtc.oir import Temporary
 
-from .oir_utils import (
-    AssignStmtFactory,
-    FieldAccessFactory,
-    FieldDeclFactory,
-    HorizontalExecutionFactory,
-    StencilFactory,
-    VerticalLoopFactory,
-    VerticalLoopSectionFactory,
-)
+from .oir_utils import AssignStmtFactory, FieldAccessFactory, HorizontalExecutionFactory
 
 
 def test_no_horizontal_offset_allowed():
@@ -43,35 +35,9 @@ def test_mask_must_be_bool():
 
 def test_temporary_default_3d():
     temp = Temporary(name="a", dtype=DataType.INT64)
-    assert temp.dimensions == (True, True, True)
+    assert temp.dimensions.value == (True, True, True)
 
-    temp1d = Temporary(name="b", dtype=DataType.INT64, dimensions=(True, False, False))
-    assert temp1d.dimensions == (True, False, False)
-
-
-def test_assign_to_ik_fwd():
-    out_name = "ik_field"
-    in_name = "other_ik_field"
-    with pytest.raises(ValidationError, match=r"Not allowed to assign to ik-field"):
-        StencilFactory(
-            params=[
-                FieldDeclFactory(
-                    name=out_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)
-                ),
-                FieldDeclFactory(
-                    name=in_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)
-                ),
-            ],
-            vertical_loops__0=VerticalLoopFactory(
-                loop_order=LoopOrder.FORWARD,
-                sections=[
-                    VerticalLoopSectionFactory(
-                        horizontal_executions=[
-                            HorizontalExecutionFactory(
-                                body=[AssignStmtFactory(left__name=out_name, right__name=in_name)]
-                            )
-                        ]
-                    )
-                ],
-            ),
-        )
+    temp1d = Temporary(
+        name="b", dtype=DataType.INT64, dimensions=DimensionFlags(value=(True, False, False))
+    )
+    assert temp1d.dimensions.value == (True, False, False)
