@@ -100,9 +100,6 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        temporaries = {
-            symbol for symbol, value in node.symtable_.items() if isinstance(value, oir.Temporary)
-        }
         horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
         counts: collections.Counter = sum(
             (
@@ -110,7 +107,7 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
                     horizontal_execution.iter_tree()
                     .if_isinstance(oir.FieldAccess)
                     .getattr("name")
-                    .if_in(temporaries)
+                    .if_in({tmp.name for tmp in node.declarations})
                     .to_set()
                 )
                 for horizontal_execution in horizontal_executions
