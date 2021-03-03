@@ -334,8 +334,11 @@ class InitInfoPass(TransformPass):
             outputs = set()
             for stmt in node.stmts:
                 stmt_info = self.visit(stmt)
-                inputs = self._merge_extents(list(inputs.items()) + list(stmt_info.inputs.items()))
-                outputs |= stmt_info.outputs
+                if stmt_info:
+                    inputs = self._merge_extents(
+                        list(inputs.items()) + list(stmt_info.inputs.items())
+                    )
+                    outputs |= stmt_info.outputs
 
             result = StatementInfo(self.data.id_generator.new, node, inputs, outputs)
 
