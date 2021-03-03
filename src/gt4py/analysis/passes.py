@@ -1206,8 +1206,15 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             return self.demotables
 
         def visit_Stage(self, node: gt_ir.Stage, **kwargs) -> None:
-            self.temp_read_from: Dict[str, bool] = {name: False for name in self.demotables}
+            self.read_fields: Set[str] = set()
+            self.written_fields: Set[str] = set()
             self.generic_visit(node)
+
+            # Any fields left that have only been read should be discarded.
+            # These have been read before (never having been) assigned
+            read_not_written = self.read_fields - self.written_fields
+            for name in read_not_written:
+                self.demotables.discard(name)
 
         def visit_HorizontalIf(self, node: gt_ir.HorizontalIf, **kwargs) -> None:
             self.visit(node.body, **kwargs, is_horizontal_if=True)
@@ -1222,15 +1229,18 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
                 self.demotables.discard(node.name)
 
             # 2. is never read before assigned to
-            if kwargs.get("is_value", False) and node.name in self.temp_read_from:
-                self.temp_read_from[node.name] = True
-            if kwargs.get("is_target", False) and self.temp_read_from.get(node.name, False):
-                self.demotables.discard(node.name)
-                del self.temp_read_from[node.name]
+            if kwargs.get("is_value", False) and node.name not in self.written_fields:
+                self.read_fields.add(node.name)
 
-            # 3. is never assigned to in a horizontal region
-            if kwargs.get("is_horizontal_if", False) and kwargs.get("is_target", False):
-                self.demotables.discard(node.name)
+            if kwargs.get("is_target", False):
+                self.written_fields.add(node.name)
+                if node.name in self.read_fields:
+                    self.demotables.discard(node.name)
+                    self.read_fields.remove(node.name)
+
+                # 3. is never assigned to in a horizontal region
+                if kwargs.get("is_horizontal_if", False):
+                    self.demotables.discard(node.name)
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
         @classmethod
