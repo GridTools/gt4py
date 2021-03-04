@@ -16,7 +16,6 @@
 
  ---- Template variables ----
 
-    - api_names: [str]
     - arg_fields: [{ "name": str, "dtype": str, "layout_id": int, "selector": [bool], "naxes": int }]
     - gt_backend: str
     - module_name: str
@@ -79,19 +78,13 @@ BufferInfo make_buffer_info(py::object& b) {
 
 void run_computation(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- set comma = joiner(", ") -%}
-{%- for api_name in api_names -%}
 {%- for field in arg_fields -%}
-{%- if api_name == field.name -%}
                      {{- comma() }}
                      py::object {{ field.name }}, const std::array<gt::uint_t, {{ field.naxes }}>& {{ field.name }}_origin
-{%- endif -%}
 {%- endfor -%}
 {%- for param in parameters -%}
-{%- if api_name == param.name -%}
                      {{- comma() }}
                      {{ param.dtype }} {{ param.name }}
-{%- endif -%}
-{%- endfor -%}
 {%- endfor -%}, py::object& exec_info)
 {
     if (!exec_info.is(py::none()))
@@ -129,19 +122,13 @@ PYBIND11_MODULE({{ module_name }}, m) {
     m.def("run_computation", &run_computation, "Runs the given computation",
           py::arg("domain"),
 {%- set comma = joiner(", ") -%}
-{%- for api_name in api_names -%}
 {%- for field in arg_fields -%}
-{%- if api_name == field.name -%}
           {{- comma() }}
           py::arg("{{ field.name }}") {{- comma() }} py::arg("{{ field.name }}_origin") {{- zero_origin }}
-{%- endif -%}
 {%- endfor -%}
 {%- for param in parameters -%}
-{%- if api_name == param.name -%}
           {{- comma() }}
           py::arg("{{ param.name }}")
-{%- endif -%}
-{%- endfor -%}
 {%- endfor -%}, py::arg("exec_info"));
 
 }

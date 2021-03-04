@@ -220,3 +220,15 @@ def test_lower_dimensional_inputs(backend):
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0))
     stencil(field_3d, field_2d, field_1d)
+
+
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
+def test_input_order(backend):
+    @gtscript.stencil(backend=backend)
+    def stencil(
+        in_field: gtscript.Field[np.float],
+        parameter: np.float,
+        out_field: gtscript.Field[np.float],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field = in_field * parameter
