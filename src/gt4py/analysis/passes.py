@@ -596,14 +596,12 @@ class MultiStageMergingWrapper:
 
     def has_cycle_with_parallel_axis_offset(self, graph: nx.DiGraph) -> bool:
         """Check the field dependency graph for a cycle with non-zero offset."""
-        race_fields = []
-        for cycle in nx.simple_cycles(graph):
-            full_cycle = cycle + [cycle[0]]
-            for source, target in zip(full_cycle[:-1], full_cycle[1:]):
-                offsets = graph.get_edge_data(source, target).get("offsets", [])
+        for component in nx.algorithms.components.strongly_connected_components(graph):
+            for source, target, attrs in graph.subgraph(component).edges(data=True):
+                offsets = attrs.get("offsets", [])
                 if any(self.offset_check(offset) for offset in offsets):
-                    race_fields.append(cycle[0])
-        return len(race_fields) != 0
+                    return True
+        return False
 
     def has_write_after_read_with_offset(self, graph: nx.DiGraph) -> bool:
         # Check for incoming edges with nonzero offset and outgoing edges with zero offset
