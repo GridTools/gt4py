@@ -14,11 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
-from eve import NodeTranslator
-from eve.iterators import TraversalOrder, iter_tree
+from eve import NodeTranslator, NodeVisitor
+from eve.concepts import TreeNode
+from eve.iterators import TraversalOrder, generic_iter_children, iter_tree
 from gtc import gtir, oir
 from gtc.common import CartesianOffset, DataType, ExprKind, LogicalOperator, UnaryOperator
 
@@ -59,41 +61,100 @@ class OIRIterationSpaceTranslator(NodeTranslator):
         )
 
 
-def oir_iteration_space_computation(stencil: oir.Stencil) -> oir.Stencil:
-    iteration_spaces = dict()
+class IterationSpaceVisitor(NodeVisitor):
+    def visit_FieldAccess(
+        self,
+        node: oir.FieldAccess,
+        *,
+        offsets: Dict[str, List[CartesianOffset]],
+        **kwargs: Dict[str, Any],
+    ) -> None:
+        self.generic_visit(node, offsets=offsets, **kwargs)
 
-    offsets: Dict[str, List[CartesianOffset]] = dict()
-    outputs = set()
-    access_spaces: Dict[str, oir.CartesianIterationSpace] = dict()
-    # reversed pre_order traversal is post-order but the last nodes per node come first.
-    # this is not possible with visitors unless a (reverseed) visit is implemented for every node
-    for node in reversed(list(iter_tree(stencil, traversal_order=TraversalOrder.PRE_ORDER))):
-        if isinstance(node, oir.FieldAccess):
-            if node.name not in offsets:
-                offsets[node.name] = list()
-            offsets[node.name].append(node.offset)
-        elif isinstance(node, oir.AssignStmt):
-            if node.left.kind == ExprKind.FIELD:
-                outputs.add(node.left.name)
-        elif isinstance(node, oir.HorizontalExecution):
-            iteration_spaces[node.id_] = oir.CartesianIterationSpace.domain()
-            for name in outputs:
-                access_space = access_spaces.get(name, oir.CartesianIterationSpace.domain())
-                iteration_spaces[node.id_] = iteration_spaces[node.id_] | access_space
-            for name in offsets:
-                access_space = oir.CartesianIterationSpace.domain()
-                for offset in offsets[name]:
-                    access_space = access_space | oir.CartesianIterationSpace.from_offset(offset)
-                accumulated_extent = iteration_spaces[node.id_].compose(access_space)
-                access_spaces[name] = (
-                    access_spaces.get(name, oir.CartesianIterationSpace.domain())
-                    | accumulated_extent
+        if node.name not in offsets:
+            offsets[node.name] = list()
+        offsets[node.name].append(node.offset)
+
+    def visit_AssignStmt(
+        self, node: oir.AssignStmt, *, outputs: Set[str], **kwargs: Dict[str, Any]
+    ) -> None:
+        self.generic_visit(node, outputs=outputs, **kwargs)
+
+        if node.left.kind == ExprKind.FIELD:
+            outputs.add(node.left.name)
+
+    def visit_HorizontalExecution(
+        self,
+        node: oir.HorizontalExecution,
+        *,
+        iteration_spaces: Dict[str, oir.CartesianIterationSpace],
+        access_spaces: Dict[str, oir.CartesianIterationSpace],
+        **kwargs: Dict[str, Any],
+    ) -> None:
+
+        offsets: Dict[str, List[CartesianOffset]] = dict()
+        outputs: Set[str] = set()
+        self.generic_visit(node, offsets=offsets, outputs=outputs, **kwargs)
+
+        iteration_spaces[str(node.id_)] = oir.CartesianIterationSpace.domain()
+        for name in outputs:
+            access_space = access_spaces.get(name, oir.CartesianIterationSpace.domain())
+            iteration_spaces[str(node.id_)] = iteration_spaces[str(node.id_)] | access_space
+        for name in offsets:
+            access_space = oir.CartesianIterationSpace.domain()
+            for offset in offsets[name]:
+                access_space = access_space | oir.CartesianIterationSpace.from_offset(offset)
+            accumulated_extent = iteration_spaces[str(node.id_)].compose(access_space)
+            access_spaces[name] = (
+                access_spaces.get(name, oir.CartesianIterationSpace.domain()) | accumulated_extent
+            )
+
+    def visit_VerticalLoop(
+        self,
+        node: oir.VerticalLoop,
+        *,
+        iteration_spaces: Dict[str, oir.CartesianIterationSpace],
+        access_spaces: Dict[str, oir.CartesianIterationSpace],
+    ) -> None:
+        iteration_spaces_sections = []
+        access_spaces_sections = []
+        for section in node.sections:
+            iteration_spaces_section = deepcopy(iteration_spaces)
+            access_spaces_section = deepcopy(access_spaces)
+            self.visit(
+                section,
+                iteration_spaces=iteration_spaces_section,
+                access_spaces=access_spaces_section,
+            )
+            iteration_spaces_sections.append(iteration_spaces_section)
+            access_spaces_sections.append(access_spaces_section)
+
+        for access_spaces_section in access_spaces_sections:
+            for name, space in access_spaces_section.items():
+                access_space = (
+                    access_spaces_section.get(name, oir.CartesianIterationSpace.domain()) | space
                 )
+                access_spaces.update({name: access_space})
+        for iteration_spaces_section in iteration_spaces_sections:
+            for name, space in iteration_spaces_section.items():
+                iteration_space = (
+                    iteration_spaces_section.get(name, oir.CartesianIterationSpace.domain()) | space
+                )
+                iteration_spaces.update({name: iteration_space})
 
-            offsets = dict()
-            outputs = set()
+    def generic_visit(self, node: TreeNode, **kwargs: Any) -> None:
+        for child in reversed(list(generic_iter_children(node))):
+            self.visit(child, **kwargs)
 
-    return OIRIterationSpaceTranslator().visit(stencil, iteration_spaces=iteration_spaces)
+    @classmethod
+    def apply(cls, stencil: oir.Stencil) -> oir.Stencil:
+        visitor = cls()
+        iteration_spaces: Dict[str, oir.CartesianIterationSpace] = dict()
+        visitor.visit(stencil, access_spaces=dict(), iteration_spaces=iteration_spaces)
+        return OIRIterationSpaceTranslator().visit(stencil, iteration_spaces=iteration_spaces)
+
+
+oir_iteration_space_computation = IterationSpaceVisitor.apply
 
 
 def oir_field_boundary_computation(stencil: oir.Stencil) -> Dict[str, oir.CartesianIterationSpace]:
