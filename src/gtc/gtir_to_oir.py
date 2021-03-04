@@ -148,6 +148,15 @@ class IterationSpaceVisitor(NodeVisitor):
 
     @classmethod
     def apply(cls, stencil: oir.Stencil) -> oir.Stencil:
+        """
+        Compute iteration_space of `HorizontalExecution` s.
+
+        (Re-)comptues the iteration_space attribute of HorizontalExecution nodes according to a
+        method which is similar to the old pipeline's method.
+
+        :param stencil: An OIR stencil where iteration_space attribute of HorizontalExecutions is allowed to be None
+        :return: An OIR stencil where iteration_space attribute is not None
+        """
         visitor = cls()
         iteration_spaces: Dict[str, oir.CartesianIterationSpace] = dict()
         visitor.visit(stencil, access_spaces=dict(), iteration_spaces=iteration_spaces)
