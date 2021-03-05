@@ -658,7 +658,7 @@ def validate_lvalue_dims(
         cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
     ) -> RootValidatorValuesType:
         for _, children in values.items():
-            _LvalueDimsValidator(vertical_loop_type=vertical_loop_type, decl_type=decl_type).visit(
+            _LvalueDimsValidator(vertical_loop_type, decl_type).visit(
                 children, symtable=values["symtable_"]
             )
         return values
