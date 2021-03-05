@@ -35,9 +35,6 @@ from typing import (
     Union,
 )
 
-import networkx as nx
-import numpy as np
-
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.analysis import (
