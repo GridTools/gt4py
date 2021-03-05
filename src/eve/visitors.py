@@ -169,8 +169,6 @@ class NodeTranslator(NodeVisitor):
             elif isinstance(node, (collections.abc.Sequence, collections.abc.Set)):
                 # Sequence or set: create a new container instance with the new values
                 tmp_items = [self.visit(value, **kwargs) for value in node]
-                print(tmp_items)
-                print(tuple(value for value in tmp_items if value is not NOTHING))
                 result = node.__class__(  # type: ignore
                     value for value in tmp_items if value is not NOTHING
                 )

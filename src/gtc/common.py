@@ -577,6 +577,74 @@ def validate_symbol_refs() -> RootValidatorType:
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
 
 
+class _LvalueDimsValidator(NodeVisitor):
+    def __init__(self, vertical_loop_type: Type[Node], decl_type: Type[Node]) -> None:
+        self.vertical_loop_type = vertical_loop_type
+        self.decl_type = decl_type
+
+    def visit_Node(
+        self,
+        node: Node,
+        *,
+        symtable: Dict[str, Any],
+        loop_order: Optional[LoopOrder] = None,
+        **kwargs: Any,
+    ) -> None:
+        if isinstance(node, self.vertical_loop_type):
+            loop_order = self._extract_single_child_of_type(node, LoopOrder)
+        if isinstance(node, SymbolTableTrait):
+            symtable = {**symtable, **node.symtable_}
+        self.generic_visit(node, symtable=symtable, loop_order=loop_order, **kwargs)
+
+    def visit_AssignStmt(
+        self,
+        node: AssignStmt,
+        *,
+        loop_order: LoopOrder,
+        symtable: Dict[str, Any],
+        **kwargs: Any,
+    ) -> None:
+        if not isinstance(symtable[node.left.name], self.decl_type):
+            return None
+        allowed_flags = self._allowed_flags(loop_order)
+        flags = self._get_declared_flags(node.left.name, symtable)
+        if flags not in allowed_flags:
+            dims = dimension_flags_to_names(flags)
+            raise ValueError(
+                f"Not allowed to assign to {dims}-field `{node.left.name}` in {loop_order.name}."
+            )
+        return None
+
+    def _allowed_flags(self, loop_order: LoopOrder) -> List[Tuple[bool, bool, bool]]:
+        allowed_flags = [(True, True, True)]  # ijk always allowed
+        if loop_order is not LoopOrder.PARALLEL:
+            allowed_flags.append((True, True, False))  # ij only allowed in FORWARD and BACKWARD
+        return allowed_flags
+
+    def _get_declared_flags(
+        self, name: SymbolRef, symtable: Dict[str, Any]
+    ) -> Tuple[bool, bool, bool]:
+        node = symtable[name]
+        if isinstance(node, self.decl_type):
+            flags = self._extract_single_child_of_type(node, DimensionFlags)
+            if not flags:
+                raise ValueError(
+                    f"Symtable declaration {node} of type {node.__class__} has no attribute of type {DimensionFlags}."
+                )
+            return flags.value
+        raise ValueError(
+            "Symtable declaration {node} of type {node.__class__} is not of type {self.decl_type}."
+        )
+
+    def _extract_single_child_of_type(self, node: Node, type_: type) -> Any:
+        children = [child for _, child in node.iter_children() if isinstance(child, type_)]
+        if len(children) == 1:
+            return children[0]
+        elif len(children) > 1:
+            raise ValueError(f"Node {node} has more than one child of type {type_}")
+        return None
+
+
 # TODO(ricoh) consider making gtir.Decl & oir.Decl common
 # TODO(ricoh) and / or adding a VerticalLoop baseclass in common
 # TODO(ricoh) instead of passing type arguments
@@ -586,68 +654,13 @@ def validate_lvalue_dims(
 ) -> RootValidatorType:
     """Validate lvalue dimensions using the root node symbol table."""
 
-    class _LvalueDimsValidator(NodeVisitor):
-        def visit_Node(
-            self,
-            node: Node,
-            *,
-            symtable: Dict[str, Any],
-            loop_order: Optional[LoopOrder] = None,
-            **kwargs: Any,
-        ) -> None:
-            if isinstance(node, vertical_loop_type):
-                loop_order = self._extract_single_child_of_type(node, LoopOrder)
-            if isinstance(node, SymbolTableTrait):
-                symtable = {**symtable, **node.symtable_}
-            self.generic_visit(node, symtable=symtable, loop_order=loop_order, **kwargs)
-
-        def visit_AssignStmt(
-            self,
-            node: AssignStmt,
-            *,
-            loop_order: LoopOrder,
-            symtable: Dict[str, Any],
-            **kwargs: Any,
-        ) -> None:
-            allowed_flags = self._allowed_flags(loop_order)
-            flags = self._get_declared_flags(node.left.name, symtable)
-            if flags not in allowed_flags:
-                dims = dimension_flags_to_names(flags)
-                raise ValueError(
-                    f"Not allowed to assign to {dims}-field `{node.left.name}` in {loop_order.name}."
-                )
-            return None
-
-        def _allowed_flags(self, loop_order: LoopOrder) -> List[Tuple[bool, bool, bool]]:
-            allowed_flags = [(True, True, True)]  # ijk always allowed
-            if loop_order is not LoopOrder.PARALLEL:
-                allowed_flags.append((True, True, False))  # ij only allowed in FORWARD and BACKWARD
-            return allowed_flags
-
-        def _get_declared_flags(
-            self, name: SymbolRef, symtable: Dict[str, Any]
-        ) -> Tuple[bool, bool, bool]:
-            node = symtable[name]
-            if isinstance(node, decl_type):
-                flags = self._extract_single_child_of_type(symtable[name], DimensionFlags)
-                return flags.value
-            raise ValueError(
-                f"Symtable declaration of type {decl_type} has no DimensionFlags attribute"
-            )
-
-        def _extract_single_child_of_type(self, node: Node, type_: type) -> Any:
-            children = [child for _, child in node.iter_children() if isinstance(child, type_)]
-            if len(children) == 1:
-                return children[0]
-            elif len(children) > 1:
-                raise ValueError(f"Node {node} has more than one child of type {type_}")
-            return None
-
     def _impl(
         cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
     ) -> RootValidatorValuesType:
         for _, children in values.items():
-            _LvalueDimsValidator().visit(children, symtable=values["symtable_"])
+            _LvalueDimsValidator(vertical_loop_type=vertical_loop_type, decl_type=decl_type).visit(
+                children, symtable=values["symtable_"]
+            )
         return values
 
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)

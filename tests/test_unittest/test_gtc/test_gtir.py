@@ -18,7 +18,7 @@ import pytest
 from pydantic.error_wrappers import ValidationError
 
 from eve import SourceLocation
-from gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
+from gtc.common import ArithmeticOperator, DataType, DimensionFlags, LevelMarker, LoopOrder
 from gtc.gtir import (
     AxisBound,
     Decl,
@@ -86,8 +86,16 @@ def copy_computation(copy_v_loop):
         name="copy_gtir",
         loc=SourceLocation(line=1, column=1, source="copy_gtir"),
         params=[
-            FieldDecl(name="foo", dtype=DataType.FLOAT32, dimensions=(True, True, True)),
-            FieldDecl(name="bar", dtype=DataType.FLOAT32, dimensions=(True, True, True)),
+            FieldDecl(
+                name="foo",
+                dtype=DataType.FLOAT32,
+                dimensions=DimensionFlags(value=(True, True, True)),
+            ),
+            FieldDecl(
+                name="bar",
+                dtype=DataType.FLOAT32,
+                dimensions=DimensionFlags(value=(True, True, True)),
+            ),
         ],
         vertical_loops=[copy_v_loop],
     )
