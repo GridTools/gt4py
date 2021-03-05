@@ -536,15 +536,12 @@ class MultiStageMergingWrapper:
 
     def has_disallowed_write_after_read_in(self, target: "MultiStageMergingWrapper") -> bool:
         write_after_read_fields = self.write_after_read_fields_in(target)
-        if write_after_read_fields and (
+        return write_after_read_fields and (
             self.has_reads_with_offset(restrict_to=write_after_read_fields)
             or target.has_reads_with_offset(restrict_to=write_after_read_fields)
             or self.has_extended_domain
             or target.has_extended_domain
-        ):
-            return True
-
-        return False
+        )
 
     def has_nonzero_parallel_extents(self, extent):
         if self.k_offset_extends_domain:
