@@ -23,6 +23,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     Iterator,
     List,
     Optional,
@@ -498,55 +499,6 @@ class NormalizeBlocksPass(TransformPass):
         transform_data.blocks = cls.SplitBlocksVisitor().visit(transform_data)
 
 
-class FieldDependencyGraphCreator(gt_ir.IRNodeVisitor):
-    @classmethod
-    def apply(cls, node_or_iterable):
-        return cls()(node_or_iterable)
-
-    def _reset_refs(self):
-        self.field_refs = {}
-        self.var_refs = []
-
-    def __call__(self, node_or_iterable):
-        self.graph = nx.DiGraph()
-        self._reset_refs()
-        self.stmt_index = 0
-        self.visit(node_or_iterable)
-        return self.graph
-
-    def visit_FieldRef(self, node: gt_ir.FieldRef):
-        if node.name not in self.graph.nodes:
-            self.graph.add_node(node.name)
-
-        if node.name in self.field_refs:
-            self.field_refs[node.name].append(node.offset)
-        else:
-            self.field_refs[node.name] = [node.offset]
-
-    def visit_VarRef(self, node: gt_ir.VarRef):
-        if node.name not in self.graph.nodes:
-            self.graph.add_node(node.name)
-
-        self.var_refs.append(node.name)
-
-    def visit_Assign(self, node: gt_ir.Assign):
-        target_name = node.target.name
-
-        self._reset_refs()
-        self.visit(node.value)
-
-        for value_field, offsets in self.field_refs.items():
-            self.graph.add_edge(target_name, value_field, offsets=offsets, index=self.stmt_index)
-
-        for value_ref in self.var_refs:
-            self.graph.add_edge(target_name, value_ref, index=self.stmt_index)
-
-        self.stmt_index += 1
-
-
-create_field_dependency_graph = FieldDependencyGraphCreator.apply
-
-
 class MultiStageMergingWrapper:
     """Wrapper for :class:`DomainBlockInfo` containing the logic required to merge or not merge."""
 
@@ -561,17 +513,13 @@ class MultiStageMergingWrapper:
         return [cls(block, parent) for block in items]
 
     def can_merge_with(self, candidate: "MultiStageMergingWrapper") -> bool:
-        all_stmts = tuple(self.statements_in_multistages(self._multi_stage, candidate._multi_stage))
-        graph = create_field_dependency_graph(all_stmts)
         if self.parent != candidate.parent:
             return False
         if candidate.iteration_order != self.iteration_order:
             return False
         if candidate.has_disallowed_read_after_write_in(self):
             return False
-        if candidate.has_cycle_with_parallel_axis_offset(graph):
-            return False
-        if candidate.has_disallowed_write_after_read_in(self, graph):
+        if candidate.has_disallowed_write_after_read_in(self):
             return False
         return True
 
@@ -586,26 +534,7 @@ class MultiStageMergingWrapper:
             else:
                 self._multi_stage.inputs[name] = extent
 
-    @property
-    def offset_check(self) -> Callable[[Dict[str, int]], bool]:
-        if self.k_offset_extends_domain:
-            check = lambda offset: any(offset.get(axis, 0) != 0 for axis in ("I", "J", "K"))
-        else:
-            check = lambda offset: any(offset.get(axis, 0) != 0 for axis in ("I", "J"))
-        return check
-
-    def has_cycle_with_parallel_axis_offset(self, graph: nx.DiGraph) -> bool:
-        """Check the field dependency graph for a cycle with non-zero offset."""
-        for component in nx.algorithms.components.strongly_connected_components(graph):
-            for source, target, attrs in graph.subgraph(component).edges(data=True):
-                offsets = attrs.get("offsets", [])
-                if any(self.offset_check(offset) for offset in offsets):
-                    return True
-        return False
-
-    def has_disallowed_write_after_read_in(
-        self, target: "MultiStageMergingWrapper", graph: nx.DiGraph
-    ) -> bool:
+    def has_disallowed_write_after_read_in(self, target: "MultiStageMergingWrapper") -> bool:
         write_after_read_fields = self.write_after_read_fields_in(target)
         if write_after_read_fields and (
             self.has_reads_with_offset(restrict_to=write_after_read_fields)
@@ -615,25 +544,39 @@ class MultiStageMergingWrapper:
         ):
             return True
 
-        # Check for incoming edges with nonzero offset and outgoing edges with zero offset
-        for node in graph.nodes:
-            offset_read_index = np.iinfo(np.int32).max
-            for this_node, other_node, attrib in graph.in_edges(nbunch=node, data=True, default={}):
-                offsets_list = attrib.get("offsets", [])
-                if any(self.offset_check(offsets) for offsets in offsets_list):
-                    offset_read_index = min(offset_read_index, attrib["index"])
-            for this_node, other_node, attrib in graph.out_edges(
-                nbunch=node, data=True, default={}
-            ):
-                if attrib["index"] > offset_read_index:
-                    return True
-
         return False
 
+    def has_nonzero_parallel_extents(self, extent):
+        if self.k_offset_extends_domain:
+            return extent != Extent.zeros()
+        else:
+            return Extent(extent[:-1]) != Extent(((0, 0), (0, 0)))
+
+    def extents_from(self, names: Iterable[str]) -> Set[Extent]:
+        return {self.inputs[name] for name in names}
+
     def has_disallowed_read_after_write_in(self, target: "MultiStageMergingWrapper") -> bool:
-        if not self.k_offset_extends_domain:
-            return False
-        return any(extent[-1] != (0, 0) for extent in self.read_after_write_extents_in(target))
+        api_fields_names = {decl.name for decl in self.parent.definition_ir.api_fields}
+
+        read_after_write_fields = self.read_after_write_fields_in(target)
+        read_after_write_api_fields = {
+            name for name in read_after_write_fields if name in api_fields_names
+        }
+
+        # Cannot have read after write in parallel axis of any API field
+        if any(
+            self.has_nonzero_parallel_extents(extent)
+            for extent in self.extents_from(read_after_write_api_fields)
+        ):
+            return True
+
+        # Cannot have read with offset to sequential axis after write in parallel computation
+        if self.k_offset_extends_domain and any(
+            extent[-1] != (0, 0) for extent in self.extents_from(read_after_write_fields)
+        ):
+            return True
+
+        return False
 
     def has_reads_with_offset(self, *, restrict_to: Optional[Set[str]]) -> bool:
         checked_axes = slice(None) if self.k_offset_extends_domain else slice(None, -1)
@@ -651,9 +594,6 @@ class MultiStageMergingWrapper:
         previous_reads = set(target.inputs)
         current_writes = set(self.outputs)
         return previous_reads.intersection(current_writes)
-
-    def read_after_write_extents_in(self, target: "MultiStageMergingWrapper") -> Set[Extent]:
-        return {self.inputs[name] for name in self.read_after_write_fields_in(target)}
 
     @staticmethod
     def accumulate_extents(extents: Sequence[Extent]) -> Extent:
