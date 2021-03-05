@@ -532,45 +532,22 @@ class MultiStageMergingWrapper:
                 self._multi_stage.inputs[name] = extent
 
     def has_disallowed_write_after_read_in(self, target: "MultiStageMergingWrapper") -> bool:
-        write_after_read_fields = self.write_after_read_fields_in(target)
-        return write_after_read_fields and (
-            self.has_reads_with_offset(restrict_to=write_after_read_fields)
-            or target.has_reads_with_offset(restrict_to=write_after_read_fields)
-            or self.has_extended_domain
-            or target.has_extended_domain
-        )
-
-    def has_nonzero_parallel_extents(self, extent):
-        if self.k_offset_extends_domain:
-            return extent != Extent.zeros()
-        else:
-            return Extent(extent[:-1]) != Extent(((0, 0), (0, 0)))
-
-    def extents_from(self, names: Iterable[str]) -> Set[Extent]:
-        return {self.inputs[name] for name in names}
+        # Cannot have write after read with offset in parallel axis of any API field
+        write_after_read_api_fields = {
+            name
+            for name in self.write_after_read_fields_in(target)
+            if name in self.api_fields_names
+        }
+        return target.has_nonzero_parallel_extent(write_after_read_api_fields)
 
     def has_disallowed_read_after_write_in(self, target: "MultiStageMergingWrapper") -> bool:
-        api_fields_names = {decl.name for decl in self.parent.definition_ir.api_fields}
-
-        read_after_write_fields = self.read_after_write_fields_in(target)
+        # Cannot have read with offset after write in parallel axis of any API field
         read_after_write_api_fields = {
-            name for name in read_after_write_fields if name in api_fields_names
+            name
+            for name in self.read_after_write_fields_in(target)
+            if name in self.api_fields_names
         }
-
-        # Cannot have read after write in parallel axis of any API field
-        if any(
-            self.has_nonzero_parallel_extents(extent)
-            for extent in self.extents_from(read_after_write_api_fields)
-        ):
-            return True
-
-        # Cannot have read with offset to sequential axis after write in parallel computation
-        if self.k_offset_extends_domain and any(
-            extent[-1] != (0, 0) for extent in self.extents_from(read_after_write_fields)
-        ):
-            return True
-
-        return False
+        return self.has_nonzero_parallel_extent(read_after_write_api_fields)
 
     def has_reads_with_offset(self, *, restrict_to: Optional[Set[str]]) -> bool:
         checked_axes = slice(None) if self.k_offset_extends_domain else slice(None, -1)
@@ -589,6 +566,22 @@ class MultiStageMergingWrapper:
         current_writes = set(self.outputs)
         return previous_reads.intersection(current_writes)
 
+    @property
+    def api_fields_names(self) -> List[str]:
+        return [decl.name for decl in self.parent.definition_ir.api_fields]
+
+    def has_nonzero_parallel_extent(self, fields: Iterable[str]) -> bool:
+        k_is_parallel = self.iteration_order == gt_ir.IterationOrder.PARALLEL
+        return any(
+            not self._has_zero_extent(
+                self.inputs[name] if k_is_parallel else self.inputs[name][:-1]
+            )
+            for name in fields
+        )
+
+    def _has_zero_extent(self, extent: Extent) -> bool:
+        return extent == Extent([(0, 0)] * extent.ndims)
+
     @staticmethod
     def accumulate_extents(extents: Sequence[Extent]) -> Extent:
         full_extent = Extent.zeros()
@@ -603,10 +596,6 @@ class MultiStageMergingWrapper:
     @property
     def full_extent(self) -> Extent:
         return self.accumulate_extents(self.extents)
-
-    @property
-    def has_extended_domain(self) -> bool:
-        return self.full_extent != Extent.zeros()
 
     @property
     def k_offset_extends_domain(self) -> bool:
@@ -751,7 +740,42 @@ class StageMergingWrapper:
                     read_interval, self.min_k_interval_sizes
                 ):
                     return True
+
+        read_after_write_fields = self.read_after_write_fields_in(candidate)
+        if self.has_nonzero_parallel_extent(read_after_write_fields):
+            return True
+
+        write_after_read_fields = self.read_after_write_fields_in(candidate)
+        if candidate.has_nonzero_parallel_extent(write_after_read_fields):
+            return True
+
         return False
+
+    def read_after_write_fields_in(self, target: "MultiStageMergingWrapper") -> Set[str]:
+        previous_writes = set(target.outputs)
+        current_reads = set(self.inputs)
+        return previous_writes.intersection(current_reads)
+
+    def write_after_read_fields_in(self, target: "MultiStageMergingWrapper") -> Set[str]:
+        previous_reads = set(target.inputs)
+        current_writes = set(self.outputs)
+        return previous_reads.intersection(current_writes)
+
+    @property
+    def api_fields_names(self) -> List[str]:
+        return [decl.name for decl in self.parent.definition_ir.api_fields]
+
+    def has_nonzero_parallel_extent(self, fields: Iterable[str]) -> bool:
+        k_is_parallel = self.parent_block.iteration_order == gt_ir.IterationOrder.PARALLEL
+        return any(
+            not self._has_zero_extent(
+                self.inputs[name] if k_is_parallel else self.inputs[name][:-1]
+            )
+            for name in fields
+        )
+
+    def _has_zero_extent(self, extent: Extent) -> bool:
+        return extent == Extent([(0, 0)] * extent.ndims)
 
     def intervals_overlap_or_imply_reorder(
         self,
