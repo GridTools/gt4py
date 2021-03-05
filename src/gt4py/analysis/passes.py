@@ -596,15 +596,6 @@ class MultiStageMergingWrapper:
             full_extent |= extent
         return full_extent
 
-    @staticmethod
-    def statements_in_multistages(*multi_stages):
-        """Iterator over statements in the multistages, in the order passed."""
-        for ms in multi_stages:
-            for ij_block in ms.ij_blocks:
-                for int_block in ij_block.interval_blocks:
-                    for stmt_info in int_block.stmts:
-                        yield stmt_info.stmt
-
     @property
     def extents(self) -> Iterator[Extent]:
         return (ij_block.compute_extent for ij_block in self.ij_blocks)
