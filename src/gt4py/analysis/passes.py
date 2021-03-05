@@ -1187,7 +1187,7 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
     therefore do not need to be fields.
 
     A field can be demoted when it is a temporary field that:
-    1. is never used with an offset
+    1. is never used with an offset and
     2. is never read before assigned to in any stage
     """
 
