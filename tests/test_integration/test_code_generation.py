@@ -182,7 +182,7 @@ def test_stage_merger_induced_interval_block_reordering(backend):
     np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, -1], 2)
 
 
-@pytest.mark.parametrize("backend", CPU_BACKENDS)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_lower_dimensional_inputs(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
