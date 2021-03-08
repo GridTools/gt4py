@@ -623,9 +623,8 @@ class _LvalueDimsValidator(NodeVisitor):
         return allowed_flags
 
 
-# TODO(ricoh) consider making gtir.Decl & oir.Decl common
-# TODO(ricoh) and / or adding a VerticalLoop baseclass in common
-# TODO(ricoh) instead of passing type arguments
+# TODO(ricoh) consider making gtir.Decl & oir.Decl common and / or adding a VerticalLoop baseclass
+# TODO(ricoh) in common instead of passing type arguments
 def validate_lvalue_dims(
     vertical_loop_type: Type[Node], decl_type: Type[Node]
 ) -> RootValidatorType:
