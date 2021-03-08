@@ -1283,8 +1283,8 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
     therefore do not need to be fields.
 
     A field can be demoted when it is a temporary field that:
-    1. is never used with an offset
-    2. is never read before assigned to in any stage
+    1. is never used with an offset,
+    2. is never read before assigned to in any stage, and
     3. is never assigned to in a horizontal region
     """
 
@@ -1296,46 +1296,45 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
         def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
             assert isinstance(node, gt_ir.StencilImplementation)
-            self.demotables = set(node.temporary_fields)
+            self.demotables: Dict[str, Optional[str]] = {
+                temp_field: None for temp_field in node.temporary_fields
+            }
+            """Dictionary mapping temporaries to their most recently referenced stage."""
             self.visit(node)
 
-            return self.demotables
+            return set(self.demotables.keys())
 
-        def visit_Stage(self, node: gt_ir.Stage, **kwargs) -> None:
-            self.read_fields: Set[str] = set()
-            self.written_fields: Set[str] = set()
-            self.generic_visit(node)
+        def visit_Stage(self, node: gt_ir.Stage, **kwargs: Any) -> None:
+            self.generic_visit(node, **kwargs, stage_name=node.name, is_write=False)
 
-            # Any fields left that have only been read should be discarded.
-            # These have been read before (never having been) assigned
-            read_not_written = self.read_fields - self.written_fields
-            for name in read_not_written:
-                self.demotables.discard(name)
+        def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
+            kwargs["is_write"] = False
+            self.visit(node.value, **kwargs)
+            kwargs["is_write"] = True
+            self.visit(node.target, **kwargs)
 
         def visit_HorizontalIf(self, node: gt_ir.HorizontalIf, **kwargs) -> None:
-            self.visit(node.body, **kwargs, is_horizontal_if=True)
+            self.visit(node.body, inside_horizontal_if=True, **kwargs)
 
-        def visit_Assign(self, node: gt_ir.Assign, **kwargs) -> None:
-            self.visit(node.value, **kwargs, is_value=True)
-            self.visit(node.target, **kwargs, is_target=True)
+        def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> None:
+            if node.name in self.demotables:
+                not_demotable = False
+                if not kwargs["is_write"]:
+                    # 1. is never used with an offset
+                    not_demotable = any(val != 0 for val in node.offset.values())
 
-        def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs) -> None:
-            # 1. is never used with an offset
-            if any(val != 0 for val in node.offset.values()):
-                self.demotables.discard(node.name)
+                    # 2. is never read before assigned to in any stage
+                    not_demotable = (
+                        not_demotable or kwargs["stage_name"] != self.demotables[node.name]
+                    )
+                else:
+                    self.demotables[node.name] = kwargs["stage_name"]
 
-            # 2. is never read before assigned to
-            if kwargs.get("is_value", False) and node.name not in self.written_fields:
-                self.read_fields.add(node.name)
-
-            if kwargs.get("is_target", False):
-                self.written_fields.add(node.name)
-                if node.name in self.read_fields:
-                    self.demotables.discard(node.name)
-                    self.read_fields.remove(node.name)
+                if not_demotable:
+                    self.demotables.pop(node.name)
 
                 # 3. is never assigned to in a horizontal region
-                if kwargs.get("is_horizontal_if", False):
+                if kwargs["is_write"] and kwargs.get("inside_horizontal_if", False):
                     self.demotables.discard(node.name)
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
