@@ -148,7 +148,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     def visit_Decl(self, node: gt_ir.Decl, **kwargs):
         raise NotImplementedError()
 
-    def visit_Statement(self, node: gt_ir.Statement):
+    def visit_Statement(self, node: gt_ir.Statement, **kwargs):
         raise NotImplementedError()
 
     def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral, **kwargs):
@@ -188,9 +188,9 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
         return source
 
-    def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
+    def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall, **kwargs):
         call = self.NATIVE_FUNC_TO_PYTHON[node.func]
-        args = ",".join(self.visit(arg) for arg in node.args)
+        args = ",".join(self.visit(arg, **kwargs) for arg in node.args)
         return f"{call}({args})"
 
     def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr, **kwargs):
@@ -225,10 +225,10 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     # def visit_Return(self, node: gt_ir.Return):
     #     self.state["body_stmts"].append("return")
 
-    def visit_BlockStmt(self, node: gt_ir.BlockStmt):
+    def visit_BlockStmt(self, node: gt_ir.BlockStmt, **kwargs):
         body_sources = []
         for stmt in node.stmts:
-            stmt_source = self.visit(stmt)
+            stmt_source = self.visit(stmt, **kwargs)
             if isinstance(stmt_source, list):
                 body_sources.extend(stmt_source)
             else:

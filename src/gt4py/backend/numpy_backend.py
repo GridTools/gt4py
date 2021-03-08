@@ -398,10 +398,10 @@ class NumPySourceGenerator(PythonSourceGenerator):
         # return "\n".join(sources)
         return sources
 
-    def visit_HorizontalIf(self, node: gt_ir.HorizontalIf) -> List[str]:
+    def visit_HorizontalIf(self, node: gt_ir.HorizontalIf, **kwargs) -> List[str]:
         sources = []
         for stmt in node.body.stmts:
-            stmt_source = self.visit(stmt, intervals=node.intervals)
+            stmt_source = self.visit(stmt, intervals=node.intervals, **kwargs)
             if isinstance(stmt_source, list):
                 sources.extend(stmt_source)
             else:
