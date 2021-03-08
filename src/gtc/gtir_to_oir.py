@@ -23,7 +23,7 @@ from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 
 
 def _create_mask(ctx: "GTIRToOIR.Context", name: str, cond: oir.Expr) -> oir.Temporary:
-    mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL)
+    mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL, dimensions=(True, True, True))
     ctx.add_decl(mask_field_decl)
 
     fill_mask_field = oir.HorizontalExecution(
@@ -104,7 +104,7 @@ class GTIRToOIR(NodeTranslator):
         return oir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 
     def visit_FieldDecl(self, node: gtir.FieldDecl, **kwargs: Any) -> oir.FieldDecl:
-        return oir.FieldDecl(name=node.name, dtype=node.dtype)
+        return oir.FieldDecl(name=node.name, dtype=node.dtype, dimensions=node.dimensions)
 
     def visit_ScalarDecl(self, node: gtir.ScalarDecl, **kwargs: Any) -> oir.ScalarDecl:
         return oir.ScalarDecl(name=node.name, dtype=node.dtype)
@@ -170,7 +170,9 @@ class GTIRToOIR(NodeTranslator):
         self.visit(node.body, ctx=ctx)
 
         for temp in node.temporaries:
-            ctx.add_decl(oir.Temporary(name=temp.name, dtype=temp.dtype))
+            ctx.add_decl(
+                oir.Temporary(name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions)
+            )
 
         return oir.VerticalLoop(
             loop_order=node.loop_order,
