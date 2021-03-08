@@ -39,7 +39,7 @@ def test_propagate_dtype_to_FieldAccess():
     decl = FieldDecl(
         name=name,
         dtype=A_ARITHMETIC_TYPE,
-        dimensions=common.DimensionFlags(value=(True, True, True)),
+        dimensions=(True, True, True),
     )
 
     testee = FieldAccessFactory(name=name)

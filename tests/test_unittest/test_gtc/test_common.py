@@ -25,7 +25,6 @@ from gtc.common import (
     ArithmeticOperator,
     ComparisonOperator,
     DataType,
-    DimensionFlags,
     Expr,
     ExprKind,
     IfStmt,
@@ -329,7 +328,7 @@ def test_symbolref_validation_for_valid_tree():
 
 
 class MultiDimDecl(SymbolChildNode):
-    dim_flags: DimensionFlags = DimensionFlags(value=(True, True, True))
+    dimensions: Tuple[bool, bool, bool] = (True, True, True)
 
 
 class MultiDimRef(DummyExpr, SymbolRefChildNode):
@@ -337,7 +336,7 @@ class MultiDimRef(DummyExpr, SymbolRefChildNode):
 
 
 class MultiDimLoop(eve.Node):
-    direction: common.LoopOrder
+    loop_order: common.LoopOrder
     assigns: List[AssignStmt]
 
 
@@ -351,15 +350,14 @@ class MultiDimRoot(eve.Node, eve.SymbolTableTrait):
 def construct_dims_assignment(dimensions: Tuple[bool, bool, bool], direction: common.LoopOrder):
     in_name = "in"
     out_name = "out"
-    dimensions = DimensionFlags(value=dimensions)
     MultiDimRoot(
         decls=[
-            MultiDimDecl(name=out_name, dim_flags=dimensions),
-            MultiDimDecl(name=in_name, dim_flags=dimensions),
+            MultiDimDecl(name=out_name, dimensions=dimensions),
+            MultiDimDecl(name=in_name, dimensions=dimensions),
         ],
         loops=[
             MultiDimLoop(
-                direction=direction,
+                loop_order=direction,
                 assigns=[
                     AssignStmt(left=MultiDimRef(name=out_name), right=MultiDimRef(name=in_name)),
                 ],

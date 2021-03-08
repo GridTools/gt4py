@@ -227,7 +227,7 @@ class ApiParamDecl(LocNode):
 
 
 class FieldDecl(ApiParamDecl):
-    dimensions: common.DimensionFlags
+    dimensions: Tuple[bool, bool, bool]
 
 
 class GlobalParamDecl(ApiParamDecl):

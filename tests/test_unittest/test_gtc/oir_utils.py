@@ -46,7 +46,7 @@ class TemporaryFactory(factory.Factory):
 
     name = identifier(oir.Temporary)
     dtype = common.DataType.FLOAT32
-    dimensions = common.DimensionFlags(value=(True, True, True))
+    dimensions = (True, True, True)
 
 
 class FieldDeclFactory(factory.Factory):
@@ -55,7 +55,7 @@ class FieldDeclFactory(factory.Factory):
 
     name = identifier(oir.FieldDecl)
     dtype = common.DataType.FLOAT32
-    dimensions = common.DimensionFlags(value=(True, True, True))
+    dimensions = (True, True, True)
 
 
 class HorizontalExecutionFactory(factory.Factory):

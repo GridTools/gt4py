@@ -17,7 +17,7 @@
 import pytest
 from pydantic.error_wrappers import ValidationError
 
-from gtc.common import DataType, DimensionFlags
+from gtc.common import DataType
 from gtc.oir import Temporary
 
 from .oir_utils import AssignStmtFactory, FieldAccessFactory, HorizontalExecutionFactory
@@ -35,9 +35,7 @@ def test_mask_must_be_bool():
 
 def test_temporary_default_3d():
     temp = Temporary(name="a", dtype=DataType.INT64)
-    assert temp.dimensions.value == (True, True, True)
+    assert temp.dimensions == (True, True, True)
 
-    temp1d = Temporary(
-        name="b", dtype=DataType.INT64, dimensions=DimensionFlags(value=(True, False, False))
-    )
-    assert temp1d.dimensions.value == (True, False, False)
+    temp1d = Temporary(name="b", dtype=DataType.INT64, dimensions=(True, False, False))
+    assert temp1d.dimensions == (True, False, False)

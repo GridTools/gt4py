@@ -207,11 +207,6 @@ class LocNode(Node):
     loc: Optional[SourceLocation]
 
 
-class DimensionFlags(LocNode):
-
-    value: Tuple[bool, bool, bool]
-
-
 class Expr(LocNode):
     """
     Expression base class.
@@ -579,6 +574,12 @@ def validate_symbol_refs() -> RootValidatorType:
 
 class _LvalueDimsValidator(NodeVisitor):
     def __init__(self, vertical_loop_type: Type[Node], decl_type: Type[Node]) -> None:
+        if not vertical_loop_type.__annotations__.get("loop_order") is LoopOrder:
+            raise ValueError(
+                f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
+            )
+        if not decl_type.__annotations__.get("dimensions") is Tuple[bool, bool, bool]:
+            raise ValueError(f"Field decl type {decl_type} has no `dimensions` attribute")
         self.vertical_loop_type = vertical_loop_type
         self.decl_type = decl_type
 
@@ -591,7 +592,7 @@ class _LvalueDimsValidator(NodeVisitor):
         **kwargs: Any,
     ) -> None:
         if isinstance(node, self.vertical_loop_type):
-            loop_order = self._extract_single_child_of_type(node, LoopOrder)
+            loop_order = node.loop_order
         if isinstance(node, SymbolTableTrait):
             symtable = {**symtable, **node.symtable_}
         self.generic_visit(node, symtable=symtable, loop_order=loop_order, **kwargs)
@@ -607,7 +608,7 @@ class _LvalueDimsValidator(NodeVisitor):
         if not isinstance(symtable[node.left.name], self.decl_type):
             return None
         allowed_flags = self._allowed_flags(loop_order)
-        flags = self._get_declared_flags(node.left.name, symtable)
+        flags = symtable[node.left.name].dimensions
         if flags not in allowed_flags:
             dims = dimension_flags_to_names(flags)
             raise ValueError(
@@ -621,38 +622,38 @@ class _LvalueDimsValidator(NodeVisitor):
             allowed_flags.append((True, True, False))  # ij only allowed in FORWARD and BACKWARD
         return allowed_flags
 
-    def _get_declared_flags(
-        self, name: SymbolRef, symtable: Dict[str, Any]
-    ) -> Tuple[bool, bool, bool]:
-        node = symtable[name]
-        if isinstance(node, self.decl_type):
-            flags = self._extract_single_child_of_type(node, DimensionFlags)
-            if not flags:
-                raise ValueError(
-                    f"Symtable declaration {node} of type {node.__class__} has no attribute of type {DimensionFlags}."
-                )
-            return flags.value
-        raise ValueError(
-            "Symtable declaration {node} of type {node.__class__} is not of type {self.decl_type}."
-        )
-
-    def _extract_single_child_of_type(self, node: Node, type_: type) -> Any:
-        children = [child for _, child in node.iter_children() if isinstance(child, type_)]
-        if len(children) == 1:
-            return children[0]
-        elif len(children) > 1:
-            raise ValueError(f"Node {node} has more than one child of type {type_}")
-        return None
-
 
 # TODO(ricoh) consider making gtir.Decl & oir.Decl common
 # TODO(ricoh) and / or adding a VerticalLoop baseclass in common
 # TODO(ricoh) instead of passing type arguments
-# TODO(ricoh) in that case, simplify the below by relying on attribute names
 def validate_lvalue_dims(
     vertical_loop_type: Type[Node], decl_type: Type[Node]
 ) -> RootValidatorType:
-    """Validate lvalue dimensions using the root node symbol table."""
+    """
+    Validate lvalue dimensions using the root node symbol table.
+
+    The following tree structure is expected::
+
+        Root(`SymTableTrait`)
+        |- *
+           |- `vertical_loop_type`
+               |- loop_order: `LoopOrder`
+               |- *
+                  |- AssignStmt(`AssignStmt`)
+                  |- left: `Node`, validated only if reference to `decl_type` in symtable
+        |- symtable_: Symtable[name, Union[`decl_type`, *]]
+
+        DeclType
+        |- dimensions: `Tuple[bool, bool, bool]`
+
+    Parameters
+    ----------
+    vertical_loop_type:
+        A node type with an `LoopOrder` attribute named `loop_order`
+    decl_type:
+        A declaration type with field dimension information in the format
+        `Tuple[bool, bool, bool]` in an attribute named `dimensions`.
+    """
 
     def _impl(
         cls: Type[pydantic.BaseModel], values: RootValidatorValuesType

@@ -46,7 +46,7 @@ from gt4py.ir.nodes import (
     VarRef,
 )
 from gtc import common, gtir
-from gtc.common import DimensionFlags, ExprKind
+from gtc.common import ExprKind
 
 
 def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:
@@ -165,7 +165,7 @@ class DefIRToGTIR(IRNodeVisitor):
                     gtir.FieldDecl(
                         name=s.name,
                         dtype=dtype,
-                        dimensions=DimensionFlags(value=(True, True, True)),
+                        dimensions=(True, True, True),
                     )
                 )
             else:
@@ -267,7 +267,7 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_FieldDecl(self, node: FieldDecl):
         domain_axes = Domain.LatLonGrid().axes_names
-        dimensions = DimensionFlags(value=[axis in node.axes for axis in domain_axes])
+        dimensions = [axis in node.axes for axis in domain_axes]
         # datatype conversion works via same ID
         return gtir.FieldDecl(
             name=node.name, dtype=common.DataType(int(node.data_type.value)), dimensions=dimensions

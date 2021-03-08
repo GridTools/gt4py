@@ -102,7 +102,7 @@ class FieldDeclFactory(factory.Factory):
 
     name = identifier(gtir.FieldDecl)
     dtype = common.DataType.FLOAT32
-    dimensions = common.DimensionFlags(value=(True, True, True))
+    dimensions = (True, True, True)
 
 
 class ScalarDeclFactory(factory.Factory):
