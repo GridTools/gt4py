@@ -29,7 +29,6 @@ from gt4py.ir.nodes import (
     BuiltinLiteral,
     Cast,
     ComputationBlock,
-    Domain,
     FieldDecl,
     FieldRef,
     If,
@@ -266,8 +265,8 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_FieldDecl(self, node: FieldDecl):
-        domain_axes = Domain.LatLonGrid().axes_names
-        dimensions = [axis in node.axes for axis in domain_axes]
+        dimension_names = ["I", "J", "K"]
+        dimensions = [dim in node.axes for dim in dimension_names]
         # datatype conversion works via same ID
         return gtir.FieldDecl(
             name=node.name, dtype=common.DataType(int(node.data_type.value)), dimensions=dimensions
