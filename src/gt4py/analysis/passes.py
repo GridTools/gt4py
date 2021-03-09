@@ -1003,14 +1003,13 @@ class ComputeExtentsPass(TransformPass):
         )
 
         field_access_extents = {name: Extent.zeros() for name in transform_data.symbols}
-        compute_domain_extents = {name: Extent.zeros() for name in transform_data.symbols}
 
         blocks = transform_data.blocks
         for dom_block in reversed(blocks):
             for ij_block in reversed(dom_block.ij_blocks):
                 ij_block.compute_extent = Extent.zeros()
                 for name in ij_block.outputs:
-                    ij_block.compute_extent |= compute_domain_extents[name]
+                    ij_block.compute_extent |= field_access_extents[name]
                 for int_block in ij_block.interval_blocks:
                     for stmt_info in int_block.stmts:
                         if isinstance(stmt_info.stmt, gt_ir.HorizontalIf):
@@ -1023,16 +1022,17 @@ class ComputeExtentsPass(TransformPass):
                             overlaps = True
                         if overlaps:
                             for name, extent in stmt_info.inputs.items():
-                                compute_extent = ij_block.compute_extent | Extent(
-                                    list(Extent(extent[:seq_axis]) - diffs) + [(0, 0)]
+                                field_access_extents[name] |= (
+                                    ij_block.compute_extent
+                                    - Extent(list(diffs) + [(0, 0)])
+                                    + extent
                                 )
-                                compute_domain_extents[name] |= compute_extent
 
                             for name in stmt_info.outputs:
-                                compute_domain_extents[name] |= ij_block.compute_extent
+                                field_access_extents[name] |= ij_block.compute_extent
 
         transform_data.implementation_ir.fields_extents = {
-            name: Extent(extent) for name, extent in compute_domain_extents.items()
+            name: Extent(extent) for name, extent in field_access_extents.items()
         }
 
 
