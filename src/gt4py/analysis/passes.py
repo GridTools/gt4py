@@ -665,6 +665,10 @@ class StageMergingWrapper:
         if self.has_data_dependencies_with(candidate):
             return False
 
+        # Check for read with offset and write on parallel axes between stages
+        if self.has_disallowed_read_with_offset_and_write(candidate):
+            return False
+
         self.has_incompatible_intervals_with(candidate)
 
         return True
@@ -793,12 +797,12 @@ class StageMergingWrapper:
     @property
     def k_offset_extends_domain(self) -> bool:
         return (
-            self.iteration_order == gt_ir.IterationOrder.PARALLEL
-            and self._parent.has_sequential_axis
+            self.parent_block.iteration_order == gt_ir.IterationOrder.PARALLEL
+            and self.parent.has_sequential_axis
         )
 
     @property
-    def parent_block(self) -> TransformData:
+    def parent_block(self) -> DomainBlockInfo:
         return self._parent_block
 
     @property
