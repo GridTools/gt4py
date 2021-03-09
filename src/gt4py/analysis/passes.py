@@ -757,12 +757,12 @@ class StageMergingWrapper:
             interval_b, self.min_k_interval_sizes
         )
 
-    def has_disallowed_read_with_offset_and_write(self, target: "StageMergingWrapper") -> bool:
-        write_after_read_fields = self.write_after_read_fields_in(target)
-        read_after_write_fields = self.read_after_write_fields_in(target)
+    def has_disallowed_read_with_offset_and_write(self, candidate: "StageMergingWrapper") -> bool:
+        write_after_read_fields = self.write_after_read_fields_in(candidate)
+        read_after_write_fields = self.read_after_write_fields_in(candidate)
 
         blocks_inputs = (
-            (target, write_after_read_fields),
+            (candidate, write_after_read_fields),
             (self, read_after_write_fields),
         )
 
@@ -774,18 +774,18 @@ class StageMergingWrapper:
 
         return False
 
-    def read_after_write_fields_in(self, target: "StageMergingWrapper") -> Set[str]:
-        previous_writes = set(target.outputs)
+    def read_after_write_fields_in(self, candidate: "StageMergingWrapper") -> Set[str]:
+        previous_writes = set(candidate.outputs)
         current_reads = set(self.inputs)
         return previous_writes.intersection(current_reads)
 
-    def write_after_read_fields_in(self, target: "StageMergingWrapper") -> Set[str]:
-        previous_reads = set(target.inputs)
+    def write_after_read_fields_in(self, candidate: "StageMergingWrapper") -> Set[str]:
+        previous_reads = set(candidate.inputs)
         current_writes = set(self.outputs)
         return previous_reads.intersection(current_writes)
 
     def nonzero_extents_on_axes(self, fields: Set[str], axes: List[int]) -> bool:
-        extents = (self.compute_extent + self.inputs[field] for field in fields)
+        extents = (self.inputs[field] for field in fields)
         specific_extents = (Extent([extent[axis] for axis in axes]) for extent in extents)
         return not all(extent.is_zero for extent in specific_extents)
 
