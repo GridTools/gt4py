@@ -199,7 +199,7 @@ class TComputationBlock(TObject):
     def build(self) -> ComputationBlock:
         if self.parent:
             self.loc.scope = self.parent.child_scope
-        temp_fields = self.fields.difference(self.parent.fields)
+        temp_fields = self.fields.difference(self.parent.fields) if self.parent else set()
         temp_decls = [
             FieldDecl(
                 name=n, data_type=DataType.AUTO, axes=self.parent.domain.axes_names, is_api=False
