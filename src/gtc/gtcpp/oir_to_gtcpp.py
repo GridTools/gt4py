@@ -233,7 +233,7 @@ class OIRToGTCpp(eve.NodeTranslator):
         return gtcpp.KCache(name=node.name, fill=node.fill, flush=node.flush, loc=node.loc)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> gtcpp.FieldDecl:
-        return gtcpp.FieldDecl(name=node.name, dtype=node.dtype)
+        return gtcpp.FieldDecl(name=node.name, dtype=node.dtype, dimensions=node.dimensions)
 
     def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> gtcpp.GlobalParamDecl:
         return gtcpp.GlobalParamDecl(name=node.name, dtype=node.dtype)

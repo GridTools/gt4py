@@ -86,8 +86,16 @@ def copy_computation(copy_v_loop):
         name="copy_gtir",
         loc=SourceLocation(line=1, column=1, source="copy_gtir"),
         params=[
-            FieldDecl(name="foo", dtype=DataType.FLOAT32),
-            FieldDecl(name="bar", dtype=DataType.FLOAT32),
+            FieldDecl(
+                name="foo",
+                dtype=DataType.FLOAT32,
+                dimensions=(True, True, True),
+            ),
+            FieldDecl(
+                name="bar",
+                dtype=DataType.FLOAT32,
+                dimensions=(True, True, True),
+            ),
         ],
         vertical_loops=[copy_v_loop],
     )
