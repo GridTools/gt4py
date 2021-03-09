@@ -532,25 +532,23 @@ class MultiStageMergingWrapper:
     def has_disallowed_read_with_offset_and_write(self, target: "MultiStageMergingWrapper") -> bool:
         write_after_read_fields = self.write_after_read_fields_in(target)
         write_after_read_api_fields = write_after_read_fields.intersection(self.api_fields_names)
-
         read_after_write_fields = self.read_after_write_fields_in(target)
         read_after_write_api_fields = read_after_write_fields.intersection(self.api_fields_names)
 
         if target.any_nonzero_parallel_extent(
             target.compute_access_offset_for(write_after_read_api_fields)
-        ):
-            return True
-        elif self.any_nonzero_parallel_extent(
+        ) or self.any_nonzero_parallel_extent(
             self.compute_access_offset_for(read_after_write_api_fields)
         ):
             return True
 
-        if self.k_offset_extends_domain and target.any_nonzero_sequential_extent(
-            target.compute_access_offset_for(write_after_read_fields)
-        ):
-            return True
-        elif self.k_offset_extends_domain and self.any_nonzero_sequential_extent(
-            self.compute_access_offset_for(read_after_write_fields)
+        if self.k_offset_extends_domain and (
+            target.any_nonzero_sequential_extent(
+                target.compute_access_offset_for(write_after_read_fields)
+            )
+            or self.any_nonzero_sequential_extent(
+                self.compute_access_offset_for(read_after_write_fields)
+            )
         ):
             return True
 
@@ -567,31 +565,30 @@ class MultiStageMergingWrapper:
         return previous_reads.intersection(current_writes)
 
     def compute_access_offset_for(self, fields: Iterable[str]) -> Set[Extent]:
-        # TODO This may still be incorrect when there are horizontal ifs.
-        # Q: Ignore the ij_block.compute_extent for statements inside these?
-        # Q: What if the HorizontalIf is nested deeply within an if statement?
-        return {self.inputs[field] for field in fields if field in self.inputs}
-        # compute_extents = set()
-        # for field in fields:
-        #     compute_extents |= {
-        #         ij_block.compute_extent | ij_block.inputs[field]
-        #         for ij_block in self.ij_blocks
-        #         if field in ij_block.inputs
-        #     }
-        # return compute_extents
+        # TODO This may still be incorrect when there are horizontal ifs
+        compute_extents = {field: Extent.zeros() for field in fields}
+        for ij_block in self.ij_blocks:
+            for int_block in ij_block.interval_blocks:
+                for stmt_info in int_block.stmts:
+                    for field in {f for f in fields if f in stmt_info.inputs}:
+                        compute_extents[field] |= ij_block.compute_extent + stmt_info.inputs[field]
+
+        return compute_extents
 
     @property
     def api_fields_names(self) -> List[str]:
         return [decl.name for decl in self.parent.definition_ir.api_fields]
 
-    def any_nonzero_parallel_extent(self, extents: Iterable[Extent]) -> bool:
-        return any(
-            not extent.is_zero if self.k_offset_extends_domain else Extent(extent[:-1]).is_zero
-            for extent in extents
+    def any_nonzero_parallel_extent(self, extents: Dict[str, Extent]) -> bool:
+        parallel_extents = (
+            extent if self.k_offset_extends_domain else Extent(extent[:-1])
+            for extent in extents.values()
         )
+        return not all(extent.is_zero for extent in parallel_extents)
 
-    def any_nonzero_sequential_extent(self, extents: Iterable[Extent]) -> bool:
-        return any(not Extent((extent[-1],)).is_zero for extent in extents)
+    def any_nonzero_sequential_extent(self, extents: Dict[str, Extent]) -> bool:
+        sequential_extents = (Extent((extent[-1],)) for extent in extents.values())
+        return not all(extent.is_zero for extent in sequential_extents)
 
     @property
     def k_offset_extends_domain(self) -> bool:
@@ -737,48 +734,7 @@ class StageMergingWrapper:
                 ):
                     return True
 
-        read_after_write_fields = self.read_after_write_fields_in(candidate)
-        if self.any_nonzero_parallel_extent(
-            self.compute_access_offset_for(read_after_write_fields)
-        ):
-            return True
-
-        write_after_read_fields = self.read_after_write_fields_in(candidate)
-        if self.any_nonzero_parallel_extent(
-            self.compute_access_offset_for(write_after_read_fields)
-        ):
-            return True
-
         return False
-
-    def read_after_write_fields_in(self, target: "MultiStageMergingWrapper") -> Set[str]:
-        previous_writes = set(target.outputs)
-        current_reads = set(self.inputs)
-        return previous_writes.intersection(current_reads)
-
-    def write_after_read_fields_in(self, target: "MultiStageMergingWrapper") -> Set[str]:
-        previous_reads = set(target.inputs)
-        current_writes = set(self.outputs)
-        return previous_reads.intersection(current_writes)
-
-    def compute_access_offset_for(self, fields: Iterable[str]) -> Set[Extent]:
-        # TODO This may still be incorrect when there are horizontal ifs.
-        # Q: Ignore the ij_block.compute_extent for statements inside these?
-        # Q: What if the HorizontalIf is nested deeply within an if statement?
-        return {self.inputs[field] for field in fields if field in self.inputs}
-
-    def any_nonzero_parallel_extent(self, extents: Iterable[Extent]) -> bool:
-        return any(
-            not extent.is_zero if self.k_offset_extends_domain else Extent(extent[:-1]).is_zero
-            for extent in extents
-        )
-
-    @property
-    def k_offset_extends_domain(self) -> bool:
-        return (
-            self.parent_block.iteration_order == gt_ir.IterationOrder.PARALLEL
-            and self.parent.has_sequential_axis
-        )
 
     def intervals_overlap_or_imply_reorder(
         self,
