@@ -24,6 +24,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     Iterator,
     List,
     Optional,
@@ -528,9 +529,7 @@ class MultiStageMergingWrapper:
             return False
         if candidate.iteration_order != self.iteration_order:
             return False
-        if candidate.has_disallowed_read_after_write_in(self):
-            return False
-        if candidate.has_disallowed_write_after_read_in(self):
+        if candidate.has_disallowed_read_with_offset_and_write(self):
             return False
         return True
 
@@ -545,26 +544,30 @@ class MultiStageMergingWrapper:
             else:
                 self._multi_stage.inputs[name] = extent
 
-    def has_disallowed_read_after_write_in(self, target: "MultiStageMergingWrapper") -> bool:
-        if not self.k_offset_extends_domain:
-            return False
-        return any(extent[-1] != (0, 0) for extent in self.read_after_write_extents_in(target))
-
-    def has_disallowed_write_after_read_in(self, target: "MultiStageMergingWrapper") -> bool:
+    def has_disallowed_read_with_offset_and_write(self, target: "MultiStageMergingWrapper") -> bool:
         write_after_read_fields = self.write_after_read_fields_in(target)
-        return write_after_read_fields and (
-            self.has_reads_with_offset(restrict_to=write_after_read_fields)
-            or target.has_reads_with_offset(restrict_to=write_after_read_fields)
-            or self.has_extended_domain
-            or target.has_extended_domain
-        )
+        write_after_read_api_fields = write_after_read_fields.intersection(self.api_fields_names)
+        read_after_write_fields = self.read_after_write_fields_in(target)
+        read_after_write_api_fields = read_after_write_fields.intersection(self.api_fields_names)
 
-    def has_reads_with_offset(self, *, restrict_to: Optional[Set[str]]) -> bool:
-        checked_axes = slice(None) if self.k_offset_extends_domain else slice(None, -1)
-        fields = restrict_to.intersection(self.inputs) if restrict_to else set(self.inputs)
-        return any(
-            self.inputs[name][checked_axes] != Extent.zeros()[checked_axes] for name in fields
-        )
+        if target.any_nonzero_parallel_extent(
+            target.compute_access_offset_for(write_after_read_api_fields)
+        ) or self.any_nonzero_parallel_extent(
+            self.compute_access_offset_for(read_after_write_api_fields)
+        ):
+            return True
+
+        if self.k_offset_extends_domain and (
+            target.any_nonzero_sequential_extent(
+                target.compute_access_offset_for(write_after_read_fields)
+            )
+            or self.any_nonzero_sequential_extent(
+                self.compute_access_offset_for(read_after_write_fields)
+            )
+        ):
+            return True
+
+        return False
 
     def read_after_write_fields_in(self, target: "MultiStageMergingWrapper") -> Set[str]:
         previous_writes = set(target.outputs)
@@ -576,27 +579,31 @@ class MultiStageMergingWrapper:
         current_writes = set(self.outputs)
         return previous_reads.intersection(current_writes)
 
-    def read_after_write_extents_in(self, target: "MultiStageMergingWrapper") -> Set[Extent]:
-        return {self.inputs[name] for name in self.read_after_write_fields_in(target)}
+    def compute_access_offset_for(self, fields: Iterable[str]) -> Set[Extent]:
+        # TODO This may still be incorrect when there are horizontal ifs
+        compute_extents = {field: Extent.zeros() for field in fields}
+        for ij_block in self.ij_blocks:
+            for int_block in ij_block.interval_blocks:
+                for stmt_info in int_block.stmts:
+                    for field in {f for f in fields if f in stmt_info.inputs}:
+                        compute_extents[field] |= ij_block.compute_extent + stmt_info.inputs[field]
 
-    @staticmethod
-    def accumulate_extents(extents: Sequence[Extent]) -> Extent:
-        full_extent = Extent.zeros()
-        for extent in extents:
-            full_extent |= extent
-        return full_extent
-
-    @property
-    def extents(self) -> Iterator[Extent]:
-        return (ij_block.compute_extent for ij_block in self.ij_blocks)
+        return compute_extents
 
     @property
-    def full_extent(self) -> Extent:
-        return self.accumulate_extents(self.extents)
+    def api_fields_names(self) -> List[str]:
+        return [decl.name for decl in self.parent.definition_ir.api_fields]
 
-    @property
-    def has_extended_domain(self) -> bool:
-        return self.full_extent != Extent.zeros()
+    def any_nonzero_parallel_extent(self, extents: Dict[str, Extent]) -> bool:
+        parallel_extents = (
+            extent if self.k_offset_extends_domain else Extent(extent[:-1])
+            for extent in extents.values()
+        )
+        return not all(extent.is_zero for extent in parallel_extents)
+
+    def any_nonzero_sequential_extent(self, extents: Dict[str, Extent]) -> bool:
+        sequential_extents = (Extent((extent[-1],)) for extent in extents.values())
+        return not all(extent.is_zero for extent in sequential_extents)
 
     @property
     def k_offset_extends_domain(self) -> bool:
@@ -741,6 +748,7 @@ class StageMergingWrapper:
                     read_interval, self.min_k_interval_sizes
                 ):
                     return True
+
         return False
 
     def intervals_overlap_or_imply_reorder(
