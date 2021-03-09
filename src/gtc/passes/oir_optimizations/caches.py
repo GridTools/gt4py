@@ -473,7 +473,11 @@ class FillFlushToLocalKCaches(NodeTranslator):
 
         # new temporaries used for caches, declarations are later added to stencil
         for field_name, tmp_name in filling_or_flushing_fields.items():
-            new_tmps.append(oir.Temporary(name=tmp_name, dtype=symtable[field_name].dtype))
+            new_tmps.append(
+                oir.Temporary(
+                    name=tmp_name, dtype=symtable[field_name].dtype, dimensions=(True, True, True)
+                )
+            )
 
         if filling_fields:
             # split sections where more than one fill operations are required at the entry level
