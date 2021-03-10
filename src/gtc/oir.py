@@ -21,7 +21,7 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import root_validator, validator
 
@@ -112,8 +112,7 @@ class Decl(LocNode):
 
 
 class FieldDecl(Decl):
-    # TODO dimensions
-    pass
+    dimensions: Tuple[bool, bool, bool]
 
 
 class ScalarDecl(Decl):
@@ -124,7 +123,7 @@ class LocalScalar(Decl):
     pass
 
 
-class Temporary(Decl):
+class Temporary(FieldDecl):
     pass
 
 
@@ -212,3 +211,4 @@ class Stencil(LocNode, SymbolTableTrait):
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()
+    _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)
