@@ -582,6 +582,10 @@ class MultiStageMergingWrapper:
         return not all(extent.is_zero for extent in specific_extents)
 
     @property
+    def api_fields_names(self) -> List[str]:
+        return [decl.name for decl in self.parent.definition_ir.api_fields]
+
+    @property
     def parallel_axes_indices(self) -> List[int]:
         axes = self.domain.axes if self.k_offset_extends_domain else self.domain.parallel_axes
         return [self.domain.index(axis) for axis in axes]
@@ -589,10 +593,6 @@ class MultiStageMergingWrapper:
     @property
     def sequential_axis_index(self) -> int:
         return self.domain.index(self.domain.sequential_axis)
-
-    @property
-    def api_fields_names(self) -> List[str]:
-        return [decl.name for decl in self.parent.definition_ir.api_fields]
 
     @property
     def k_offset_extends_domain(self) -> bool:
@@ -622,12 +622,12 @@ class MultiStageMergingWrapper:
         return self._multi_stage.outputs
 
     @property
-    def parent(self) -> TransformData:
-        return self._parent
-
-    @property
     def wrapped(self) -> DomainBlockInfo:
         return self._multi_stage
+
+    @property
+    def parent(self) -> TransformData:
+        return self._parent
 
     @property
     def domain(self) -> gt_ir.Domain:
@@ -668,8 +668,6 @@ class StageMergingWrapper:
         # Check for read with offset and write on parallel axes between stages
         if self.has_disallowed_read_with_offset_and_write(candidate):
             return False
-
-        self.has_incompatible_intervals_with(candidate)
 
         return True
 
@@ -802,10 +800,6 @@ class StageMergingWrapper:
         )
 
     @property
-    def parent_block(self) -> DomainBlockInfo:
-        return self._parent_block
-
-    @property
     def compute_extent(self) -> Extent:
         return self._stage.compute_extent
 
@@ -834,12 +828,16 @@ class StageMergingWrapper:
         return self._parent.min_k_interval_sizes
 
     @property
-    def parent(self) -> TransformData:
-        return self._parent
-
-    @property
     def wrapped(self) -> IJBlockInfo:
         return self._stage
+
+    @property
+    def parent_block(self) -> DomainBlockInfo:
+        return self._parent_block
+
+    @property
+    def parent(self) -> TransformData:
+        return self._parent
 
     @property
     def domain(self) -> gt_ir.Domain:
