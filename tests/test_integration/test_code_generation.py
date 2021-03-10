@@ -199,15 +199,17 @@ def test_lower_dimensional_inputs(backend):
     default_origin = (1, 1, 0)
     dtype = float
 
-    field_3d = gt_storage.ones(defaults=backend, halo=default_origin, shape=full_shape, dtype=dtype)
+    field_3d = gt_storage.zeros(
+        defaults=backend, halo=default_origin, shape=full_shape, dtype=dtype
+    )
     assert field_3d.shape == full_shape[:]
 
-    field_2d = gt_storage.ones(
+    field_2d = gt_storage.zeros(
         defaults=backend, halo=default_origin[:-1], shape=full_shape[:-1], dtype=dtype, dims="IJ"
     )
     assert field_2d.shape == full_shape[:-1]
 
-    field_1d = gt_storage.zeros(
+    field_1d = gt_storage.ones(
         defaults=backend, halo=(default_origin[-1],), shape=(full_shape[-1],), dtype=dtype, dims="K"
     )
     assert field_1d.shape == (full_shape[-1],)
