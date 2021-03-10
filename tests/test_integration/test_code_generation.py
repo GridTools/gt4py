@@ -171,7 +171,7 @@ def test_stage_merger_induced_interval_block_reordering(backend):
     np.testing.assert_allclose(np.asarray(field_out)[:, :, -1], 2)
 
 
-@pytest.mark.parametrize("backend", OLD_BACKENDS)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_lower_dimensional_inputs(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
@@ -181,14 +181,19 @@ def test_lower_dimensional_inputs(backend):
     ):
         with computation(FORWARD):
             with interval(0, 1):
-                field_d = field_1d[1] + field_3d[0, 1, 0]
+                field_2d = field_1d[1] + field_3d[0, 1, 0]
+
+        with computation(PARALLEL):
+            with interval(0, -1):
+                tmp = field_2d[0, 1] + field_1d[1]
+            with interval(-1, None):
+                tmp = field_2d[0, 1] + field_1d[0]
 
         with computation(PARALLEL):
             with interval(0, 1):
-                tmp = field_2d[0, 1] + field_1d[1]
                 field_3d = tmp[1, 0, 0] + field_1d[1]
             with interval(1, None):
-                field_3d = tmp[-1, 0, 0]
+                field_3d = tmp[-1, 0, -1]
 
     full_shape = (6, 6, 6)
     default_origin = (1, 1, 0)
@@ -207,5 +212,8 @@ def test_lower_dimensional_inputs(backend):
     )
     assert field_1d.shape == (full_shape[-1],)
 
-    stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0))
+    stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0), domain=(4, 3, 6))
+    np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, :1], 3)
+    np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, 1:], 2)
+
     stencil(field_3d, field_2d, field_1d)
