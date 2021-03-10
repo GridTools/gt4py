@@ -36,9 +36,6 @@ from typing import (
     Union,
 )
 
-import networkx as nx
-import numpy as np
-
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.analysis import (
@@ -953,7 +950,8 @@ def compute_extent_diff(
             return None
         else:
             diffs.append(diff)
-    return Extent(diffs)
+
+    return Extent(diffs + [(0, 0)])
 
 
 class RemoveUnreachedStatementsPass(TransformPass):
@@ -1002,37 +1000,30 @@ class ComputeExtentsPass(TransformPass):
             transform_data.definition_ir.domain.sequential_axis
         )
 
-        field_access_extents = {name: Extent.zeros() for name in transform_data.symbols}
+        access_extents = {name: Extent.zeros() for name in transform_data.symbols}
 
         blocks = transform_data.blocks
         for dom_block in reversed(blocks):
             for ij_block in reversed(dom_block.ij_blocks):
                 ij_block.compute_extent = Extent.zeros()
                 for name in ij_block.outputs:
-                    ij_block.compute_extent |= field_access_extents[name]
+                    ij_block.compute_extent |= access_extents[name]
                 for int_block in ij_block.interval_blocks:
                     for stmt_info in int_block.stmts:
                         if isinstance(stmt_info.stmt, gt_ir.HorizontalIf):
-                            diffs = compute_extent_diff(
+                            extent_from_edge = compute_extent_diff(
                                 ij_block.compute_extent, stmt_info.stmt.intervals
                             )
-                            overlaps = diffs is not None
                         else:
-                            diffs = Extent.zeros()[:seq_axis]
-                            overlaps = True
-                        if overlaps:
+                            extent_from_edge = Extent.zeros()
+                        if extent_from_edge is not None:
                             for name, extent in stmt_info.inputs.items():
-                                field_access_extents[name] |= (
-                                    ij_block.compute_extent
-                                    - Extent(list(diffs) + [(0, 0)])
-                                    + extent
-                                )
-
-                            for name in stmt_info.outputs:
-                                field_access_extents[name] |= ij_block.compute_extent
+                                access_extents[name] |= (
+                                    ij_block.compute_extent - extent_from_edge
+                                ) + Extent(list(extent[:seq_axis]) + [(0, 0)])
 
         transform_data.implementation_ir.fields_extents = {
-            name: Extent(extent) for name, extent in field_access_extents.items()
+            name: extent for name, extent in access_extents.items()
         }
 
 
