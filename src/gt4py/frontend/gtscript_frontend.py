@@ -176,6 +176,12 @@ class AxisIntervalParser(gt_meta.ASTPass):
 
         if isinstance(node, ast.Slice):
             slice_node = node
+        elif isinstance(node, ast.Subscript):
+            slice_node = (
+                cls.slice_from_value(node)
+                if isinstance(node.slice, (ast.Index, ast.Constant))
+                else node.slice
+            )
         else:
             slice_node = cls.slice_from_value(node)
 
