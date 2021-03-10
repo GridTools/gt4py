@@ -14,21 +14,23 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Eve: a stencil toolchain in pure Python."""
+"""Eve framework to support development of DSL toolchains in pure Python.
 
+The internal dependencies between modules are the following (each line depends
+on some of the previous ones):
 
-# flake8: noqa  # disable flake8 because of non-used imports warnings
+  - typingx  (no dependencies)
+  - exceptions, type_definitions
+  - utils
+  - concepts <-> iterators  (circular dependency only inside methods, it should be safe)
+  - traits, visitors
+  - codegen
+
+"""
+
+from __future__ import annotations  # isort:skip
+
 from .version import __version__, __versioninfo__  # isort:skip
-
-# Internal dependencies between modules (each line depends on some of the previous ones):
-#
-#   - typingx  (no dependencies)
-#   - exceptions, type_definitions
-#   - utils
-#   - concepts <-> iterators  (circular dependency only inside methods, it should be safe)
-#   - traits, visitors
-#   - codegen
-#
 
 from .concepts import (
     FieldKind,
@@ -62,3 +64,39 @@ from .type_definitions import (
     SymbolRef,
 )
 from .visitors import NodeMutator, NodeTranslator, NodeVisitor
+
+
+__all__ = [
+    "__version__",
+    "__versioninfo__",
+    "Bool",
+    "Enum",
+    "Float",
+    "Int",
+    "IntEnum",
+    "FieldKind",
+    "FrozenModel",
+    "FrozenNode",
+    "GenericNode",
+    "Model",
+    "NegativeFloat",
+    "NegativeInt",
+    "NOTHING",
+    "Node",
+    "NodeMutator",
+    "NodeTranslator",
+    "NodeVisitor",
+    "PositiveFloat",
+    "PositiveInt",
+    "SourceLocation",
+    "Str",
+    "StrEnum",
+    "SymbolName",
+    "SymbolRef",
+    "SymbolTableTrait",
+    "VType",
+    "field",
+    "iter_tree",
+    "in_field",
+    "out_field",
+]

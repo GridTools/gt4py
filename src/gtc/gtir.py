@@ -27,7 +27,7 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-from typing import Any, Dict, Generator, List, Set
+from typing import Any, Dict, Generator, List, Set, Tuple
 
 from pydantic import validator
 from pydantic.class_validators import root_validator
@@ -191,8 +191,7 @@ class Decl(LocNode):  # TODO probably Stmt
 
 
 class FieldDecl(Decl):
-    # TODO dimensions
-    pass
+    dimensions: Tuple[bool, bool, bool]
 
 
 class ScalarDecl(Decl):
@@ -270,3 +269,4 @@ class Stencil(LocNode, SymbolTableTrait):
         return [p.name for p in self.params]
 
     _validate_symbol_refs = common.validate_symbol_refs()
+    _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)

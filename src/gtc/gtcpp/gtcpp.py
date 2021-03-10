@@ -227,8 +227,7 @@ class ApiParamDecl(LocNode):
 
 
 class FieldDecl(ApiParamDecl):
-    # TODO dimensions
-    pass
+    dimensions: Tuple[bool, bool, bool]
 
 
 class GlobalParamDecl(ApiParamDecl):
