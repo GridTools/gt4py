@@ -705,7 +705,8 @@ class TestReducedDimensions:
                 field_out = field_in[0, 0, 1]
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match="Incorrect offset specification detected"
+            gt_frontend.GTScriptSyntaxError,
+            match="Incorrect offset .* to field .* with dimensions .*",
         ):
             compile_definition(definition, "test_error_syntax", module, externals=externals)
 
@@ -722,7 +723,7 @@ class TestReducedDimensions:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Cannot assign to a field unless all parallel axes are present",
+            match="Cannot assign to field .* as all parallel axes .* are not present",
         ):
             compile_definition(definition, "test_error_annotation", module, externals=externals)
 

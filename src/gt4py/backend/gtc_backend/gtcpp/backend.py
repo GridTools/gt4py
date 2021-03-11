@@ -120,7 +120,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                 if num_dims != 3:
                     gt_dims = [
                         f"gt::stencil::dim::{dim}"
-                        for dim in gtc_utils.mask_to_dims(node.dimensions)
+                        for dim in gtc_utils.dimension_flags_to_names(node.dimensions)
                     ]
                     sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
                         gt_dims=", ".join(gt_dims), sid_def=sid_def

@@ -944,6 +944,7 @@ class IRMaker(ast.NodeVisitor):
     def _eval_index(self, node: ast.Subscript) -> Optional[List[int]]:
         invalid_target = GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
 
+        # Python 3.9 skips wrapping the ast.Tuple in an ast.Index
         tuple_or_constant = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
 
         # Python 3.8 still uses slice=ExtSlice
@@ -1228,7 +1229,7 @@ class IRMaker(ast.NodeVisitor):
                 par_axes_names.append(gt_ir.Domain.LatLonGrid().sequential_axis.name)
             if set(par_axes_names) - set(axes):
                 raise GTScriptSyntaxError(
-                    message=f"Cannot assign to a field unless all parallel axes are present: '{par_axes_names}'.",
+                    message=f"Cannot assign to field '{node.targets[0].id}' as all parallel axes '{par_axes_names}' are not present.",
                     loc=gt_ir.Location.from_ast_node(t),
                 )
 

@@ -112,7 +112,7 @@ class Decl(LocNode):
 
 
 class FieldDecl(Decl):
-    dimensions: Tuple[bool, bool, bool] = (True, True, True)
+    dimensions: Tuple[bool, bool, bool]
 
 
 class ScalarDecl(Decl):
@@ -211,4 +211,4 @@ class Stencil(LocNode, SymbolTableTrait):
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()
-    _validate_lvalue_dims = common.validate_lvalue_dims()
+    _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)

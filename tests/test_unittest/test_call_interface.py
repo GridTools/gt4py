@@ -388,7 +388,7 @@ class TestAxesMismatch:
     def test_ndarray(self):
         self.run_test(
             np.ndarray((3, 3, 3), np.float64),
-            f"The storage for '.*' has 3 dimensions, but the API signature expects 2",
+            f"Storage for '.*' has 3 dimensions but the API signature expects 2",
         )
 
     def test_storage(self):
@@ -400,5 +400,5 @@ class TestAxesMismatch:
                 backend="debug",
                 default_origin=(0, 0),
             ),
-            "The storage for '.*' has mask '\(True, False, True\)', but the API signature expects '\(True, True, False\)'",
+            "Storage for '.*' has mask '\(True, False, True\)' but the API signature expects '\(True, True, False\)'",
         )

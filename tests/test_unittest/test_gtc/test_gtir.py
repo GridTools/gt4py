@@ -86,8 +86,16 @@ def copy_computation(copy_v_loop):
         name="copy_gtir",
         loc=SourceLocation(line=1, column=1, source="copy_gtir"),
         params=[
-            FieldDecl(name="foo", dtype=DataType.FLOAT32, dimensions=(True, True, True)),
-            FieldDecl(name="bar", dtype=DataType.FLOAT32, dimensions=(True, True, True)),
+            FieldDecl(
+                name="foo",
+                dtype=DataType.FLOAT32,
+                dimensions=(True, True, True),
+            ),
+            FieldDecl(
+                name="bar",
+                dtype=DataType.FLOAT32,
+                dimensions=(True, True, True),
+            ),
         ],
         vertical_loops=[copy_v_loop],
     )
@@ -129,46 +137,6 @@ def test_symbolref_without_decl():
             params=[],
             vertical_loops__0__body__0=ParAssignStmtFactory(
                 left__name="out_field", right__name="in_field"
-            ),
-        )
-
-
-def test_assign_to_ik_fwd():
-    out_name = "ik_field"
-    in_name = "other_ik_field"
-    with pytest.raises(ValidationError, match=r"Not allowed to assign to ik-field"):
-        StencilFactory(
-            params=[
-                FieldDeclFactory(
-                    name=out_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)
-                ),
-                FieldDeclFactory(
-                    name=in_name, dtype=DataType.FLOAT32, dimensions=(True, False, True)
-                ),
-            ],
-            vertical_loops__0=VerticalLoopFactory(
-                loop_order=LoopOrder.FORWARD,
-                body=[
-                    ParAssignStmtFactory(left__name=out_name, right__name=in_name),
-                ],
-            ),
-        )
-
-
-def test_assign_to_ij_par():
-    out_name = "ij_field"
-    in_name = "other_field"
-    with pytest.raises(
-        ValidationError, match=r"Not allowed to assign to ij-field `ij_field` in PARALLEL"
-    ):
-        StencilFactory(
-            params=[
-                FieldDecl(name=out_name, dtype=DataType.FLOAT32, dimensions=(True, True, False)),
-                FieldDecl(name=in_name, dtype=DataType.FLOAT32, dimensions=(True, True, True)),
-            ],
-            vertical_loops__0=VerticalLoopFactory(
-                loop_order=LoopOrder.PARALLEL,
-                body=[ParAssignStmtFactory(left__name=out_name, right__name=in_name)],
             ),
         )
 

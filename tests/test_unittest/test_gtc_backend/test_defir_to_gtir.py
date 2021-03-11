@@ -100,6 +100,16 @@ def test_bin_op_expr(defir_to_gtir):
     bin_op = defir_to_gtir.visit_BinOpExpr(bin_op_expr)
     assert isinstance(bin_op, gtir.BinaryOp)
 
+    bin_op_expr = BinOpExpr(
+        op=BinaryOperator.POW, lhs=TFieldRef(name="a").build(), rhs=TFieldRef(name="b").build()
+    )
+    native_func_call = defir_to_gtir.visit_BinOpExpr(bin_op_expr)
+    assert isinstance(native_func_call, gtir.NativeFuncCall)
+    assert native_func_call.func == common.NativeFunction.POW
+    assert len(native_func_call.args) == 2
+    assert native_func_call.args[0].name == "a"
+    assert native_func_call.args[1].name == "b"
+
 
 def test_field_ref(defir_to_gtir):
     field_ref = TFieldRef(name="a", offset=(-1, 3, 0)).build()
