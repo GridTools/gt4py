@@ -313,11 +313,7 @@ class BaseOirSDFGBuilder(ABC):
             assert edge.dst_conn is None
             self._state.remove_edge(edge)
             if not nx.has_path(self._state.nx, edge.src, edge.dst):
-                import os
-
-                os.makedirs("_nodelete_sdfgs", exist_ok=True)
                 self._state.add_edge(edge.src, edge.src_conn, edge.dst, edge.dst_conn, edge.data)
-                self._sdfg.save(f"_nodelete_sdfgs/{self._sdfg.name}")
 
         self.add_subsets()
         self.add_arrays()
