@@ -212,6 +212,12 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         gt_ir.Builtin.TRUE: "true",
     }
 
+    ITERATION_ORDER_TO_GT_ORDER = {
+        gt_ir.IterationOrder.FORWARD: "forward",
+        gt_ir.IterationOrder.BACKWARD: "backward",
+        gt_ir.IterationOrder.PARALLEL: "forward",  # NOTE required for
+    }
+
     def __init__(self, class_name, module_name, gt_backend_t, options):
         self.class_name = class_name
         self.module_name = module_name
@@ -501,7 +507,13 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         multi_stages = []
         for multi_stage in node.multi_stages:
             steps = [[stage.name for stage in group.stages] for group in multi_stage.groups]
-            multi_stages.append({"exec": str(multi_stage.iteration_order).lower(), "steps": steps})
+            ordering = self.ITERATION_ORDER_TO_GT_ORDER[multi_stage.iteration_order]
+            multi_stages.append(
+                {
+                    "exec": ordering,
+                    "steps": steps,
+                }
+            )
 
         template_args = dict(
             arg_fields=arg_fields,

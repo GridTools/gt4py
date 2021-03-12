@@ -151,7 +151,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     def visit_LoopOrder(self, looporder: LoopOrder, **kwargs: Any) -> str:
         return {
-            LoopOrder.PARALLEL: "parallel",
+            LoopOrder.PARALLEL: "forward",
             LoopOrder.FORWARD: "forward",
             LoopOrder.BACKWARD: "backward",
         }[looporder]
