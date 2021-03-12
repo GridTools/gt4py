@@ -190,16 +190,19 @@ class LowerHorizontalIfPass(gt_ir.IRNodeMapper):
                         )
                     )
 
-        return (
-            True,
-            gt_ir.If(
-                condition=functools.reduce(
-                    lambda x, y: gt_ir.BinOpExpr(op=gt_ir.BinaryOperator.AND, lhs=x, rhs=y),
-                    conditions,
+        if conditions:
+            return (
+                True,
+                gt_ir.If(
+                    condition=functools.reduce(
+                        lambda x, y: gt_ir.BinOpExpr(op=gt_ir.BinaryOperator.AND, lhs=x, rhs=y),
+                        conditions,
+                    ),
+                    main_body=node.body,
                 ),
-                main_body=node.body,
-            ),
-        )
+            )
+        else:
+            return True, node.body
 
 
 class _MaxKOffsetExtractor(gt_ir.IRNodeVisitor):
