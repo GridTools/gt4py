@@ -215,7 +215,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
     ITERATION_ORDER_TO_GT_ORDER = {
         gt_ir.IterationOrder.FORWARD: "forward",
         gt_ir.IterationOrder.BACKWARD: "backward",
-        gt_ir.IterationOrder.PARALLEL: "forward",  # NOTE required for
+        gt_ir.IterationOrder.PARALLEL: "forward",  # NOTE requires sync between parallel mss
     }
 
     def __init__(self, class_name, module_name, gt_backend_t, options):
