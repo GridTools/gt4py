@@ -17,10 +17,14 @@ def convert(sdfg: dace.SDFG) -> oir.Stencil:
         dtype = common.typestr_to_data_type(array.dtype.as_numpy_dtype().str)
         if isinstance(array, dace.data.Scalar):
             params.append(oir.ScalarDecl(name=name, dtype=dtype))
-        elif not array.transient:
-            params.append(oir.FieldDecl(name=name, dtype=dtype))
         else:
-            decls.append(oir.FieldDecl(name=name, dtype=dtype))
+            dimensions = list(
+                any(dace.symbol(k) in s.free_symbols for s in array.shape) for k in "IJK"
+            )
+            if not array.transient:
+                params.append(oir.FieldDecl(name=name, dtype=dtype, dimensions=dimensions))
+            else:
+                decls.append(oir.Temporary(name=name, dtype=dtype, dimensions=dimensions))
 
     is_correct_node_types = all(
         isinstance(n, (dace.SDFGState, dace.nodes.AccessNode, VerticalLoopLibraryNode))
