@@ -109,7 +109,6 @@ if(BUILD_TESTING)
     # add_subdirectory(fortran) # TODO
     
     add_regression_test(cell2cell)
-    # add_regression_test(cell2cell_sparse_gtir DRIVER cell2cell) # TODO different driver?!
     add_regression_test(vertex2edge)
     add_regression_test(vertex2edge_gtir DRIVER vertex2edge)
     add_regression_test(sparse_assign_gtir DRIVER sparse_assign)
