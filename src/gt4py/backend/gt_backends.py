@@ -573,35 +573,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 if value is not None:
                     constants[name] = value
 
-        fields_in_horizontal_if = self.fields_in_horizontal_if
-
-        arg_fields = []
-        tmp_arg_fields = []
-        tmp_fields = []
-        storage_ids = []
-        max_ndim = 0
-        for name, field_decl in node.fields.items():
-            if name not in node.unreferenced:
-                max_ndim = max(max_ndim, len(field_decl.axes))
-                field_attributes = {
-                    "name": field_decl.name,
-                    "dtype": self._make_cpp_type(field_decl.data_type),
-                    "naxes": len(field_decl.axes),
-                    "axes": field_decl.axes,
-                    "selector": tuple(
-                        axis in field_decl.axes for axis in self.impl_node.domain.axes_names
-                    ),
-                }
-                if field_decl.is_api or name in fields_in_horizontal_if:
-                    if field_decl.layout_id not in storage_ids:
-                        storage_ids.append(field_decl.layout_id)
-                    field_attributes["layout_id"] = storage_ids.index(field_decl.layout_id)
-                    arg_fields.append(field_attributes)
-                    if name in fields_in_horizontal_if:
-                        tmp_arg_fields.append(name)
-                else:
-                    tmp_fields.append(field_attributes)
-        tmp_fields = list(sorted(tmp_fields, key=lambda field: field["name"]))
+        arg_fields, tmp_arg_fields, tmp_fields = self._compute_template_fields(node)
 
         parameters = [
             {"name": parameter.name, "dtype": self._make_cpp_type(parameter.data_type)}
@@ -645,6 +617,37 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 sources["bindings"][key] = template.render(**template_args)
 
         return sources
+
+    def _compute_template_fields(self, node):
+        fields_in_horizontal_if = self.fields_in_horizontal_if
+        arg_fields = []
+        tmp_arg_fields = []
+        tmp_fields = []
+        storage_ids = []
+        max_ndim = 0
+        for name, field_decl in node.fields.items():
+            if name not in node.unreferenced:
+                max_ndim = max(max_ndim, len(field_decl.axes))
+                field_attributes = {
+                    "name": field_decl.name,
+                    "dtype": self._make_cpp_type(field_decl.data_type),
+                    "naxes": len(field_decl.axes),
+                    "axes": field_decl.axes,
+                    "selector": tuple(
+                        axis in field_decl.axes for axis in self.impl_node.domain.axes_names
+                    ),
+                }
+                if field_decl.is_api or name in fields_in_horizontal_if:
+                    if field_decl.layout_id not in storage_ids:
+                        storage_ids.append(field_decl.layout_id)
+                    field_attributes["layout_id"] = storage_ids.index(field_decl.layout_id)
+                    arg_fields.append(field_attributes)
+                    if name in fields_in_horizontal_if:
+                        tmp_arg_fields.append(name)
+                else:
+                    tmp_fields.append(field_attributes)
+        tmp_fields = list(sorted(tmp_fields, key=lambda field: field["name"]))
+        return arg_fields, tmp_arg_fields, tmp_fields
 
 
 class GTPyModuleGenerator(gt_backend.PyExtModuleGenerator):
