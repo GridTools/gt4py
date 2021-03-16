@@ -321,7 +321,11 @@ void run(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- for field in arg_fields -%}
                      {{ comma() }}p_{{ field.name }}()=ds_{{ field.name }}
 {%- endfor %});
-        // computation_.sync_bound_data_stores();
+    // gt_computation_.sync_bound_data_stores();
+
+{%- for name in tmp_arg_fields %}
+    ds_{{ name }}.sync();
+{%- endfor %}
 }
 
 }  // namespace {{ stencil_unique_name }}

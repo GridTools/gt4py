@@ -548,19 +548,18 @@ class MultiStageMergingWrapper:
                 yield from interval_block.stmts
 
     @property
-    def horizontal_if_fields_with_offsets(self):
+    def horizontal_if_fields(self):
         fields = []
         for stmt_info in self.statements:
             if isinstance(stmt_info.stmt, gt_ir.HorizontalIf):
-                fields.extend(
-                    [field for field in stmt_info.inputs if not stmt_info.inputs[field].is_zero]
-                )
+                fields.extend(stmt_info.inputs)
+                fields.extend(stmt_info.inputs)
         return set(fields)
 
     def has_disallowed_read_with_offset_and_write(self, target: "MultiStageMergingWrapper") -> bool:
         write_after_read_fields = {"all": self.write_after_read_fields_in(target)}
         write_after_read_horizontal_ifs = write_after_read_fields["all"].intersection(
-            target.horizontal_if_fields_with_offsets
+            target.horizontal_if_fields
         )
         write_after_read_fields["api"] = (
             write_after_read_fields["all"]
@@ -570,7 +569,7 @@ class MultiStageMergingWrapper:
 
         read_after_write_fields = {"all": self.read_after_write_fields_in(target)}
         read_after_write_horizontal_ifs = read_after_write_fields["all"].intersection(
-            self.horizontal_if_fields_with_offsets
+            self.horizontal_if_fields
         )
         read_after_write_fields["api"] = (
             read_after_write_fields["all"]

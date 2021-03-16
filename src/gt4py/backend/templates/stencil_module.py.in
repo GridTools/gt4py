@@ -20,6 +20,7 @@
     - module_name: str
     - backend: str
     - arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
+    - tmp_arg_fields: [{ "name": str, "dtype": str, "layout_id": int }]
     - parameters: [{ "name": str, "dtype": str }]
 
 imports, module_members, class_name, class_members, stencil_signature, implementation
