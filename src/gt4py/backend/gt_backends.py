@@ -892,7 +892,25 @@ class GTMCBackend(BaseGTBackend):
         return self.make_extension(uses_cuda=False)
 
 
-class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
+class GTCUDAPyModuleGenerator(GTPyModuleGenerator):
+    def generate_implementation(self) -> str:
+        source = (
+            super().generate_implementation()
+            + """
+cupy.cuda.Device(0).synchronize()
+    """
+        )
+        return source
+
+    def generate_imports(self) -> str:
+        source = (
+            """
+import cupy
+"""
+            + super().generate_imports()
+        )
+        return source
+
     def generate_pre_run(self) -> str:
         field_names = [
             key
