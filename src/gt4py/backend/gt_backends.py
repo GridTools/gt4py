@@ -18,7 +18,7 @@ import abc
 import functools
 import numbers
 import os
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type, Union
 
 import jinja2
 import numpy as np
@@ -702,7 +702,6 @@ from gt4py import storage as gt_storage
             )
             tmp_field_args.append(f"storage_{name}")
             tmp_field_args.append(origin_str)
-
 
         if tmp_field_args:
             tmp_field_args_str = ", ".join(tmp_field_args) + ", "
