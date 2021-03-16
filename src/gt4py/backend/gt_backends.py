@@ -677,15 +677,17 @@ from gt4py import storage as gt_storage
         definition_ir = self.builder.definition_ir
         sources = gt_utils.text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
 
-        args = []
+        api_field_args = []
+        parameter_args = []
         api_fields = set(field.name for field in definition_ir.api_fields)
         for arg in definition_ir.api_signature:
             if arg.name not in self.args_data["unreferenced"]:
-                args.append(arg.name)
                 if arg.name in api_fields:
-                    args.append("list(_origin_['{}'])".format(arg.name))
+                    api_field_args.append(arg.name)
+                    api_field_args.append("list(_origin_['{}'])".format(arg.name))
+                else:
+                    parameter_args.append(arg.name)
 
-        # def empty(backend, default_origin, shape, dtype, mask=None, *, managed_memory=False):
         allocations = []
         tmp_field_args = []
         for name in self.fields_in_horizontal_if:
@@ -706,10 +708,10 @@ from gt4py import storage as gt_storage
             tmp_field_args.append(f"storage_{name}")
             tmp_field_args.append(origin_str)
 
-        if tmp_field_args:
-            tmp_field_args_str = ", ".join(tmp_field_args) + ", "
-        else:
-            tmp_field_args_str = ""
+        # Field args must precede parameter args
+        args = api_field_args
+        args.extend(tmp_field_args)
+        args.extend(parameter_args)
 
         # only generate implementation if any multi_stages are present. e.g. if no statement in the
         # stencil has any effect on the API fields, this may not be the case since they could be
@@ -718,11 +720,10 @@ from gt4py import storage as gt_storage
             source = """
 {allocations}
 # Load or generate a GTComputation object for the current domain size
-pyext_module.run_computation(list(_domain_), {run_args}, {tmp_field_args_str} exec_info)
+pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 """.format(
                 allocations="\n".join(allocations),
                 run_args=", ".join(args),
-                tmp_field_args_str=tmp_field_args_str,
             )
             sources.extend(source.splitlines())
         else:
