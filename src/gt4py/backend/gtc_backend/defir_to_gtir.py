@@ -160,7 +160,13 @@ class DefIRToGTIR(IRNodeVisitor):
                     dtype = cast(
                         common.DataType, common.DataType.FLOAT64
                     )  # see https://github.com/GridTools/gtc/issues/100
-                temporaries.append(gtir.FieldDecl(name=s.name, dtype=dtype))
+                temporaries.append(
+                    gtir.FieldDecl(
+                        name=s.name,
+                        dtype=dtype,
+                        dimensions=(True, True, True),
+                    )
+                )
             else:
                 stmts.append(self.visit(s))
         start, end = self.visit(node.interval)
@@ -263,8 +269,12 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_FieldDecl(self, node: FieldDecl):
+        dimension_names = ["I", "J", "K"]
+        dimensions = [dim in node.axes for dim in dimension_names]
         # datatype conversion works via same ID
-        return gtir.FieldDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
+        return gtir.FieldDecl(
+            name=node.name, dtype=common.DataType(int(node.data_type.value)), dimensions=dimensions
+        )
 
     def visit_VarDecl(self, node: VarDecl):
         # datatype conversion works via same ID
