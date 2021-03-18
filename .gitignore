@@ -104,3 +104,6 @@ venv.bak/
 
 # mkdocs documentation
 /site
+
+# DaCe
+*.sdfg
