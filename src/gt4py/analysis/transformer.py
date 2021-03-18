@@ -26,6 +26,7 @@ from .passes import (
     BuildIIRPass,
     ComputeExtentsPass,
     ComputeUsedSymbolsPass,
+    ConstantFoldingPass,
     DataTypePass,
     DemoteLocalTemporariesToVariablesPass,
     HousekeepingPass,
@@ -106,6 +107,9 @@ class IRTransformer:
 
         # Fill in missing dtypes
         DataTypePass.apply(self.transform_data)
+
+        # Replace scalar literal constants with the actual values
+        ConstantFoldingPass.apply(self.transform_data)
 
         # turn temporary fields that are only written and read within the same function
         # into local scalars
