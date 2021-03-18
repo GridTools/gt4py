@@ -528,6 +528,8 @@ class MultiStageMergingWrapper:
             return False
         if candidate.has_disallowed_read_with_offset_and_write(self):
             return False
+        if candidate.has_horizontal_if or self.has_horizontal_if:
+            return False
         return True
 
     def merge_with(self, candidate: "MultiStageMergingWrapper") -> None:
@@ -540,6 +542,13 @@ class MultiStageMergingWrapper:
                 self._multi_stage.inputs[name] |= extent
             else:
                 self._multi_stage.inputs[name] = extent
+
+    @property
+    def has_horizontal_if(self) -> bool:
+        for stmt_info in self.statements:
+            if isinstance(stmt_info.stmt, gt_ir.HorizontalIf):
+                return True
+        return False
 
     @property
     def statements(self):
