@@ -113,8 +113,6 @@ def test_stencils_roundtrip(stencil_name):
 
     sdfg_pre = deepcopy(sdfg)
 
-    sdfg_pre.save("pre.sdfg")
     oir = convert(sdfg)
     sdfg_post = OirSDFGBuilder.build(oir.name, oir)
-    sdfg_post.save("post.sdfg")
     assert_sdfg_equal(sdfg_pre, sdfg_post)
