@@ -728,6 +728,23 @@ class TestReducedDimensions:
             compile_definition(definition, "test_error_annotation", module, externals=externals)
 
 
+class TestDataDimensions:
+    def test_syntax(self, id_version):
+        module = f"TestDataDimensions_test_syntax_{id_version}"
+        externals = {}
+
+        def definition(
+            field_in: gtscript.Field[np.float, gtscript.IJK],
+            field_out: gtscript.Field[((3,), np.float_), gtscript.IJK],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out[0, 0, 0][0] = field_in
+                field_out[0, 0, 0][1] = field_in
+                field_out[0, 0, 0][2] = field_in[0, 0, 0]
+
+        compile_definition(definition, "test_syntax", module, externals=externals)
+
+
 class TestImports:
     def test_all_legal_combinations(self, id_version):
         def definition_func(inout_field: gtscript.Field[float]):

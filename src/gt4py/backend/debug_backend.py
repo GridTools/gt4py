@@ -109,6 +109,8 @@ class DebugSourceGenerator(PythonSourceGenerator):
     # ---- Visitor handlers ----
     def visit_FieldRef(self, node: gt_ir.FieldRef):
         assert node.name in self.block_info.accessors
+        if node.data_index != [0]:
+            raise ValueError("Only scalar fields are supported.")
         index = []
         for ax in self.impl_node.fields[node.name].axes:
             offset = "{:+d}".format(node.offset[ax]) if ax in node.offset else ""
