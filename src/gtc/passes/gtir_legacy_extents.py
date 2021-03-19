@@ -8,7 +8,7 @@ from gtc import gtir
 
 
 def _iter_field_names(node: Union[gtir.Stencil, gtir.ParAssignStmt]) -> XIterator[gtir.FieldAccess]:
-    return node.iter_tree().if_isinstance(gtir.FieldAccess).getattr("name").unique()
+    return node.iter_tree().if_isinstance(gtir.FieldDecl).getattr("name").unique()
 
 
 def _iter_assigns(node: gtir.Stencil) -> XIterator[gtir.ParAssignStmt]:
@@ -21,14 +21,23 @@ def _ext_from_off(offset: gtir.CartesianOffset) -> Extent:
     )
 
 
+FIELD_EXT_T = Dict[str, Extent]
+
+
 class LegacyExtentsVisitor(NodeVisitor):
     @dataclass
     class AssignContext:
         left_extent: Extent
-        assign_extents: Dict[str, Extent] = field(default_factory=dict)
+        assign_extents: FIELD_EXT_T = field(default_factory=dict)
+
+    def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> FIELD_EXT_T:
+        field_extents = {name: Extent.zeros() for name in _iter_field_names(node)}
+        for assign in _iter_assigns(node).to_list()[::-1]:
+            self.visit(assign, field_extents=field_extents)
+        return field_extents
 
     def visit_ParAssignStmt(
-        self, node: gtir.ParAssignStmt, *, field_extents: Dict[str, Extent], **kwargs: Any
+        self, node: gtir.ParAssignStmt, *, field_extents: FIELD_EXT_T, **kwargs: Any
     ) -> None:
         left_extent = field_extents.setdefault(node.left.name, Extent.zeros())
         pa_ctx = self.AssignContext(left_extent=left_extent)
@@ -40,7 +49,7 @@ class LegacyExtentsVisitor(NodeVisitor):
         self,
         node: gtir.FieldAccess,
         *,
-        field_extents: Dict[str, Extent],
+        field_extents: FIELD_EXT_T,
         pa_ctx: AssignContext,
         **kwargs: Any,
     ) -> None:
@@ -50,9 +59,5 @@ class LegacyExtentsVisitor(NodeVisitor):
         pa_ctx.assign_extents[node.name] |= pa_ctx.left_extent + _ext_from_off(node.offset)
 
 
-def compute_legacy_extents(node: gtir.Stencil) -> Dict[str, Extent]:
-    field_extents: Dict[str, Extent] = {}
-    visitor = LegacyExtentsVisitor()
-    for assign in _iter_assigns(node).to_list()[::-1]:
-        visitor.visit(assign, field_extents=field_extents)
-    return field_extents
+def compute_legacy_extents(node: gtir.Stencil) -> FIELD_EXT_T:
+    return LegacyExtentsVisitor().visit(node)
