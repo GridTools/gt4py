@@ -1,6 +1,7 @@
 import abc
 import numbers
 import os
+from inspect import getdoc
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import jinja2
@@ -45,54 +46,19 @@ class BaseModuleGenerator(abc.ABC):
             self._builder = builder
         self.args_data = args_data
 
-        definition_ir = self.builder.definition_ir
-
-        if definition_ir.sources is not None:
-            sources = {
-                key: gt_utils.text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
-                for key, value in definition_ir.sources
-            }
-        else:
-            sources = {}
-
-        if definition_ir.externals:
-            constants = {
-                name: repr(value)
-                for name, value in definition_ir.externals.items()
-                if isinstance(value, numbers.Number)
-            }
-        else:
-            constants = {}
-
-        options = {
-            key: value
-            for key, value in self.builder.options.as_dict().items()
-            if key not in ["build_info"]
-        }
-
-        parallel_axes = definition_ir.domain.parallel_axes or []
-        sequential_axis = definition_ir.domain.sequential_axis.name
-        domain_info = repr(
-            gt_definitions.DomainInfo(
-                parallel_axes=tuple(ax.name for ax in parallel_axes),
-                sequential_axis=sequential_axis,
-                ndims=len(parallel_axes) + (1 if sequential_axis else 0),
-            )
-        )
-
         module_source = self.template.render(
             imports=self.generate_imports(),
             module_members=self.generate_module_members(),
-            class_name=self.builder.class_name,
+            class_name=self.generate_class_name(),
             class_members=self.generate_class_members(),
-            docstring=definition_ir.docstring,
-            gt_backend=self.backend_name,
-            gt_source=sources,
-            gt_domain_info=domain_info,
+            docstring=self.generate_docstring(),
+            gt_backend=self.generate_backend_name(),
+            gt_source=self.generate_sources(),
+            gt_domain_info=self.generate_domain_info(),
             gt_field_info=repr(self.args_data["field_info"]),
             gt_parameter_info=repr(self.args_data["parameter_info"]),
-            gt_constants=constants,
-            gt_options=options,
+            gt_constants=self.generate_constants(),
+            gt_options=self.generate_options(),
             stencil_signature=self.generate_signature(),
             field_names=self.args_data["field_info"].keys(),
             param_names=self.args_data["parameter_info"].keys(),
@@ -100,7 +66,7 @@ class BaseModuleGenerator(abc.ABC):
             post_run=self.generate_post_run(),
             implementation=self.generate_implementation(),
         )
-        if options["format_source"]:
+        if self.builder.options.as_dict()["format_source"]:
             module_source = gt_utils.text.format_source(
                 module_source, line_length=self.SOURCE_LINE_LENGTH
             )
@@ -131,6 +97,51 @@ class BaseModuleGenerator(abc.ABC):
     def generate_imports(self) -> str:
         source = ""
         return source
+
+    def generate_class_name(self) -> str:
+        return self.builder.class_name
+
+    def generate_docstring(self) -> str:
+        return getdoc(self.builder.definition) or ""
+
+    def generate_backend_name(self) -> str:
+        return self.backend_name
+
+    def generate_sources(self) -> Dict[str, str]:
+        if self.builder.definition_ir.sources is not None:
+            return {
+                key: gt_utils.text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
+                for key, value in self.builder.definition_ir.sources
+            }
+        return {}
+
+    def generate_constants(self) -> Dict[str, str]:
+        if self.builder.definition_ir.externals:
+            return {
+                name: repr(value)
+                for name, value in self.builder.definition_ir.externals.items()
+                if isinstance(value, numbers.Number)
+            }
+        return {}
+
+    def generate_options(self) -> Dict[str, Any]:
+        return {
+            key: value
+            for key, value in self.builder.options.as_dict().items()
+            if key not in ["build_info"]
+        }
+
+    def generate_domain_info(self) -> str:
+        parallel_axes = self.builder.definition_ir.domain.parallel_axes or []
+        sequential_axis = self.builder.definition_ir.domain.sequential_axis.name
+        domain_info = repr(
+            gt_definitions.DomainInfo(
+                parallel_axes=tuple(ax.name for ax in parallel_axes),
+                sequential_axis=sequential_axis,
+                ndims=len(parallel_axes) + (1 if sequential_axis else 0),
+            )
+        )
+        return domain_info
 
     def generate_module_members(self) -> str:
         source = ""
