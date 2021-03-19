@@ -27,6 +27,7 @@ import jinja2
 from dawn4py.serialization import SIR
 from dawn4py.serialization import utils as sir_utils
 
+import gt4py.backend.module_generator
 from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import gt_src_manager
@@ -315,9 +316,11 @@ for name in dir(dawn4py.CodeGenOptions) + dir(dawn4py.OptimizerOptions):
 _DAWN_BACKEND_OPTIONS = {**_DAWN_BASE_OPTIONS, **_DAWN_TOOLCHAIN_OPTIONS}
 
 
-class DawnPyModuleGenerator(gt_backend.PyExtModuleGenerator):
+class DawnPyModuleGenerator(gt4py.backend.module_generator.PyExtModuleGenerator):
     def generate_implementation(self) -> str:
-        sources = gt_text.TextBlock(indent_size=gt_backend.BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
+        sources = gt_text.TextBlock(
+            indent_size=gt4py.backend.module_generator.BaseModuleGenerator.TEMPLATE_INDENT_SIZE
+        )
 
         args = []
         empty_checks = []

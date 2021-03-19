@@ -16,7 +16,7 @@
 
 import pytest
 
-from gt4py.backend.base import BaseModuleGenerator
+from gt4py.backend import BaseModuleGenerator
 from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 

@@ -31,6 +31,7 @@ from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
 
 from . import pyext_builder
+from .module_generator import CUDAPyExtModuleGenerator, PyExtModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -538,7 +539,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     GT_BACKEND_T: str
 
-    MODULE_GENERATOR_CLASS = gt_backend.PyExtModuleGenerator
+    MODULE_GENERATOR_CLASS = PyExtModuleGenerator
 
     PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
@@ -687,7 +688,7 @@ class GTMCBackend(BaseGTBackend):
         return self.make_extension(uses_cuda=False)
 
 
-class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
+class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
     def generate_pre_run(self) -> str:
         field_names = [
             key
