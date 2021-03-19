@@ -84,7 +84,7 @@ __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
 
 
-_VALID_DATA_TYPES = (bool, np.bool, int, np.int32, np.int64, float, np.float32, np.float64)
+_VALID_DATA_TYPES = (bool, np.bool_, int, np.int32, np.int64, float, np.float32, np.float64)
 
 
 def _set_arg_dtypes(definition, dtypes):
@@ -453,20 +453,36 @@ class _FieldDescriptor:
 
 
 class _FieldDescriptorMaker:
-    def __getitem__(self, dtype_and_axes):
-        if isinstance(dtype_and_axes, collections.abc.Collection) and not isinstance(
-            dtype_and_axes, str
-        ):
-            if isinstance(dtype_and_axes[0], collections.abc.Collection):
-                # dtype also includes data axes
-                data_dims, dtype = dtype_and_axes[0]
-                axes = dtype_and_axes[1]
-            else:
-                data_dims = (1,)
-                dtype, axes = dtype_and_axes
+    @staticmethod
+    def _is_axes_spec(spec) -> bool:
+        return (
+            isinstance(spec, _Axis)
+            or isinstance(spec, collections.abc.Collection)
+            and all(isinstance(i, _Axis) for i in spec)
+        )
+
+    def __getitem__(self, field_spec):
+        axes = IJK
+        data_dims = (1,)
+
+        if isinstance(field_spec, str) or not isinstance(field_spec, collections.abc.Collection):
+            # Field[dtype]
+            dtype = field_spec
+        elif _FieldDescriptorMaker._is_axes_spec(field_spec[0]):
+            # Field[axes, dtype]
+            assert len(field_spec) == 2
+            axes, dtype = field_spec
+        elif len(field_spec) == 2 and not _FieldDescriptorMaker._is_axes_spec(field_spec[1]):
+            # Field[high_dimensional_dtype]
+            dtype = field_spec
         else:
-            dtype, axes = [dtype_and_axes, IJK]
-            data_dims = (1,)
+            raise ValueError("Invalid field type descriptor")
+
+        if isinstance(dtype, collections.abc.Collection) and not isinstance(dtype, str):
+            # high dimensional dtype also includes data axes
+            assert len(dtype) == 2
+            dtype, data_dims = dtype
+
         return _FieldDescriptor(dtype, axes, data_dims)
 
 
