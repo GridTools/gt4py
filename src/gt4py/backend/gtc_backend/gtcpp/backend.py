@@ -37,9 +37,7 @@ from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
-from gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-from gtc.passes.gtir_upcaster import upcast
+from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
 
@@ -56,11 +54,8 @@ class GTCGTExtGenerator:
         self.options = options
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = DefIRToGTIR.apply(definition_ir)
-        gtir_without_unused_params = prune_unused_parameters(gtir)
-        dtype_deduced = resolve_dtype(gtir_without_unused_params)
-        upcasted = upcast(dtype_deduced)
-        oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
+        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full().gtir
+        oir = gtir_to_oir.GTIRToOIR().visit(gtir)
         oir = self._optimize_oir(oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
