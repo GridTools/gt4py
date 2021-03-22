@@ -528,8 +528,6 @@ class MultiStageMergingWrapper:
             return False
         if candidate.has_disallowed_read_with_offset_and_write(self):
             return False
-        if candidate.has_horizontal_if or self.has_horizontal_if:
-            return False
         return True
 
     def merge_with(self, candidate: "MultiStageMergingWrapper") -> None:
@@ -542,13 +540,6 @@ class MultiStageMergingWrapper:
                 self._multi_stage.inputs[name] |= extent
             else:
                 self._multi_stage.inputs[name] = extent
-
-    @property
-    def has_horizontal_if(self) -> bool:
-        for stmt_info in self.statements:
-            if isinstance(stmt_info.stmt, gt_ir.HorizontalIf):
-                return True
-        return False
 
     @property
     def statements(self):
@@ -694,14 +685,6 @@ class StageMergingWrapper:
     ) -> List["StageMergingWrapper"]:
         return [cls(ij_block, parent, parent_block) for ij_block in items]
 
-    @property
-    def has_horizontal_if(self) -> bool:
-        for int_block in self._stage.interval_blocks:
-            for stmt_info in int_block.stmts:
-                if isinstance(stmt_info.stmt, gt_ir.HorizontalIf):
-                    return True
-        return False
-
     def can_merge_with(self, candidate: "StageMergingWrapper") -> bool:
         if not self.parent_block == candidate.parent_block:
             return False
@@ -721,10 +704,6 @@ class StageMergingWrapper:
 
         # Check for read with offset and write on parallel axes between stages
         if self.has_disallowed_read_with_offset_and_write(candidate):
-            return False
-
-        # Check if either have horizontal ifs
-        if self.has_horizontal_if or candidate.has_horizontal_if:
             return False
 
         self.has_incompatible_intervals_with(candidate)
