@@ -19,7 +19,7 @@ import inspect
 import pytest
 
 from gt4py.backend import REGISTRY as backend_registry
-from gt4py.backend.module_generator import make_args_data_from_iir
+from gt4py.backend.module_generator import make_args_data_from_gtir, make_args_data_from_iir
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
@@ -86,6 +86,19 @@ def test_make_args_data_from_iir(backend_name, mode):
         assert key not in parameter_info_val[mode]
         assert key in unreferenced_val[mode]
         assert key in args_found
+
+
+@pytest.mark.parametrize("backend_name", ALL_BACKENDS)
+@pytest.mark.parametrize("mode", (0, 1, 2))
+def test_make_args_data_from_gtir(backend_name, mode):
+    backend_cls = backend_registry[backend_name]
+    builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
+    args_data = make_args_data_from_gtir(builder.gtir_pipeline)
+    iir_args_data = make_args_data_from_iir(builder.implementation_ir)
+
+    assert args_data.field_info == iir_args_data.field_info
+    assert args_data.parameter_info == iir_args_data.parameter_info
+    assert args_data.unreferenced == iir_args_data.unreferenced
 
 
 @pytest.mark.parametrize("backend_name", ALL_BACKENDS)

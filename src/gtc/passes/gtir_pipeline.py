@@ -13,14 +13,16 @@ class GtirPipeline:
     def __init__(self, node: gtir.Stencil):
         self.gtir = node
 
-    def apply(self, step: PASS_T) -> "GtirPipeline":
-        return self.__class__(step(self.gtir))
+    def steps(self) -> Sequence[PASS_T]:
+        return [prune_unused_parameters, resolve_dtype, upcast]
 
-    def full(self, skip: Sequence[PASS_T] = None) -> "GtirPipeline":
-        order = [prune_unused_parameters, resolve_dtype, upcast]
-        for step in skip or []:
-            order.remove(step)  # type: ignore
-        result = self
-        for step in order:
-            result = result.apply(step)
+    def apply(self, steps: Sequence[PASS_T]) -> gtir.Stencil:
+        result = self.gtir
+        for step in steps:
+            result = step(result)
         return result
+
+    def full(self, skip: Sequence[PASS_T] = None) -> gtir.Stencil:
+        skip = skip or []
+        pipeline = [step for step in self.steps() if step not in skip]
+        return self.apply(pipeline)

@@ -10,6 +10,10 @@ import jinja2
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
+from gtc import gtir
+from gtc.passes.gtir_legacy_extents import compute_legacy_extents
+from gtc.passes.gtir_pipeline import GtirPipeline, prune_unused_parameters
+from gtc.utils import dimension_flags_to_names
 
 
 if TYPE_CHECKING:
@@ -67,8 +71,58 @@ def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> M
             else:
                 data.parameter_info[arg.name] = None
 
-    data.unreferenced = implementation_ir.unreferenced
+    data.unreferenced = set(implementation_ir.unreferenced)
 
+    return data
+
+
+def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
+    data = ModuleData()
+    node = pipeline.full(skip=[prune_unused_parameters])
+    field_extents = compute_legacy_extents(node)
+
+    write_fields = (
+        node.iter_tree()
+        .if_isinstance(gtir.ParAssignStmt)
+        .getattr("left")
+        .if_isinstance(gtir.FieldAccess)
+        .getattr("name")
+        .to_list()
+    )
+    all_referenced_fields = (
+        node.iter_tree().if_isinstance(gtir.FieldAccess).getattr("name").to_set()
+    )
+    all_field_params = {param.name for param in node.params if isinstance(param, gtir.FieldDecl)}
+    referenced_field_params = all_field_params.intersection(all_referenced_fields)
+
+    for name in referenced_field_params:
+        data.field_info[name] = FieldInfo(
+            access=AccessKind.READ_WRITE if name in write_fields else AccessKind.READ_ONLY,
+            boundary=field_extents[name].to_boundary(),
+            axes=list(dimension_flags_to_names(node.symtable_[name].dimensions).upper()),
+            dtype=node.symtable_[name].dtype.name.lower(),
+        )
+
+    unref_field_params = all_field_params.difference(all_referenced_fields)
+
+    for name in unref_field_params:
+        data.field_info[name] = None
+
+    all_scalar_params = set(node.param_names).difference(all_field_params)
+    all_referenced_scalars = (
+        node.iter_tree().if_isinstance(gtir.ScalarAccess).getattr("name").to_set()
+    )
+    referenced_scalar_params = all_scalar_params.intersection(all_referenced_scalars)
+
+    for name in referenced_scalar_params:
+        data.parameter_info[name] = ParameterInfo(dtype=node.symtable_[name].dtype.name.lower())
+
+    unref_scalar_params = all_scalar_params.difference(all_referenced_scalars)
+
+    for name in unref_scalar_params:
+        data.parameter_info[name] = None
+
+    data.unreferenced = unref_scalar_params.union(unref_field_params)
     return data
 
 
