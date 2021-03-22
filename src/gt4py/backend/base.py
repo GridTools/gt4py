@@ -22,11 +22,10 @@ import pathlib
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional, Tuple, Type, Union
 
 from gt4py import definitions as gt_definitions
-from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
-from gt4py.backend.module_generator import BaseModuleGenerator
 
 from . import pyext_builder
+from .module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_iir
 
 
 if TYPE_CHECKING:
@@ -282,58 +281,11 @@ class BaseBackend(Backend):
 
         return self._load()
 
-    def make_module_source(
-        self, *, args_data: Optional[Dict[str, Any]] = None, **kwargs: Any
-    ) -> str:
+    def make_module_source(self, *, args_data: Optional[ModuleData] = None, **kwargs: Any) -> str:
         """Generate the module source code with or without stencil id."""
-        args_data = args_data or self.make_args_data_from_iir(self.builder.implementation_ir)
+        args_data = args_data or make_args_data_from_iir(self.builder.implementation_ir)
         source = self.MODULE_GENERATOR_CLASS()(args_data, self.builder, **kwargs)
         return source
-
-    @staticmethod
-    def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> Dict[str, Any]:
-        data: Dict[str, Any] = {"field_info": {}, "parameter_info": {}, "unreferenced": {}}
-
-        # Collect access type per field
-        out_fields = set()
-        for ms in implementation_ir.multi_stages:
-            for sg in ms.groups:
-                for st in sg.stages:
-                    for acc in st.accessors:
-                        if (
-                            isinstance(acc, gt_ir.FieldAccessor)
-                            and acc.intent == gt_ir.AccessIntent.READ_WRITE
-                        ):
-                            out_fields.add(acc.symbol)
-
-        for arg in implementation_ir.api_signature:
-            if arg.name in implementation_ir.fields:
-                access = (
-                    gt_definitions.AccessKind.READ_WRITE
-                    if arg.name in out_fields
-                    else gt_definitions.AccessKind.READ_ONLY
-                )
-                if arg.name not in implementation_ir.unreferenced:
-                    field_decl = implementation_ir.fields[arg.name]
-                    data["field_info"][arg.name] = gt_definitions.FieldInfo(
-                        access=access,
-                        boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
-                        axes=field_decl.axes,
-                        dtype=field_decl.data_type.dtype,
-                    )
-                else:
-                    data["field_info"][arg.name] = None
-            else:
-                if arg.name not in implementation_ir.unreferenced:
-                    data["parameter_info"][arg.name] = gt_definitions.ParameterInfo(
-                        dtype=implementation_ir.parameters[arg.name].data_type.dtype
-                    )
-                else:
-                    data["parameter_info"][arg.name] = None
-
-        data["unreferenced"] = implementation_ir.unreferenced
-
-        return data
 
 
 class PurePythonBackendCLIMixin(CLIBackendMixin):

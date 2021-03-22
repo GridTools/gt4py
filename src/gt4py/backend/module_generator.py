@@ -1,18 +1,75 @@
 import abc
 import numbers
 import os
+from dataclasses import dataclass, field
 from inspect import getdoc
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, Set
 
 import jinja2
 
-from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
+from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 
 
 if TYPE_CHECKING:
     from gt4py.stencil_builder import StencilBuilder
+
+
+@dataclass
+class ModuleData:
+    field_info: Dict[str, Optional[FieldInfo]] = field(default_factory=dict)
+    parameter_info: Dict[str, Optional[ParameterInfo]] = field(default_factory=dict)
+    unreferenced: Set[str] = field(default_factory=set)
+
+    @property
+    def field_names(self):
+        return self.field_info.keys()
+
+    @property
+    def parameter_names(self):
+        return self.parameter_info.keys()
+
+
+def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> ModuleData:
+    data = ModuleData()
+
+    # Collect access type per field
+    out_fields = set()
+    for ms in implementation_ir.multi_stages:
+        for sg in ms.groups:
+            for st in sg.stages:
+                for acc in st.accessors:
+                    if (
+                        isinstance(acc, gt_ir.FieldAccessor)
+                        and acc.intent == gt_ir.AccessIntent.READ_WRITE
+                    ):
+                        out_fields.add(acc.symbol)
+
+    for arg in implementation_ir.api_signature:
+        if arg.name in implementation_ir.fields:
+            access = AccessKind.READ_WRITE if arg.name in out_fields else AccessKind.READ_ONLY
+            if arg.name not in implementation_ir.unreferenced:
+                field_decl = implementation_ir.fields[arg.name]
+                data.field_info[arg.name] = FieldInfo(
+                    access=access,
+                    boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
+                    axes=field_decl.axes,
+                    dtype=field_decl.data_type.dtype,
+                )
+            else:
+                data.field_info[arg.name] = None
+        else:
+            if arg.name not in implementation_ir.unreferenced:
+                data.parameter_info[arg.name] = ParameterInfo(
+                    dtype=implementation_ir.parameters[arg.name].data_type.dtype
+                )
+            else:
+                data.parameter_info[arg.name] = None
+
+    data.unreferenced = implementation_ir.unreferenced
+
+    return data
 
 
 class BaseModuleGenerator(abc.ABC):
@@ -26,18 +83,18 @@ class BaseModuleGenerator(abc.ABC):
     TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "stencil_module.py.in")
 
     _builder: Optional["StencilBuilder"]
-    args_data: Dict[str, Any]
+    args_data: ModuleData
     template: jinja2.Template
 
     def __init__(self, builder: Optional["StencilBuilder"] = None):
         self._builder = builder
-        self.args_data = {}
+        self.args_data = ModuleData()
         with open(self.TEMPLATE_PATH, "r") as f:
             self.template = jinja2.Template(f.read())
 
     def __call__(
         self,
-        args_data: Dict[str, Any],
+        args_data: ModuleData,
         builder: Optional["StencilBuilder"] = None,
         **kwargs: Any,
     ) -> str:
@@ -55,13 +112,13 @@ class BaseModuleGenerator(abc.ABC):
             gt_backend=self.generate_backend_name(),
             gt_source=self.generate_sources(),
             gt_domain_info=self.generate_domain_info(),
-            gt_field_info=repr(self.args_data["field_info"]),
-            gt_parameter_info=repr(self.args_data["parameter_info"]),
+            gt_field_info=repr(self.args_data.field_info),
+            gt_parameter_info=repr(self.args_data.parameter_info),
             gt_constants=self.generate_constants(),
             gt_options=self.generate_options(),
             stencil_signature=self.generate_signature(),
-            field_names=self.args_data["field_info"].keys(),
-            param_names=self.args_data["parameter_info"].keys(),
+            field_names=self.args_data.field_names,
+            param_names=self.args_data.parameter_names,
             pre_run=self.generate_pre_run(),
             post_run=self.generate_post_run(),
             implementation=self.generate_implementation(),
@@ -135,7 +192,7 @@ class BaseModuleGenerator(abc.ABC):
         parallel_axes = self.builder.definition_ir.domain.parallel_axes or []
         sequential_axis = self.builder.definition_ir.domain.sequential_axis.name
         domain_info = repr(
-            gt_definitions.DomainInfo(
+            DomainInfo(
                 parallel_axes=tuple(ax.name for ax in parallel_axes),
                 sequential_axis=sequential_axis,
                 ndims=len(parallel_axes) + (1 if sequential_axis else 0),
@@ -195,7 +252,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
 
     def __call__(
         self,
-        args_data: Dict[str, Any],
+        args_data: ModuleData,
         builder: Optional["StencilBuilder"] = None,
         **kwargs: Any,
     ) -> str:
@@ -224,7 +281,7 @@ pyext_module = gt_utils.make_module_from_file(
         args = []
         api_fields = set(field.name for field in definition_ir.api_fields)
         for arg in definition_ir.api_signature:
-            if arg.name not in self.args_data["unreferenced"]:
+            if arg.name not in self.args_data.unreferenced:
                 args.append(arg.name)
                 if arg.name in api_fields:
                     args.append("list(_origin_['{}'])".format(arg.name))
