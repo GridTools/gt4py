@@ -33,6 +33,7 @@ from gt4py import definitions as gt_definitions
 from gt4py import gt_src_manager
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
+from gt4py.backend.module_generator import ModuleData
 from gt4py.utils import text as gt_text
 
 from . import pyext_builder
@@ -331,8 +332,8 @@ class DawnPyModuleGenerator(gt4py.backend.module_generator.PyExtModuleGenerator)
         # None values must be replaced with defaults for the unreferenced parameters,
         # (0,0,0) for the origins, np.empty for fields, and zero for scalars.
 
-        field_info = self.args_data["field_info"]
-        unreferenced = self.args_data["unreferenced"]
+        field_info = {k: v for k, v in self.args_data.field_info.items() if v}
+        unreferenced = self.args_data.unreferenced
 
         for arg in self.builder.definition_ir.api_signature:
             args.append(arg.name)
@@ -402,15 +403,13 @@ cupy.cuda.Device(0).synchronize()
         return ["import cupy"]
 
     def backend_pre_run(self) -> List[str]:
-        field_names = [
-            key for key, value in self.args_data["field_info"].items() if value is not None
-        ]
+        field_names = [key for key, value in self.args_data.field_info.items() if value is not None]
         return [f"{name}.host_to_device()" for name in field_names]
 
     def generate_post_run(self) -> str:
         output_field_names = [
             name
-            for name, info in self.args_data["field_info"].items()
+            for name, info in self.args_data.field_info.items()
             if info and info.access == gt_definitions.AccessKind.READ_WRITE
         ]
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])
@@ -611,8 +610,8 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
     @staticmethod
     def make_args_data(
         definition_ir: gt_ir.StencilDefinition, sir_field_info: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        data: Dict[str, Any] = {"field_info": {}, "parameter_info": {}, "unreferenced": set()}
+    ) -> ModuleData:
+        data = ModuleData()
 
         fields = {item.name: item for item in definition_ir.api_fields}
         parameters = {item.name: item for item in definition_ir.parameters}
@@ -622,17 +621,17 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
                 access = sir_field_info[arg.name]["access"]
                 if access is None:
                     access = gt_definitions.AccessKind.READ_ONLY
-                    data["unreferenced"].add(arg.name)
+                    data.unreferenced.add(arg.name)
                 extent = sir_field_info[arg.name]["extent"]
                 boundary = gt_definitions.Boundary([(-pair[0], pair[1]) for pair in extent])
-                data["field_info"][arg.name] = gt_definitions.FieldInfo(
+                data.field_info[arg.name] = gt_definitions.FieldInfo(
                     access=access,
                     boundary=boundary,
                     axes=fields[arg.name].axes,
                     dtype=fields[arg.name].data_type.dtype,
                 )
             else:
-                data["parameter_info"][arg.name] = gt_definitions.ParameterInfo(
+                data.parameter_info[arg.name] = gt_definitions.ParameterInfo(
                     dtype=parameters[arg.name].data_type.dtype
                 )
 
