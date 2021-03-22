@@ -240,6 +240,12 @@ class GTStage(LocNode):
     # or `temporaries`
     args: List[Arg]
 
+    @validator("args")
+    def has_args(cls, v: List[Arg]) -> List[Arg]:
+        if not v:
+            raise ValueError("At least one argument required")
+        return v
+
 
 class Cache(LocNode):
     name: SymbolRef  # symbol ref to GTComputation params or temporaries
