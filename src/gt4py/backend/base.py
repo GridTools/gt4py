@@ -642,19 +642,13 @@ pyext_module = gt_utils.make_module_from_file(
         definition_ir = self.builder.definition_ir
         sources = gt_utils.text.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
 
-        args, field_args, param_args = [], [], []
+        args = []
         api_fields = set(field.name for field in definition_ir.api_fields)
         for arg in definition_ir.api_signature:
             if arg.name not in self.args_data["unreferenced"]:
                 args.append(arg.name)
                 if arg.name in api_fields:
                     args.append("list(_origin_['{}'])".format(arg.name))
-                    field_args.append(arg.name)
-                    field_args.append("list(_origin_['{}'])".format(arg.name))
-                else:
-                    param_args.append(arg.name)
-
-        args = field_args + param_args
 
         # only generate implementation if any multi_stages are present. e.g. if no statement in the
         # stencil has any effect on the API fields, this may not be the case since they could be

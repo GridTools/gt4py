@@ -461,7 +461,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 if value is not None:
                     constants[name] = value
 
-        api_order = {arg_info.name: i for i, arg_info in enumerate(node.api_signature)}
+        api_names = [arg_info.name for arg_info in node.api_signature]
         arg_fields = []
         tmp_fields = []
         storage_ids = []
@@ -486,8 +486,6 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                     arg_fields.append(field_attributes)
                 else:
                     tmp_fields.append(field_attributes)
-
-        arg_fields = list(sorted(arg_fields, key=lambda field: api_order[field["name"]]))
         tmp_fields = list(sorted(tmp_fields, key=lambda field: field["name"]))
 
         parameters = [
@@ -495,7 +493,6 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             for name, parameter in node.parameters.items()
             if name not in node.unreferenced
         ]
-        parameters = list(sorted(parameters, key=lambda field: api_order[field["name"]]))
 
         stage_functors = {}
         for multi_stage in node.multi_stages:
@@ -509,6 +506,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             multi_stages.append({"exec": str(multi_stage.iteration_order).lower(), "steps": steps})
 
         template_args = dict(
+            api_names=api_names,
             arg_fields=arg_fields,
             constants=constants,
             gt_backend=self.gt_backend_t,
