@@ -19,6 +19,7 @@ import collections
 import enum
 import numbers
 import operator
+import sys
 from typing import Mapping, Optional
 
 from gt4py import utils as gt_utils
@@ -40,7 +41,7 @@ class CartesianSpace:
             return self.name
 
     names = [ax.name for ax in Axis]
-    ndims = len(names)
+    ndim = len(names)
 
 
 class NumericTuple(tuple):
@@ -57,7 +58,7 @@ class NumericTuple(tuple):
         assert ndims[0] <= len(value) <= ndims[1]
 
     @classmethod
-    def is_valid(cls, value, *, ndims=(1, CartesianSpace.ndims)):
+    def is_valid(cls, value, *, ndims=(1, sys.maxsize)):
         if isinstance(ndims, numbers.Integral):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
@@ -71,15 +72,15 @@ class NumericTuple(tuple):
             return True
 
     @classmethod
-    def zeros(cls, ndims=CartesianSpace.ndims):
+    def zeros(cls, ndims=CartesianSpace.ndim):
         return cls([0] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def ones(cls, ndims=CartesianSpace.ndims):
+    def ones(cls, ndims=CartesianSpace.ndim):
         return cls([1] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def from_k(cls, value, ndims=CartesianSpace.ndims):
+    def from_k(cls, value, ndims=CartesianSpace.ndim):
         return cls([value] * ndims, ndims=(ndims, ndims))
 
     @classmethod
@@ -95,11 +96,13 @@ class NumericTuple(tuple):
         else:
             return cls.from_k(value)
 
-    def __new__(cls, sizes, *args, ndims=(1, 3)):
+    def __new__(cls, sizes, *args, ndims=None):
         if len(args) > 0:
             sizes = [sizes, *args]
 
-        if isinstance(ndims, int):
+        if ndims is None:
+            ndims = tuple([len(sizes)] * 2)
+        elif isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
@@ -285,7 +288,7 @@ class FrameTuple(tuple):
         assert ndims[0] <= len(value) <= ndims[1]
 
     @classmethod
-    def is_valid(cls, value, *, ndims=(1, CartesianSpace.ndims)):
+    def is_valid(cls, value, *, ndims=(1, sys.maxsize)):
         if isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
@@ -299,15 +302,15 @@ class FrameTuple(tuple):
             return True
 
     @classmethod
-    def zeros(cls, ndims=CartesianSpace.ndims):
+    def zeros(cls, ndims=CartesianSpace.ndim):
         return cls([(0, 0)] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def ones(cls, ndims=CartesianSpace.ndims):
+    def ones(cls, ndims=CartesianSpace.ndim):
         return cls([(1, 1)] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def from_k(cls, value_pair, ndims=CartesianSpace.ndims):
+    def from_k(cls, value_pair, ndims=CartesianSpace.ndim):
         return cls([value_pair] * ndims, ndims=(ndims, ndims))
 
     @classmethod
@@ -315,9 +318,12 @@ class FrameTuple(tuple):
         ndims = max(len(lower), len(upper))
         return cls([(lower[i], upper[i]) for i in range(ndims)], ndims=(ndims, ndims))
 
-    def __new__(cls, ranges, *args, ndims=(1, 3)):
+    def __new__(cls, ranges, *args, ndims=None):
         if len(args) > 0:
             ranges = [ranges, *args]
+
+        if ndims is None:
+            ndims = tuple([len(ranges)] * 2)
         try:
             cls._check_value(ranges, ndims=ndims)
         except Exception as e:
@@ -525,7 +531,7 @@ class Extent(FrameTuple):
         assert ndims[0] <= len(value) <= ndims[1]
 
     @classmethod
-    def empty(cls, ndims=CartesianSpace.ndims):
+    def empty(cls, ndims=CartesianSpace.ndim):
         return cls([(None, None)] * ndims)
 
     @classmethod
@@ -624,7 +630,7 @@ class CenteredExtent(Extent):
         assert ndims[0] <= len(value) <= ndims[1]
 
     @classmethod
-    def empty(cls, ndims=CartesianSpace.ndims):
+    def empty(cls, ndims=CartesianSpace.ndim):
         return cls.zeros(ndims)
 
     @classmethod
