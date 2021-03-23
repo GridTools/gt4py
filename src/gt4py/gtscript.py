@@ -428,7 +428,7 @@ PARALLEL = 0
 
 
 class _FieldDescriptor:
-    def __init__(self, dtype, axes, data_dims: Tuple[int] = (1,)):
+    def __init__(self, dtype, axes, data_dims):
         if isinstance(dtype, str):
             self.dtype = dtype
         else:
@@ -436,7 +436,13 @@ class _FieldDescriptor:
                 raise ValueError("Invalid data type descriptor")
             self.dtype = np.dtype(dtype)
         self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
-        self.data_dims = data_dims
+        self.data_dims = None
+        if data_dims:
+            if not isinstance(data_dims, collections.abc.Collection):
+                self.data_dims = [data_dims]
+            else:
+                self.data_dims = [*data_dims]
+        print(f"{self.data_dims=}")
 
     def __repr__(self):
         args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}"
@@ -463,7 +469,7 @@ class _FieldDescriptorMaker:
 
     def __getitem__(self, field_spec):
         axes = IJK
-        data_dims = (1,)
+        data_dims = None
 
         if isinstance(field_spec, str) or not isinstance(field_spec, collections.abc.Collection):
             # Field[dtype]

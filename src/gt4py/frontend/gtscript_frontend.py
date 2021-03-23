@@ -1195,7 +1195,6 @@ class IRMaker(ast.NodeVisitor):
                     loc=gt_ir.Location.from_ast_node(t),
                 )
             elif spatial_offset:
-                print(name, spatial_offset, data_index)
                 if any(offset != 0 for offset in spatial_offset):
                     raise GTScriptSyntaxError(
                         message="Assignment to non-zero offsets is not supported.",
@@ -1203,7 +1202,7 @@ class IRMaker(ast.NodeVisitor):
                     )
 
             if not self._is_known(name):
-                if data_index is not None and data_index != [0]:
+                if data_index is not None and data_index:
                     raise GTScriptSyntaxError(
                         message="Temporaries may not use additional data dimensions.",
                         loc=gt_ir.Location.from_ast_node(t),
@@ -1213,7 +1212,6 @@ class IRMaker(ast.NodeVisitor):
                     name=name,
                     data_type=gt_ir.DataType.AUTO,
                     axes=gt_ir.Domain.LatLonGrid().axes_names,
-                    data_dims=[1],  # all temporaries are scalar
                     # layout_id=t.id,
                     is_api=False,
                 )
@@ -1627,10 +1625,12 @@ class GTScriptParser(ast.NodeVisitor):
                     assert arg_info.default in [gt_ir.Empty, None]
                     data_type = gt_ir.DataType.from_dtype(np.dtype(arg_annotation.dtype))
                     axes = [ax.name for ax in arg_annotation.axes]
+                    data_dims=arg_annotation.data_dims
                     fields_decls[arg_info.name] = gt_ir.FieldDecl(
                         name=arg_info.name,
                         data_type=data_type,
                         axes=axes,
+                        data_dims=data_dims,
                         is_api=True,
                         layout_id=arg_info.name,
                     )

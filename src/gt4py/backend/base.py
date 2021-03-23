@@ -321,6 +321,7 @@ class BaseBackend(Backend):
                         access=access,
                         boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
                         axes=field_decl.axes,
+                        data_dims=field_decl.data_dims,
                         dtype=field_decl.data_type.dtype,
                     )
                 else:

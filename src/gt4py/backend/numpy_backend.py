@@ -176,7 +176,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
         assert node.name in self.block_info.accessors
-        if node.data_index != [0]:
+        if node.data_index:
             raise ValueError("Only scalar fields are supported.")
 
         is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
