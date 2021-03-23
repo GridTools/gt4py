@@ -249,7 +249,7 @@ def stencil(
 
 
 def lazy_stencil(
-    backend_name=None,
+    backend=None,
     definition=None,
     *,
     build_info=None,
@@ -322,9 +322,7 @@ def lazy_stencil(
             }
         )
         stencil = LazyStencil(
-            StencilBuilder(func, backend_name=backend_name, options=options).with_externals(
-                externals or {}
-            )
+            StencilBuilder(func, backend=backend, options=options).with_externals(externals or {})
         )
         if eager:
             stencil = stencil.implementation
