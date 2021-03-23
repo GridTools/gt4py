@@ -587,11 +587,27 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             for group in multi_stage.groups:
                 for stage in group.stages:
                     stage_functors[stage.name] = self.visit(stage)
-
+        computations = []
         multi_stages = []
+        ms_requires_positional = False
         for multi_stage in node.multi_stages:
+            ms_requires_positional = ms_requires_positional or (
+                len(tuple(gt_ir.filter_nodes_dfs(multi_stage, gt_ir.AxisIndex))) > 0
+            )
             steps = [[stage.name for stage in group.stages] for group in multi_stage.groups]
-            multi_stages.append({"exec": str(multi_stage.iteration_order).lower(), "steps": steps})
+            ordering = self.ITERATION_ORDER_TO_GT_ORDER[multi_stage.iteration_order]
+            multi_stages.append(
+                {
+                    "exec": ordering,
+                    "steps": steps,
+                }
+            )
+            # if they need sync
+            computations.append(
+                {"multi_stages": list(multi_stages), "requires_positional": ms_requires_positional}
+            )
+            multi_stages.clear()
+            ms_requires_positional = False
 
         template_args = dict(
             arg_fields=arg_fields,
@@ -602,6 +618,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             k_axis=k_axis,
             module_name=self.module_name,
             requires_positional=requires_positional,
+            computations=computations,
             multi_stages=multi_stages,
             parameters=parameters,
             stage_functors=stage_functors,
