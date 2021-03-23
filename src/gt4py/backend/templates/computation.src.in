@@ -290,7 +290,7 @@ void run(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- endif -%}
 
 {%- set multi_comma = joiner(",") %}
-{%- for multi in computation.mutlistages %}
+{%- for multi in computation.multi_stages %}
         {{- multi_comma() }}
         gt::make_multistage(gt::execute::{{ multi.exec }}(),
     {%- set step_comma = joiner(",") %}
