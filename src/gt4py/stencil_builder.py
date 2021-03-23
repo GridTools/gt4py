@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pathlib
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 

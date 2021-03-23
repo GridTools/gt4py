@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -174,7 +174,7 @@ import collections
 import copy
 import enum
 import operator
-from typing import List
+from typing import List, Sequence
 
 import numpy as np
 
@@ -396,10 +396,14 @@ class FieldRef(Ref):
     offset = attribute(of=DictOf[str, int])
     loc = attribute(of=Location, optional=True)
 
+    @classmethod
+    def at_center(cls, name: str, axes: Sequence[str], loc=None):
+        return cls(name=name, offset={axis: 0 for axis in axes}, loc=loc)
+
 
 @attribclass
 class Cast(Expr):
-    dtype = attribute(of=DataType)
+    data_type = attribute(of=DataType)
     expr = attribute(of=Expr)
     loc = attribute(of=Location, optional=True)
 

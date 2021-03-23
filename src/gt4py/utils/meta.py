@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -249,18 +249,6 @@ class ASTTransformPass(ASTPass):
         return node
 
 
-def get_qualified_name(base_node: Union[ast.Name, ast.Attribute]):
-    node = base_node.body if isinstance(base_node, ast.Expression) else base_node
-    if isinstance(node, ast.Name):
-        return node.id
-    elif isinstance(node, ast.Attribute):
-        return get_qualified_name(node.value) + "." + node.attr
-    else:
-        raise ValueError(
-            f"Expected a node of type Union[ast.Name, ast.Attribute], but got {type(node)}"
-        )
-
-
 class ASTEvaluator(ASTPass):
     AST_OP_TO_OP = {
         # Arithmetic operations
@@ -336,7 +324,7 @@ class ASTEvaluator(ASTPass):
         return condition
 
     def visit_Attribute(self, node: ast.Attribute):
-        qualified_name = get_qualified_name(node)
+        qualified_name = get_qualified_name_from_node(node)
         if qualified_name not in self.context:
             raise ValueError(f"{qualified_name} not found in context")
         return self.context[qualified_name]

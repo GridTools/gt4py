@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -40,9 +40,11 @@ def annotate_function(function, dtypes):
 
 def standardize_dtype_dict(dtypes):
     """Standardizes the dtype dict as it can be specified for the stencil test suites.
+
     In the input dictionary, a selection of possible dtypes or just a single dtype can be specified for a set of fields
     or a single field. This function makes sure that all keys are tuples (by wrapping single field names and single
-    dtypes as 1-tuples)"""
+    dtypes as 1-tuples)
+    """
     assert isinstance(dtypes, collections.abc.Mapping)
     assert all(
         (isinstance(k, str) or gt_utils.is_iterable_of(k, str)) for k in dtypes.keys()
@@ -69,7 +71,7 @@ def standardize_dtype_dict(dtypes):
         result[key] = value
 
     for key, value in result.items():
-        result[key] = [np.dtype(dt) for dt in result[key]]
+        result[key] = [np.dtype(dt) for dt in value]
 
     keys = [k for t in result.keys() for k in t]
     if not len(keys) == len(set(keys)):

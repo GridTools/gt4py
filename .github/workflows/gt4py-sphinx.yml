@@ -3,10 +3,10 @@ name: Build Docs
 on:
   push:
     branches:
-      - master
+    - master
   pull_request:
     branches:
-      - master
+    - master
 
 jobs:
   sphinx-build:
@@ -26,4 +26,4 @@ jobs:
         python -m pip install .
     - name: Build documentation
       run: |
-        cd docs && SPHINXOPTS=-W make -e html
+        cd docs/gt4py && SPHINXOPTS=-W make -e html

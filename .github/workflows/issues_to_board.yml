@@ -8,8 +8,8 @@ jobs:
   move-issues:
     runs-on: ubuntu-latest
     steps:
-      - uses: alex-page/github-project-automation-plus@v0.2.4
-        with:
-          project: GridTools
-          column: Triage 
-          repo-token: ${{ secrets.ACCESS_TOKEN_PROJECT_AUTOMATION }}
+    - uses: alex-page/github-project-automation-plus@v0.2.4
+      with:
+        project: GridTools
+        column: Triage
+        repo-token: ${{ secrets.ACCESS_TOKEN_PROJECT_AUTOMATION }}

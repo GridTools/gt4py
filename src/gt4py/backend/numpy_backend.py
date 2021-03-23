@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -14,8 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import copy
 import textwrap
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -23,6 +24,9 @@ from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.utils import text as gt_text
+from gt4py.utils.attrib import Set as SetOf
+from gt4py.utils.attrib import attribkwclass as attribclass
+from gt4py.utils.attrib import attribute
 
 from .python_generator import PythonSourceGenerator
 
@@ -30,6 +34,28 @@ from .python_generator import PythonSourceGenerator
 if TYPE_CHECKING:
     from gt4py.stencil_builder import StencilBuilder
     from gt4py.storage.storage import Storage
+
+
+@attribclass
+class ShapedExpr(gt_ir.Expr):
+    axes = attribute(of=SetOf[str])
+    expr = attribute(of=gt_ir.Expr)
+
+
+class NumpyIR(gt_ir.IRNodeMapper):
+    @classmethod
+    def apply(cls, impl_ir: gt_ir.StencilImplementation):
+        new_ir = copy.deepcopy(impl_ir)
+        node = cls(new_ir.fields).visit(new_ir)
+        return node
+
+    def __init__(self, fields: Dict[str, gt_ir.FieldDecl]):
+        self.fields = fields
+
+    def visit_FieldRef(
+        self, path: tuple, node_name: str, node: gt_ir.FieldRef
+    ) -> Tuple[bool, ShapedExpr]:
+        return True, ShapedExpr(axes=set(self.fields[node.name].axes), expr=node)
 
 
 class NumPySourceGenerator(PythonSourceGenerator):
@@ -130,6 +156,24 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return source_lines
 
     # ---- Visitor handlers ----
+    def visit_ShapedExpr(self, node: ShapedExpr) -> str:
+        code = self.visit(node.expr)
+        if not isinstance(node.expr, ShapedExpr):
+            parallel_axes = (
+                self.impl_node.domain.axes
+                if self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
+                else self.impl_node.domain.parallel_axes
+            )
+            parallel_axes_names = [axis.name for axis in parallel_axes]
+            leftover_axes = set(parallel_axes_names) - set(node.axes)
+            if leftover_axes:
+                np_newaxis = "{np}.newaxis".format(np=self.numpy_prefix)
+                view = ", ".join(
+                    ":" if axis in node.axes else np_newaxis for axis in parallel_axes_names
+                )
+                code = f"({code})[{view}]"
+        return code
+
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
         assert node.name in self.block_info.accessors
 
@@ -137,6 +181,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
         extent = self.block_info.extent
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
+        parallel_axes_dims = [
+            self.impl_node.domain.index(axis)
+            for axis in self.impl_node.fields[node.name].axes
+            if axis != self.domain.sequential_axis.name
+        ]
 
         for d, ax in enumerate(self.domain.axes_names):
             idx = node.offset.get(ax, 0)
@@ -145,45 +194,53 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 upper_extent[d] += idx
 
         index = []
-        for d in range(2):
+        for fd, d in enumerate(parallel_axes_dims):
             start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
             size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
             size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
             index.append(
-                "{name}{marker}[{d}]{start}: {name}{marker}[{d}] + {size}".format(
+                "{name}{marker}[{fd}]{start}: {name}{marker}[{fd}] + {size}".format(
                     name=node.name,
                     start=start_expr,
                     marker=self.origin_marker,
-                    d=d,
+                    fd=fd,
                     size=size_expr,
                 )
             )
 
         k_ax = self.domain.sequential_axis.name
-        k_offset = node.offset.get(k_ax, 0)
-        if is_parallel:
-            start_expr = self.interval_k_start_name
-            start_expr += " {:+d}".format(k_offset) if k_offset else ""
-            end_expr = self.interval_k_end_name
-            end_expr += " {:+d}".format(k_offset) if k_offset else ""
-            index.append(
-                "{name}{marker}[2] + {start}:{name}{marker}[2] + {stop}".format(
-                    name=node.name, start=start_expr, marker=self.origin_marker, stop=end_expr
+        if k_ax in self.impl_node.fields[node.name].axes:
+            fd = self.impl_node.fields[node.name].axes.index(k_ax)
+            k_offset = node.offset.get(k_ax, 0)
+            if is_parallel:
+                start_expr = self.interval_k_start_name
+                start_expr += " {:+d}".format(k_offset) if k_offset else ""
+                end_expr = self.interval_k_end_name
+                end_expr += " {:+d}".format(k_offset) if k_offset else ""
+                index.append(
+                    "{name}{marker}[{fd}] + {start}:{name}{marker}[{fd}] + {stop}".format(
+                        name=node.name,
+                        start=start_expr,
+                        marker=self.origin_marker,
+                        stop=end_expr,
+                        fd=fd,
+                    )
                 )
-            )
-        else:
-            idx = "{:+d}".format(k_offset) if k_offset else ""
-            index.append(
-                "{name}{marker}[{d}] + {ax}{idx}".format(
-                    name=node.name,
-                    marker=self.origin_marker,
-                    d=len(self.domain.parallel_axes),
-                    ax=k_ax,
-                    idx=idx,
+            else:
+                idx = "{:+d}".format(k_offset) if k_offset else ""
+                index.append(
+                    "{name}{marker}[{fd}] + {ax}{idx}".format(
+                        name=node.name,
+                        marker=self.origin_marker,
+                        fd=fd,
+                        ax=k_ax,
+                        idx=idx,
+                    )
                 )
-            )
 
         source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
+        if not parallel_axes_dims and not is_parallel:
+            source = f"np.asarray([{source}])"
 
         return source
 
@@ -267,8 +324,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
             # If it does, it needs to be the else expression of the where, otherwise we set the else to nan.
             # This ensures that we only write defined values.
             # This check is not relevant for fields as they enter defined
-            is_possible_else = not isinstance(stmt.target, gt_ir.VarRef) or (
-                stmt.target.name in self.var_refs_defined
+            target_expr = stmt.target.expr if isinstance(stmt.target, ShapedExpr) else stmt.target
+            is_possible_else = not isinstance(target_expr, gt_ir.VarRef) or (
+                target_expr.name in self.var_refs_defined
             )
 
             sources.append(
@@ -281,8 +339,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 )
             )
 
-            if isinstance(stmt.target, gt_ir.VarRef):
-                self.var_refs_defined.add(stmt.target.name)
+            if isinstance(target_expr, gt_ir.VarRef):
+                self.var_refs_defined.add(target_expr.name)
 
         else:
             stmt_sources = self.visit(stmt)
@@ -337,7 +395,8 @@ class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
 
     def generate_implementation(self) -> str:
         block = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
-        self.source_generator(self.builder.implementation_ir, block)
+        numpy_ir = NumpyIR.apply(self.builder.implementation_ir)
+        self.source_generator(numpy_ir, block)
         if self.builder.options.backend_opts.get("ignore_np_errstate", True):
             source = "with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):\n"
             source += textwrap.indent(block.text, " " * self.TEMPLATE_INDENT_SIZE)

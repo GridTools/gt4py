@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -19,6 +19,7 @@ import collections
 import enum
 import numbers
 import operator
+from typing import Mapping, Optional
 
 from gt4py import utils as gt_utils
 from gt4py.utils.attrib import Any, AttributeClassLike
@@ -46,6 +47,8 @@ class NumericTuple(tuple):
     """N-dimensional like vector implemented as a subclass of the tuple builtin."""
 
     __slots__ = ()
+
+    _DEFAULT = 0
 
     @classmethod
     def _check_value(cls, value, ndims):
@@ -78,6 +81,12 @@ class NumericTuple(tuple):
     @classmethod
     def from_k(cls, value, ndims=CartesianSpace.ndims):
         return cls([value] * ndims, ndims=(ndims, ndims))
+
+    @classmethod
+    def from_mask(cls, seq, mask, default=None):
+        if default is None:
+            default = cls._DEFAULT
+        return cls(gt_utils.interpolate_mask(seq, mask, default))
 
     @classmethod
     def from_value(cls, value):
@@ -142,28 +151,44 @@ class NumericTuple(tuple):
         return self._apply(other, max)
 
     def __lt__(self, other):
-        """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.lt)
+        """No element can be greater, but if any element is smaller, return True."""
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: -1 if a < b else (1 if a > b else 0),
+            lambda items: any(i < 0 for i in items) and not any(i > 0 for i in items),
+        )
 
     def __le__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.le)
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: -1 if a < b else (1 if a > b else 0),
+            lambda items: all(i <= 0 for i in items),
+        )
 
     def __eq__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.eq)
+        return self._compare(self._broadcast(other), operator.eq, all)
 
     def __ne__(self, other):
         """Element-wise comparison."""
-        return not self._compare(self._broadcast(other), operator.eq)
+        return not self._compare(self._broadcast(other), operator.eq, all)
 
     def __gt__(self, other):
-        """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.gt)
+        """No element can be smaller, but if any element is larger, return True."""
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: 1 if a > b else (-1 if a < b else 0),
+            lambda items: any(i > 0 for i in items) and not any(i < 0 for i in items),
+        )
 
     def __ge__(self, other):
         """Element-wise comparison."""
-        return self._compare(self._broadcast(other), operator.ge)
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: 1 if a > b else (-1 if a < b else 0),
+            lambda items: all(i >= 0 for i in items),
+        )
 
     def __repr__(self):
         return "{cls_name}({value})".format(
@@ -209,11 +234,14 @@ class NumericTuple(tuple):
 
         return value
 
-    def _compare(self, other, op):
+    def _compare(self, other, op, reduction_op):
         if len(self) != len(other):  # or not isinstance(other, type(self))
             raise ValueError("Incompatible instance '{obj}'".format(obj=other))
 
-        return all(op(a, b) for a, b in zip(self, other))
+        return reduction_op(op(a, b) for a, b in zip(self, other))
+
+    def filter_mask(self, mask):
+        return type(self)(gt_utils.filter_mask(self, mask))
 
 
 class Index(NumericTuple):
@@ -232,6 +260,8 @@ class Shape(NumericTuple):
     """Shape of a n-dimensional grid (all elements are int >= 0)."""
 
     __slots__ = ()
+
+    _DEFAULT = 1
 
     @classmethod
     def _check_value(cls, value, ndims):
@@ -377,11 +407,11 @@ class FrameTuple(tuple):
 
     @property
     def lower_indices(self):
-        return tuple(d[0] for d in self)
+        return NumericTuple(*(d[0] for d in self))
 
     @property
     def upper_indices(self):
-        return tuple(d[1] for d in self)
+        return NumericTuple(*(d[1] for d in self))
 
     def append(self, point):
         other = self.__class__([(i, i) for i in point])
@@ -622,12 +652,15 @@ class DomainInfo(
     pass
 
 
-class FieldInfo(collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "dtype"])):
+class FieldInfo(
+    collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "axes", "dtype"])
+):
     def __repr__(self):
-        result = (
-            "FieldInfo(access=AccessKind.{access}, boundary={boundary}, dtype={dtype})".format(
-                access=self.access.name, boundary=repr(self.boundary), dtype=repr(self.dtype)
-            )
+        result = "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, dtype={dtype})".format(
+            access=self.access.name,
+            boundary=repr(self.boundary),
+            axes=repr(self.axes),
+            dtype=repr(self.dtype),
         )
         return result
 
@@ -642,6 +675,7 @@ class BuildOptions(AttributeClassLike):
 
     name = attribute(of=str)
     module = attribute(of=str)
+    format_source = attribute(of=bool, default=True)
     backend_opts = attribute(of=DictOf[str, Any], factory=dict)
     build_info = attribute(of=dict, optional=True)
     rebuild = attribute(of=bool, default=False)
@@ -655,7 +689,7 @@ class BuildOptions(AttributeClassLike):
     @property
     def shashed_id(self):
         result = gt_utils.shashed_id(
-            self.name, self.module, *tuple(sorted(self.backend_opts.items()))
+            self.name, self.module, self.format_source, *tuple(sorted(self.backend_opts.items()))
         )
 
         return result
@@ -701,20 +735,20 @@ def normalize_domain(domain):
     return domain
 
 
-def normalize_origin(origin):
+def normalize_origin(origin) -> Optional[Index]:
     if origin is not None:
         origin = tuple(origin)
         if isinstance(origin, numbers.Integral):
-            origin = Shape.from_k(int(origin))
+            origin = Index.from_k(int(origin))
         elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin):
-            origin = Shape.from_value(origin)
+            origin = Index.from_value(origin)
         else:
             raise ValueError("Invalid 'origin' value ({})".format(origin))
 
     return origin
 
 
-def normalize_origin_mapping(origin_mapping):
+def normalize_origin_mapping(origin_mapping) -> Mapping[str, Index]:
     origin_mapping = origin_mapping if origin_mapping is not None else {}
     if isinstance(origin_mapping, collections.abc.Mapping):
         origin_mapping = {

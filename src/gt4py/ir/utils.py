@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -29,17 +29,6 @@ from .nodes import *
 
 # --- Definition IR ---
 DEFAULT_LAYOUT_ID = "_default_layout_id_"
-
-
-def make_expr(value):
-    if isinstance(value, Expr):
-        result = value
-    elif isinstance(value, numbers.Number):
-        data_type = DataType.from_dtype(np.dtype(type(value)))
-        result = ScalarLiteral(value=value, data_type=data_type)
-    else:
-        raise ValueError("Invalid expression value '{}'".format(value))
-    return result
 
 
 def make_field_decl(

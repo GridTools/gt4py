@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -60,10 +60,6 @@ def pytest_configure(config):
     # HealthCheck.too_slow causes more trouble than good -- especially in CIs.
     hyp.settings.register_profile(
         "slow", hyp.settings(suppress_health_check=[hyp.HealthCheck.too_slow], deadline=None)
-    )
-    config.addinivalue_line(
-        "markers",
-        "requires_cudatoolkit: mark tests that require compilation of CUDA stencils (assume cupy is installed)",
     )
     config.addinivalue_line(
         "markers",

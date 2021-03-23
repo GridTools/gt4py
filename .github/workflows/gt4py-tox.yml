@@ -3,17 +3,17 @@ name: Tox (CPU only)
 on:
   push:
     branches:
-      - master
+    - master
   pull_request:
     branches:
-      - master
+    - master
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8]
+        python-version: [3.8]
 
     steps:
     - uses: actions/checkout@v2
@@ -37,5 +37,5 @@ jobs:
       run: |
         pyversion_no_dot="${{ matrix.python-version }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
-        pip install tox
-        tox -r -e py${pyversion_no_dot}-cpu
+        pip install tox clang-format
+        tox -r -e py${pyversion_no_dot}-internal-cpu
