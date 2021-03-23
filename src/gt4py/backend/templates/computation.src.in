@@ -271,24 +271,26 @@ void run(const std::array<gt::uint_t, MAX_DIM>& domain,
     auto ds_{{ field.name }} = make_data_store<{{ field.dtype }}, {{ field.layout_id }}, {{ field.naxes }}>(bi_{{ field.name }}, domain, {{ field.name }}_origin, gt::selector<{{ field.selector | join(", ") | lower }}>{});
 {%- endfor %}
 
+
+{% for computation in computations %}
     // Run computation and wait for the synchronization of the output stores
 {%- if requires_positional %}
-    auto gt_computation = gt::make_positional_computation<backend_t>(
+    auto gt_computation_{{ loop.index0 }} = gt::make_positional_computation<backend_t>(
 {%- else %}
-    auto gt_computation = gt::make_computation<backend_t>(
+    auto gt_computation_{{ loop.index0 }} = gt::make_computation<backend_t>(
 {%- endif %}
         make_grid(domain),
 {%- for param in parameters %}
         p_{{ param.name }}() = gt::make_global_parameter<{{ param.dtype }}>({{ param.name }}),
 {% endfor -%}
-{%- if requires_positional -%}
+{%- if computation.requires_positional -%}
 {%- for axis_name in axes_names %}
         p_domain_size_{{ axis_name }}() = gt::make_global_parameter(domain[{{ loop.index0 }}]),
 {%- endfor -%}
 {%- endif -%}
 
 {%- set multi_comma = joiner(",") %}
-{%- for multi in multi_stages %}
+{%- for multi in computation.multi_stages %}
         {{- multi_comma() }}
         gt::make_multistage(gt::execute::{{ multi.exec }}(),
     {%- set step_comma = joiner(",") %}
@@ -317,10 +319,13 @@ void run(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- endfor %}
     );
 
-    gt_computation.run({%- set comma = joiner(", ") %}
+{% endfor %}
+{% for computation in computations %}
+    gt_computation_{{ loop.index0 }}.run({%- set comma = joiner(", ") %}
 {%- for field in arg_fields -%}
                      {{ comma() }}p_{{ field.name }}()=ds_{{ field.name }}
 {%- endfor %});
+{% endfor %}
     // gt_computation_.sync_bound_data_stores();
 }
 
