@@ -290,15 +290,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
         if isinstance(value_decl, (Argument, TemporaryFieldDecl, TemporarySparseFieldDecl)) and (
             issubclass(value_decl.type_, (Field, TemporaryField, SparseField, TemporarySparseField))
         ):
-            try:
-                if not all(
-                    isinstance(symtable[index.name], LocationSpecification)
-                    or isinstance(symtable[index.name], LocationComprehension)
-                    for index in node.indices
-                ):
-                    1 + 1
-            except:
-                bla = 1 + 1
+ 
             assert len(node.indices) in [1, 2]
             assert all(isinstance(index, SymbolRef) for index in node.indices)
             assert all(
