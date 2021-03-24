@@ -166,7 +166,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
         if bound.level == gt_ir.LevelMarker.START:
             return "{:d}".format(bound.offset)
         else:
-            return "{:s}[:d] {:+d}".format(self.domain_arg_name, index, bound.offset)
+            return "{:s}[{:d}] {:+d}".format(self.domain_arg_name, index, bound.offset)
 
     def _create_horizontal_conditional(
         self, axis_name: str, index: int, interval: gt_ir.AxisInterval
