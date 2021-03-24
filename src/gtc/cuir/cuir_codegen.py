@@ -54,7 +54,13 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     BinaryOp = as_fmt("({left} {op} {right})")
 
-    UnaryOp = as_fmt("({op}{expr})")
+    UNARY_OPERATOR_TO_CODE = {
+        UnaryOperator.NOT: "!",
+        UnaryOperator.NEG: "-",
+        UnaryOperator.POS: "+",
+    }
+
+    UnaryOp = as_fmt("({_this_generator.UNARY_OPERATOR_TO_CODE[_this_node.op]}{expr})")
 
     TernaryOp = as_fmt("({cond} ? {true_expr} : {false_expr})")
 
@@ -108,14 +114,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             return self.DATA_TYPE_TO_CODE[dtype]
         except KeyError as error:
             raise NotImplementedError("Not implemented NativeFunction encountered.") from error
-
-    UNARY_OPERATOR_TO_CODE = {
-        UnaryOperator.NOT: "!",
-        UnaryOperator.NEG: "-",
-        UnaryOperator.POS: "+",
-    }
-
-    UnaryOperator = as_fmt("{_this_generator.UNARY_OPERATOR_TO_CODE[_this_node]}")
 
     IJExtent = as_fmt("extent<{i[0]}, {i[1]}, {j[0]}, {j[1]}>")
 
