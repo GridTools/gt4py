@@ -6,6 +6,7 @@ from inspect import getdoc
 from typing import TYPE_CHECKING, Any, Dict, Optional, Set
 
 import jinja2
+import numpy
 
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
@@ -100,7 +101,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
             access=AccessKind.READ_WRITE if name in write_fields else AccessKind.READ_ONLY,
             boundary=field_extents[name].to_boundary(),
             axes=list(dimension_flags_to_names(node.symtable_[name].dimensions).upper()),
-            dtype=node.symtable_[name].dtype.name.lower(),
+            dtype=numpy.dtype(node.symtable_[name].dtype.name.lower()),
         )
 
     unref_field_params = all_field_params.difference(all_referenced_fields)
@@ -115,7 +116,9 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     referenced_scalar_params = all_scalar_params.intersection(all_referenced_scalars)
 
     for name in referenced_scalar_params:
-        data.parameter_info[name] = ParameterInfo(dtype=node.symtable_[name].dtype.name.lower())
+        data.parameter_info[name] = ParameterInfo(
+            dtype=numpy.dtype(node.symtable_[name].dtype.name.lower())
+        )
 
     unref_scalar_params = all_scalar_params.difference(all_referenced_scalars)
 
