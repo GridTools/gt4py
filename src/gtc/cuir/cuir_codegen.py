@@ -103,7 +103,11 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         DataType.FLOAT64: "double",
     }
 
-    DataType = as_fmt("{_this_generator.DATA_TYPE_TO_CODE[_this_node]}")
+    def visit_DataType(self, dtype: DataType, **kwargs: Any) -> str:
+        try:
+            return self.DATA_TYPE_TO_CODE[dtype]
+        except KeyError as error:
+            raise NotImplementedError("Not implemented NativeFunction encountered.") from error
 
     UNARY_OPERATOR_TO_CODE = {
         UnaryOperator.NOT: "!",
