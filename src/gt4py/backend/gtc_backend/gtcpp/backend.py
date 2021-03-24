@@ -54,7 +54,7 @@ class GTCGTExtGenerator:
         self.options = options
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full().gtir
+        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
         oir = gtir_to_oir.GTIRToOIR().visit(gtir)
         oir = self._optimize_oir(oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
