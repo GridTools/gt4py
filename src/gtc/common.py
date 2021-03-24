@@ -547,8 +547,9 @@ def validate_symbol_refs() -> RootValidatorType:
                     if isinstance(metadata["definition"].type_, type) and issubclass(
                         metadata["definition"].type_, SymbolRef
                     ):
-                        if getattr(node, name) not in symtable:
-                            self.missing_symbols.append(getattr(node, name))
+                        if getattr(node, name):
+                            if getattr(node, name) not in symtable:
+                                self.missing_symbols.append(getattr(node, name))
 
                 if isinstance(node, SymbolTableTrait):
                     symtable = {**symtable, **node.symtable_}
