@@ -25,7 +25,7 @@ from gt4py import definitions as gt_definitions
 from gt4py import utils as gt_utils
 
 from . import pyext_builder
-from .module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_iir
+from .module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_gtir
 
 
 if TYPE_CHECKING:
@@ -283,7 +283,7 @@ class BaseBackend(Backend):
 
     def make_module_source(self, *, args_data: Optional[ModuleData] = None, **kwargs: Any) -> str:
         """Generate the module source code with or without stencil id."""
-        args_data = args_data or make_args_data_from_iir(self.builder.implementation_ir)
+        args_data = args_data or make_args_data_from_gtir(self.builder.gtir_pipeline)
         source = self.MODULE_GENERATOR_CLASS()(args_data, self.builder, **kwargs)
         return source
 
