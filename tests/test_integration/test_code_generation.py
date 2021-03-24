@@ -210,7 +210,9 @@ def test_lower_dimensional_inputs(backend):
     default_origin = (1, 1, 0)
     dtype = float
 
-    field_3d = gt_storage.zeros(backend, default_origin, full_shape, dtype, mask=None)
+    field_3d = gt_storage.zeros(
+        backend, default_origin, full_shape, dtype, mask=None, managed_memory=True
+    )
     assert field_3d.shape == full_shape[:]
 
     field_2d = gt_storage.zeros(
