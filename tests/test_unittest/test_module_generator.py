@@ -16,7 +16,7 @@
 
 import pytest
 
-from gt4py.backend import BaseModuleGenerator
+from gt4py.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
@@ -38,7 +38,7 @@ def sample_builder():
 
 @pytest.fixture
 def sample_args_data():
-    yield {"field_info": {"in_field": ""}, "parameter_info": {"inf_field": ""}}
+    yield ModuleData(field_info={"in_field": None}, parameter_info={"inf_field": None})
 
 
 def test_uninitialized_builder(sample_builder, sample_args_data):
