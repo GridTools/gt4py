@@ -341,6 +341,18 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
         return result
 
+    @staticmethod
+    def accessors_in_multistage(multi_stage, accessor_type) -> List[str]:
+        accessor_names = set()
+        for group in multi_stage.groups:
+            for stage in group.stages:
+                accessor_names |= {
+                    accessor.symbol
+                    for accessor in stage.accessors
+                    if isinstance(accessor, accessor_type)
+                }
+        return sorted(list(accessor_names))
+
     @property
     def fields_in_horizontal_if(self) -> Set[str]:
         names = []
@@ -587,26 +599,29 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             for group in multi_stage.groups:
                 for stage in group.stages:
                     stage_functors[stage.name] = self.visit(stage)
-        computations = []
+
+        arg_field_names = {field["name"] for field in arg_fields}
+
         multi_stages = []
-        ms_requires_positional = False
         for multi_stage in node.multi_stages:
-            ms_requires_positional = ms_requires_positional or (
+            requires_positional = (
                 len(tuple(gt_ir.filter_nodes_dfs(multi_stage, gt_ir.AxisIndex))) > 0
             )
             steps = [[stage.name for stage in group.stages] for group in multi_stage.groups]
+            used_fields = self.accessors_in_multistage(multi_stage, gt_ir.FieldAccessor)
+            used_arg_fields = [field for field in used_fields if field in arg_field_names]
+            used_parameters = self.accessors_in_multistage(multi_stage, gt_ir.ParameterAccessor)
             multi_stages.append(
                 {
                     "exec": str(multi_stage.iteration_order).lower(),
                     "steps": steps,
+                    "requires_positional": requires_positional,
+                    "fields": used_arg_fields,
+                    "parameters": used_parameters,
                 }
             )
-            # if they need sync
-            computations.append(
-                {"multi_stages": list(multi_stages), "requires_positional": ms_requires_positional}
-            )
-            multi_stages.clear()
-            ms_requires_positional = False
+
+        any_positional = any(multi_stage["requires_positional"] for multi_stage in multi_stages)
 
         template_args = dict(
             arg_fields=arg_fields,
@@ -616,8 +631,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             halo_sizes=halo_sizes,
             k_axis=k_axis,
             module_name=self.module_name,
-            requires_positional=requires_positional,
-            computations=computations,
+            requires_positional=any_positional,
             multi_stages=multi_stages,
             parameters=parameters,
             stage_functors=stage_functors,
@@ -851,9 +865,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         """Generate the source for the stencil independently from use case."""
         if "computation_src" in self.builder.backend_data:
             return self.builder.backend_data["computation_src"]
-        class_name = (
-            self.pyext_class_name if self.builder.stencil_id else self.builder.options.name
-        )
+        class_name = self.pyext_class_name if self.builder.stencil_id else self.builder.options.name
         module_name = (
             self.pyext_module_name
             if self.builder.stencil_id
