@@ -275,10 +275,6 @@ class PyToGTScript:
 
                     assert len(args) + len(transformed_kwargs) == len(captures)
 
-                    try:
-                        node_type(*args, **transformed_kwargs)
-                    except:
-                        bla = 1 + 1
 
                     return node_type(*args, **transformed_kwargs)
 
