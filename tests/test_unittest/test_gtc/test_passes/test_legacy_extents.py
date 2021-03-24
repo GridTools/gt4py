@@ -8,7 +8,7 @@ from gtc.passes.gtir_pipeline import prune_unused_parameters
 
 
 def prepare_gtir(builder: StencilBuilder):
-    return builder.gtir_pipeline.full(skip=[prune_unused_parameters]).gtir
+    return builder.gtir_pipeline.full(skip=[prune_unused_parameters])
 
 
 def test_noextents():
