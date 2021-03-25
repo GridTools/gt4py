@@ -659,7 +659,9 @@ class DomainInfo(
 
 
 class FieldInfo(
-    collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "axes", "data_dims", "dtype"])
+    collections.namedtuple(
+        "FieldInfoNamedTuple", ["access", "boundary", "axes", "data_dims", "dtype"]
+    )
 ):
     def __repr__(self):
         result = "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, data_dims={data_dims}, dtype={dtype})".format(
@@ -747,7 +749,7 @@ def normalize_origin(origin) -> Optional[Index]:
         origin = tuple(origin)
         if isinstance(origin, numbers.Integral):
             origin = Index.from_k(int(origin))
-        elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin):
+        elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin, ndims=(1, 3)):
             origin = Index.from_value(origin)
         else:
             raise ValueError("Invalid 'origin' value ({})".format(origin))
