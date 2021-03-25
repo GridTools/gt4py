@@ -544,6 +544,8 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     MODULE_GENERATOR_CLASS = PyExtModuleGenerator
 
+    USE_LEGACY_TOOLCHAIN = True
+
     PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
     def generate(self) -> Type["StencilObject"]:
