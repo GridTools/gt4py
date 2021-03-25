@@ -436,13 +436,12 @@ class _FieldDescriptor:
                 raise ValueError("Invalid data type descriptor")
             self.dtype = np.dtype(dtype)
         self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
-        self.data_dims = None
+        self.data_dims = ()
         if data_dims:
             if not isinstance(data_dims, collections.abc.Collection):
                 self.data_dims = [data_dims]
             else:
                 self.data_dims = [*data_dims]
-        print(f"{self.data_dims=}")
 
     def __repr__(self):
         args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}"

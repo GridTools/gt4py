@@ -394,7 +394,7 @@ class VarRef(Ref):
 class FieldRef(Ref):
     name = attribute(of=str)
     offset = attribute(of=DictOf[str, int])
-    data_index = attribute(of=ListOf[int], optional=True)
+    data_index = attribute(of=ListOf[int], factory=list)
     loc = attribute(of=Location, optional=True)
 
     @classmethod
@@ -607,7 +607,7 @@ class FieldDecl(Decl):
     data_type = attribute(of=DataType)
     axes = attribute(of=ListOf[str])
     is_api = attribute(of=bool)
-    data_dims = attribute(of=ListOf[int], optional=True)
+    data_dims = attribute(of=ListOf[int], factory=list)
     layout_id = attribute(of=str, default="_default_")
     loc = attribute(of=Location, optional=True)
 
