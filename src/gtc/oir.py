@@ -274,11 +274,11 @@ class CacheDesc(LocNode):
         end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
         return Interval(start=start, end=end)
 
-    @root_validator(skip_on_failure=True)
-    def ordered_check(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        if not values["start"] < values["end"]:
-            raise ValueError("Interval start needs to be lower than end.")
-        return values
+    # @root_validator(skip_on_failure=True)
+    # def ordered_check(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
+    #     if not values["start"] < values["end"]:
+    #         raise ValueError("Interval start needs to be lower than end.")
+    #     return values
 
 
 class IJCache(CacheDesc):

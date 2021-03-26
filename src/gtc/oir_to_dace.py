@@ -39,6 +39,8 @@ class Access:
 
 
 class BaseOirSDFGBuilder(ABC):
+    has_transients = True
+
     class AccessCollector(NodeVisitor):
         """Collects all field accesses and corresponding offsets."""
 
@@ -134,7 +136,6 @@ class BaseOirSDFGBuilder(ABC):
         self._access_nodes = dict()
         self._access_collection_cache = dict()
         self._source_nodes = dict()
-        self._sink_nodes = dict()
         self._delete_candidates = list()
 
     def _access_space_to_subset(self, name, access_space):
@@ -318,8 +319,20 @@ class BaseOirSDFGBuilder(ABC):
         self.add_subsets()
         self.add_arrays()
         self._sdfg.validate()
-        for acc in self._sink_nodes.values():
-            acc.access = dace.AccessType.WriteOnly
+        for acc in (n for n in self._state.nodes() if isinstance(n, dace.nodes.AccessNode)):
+            is_write = len(self._state.in_edges(acc)) > 0 and all(
+                edge.data.data is not None for edge in self._state.in_edges(acc)
+            )
+            is_read = len(self._state.out_edges(acc)) > 0 and all(
+                edge.data.data is not None for edge in self._state.out_edges(acc)
+            )
+            if is_read and is_write:
+                acc.access = dace.AccessType.ReadWrite
+            elif is_read:
+                acc.access = dace.AccessType.ReadOnly
+            else:
+                assert is_write
+                acc.access = dace.AccessType.WriteOnly
         return self._sdfg
 
     @abstractmethod
@@ -347,7 +360,7 @@ class BaseOirSDFGBuilder(ABC):
             name = decl.name
             dtype = dace.dtypes.typeclass(np.dtype(data_type_to_typestr(self._dtypes[name])).name)
             if isinstance(decl, ScalarDecl):
-                self._sdfg.add_scalar(name, dtype=dtype)
+                self._sdfg.add_symbol(name, stype=dtype)
             else:
                 if name not in self._get_access_collection(self._sdfg).offsets():
                     continue
@@ -358,7 +371,7 @@ class BaseOirSDFGBuilder(ABC):
                     name,
                     dtype=dtype,
                     shape=(f"I{di:+d}", f"J{dj:+d}", self.get_k_size(name)),
-                    transient=isinstance(decl, Temporary),
+                    transient=isinstance(decl, Temporary) and self.has_transients,
                 )
 
     @classmethod
@@ -407,6 +420,8 @@ class BaseOirSDFGBuilder(ABC):
 
 
 class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
+    has_transients = False
+
     def get_k_size(self, name):
         collection = self._get_access_collection(self._sdfg)
         min_k = min(o[2] for o in collection.offsets()[name])
@@ -420,18 +435,17 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         write_subsets = dict()
         read_subsets = dict()
         k_origins = dict()
-        for name, offsets in collection.offsets().items():
-            k_origins[name] = -min(o[2] for o in offsets)
+        # for name, offsets in collection.offsets().items():
+        #     k_origins[name] = -min(o[2] for o in offsets)
         for name, offsets in collection.read_offsets().items():
-            read_subsets[name] = "{}:{}".format(
-                k_origins[name] + min(o[2] for o in offsets),
-                k_origins[name] + max(o[2] for o in offsets) + 1,
+            read_subsets[name] = "k{:+d}:k{:+d}".format(
+                min(o[2] for o in offsets),
+                max(o[2] for o in offsets) + 1,
+                # k_origins[name] + min(o[2] for o in offsets),
+                # k_origins[name] + max(o[2] for o in offsets) + 1,
             )
         for name in collection.write_fields():
-            write_subsets[name] = "{}:{}".format(
-                k_origins[name],
-                k_origins[name] + 1,
-            )
+            write_subsets[name] = "k:k+1"
         return read_subsets, write_subsets
 
     def add_read_edges(self, node):

@@ -76,9 +76,30 @@ class GTCGTExtGenerator:
         dtype_deduced = resolve_dtype(gtir_without_unused_params)
         upcasted = upcast(dtype_deduced)
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
-        sdfg = OirSDFGBuilder.build(oir.name, oir)
-        oir = dace_to_oir.convert(sdfg)
         oir = self._optimize_oir(oir)
+        oir = gtir_to_oir.oir_iteration_space_computation(oir)
+        sdfg = OirSDFGBuilder.build(oir.name, oir)
+        sdfg.save(definition_ir.name + "_toplevel.sdfg")
+
+        import copy
+
+        sdfg2 = copy.deepcopy(sdfg)
+        sdfg2.expand_library_nodes(recursive=False)
+        sdfg2.save(definition_ir.name + "_expanded.sdfg")
+        sdfg2.validate()
+        # sdfg2.apply_strict_transformations(validate=False)
+
+        # from dace.transformation.interstate import StateFusion, InlineSDFG
+        # for node, _ in sdfg2.all_nodes_recursive():
+        #     import dace
+        #     if isinstance(node, dace.nodes.NestedSDFG):
+        #         node.sdfg.apply_transformations_repeated([InlineSDFG], strict=True, validate=False)
+        #     sdfg2.apply_transformations_repeated([InlineSDFG], strict=True, validate=False)
+        #     # sdfg2.apply_transformations_repeated(StateFusion, strict=True, validate=False)
+
+        sdfg2.save(definition_ir.name + "_strict.sdfg")
+        sdfg2.compile()
+        oir = dace_to_oir.convert(sdfg)
 
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)

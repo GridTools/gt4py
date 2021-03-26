@@ -25,6 +25,13 @@ def convert(sdfg: dace.SDFG) -> oir.Stencil:
                 params.append(oir.FieldDecl(name=name, dtype=dtype, dimensions=dimensions))
             else:
                 decls.append(oir.Temporary(name=name, dtype=dtype, dimensions=dimensions))
+    for sym, stype in sdfg.symbols.items():
+        if sym not in "IJK":
+            params.append(
+                oir.ScalarDecl(
+                    name=sym, dtype=common.typestr_to_data_type(stype.as_numpy_dtype().str)
+                )
+            )
 
     is_correct_node_types = all(
         isinstance(n, (dace.SDFGState, dace.nodes.AccessNode, VerticalLoopLibraryNode))
