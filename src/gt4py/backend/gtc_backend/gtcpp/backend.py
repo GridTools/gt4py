@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
-
+import dace
 import gtc.dace_to_oir as dace_to_oir
 import gtc.utils as gtc_utils
 from eve import codegen
@@ -55,7 +55,7 @@ from gtc.passes.oir_optimizations.temporaries import (
     WriteBeforeReadTemporariesToScalars,
 )
 from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
-
+from gtc import oir
 
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
@@ -86,6 +86,11 @@ class GTCGTExtGenerator:
         sdfg2 = copy.deepcopy(sdfg)
         sdfg2.expand_library_nodes(recursive=False)
         sdfg2.save(definition_ir.name + "_expanded.sdfg")
+        sdfg2.expand_library_nodes(recursive=False)
+        sdfg2.save(definition_ir.name + "_expanded2.sdfg")
+        for n, _ in sdfg2.all_nodes_recursive():
+            if isinstance(n, dace.nodes.MapEntry):
+                n.map.schedule=dace.ScheduleType.Sequential
         sdfg2.validate()
         # sdfg2.apply_strict_transformations(validate=False)
 
@@ -98,14 +103,23 @@ class GTCGTExtGenerator:
         #     # sdfg2.apply_transformations_repeated(StateFusion, strict=True, validate=False)
 
         sdfg2.save(definition_ir.name + "_strict.sdfg")
-        sdfg2.compile()
+        sdfg2.validate()
+        # sdfg2.compile()
         oir = dace_to_oir.convert(sdfg)
 
-        gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
-        implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
-        bindings = GTCppBindingsCodegen.apply(
-            gtcpp, module_name=self.module_name, gt_backend_t=self.gt_backend_t
+        # gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
+        # implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
+        code_objects = sdfg2.generate_code()
+        implementation = code_objects[[co.title for co in code_objects].index("Frame")].clean_code
+        lines = implementation.split("\n")
+        implementation = "\n".join(lines[0:2] + lines[3:])
+        implementation = codegen.format_source("cpp", implementation, style="LLVM")
+        from gtc.gtir_to_oir import oir_field_boundary_computation
+        origins = {k:(-v.i_interval.start.offset, -v.j_interval.start.offset, 0) for k,v in oir_field_boundary_computation(oir).items()}
+        bindings = DaCeBindingsCodegen.apply(oir,
+            sdfg2, module_name=self.module_name, origins=origins
         )
+
         bindings_ext = ".cu" if self.gt_backend_t == "gpu" else ".cpp"
         return {
             "computation": {"computation.hpp": implementation},
@@ -126,7 +140,7 @@ class GTCGTExtGenerator:
         return oir
 
 
-class GTCppBindingsCodegen(codegen.TemplatedGenerator):
+class DaCeBindingsCodegen:
     def __init__(self):
         self._unique_index: int = 0
 
@@ -134,110 +148,198 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         self._unique_index += 1
         return self._unique_index
 
-    def visit_DataType(self, dtype: DataType, **kwargs):
-        if dtype == DataType.INT64:
-            return "long long"
-        elif dtype == DataType.FLOAT64:
-            return "double"
-        elif dtype == DataType.FLOAT32:
-            return "float"
-        elif dtype == DataType.BOOL:
-            return "bool"
-        else:
-            raise AssertionError(f"Invalid DataType value: {dtype}")
 
-    def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
-        assert "gt_backend_t" in kwargs
-        if "external_arg" in kwargs:
-            if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,{ndim}> {name}_origin".format(
-                    name=node.name,
-                    ndim=node.dimensions.count(True),
-                )
-            else:
-                num_dims = node.dimensions.count(True)
-                sid_def = """gt::as_{sid_type}<{dtype}, {num_dims},
-                    std::integral_constant<int, {unique_index}>>({name})""".format(
-                    sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
-                    name=node.name,
-                    dtype=self.visit(node.dtype),
-                    unique_index=self.unique_index(),
-                    num_dims=num_dims,
-                )
-                if num_dims != 3:
-                    gt_dims = [
-                        f"gt::stencil::dim::{dim}"
-                        for dim in gtc_utils.dimension_flags_to_names(node.dimensions)
-                    ]
-                    sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
-                        gt_dims=", ".join(gt_dims), sid_def=sid_def
-                    )
-                return "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-                    sid_def=sid_def,
-                    name=node.name,
-                )
+    mako_template = as_mako(
+"""
+#include <chrono>
+#include <iostream>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <gridtools/storage/adapter/python_sid_adapter.hpp>
+#include <gridtools/stencil/global_parameter.hpp>
+#include <gridtools/sid/sid_shift_origin.hpp>
+#include <gridtools/sid/rename_dimensions.hpp>
+#include "computation.hpp"
+namespace gt = gridtools;
+namespace py = ::pybind11;
+%if len(entry_params) > 0:
 
-    def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
-        if "external_arg" in kwargs:
-            if kwargs["external_arg"]:
-                return "{dtype} {name}".format(name=node.name, dtype=self.visit(node.dtype))
-            else:
-                return "gridtools::stencil::make_global_parameter({name})".format(name=node.name)
+class ${name}_functor {
+  const int __I;
+  const int __J;
+  const int __K;
+  ${name}_t *dace_handle;
 
-    def visit_Program(self, node: gtcpp.Program, **kwargs):
-        assert "module_name" in kwargs
-        entry_params = self.visit(node.parameters, external_arg=True, **kwargs)
-        sid_params = self.visit(node.parameters, external_arg=False, **kwargs)
-        return self.generic_visit(
-            node,
-            entry_params=entry_params,
-            sid_params=sid_params,
-            **kwargs,
-        )
+public:
+  ${name}_functor(std::array<gt::uint_t, 3> domain)
+      : __I(domain[0]), __J(domain[1]), __K(domain[2]),
+        dace_handle(__dace_init_${name}(${zeros_init_func})){};
+  ~${name}_functor() {
+    __dace_exit_${name}(dace_handle);
+  };
+  void operator()(${functor_args}) {
+  
+    ${get_strides_and_ptr}
+    
+    __program_${name}(
+        dace_handle, ${dace_args});
+        
+  }
+};
 
-    Program = as_mako(
-        """
-        #include <chrono>
-        #include <pybind11/pybind11.h>
-        #include <pybind11/stl.h>
-        #include <gridtools/storage/adapter/python_sid_adapter.hpp>
-        #include <gridtools/stencil/global_parameter.hpp>
-        #include <gridtools/sid/sid_shift_origin.hpp>
-        #include <gridtools/sid/rename_dimensions.hpp>
-        #include "computation.hpp"
-        namespace gt = gridtools;
-        namespace py = ::pybind11;
-        %if len(entry_params) > 0:
-        PYBIND11_MODULE(${module_name}, m) {
-            m.def("run_computation", [](std::array<gt::uint_t, 3> domain,
-            ${','.join(entry_params)},
-            py::object exec_info){
-                if (!exec_info.is(py::none()))
-                {
-                    auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_start_time"] = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
-                }
+std::tuple<gt::uint_t, gt::uint_t, gt::uint_t> last_size;
+${name}_functor *${name}_ptr(nullptr);
+${name}_functor & get_${name}(std::array<gt::uint_t, 3> domain) {
+  auto this_size = std::tuple_cat(domain);
+  if (${name}_ptr!=nullptr || this_size!=last_size){
+      delete ${name}_ptr;
+      ${name}_ptr = new ${name}_functor(domain);
+  }
+  return *${name}_ptr;
+}
 
-                ${name}(domain)(${','.join(sid_params)});
+PYBIND11_MODULE(${module_name}, m) {
+    m.def("run_computation", [](std::array<gt::uint_t, 3> domain,
+    ${entry_params},
+    py::object exec_info){
+        if (!exec_info.is(py::none()))
+        {
+            auto exec_info_dict = exec_info.cast<py::dict>();
+            exec_info_dict["run_cpp_start_time"] = static_cast<double>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+        }
 
-                if (!exec_info.is(py::none()))
-                {
-                    auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_end_time"] = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
-                }
+        get_${name}(domain)(${sid_params});
 
-            }, "Runs the given computation");}
-        %endif
-        """
+        if (!exec_info.is(py::none()))
+        {
+            auto exec_info_dict = exec_info.cast<py::dict>();
+            exec_info_dict["run_cpp_end_time"] = static_cast<double>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
+        }
+
+    }, "Runs the given computation");}
+%endif
+"""
     )
 
+    def generate_strides_and_ptr(self, sdfg, offset_dict):
+        res = []
+        for name, array in sdfg.arrays.items():
+            if array.transient:
+                continue
+            if name in offset_dict:
+                offset = ", ".join(str(-o) for o in offset_dict[name])
+            else:
+                offset = "0, 0, 0"
+            # res.append(f"""auto __{name}_outer =gt::sid::shift_sid_origin(__{name}_sid, std::array<gt::int_t, 3>({{{offset}}}));
+            #            auto {name} = gt::sid::sid_get_origin(__{name}_outer)();
+            #            auto __{name}_strides = gt::sid::sid_get_strides(__{name}_sid);
+            #            int __{name}_I_stride = __{name}_strides[0];
+            #            int __{name}_J_stride = __{name}_strides[1];
+            #            int __{name}_K_stride = __{name}_strides[2];"""
+            # )
+            dtype=array.dtype.ctype
+            res.append(f"""
+                       auto __{name}_outer =gt::sid::shift_sid_origin(__{name}_sid, std::array<gt::int_t, 3>{{0, 0, 0}});
+                       {dtype}* {name} = gt::sid::sid_get_origin(__{name}_outer)();
+                       auto __{name}_strides = gt::sid::sid_get_strides(__{name}_sid);
+                       int __{name}_I_stride = __{name}_strides[0];
+                       int __{name}_J_stride = __{name}_strides[1];
+                       int __{name}_K_stride = __{name}_strides[2];
+                       {name} -= ({"+".join(f"__{name}_{var}_stride*({offset_dict[name][idx]})" for idx, var in enumerate("IJK"))});"""
+            )
+        return "\n".join(res)
+
+    def generate_entry_params(self, oir: oir.Stencil, sdfg: dace.SDFG):
+        res = {}
+        import dace.data
+        for name in sdfg.signature_arglist(with_types=False, for_call=True):
+            if name in sdfg.arrays:
+                data = sdfg.arrays[name]
+                assert isinstance(data, dace.data.Array)
+                res[name] = "py::buffer {name}, std::array<gt::uint_t,{ndim}> {name}_origin".format(
+                    name=name,
+                    ndim=len(data.shape),
+                )
+            elif name in sdfg.symbols and not name.startswith('__'):
+                assert name in sdfg.symbols
+                res[name] = "{dtype} {name}".format(dtype=sdfg.symbols[name].ctype, name=name )
+        return ",".join(res[node.name] for node in oir.params)
+
+    def generate_sid_params(self, sdfg: dace.SDFG):
+        res = []
+        import dace.data
+        for name, array in sdfg.arrays.items():
+            if array.transient:
+                continue
+            num_dims = len(array.shape)
+            sid_def = """gt::as_{sid_type}<{dtype}, {num_dims},
+                std::integral_constant<int, {unique_index}>>({name})""".format(
+                sid_type="cuda_sid" if array.storage in [dace.StorageType.GPU_Global, dace.StorageType.GPU_Shared] else "sid",
+                name=name,
+                dtype=array.dtype.ctype,
+                unique_index=self.unique_index(),
+                num_dims=num_dims,
+            )
+            res.append("gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
+                sid_def=sid_def,
+                name=name,
+            ))
+        for name in (n for n in sdfg.symbols.keys() if not n.startswith('__')):
+            res.append(name)
+        return ", ".join(res)
+
+    def generate_transient_strides(self, sdfg):
+        symbols = {f"__{var}":f"__{var}" for var in "IJK"}
+        for name, array in sdfg.arrays.items():
+            if array.transient:
+                symbols[f"__{name}_K_stride"] = "1"
+                symbols[f"__{name}_J_stride"] = str(array.shape[2])
+                symbols[f"__{name}_I_stride"] = str(array.shape[1]*array.shape[2])
+        for sym in sdfg.symbols.keys():
+            if sym not in symbols:
+                symbols[sym] = "0"
+        return ",".join(symbols[s] for s in sdfg.signature_arglist(with_types=False, for_call=True) if s in symbols)
+    def generate_dace_args(self, sdfg):
+        symbols = {f"__{var}":f"__{var}" for var in "IJK"}
+        for name, array in sdfg.arrays.items():
+            if array.transient:
+                symbols[f"__{name}_K_stride"] = "1"
+                symbols[f"__{name}_J_stride"] = str(array.shape[2])
+                symbols[f"__{name}_I_stride"] = str(array.shape[1]*array.shape[2])
+        for sym in sdfg.signature_arglist(with_types=False, for_call=True):
+            if sym not in symbols:
+                symbols[sym] = sym
+        return ",".join(symbols[s] for s in sdfg.signature_arglist(with_types=False, for_call=True))
+
+    def generate_functor_args(self, sdfg: dace.SDFG):
+        res = []
+        for name, array in sdfg.arrays.items():
+            if array.transient:
+                continue
+            res.append(f"auto &&__{name}_sid")
+        for name, dtype in ((n, d) for n, d in sdfg.symbols.items() if not n.startswith('__')):
+            res.append(dtype.as_arg(name))
+        return ", ".join(res)
+
+    def generate_sdfg_bindings(self, oir, sdfg, module_name, origins):
+
+        return self.mako_template.render_values(
+            name=sdfg.name,
+            module_name=module_name,
+            get_strides_and_ptr=self.generate_strides_and_ptr(sdfg, origins),
+            dace_args=self.generate_dace_args(sdfg),
+            entry_params=self.generate_entry_params(oir, sdfg),
+            sid_params=self.generate_sid_params(sdfg),
+            functor_args=self.generate_functor_args(sdfg),
+            zeros_init_func=self.generate_transient_strides(sdfg),
+        )
     @classmethod
-    def apply(cls, root, *, module_name="stencil", **kwargs) -> str:
-        generated_code = cls().visit(root, module_name=module_name, **kwargs)
+    def apply(cls, oir: oir.Stencil, sdfg: dace.SDFG, module_name: str, origins) -> str:
+        generated_code = cls().generate_sdfg_bindings(oir, sdfg, module_name=module_name, origins=origins)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
 

@@ -168,23 +168,36 @@ class NaiveVerticalLoopExpansion(dace.library.ExpandTransformation):
 
 
 class NaiveVerticalLoopExpander:
-    def get_origins(self, node: "VerticalLoopLibraryNode"):
+
+    def get_ij_origins(self, node: "VerticalLoopLibraryNode"):
         min_offsets = {}
-        k_origs = {}
         for interval, section in node.sections:
-            access_collection = self._get_access_collection(node)
+            access_collection = self._get_access_collection(section)
             min_offsets.update(
                 {name: off.pop() for name, off in access_collection.offsets().items()}
             )
             for name, offsets in access_collection.offsets().items():
                 for off in offsets:
                     min_offsets[name] = tuple(min(m, o) for m, o in zip(min_offsets[name], off))
+        return {k: (-v[0], -v[1]) for k, v in min_offsets.items()}
+
+    def get_k_origins(self, node: "VerticalLoopLibraryNode"):
+        k_origs = {}
+        for interval, section in node.sections:
+            access_collection = self._get_access_collection(section)
+            for name, offsets in access_collection.offsets().items():
+                for off in offsets:
                     k_level = oir.AxisBound(
-                        level=interval.start.level, offset=interval.start.offset - off[2]
+                        level=interval.start.level, offset=interval.start.offset + off[2]
                     )
                     k_orig = min(k_origs.get(name, k_level), k_level)
                     k_origs[name] = k_orig
-        return {k: (-v[0], -v[1], k_origs[k]) for k, v in min_offsets.items()}
+        return k_origs
+
+    def get_origins(self, node: "VerticalLoopLibraryNode"):
+        ij_origins = self.get_ij_origins(node)
+        k_origins = self.get_k_origins(node)
+        return {name:(*ij_origins[name],k_origins[name]) for name in ij_origins.keys()}
 
     def __init__(
         self, node: "VerticalLoopLibraryNode", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
@@ -225,7 +238,14 @@ class NaiveVerticalLoopExpander:
 
         for name, subset in subsets.items():
             dtype = self.parent_sdfg.arrays[name].dtype
-            self.res_sdfg.add_array(name, shape=subset.bounding_box_size(), dtype=dtype)
+            self.res_sdfg.add_array(
+                name,
+                shape=subset.bounding_box_size(),
+                strides=tuple(
+                    dace.symbolic.pystr_to_symbolic(f"__{name}_{var}_stride") for var in "IJK"
+                ),
+                dtype=dtype,
+            )
 
         return dace.nodes.NestedSDFG(
             self.res_sdfg.name + "_nsdfg",
@@ -277,7 +297,7 @@ class NaiveVerticalLoopExpander:
             subset_str = "{i:+d}:{i:+d}+({I}),{j:+d}:{j:+d}+({J}),k-({k_orig}){k:+d}:k-({k_orig}){k:+d}{K:+d}".format(
                 i=self.origins[name][0] + off[0],
                 j=self.origins[name][1] + off[1],
-                k_orig=get_axis_bound_str(self.origins[name][2], "K"),
+                k_orig=get_axis_bound_str(self.origins[name][2], "__K"),
                 k=off[2],
                 I=shape[0],
                 J=shape[1],
@@ -306,12 +326,12 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
     @staticmethod
     def _get_loop_controls(interval: Interval, loop_order: LoopOrder):
         if loop_order == LoopOrder.BACKWARD:
-            initialize_expr = f"({get_axis_bound_str(interval.end, 'K')})-1"
-            condition_expr = f"k>=({get_axis_bound_str(interval.start, 'K')})"
+            initialize_expr = f"({get_axis_bound_str(interval.end, '__K')})-1"
+            condition_expr = f"k>=({get_axis_bound_str(interval.start, '__K')})"
             increment_expr = f"k-1"
         else:
-            initialize_expr = f"{get_axis_bound_str(interval.start, 'K')}"
-            condition_expr = f"k<({get_axis_bound_str(interval.end, 'K')})"
+            initialize_expr = f"{get_axis_bound_str(interval.start, '__K')}"
+            condition_expr = f"k<({get_axis_bound_str(interval.end, '__K')})"
             increment_expr = f"k+1"
         return initialize_expr, condition_expr, increment_expr
 
@@ -374,7 +394,7 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
 
         for interval, section in self.node.sections:
 
-            interval_str = get_interval_range_str(interval, "K")
+            interval_str = get_interval_range_str(interval, "__K")
             map_entry, map_exit = res_state.add_map(
                 section.name + "_map", ndrange={"k": interval_str}
             )
@@ -416,7 +436,7 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
                     out_accesses[name],
                     src_conn=name,
                     dst_conn=None,
-                    memlet=dace.memlet.Memlet.simple(name, subset),
+                    memlet=dace.memlet.Memlet.simple(name, subset, dynamic=False),
                 )
 
 
@@ -480,7 +500,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
 
     def visit_FieldAccess(self, node: oir.FieldAccess, *, is_target, targets):
 
-        if is_target or node.name in targets:
+        if (is_target or node.name in targets) and self.visit(node.offset)=='':
             targets.add(node.name)
             return "__" + node.name
         else:
@@ -509,8 +529,8 @@ class TaskletCodegen(codegen.TemplatedGenerator):
 
     TernaryOp = as_fmt("({true_expr} if {cond} else {false_expr})")
 
-    Cast = as_fmt("{dtype}({expr})")
-
+    # Cast = as_fmt("{dtype}({expr})")
+    Cast = as_fmt("{expr}")
     def visit_BuiltInLiteral(self, builtin: common.BuiltInLiteral, **kwargs: Any) -> str:
         if builtin == common.BuiltInLiteral.TRUE:
             return "True"
@@ -623,7 +643,14 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
 
         for name, subset in subsets.items():
             dtype = parent_sdfg.arrays[name].dtype
-            res_sdfg.add_array(name, shape=subset.bounding_box_size(), dtype=dtype)
+            res_sdfg.add_array(
+                name,
+                shape=subset.bounding_box_size(),
+                strides=tuple(
+                    dace.symbolic.pystr_to_symbolic(f"__{name}_{var}_stride") for var in "IJK"
+                ),
+                dtype=dtype,
+            )
 
         return dace.nodes.NestedSDFG(
             res_sdfg.name + "_nsdfg",
@@ -669,7 +696,7 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                 min_offsets[name] = tuple(min(m, o) for m, o in zip(min_offsets[name], off))
         for name, offsets in access_collection.read_offsets().items():
             for off in offsets:
-                subset_str = "i{i:+d},j{j:+d},k{k:+d}".format(
+                subset_str = "i{i:+d},j{j:+d},{k:+d}".format(
                     i=-min_offsets[name][0] + off[0],
                     j=-min_offsets[name][1] + off[1],
                     k=-min_offsets[name][2] + off[2],
@@ -684,11 +711,11 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                     acc_name += suffix
                 in_memlets[acc_name] = dace.memlet.Memlet.simple(name, subset_str)
         for name in access_collection.write_fields():
-            subset_str = "i{i:+d},j{j:+d},k{k:+d}".format(
+            subset_str = "i{i:+d},j{j:+d},{k:+d}".format(
                 i=-min_offsets[name][0], j=-min_offsets[name][1], k=-min_offsets[name][2]
             )
             acc_name = "__" + name
-            out_memlets[acc_name] = dace.memlet.Memlet.simple(name, subset_str)
+            out_memlets[acc_name] = dace.memlet.Memlet.simple(name, subset_str, dynamic=node.oir_node.mask is not None)
 
         return in_memlets, out_memlets
 
@@ -705,14 +732,14 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
         res_state = res_sdfg.add_state(node.name + "_state")
         in_memlets, out_memlets = NaiveHorizontalExecutionExpansion.get_innermost_memlets(node)
         map_ranges = {
-            "i": get_interval_range_str(node.oir_node.iteration_space.i_interval, "I"),
-            "j": get_interval_range_str(node.oir_node.iteration_space.j_interval, "J"),
+            "i": get_interval_range_str(node.oir_node.iteration_space.i_interval, "__I"),
+            "j": get_interval_range_str(node.oir_node.iteration_space.j_interval, "__J"),
         }
         inputs = [name[len("IN_") :] for name in node.in_connectors]
         outputs = [name[len("OUT_") :] for name in node.out_connectors]
         input_nodes = {name: res_state.add_read(name) for name in inputs}
         output_nodes = {name: res_state.add_write(name) for name in outputs}
-        res_state.add_mapped_tasklet(
+        tasklet, _, _ = res_state.add_mapped_tasklet(
             node.name + "_tasklet",
             map_ranges=map_ranges,
             inputs=in_memlets,
@@ -722,7 +749,12 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
             code=NaiveHorizontalExecutionExpansion.code_generate(node.oir_node),
             external_edges=True,
         )
+        for conn in tasklet.in_connectors:
+            tasklet.in_connectors[conn] = res_sdfg.arrays[in_memlets[conn].data].dtype
+        for conn in tasklet.out_connectors:
+            tasklet.out_connectors[conn] = res_sdfg.arrays[out_memlets[conn].data].dtype
         res.symbol_mapping = {s: s for s in res_sdfg.free_symbols}
+        res_sdfg.save('tmp.sdfg')
         for s in list(res_sdfg.free_symbols):
             if s not in res_sdfg.symbols:
                 res_sdfg.add_symbol(s, parent_sdfg.symbols[s])

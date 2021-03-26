@@ -141,11 +141,11 @@ class BaseOirSDFGBuilder(ABC):
     def _access_space_to_subset(self, name, access_space):
         extent = self._extents[name]
         origin = (-extent[0][0], -extent[1][0])
-        i_subset = "{start}:I{end:+d}".format(
+        i_subset = "{start}:__I{end:+d}".format(
             start=origin[0] + access_space.i_interval.start.offset,
             end=origin[0] + access_space.i_interval.end.offset,
         )
-        j_subset = "{start}:J{end:+d}".format(
+        j_subset = "{start}:__J{end:+d}".format(
             start=origin[1] + access_space.j_interval.start.offset,
             end=origin[1] + access_space.j_interval.end.offset,
         )
@@ -370,8 +370,12 @@ class BaseOirSDFGBuilder(ABC):
                 self._sdfg.add_array(
                     name,
                     dtype=dtype,
-                    shape=(f"I{di:+d}", f"J{dj:+d}", self.get_k_size(name)),
+                    shape=(f"__I{di:+d}", f"__J{dj:+d}", self.get_k_size(name)),
+                    strides=tuple(
+                        dace.symbolic.pystr_to_symbolic(f"__{name}_{var}_stride") for var in "IJK"
+                    ),
                     transient=isinstance(decl, Temporary) and self.has_transients,
+                    lifetime=dace.AllocationLifetime.Persistent,
                 )
 
     @classmethod
@@ -407,15 +411,17 @@ class BaseOirSDFGBuilder(ABC):
                         name = edge.src.data
                         access_space = access_spaces_input[name]
                         subset_str_k = k_subset_strs_input[name]
+                        dynamic=isinstance(node, HorizontalExecutionLibraryNode) and node.oir_node.mask is not None
                     elif edge.src_conn is not None:
                         name = edge.dst.data
                         access_space = access_spaces_output[name]
                         subset_str_k = k_subset_strs_output[name]
+                        dynamic=False
                     else:
                         continue
                     subset_str_ij = self._access_space_to_subset(name, access_space)
                     edge.data = dace.Memlet.simple(
-                        data=name, subset_str=subset_str_ij + "," + subset_str_k
+                        data=name, subset_str=subset_str_ij + "," + subset_str_k, dynamic=dynamic
                     )
 
 
@@ -435,17 +441,18 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         write_subsets = dict()
         read_subsets = dict()
         k_origins = dict()
-        # for name, offsets in collection.offsets().items():
-        #     k_origins[name] = -min(o[2] for o in offsets)
+        for name, offsets in collection.offsets().items():
+            k_origins[name] = -min(o[2] for o in offsets)
         for name, offsets in collection.read_offsets().items():
-            read_subsets[name] = "k{:+d}:k{:+d}".format(
-                min(o[2] for o in offsets),
-                max(o[2] for o in offsets) + 1,
-                # k_origins[name] + min(o[2] for o in offsets),
-                # k_origins[name] + max(o[2] for o in offsets) + 1,
+            read_subsets[name] = "{origin}{min_off:+d}:{origin}{max_off:+d}".format(
+                origin=k_origins[name],
+                min_off=min(o[2] for o in offsets),
+                max_off=max(o[2] for o in offsets) + 1,
             )
         for name in collection.write_fields():
-            write_subsets[name] = "k:k+1"
+            write_subsets[name] = "{origin}:{origin}+1".format(
+                origin=k_origins[name]
+            )
         return read_subsets, write_subsets
 
     def add_read_edges(self, node):
@@ -500,7 +507,7 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
 
 class OirSDFGBuilder(BaseOirSDFGBuilder):
     def get_k_size(self, name):
-        return "K"
+        return "__K"
 
     def get_k_subsets(self, node):
         assert isinstance(node, VerticalLoopLibraryNode)
@@ -527,17 +534,17 @@ class OirSDFGBuilder(BaseOirSDFGBuilder):
         write_subsets = dict()
         for name, interval in write_intervals.items():
             write_subsets[name] = "{}{:+d}:{}{:+d}".format(
-                "K" if interval.start.level == LevelMarker.END else "",
+                "__K" if interval.start.level == LevelMarker.END else "",
                 interval.start.offset,
-                "K" if interval.end.level == LevelMarker.END else "",
+                "__K" if interval.end.level == LevelMarker.END else "",
                 interval.end.offset,
             )
         read_subsets = dict()
         for name, interval in read_intervals.items():
             read_subsets[name] = "{}{:+d}:{}{:+d}".format(
-                "K" if interval.start.level == LevelMarker.END else "",
+                "__K" if interval.start.level == LevelMarker.END else "",
                 interval.start.offset,
-                "K" if interval.end.level == LevelMarker.END else "",
+                "__K" if interval.end.level == LevelMarker.END else "",
                 interval.end.offset,
             )
         return read_subsets, write_subsets

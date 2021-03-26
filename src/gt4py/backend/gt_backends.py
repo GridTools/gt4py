@@ -613,10 +613,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         # Build extension module
         pyext_opts = dict(
-            verbose=self.builder.options.backend_opts.get("verbose", False),
+            verbose=self.builder.options.backend_opts.get("verbose", True),
             clean=self.builder.options.backend_opts.get("clean", False),
             **pyext_builder.get_gt_pyext_build_opts(
-                debug_mode=self.builder.options.backend_opts.get("debug_mode", False),
+                debug_mode=self.builder.options.backend_opts.get("debug_mode", True),
                 add_profile_info=self.builder.options.backend_opts.get("add_profile_info", False),
                 uses_cuda=uses_cuda,
                 gt_version=gt_version,

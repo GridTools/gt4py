@@ -19,14 +19,18 @@ def convert(sdfg: dace.SDFG) -> oir.Stencil:
             params.append(oir.ScalarDecl(name=name, dtype=dtype))
         else:
             dimensions = list(
-                any(dace.symbol(k) in s.free_symbols for s in array.shape) for k in "IJK"
+                any(dace.symbol(f'__{k}') in s.free_symbols for s in array.shape) for k in "IJK"
             )
             if not array.transient:
                 params.append(oir.FieldDecl(name=name, dtype=dtype, dimensions=dimensions))
             else:
                 decls.append(oir.Temporary(name=name, dtype=dtype, dimensions=dimensions))
+
+    internal_symbols = ["__I", "__J", "__K"] + list(
+        f"__{name}_{var}_stride" for name in sdfg.arrays.keys() for var in "IJK"
+    )
     for sym, stype in sdfg.symbols.items():
-        if sym not in "IJK":
+        if sym not in internal_symbols:
             params.append(
                 oir.ScalarDecl(
                     name=sym, dtype=common.typestr_to_data_type(stype.as_numpy_dtype().str)

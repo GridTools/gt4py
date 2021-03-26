@@ -73,8 +73,8 @@ def get_reference(test_name, backend, domain, origins, shapes, masks=None):
 
 
 @register
-@hyp.given(domain=hyp_st.tuples(*([hyp_st.integers(min_value=1, max_value=8)] * 3)))
-def run_horizontal_diffusion(backend, id_version, domain):
+# @hyp.given(domain=hyp_st.tuples(*([hyp_st.integers(min_value=1, max_value=8)] * 3)))
+def run_horizontal_diffusion(backend, id_version, domain=(3,3,1)):
 
     validate_field_names = ["out_field"]
     origins = {"in_field": (2, 2, 0), "out_field": (0, 0, 0), "coeff": (0, 0, 0)}
@@ -94,12 +94,24 @@ def run_horizontal_diffusion(backend, id_version, domain):
     for k in arg_fields:
         if hasattr(arg_fields[k], "host_to_device"):
             arg_fields[k].host_to_device()
+
+    arg_fields_np_in = {k: np.array(a, copy=True) for k, a in arg_fields.items()}
+    print(arg_fields_np_in['in_field'])
+    for k, arg in arg_fields_np_in.items():
+        print(k,arg[origins[k]])
     testmodule.run(
         **arg_fields,
         _domain_=domain,
         _origin_=origins,
         exec_info=None,
     )
+    for arg in arg_fields.values():
+        arg.device_to_host(force=True)
+    arg_fields_np_out = {k: np.array(a, copy=True) for k, a in arg_fields.items()}
+
+    for k in arg_fields_np_in.keys():
+        print(k)
+        print(arg_fields_np_in[k]==arg_fields_np_out[k])
 
     for k in validate_field_names:
         if hasattr(arg_fields[k], "synchronize"):
@@ -110,15 +122,15 @@ def run_horizontal_diffusion(backend, id_version, domain):
 
 
 @register
-@hyp.given(
-    domain=hyp_st.tuples(
-        *(
-            [hyp_st.integers(min_value=1, max_value=32)] * 2
-            + [hyp_st.integers(min_value=2, max_value=32)]
-        )
-    )
-)
-def run_tridiagonal_solver(backend, id_version, domain):
+# @hyp.given(
+#     domain=hyp_st.tuples(
+#         *(
+#             [hyp_st.integers(min_value=1, max_value=32)] * 2
+#             + [hyp_st.integers(min_value=2, max_value=32)]
+#         )
+#     )
+# )
+def run_tridiagonal_solver(backend, id_version, domain=(1,1,4)):
 
     validate_field_names = ["out"]
     origins = {
