@@ -3,7 +3,7 @@ import numbers
 import os
 from dataclasses import dataclass, field
 from inspect import getdoc
-from typing import TYPE_CHECKING, Any, Dict, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
 
 import jinja2
 import numpy
@@ -13,7 +13,7 @@ from gt4py import utils as gt_utils
 from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gtc import gtir
 from gtc.passes.gtir_legacy_extents import compute_legacy_extents
-from gtc.passes.gtir_pipeline import GtirPipeline, prune_unused_parameters
+from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.utils import dimension_flags_to_names
 
 
@@ -77,9 +77,24 @@ def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> M
     return data
 
 
+def get_unused_params_from_gtir(
+    pipeline: GtirPipeline,
+) -> List[Union[gtir.FieldDecl, gtir.ScalarDecl]]:
+    node = pipeline.gtir
+    field_names = {
+        param.name for param in node.params if isinstance(param, (gtir.FieldDecl, gtir.ScalarDecl))
+    }
+    used_field_names = (
+        node.iter_tree().if_isinstance(gtir.FieldAccess, gtir.ScalarAccess).getattr("name").to_set()
+    )
+    return [
+        param for param in node.params if param.name in field_names.difference(used_field_names)
+    ]
+
+
 def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     data = ModuleData()
-    node = pipeline.full(skip=[prune_unused_parameters])
+    node = pipeline.full()
     field_extents = compute_legacy_extents(node)
 
     write_fields = (
@@ -90,12 +105,10 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         .getattr("name")
         .to_list()
     )
-    all_referenced_fields = (
-        node.iter_tree().if_isinstance(gtir.FieldAccess).getattr("name").to_set()
-    )
-    all_field_params = {param.name for param in node.params if isinstance(param, gtir.FieldDecl)}
-    referenced_field_params = all_field_params.intersection(all_referenced_fields)
 
+    referenced_field_params = {
+        param.name for param in node.params if isinstance(param, gtir.FieldDecl)
+    }
     for name in referenced_field_params:
         data.field_info[name] = FieldInfo(
             access=AccessKind.READ_WRITE if name in write_fields else AccessKind.READ_ONLY,
@@ -104,28 +117,20 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
             dtype=numpy.dtype(node.symtable_[name].dtype.name.lower()),
         )
 
-    unref_field_params = all_field_params.difference(all_referenced_fields)
-
-    for name in unref_field_params:
-        data.field_info[name] = None
-
-    all_scalar_params = set(node.param_names).difference(all_field_params)
-    all_referenced_scalars = (
-        node.iter_tree().if_isinstance(gtir.ScalarAccess).getattr("name").to_set()
-    )
-    referenced_scalar_params = all_scalar_params.intersection(all_referenced_scalars)
-
+    referenced_scalar_params = set(node.param_names).difference(referenced_field_params)
     for name in referenced_scalar_params:
         data.parameter_info[name] = ParameterInfo(
             dtype=numpy.dtype(node.symtable_[name].dtype.name.lower())
         )
 
-    unref_scalar_params = all_scalar_params.difference(all_referenced_scalars)
+    unref_params = get_unused_params_from_gtir(pipeline)
+    for param in unref_params:
+        if isinstance(param, gtir.FieldDecl):
+            data.field_info[param.name] = None
+        elif isinstance(param, gtir.ScalarDecl):
+            data.parameter_info[param.name] = None
 
-    for name in unref_scalar_params:
-        data.parameter_info[name] = None
-
-    data.unreferenced = unref_scalar_params.union(unref_field_params)
+    data.unreferenced = {param.name for param in unref_params}
     return data
 
 
