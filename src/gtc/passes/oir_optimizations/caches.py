@@ -330,6 +330,8 @@ class FillFlushToLocalKCaches(NodeTranslator):
 
         class FixSymbolNameClashes(NodeTranslator):
             def visit_ScalarAccess(self, node: oir.ScalarAccess) -> oir.ScalarAccess:
+                if node.name not in decls_map:
+                    return node
                 return oir.ScalarAccess(name=decls_map[node.name], dtype=node.dtype)
 
             def visit_LocalScalar(self, node: oir.LocalScalar) -> oir.LocalScalar:
