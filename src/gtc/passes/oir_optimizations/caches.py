@@ -105,7 +105,9 @@ class KCacheDetection(NodeTranslator):
     max_cacheable_offset: int = 5
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
-        if node.loop_order == common.LoopOrder.PARALLEL:
+        if node.loop_order == common.LoopOrder.PARALLEL or any(
+            len(section.horizontal_executions) != 1 for section in node.sections
+        ):
             return self.generic_visit(node, **kwargs)
 
         def accessed_more_than_once(offsets: Set[Any]) -> bool:
