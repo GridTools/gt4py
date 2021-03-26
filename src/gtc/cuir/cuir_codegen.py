@@ -140,7 +140,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         __shared__ ${dtype} ${name}_cache_data[${name}_cache_data_size];
         constexpr int i_stride_${name} = 1;
         constexpr int j_stride_${name} = i_block_size_t() + ${-_this_node.extent.i[0] + _this_node.extent.i[1]};
-        ${dtype} *${name} = ${name}_cache_data + (${-_this_node.extent.i[0]} + i_block) * i_stride_${name} + (${-_this_node.extent.j[0]} + j_block) * j_stride_${name};
+        ${dtype} *${name} = ${name}_cache_data + (${-_this_node.extent.i[0]} + _i_block) * i_stride_${name} + (${-_this_node.extent.j[0]} + _j_block) * j_stride_${name};
         """
     )
 
@@ -155,7 +155,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     VerticalLoopSection = as_mako(
         """
         <%def name="sid_shift(step)">
-            sid::shift(ptr, sid::get_stride<dim::k>(m_strides), ${step}_c);
+            sid::shift(_ptr, sid::get_stride<dim::k>(m_strides), ${step}_c);
         </%def>
         <%def name="cache_shift(cache_vars)">
             % for dst, src in zip(cache_vars[:-1], cache_vars[1:]):
@@ -164,7 +164,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         </%def>
         // ${id_}
         % if order == cuir.LoopOrder.FORWARD:
-            for (int k_block = ${start}; k_block < ${end}; ++k_block) {
+            for (int _k_block = ${start}; _k_block < ${end}; ++_k_block) {
                 ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
 
                 ${sid_shift(1)}
@@ -173,7 +173,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 % endfor
             }
         % elif order == cuir.LoopOrder.BACKWARD:
-            for (int k_block = ${end} - 1; k_block >= ${start}; --k_block) {
+            for (int _k_block = ${end} - 1; _k_block >= ${start}; --_k_block) {
                 ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
 
                 ${sid_shift(-1)}
@@ -182,7 +182,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 % endfor
             }
         % else:
-            if (k_block >= ${start} && k_block < ${end}) {
+            if (_k_block >= ${start} && _k_block < ${end}) {
                 ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
             }
         % endif
@@ -222,31 +222,31 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             int k_size;
 
             template <class Validator>
-            GT_FUNCTION_DEVICE void operator()(const int i_block,
-                                               const int j_block,
+            GT_FUNCTION_DEVICE void operator()(const int _i_block,
+                                               const int _j_block,
                                                Validator validator) const {
-                auto ptr = m_ptr_holder();
-                sid::shift(ptr,
+                auto _ptr = m_ptr_holder();
+                sid::shift(_ptr,
                            sid::get_stride<sid::blocked_dim<dim::i>>(m_strides),
                            blockIdx.x);
-                sid::shift(ptr,
+                sid::shift(_ptr,
                            sid::get_stride<sid::blocked_dim<dim::j>>(m_strides),
                            blockIdx.y);
-                sid::shift(ptr,
+                sid::shift(_ptr,
                            sid::get_stride<dim::i>(m_strides),
-                           i_block);
-                sid::shift(ptr,
+                           _i_block);
+                sid::shift(_ptr,
                            sid::get_stride<dim::j>(m_strides),
-                           j_block);
+                           _j_block);
                 % if order == cuir.LoopOrder.PARALLEL:
-                const int k_block = blockIdx.z;
-                sid::shift(ptr,
+                const int _k_block = blockIdx.z;
+                sid::shift(_ptr,
                            sid::get_stride<dim::k>(m_strides),
-                           k_block);
+                           _k_block);
                 % endif
 
                 % for field in fields:
-                    auto &&${field} = device::at_key<tag::${field}>(ptr);
+                    auto &&${field} = device::at_key<tag::${field}>(_ptr);
                 % endfor
 
                 % for ij_cache in ij_caches:
@@ -278,11 +278,11 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             % endfor
 
             template <class Validator>
-            GT_FUNCTION_DEVICE void operator()(const int i_block,
-                                               const int j_block,
+            GT_FUNCTION_DEVICE void operator()(const int _i_block,
+                                               const int _j_block,
                                                Validator validator) const {
                 % for vertical_loop in _this_node.vertical_loops:
-                    m_${vertical_loop.id_}(i_block, j_block, validator);
+                    m_${vertical_loop.id_}(_i_block, _j_block, validator);
                 % endfor
             }
         };
