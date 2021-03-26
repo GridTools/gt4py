@@ -30,6 +30,7 @@ from ...oir_utils import (
     IJCacheFactory,
     IntervalFactory,
     KCacheFactory,
+    LocalScalarFactory,
     StencilFactory,
     TemporaryFactory,
     VerticalLoopFactory,
@@ -382,13 +383,18 @@ def test_fill_to_local_k_caches_section_splitting_forward():
                 sections=[
                     VerticalLoopSectionFactory(
                         interval=IntervalFactory(end=AxisBound(level=LevelMarker.END, offset=-1)),
-                        horizontal_executions__0__body=[
-                            AssignStmtFactory(
-                                left__name="foo", right__name="foo", right__offset__k=0
-                            ),
-                            AssignStmtFactory(
-                                left__name="foo", right__name="foo", right__offset__k=1
-                            ),
+                        horizontal_executions=[
+                            HorizontalExecutionFactory(
+                                body=[
+                                    AssignStmtFactory(
+                                        left__name="foo", right__name="foo", right__offset__k=0
+                                    ),
+                                    AssignStmtFactory(
+                                        left__name="foo", right__name="foo", right__offset__k=1
+                                    ),
+                                ],
+                                declarations=[LocalScalarFactory()],
+                            )
                         ],
                     ),
                     VerticalLoopSectionFactory(
