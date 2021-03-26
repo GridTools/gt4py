@@ -40,9 +40,22 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         "*${f'sid::multi_shifted<tag::{name}>({name}, m_strides, {offset})' if offset else name}"
     )
 
-    IJCacheAccess = as_mako(
-        "${'*' + name if _this_node.offset.i == _this_node.offset.j == 0 else name + '[' + ' + '.join(f'{o} * {d}_stride_{name}' for o, d in zip([_this_node.offset.i, _this_node.offset.j], 'ij') if o != 0) + ']'}"
-    )
+    def visit_IJCacheAccess(
+        self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
+    ) -> str:
+        extent = symtable[node.name].extent
+        if extent.i == extent.j == (0, 0):
+            # cache is scalar
+            assert node.offset.i == node.offset.j == 0
+            return node.name
+        if node.offset.i == node.offset.j == 0:
+            return "*" + node.name
+        offsets = (
+            f"{o} * {d}_stride_{node.name}"
+            for o, d in zip([node.offset.i, node.offset.j], "ij")
+            if o != 0
+        )
+        return node.name + "[" + " + ".join(offsets) + "]"
 
     KCacheAccess = as_mako("${_this_generator.k_cache_var(name, _this_node.offset.k)}")
 
@@ -138,11 +151,17 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     IJCacheDecl = as_mako(
         """
+        % if _this_node.extent.i == _this_node.extent.j == (0, 0):
+        // scalar ij-cache
+        ${dtype} ${name};
+        % else:
+        // ij-cache in shared memory
         constexpr int ${name}_cache_data_size = (i_block_size_t() + ${-_this_node.extent.i[0] + _this_node.extent.i[1]}) * (j_block_size_t() + ${-_this_node.extent.j[0] + _this_node.extent.j[1]});
         __shared__ ${dtype} ${name}_cache_data[${name}_cache_data_size];
         constexpr int i_stride_${name} = 1;
         constexpr int j_stride_${name} = i_block_size_t() + ${-_this_node.extent.i[0] + _this_node.extent.i[1]};
         ${dtype} *${name} = ${name}_cache_data + (${-_this_node.extent.i[0]} + _i_block) * i_stride_${name} + (${-_this_node.extent.j[0]} + _j_block) * j_stride_${name};
+        % endif
         """
     )
 
@@ -212,6 +231,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             fields=node.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set(),
             k_cache_decls=node.k_caches,
             order=node.loop_order,
+            symtable=symtable,
             **kwargs,
         )
 
@@ -295,9 +315,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     def visit_Program(self, node: cuir.Program, **kwargs: Any) -> Union[str, Collection[str]]:
         def loop_start(vertical_loop: cuir.VerticalLoop) -> str:
             if vertical_loop.loop_order == cuir.LoopOrder.FORWARD:
-                return self.visit(vertical_loop.sections[0].start)
+                return self.visit(vertical_loop.sections[0].start, **kwargs)
             if vertical_loop.loop_order == cuir.LoopOrder.BACKWARD:
-                return self.visit(vertical_loop.sections[0].end) + " - 1"
+                return self.visit(vertical_loop.sections[0].end, **kwargs) + " - 1"
             return "0"
 
         def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
@@ -306,18 +326,19 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             )
 
         def ctype(symbol: str) -> str:
-            return self.visit(node.symtable_[symbol].dtype)
+            return self.visit(node.symtable_[symbol].dtype, **kwargs)
 
         return self.generic_visit(
             node,
             max_extent=self.visit(
-                cuir.IJExtent.zero().union(*node.iter_tree().if_isinstance(cuir.IJExtent))
+                cuir.IJExtent.zero().union(*node.iter_tree().if_isinstance(cuir.IJExtent)), **kwargs
             ),
             loop_start=loop_start,
             loop_fields=loop_fields,
             ctype=ctype,
             symtable=node.symtable_,
             cuir=cuir,
+            **kwargs,
         )
 
     Program = as_mako(
