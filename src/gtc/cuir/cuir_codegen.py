@@ -88,6 +88,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         NativeFunction.POW: "math::pow",
         NativeFunction.EXP: "math::exp",
         NativeFunction.LOG: "math::log",
+        NativeFunction.FLOOR: "::floor",
+        NativeFunction.CEIL: "::ceil",
         NativeFunction.TRUNC: "math::trunc",
     }
 
