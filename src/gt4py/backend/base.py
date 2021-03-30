@@ -302,9 +302,8 @@ class BaseBackend(Backend):
             for sg in ms.groups:
                 for st in sg.stages:
                     for acc in st.accessors:
-                        if (
-                            isinstance(acc, gt_ir.FieldAccessor)
-                            and acc.intent == gt_ir.AccessIntent.READ_WRITE
+                        if isinstance(acc, gt_ir.FieldAccessor) and bool(
+                            acc.intent & gt_ir.AccessIntent.WRITE
                         ):
                             out_fields.add(acc.symbol)
 
