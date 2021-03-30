@@ -96,6 +96,9 @@ class Backend(abc.ABC):
 
     builder: "StencilBuilder"
 
+    #: Toolchain choice, True if the pre-GTC toolchain should be used
+    USE_LEGACY_TOOLCHAIN: ClassVar[bool] = False
+
     def __init__(self, builder: "StencilBuilder"):
         self.builder = builder
 
@@ -235,7 +238,6 @@ class CLIBackendMixin(Backend):
 class BaseBackend(Backend):
 
     MODULE_GENERATOR_CLASS: ClassVar[Type["BaseModuleGenerator"]]
-    USE_LEGACY_TOOLCHAIN: ClassVar[bool] = False
 
     def load(self) -> Optional[Type["StencilObject"]]:
         stencil_class = None

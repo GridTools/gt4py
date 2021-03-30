@@ -251,13 +251,10 @@ class StencilBuilder:
             "iir", gt4py.analysis.transform(self.definition_ir, self.options)
         )
 
-    def _make_gtir_pipeline(self) -> GtirPipeline:
-        return GtirPipeline(DefIRToGTIR.apply(self.definition_ir))
-
     @property
     def gtir_pipeline(self) -> GtirPipeline:
         return self._build_data.get("gtir_pipeline") or self._build_data.setdefault(
-            "gtir_pipeline", self._make_gtir_pipeline()
+            "gtir_pipeline", GtirPipeline(DefIRToGTIR.apply(self.definition_ir))
         )
 
     @property
