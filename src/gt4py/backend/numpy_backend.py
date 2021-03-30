@@ -176,8 +176,6 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
         assert node.name in self.block_info.accessors
-        if node.data_index:
-            raise ValueError("Only scalar fields are supported.")
 
         is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
         extent = self.block_info.extent
@@ -240,7 +238,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     )
                 )
 
-        source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
+        data_idx = f", {','.join(str(i) for i in node.data_index)}" if node.data_index else ""
+        source = f"{node.name}[{', '.join(index)}{data_idx}]"
         if not parallel_axes_dims and not is_parallel:
             source = f"np.asarray([{source}])"
 

@@ -119,7 +119,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
             marker=self.origin_marker, name=node.name, index=index_str
         )
         if node.data_index:
-            raise ValueError("Only scalar fields are supported.")
+            source = f"{source}[{','.join(str(i) for i in node.data_index)}]"
 
         return source
 
