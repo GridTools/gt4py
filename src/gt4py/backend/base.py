@@ -96,7 +96,11 @@ class Backend(abc.ABC):
 
     builder: "StencilBuilder"
 
-    #: Toolchain choice, True if the pre-GTC toolchain should be used
+    #: Toolchain choice between GTIR and ImplementationIR, True for ImplementationIR
+    #:
+    #: If True the ImplementationIR should be used for all code generation, analysis
+    #: and optimization. Instantiation of GTIR should be avoided.
+    #: Likewise if False, ImplementationIR should never be instanciated during builds.
     USE_LEGACY_TOOLCHAIN: ClassVar[bool] = False
 
     def __init__(self, builder: "StencilBuilder"):

@@ -161,7 +161,12 @@ class BaseModuleGenerator(abc.ABC):
         builder: Optional["StencilBuilder"] = None,
         **kwargs: Any,
     ) -> str:
-        """Generate source code for a Python module containing a StencilObject."""
+        """
+        Generate source code for a Python module containing a StencilObject.
+
+        A possible reaosn for extending is processing additional kwargs,
+        using a different template might require completely overriding.
+        """
         if builder:
             self._builder = builder
         self.args_data = args_data
@@ -212,21 +217,47 @@ class BaseModuleGenerator(abc.ABC):
 
     @abc.abstractmethod
     def generate_implementation(self) -> str:
+        """Generate the work code inside the stencil object's run function."""
         pass
 
     def generate_imports(self) -> str:
+        """Generate import statements and related code for the stencil class module."""
         return ""
 
     def generate_class_name(self) -> str:
+        """
+        Generate the name of the stencil class.
+
+        This should ususally be deferred to the chosen caching strategy via
+        the builder object (see default implementation).
+        """
         return self.builder.class_name
 
     def generate_docstring(self) -> str:
+        """
+        Generate the docstring of the stencil object.
+
+        The default is to return the stencil definition's docstring or an
+        empty string.
+        The output should be least based on the stencil definition's docstring,
+        if one exists.
+        """
         return getdoc(self.builder.definition) or ""
 
     def generate_backend_name(self) -> str:
+        """
+        Return the name of the backend.
+
+        There should never be a need to override this.
+        """
         return self.backend_name
 
     def generate_sources(self) -> Dict[str, str]:
+        """
+        Return the source code of the stencil definition in string format.
+
+        This is unlikely to require overriding.
+        """
         if self.builder.definition_ir.sources is not None:
             return {
                 key: gt_utils.text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
@@ -235,6 +266,11 @@ class BaseModuleGenerator(abc.ABC):
         return {}
 
     def generate_constants(self) -> Dict[str, str]:
+        """
+        Return a mapping of named numeric constants passed as externals.
+
+        This is unlikely to require overriding.
+        """
         if self.builder.definition_ir.externals:
             return {
                 name: repr(value)
@@ -244,6 +280,11 @@ class BaseModuleGenerator(abc.ABC):
         return {}
 
     def generate_options(self) -> Dict[str, Any]:
+        """
+        Return dictionary of build options.
+
+        Must exclude options that should never be cached.
+        """
         return {
             key: value
             for key, value in self.builder.options.as_dict().items()
@@ -251,6 +292,11 @@ class BaseModuleGenerator(abc.ABC):
         }
 
     def generate_domain_info(self) -> str:
+        """
+        Generate a ``DomainInfo`` constructor call with the correct arguments.
+
+        Might require overriding for module generators of non-cartesian backends.
+        """
         parallel_axes = self.builder.definition_ir.domain.parallel_axes or []
         sequential_axis = self.builder.definition_ir.domain.sequential_axis.name
         domain_info = repr(
@@ -263,12 +309,27 @@ class BaseModuleGenerator(abc.ABC):
         return domain_info
 
     def generate_module_members(self) -> str:
+        """
+        Generate additional module level code after all imports.
+
+        May contain any executable module level code including function and class defs.
+        """
         return ""
 
     def generate_class_members(self) -> str:
+        """
+        Generate additional stencil class members.
+
+        May contain any class level code including methods.
+        """
         return ""
 
     def generate_signature(self) -> str:
+        """
+        Generate the stencil definition specific part of the stencil object's ``__call__`` signature.
+
+        Unlikely to require overriding.
+        """
         args = []
         keyword_args = ["*"]
         for arg in self.builder.definition_ir.api_signature:
@@ -292,9 +353,11 @@ class BaseModuleGenerator(abc.ABC):
         return signature
 
     def generate_pre_run(self) -> str:
+        """Additional code to be run just before the run method (implementation) is called."""
         return ""
 
     def generate_post_run(self) -> str:
+        """Additional code to be run just after the run method (implementation) is called."""
         return ""
 
 
@@ -325,6 +388,13 @@ def gtir_has_effect(pipeline: GtirPipeline) -> bool:
 
 
 class PyExtModuleGenerator(BaseModuleGenerator):
+    """
+    Module Generator for use with backends that generate c++ python extensions.
+
+    Will either use ImplementationIR or GTIR depending on the backend's USE_LEGACY_TOOLCHAIN
+    class attribute. Using with other IRs requires subclassing and overriding ``_is_not_empty()``
+    and ``_has_effect()`` methods.
+    """
 
     pyext_module_name: str
     pyext_file_path: str
@@ -399,19 +469,20 @@ class PyExtModuleGenerator(BaseModuleGenerator):
 
 class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
     def generate_implementation(self) -> str:
-        source = (
-            super().generate_implementation()
-            + """
-cupy.cuda.Device(0).synchronize()
-    """
+        source = super().generate_implementation() + textwrap.dedent(
+            """
+                cupy.cuda.Device(0).synchronize()
+                """
         )
         return source
 
     def generate_imports(self) -> str:
         source = (
-            """
-import cupy
-"""
+            textwrap.dedent(
+                """
+                import cupy
+                """
+            )
             + super().generate_imports()
         )
         return source
