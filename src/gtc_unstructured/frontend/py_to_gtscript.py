@@ -187,7 +187,7 @@ class PyToGTScript:
         )
 
         Computation = ast.FunctionDef(
-            # args=ast.arguments(args=Capture("arguments")),
+            # args=ast.arguments(args=Capture("arguments")), # noqa E800
             body=Capture("stencils"),
             name=Capture("name"),
         )

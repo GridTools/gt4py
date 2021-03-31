@@ -54,7 +54,7 @@ def declare_built_in_function(name, sig):
     The signature is a tuple of a tuple containing the argument types and the return type, e.g. ((Number,), Number)
     for a method taking a number as an argument and returning a number.
     """
-    if not name in globals():
+    if name not in globals():
         globals()[name] = BuiltInFunction(name)
         __all__.append(name)
 

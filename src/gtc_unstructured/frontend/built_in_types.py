@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import inspect
-from typing import Any, List, cast
+from typing import Any, List
 
 
 class BuiltInTypeMeta(type):
@@ -36,7 +36,7 @@ class BuiltInTypeMeta(type):
 
         assert bases == (object,) or (len(bases) == 1 and issubclass(bases[0], BuiltInType))
         # TODO(tehrengruber): allow only class methods
-        # assert all(attr[0:2] == "__" for attr in namespace.keys())  # no custom attributes
+        # assert all(attr[0:2] == "__" for attr in namespace.keys())  # no custom attributes # noqa E800
         # TODO(tehrengruber): there might be a better way to do this
         instance = type.__new__(cls, class_name, bases, namespace)
         instance.class_name = class_name
@@ -46,7 +46,7 @@ class BuiltInTypeMeta(type):
 
     @property
     def body(self):
-        """Return type function body (name borrowed from polymorphism theory)."""
+        """Return type function body (name borrowed from polymorphism theory)."""  # noqa D402
         return self.__class__(self.class_name, self.__bases__, self.namespace, args=[])
 
     def __eq__(self, other) -> bool:

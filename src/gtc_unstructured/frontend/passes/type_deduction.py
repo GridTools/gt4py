@@ -50,7 +50,7 @@ class TypeDeduction(eve.NodeVisitor):
     def visit_Call(self, node: Call, **kwargs):
         # todo: enhance
         return Number
-        # return built_in_functions[node.func].return_type(*self.visit(node.args))
+        # return built_in_functions[node.func].return_type(*self.visit(node.args)) # noqa E800
 
     def visit_Constant(self, node: Constant, **kwargs):
         return type(node.value)
