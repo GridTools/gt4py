@@ -97,10 +97,19 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         NativeFunction.MIN: "math::min",
         NativeFunction.MAX: "math::max",
         NativeFunction.MOD: "math::fmod",
+        NativeFunction.SIN: "::sin",
+        NativeFunction.COS: "::cos",
+        NativeFunction.TAN: "::tan",
+        NativeFunction.ARCSIN: "::asin",
+        NativeFunction.ARCCOS: "::acos",
+        NativeFunction.ARCTAN: "::atan",
         NativeFunction.SQRT: "math::sqrt",
         NativeFunction.POW: "math::pow",
         NativeFunction.EXP: "math::exp",
         NativeFunction.LOG: "math::log",
+        NativeFunction.ISFINITE: "std::isfinite",
+        NativeFunction.ISINF: "std::isinf",
+        NativeFunction.ISNAN: "std::isnan",
         NativeFunction.FLOOR: "::floor",
         NativeFunction.CEIL: "::ceil",
         NativeFunction.TRUNC: "math::trunc",
@@ -110,7 +119,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         try:
             return self.NATIVE_FUNCTION_TO_CODE[func]
         except KeyError as error:
-            raise NotImplementedError("Not implemented NativeFunction encountered.") from error
+            raise NotImplementedError(
+                f"Not implemented NativeFunction '{func}' encountered."
+            ) from error
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
