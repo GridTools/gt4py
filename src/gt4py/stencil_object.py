@@ -165,7 +165,7 @@ class StencilObject(abc.ABC):
             field_domain = (field_domain_shape - field_domain_halos).filter_mask(api_domain_mask)
             max_domain &= Shape.from_mask(field_domain, api_domain_mask, default=max_size)
 
-        return max_domain
+        return Shape([i if i != max_size else 1 for i in max_domain])
 
     def _validate_args(self, used_field_args, used_param_args, domain, origin):
         """Validate input arguments to _call_run.
@@ -228,10 +228,10 @@ class StencilObject(abc.ABC):
             spatial_domain = domain.filter_mask(field_mask)
             upper_indices = field_info.boundary.upper_indices.filter_mask(field_mask)
 
-            if len(field.shape) != spatial_ndim + len(field_info.data_dims):
+            if field.ndim != spatial_ndim + len(field_info.data_dims):
                 raise ValueError(
-                    f"Storage for '{name}' has mask '{field.mask}' but the API signature "
-                    f"expects '{field_info.axes}[{field_info.data_dims}]'"
+                    f"Storage for '{name}' has {field.ndim} dimensions but the API signature "
+                    f"expects {spatial_ndim + len(field_info.data_dims)} ('{field_info.axes}[{field_info.data_dims}]')"
                 )
 
             if field_origin < min_origin:
@@ -309,7 +309,7 @@ class StencilObject(abc.ABC):
 
         origin = {} if origin is None else normalize_origin_mapping(origin)
         all_origin = origin.get("_all_", None)
-        if all_origin and len(all_origin != 3):
+        if all_origin and len(all_origin) != 3:
             raise ValueError(f"'_all_' origin must be specified for the 'IJK' spatial dimensions.")
 
         # Collect used arguments and normalized domain shapes (3D/IJK)
@@ -322,7 +322,11 @@ class StencilObject(abc.ABC):
                     if field_origin := origin.get(name, all_origin):
                         origin[name] = Shape(field_origin)
                     else:
-                        origin[name] = Shape(field_arg.default_origin)
+                        origin[name] = Shape(
+                            field_arg.default_origin
+                            if hasattr(field_arg, "default_origin")
+                            else (0,) * field_arg.ndim
+                        )
                 else:
                     raise ValueError(f"Missing value for '{name}' field.")
 
@@ -336,14 +340,11 @@ class StencilObject(abc.ABC):
                     raise ValueError(f"Missing value for '{name}' parameter.")
 
         # Domain
-        if domain is None:
-            domain = self._get_max_domain(used_field_args, origin)
-            if any(axis_bound == np.iinfo(np.uintc).max for axis_bound in domain):
-                raise ValueError(
-                    f"Compute domain could not be deduced. Specifiy the domain explicitly or ensure you reference at least one field."
-                )
-        else:
-            domain = normalize_domain(domain)
+        domain = (
+            self._get_max_domain(used_field_args, origin)
+            if domain is None
+            else normalize_domain(domain)
+        )
 
         if validate_args:
             self._validate_args(used_field_args, used_param_args, domain, origin)

@@ -46,7 +46,7 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
     """
 
     if mask is None:
-        mask = tuple([True if i < len(shape) else False for i in range(3)])
+        mask = tuple(True if i < len(shape) else False for i in range(3))
     elif not gt_util.is_iterable_of(mask, bool):
         # User-friendly axes specification (e.g. "IJK" or gtscript.IJK)
         str_kind = "".join(str(i) for i in mask) if isinstance(mask, (tuple, list)) else str(mask)
@@ -57,7 +57,7 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
             raise ValueError(f"Repeated axes names in mask specification: '{mask}'")
         mask = ("I" in axes_set, "J" in axes_set, "K" in axes_set)
     elif len(mask) < 3 and sum(mask):
-        mask = tuple([*mask] + [False] * (3 - len(mask)))
+        mask = (*mask,) + (False,) * (3 - len(mask))
     elif not sum(mask):
         raise ValueError(f"Invalid empty mask: '{mask}'")
 
@@ -97,9 +97,9 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
     dtype = np.dtype(dtype)
     if dtype.shape:
         # Subarray dtype
-        default_origin = tuple([*default_origin] + [0] * dtype.ndim)
-        shape = tuple([*shape, *(dtype.subdtype[1])])
-        mask = tuple([*mask] + [True] * dtype.ndim)
+        default_origin = (*default_origin, + (0,) * dtype.ndim)
+        shape = (*shape, *(dtype.subdtype[1]))
+        mask = (*mask, (True,) * dtype.ndim)
         dtype = dtype.subdtype[0]
 
     return default_origin, shape, dtype, mask

@@ -374,31 +374,34 @@ def test_exec_info(backend):
 
 
 class TestAxesMismatch:
-    def run_test(self, field_out, match):
+    @pytest.fixture
+    def sample_stencil(self):
         @gtscript.stencil(backend="debug")
-        def definition(
-            field_out: gtscript.Field[np.float64, gtscript.IJ],
+        def _stencil(
+            field_out: gtscript.Field[gtscript.IJ, np.float64],
         ):
             with computation(FORWARD), interval(...):
                 field_out = 1.0
 
-        with pytest.raises(ValueError, match=match):
-            definition(field_out)
+        return _stencil
 
-    def test_ndarray(self):
-        self.run_test(
-            np.ndarray((3, 3, 3), np.float64),
-            f"Storage for '.*' has 3 dimensions but the API signature expects 2",
-        )
+    def test_ndarray(self, sample_stencil):
+        with pytest.raises(
+            ValueError, match="Storage for '.*' has 3 dimensions but the API signature expects 2 .*"
+        ):
+            sample_stencil(field_out=np.ndarray((3, 3, 3), np.float64))
 
-    def test_storage(self):
-        self.run_test(
-            gt_storage.empty(
-                shape=(3, 3),
-                mask=[True, False, True],
-                dtype=np.float64,
-                backend="debug",
-                default_origin=(0, 0),
-            ),
-            "Storage for '.*' has mask '\(True, False, True\)' but the API signature expects '\(True, True, False\)'",
-        )
+    def test_storage(self, sample_stencil):
+        with pytest.raises(
+            ValueError,
+            match="Storage for '.*' has domain mask '.*' but the API signature expects '\['I', 'J'\]'",
+        ):
+            sample_stencil(
+                field_out=gt_storage.empty(
+                    shape=(3, 3),
+                    mask=[True, False, True],
+                    dtype=np.float64,
+                    backend="debug",
+                    default_origin=(0, 0),
+                )
+            )
