@@ -20,6 +20,11 @@ from . import cuir
 
 
 class FuseKernels(NodeTranslator):
+    """Fuse consecutive kernels into single kernel for better launch overhead.
+
+    Fuse kernels that are directly translated from OIR vertical loops into separate kernels if no synchronization is required.
+    """
+
     def visit_Program(self, node: cuir.Program) -> cuir.Program:
         def is_parallel(kernel: cuir.Kernel) -> bool:
             parallel = [
