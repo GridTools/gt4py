@@ -7,13 +7,7 @@
 #     out = sum(in[v] for v in vertices(e))
 # ```
 
-from gtc_unstructured.frontend.gtscript import (
-    FORWARD,
-    Edge,
-    Field,
-    computation,
-    location,
-)
+from gtc_unstructured.frontend.gtscript import FORWARD, Edge, Field, computation, location
 from gtc_unstructured.irs.common import DataType
 
 

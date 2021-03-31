@@ -1,10 +1,10 @@
-import sys
 import importlib
 import os
+import sys
 
-from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 from gtc_unstructured.frontend.frontend import GTScriptCompilationTask
 from gtc_unstructured.irs.icon_bindings_codegen import IconBindingsCodegen
+from gtc_unstructured.irs.usid_codegen import UsidGpuCodeGenerator, UsidNaiveCodeGenerator
 
 
 def _generate(stencil, *, output_dir, stencil_name="stencil", generate_icon=False, mode="unaive"):

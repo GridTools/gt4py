@@ -20,6 +20,7 @@ from gtc_unstructured.frontend.gtscript import (
 )
 from gtc_unstructured.irs.common import DataType
 
+
 E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
 dtype = DataType.FLOAT64
 

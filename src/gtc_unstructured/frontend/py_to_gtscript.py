@@ -275,7 +275,6 @@ class PyToGTScript:
 
                     assert len(args) + len(transformed_kwargs) == len(captures)
 
-
                     return node_type(*args, **transformed_kwargs)
 
                 raise ValueError(
