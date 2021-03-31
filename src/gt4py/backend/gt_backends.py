@@ -163,6 +163,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         gt_ir.BinaryOperator.MUL: "*",
         gt_ir.BinaryOperator.DIV: "/",
         gt_ir.BinaryOperator.POW: lambda lhs, rhs: "pow({lhs}, {rhs})".format(lhs=lhs, rhs=rhs),
+        gt_ir.BinaryOperator.MOD: lambda lhs, rhs: "fmod({lhs}, {rhs})".format(lhs=lhs, rhs=rhs),
         gt_ir.BinaryOperator.AND: "&&",
         gt_ir.BinaryOperator.OR: "||",
         gt_ir.BinaryOperator.LT: "<",

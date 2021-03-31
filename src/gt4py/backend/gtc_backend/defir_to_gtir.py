@@ -197,6 +197,10 @@ class DefIRToGTIR(IRNodeVisitor):
             return gtir.NativeFuncCall(
                 func=common.NativeFunction.POW, args=[self.visit(node.lhs), self.visit(node.rhs)]
             )
+        if node.op == BinaryOperator.MOD:
+            return gtir.NativeFuncCall(
+                func=common.NativeFunction.MOD, args=[self.visit(node.lhs), self.visit(node.rhs)]
+            )
         return gtir.BinaryOp(
             left=self.visit(node.lhs),
             right=self.visit(node.rhs),
