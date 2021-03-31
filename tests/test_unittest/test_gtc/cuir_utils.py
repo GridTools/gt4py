@@ -29,6 +29,14 @@ class FieldDeclFactory(factory.Factory):
     dtype = cuir.DataType.FLOAT32
 
 
+class TemporaryFactory(factory.Factory):
+    class Meta:
+        model = cuir.Temporary
+
+    name = identifier(cuir.Temporary)
+    dtype = cuir.DataType.FLOAT32
+
+
 class IJExtentFactory(factory.Factory):
     class Meta:
         model = cuir.IJExtent
@@ -37,11 +45,29 @@ class IJExtentFactory(factory.Factory):
     j = (0, 0)
 
 
+class IJCacheDeclFactory(factory.Factory):
+    class Meta:
+        model = cuir.IJCacheDecl
+
+    name = identifier(cuir.IJCacheDecl)
+    dtype = cuir.DataType.FLOAT32
+    extent = factory.SubFactory(IJExtentFactory)
+
+
 class FieldAccessFactory(factory.Factory):
     class Meta:
         model = cuir.FieldAccess
 
     name = identifier(cuir.FieldAccess)
+    offset = factory.SubFactory(CartesianOffsetFactory)
+    dtype = cuir.DataType.FLOAT32
+
+
+class IJCacheAccessFactory(factory.Factory):
+    class Meta:
+        model = cuir.IJCacheAccess
+
+    name = identifier(cuir.IJCacheAccess)
     offset = factory.SubFactory(CartesianOffsetFactory)
     dtype = cuir.DataType.FLOAT32
 
