@@ -215,6 +215,12 @@ def large_k_interval(in_field: Field3D, out_field: Field3D):
 
 
 @register
+def single_level_with_offset(in_field: Field3D, out_field: Field3D):
+    with computation(PARALLEL), interval(1, 2):
+        out_field = in_field
+
+
+@register
 def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
     with computation(PARALLEL), interval(...):
         mask = in_field >= 0
