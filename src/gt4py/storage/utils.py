@@ -77,7 +77,6 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
     else:
         raise TypeError("shape must be a tuple of ints or pairs of ints.")
 
-
     if default_origin is not None:
         if sum(mask) != len(default_origin) and len(mask) != len(default_origin):
             raise ValueError(
@@ -97,7 +96,7 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
     dtype = np.dtype(dtype)
     if dtype.shape:
         # Subarray dtype
-        default_origin = (*default_origin, + (0,) * dtype.ndim)
+        default_origin = (*default_origin, +(0,) * dtype.ndim)
         shape = (*shape, *(dtype.subdtype[1]))
         mask = (*mask, (True,) * dtype.ndim)
         dtype = dtype.subdtype[0]

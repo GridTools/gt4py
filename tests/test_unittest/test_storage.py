@@ -319,8 +319,8 @@ def test_allocate_gpu_unmanaged(param_dict):
 
 
 def test_normalize_storage_spec():
-    from gt4py.storage.utils import normalize_storage_spec
     from gt4py import gtscript
+    from gt4py.storage.utils import normalize_storage_spec
 
     default_origin = (0, 0, 0)
     shape = (10, 10, 10)

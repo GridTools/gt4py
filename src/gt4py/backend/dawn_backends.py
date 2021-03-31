@@ -626,6 +626,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
                     access=access,
                     boundary=boundary,
                     axes=fields[arg.name].axes,
+                    data_dims=fields[arg.name].data_dims,
                     dtype=fields[arg.name].data_type.dtype,
                 )
             else:
