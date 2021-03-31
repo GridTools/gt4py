@@ -669,12 +669,11 @@ pyext_module.run_computation(list(_domain_), {run_args}, exec_info)
 
 class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
     def generate_implementation(self) -> str:
-        source = (
-            super().generate_implementation()
-            + """
+        source = super().generate_implementation()
+        if self.builder.options.backend_opts.get("device_sync", True):
+            source += """
 cupy.cuda.Device(0).synchronize()
     """
-        )
         return source
 
     def generate_imports(self) -> str:
