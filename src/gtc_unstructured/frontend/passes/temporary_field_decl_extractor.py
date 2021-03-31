@@ -1,5 +1,4 @@
-from numbers import Number
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Union
 
 import eve
 
@@ -61,8 +60,8 @@ class TemporaryFieldDeclExtractor(eve.NodeVisitor):
                 self.temporary_fields[target.name] = TemporaryFieldDecl(
                     name=SymbolName(target.name), type_=built_in_types.TemporaryField[args]
                 )
-            # else:
-            #    raise ValueError()
+            # else:  # noqa: E800
+            #    raise ValueError()  # noqa: E800
 
     def visit_Stencil(self, node: Stencil, **kwargs):
         self.primary_location = None
