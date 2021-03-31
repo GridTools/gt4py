@@ -175,7 +175,7 @@ class SuiteMeta(type):
                                     k: (
                                         dtype.type
                                         if (k in cls_dict["constants"] or k in parameters)
-                                        else gtscript.Field[dtype.type, gtscript.IJK]
+                                        else gtscript.Field[gtscript.IJK, dtype.type]
                                     )
                                     for k, dtype in d.items()
                                 },
