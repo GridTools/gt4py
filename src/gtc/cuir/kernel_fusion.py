@@ -14,8 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Set
-
 from eve import NodeTranslator
 
 from . import cuir
@@ -30,13 +28,25 @@ class FuseKernels(NodeTranslator):
             assert all(parallel) or not any(parallel), "Mixed k-parallelism in kernel"
             return any(parallel)
 
-        current_writes: Set[str] = set()
         kernels = [self.visit(node.kernels[0])]
+        previous_parallel = is_parallel(kernels[-1])
+        previous_writes = (
+            kernels[-1]
+            .iter_tree()
+            .if_isinstance(cuir.AssignStmt)
+            .getattr("left")
+            .if_isinstance(cuir.FieldAccess)
+            .getattr("name")
+            .to_set()
+        )
         for kernel in node.kernels[1:]:
-            reads_with_horizontal_offsets = (
+            parallel = is_parallel(kernel)
+            reads_with_offsets = (
                 kernel.iter_tree()
                 .if_isinstance(cuir.FieldAccess)
-                .filter(lambda x: x.offset.i != 0 or x.offset.j != 0)
+                .filter(
+                    lambda x: x.offset.i != 0 or x.offset.j != 0 or (x.offset.k != 0 and parallel)
+                )
                 .getattr("name")
                 .to_set()
             )
@@ -49,14 +59,13 @@ class FuseKernels(NodeTranslator):
                 .to_set()
             )
 
-            if (
-                is_parallel(kernels[-1]) != is_parallel(kernel)
-                or reads_with_horizontal_offsets & current_writes
-            ):
+            if previous_parallel != parallel or reads_with_offsets & previous_writes:
                 kernels.append(self.visit(kernel))
-                current_writes = new_writes
+                previous_writes = new_writes
             else:
                 kernels[-1].vertical_loops += self.visit(kernel.vertical_loops)
+                previous_writes |= new_writes
+            previous_parallel = parallel
 
         return cuir.Program(
             name=node.name, params=node.params, temporaries=node.temporaries, kernels=kernels
