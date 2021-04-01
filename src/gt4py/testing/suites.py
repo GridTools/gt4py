@@ -134,13 +134,10 @@ class SuiteMeta(type):
             grouped_combinations = [
                 {k: v for k, v in zip(dtypes.keys(), p)} for p in product(*dtypes.values())
             ]
-            ret = []
-            for combination in grouped_combinations:
-                d = dict()
-                for ktuple in combination:
-                    for k in ktuple:
-                        d[k] = combination[ktuple]
-                ret.append(d)
+            ret = [
+                {k: combination[ktuple] for ktuple in combination for k in ktuple}
+                for combination in grouped_combinations
+            ]
             return ret
 
         def get_globals_combinations(dtypes):
@@ -155,7 +152,15 @@ class SuiteMeta(type):
 
         parameters = inspect.getfullargspec(cls_dict["definition"]).kwonlyargs
         cls_dict["tests"] = []
-        for d in get_dtype_combinations(dtypes):
+        for d_with_axes in get_dtype_combinations(dtypes):
+            field_axes = {}
+            d = {}
+            for name_axes, dt in d_with_axes.items():
+                name, *axes = name_axes.split(":")
+                d[name] = dt
+                if axes:
+                    field_axes[name] = getattr(gtscript, axes[0])
+
             for g in get_globals_combinations(d):
                 for b in backends:
                     cls_dict["tests"].append(
@@ -175,7 +180,7 @@ class SuiteMeta(type):
                                     k: (
                                         dtype.type
                                         if (k in cls_dict["constants"] or k in parameters)
-                                        else gtscript.Field[gtscript.IJK, dtype.type]
+                                        else gtscript.Field[field_axes.get(k, gtscript.IJK), dtype.type]
                                     )
                                     for k, dtype in d.items()
                                 },
