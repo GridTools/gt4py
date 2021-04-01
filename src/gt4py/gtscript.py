@@ -94,7 +94,9 @@ def _set_arg_dtypes(definition, dtypes):
     for arg, value in annotations.items():
         if isinstance(value, _FieldDescriptor) and isinstance(value.dtype, str):
             if value.dtype in dtypes:
-                annotations[arg] = _FieldDescriptor(dtypes[value.dtype], value.axes)
+                annotations[arg] = _FieldDescriptor(
+                    dtypes[value.dtype], value.axes, value.data_dims
+                )
             else:
                 raise ValueError(f"Missing '{value.dtype}' dtype definition for arg '{arg}'")
         elif isinstance(value, str):
@@ -428,7 +430,7 @@ PARALLEL = 0
 
 
 class _FieldDescriptor:
-    def __init__(self, dtype, axes, data_dims):
+    def __init__(self, dtype, axes, data_dims=tuple()):
         if isinstance(dtype, str):
             self.dtype = dtype
         else:
@@ -436,25 +438,22 @@ class _FieldDescriptor:
                 raise ValueError("Invalid data type descriptor")
             self.dtype = np.dtype(dtype)
         self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
-        self.data_dims = ()
         if data_dims:
             if not isinstance(data_dims, collections.abc.Collection):
                 self.data_dims = [data_dims]
             else:
                 self.data_dims = [*data_dims]
+        else:
+            self.data_dims = data_dims
 
     def __repr__(self):
-        args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}"
-        if self.data_dims != (1,):
-            args = f", data_dims={repr(self.data_dims)}"
+        args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}, data_dims={repr(self.data_dims)}"
         return f"_FieldDescriptor({args})"
 
     def __str__(self):
-        if self.data_dims == (1,):
-            dtype_and_ddims = str(self.dtype)
-        else:
-            dtype_and_ddims = f"({self.data_dims}, {self.dtype})"
-        return f"Field<{dtype_and_ddims}, [{', '.join(str(ax) for ax in self.axes)}]>"
+        return (
+            f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
+        )
 
 
 class _FieldDescriptorMaker:
@@ -468,7 +467,7 @@ class _FieldDescriptorMaker:
 
     def __getitem__(self, field_spec):
         axes = IJK
-        data_dims = None
+        data_dims = ()
 
         if isinstance(field_spec, str) or not isinstance(field_spec, collections.abc.Collection):
             # Field[dtype]
