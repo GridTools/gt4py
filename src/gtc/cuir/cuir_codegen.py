@@ -93,26 +93,26 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
     NATIVE_FUNCTION_TO_CODE = {
-        NativeFunction.ABS: "math::abs",
-        NativeFunction.MIN: "math::min",
-        NativeFunction.MAX: "math::max",
-        NativeFunction.MOD: "math::fmod",
-        NativeFunction.SIN: "::sin",
-        NativeFunction.COS: "::cos",
-        NativeFunction.TAN: "::tan",
-        NativeFunction.ARCSIN: "::asin",
-        NativeFunction.ARCCOS: "::acos",
-        NativeFunction.ARCTAN: "::atan",
-        NativeFunction.SQRT: "math::sqrt",
-        NativeFunction.POW: "math::pow",
-        NativeFunction.EXP: "math::exp",
-        NativeFunction.LOG: "math::log",
+        NativeFunction.ABS: "std::abs",
+        NativeFunction.MIN: "std::min",
+        NativeFunction.MAX: "std::max",
+        NativeFunction.MOD: "std::fmod",
+        NativeFunction.SIN: "std::sin",
+        NativeFunction.COS: "std::cos",
+        NativeFunction.TAN: "std::tan",
+        NativeFunction.ARCSIN: "std::asin",
+        NativeFunction.ARCCOS: "std::acos",
+        NativeFunction.ARCTAN: "std::atan",
+        NativeFunction.SQRT: "std::sqrt",
+        NativeFunction.POW: "std::pow",
+        NativeFunction.EXP: "std::exp",
+        NativeFunction.LOG: "std::log",
         NativeFunction.ISFINITE: "std::isfinite",
         NativeFunction.ISINF: "std::isinf",
         NativeFunction.ISNAN: "std::isnan",
-        NativeFunction.FLOOR: "::floor",
-        NativeFunction.CEIL: "::ceil",
-        NativeFunction.TRUNC: "math::trunc",
+        NativeFunction.FLOOR: "std::floor",
+        NativeFunction.CEIL: "std::ceil",
+        NativeFunction.TRUNC: "std::trunc",
     }
 
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:
@@ -357,7 +357,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         #include <array>
         #include <cstdint>
         #include <gridtools/common/cuda_util.hpp>
-        #include <gridtools/common/gt_math.hpp>
         #include <gridtools/common/host_device.hpp>
         #include <gridtools/common/hymap.hpp>
         #include <gridtools/common/integral_constant.hpp>

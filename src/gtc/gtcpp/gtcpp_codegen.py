@@ -99,26 +99,26 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:
         try:
             return {
-                NativeFunction.ABS: "gridtools::math::abs",
-                NativeFunction.MIN: "gridtools::math::min",
-                NativeFunction.MAX: "gridtools::math::max",
-                NativeFunction.MOD: "gridtools::math::fmod",
+                NativeFunction.ABS: "std::abs",
+                NativeFunction.MIN: "std::min",
+                NativeFunction.MAX: "std::max",
+                NativeFunction.MOD: "std::fmod",
                 NativeFunction.SIN: "std::sin",
                 NativeFunction.COS: "std::cos",
                 NativeFunction.TAN: "std::tan",
                 NativeFunction.ARCSIN: "std::asin",
                 NativeFunction.ARCCOS: "std::acos",
                 NativeFunction.ARCTAN: "std::atan",
-                NativeFunction.SQRT: "gridtools::math::sqrt",
-                NativeFunction.POW: "gridtools::math::pow",
-                NativeFunction.EXP: "gridtools::math::exp",
-                NativeFunction.LOG: "gridtools::math::log",
+                NativeFunction.SQRT: "std::sqrt",
+                NativeFunction.POW: "std::pow",
+                NativeFunction.EXP: "std::exp",
+                NativeFunction.LOG: "std::log",
                 NativeFunction.ISFINITE: "std::isfinite",
                 NativeFunction.ISINF: "std::isinf",
                 NativeFunction.ISNAN: "std::isnan",
                 NativeFunction.FLOOR: "std::floor",
                 NativeFunction.CEIL: "std::ceil",
-                NativeFunction.TRUNC: "gridtools::math::trunc",
+                NativeFunction.TRUNC: "std::trunc",
             }[func]
         except KeyError as error:
             raise NotImplementedError(
