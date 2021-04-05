@@ -1408,27 +1408,14 @@ class HousekeepingPass(TransformPass):
             assert isinstance(node, gt_ir.StencilImplementation)
             self.visit(node)
 
-        def visit_ApplyBlock(
-            self, path: tuple, node_name: str, node: gt_ir.ApplyBlock
-        ) -> Tuple[bool, Optional[gt_ir.ApplyBlock]]:
-            self.generic_visit(path, node_name, node.body)
-            if node.body.stmts:
-                return True, node
-            else:
-                return False, None
-
         def visit_Stage(
             self, path: tuple, node_name: str, node: gt_ir.Stage
         ) -> Tuple[bool, Optional[gt_ir.Stage]]:
             self.generic_visit(path, node_name, node)
 
-            if (
-                any(
-                    isinstance(a, gt_ir.FieldAccessor)
-                    and (a.intent is gt_ir.AccessIntent.READ_WRITE)
-                    for a in node.accessors
-                )
-                and node.apply_blocks
+            if any(
+                isinstance(a, gt_ir.FieldAccessor) and (a.intent is gt_ir.AccessIntent.READ_WRITE)
+                for a in node.accessors
             ):
                 return True, node
             else:
