@@ -1293,6 +1293,7 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
 class ConstantFoldingPass(TransformPass):
     """Demote temporary fields to constants if only assigned to a single scalar value."""
+
     class CollectConstants(gt_ir.IRNodeVisitor):
         @classmethod
         def apply(cls, node: gt_ir.StencilImplementation) -> Set[str]:
@@ -1309,7 +1310,10 @@ class ConstantFoldingPass(TransformPass):
             target_name = node.target.name
             if target_name in self.constants:
                 self.constants[target_name] += 1
-                if not isinstance(node.value, gt_ir.ScalarLiteral) or self.constants[target_name] > 1:
+                if (
+                    not isinstance(node.value, gt_ir.ScalarLiteral)
+                    or self.constants[target_name] > 1
+                ):
                     self.constants.pop(target_name)
 
     class ConstantFolder(gt_ir.IRNodeMapper):
@@ -1319,9 +1323,7 @@ class ConstantFoldingPass(TransformPass):
             return instance(node)
 
         def __init__(self, constants: Set[str]):
-            self.literals: Dict[str, gt_ir.ScalarLiteral] = {
-                name: None for name in constants
-            }
+            self.literals: Dict[str, gt_ir.ScalarLiteral] = {name: None for name in constants}
 
         def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
             return self.visit(node)
