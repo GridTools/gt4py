@@ -136,7 +136,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return source_lines
 
     def make_temporary_field(
-        self, name: str, dtype: gt_ir.DataType, axes: list, extent: gt_definitions.Extent
+        self, name: str, dtype: gt_ir.DataType, axes: List[str], extent: gt_definitions.Extent
     ) -> List[str]:
         source_lines = super().make_temporary_field(name, dtype, axes, extent)
         origin = (extent.to_boundary().lower_indices)[0 : len(axes)]

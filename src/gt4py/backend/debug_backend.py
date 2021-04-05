@@ -63,7 +63,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
         return source_lines
 
     def make_temporary_field(
-        self, name: str, dtype: gt_ir.DataType, axes: str, extent: gt_definitions.Extent
+        self, name: str, dtype: gt_ir.DataType, axes: list, extent: gt_definitions.Extent
     ):
         source_lines = super().make_temporary_field(name, dtype, axes, extent)
         source_lines.extend(self._make_field_accessor(name, extent.to_boundary().lower_indices))
