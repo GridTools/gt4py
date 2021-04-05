@@ -1292,6 +1292,7 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
 
 class ConstantFoldingPass(TransformPass):
+    """Demote temporary fields to constants if only assigned to a single scalar value."""
     class CollectConstants(gt_ir.IRNodeVisitor):
         @classmethod
         def apply(cls, node: gt_ir.StencilImplementation) -> Set[str]:
