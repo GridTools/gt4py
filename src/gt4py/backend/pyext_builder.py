@@ -73,7 +73,9 @@ def get_gt_pyext_build_opts(
         raise RuntimeError(f"GridTools version {gt_version}.x is not supported")
 
     import os
+
     import dace
+
     extra_compile_args = dict(
         cxx=[
             "-std=c++14",
@@ -82,7 +84,7 @@ def get_gt_pyext_build_opts(
             "-fPIC",
             "-isystem{}".format(gt_include_path),
             "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
-            "-isystem{}".format(os.path.dirname(dace.__file__)+"/runtime/include/"),
+            "-isystem{}".format(os.path.dirname(dace.__file__) + "/runtime/include/"),
             "-DBOOST_PP_VARIADICS",
             *extra_compile_args_from_config["cxx"],
         ],

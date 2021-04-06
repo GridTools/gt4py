@@ -411,12 +411,15 @@ class BaseOirSDFGBuilder(ABC):
                         name = edge.src.data
                         access_space = access_spaces_input[name]
                         subset_str_k = k_subset_strs_input[name]
-                        dynamic=isinstance(node, HorizontalExecutionLibraryNode) and node.oir_node.mask is not None
+                        dynamic = (
+                            isinstance(node, HorizontalExecutionLibraryNode)
+                            and node.oir_node.mask is not None
+                        )
                     elif edge.src_conn is not None:
                         name = edge.dst.data
                         access_space = access_spaces_output[name]
                         subset_str_k = k_subset_strs_output[name]
-                        dynamic=False
+                        dynamic = False
                     else:
                         continue
                     subset_str_ij = self._access_space_to_subset(name, access_space)
@@ -450,9 +453,7 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
                 max_off=max(o[2] for o in offsets) + 1,
             )
         for name in collection.write_fields():
-            write_subsets[name] = "{origin}:{origin}+1".format(
-                origin=k_origins[name]
-            )
+            write_subsets[name] = "{origin}:{origin}+1".format(origin=k_origins[name])
         return read_subsets, write_subsets
 
     def add_read_edges(self, node):

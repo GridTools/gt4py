@@ -529,16 +529,8 @@ class StencilTestSuite(metaclass=SuiteMeta):
         inputs = {key: value for key, value in inputs.items() if value is not None}
 
         validation_fields = {name: np.array(field, copy=True) for name, field in inputs.items()}
-        print('patched_origin',patched_origin)
-        for k, i in inputs.items():
-            if isinstance(i, np.ndarray):
-                print(k, i[patched_origin], i[tuple(slice(p, p+1) for p in patched_origin)].ctypes.data)
-        implementation(**inputs, origin=patched_origin, exec_info=exec_info)
-        print('post')
-        for k, i in inputs.items():
-            if isinstance(i, np.ndarray):
-                print(k, i[patched_origin], i[tuple(slice(p, p+1) for p in patched_origin)].ctypes.data)
 
+        implementation(**inputs, origin=patched_origin, exec_info=exec_info)
         domain = exec_info["domain"]
 
         validation_origins = {

@@ -19,7 +19,7 @@ def convert(sdfg: dace.SDFG) -> oir.Stencil:
             params.append(oir.ScalarDecl(name=name, dtype=dtype))
         else:
             dimensions = list(
-                any(dace.symbol(f'__{k}') in s.free_symbols for s in array.shape) for k in "IJK"
+                any(dace.symbol(f"__{k}") in s.free_symbols for s in array.shape) for k in "IJK"
             )
             if not array.transient:
                 params.append(oir.FieldDecl(name=name, dtype=dtype, dimensions=dimensions))

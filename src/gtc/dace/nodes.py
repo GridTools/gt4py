@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple, Union
 
 import dace.properties
-from dace import library
-from dace.subsets import Range, union
+import dace.subsets
+from dace import SDFG, library
 
-from eve import NodeVisitor
+from eve import NodeVisitor, codegen
+from eve.codegen import FormatTemplate as as_fmt
+from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import TreeNode
 from eve.utils import XIterator, xiter
-from gtc import oir
+from gtc import common, oir
 from gtc.common import LoopOrder
 from gtc.oir import CacheDesc, FieldAccess, HorizontalExecution, Interval, Stencil, VerticalLoop
 
@@ -169,20 +171,31 @@ class NaiveVerticalLoopExpansion(dace.library.ExpandTransformation):
 
 class NaiveVerticalLoopExpander:
 
+    node: "VerticalLoopLibraryNode"
+    parent_state: dace.SDFGState
+    parent_sdfg: dace.SDFG
+    res_sdfg: dace.SDFG
+    origins: Dict[str, Tuple[int, int, oir.AxisBound]]
+
     def get_ij_origins(self, node: "VerticalLoopLibraryNode"):
-        min_offsets = {}
-        for interval, section in node.sections:
+        min_offsets: Dict[str, Tuple[int, int, int]] = {}
+        for _, section in node.sections:
             access_collection = self._get_access_collection(section)
             min_offsets.update(
                 {name: off.pop() for name, off in access_collection.offsets().items()}
             )
             for name, offsets in access_collection.offsets().items():
+                off: Tuple[int, int, int]
                 for off in offsets:
-                    min_offsets[name] = tuple(min(m, o) for m, o in zip(min_offsets[name], off))
+                    min_offsets[name] = (
+                        min(min_offsets[name][0], off[0]),
+                        min(min_offsets[name][1], off[1]),
+                        min(min_offsets[name][2], off[2]),
+                    )
         return {k: (-v[0], -v[1]) for k, v in min_offsets.items()}
 
     def get_k_origins(self, node: "VerticalLoopLibraryNode"):
-        k_origs = {}
+        k_origs: Dict[str, oir.AxisBound] = {}
         for interval, section in node.sections:
             access_collection = self._get_access_collection(section)
             for name, offsets in access_collection.offsets().items():
@@ -197,7 +210,7 @@ class NaiveVerticalLoopExpander:
     def get_origins(self, node: "VerticalLoopLibraryNode"):
         ij_origins = self.get_ij_origins(node)
         k_origins = self.get_k_origins(node)
-        return {name:(*ij_origins[name],k_origins[name]) for name in ij_origins.keys()}
+        return {name: (*ij_origins[name], k_origins[name]) for name in ij_origins.keys()}
 
     def __init__(
         self, node: "VerticalLoopLibraryNode", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
@@ -205,9 +218,8 @@ class NaiveVerticalLoopExpander:
         self.node = node
         self.parent_state = parent_state
         self.parent_sdfg = parent_sdfg
-        self.offsets = dict()
         self.res_sdfg = dace.SDFG(node.name + "_sdfg")
-        self._access_collection_cache = dict()
+        self._access_collection_cache: Dict[Any, AccessCollector.Result] = dict()
         self.origins = self.get_origins(node)
 
     def fix_context_memlets_and_get_nsdfg_add_arrays(self):
@@ -224,7 +236,9 @@ class NaiveVerticalLoopExpander:
         }
         for edge in self.parent_state.out_edges(self.node):
             if edge.data.data in subsets:
-                subsets[edge.data.data] = union(edge.data.subset, subsets[edge.data.data])
+                subsets[edge.data.data] = dace.subsets.union(
+                    edge.data.subset, subsets[edge.data.data]
+                )
             elif edge.data.data is not None:
                 subsets[edge.data.data] = edge.data.subset
         for edge in self.parent_state.in_edges(self.node):
@@ -287,13 +301,14 @@ class NaiveVerticalLoopExpander:
 
         for name, offsets in access_collection.offsets().items():
             for off in offsets:
-                min_offsets[name] = tuple(min(m, o) for m, o in zip(min_offsets[name], off))
+                min_offsets[name] = (
+                    min(min_offsets[name][0], off[0]),
+                    min(min_offsets[name][1], off[1]),
+                    min(min_offsets[name][2], off[2]),
+                )
         for name, off in min_offsets.items():
             shape = section.arrays[name].shape
 
-            min_idx = oir.AxisBound(
-                level=interval.start.level, offset=interval.start.offset - off[2]
-            )
             subset_str = "{i:+d}:{i:+d}+({I}),{j:+d}:{j:+d}+({J}),k-({k_orig}){k:+d}:k-({k_orig}){k:+d}{K:+d}".format(
                 i=self.origins[name][0] + off[0],
                 j=self.origins[name][1] + off[1],
@@ -328,11 +343,11 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
         if loop_order == LoopOrder.BACKWARD:
             initialize_expr = f"({get_axis_bound_str(interval.end, '__K')})-1"
             condition_expr = f"k>=({get_axis_bound_str(interval.start, '__K')})"
-            increment_expr = f"k-1"
+            increment_expr = "k-1"
         else:
             initialize_expr = f"{get_axis_bound_str(interval.start, '__K')}"
             condition_expr = f"k<({get_axis_bound_str(interval.end, '__K')})"
-            increment_expr = f"k+1"
+            increment_expr = "k+1"
         return initialize_expr, condition_expr, increment_expr
 
     def _expand(self):
@@ -368,7 +383,6 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
                 inputs={k for k in in_accesses},
                 outputs={k for k in out_accesses},
             )
-            self.res_sdfg.save("nsdfg.sdfg")
             for name, acc in in_accesses.items():
                 loop_state.add_edge(
                     acc, None, nsdfg, name, dace.memlet.Memlet.simple(name, in_subsets[name])
@@ -488,19 +502,13 @@ class VerticalLoopLibraryNode(dace.nodes.LibraryNode):
         super().validate(*args, **kwargs)
 
 
-from eve import codegen
-from eve.codegen import FormatTemplate as as_fmt
-from eve.codegen import MakoTemplate as as_mako
-from gtc import common
-
-
 class TaskletCodegen(codegen.TemplatedGenerator):
 
     ScalarAccess = as_fmt("{name}")
 
     def visit_FieldAccess(self, node: oir.FieldAccess, *, is_target, targets):
 
-        if (is_target or node.name in targets) and self.visit(node.offset)=='':
+        if (is_target or node.name in targets) and self.visit(node.offset) == "":
             targets.add(node.name)
             return "__" + node.name
         else:
@@ -529,8 +537,6 @@ class TaskletCodegen(codegen.TemplatedGenerator):
 
     TernaryOp = as_fmt("({true_expr} if {cond} else {false_expr})")
 
-    # Cast = as_fmt("{dtype}({expr})")
-    Cast = as_fmt("{expr}")
     def visit_BuiltInLiteral(self, builtin: common.BuiltInLiteral, **kwargs: Any) -> str:
         if builtin == common.BuiltInLiteral.TRUE:
             return "True"
@@ -539,6 +545,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         raise NotImplementedError("Not implemented BuiltInLiteral encountered.")
 
     Literal = as_fmt("{dtype}({value})")
+    Cast = as_fmt("{dtype}({expr})")
 
     def visit_NativeFunction(self, func: common.NativeFunction, **kwargs: Any) -> str:
         try:
@@ -546,7 +553,23 @@ class TaskletCodegen(codegen.TemplatedGenerator):
                 common.NativeFunction.ABS: "abs",
                 common.NativeFunction.MIN: "min",
                 common.NativeFunction.MAX: "max",
+                common.NativeFunction.MOD: "fmod",
+                common.NativeFunction.SIN: "math.sin",
+                common.NativeFunction.COS: "math.cos",
+                common.NativeFunction.TAN: "math.tan",
+                common.NativeFunction.ARCSIN: "asin",
+                common.NativeFunction.ARCCOS: "acos",
+                common.NativeFunction.ARCTAN: "atan",
                 common.NativeFunction.SQRT: "math.sqrt",
+                common.NativeFunction.POW: "math.pow",
+                common.NativeFunction.EXP: "math.exp",
+                common.NativeFunction.LOG: "math.log",
+                common.NativeFunction.ISFINITE: "isfinite",
+                common.NativeFunction.ISINF: "isinf",
+                common.NativeFunction.ISNAN: "isnan",
+                common.NativeFunction.FLOOR: "floor",
+                common.NativeFunction.CEIL: "ceil",
+                common.NativeFunction.TRUNC: "trunc",
             }[func]
         except KeyError as error:
             raise NotImplementedError("Not implemented NativeFunction encountered.") from error
@@ -578,7 +601,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
     Param = as_fmt("{name}")
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution):
-        targets = set()
+        targets: Set[str] = set()
         mask_str = ""
         indent = ""
         if node.mask is not None:
@@ -625,7 +648,7 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                 continue
             name = edge.src_conn[len("OUT_") :]
             if name in subsets:
-                subsets[name] = union(edge.data.subset, subsets[name])
+                subsets[name] = dace.subsets.union(edge.data.subset, subsets[name])
             else:
                 subsets[name] = edge.data.subset
         for edge in parent_state.in_edges(node):
@@ -693,7 +716,11 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
 
         for name, offsets in access_collection.offsets().items():
             for off in offsets:
-                min_offsets[name] = tuple(min(m, o) for m, o in zip(min_offsets[name], off))
+                min_offsets[name] = (
+                    min(min_offsets[name][0], off[0]),
+                    min(min_offsets[name][1], off[1]),
+                    min(min_offsets[name][2], off[2]),
+                )
         for name, offsets in access_collection.read_offsets().items():
             for off in offsets:
                 subset_str = "i{i:+d},j{j:+d},{k:+d}".format(
@@ -715,7 +742,9 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                 i=-min_offsets[name][0], j=-min_offsets[name][1], k=-min_offsets[name][2]
             )
             acc_name = "__" + name
-            out_memlets[acc_name] = dace.memlet.Memlet.simple(name, subset_str, dynamic=node.oir_node.mask is not None)
+            out_memlets[acc_name] = dace.memlet.Memlet.simple(
+                name, subset_str, dynamic=node.oir_node.mask is not None
+            )
 
         return in_memlets, out_memlets
 
@@ -749,12 +778,7 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
             code=NaiveHorizontalExecutionExpansion.code_generate(node.oir_node),
             external_edges=True,
         )
-        for conn in tasklet.in_connectors:
-            tasklet.in_connectors[conn] = res_sdfg.arrays[in_memlets[conn].data].dtype
-        for conn in tasklet.out_connectors:
-            tasklet.out_connectors[conn] = res_sdfg.arrays[out_memlets[conn].data].dtype
         res.symbol_mapping = {s: s for s in res_sdfg.free_symbols}
-        res_sdfg.save('tmp.sdfg')
         for s in list(res_sdfg.free_symbols):
             if s not in res_sdfg.symbols:
                 res_sdfg.add_symbol(s, parent_sdfg.symbols[s])

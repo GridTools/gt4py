@@ -26,7 +26,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from pydantic import root_validator, validator
 
 from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
-from eve.typingx import RootValidatorValuesType
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
@@ -273,12 +272,6 @@ class CacheDesc(LocNode):
         start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
         end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
         return Interval(start=start, end=end)
-
-    # @root_validator(skip_on_failure=True)
-    # def ordered_check(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-    #     if not values["start"] < values["end"]:
-    #         raise ValueError("Interval start needs to be lower than end.")
-    #     return values
 
 
 class IJCache(CacheDesc):
