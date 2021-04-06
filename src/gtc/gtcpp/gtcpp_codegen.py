@@ -30,7 +30,7 @@ def _offset_limit(root: Node) -> int:
         .if_isinstance(gtcpp.GTLevel)
         .getattr("offset")
         .reduce(lambda state, cur: max(state, abs(cur)), init=0)
-    )
+    ) + 1
 
 
 class GTCppCodegen(codegen.TemplatedGenerator):
