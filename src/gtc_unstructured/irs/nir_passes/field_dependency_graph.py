@@ -20,7 +20,13 @@ import networkx as nx
 
 import eve  # noqa: F401
 from eve import NodeVisitor
-from gtc_unstructured.irs.nir import AssignStmt, FieldAccess, HorizontalLoop, IterationSpace
+from gtc_unstructured.irs.nir import (
+    AssignStmt,
+    FieldAccess,
+    HorizontalLoop,
+    IterationSpace,
+    NeighborLoop,
+)
 
 
 class _FieldWriteDependencyGraph(NodeVisitor):
@@ -52,6 +58,9 @@ class _FieldWriteDependencyGraph(NodeVisitor):
         for loop in loops:
             instance.visit(loop, symtable=loop.symtable_, **kwargs)
         return instance.graph
+
+    def visit_NeighborLoop(self, node: NeighborLoop, *, symtable, **kwargs):
+        self.generic_visit(node, symtable={**symtable, **node.symtable_}, **kwargs)
 
     def visit_FieldAccess(self, node: FieldAccess, *, symtable, **kwargs):
         has_extent = False if isinstance(symtable[node.primary], IterationSpace) else True

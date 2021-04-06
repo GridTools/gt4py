@@ -80,7 +80,7 @@ hloop0 = HorizontalLoop(
                 Literal(value="-1", vtype=dtype, location_type=LocationType.Vertex),
                 Literal(value="1", vtype=dtype, location_type=LocationType.Vertex),
             ],
-            location_ref=LocationRef(name="v_neighs_of_e"),
+            location_ref=LocationRef(name="other_v_of_e"),
             location_type=LocationType.Edge,  # wrong
         ),
         neighbors=LocationComprehension(name="other_v_of_e", of=ConnectivityRef(name="e2v")),
@@ -125,6 +125,11 @@ stencils = [
         ]
     )
 ]
+
+from devtools import debug
+
+
+debug(stencils)
 
 sten = Computation(
     name="sten",

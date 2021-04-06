@@ -29,6 +29,7 @@ from gtc_unstructured.irs.usid import (
     Kernel,
     KernelCall,
     NeighborLoop,
+    SidCompositeEntry,
     SidCompositeSparseEntry,
     Temporary,
     TemporarySparseField,
@@ -251,9 +252,12 @@ class UsidCodeGenerator(codegen.TemplatedGenerator):
 
     def visit_Computation(self, node: Computation, **kwargs):
         # maybe tags should be generated in lowering
-        field_tags = set()
-        for field in node.parameters + node.temporaries:
-            field_tags.add("struct " + field.tag + ";")
+        field_tag_names = node.iter_tree().if_isinstance(SidCompositeEntry).getattr("name").to_set()
+        connectivity_tag_names = (c.tag for c in node.connectivities)
+        field_tags = [
+            f"struct {field_tag};"
+            for field_tag in field_tag_names.difference(connectivity_tag_names)
+        ]
 
         connectivity_params = [f"auto&& {c.name}" for c in node.connectivities]
         field_params = [f"auto&& {f.name}" for f in node.parameters]

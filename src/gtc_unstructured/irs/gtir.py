@@ -162,7 +162,7 @@ class TemporarySparseField(SparseField):
     pass
 
 
-class HorizontalLoop(Node):
+class HorizontalLoop(Node, SymbolTableTrait):
     stmt: Stmt
     location: PrimaryLocation
 

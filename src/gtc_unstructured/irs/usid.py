@@ -115,12 +115,6 @@ class SidCompositeEntry(FrozenNode):
     ref: SymbolRef  # ref to field
     name: SymbolName  # (don't set: generated from ref)
 
-    @root_validator(pre=True)
-    def set_name(cls, values):
-        assert "name" not in values
-        values["name"] = values["ref"] + TAG_APPENDIX
-        return values
-
     # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
     def __hash__(self):
         return hash(self.name)

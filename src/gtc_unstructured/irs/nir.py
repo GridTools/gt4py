@@ -93,8 +93,12 @@ class BlockStmt(Stmt):
         return values
 
 
-class NeighborLoop(Stmt):
-    name: SymbolName  # interpret as loop var
+class NeighborLoopVar(Node):
+    name: SymbolName
+
+
+class NeighborLoop(Stmt, SymbolTableTrait):
+    name: NeighborLoopVar  # this extra indirection is needed as we want this SymbolName to be inside NeighborLoop scope
     connectivity: SymbolRef
     body: BlockStmt
 

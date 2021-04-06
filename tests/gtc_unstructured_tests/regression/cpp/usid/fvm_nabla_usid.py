@@ -100,15 +100,17 @@ nabla_edge_1 = Kernel(
     primary_composite=SidComposite(
         name="primary_edge",
         entries=[
-            SidCompositeEntry(ref="e2v"),
-            SidCompositeEntry(ref="zavg_tmp"),
-            SidCompositeEntry(ref="S_MXX"),
-            SidCompositeEntry(ref="S_MYY"),
-            SidCompositeEntry(ref="zavgS_MXX"),
-            SidCompositeEntry(ref="zavgS_MYY"),
+            SidCompositeEntry(ref="e2v", name="e2v_tag"),
+            SidCompositeEntry(ref="zavg_tmp", name="zavg_tmp_tag"),
+            SidCompositeEntry(ref="S_MXX", name="S_MXX_tag"),
+            SidCompositeEntry(ref="S_MYY", name="S_MYY_tag"),
+            SidCompositeEntry(ref="zavgS_MXX", name="zavgS_MXX_tag"),
+            SidCompositeEntry(ref="zavgS_MYY", name="zavgS_MYY_tag"),
         ],
     ),
-    secondary_composites=[SidComposite(name="vertices", entries=[SidCompositeEntry(ref="pp")])],
+    secondary_composites=[
+        SidComposite(name="vertices", entries=[SidCompositeEntry(ref="pp", name="pp_tag")])
+    ],
     body=[edge1_assign0, vertex_on_edge_loop, edge1_assign1, edge1_assign2, edge1_assign3],
 )
 
@@ -200,19 +202,19 @@ nabla_vertex_2 = Kernel(
     primary_composite=SidComposite(
         name="vertex_prim",
         entries=[
-            SidCompositeEntry(ref="v2e"),  # TODO?
+            SidCompositeEntry(ref="v2e", name="v2e_tag"),  # TODO?
             # SidCompositeNeighborTableEntry(connectivity="v2e"),
-            SidCompositeEntry(ref="pnabla_MXX"),
-            SidCompositeEntry(ref="pnabla_MYY"),
-            SidCompositeSparseEntry(ref="sign", connectivity="v2e"),
+            SidCompositeEntry(ref="pnabla_MXX", name="pnabla_MXX_tag"),
+            SidCompositeEntry(ref="pnabla_MYY", name="pnabla_MYY_tag"),
+            SidCompositeSparseEntry(ref="sign", name="sign_tag", connectivity="v2e"),
         ],
     ),
     secondary_composites=[
         SidComposite(
             name="edge_neighbors",
             entries=[
-                SidCompositeEntry(ref="zavgS_MXX"),
-                SidCompositeEntry(ref="zavgS_MYY"),
+                SidCompositeEntry(ref="zavgS_MXX", name="zavgS_MXX_tag"),
+                SidCompositeEntry(ref="zavgS_MYY", name="zavgS_MYY_tag"),
             ],
         )
     ],
@@ -242,9 +244,9 @@ nabla_vertex_4 = Kernel(
     primary_composite=SidComposite(
         name="primary",
         entries=[
-            SidCompositeEntry(ref="pnabla_MXX"),
-            SidCompositeEntry(ref="pnabla_MYY"),
-            SidCompositeEntry(ref="vol"),
+            SidCompositeEntry(ref="pnabla_MXX", name="pnabla_MXX_tag"),
+            SidCompositeEntry(ref="pnabla_MYY", name="pnabla_MYY_tag"),
+            SidCompositeEntry(ref="vol", name="vol_tag"),
         ],
     ),
     secondary_composites=[],

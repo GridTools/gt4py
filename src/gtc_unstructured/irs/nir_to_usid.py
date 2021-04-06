@@ -110,10 +110,14 @@ class NirToUsid(eve.NodeTranslator):
         primary = "p"
         secondary = "n"
 
-        acc_mapping = {primary_sid: primary, node.name: secondary}
-        sid_mapping = {primary_sid: primary_sid, node.name: secondary_sid}
+        acc_mapping = {primary_sid: primary, node.name.name: secondary}
+        sid_mapping = {primary_sid: primary_sid, node.name.name: secondary_sid}
 
-        kernel_ctx.add_primary_entry(usid.SidCompositeEntry(ref=node.connectivity))
+        kernel_ctx.add_primary_entry(
+            usid.SidCompositeEntry(
+                ref=node.connectivity, name=f"{node.connectivity}{usid.TAG_APPENDIX}"
+            )
+        )
         body = self.visit(
             node.body,
             kernel_ctx=kernel_ctx,
@@ -149,10 +153,12 @@ class NirToUsid(eve.NodeTranslator):
         field_deref = symtable[node.name]
         sid = sid_mapping(node.primary)
         ref = acc_mapping(node.primary)
-        name = node.name + usid.TAG_APPENDIX
+        name = f"{node.name}_{sid}"
         if isinstance(field_deref, nir.SparseField):
             kernel_ctx.add_primary_entry(
-                usid.SidCompositeSparseEntry(ref=node.name, connectivity=field_deref.connectivity)
+                usid.SidCompositeSparseEntry(
+                    ref=node.name, name=name, connectivity=field_deref.connectivity
+                )
             )
         elif isinstance(field_deref, nir.LocalFieldVar):
             assert "neigh_loop_ctx" in kwargs
@@ -164,9 +170,9 @@ class NirToUsid(eve.NodeTranslator):
             )
         else:
             if sid == kernel_ctx.primary_composite_name:
-                kernel_ctx.add_primary_entry(usid.SidCompositeEntry(ref=node.name))
+                kernel_ctx.add_primary_entry(usid.SidCompositeEntry(ref=node.name, name=name))
             else:
-                kernel_ctx.add_entry(sid, usid.SidCompositeEntry(ref=node.name))
+                kernel_ctx.add_entry(sid, usid.SidCompositeEntry(ref=node.name, name=name))
 
         return usid.FieldAccess(
             name=name,
@@ -232,6 +238,8 @@ class NirToUsid(eve.NodeTranslator):
         ]
 
         kernel_name = "kernel_" + node.id_
+        debug(primary_composite)
+        debug(secondary_composites)
         kernel = usid.Kernel(
             name=kernel_name,
             primary_location=node.iteration_space.location_type,

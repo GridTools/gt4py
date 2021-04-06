@@ -141,7 +141,7 @@ class GtirToNir(eve.NodeTranslator):
         name = node.neighbors.name
         hloop_ctx.add_statement(
             nir.NeighborLoop(
-                name=name,
+                name=nir.NeighborLoopVar(name=name),
                 connectivity=node.neighbors.of.name,
                 body=nir.BlockStmt(
                     declarations=[],
@@ -226,7 +226,7 @@ class GtirToNir(eve.NodeTranslator):
         )
         hloop_ctx.add_statement(
             nir.NeighborLoop(
-                name=node.neighbors.name,
+                name=nir.NeighborLoopVar(name=node.neighbors.name),
                 connectivity=connectivity_deref.name,
                 body=body,
                 location_type=node.location_type,
@@ -264,12 +264,13 @@ class GtirToNir(eve.NodeTranslator):
         )
         return nir_node
 
-    def visit_HorizontalLoop(self, node: gtir.HorizontalLoop, **kwargs):
+    def visit_HorizontalLoop(self, node: gtir.HorizontalLoop, *, symtable, **kwargs):
         hloop_ctx = self.HorizontalLoopContext()
         self.visit(
             node.stmt,
             hloop_ctx=hloop_ctx,
             location_comprehensions={node.location.name: node.location},
+            symtable={**symtable, **node.symtable_},
             **kwargs,
         )
         return nir.HorizontalLoop(
