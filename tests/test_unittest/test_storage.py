@@ -336,7 +336,14 @@ def test_normalize_storage_spec():
     assert mask_out == mask
 
     # Default origin
-    normalize_storage_spec((1, 1, 1), shape, dtype, mask)
+    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        (1, 1, 1), shape, dtype, mask
+    )
+    assert default_origin_out == (1, 1, 1)
+    assert shape_out == shape
+    assert dtype_out == dtype
+    assert mask_out == mask
+
     with pytest.raises(TypeError, match="default_origin"):
         normalize_storage_spec(None, shape, dtype, mask)
     with pytest.raises(TypeError, match="default_origin"):
@@ -347,7 +354,20 @@ def test_normalize_storage_spec():
         normalize_storage_spec((-1, -1, -1), shape, dtype, mask)
 
     # Shape
-    normalize_storage_spec(default_origin, (10, 10), dtype, (True, True, False))
+    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        default_origin, (10, 10), dtype, (True, True, False)
+    )
+    assert default_origin_out == (0, 0)
+    assert shape_out == (10, 10)
+    assert dtype_out == dtype
+    assert mask_out == (True, True, False)
+
+    _, shape_out, __, mask_out = normalize_storage_spec(
+        default_origin, (10, 20), dtype, (False, True, False)
+    )
+    assert shape_out == (20,)
+    assert mask_out == (False, True, False)
+
     with pytest.raises(TypeError, match="shape"):
         normalize_storage_spec(default_origin, "(10,10)", dtype, mask)
     with pytest.raises(TypeError, match="shape"):
@@ -356,10 +376,23 @@ def test_normalize_storage_spec():
         normalize_storage_spec(default_origin, (10, 10, 0), dtype, mask)
 
     # Mask
-    normalize_storage_spec(default_origin, (10, 10), dtype, (True, True, False))
-    normalize_storage_spec(default_origin, (10, 10), dtype, "IJ")
-    normalize_storage_spec(default_origin, (10, 10), dtype, gtscript.IJ)
-    normalize_storage_spec(default_origin, (10, 10), dtype, gtscript.IJ)
+    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        default_origin, (10, 10), dtype, (True, True, False)
+    )
+    assert default_origin_out == (0, 0)
+    assert shape_out == (10, 10)
+    assert dtype_out == dtype
+    assert mask_out == (True, True, False)
+
+    _, __, ___, mask_out = normalize_storage_spec(default_origin, (10, 10), dtype, "IJ")
+    assert mask_out == (True, True, False)
+
+    _, __, ___, mask_out = normalize_storage_spec(default_origin, (10, 10), dtype, gtscript.IJ)
+    assert mask_out == (True, True, False)
+
+    _, __, ___, mask_out = normalize_storage_spec(default_origin, (10, 10, 10), dtype, gtscript.IJK)
+    assert mask_out == (True, True, True)
+
     with pytest.raises(ValueError, match="mask"):
         normalize_storage_spec(default_origin, (10, 10), dtype, (False, False, False))
 
