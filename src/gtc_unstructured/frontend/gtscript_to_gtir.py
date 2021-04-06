@@ -15,8 +15,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import copy
 import numbers
-from typing import Any, Dict, List, Union, cast, Tuple
 from numbers import Number
+from typing import Any, Dict, List, Tuple, Union, cast
 
 from devtools import debug
 

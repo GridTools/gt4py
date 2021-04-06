@@ -221,7 +221,9 @@ class TemporarySparseFieldDecl(GTScriptASTNode):
 class Computation(GTScriptASTNode, SymbolTableTrait):
     # TODO(tehrengruber): use the following as soon as nodes support type parameters:
     #  stencils: List[Union[Stencil[Stencil[Statement]], Stencil[Statement]]]
-    declarations: List[Union[TemporaryFieldDecl, TemporarySparseFieldDecl]] = []  # derived attribute
+    declarations: List[
+        Union[TemporaryFieldDecl, TemporarySparseFieldDecl]
+    ] = []  # derived attribute
 
     name: str
     arguments: List[Argument]
