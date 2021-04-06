@@ -27,9 +27,11 @@ from .typingx import Any, Generator, Iterable, List, Optional, Tuple, Union
 
 
 try:
+    # For perfomance reasons, try to use cytoolz when possible (using cython)
     import cytoolz as toolz
 except ModuleNotFoundError:
-    import toolz  # noqa
+    # Fall back to pure Python toolz
+    import toolz  # noqa: F401  # imported but unused
 
 
 KeyValue = Tuple[Union[int, str], Any]

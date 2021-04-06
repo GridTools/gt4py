@@ -227,8 +227,7 @@ class ApiParamDecl(LocNode):
 
 
 class FieldDecl(ApiParamDecl):
-    # TODO dimensions
-    pass
+    dimensions: Tuple[bool, bool, bool]
 
 
 class GlobalParamDecl(ApiParamDecl):
@@ -240,6 +239,12 @@ class GTStage(LocNode):
     # `args` are SymbolRefs to GTComputation `arguments` (interpreted as parameters)
     # or `temporaries`
     args: List[Arg]
+
+    @validator("args")
+    def has_args(cls, v: List[Arg]) -> List[Arg]:
+        if not v:
+            raise ValueError("At least one argument required")
+        return v
 
 
 class Cache(LocNode):
