@@ -22,7 +22,7 @@ import itertools
 import numbers
 import textwrap
 import types
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 
@@ -124,23 +124,21 @@ class AssertionChecker(ast.NodeTransformer):
     """Check assertions and remove from the AST for further parsing."""
 
     @classmethod
-    def apply(cls, func_node: ast.FunctionDef, context: dict, source: str):
-        checker = cls(context)
+    def apply(cls, func_node: ast.FunctionDef, context: Dict[str, Any], source: str):
+        checker = cls(context, source)
         checker.visit(func_node)
 
-    def __init__(self, context):
+    def __init__(self, context: Dict[str, Any], source: str):
         self.context = context
+        self.source = source
 
-    def _process_assertion(self, expr_node) -> None:
+    def _process_assertion(self, expr_node: ast.Expr) -> None:
         condition_value = gt_utils.meta.ast_eval(expr_node, self.context, default=NOTHING)
         if condition_value is not NOTHING:
             if not condition_value:
+                source_lines = textwrap.dedent(self.source).split("\n")
                 loc = gt_ir.Location.from_ast_node(expr_node)
-                raise GTScriptAssertionError(
-                    "GTScript external_assert failed at '{scope}' (line: {line}, col: {col})".format(
-                        scope=loc.scope, line=loc.line, col=loc.column
-                    )
-                )
+                raise GTScriptAssertionError(source_lines[loc.line - 1], loc=loc)
         else:
             raise GTScriptSyntaxError(
                 "Evaluation of external_assert condition failed at the preprocessing step."
