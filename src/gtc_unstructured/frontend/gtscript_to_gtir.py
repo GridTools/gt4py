@@ -428,15 +428,16 @@ class GTScriptToGTIR(eve.NodeTranslator):
             location_type=location_stack[-1][1],
         )
 
-    def visit_Stencil(self, node: Stencil, **kwargs) -> gtir.Stencil:
+    def visit_Stencil(self, node: Stencil, *, symtable, **kwargs) -> gtir.Stencil:
+        symtable = {**symtable, **node.symtable_}
         loop_order, primary_location = None, None
         for it_spec in node.iteration_spec:
             if isinstance(it_spec, IterationOrder):
                 assert loop_order is None
-                loop_order = self.visit(it_spec, **kwargs)
+                loop_order = self.visit(it_spec, symtable=symtable, **kwargs)
             elif isinstance(it_spec, LocationSpecification):
                 assert primary_location is None
-                primary_location = self.visit(it_spec, **kwargs)
+                primary_location = self.visit(it_spec, symtable=symtable, **kwargs)
             elif isinstance(it_spec, Interval):
                 # TODO(tehrengruber): implement
                 pass
@@ -453,7 +454,9 @@ class GTScriptToGTIR(eve.NodeTranslator):
         for stmt in node.body:
             horizontal_loops.append(
                 gtir.HorizontalLoop(
-                    stmt=self.visit(stmt, location_stack=location_stack, **kwargs),
+                    stmt=self.visit(
+                        stmt, location_stack=location_stack, symtable=symtable, **kwargs
+                    ),
                     location=primary_location,
                 )
             )

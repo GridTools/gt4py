@@ -156,7 +156,7 @@ class Assign(Statement):
     value: Expr
 
 
-class Stencil(GTScriptASTNode):
+class Stencil(GTScriptASTNode, SymbolTableTrait):
     iteration_spec: List[Union[IterationOrder, LocationSpecification, Interval]]
     body: List[
         Union[Statement, "Stencil"]

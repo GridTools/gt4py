@@ -63,7 +63,7 @@ class TemporaryFieldDeclExtractor(eve.NodeVisitor):
             # else:  # noqa: E800
             #    raise ValueError()  # noqa: E800
 
-    def visit_Stencil(self, node: Stencil, **kwargs):
+    def visit_Stencil(self, node: Stencil, *, symtable: Dict[str, Any], **kwargs):
         self.primary_location = None
-        self.generic_visit(node, **kwargs)
+        self.generic_visit(node, symtable={**symtable, **node.symtable_}, **kwargs)
         self.primary_location = None
