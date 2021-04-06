@@ -34,6 +34,7 @@ from .analysis_setup import (
     init_pass,
     merge_blocks_pass,
     normalize_blocks_pass,
+    reduce_temporaries_pass,
 )
 from .definition_setup import (
     TAssign,
