@@ -242,6 +242,7 @@ class Computation(GTScriptASTNode, SymbolTableTrait):
         for arg in values["arguments"]:
             if issubclass(arg.type_, built_in_types.Connectivity):
                 values["externals"].append(External(name=arg.type_.class_name, value=arg.type_))
+        del values["symtable_"]
         values["symtable_"] = cls._collect_symbols(values)
         return values
 
@@ -254,7 +255,18 @@ class Computation(GTScriptASTNode, SymbolTableTrait):
         values["declarations"] = values["declarations"] + TemporaryFieldDeclExtractor.apply(
             values["symtable_"], values["stencils"]
         )
-        #  TODO(tehrengruber): use SymbolTableTrait.collect_symbols with new dataclasses
+        # TODO Find a solution for this pattern:
+        # - During transformation from python ast to gtscript_ast, we cannot easily create Symbols for temporaries
+        #   (because the pass is generic `transform()` in `py_to_gtscript.py`).
+        # - If we want to use Symbol-SymbolRef check, we should represent the Temporary as a Symbol.
+        # - The first place where we can easily do this is here.
+        # - Considerations:
+        #   - The automtic symbol collection (vis SymbolTableTrait) already run (and we actually want to use it in the pass),
+        #     but we need to run again afterwards. Ugly... If we at some point automatically run the SymbolRef check
+        #     in this root node, the pattern will fail as we cannot define run-in-between-collection-and-ref-check.
+        #   - The temporaries in `declarations` are like cached properties, but not really as they declare Symbols.
+        #   - If there wasn't the Symbol declarations, we could run this in the lowering to GTIR.
+        del values["symtable_"]
         values["symtable_"] = cls._collect_symbols(values)
         return values
 
