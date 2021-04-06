@@ -180,7 +180,9 @@ class SuiteMeta(type):
                                     k: (
                                         dtype.type
                                         if (k in cls_dict["constants"] or k in parameters)
-                                        else gtscript.Field[field_axes.get(k, gtscript.IJK), dtype.type]
+                                        else gtscript.Field[
+                                            field_axes.get(k, gtscript.IJK), dtype.type
+                                        ]
                                     )
                                     for k, dtype in d.items()
                                 },
