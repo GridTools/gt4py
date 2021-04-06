@@ -105,6 +105,9 @@ class KCacheDetection(NodeTranslator):
     max_cacheable_offset: int = 5
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
+        # k-caches are restricted to loops with a single horizontal region as all regions without
+        # horizontal offsets should be merged before anyway and this restriction allows for easier
+        # conversion of fill and flush caches to local caches later
         if node.loop_order == common.LoopOrder.PARALLEL or any(
             len(section.horizontal_executions) != 1 for section in node.sections
         ):
