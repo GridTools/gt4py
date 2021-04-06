@@ -109,7 +109,7 @@ class NodeCanonicalizer(eve.NodeTranslator):
     def visit_UnaryOp(self, node: UnaryOp):
         if isinstance(node.operand, Constant) and isinstance(node.operand.value, Number):
             if node.op == stable_gtc_common.UnaryOperator.NEG:
-                return Constant(value=-node.operand.value)
+                return Constant(value=-node.operand.value)  # type: ignore[operator]
             elif node.op == stable_gtc_common.UnaryOperator.POS:
                 return node.operand
 
