@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.ir.nodes import Domain, IterationOrder, ScalarLiteral
+from gt4py.ir.nodes import Domain, IterationOrder
 
 from ..analysis_setup import AnalysisPass
 from ..definition_setup import TAssign, TComputationBlock, TDefinition, TScalarLiteral
@@ -53,7 +53,7 @@ def test_constant_folding_assign_twice(
             ),
             TComputationBlock(order=IterationOrder.PARALLEL).add_statements(
                 TAssign("out", "tmp", (0, 0, 0)),
-            )
+            ),
         )
         .build_transform()
     )
