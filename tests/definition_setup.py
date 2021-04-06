@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Iterator, List, Set, Tuple, Union
+from typing import Any, Iterator, List, Set, Tuple, Union
 
 import pytest
 
@@ -36,6 +36,7 @@ from gt4py.ir.nodes import (
     IterationOrder,
     LevelMarker,
     Location,
+    ScalarLiteral,
     StencilDefinition,
     StencilImplementation,
 )
@@ -307,3 +308,36 @@ class TFieldRef(TObject):
     @property
     def field_names(self) -> Set[str]:
         return {self.name}
+
+
+class TScalarLiteral(TObject):
+    def __init__(
+        self,
+        *,
+        value: Any,
+        loc: Location = None,
+        parent: TObject = None,
+    ):
+        super().__init__(loc or Location(line=0, column=0), parent=parent)
+        self.value = value
+
+    def build(self):
+        if self.parent:
+            self.loc.scope = self.parent.child_scope
+        return ScalarLiteral(
+            value=self.value,
+            data_type=DataType.AUTO,
+            loc=self.loc,
+        )
+
+    @property
+    def height(self) -> int:
+        return 1
+
+    @property
+    def width(self) -> int:
+        return len(str(self.value))
+
+    @property
+    def field_names(self) -> Set[str]:
+        return {str(self.value)}
