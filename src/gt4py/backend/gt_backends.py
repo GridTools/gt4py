@@ -100,14 +100,14 @@ def mc_is_compatible_layout(field: "Storage") -> bool:
     return True
 
 
-def cuda_layout(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
+def make_cuda_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     ctr = reversed(range(sum(mask)))
     return tuple([next(ctr) if m else None for m in mask])
 
 
 def cuda_is_compatible_layout(field: "Storage") -> bool:
     stride = 0
-    layout_map = cuda_layout(field.mask)
+    layout_map = make_cuda_layout_map(field.mask)
     flattened_layout = [index for index in layout_map if index is not None]
     if len(field.strides) < len(flattened_layout):
         return False
@@ -723,7 +723,7 @@ class GTCUDABackend(BaseGTBackend):
     storage_info = {
         "alignment": 32,
         "device": "gpu",
-        "layout_map": cuda_layout,
+        "layout_map": make_cuda_layout_map,
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }
