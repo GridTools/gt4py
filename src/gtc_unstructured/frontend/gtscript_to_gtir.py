@@ -15,7 +15,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import copy
 import numbers
-from typing import Any, Dict, List, Union, cast
+from typing import Any, Dict, List, Union, cast, Tuple
+from numbers import Number
 
 from devtools import debug
 
@@ -47,6 +48,7 @@ from .gtscript_ast import (
     Generator,
     Interval,
     IterationOrder,
+    List_,
     LocationComprehension,
     LocationSpecification,
     Pass,
@@ -105,7 +107,7 @@ class NodeCanonicalizer(eve.NodeTranslator):
         return node
 
     def visit_UnaryOp(self, node: UnaryOp):
-        if isinstance(node.operand, Constant):
+        if isinstance(node.operand, Constant) and isinstance(node.operand.value, Number):
             if node.op == stable_gtc_common.UnaryOperator.NEG:
                 return Constant(value=-node.operand.value)
             elif node.op == stable_gtc_common.UnaryOperator.POS:
@@ -145,7 +147,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
 
     def visit_LocationSpecification(
         self, node: LocationSpecification, *, symtable, **kwargs
-    ) -> gtir.LocationComprehension:
+    ) -> gtir.PrimaryLocation:
         loc_type = evaluate_const_expr(symtable, node.location_type)
 
         return gtir.PrimaryLocation(name=node.name, location_type=loc_type)
@@ -237,7 +239,10 @@ class GTScriptToGTIR(eve.NodeTranslator):
         neighbor_vector_access_expr_location_name,
         **kwargs,
     ):
+        # TODO(tehrengruber): rework after NeighborVectorAccess in GTIR redesign
         assert inside_sparse_assign
+        assert len(node.args) == 1
+        assert isinstance(node.args[0], List_)
         func = evaluate_const_expr(symtable, node.func)
 
         return gtir.NeighborVectorAccess(
@@ -294,13 +299,14 @@ class GTScriptToGTIR(eve.NodeTranslator):
             assert len(node.indices) in [1, 2]
             assert all(isinstance(index, SymbolRef) for index in node.indices)
             assert all(
-                isinstance(symtable[index.name], LocationSpecification)
-                or isinstance(symtable[index.name], LocationComprehension)
+                isinstance(symtable[index.name], LocationSpecification)  # type: ignore[union-attr]
+                or isinstance(symtable[index.name], LocationComprehension)  # type: ignore[union-attr]
                 for index in node.indices
             )
 
             # check arguments for consistency
             # TODO: lower IRs should check this too, currently without this check they just generate invalid code
+            expected_index_types: Tuple[BuiltInTypeMeta, ...]
             if issubclass(value_decl.type_, SparseField) or issubclass(
                 value_decl.type_, TemporarySparseField
             ):
@@ -343,6 +349,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
         right_type = deduce_type(symtable, node.value)
         sparse_assign = issubclass(right_type, LocalField)
         if sparse_assign:
+            assert isinstance(node.target, SymbolRef)
             location_type = symtable[node.target.name].type_.args[0]
             if location_type != right_type.args[0]:
                 raise ValueError()
@@ -468,11 +475,11 @@ class GTScriptToGTIR(eve.NodeTranslator):
         )
 
     def visit_Computation(self, node: Computation) -> gtir.Computation:
-        field_args = []
-        connectivity_args = []
-        temporary_fields = []
+        field_args: List[Union[gtir.UField, gtir.SparseField]] = []
+        connectivity_args: List[gtir.Connectivity] = []
+        temporary_fields: List[Union[gtir.TemporaryField, gtir.TemporarySparseField]] = []
 
-        for arg in node.arguments + node.declarations:
+        for arg in node.arguments + node.declarations:  # type: ignore[operator]
             if issubclass(arg.type_, Field) or issubclass(arg.type_, TemporaryField):
                 field_type = arg.type_
                 loc_type, vtype = field_type.args
@@ -487,7 +494,7 @@ class GTScriptToGTIR(eve.NodeTranslator):
 
                 horizontal = None
                 vertical = None
-                new_type_args = [None, vtype]
+                new_type_args: List[Any] = [None, vtype]
                 for loc in loc_type:
                     if isinstance(loc, common.LocationType):
                         horizontal = gtir.HorizontalDimension(primary=loc)
@@ -515,14 +522,15 @@ class GTScriptToGTIR(eve.NodeTranslator):
                 arg.type_ = arg.type_.body[tuple(new_type_args)]
 
             elif issubclass(arg.type_, Connectivity):
-                base_connectivty = arg.type_.base_connectivity()
+                # TODO(tehrengruber): understand why mypy doesn't understand this
+                base_connectivity = arg.type_.base_connectivity()  # type: ignore[attr-defined]
                 connectivity_args.append(
                     gtir.Connectivity(
                         name=arg.name,
-                        primary=base_connectivty.primary_location(),
-                        secondary=base_connectivty.secondary_location(),
-                        max_neighbors=base_connectivty.max_neighbors(),
-                        has_skip_values=base_connectivty.has_skip_values(),
+                        primary=base_connectivity.primary_location(),
+                        secondary=base_connectivity.secondary_location(),
+                        max_neighbors=base_connectivity.max_neighbors(),
+                        has_skip_values=base_connectivity.has_skip_values(),
                     )
                 )
             elif issubclass(arg.type_, SparseField) or issubclass(arg.type_, TemporarySparseField):

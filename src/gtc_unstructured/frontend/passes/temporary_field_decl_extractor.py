@@ -19,7 +19,7 @@ from .type_deduction import deduce_type
 
 class TemporaryFieldDeclExtractor(eve.NodeVisitor):
     primary_location: Union[None, LocationSpecification]
-    temporary_fields: List[TemporaryFieldDecl]
+    temporary_fields: Dict[str, Union[TemporaryFieldDecl, TemporarySparseFieldDecl]]
 
     def __init__(self):
         self.primary_location = None
@@ -56,7 +56,7 @@ class TemporaryFieldDeclExtractor(eve.NodeVisitor):
                 )
             else:  # TODO(tehrengruber): issubclass(value_type, Number)
                 args = (self.primary_location.location_type, SymbolRef(name="dtype"))
-                args = tuple(evaluate_const_expr(symtable, arg) for arg in args)
+                args = tuple(evaluate_const_expr(symtable, arg) for arg in args)  # type: ignore[assignment]
                 self.temporary_fields[target.name] = TemporaryFieldDecl(
                     name=SymbolName(target.name), type_=built_in_types.TemporaryField[args]
                 )

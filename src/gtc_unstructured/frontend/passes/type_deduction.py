@@ -85,8 +85,9 @@ class TypeDeduction(eve.NodeVisitor):
 
     def visit_Subscript(self, node: Subscript, *, symtable, **kwargs):
         # todo: enhance
+        assert all(isinstance(idx, SymbolRef) for idx in node.indices)
         if all(
-            isinstance(symtable[idx.name], (LocationSpecification, LocationComprehension))
+            isinstance(symtable[idx.name], (LocationSpecification, LocationComprehension))  # type: ignore[union-attr]
             for idx in node.indices
         ):
             return Number
