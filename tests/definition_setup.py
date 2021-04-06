@@ -222,7 +222,7 @@ class TStatement(TObject):
 
 
 class TAssign(TStatement):
-    def __init__(self, target: str, value: Union[str, Expr], offset: Tuple[int, int, int]):
+    def __init__(self, target: str, value: Union[str, Expr, TObject], offset: Tuple[int, int, int]):
         super().__init__(Location(line=0, column=0))
         self._target = target
         self._value = value
