@@ -35,7 +35,10 @@ class _CollectSymbols(visitors.NodeVisitor):
             if isinstance(metadata["definition"].type_, type) and issubclass(
                 metadata["definition"].type_, SymbolName
             ):
-                self.collected[getattr(node, name)] = node
+                symbol_name = getattr(node, name)
+                if symbol_name in self.collected:
+                    raise ValueError(f"Multiple definitions of symbol '{symbol_name}'")
+                self.collected[symbol_name] = node
         if not isinstance(node, SymbolTableTrait):
             # don't recurse into a new scope (i.e. node with SymbolTableTrait)
             self.generic_visit(node)
@@ -58,8 +61,10 @@ class SymbolTableTrait(concepts.Model):
     def _collect_symbols_validator(  # type: ignore  # validators are classmethods
         cls: Type[SymbolTableTrait], values: Dict[str, Any]
     ) -> Dict[str, Any]:
+        values.pop("symtable_", None)
         values["symtable_"] = cls._collect_symbols(values)
         return values
 
     def collect_symbols(self) -> None:
+        self.symtable_ = dict()
         self.symtable_ = self._collect_symbols(self)

@@ -1031,6 +1031,9 @@ class IRMaker(ast.NodeVisitor):
     def visit_Div(self, node: ast.Div) -> gt_ir.BinaryOperator:
         return gt_ir.BinaryOperator.DIV
 
+    def visit_Mod(self, node: ast.Mod) -> gt_ir.BinaryOperator:
+        return gt_ir.BinaryOperator.MOD
+
     def visit_Pow(self, node: ast.Pow) -> gt_ir.BinaryOperator:
         return gt_ir.BinaryOperator.POW
 

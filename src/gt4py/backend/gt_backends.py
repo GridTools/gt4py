@@ -162,7 +162,8 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         gt_ir.BinaryOperator.SUB: "-",
         gt_ir.BinaryOperator.MUL: "*",
         gt_ir.BinaryOperator.DIV: "/",
-        gt_ir.BinaryOperator.POW: lambda lhs, rhs: "pow({lhs}, {rhs})".format(lhs=lhs, rhs=rhs),
+        gt_ir.BinaryOperator.POW: "pow({}, {})".format,
+        gt_ir.BinaryOperator.MOD: "fmod({}, {})".format,
         gt_ir.BinaryOperator.AND: "&&",
         gt_ir.BinaryOperator.OR: "||",
         gt_ir.BinaryOperator.LT: "<",
@@ -464,10 +465,12 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 if value is not None:
                     constants[name] = value
 
+        api_names = [arg_info.name for arg_info in node.api_signature]
         arg_fields = []
         tmp_fields = []
         storage_ids = []
         max_ndim = 0
+
         for name, field_decl in node.fields.items():
             if name not in node.unreferenced:
                 max_ndim = max(max_ndim, len(field_decl.axes))
@@ -507,6 +510,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             multi_stages.append({"exec": str(multi_stage.iteration_order).lower(), "steps": steps})
 
         template_args = dict(
+            api_names=api_names,
             arg_fields=arg_fields,
             constants=constants,
             gt_backend=self.gt_backend_t,
