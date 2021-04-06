@@ -16,6 +16,7 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
+import gtc.dace_to_oir as dace_to_oir
 import gtc.utils as gtc_utils
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
@@ -37,6 +38,7 @@ from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
+from gtc.oir_to_dace import OirSDFGBuilder
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
@@ -72,6 +74,8 @@ class GTCGTExtGenerator:
         dtype_deduced = resolve_dtype(gtir_without_unused_params)
         upcasted = upcast(dtype_deduced)
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
+        sdfg = OirSDFGBuilder.build(oir.name, oir)
+        oir = dace_to_oir.convert(sdfg)
         oir = self._optimize_oir(oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
