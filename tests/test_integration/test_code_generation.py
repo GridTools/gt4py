@@ -192,7 +192,7 @@ def test_lower_dimensional_inputs(backend):
     ):
         with computation(FORWARD):
             with interval(0, 1):
-                field_2d = field_1d[1] + field_3d[0, 1, 0]
+                field_2d = field_1d[1]
 
         with computation(PARALLEL):
             with interval(0, -1):
@@ -204,7 +204,7 @@ def test_lower_dimensional_inputs(backend):
             with interval(0, 1):
                 field_3d = tmp[1, 0, 0] + field_1d[1]
             with interval(1, None):
-                field_3d = tmp[-1, 0, -1]
+                field_3d = tmp[-1, 0, 0]
 
     full_shape = (6, 6, 6)
     default_origin = (1, 1, 0)
@@ -228,3 +228,15 @@ def test_lower_dimensional_inputs(backend):
     np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, 1:], 2)
 
     stencil(field_3d, field_2d, field_1d)
+
+
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
+def test_input_order(backend):
+    @gtscript.stencil(backend=backend)
+    def stencil(
+        in_field: gtscript.Field[np.float],
+        parameter: np.float,
+        out_field: gtscript.Field[np.float],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field = in_field * parameter
