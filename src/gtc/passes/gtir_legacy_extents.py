@@ -32,7 +32,7 @@ class LegacyExtentsVisitor(NodeVisitor):
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> FIELD_EXT_T:
         field_extents = {name: Extent.zeros() for name in _iter_field_names(node)}
-        for assign in _iter_assigns(node).to_list()[::-1]:
+        for assign in reversed(_iter_assigns(node).to_list()):
             self.visit(assign, field_extents=field_extents)
         return field_extents
 
