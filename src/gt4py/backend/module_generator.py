@@ -375,16 +375,7 @@ def iir_has_effect(implementation_ir: gt_ir.StencilImplementation) -> bool:
 
 
 def gtir_has_effect(pipeline: GtirPipeline) -> bool:
-    node = pipeline.full()
-    for assign in node.iter_tree().if_isinstance(gtir.ParAssignStmt):
-        if isinstance(assign.right, type(assign.left)):
-            if assign.left.name == assign.right.name:
-                continue
-            else:
-                return True
-        else:
-            return True
-    return False
+    return True
 
 
 class PyExtModuleGenerator(BaseModuleGenerator):
