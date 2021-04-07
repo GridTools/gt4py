@@ -174,11 +174,10 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         #include "computation.hpp"
         namespace gt = gridtools;
         namespace py = ::pybind11;
-        %if len(entry_params) > 0:
         PYBIND11_MODULE(${module_name}, m) {
-            m.def("run_computation", [](std::array<gt::uint_t, 3> domain,
-            ${','.join(entry_params)},
-            py::object exec_info){
+            m.def("run_computation", [](
+            ${','.join(["std::array<gt::uint_t, 3> domain", *entry_params, 'py::object exec_info'])}
+            ){
                 if (!exec_info.is(py::none()))
                 {
                     auto exec_info_dict = exec_info.cast<py::dict>();
@@ -198,7 +197,6 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                 }
 
             }, "Runs the given computation");}
-        %endif
         """
     )
 

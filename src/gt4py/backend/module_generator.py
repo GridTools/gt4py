@@ -448,7 +448,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
             source = textwrap.dedent(
                 f"""
                 # Load or generate a GTComputation object for the current domain size
-                pyext_module.run_computation(list(_domain_), {",".join(args)}, exec_info)
+                pyext_module.run_computation({",".join(["list(_domain_)", *args, "exec_info"])})
                 """
             )
             sources.extend(source.splitlines())
