@@ -224,6 +224,7 @@ def test_lower_dimensional_inputs(backend):
     assert field_1d.shape == (full_shape[-1],)
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0), domain=(4, 3, 6))
+    field_3d.device_to_host()
     np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, :1], 3)
     np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, 1:], 2)
 
