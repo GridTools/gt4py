@@ -22,7 +22,7 @@ from gt4py.backend import REGISTRY as backend_registry
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, DAWN_CPU_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, DAWN_CPU_BACKENDS
 
 
 def stencil_def(
@@ -127,7 +127,7 @@ def test_generate_post_run(backend_name, mode):
         assert source == "out._set_device_modified()"
 
 
-@pytest.mark.parametrize("backend_name", ("gtcuda",))
+@pytest.mark.parametrize("backend_name", GPU_BACKENDS)
 @pytest.mark.parametrize("mode", (2,))
 @pytest.mark.parametrize("device_sync", (True, False))
 def test_device_sync_option(backend_name, mode, device_sync):
