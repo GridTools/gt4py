@@ -436,7 +436,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
     def _has_effect(self) -> bool:
         if self.builder.backend.USE_LEGACY_TOOLCHAIN:
             return iir_has_effect(self.builder.implementation_ir)
-        return gtir_is_not_emtpy(self.builder.gtir_pipeline)
+        return gtir_has_effect(self.builder.gtir_pipeline)
 
     def generate_implementation(self) -> str:
         definition_ir = self.builder.definition_ir
