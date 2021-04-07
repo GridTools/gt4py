@@ -118,3 +118,23 @@ def test_unreferenced():
 
     for name, ext in old_ext.items():
         assert legacy_ext[name] == ext
+
+
+def test_field_if():
+    def stencil(field_a: gs.Field[float], field_b: gs.Field[float]):
+        with computation(PARALLEL), interval(...):
+            if field_b[0, 1, 0] < 0.1:
+                if field_b[1, 0, 0] > 1.0:
+                    field_a = 0
+                else:
+                    field_a = 1
+            else:
+                tmp = -field_b[0, 1, 0]
+                field_a = tmp
+
+    builder = StencilBuilder(stencil, backend=from_name("debug"))
+    old_ext = builder.implementation_ir.fields_extents
+    legacy_ext = compute_legacy_extents(prepare_gtir(builder))
+
+    for name, ext in old_ext.items():
+        assert legacy_ext[name] == ext
