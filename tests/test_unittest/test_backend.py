@@ -22,7 +22,7 @@ from gt4py.backend import REGISTRY as backend_registry
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, DAWN_CPU_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, DAWN_CPU_BACKENDS, GPU_BACKENDS
 
 
 def stencil_def(
