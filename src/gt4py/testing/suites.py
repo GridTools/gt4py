@@ -283,15 +283,16 @@ class SuiteMeta(type):
         assert isinstance(
             cls_dict["dtypes"], (collections.abc.Sequence, collections.abc.Mapping)
         ), "'dtypes' must be a sequence or a mapping object"
-
+        pytest.param
         # Check backends
+        backends = [pytest.param(b) for b in backends]
         assert isinstance(backends, collections.abc.Sequence) and all(
-            isinstance(b, str) for b in backends
+            len(b.values) == 1 and isinstance(b.values[0], str) for b in backends
         ), "'backends' must be a sequence of strings"
         for b in backends:
-            assert b in gt.backend.REGISTRY.names, "backend '{backend}' not supported".format(
-                backend=b
-            )
+            assert (
+                b.values[0] in gt.backend.REGISTRY.names
+            ), "backend '{backend}' not supported".format(backend=b)
 
         # Check definition and validation functions
         if not isinstance(cls_dict["definition"], types.FunctionType):

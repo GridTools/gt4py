@@ -14,8 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import itertools
-
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
 import numpy as np
@@ -27,13 +25,14 @@ try:
 except ImportError:
     pass
 
-# import gt4py.storage as gt_storage
 import gt4py.backend as gt_backend
 import gt4py.definitions as gt_definitions
 import gt4py.ir as gt_ir
 import gt4py.storage as gt_store
 import gt4py.storage.utils as gt_storage_utils
 import gt4py.utils as gt_utils
+
+from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 
 
 # ---- Hypothesis strategies ----
@@ -383,27 +382,21 @@ def test_normalize_shape():
 
 
 @pytest.mark.parametrize(
-    ["alloc_fun", "backend"],
-    itertools.product(
-        [
-            gt_store.empty,
-            gt_store.ones,
-            gt_store.zeros,
-            lambda dtype, default_origin, shape, backend: gt_store.from_array(
-                np.empty(shape, dtype=dtype),
-                backend=backend,
-                shape=shape,
-                dtype=dtype,
-                default_origin=default_origin,
-            ),
-        ],
-        [
-            name
-            for name in gt_backend.REGISTRY.names
-            if gt_backend.from_name(name).storage_info["device"] == "cpu"
-        ],
-    ),
+    "alloc_fun",
+    [
+        gt_store.empty,
+        gt_store.ones,
+        gt_store.zeros,
+        lambda dtype, default_origin, shape, backend: gt_store.from_array(
+            np.empty(shape, dtype=dtype),
+            backend=backend,
+            shape=shape,
+            dtype=dtype,
+            default_origin=default_origin,
+        ),
+    ],
 )
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_cpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, default_origin=(1, 2, 3), shape=(2, 4, 6), backend=backend)
     assert type(stor.default_origin) is tuple
@@ -414,28 +407,24 @@ def test_cpu_constructor(alloc_fun, backend):
     assert stor.is_stencil_view
 
 
-@pytest.mark.requires_gpu
 @pytest.mark.parametrize(
-    ["alloc_fun", "backend"],
-    itertools.product(
-        [
-            gt_store.empty,
-            gt_store.ones,
-            gt_store.zeros,
-            lambda dtype, default_origin, shape, backend: gt_store.from_array(
-                np.empty(shape, dtype=dtype),
-                backend=backend,
-                shape=shape,
-                dtype=dtype,
-                default_origin=default_origin,
-            ),
-        ],
-        [
-            name
-            for name in gt_backend.REGISTRY.names
-            if gt_backend.from_name(name).storage_info["device"] == "gpu"
-        ],
-    ),
+    "alloc_fun",
+    [
+        gt_store.empty,
+        gt_store.ones,
+        gt_store.zeros,
+        lambda dtype, default_origin, shape, backend: gt_store.from_array(
+            np.empty(shape, dtype=dtype),
+            backend=backend,
+            shape=shape,
+            dtype=dtype,
+            default_origin=default_origin,
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "backend",
+    GPU_BACKENDS,
 )
 def test_gpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, default_origin=(1, 2, 3), shape=(2, 4, 6), backend=backend)
@@ -639,16 +628,10 @@ def test_transpose(backend="gtmc"):
     assert not transposed.is_stencil_view
 
 
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
 @pytest.mark.parametrize(
-    ["backend", "method"],
-    itertools.product(
-        [
-            name
-            for name in gt_backend.REGISTRY.names
-            if gt_backend.from_name(name).storage_info["device"] == "cpu"
-        ],
-        ["deepcopy", "copy_method"],
-    ),
+    "method",
+    ["deepcopy", "copy_method"],
 )
 def test_copy_cpu(method, backend):
     default_origin = (1, 1, 1)
