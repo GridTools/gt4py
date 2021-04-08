@@ -18,11 +18,12 @@ import inspect
 
 import pytest
 
+import gt4py.backend as gt_backend
 from gt4py.backend import REGISTRY as backend_registry
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, DAWN_CPU_BACKENDS
+from ..definitions import ALL_BACKENDS
 
 
 def stencil_def(
@@ -99,8 +100,8 @@ def test_generate_pre_run(backend_name, mode):
     module_generator.args_data = args_data
     source = module_generator.generate_pre_run()
 
-    if backend_name in CPU_BACKENDS:
-        if backend_name not in DAWN_CPU_BACKENDS:
+    if gt_backend.from_name(backend_name).storage_info["device"] == "cpu":
+        if "dawn:" not in backend_name:
             assert source == ""
     else:
         for key in field_info_val[mode]:
@@ -121,7 +122,7 @@ def test_generate_post_run(backend_name, mode):
     module_generator.args_data = args_data
     source = module_generator.generate_post_run()
 
-    if backend_name in CPU_BACKENDS:
+    if gt_backend.from_name(backend_name).storage_info["device"] == "cpu":
         assert source == ""
     else:
         assert source == "out._set_device_modified()"
