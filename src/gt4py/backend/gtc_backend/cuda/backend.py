@@ -25,7 +25,7 @@ from gt4py.backend.gt_backends import (
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
     cuda_is_compatible_type,
-    cuda_layout,
+    make_cuda_layout_map,
 )
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
@@ -199,7 +199,7 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     storage_info = {
         "alignment": 32,
         "device": "gpu",
-        "layout_map": cuda_layout,
+        "layout_map": make_cuda_layout_map,
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }
