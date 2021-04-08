@@ -17,6 +17,7 @@
 # Disable isort to avoid circular imports
 # isort: off
 from .base import *
+from .module_generator import BaseModuleGenerator
 from . import python_generator
 
 # isort: on

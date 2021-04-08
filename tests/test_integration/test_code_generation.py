@@ -40,7 +40,7 @@ def test_generation(name, backend):
                 mask=gtscript.mask_from_axes(v.axes),
                 backend=backend,
                 shape=(23, 23, 23),
-                default_origin=(10, 10, 10),
+                default_origin=(10, 10, 5),
             )
         else:
             args[k] = v(1.5)
