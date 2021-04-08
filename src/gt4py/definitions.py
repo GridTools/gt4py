@@ -628,7 +628,6 @@ class CenteredExtent(Extent):
         )
         assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
-
     @classmethod
     def empty(cls, ndims=CartesianSpace.ndim):
         return cls.zeros(ndims)
