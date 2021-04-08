@@ -26,7 +26,6 @@ from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
 
-@pytest.mark.requires_gpu
 @pytest.mark.parametrize("name", stencil_definitions)
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_generation(name, backend):
