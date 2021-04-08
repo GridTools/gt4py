@@ -25,7 +25,7 @@ import pytest
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_store
 
-from ..definitions import INTERNAL_CPU_BACKENDS, INTERNAL_GPU_BACKENDS, id_version
+from ..definitions import INTERNAL_BACKENDS
 from ..reference_cpp_regression import reference_module
 from .utils import id_version  # import fixture used by pytest
 from .utils import generate_test_module
@@ -257,16 +257,7 @@ def run_large_k_interval(backend, id_version, domain):
         )
 
 
-@pytest.mark.parametrize(
-    ["backend", "function"], itertools.product(INTERNAL_CPU_BACKENDS, REGISTRY)
-)
-def test_cpp_regression_cpu(backend, id_version, function):
-    function(gt_backend.from_name(backend), id_version)
-
-
-@pytest.mark.requires_gpu
-@pytest.mark.parametrize(
-    ["backend", "function"], itertools.product(INTERNAL_GPU_BACKENDS, REGISTRY)
-)
-def test_cpp_regression_gpu(backend, id_version, function):
+@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+@pytest.mark.parametrize("function", REGISTRY)
+def test_cpp_regression(backend, id_version, function):
     function(gt_backend.from_name(backend), id_version)
