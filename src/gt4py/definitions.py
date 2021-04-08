@@ -19,7 +19,6 @@ import collections
 import enum
 import numbers
 import operator
-import sys
 from typing import Mapping, Optional
 
 from gt4py import utils as gt_utils
@@ -55,10 +54,10 @@ class NumericTuple(tuple):
     def _check_value(cls, value, ndims):
         assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
         assert all(isinstance(d, numbers.Number) for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def is_valid(cls, value, *, ndims=(1, sys.maxsize)):
+    def is_valid(cls, value, *, ndims=(1, None)):
         if isinstance(ndims, numbers.Integral):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
@@ -256,7 +255,7 @@ class Index(NumericTuple):
     def _check_value(cls, value, ndims):
         assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
         assert all(isinstance(d, numbers.Integral) for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
 
 class Shape(NumericTuple):
@@ -270,7 +269,7 @@ class Shape(NumericTuple):
     def _check_value(cls, value, ndims):
         assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
         assert all(isinstance(d, numbers.Integral) and d >= 0 for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
 
 class FrameTuple(tuple):
@@ -285,10 +284,10 @@ class FrameTuple(tuple):
             len(r) == 2 and isinstance(r[0], numbers.Number) and isinstance(r[1], numbers.Number)
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def is_valid(cls, value, *, ndims=(1, sys.maxsize)):
+    def is_valid(cls, value, *, ndims=(1, None)):
         if isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
@@ -486,7 +485,7 @@ class Boundary(FrameTuple):
             # and r[0] >= 0 and r[1] >= 0
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
     def from_offset(cls, offset):
@@ -528,7 +527,7 @@ class Extent(FrameTuple):
             and (r[0] is None or r[1] is None or r[1] <= r[1])
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
     def empty(cls, ndims=CartesianSpace.ndim):
@@ -627,7 +626,8 @@ class CenteredExtent(Extent):
             len(r) == 2 and isinstance(r[0], int) and isinstance(r[1], int) and r[0] <= 0 <= r[1]
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
+
 
     @classmethod
     def empty(cls, ndims=CartesianSpace.ndim):
