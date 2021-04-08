@@ -89,9 +89,8 @@ def allocation_strategy(draw):
 def mask_strategy(draw):
     dimension = draw(hyp_st.integers(min_value=1, max_value=6))
 
-    shape_strats = [hyp_st.integers(min_value=1, max_value=64)] * dimension
+    shape_strats = [hyp_st.integers(min_value=1, max_value=32)] * dimension
     shape = draw(hyp_st.tuples(*shape_strats))
-
     default_origin_strats = [
         hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1)) for i in range(dimension)
     ]
