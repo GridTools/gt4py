@@ -20,7 +20,7 @@ import enum
 import numbers
 import operator
 from dataclasses import dataclass
-from typing import List, Mapping, Optional
+from typing import Mapping, Optional, Tuple
 
 import numpy
 
@@ -660,24 +660,25 @@ class DomainInfo(
     pass
 
 
-@dataclass
+@dataclass(frozen=True)
 class FieldInfo:
     access: AccessKind
     boundary: Boundary
-    axes: List[str]
+    axes: Tuple[str, ...]
+    data_dims: Tuple[int, ...]
     dtype: numpy.dtype
 
     def __repr__(self):
-        result = "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, dtype={dtype})".format(
+        return "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, data_dims={data_dims}, dtype={dtype})".format(
             access=self.access.name,
             boundary=repr(self.boundary),
             axes=repr(self.axes),
+            data_dims=repr(self.data_dims),
             dtype=repr(self.dtype),
         )
-        return result
 
 
-@dataclass
+@dataclass(frozen=True)
 class ParameterInfo:
     dtype: numpy.dtype
 

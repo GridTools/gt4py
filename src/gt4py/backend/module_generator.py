@@ -60,7 +60,8 @@ def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> M
                 data.field_info[arg.name] = FieldInfo(
                     access=access,
                     boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
-                    axes=field_decl.axes,
+                    axes=tuple(field_decl.axes),
+                    data_dims=tuple(field_decl.data_dims),
                     dtype=field_decl.data_type.dtype,
                 )
             else:
@@ -114,7 +115,8 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         data.field_info[name] = FieldInfo(
             access=AccessKind.READ_WRITE if name in write_fields else AccessKind.READ_ONLY,
             boundary=field_extents[name].to_boundary(),
-            axes=list(dimension_flags_to_names(node.symtable_[name].dimensions).upper()),
+            axes=tuple(dimension_flags_to_names(node.symtable_[name].dimensions).upper()),
+            data_dims=tuple(node.symtable_[name].data_dims),
             dtype=numpy.dtype(node.symtable_[name].dtype.name.lower()),
         )
 
