@@ -31,6 +31,7 @@ from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
 
 from . import pyext_builder
+from .module_generator import CUDAPyExtModuleGenerator, PyExtModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -545,7 +546,9 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     GT_BACKEND_T: str
 
-    MODULE_GENERATOR_CLASS = gt_backend.PyExtModuleGenerator
+    MODULE_GENERATOR_CLASS = PyExtModuleGenerator
+
+    USE_LEGACY_TOOLCHAIN = True
 
     PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
@@ -694,12 +697,10 @@ class GTMCBackend(BaseGTBackend):
         return self.make_extension(uses_cuda=False)
 
 
-class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
+class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
     def generate_pre_run(self) -> str:
         field_names = [
-            key
-            for key in self.args_data["field_info"]
-            if self.args_data["field_info"][key] is not None
+            key for key in self.args_data.field_info if self.args_data.field_info[key] is not None
         ]
 
         return "\n".join([f + ".host_to_device()" for f in field_names])
@@ -707,7 +708,7 @@ class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
     def generate_post_run(self) -> str:
         output_field_names = [
             name
-            for name, info in self.args_data["field_info"].items()
+            for name, info in self.args_data.field_info.items()
             if info is not None and info.access == gt_definitions.AccessKind.READ_WRITE
         ]
 

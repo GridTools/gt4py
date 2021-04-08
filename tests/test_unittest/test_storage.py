@@ -87,28 +87,23 @@ def allocation_strategy(draw):
 
 @hyp_st.composite
 def mask_strategy(draw):
-    dimension = draw(hyp_st.integers(min_value=0, max_value=4))
+    dimension = draw(hyp_st.integers(min_value=1, max_value=6))
 
-    mask_strats = []
-    shape_strats = []
-    default_origin_strats = []
-
-    for i in range(dimension):
-        shape_strats = shape_strats + [hyp_st.integers(min_value=1, max_value=64)]
-        mask_strats = mask_strats + [hyp_st.booleans()]
+    shape_strats = [hyp_st.integers(min_value=1, max_value=32)] * dimension
     shape = draw(hyp_st.tuples(*shape_strats))
-    for i in range(dimension):
-        default_origin_strats = default_origin_strats + [
-            hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1))
-        ]
+    default_origin_strats = [
+        hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1)) for i in range(dimension)
+    ]
     default_origin = draw(hyp_st.tuples(*default_origin_strats))
+
+    mask_values = [True] * dimension
+    if dimension < 3:
+        mask_values += [False] * (3 - dimension)
+
     mask = draw(
         hyp_st.one_of(
             hyp_st.just(None),
-            hyp_st.tuples(*mask_strats),
-            hyp_st.permutations(
-                ([True] * dimension) + ([False] * draw(hyp_st.integers(min_value=0, max_value=10)))
-            ),
+            hyp_st.permutations(mask_values),
         )
     )
     return dict(shape=shape, default_origin=default_origin, mask=mask)
@@ -362,12 +357,8 @@ def test_normalize_storage_spec():
     assert dtype_out == dtype
     assert mask_out == (True, True, False)
 
-    _, shape_out, __, mask_out = normalize_storage_spec(
-        default_origin, (10, 20), dtype, (False, True, False)
-    )
-    assert shape_out == (20,)
-    assert mask_out == (False, True, False)
-
+    with pytest.raises(ValueError, match="non-matching"):
+        normalize_storage_spec(default_origin, (10, 20), dtype, (False, True, False))
     with pytest.raises(TypeError, match="shape"):
         normalize_storage_spec(default_origin, "(10,10)", dtype, mask)
     with pytest.raises(TypeError, match="shape"):
@@ -471,7 +462,6 @@ def test_gpu_constructor(alloc_fun, backend):
     assert stor.is_stencil_view
 
 
-@pytest.mark.skip(reason="does not work with refactored storages")
 @hyp.given(param_dict=mask_strategy())
 def test_masked_storage_cpu(param_dict):
     mask = param_dict["mask"]
@@ -486,7 +476,6 @@ def test_masked_storage_cpu(param_dict):
     assert sum(store.mask) == len(store.data.shape)
 
 
-@pytest.mark.skip(reason="does not work with refactored storages")
 @pytest.mark.requires_gpu
 @hyp.given(param_dict=mask_strategy())
 def test_masked_storage_gpu(param_dict):
@@ -506,21 +495,14 @@ def test_masked_storage_asserts():
     default_origin = (1, 1, 1)
     shape = (2, 2, 2)
 
-    mask = ()
-    try:
+    with pytest.raises(ValueError):
         gt_store.empty(
             dtype=np.float64,
             default_origin=default_origin,
             shape=shape,
-            mask=mask,
+            mask=(),
             backend="gtx86",
         )
-    except ValueError:
-        pass
-    except Exception as e:
-        raise e
-    else:
-        assert False
 
 
 def run_test_slices(backend):

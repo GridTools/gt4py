@@ -105,7 +105,12 @@ class KCacheDetection(NodeTranslator):
     max_cacheable_offset: int = 5
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
-        if node.loop_order == common.LoopOrder.PARALLEL:
+        # k-caches are restricted to loops with a single horizontal region as all regions without
+        # horizontal offsets should be merged before anyway and this restriction allows for easier
+        # conversion of fill and flush caches to local caches later
+        if node.loop_order == common.LoopOrder.PARALLEL or any(
+            len(section.horizontal_executions) != 1 for section in node.sections
+        ):
             return self.generic_visit(node, **kwargs)
 
         def accessed_more_than_once(offsets: Set[Any]) -> bool:
@@ -299,7 +304,9 @@ class FillFlushToLocalKCaches(NodeTranslator):
 
     @staticmethod
     def _split_entry_level(
-        loop_order: common.LoopOrder, section: oir.VerticalLoopSection
+        loop_order: common.LoopOrder,
+        section: oir.VerticalLoopSection,
+        new_symbol_name: Callable[[str], str],
     ) -> Tuple[oir.VerticalLoopSection, oir.VerticalLoopSection]:
         """Split the entry level of a loop section.
 
@@ -323,9 +330,22 @@ class FillFlushToLocalKCaches(NodeTranslator):
             )
             entry_interval = oir.Interval(start=bound, end=section.interval.end)
             rest_interval = oir.Interval(start=section.interval.start, end=bound)
+        decls = list(section.iter_tree().if_isinstance(oir.Decl))
+        decls_map = {decl.name: new_symbol_name(decl.name) for decl in decls}
+
+        class FixSymbolNameClashes(NodeTranslator):
+            def visit_ScalarAccess(self, node: oir.ScalarAccess) -> oir.ScalarAccess:
+                if node.name not in decls_map:
+                    return node
+                return oir.ScalarAccess(name=decls_map[node.name], dtype=node.dtype)
+
+            def visit_LocalScalar(self, node: oir.LocalScalar) -> oir.LocalScalar:
+                return oir.LocalScalar(name=decls_map[node.name], dtype=node.dtype)
+
         return (
             oir.VerticalLoopSection(
-                interval=entry_interval, horizontal_executions=section.horizontal_executions
+                interval=entry_interval,
+                horizontal_executions=FixSymbolNameClashes().visit(section.horizontal_executions),
             ),
             oir.VerticalLoopSection(
                 interval=rest_interval, horizontal_executions=section.horizontal_executions
@@ -339,6 +359,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
         section: oir.VerticalLoopSection,
         filling_fields: Iterable[str],
         first_unfilled: Dict[str, int],
+        new_symbol_name: Callable[[str], str],
     ) -> Tuple[Tuple[oir.VerticalLoopSection, ...], Dict[str, int]]:
         """Split loop sections that require multiple fills.
 
@@ -359,7 +380,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
             max_required_fills = max(required_fills, max_required_fills)
             first_unfilled[field] = lmax
         if max_required_fills > 1 and cls._requires_splitting(section.interval):
-            return cls._split_entry_level(loop_order, section), first_unfilled
+            return cls._split_entry_level(loop_order, section, new_symbol_name), first_unfilled
         return (section,), first_unfilled
 
     @classmethod
@@ -485,7 +506,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
             split_sections: List[oir.VerticalLoopSection] = []
             for section in node.sections:
                 split_section, previous_fills = self._split_section_with_multiple_fills(
-                    node.loop_order, section, filling_fields, first_unfilled
+                    node.loop_order, section, filling_fields, first_unfilled, new_symbol_name
                 )
                 split_sections += split_section
         else:

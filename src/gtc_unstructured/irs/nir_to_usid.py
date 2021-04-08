@@ -15,40 +15,58 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from devtools import debug
+from dataclasses import dataclass, field
+from typing import Dict, Optional, Set, Union
 
-import eve
-from gtc_unstructured.irs import common, nir, usid
+from devtools import debug  # noqa: F401
 
-
-def location_type_from_dimensions(dimensions):
-    location_type = [dim for dim in dimensions if isinstance(dim, common.LocationType)]
-    if len(location_type) == 1:
-        return location_type[0]
-    elif len(location_type) == 0:
-        return None
-    else:
-        raise ValueError("Invalid!")
+import eve  # noqa: F401
+from gtc_unstructured.irs import nir, usid
 
 
 class NirToUsid(eve.NodeTranslator):
-    def __init__(self, **kwargs):
-        super().__init__()
-        self.fields = dict()  # poor man symbol table
+    @dataclass
+    class KernelContext:
+        primary_composite_name: str
+        primary_composite_entries: Set = field(default_factory=set)
+        composites: Dict = field(default_factory=dict)
+
+        def add_primary_entry(
+            self, entry: Union[usid.SidCompositeEntry, usid.SidCompositeSparseEntry]
+        ):
+            self.primary_composite_entries.add(entry)
+            return self
+
+        def add_sid(self, name: str):
+            if name not in self.composites:
+                self.composites[name] = set()
+            return self
+
+        def add_entry(
+            self, name: str, entry: Union[usid.SidCompositeEntry, usid.SidCompositeSparseEntry]
+        ) -> "NirToUsid.KernelContext":
+            assert name in self.composites
+            self.composites[name].add(entry)
+            return self
+
+    @dataclass
+    class NeighborLoopContext:
+        local_index: Optional[str] = None
+
+        def needs_index(self) -> str:
+            self.local_index = "i"
+            return self.local_index
 
     def convert_dimensions(self, dims: nir.Dimensions):
         dimensions = []
         if dims.horizontal:
             horizontal = dims.horizontal
             dimensions.append(horizontal.primary)
-            if horizontal.secondary:
-                dimensions.append(self.visit(horizontal.secondary))
+            # TODO if horizontal.secondary:
+            # TODO    dimensions.append(self.visit(horizontal.secondary))
         if dims.vertical:
             dimensions.append(self.visit(dims.vertical))
         return dimensions
-
-    def visit_NeighborChain(self, node: nir.NeighborChain, **kwargs):
-        return usid.NeighborChain(elements=[location for location in node.elements])
 
     def visit_VerticalDimension(self, node: nir.VerticalDimension, **kwargs):
         return usid.VerticalDimension()
@@ -56,6 +74,14 @@ class NirToUsid(eve.NodeTranslator):
     def visit_UField(self, node: nir.UField, **kwargs):
         return usid.UField(
             name=node.name, vtype=node.vtype, dimensions=self.convert_dimensions(node.dimensions)
+        )
+
+    def visit_SparseField(self, node: nir.SparseField, **kwargs):
+        return usid.SparseField(
+            name=node.name,
+            vtype=node.vtype,
+            dimensions=self.convert_dimensions(node.dimensions),
+            connectivity=node.connectivity,
         )
 
     def visit_TemporaryField(self, node: nir.TemporaryField, **kwargs):
@@ -74,22 +100,83 @@ class NirToUsid(eve.NodeTranslator):
     def visit_Literal(self, node: nir.Literal, **kwargs):
         return usid.Literal(value=node.value, vtype=node.vtype, location_type=node.location_type)
 
-    def visit_NeighborLoop(self, node: nir.NeighborLoop, **kwargs):
-        return usid.NeighborLoop(
-            outer_sid=kwargs["sids_tbl"][usid.NeighborChain(elements=[node.location_type])].name,
-            connectivity=kwargs["conn_tbl"][node.neighbors].name,
-            sid=kwargs["sids_tbl"][node.neighbors].name
-            if node.neighbors in kwargs["sids_tbl"]
-            else None,
-            location_type=node.location_type,
-            body_location_type=node.neighbors.elements[-1],
-            body=self.visit(node.body, **kwargs),
+    def visit_NeighborLoop(self, node: nir.NeighborLoop, kernel_ctx: "KernelContext", **kwargs):
+        neigh_loop_ctx = self.NeighborLoopContext()
+
+        primary_sid = kernel_ctx.primary_composite_name
+        secondary_sid = kwargs["symtable"][node.connectivity].name + "_sid"  # node.name
+        kernel_ctx.add_sid(secondary_sid)
+
+        primary = "p"
+        secondary = "n"
+
+        acc_mapping = {primary_sid: primary, node.name.name: secondary}
+        sid_mapping = {primary_sid: primary_sid, node.name.name: secondary_sid}
+
+        kernel_ctx.add_primary_entry(
+            usid.SidCompositeEntry(
+                ref=node.connectivity, name=f"{node.connectivity}{usid.TAG_APPENDIX}"
+            )
+        )
+        body = self.visit(
+            node.body,
+            kernel_ctx=kernel_ctx,
+            neigh_loop_ctx=neigh_loop_ctx,
+            acc_mapping=lambda x: acc_mapping[x],
+            sid_mapping=lambda x: sid_mapping[x],
+            **kwargs,
         )
 
-    def visit_FieldAccess(self, node: nir.FieldAccess, **kwargs):
+        return usid.NeighborLoop(
+            primary_sid=kernel_ctx.primary_composite_name,
+            secondary_sid=secondary_sid,
+            connectivity=node.connectivity,
+            primary=usid.PtrRef(name=primary),
+            secondary=usid.PtrRef(name=secondary),
+            location_type=node.location_type,
+            local_index=usid.LocalIndex(name=neigh_loop_ctx.local_index)
+            if neigh_loop_ctx.local_index
+            else None,
+            body=body,
+        )
+
+    def visit_FieldAccess(
+        self,
+        node: nir.FieldAccess,
+        *,
+        kernel_ctx: "KernelContext",
+        acc_mapping=lambda x: x,
+        sid_mapping=lambda x: x,
+        **kwargs,
+    ):
+        symtable = kwargs["symtable"]
+        field_deref = symtable[node.name]
+        sid = sid_mapping(node.primary)
+        ref = acc_mapping(node.primary)
+        name = f"{node.name}_{sid}"
+        if isinstance(field_deref, nir.SparseField):
+            kernel_ctx.add_primary_entry(
+                usid.SidCompositeSparseEntry(
+                    ref=node.name, name=name, connectivity=field_deref.connectivity
+                )
+            )
+        elif isinstance(field_deref, nir.LocalFieldVar):
+            assert "neigh_loop_ctx" in kwargs
+            neigh_loop_ctx = kwargs["neigh_loop_ctx"]
+            return usid.ArrayAccess(
+                name=node.name,
+                subscript=neigh_loop_ctx.needs_index(),
+                location_type=node.location_type,
+            )
+        else:
+            if sid == kernel_ctx.primary_composite_name:
+                kernel_ctx.add_primary_entry(usid.SidCompositeEntry(ref=node.name, name=name))
+            else:
+                kernel_ctx.add_entry(sid, usid.SidCompositeEntry(ref=node.name, name=name))
+
         return usid.FieldAccess(
-            name=node.name,
-            sid=kwargs["sids_tbl"][self.visit(node.primary, **kwargs)].name,
+            name=name,
+            sid=ref,
             location_type=node.location_type,
         )
 
@@ -103,92 +190,62 @@ class NirToUsid(eve.NodeTranslator):
             location_type=node.location_type,
         )
 
+    def visit_NativeFuncCall(self, node: nir.NativeFuncCall, **kwargs):
+        return usid.NativeFuncCall(
+            func=node.func,
+            args=self.visit(node.args, **kwargs),
+            location_type=node.location_type,
+        )
+
+    def visit_LocalVar(self, node: nir.LocalVar, **kwargs):
+        return usid.VarDecl(
+            name=node.name,
+            init=usid.Literal(value="0.0", vtype=node.vtype, location_type=node.location_type),
+            vtype=node.vtype,
+            location_type=node.location_type,
+        )
+
+    def visit_LocalFieldVar(self, node: nir.LocalFieldVar, *, symtable, **kwargs):
+        connectivity_deref: nir.Connectivity = symtable[node.connectivity]
+        return usid.StaticArrayDecl(
+            name=node.name,
+            init=self.visit(node.init),
+            vtype=node.init[
+                0
+            ].vtype,  # TODO bad hack, need to check that all are the same and can be deduced
+            size=connectivity_deref.max_neighbors,
+            location_type=node.location_type,
+        )
+
     def visit_BlockStmt(self, node: nir.BlockStmt, **kwargs):
-        statements = []
-        for decl in node.declarations:
-            statements.append(
-                usid.VarDecl(
-                    name=decl.name,
-                    init=usid.Literal(
-                        value="0.0", vtype=decl.vtype, location_type=node.location_type
-                    ),
-                    vtype=decl.vtype,
-                    location_type=node.location_type,
-                )
-            )
+        statements = self.visit(node.declarations, **kwargs)
         for stmt in node.statements:
             statements.append(self.visit(stmt, **kwargs))
         return statements
 
-    def visit_HorizontalLoop(self, node: nir.HorizontalLoop, **kwargs):
-        location_type_str = str(common.LocationType(node.location_type).name).lower()
-        primary_connectivity = location_type_str + "_conn"
-        connectivities = set()
-        connectivities.add(
-            usid.Connectivity(
-                name=primary_connectivity, chain=usid.NeighborChain(elements=[node.location_type])
-            )
+    def visit_HorizontalLoop(self, node: nir.HorizontalLoop, *, symtable, **kwargs):
+
+        kernel_ctx = self.KernelContext(node.iteration_space.name)
+        body = self.visit(
+            node.stmt, kernel_ctx=kernel_ctx, symtable={**symtable, **node.symtable_}, **kwargs
         )
-
-        field_accesses = eve.iter_tree(node.stmt).if_isinstance(nir.FieldAccess).to_list()
-
-        other_sids_entries = {}
-        primary_sid_entries = set()
-        for acc in field_accesses:
-            if len(acc.primary.elements) == 1:
-                assert acc.primary.elements[0] == node.location_type
-                primary_sid_entries.add(usid.SidCompositeEntry(name=acc.name))
-            else:
-                assert (
-                    len(acc.primary.elements) == 2
-                )  # TODO cannot deal with more than one level of nesting
-                secondary_loc = acc.primary.elements[
-                    -1
-                ]  # TODO change if we have more than one level of nesting
-                if secondary_loc not in other_sids_entries:
-                    other_sids_entries[secondary_loc] = set()
-                other_sids_entries[secondary_loc].add(usid.SidCompositeEntry(name=acc.name))
-
-        neighloops = eve.iter_tree(node.stmt).if_isinstance(nir.NeighborLoop).to_list()
-        for loop in neighloops:
-            transformed_neighbors = self.visit(loop.neighbors, **kwargs)
-            connectivity_name = str(transformed_neighbors) + "_conn"
-            connectivities.add(
-                usid.Connectivity(name=connectivity_name, chain=transformed_neighbors)
-            )
-            primary_sid_entries.add(
-                usid.SidCompositeNeighborTableEntry(connectivity=connectivity_name)
-            )
-
-        primary_sid = location_type_str
-        sids = []
-        sids.append(
-            usid.SidComposite(
-                name=primary_sid,
-                entries=primary_sid_entries,
-                location=usid.NeighborChain(elements=[node.location_type]),
-            )
+        primary_composite = usid.SidComposite(
+            name=node.iteration_space.name, entries=kernel_ctx.primary_composite_entries
         )
-
-        for k, v in other_sids_entries.items():
-            chain = usid.NeighborChain(elements=[node.location_type, k])
-            sids.append(
-                usid.SidComposite(name=str(chain), entries=v, location=chain)
-            )  # TODO _conn via property
+        composites = kernel_ctx.composites
+        secondary_composites = [
+            usid.SidComposite(name=name, entries=entries) for name, entries in composites.items()
+        ]
 
         kernel_name = "kernel_" + node.id_
+        debug(primary_composite)
+        debug(secondary_composites)
         kernel = usid.Kernel(
-            ast=self.visit(
-                node.stmt,
-                sids_tbl={s.location: s for s in sids},
-                conn_tbl={c.chain: c for c in connectivities},
-                **kwargs,
-            ),
             name=kernel_name,
-            primary_connectivity=primary_connectivity,
-            primary_sid=primary_sid,
-            connectivities=connectivities,
-            sids=sids,
+            primary_location=node.iteration_space.location_type,
+            primary_composite=primary_composite,
+            secondary_composites=secondary_composites,
+            body=body,
         )
         return kernel, usid.KernelCall(name=kernel_name)
 
@@ -211,30 +268,34 @@ class NirToUsid(eve.NodeTranslator):
             kernel_calls.extend(c)
         return kernels, kernel_calls
 
+    def visit_Connectivity(self, node: nir.Connectivity, **kwargs):
+        return usid.Connectivity(
+            name=node.name,
+            max_neighbors=node.max_neighbors,
+            has_skip_values=node.has_skip_values,
+        )
+
     def visit_Computation(self, node: nir.Computation, **kwargs):
         parameters = []
         for f in node.params:  # before visiting stencils!
             converted_param = self.visit(f)
             parameters.append(converted_param)
-            self.fields[converted_param.name] = converted_param
 
         temporaries = []
         for tmp in node.declarations or []:
             converted_tmp = self.visit(tmp)
             temporaries.append(converted_tmp)
-            self.fields[converted_tmp.name] = converted_tmp
 
         kernels = []
         ctrlflow_ast = []
         for s in node.stencils:
-            kernel, kernel_call = self.visit(s)
+            kernel, kernel_call = self.visit(s, symtable=node.symtable_)
             kernels.extend(kernel)
             ctrlflow_ast.extend(kernel_call)
 
-        debug(kernels)
-
         return usid.Computation(
             name=node.name,
+            connectivities=self.visit(node.connectivities),
             parameters=parameters,
             temporaries=temporaries,
             kernels=kernels,
