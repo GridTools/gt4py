@@ -66,7 +66,9 @@ class OIRToCUIR(eve.NodeTranslator):
                 name=k_caches[node.name].name, offset=node.offset, dtype=node.dtype
             )
         accessed_fields.add(node.name)
-        return cuir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
+        return cuir.FieldAccess(
+            name=node.name, offset=node.offset, data_index=node.data_index, dtype=node.dtype
+        )
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any

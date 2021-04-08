@@ -50,6 +50,11 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
         .getattr("name")
         .to_set()
     )
+    ndims = dict(
+        node.iter_tree()
+        .if_isinstance(gtcpp.AccessorRef)
+        .map(lambda accessor: (accessor.name, 3 + len(accessor.data_index)))
+    )
 
     return [
         gtcpp.GTAccessor(
@@ -57,6 +62,7 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
             id=i,
             intent=gtcpp.Intent.INOUT if name in inout_fields else gtcpp.Intent.IN,
             extent=extent,
+            ndim=ndims[name],
         )
         for i, (name, extent) in enumerate(extents.items())
     ]
@@ -121,7 +127,12 @@ class OIRToGTCpp(eve.NodeTranslator):
         return node
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> gtcpp.AccessorRef:
-        return gtcpp.AccessorRef(name=node.name, offset=self.visit(node.offset), dtype=node.dtype)
+        return gtcpp.AccessorRef(
+            name=node.name,
+            offset=self.visit(node.offset),
+            data_index=node.data_index,
+            dtype=node.dtype,
+        )
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, **kwargs: Any
@@ -233,7 +244,9 @@ class OIRToGTCpp(eve.NodeTranslator):
         return gtcpp.KCache(name=node.name, fill=node.fill, flush=node.flush, loc=node.loc)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> gtcpp.FieldDecl:
-        return gtcpp.FieldDecl(name=node.name, dtype=node.dtype, dimensions=node.dimensions)
+        return gtcpp.FieldDecl(
+            name=node.name, dtype=node.dtype, dimensions=node.dimensions, data_dims=node.data_dims
+        )
 
     def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> gtcpp.GlobalParamDecl:
         return gtcpp.GlobalParamDecl(name=node.name, dtype=node.dtype)

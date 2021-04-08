@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import root_validator, validator
 
-from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
+from eve import Str, SymbolName, SymbolRef, SymbolTableTrait, field
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
@@ -113,6 +113,7 @@ class Decl(LocNode):
 
 class FieldDecl(Decl):
     dimensions: Tuple[bool, bool, bool]
+    data_dims: List[int] = field(default_factory=list)
 
 
 class ScalarDecl(Decl):

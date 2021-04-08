@@ -21,7 +21,7 @@ from typing import Any, List, Optional, Tuple, Union
 from pydantic.class_validators import validator
 
 import eve
-from eve import Str, StrEnum, SymbolName, SymbolTableTrait
+from eve import Str, StrEnum, SymbolName, SymbolTableTrait, field
 from eve.type_definitions import SymbolRef
 from gtc import common
 from gtc.common import LocNode
@@ -172,6 +172,7 @@ class GTAccessor(LocNode):
     id: int  # noqa: A003  # shadowing python builtin
     intent: Intent
     extent: GTExtent
+    ndim: int = 3
 
 
 class GTParamList(LocNode):
@@ -228,6 +229,7 @@ class ApiParamDecl(LocNode):
 
 class FieldDecl(ApiParamDecl):
     dimensions: Tuple[bool, bool, bool]
+    data_dims: List[int] = field(default_factory=list)
 
 
 class GlobalParamDecl(ApiParamDecl):
