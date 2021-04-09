@@ -19,7 +19,10 @@ import collections
 import enum
 import numbers
 import operator
-from typing import Mapping, Optional
+from dataclasses import dataclass
+from typing import List, Mapping, Optional
+
+import numpy
 
 from gt4py import utils as gt_utils
 from gt4py.utils.attrib import Any, AttributeClassLike
@@ -656,9 +659,13 @@ class DomainInfo(
     pass
 
 
-class FieldInfo(
-    collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "axes", "dtype"])
-):
+@dataclass
+class FieldInfo:
+    access: AccessKind
+    boundary: Boundary
+    axes: List[str]
+    dtype: numpy.dtype
+
     def __repr__(self):
         result = "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, dtype={dtype})".format(
             access=self.access.name,
@@ -669,8 +676,9 @@ class FieldInfo(
         return result
 
 
-class ParameterInfo(collections.namedtuple("ParameterInfoNamedTuple", ["dtype"])):
-    pass
+@dataclass
+class ParameterInfo:
+    dtype: numpy.dtype
 
 
 @attribkwclass

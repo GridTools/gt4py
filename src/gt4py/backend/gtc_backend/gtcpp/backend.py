@@ -16,6 +16,7 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
+import gtc.utils as gtc_utils
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
@@ -36,11 +37,20 @@ from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
-from gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-from gtc.passes.gtir_upcaster import upcast
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
-from gtc.passes.oir_optimizations.temporaries import TemporariesToScalars
+from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_optimizations.caches import (
+    IJCacheDetection,
+    KCacheDetection,
+    PruneKCacheFills,
+    PruneKCacheFlushes,
+)
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
+from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.passes.oir_optimizations.temporaries import (
+    LocalTemporariesToScalars,
+    WriteBeforeReadTemporariesToScalars,
+)
+from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 
 
 if TYPE_CHECKING:
@@ -55,11 +65,8 @@ class GTCGTExtGenerator:
         self.options = options
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = DefIRToGTIR.apply(definition_ir)
-        gtir_without_unused_params = prune_unused_parameters(gtir)
-        dtype_deduced = resolve_dtype(gtir_without_unused_params)
-        upcasted = upcast(dtype_deduced)
-        oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
+        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+        oir = gtir_to_oir.GTIRToOIR().visit(gtir)
         oir = self._optimize_oir(oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
@@ -74,7 +81,15 @@ class GTCGTExtGenerator:
 
     def _optimize_oir(self, oir):
         oir = GreedyMerging().visit(oir)
-        oir = TemporariesToScalars().visit(oir)
+        oir = AdjacentLoopMerging().visit(oir)
+        oir = LocalTemporariesToScalars().visit(oir)
+        oir = WriteBeforeReadTemporariesToScalars().visit(oir)
+        oir = OnTheFlyMerging().visit(oir)
+        oir = NoFieldAccessPruning().visit(oir)
+        oir = IJCacheDetection().visit(oir)
+        oir = KCacheDetection().visit(oir)
+        oir = PruneKCacheFills().visit(oir)
+        oir = PruneKCacheFlushes().visit(oir)
         return oir
 
 
@@ -102,16 +117,31 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         assert "gt_backend_t" in kwargs
         if "external_arg" in kwargs:
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,3> {name}_origin".format(
-                    name=node.name
+                return "py::buffer {name}, std::array<gt::uint_t,{ndim}> {name}_origin".format(
+                    name=node.name,
+                    ndim=node.dimensions.count(True),
                 )
             else:
-                return """gt::sid::shift_sid_origin(gt::as_{sid_type}<{dtype}, 3,
-                    std::integral_constant<int, {unique_index}>>({name}), {name}_origin)""".format(
+                num_dims = node.dimensions.count(True)
+                sid_def = """gt::as_{sid_type}<{dtype}, {num_dims},
+                    std::integral_constant<int, {unique_index}>>({name})""".format(
+                    sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
                     name=node.name,
                     dtype=self.visit(node.dtype),
                     unique_index=self.unique_index(),
-                    sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
+                    num_dims=num_dims,
+                )
+                if num_dims != 3:
+                    gt_dims = [
+                        f"gt::stencil::dim::{dim}"
+                        for dim in gtc_utils.dimension_flags_to_names(node.dimensions)
+                    ]
+                    sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
+                        gt_dims=", ".join(gt_dims), sid_def=sid_def
+                    )
+                return "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
+                    sid_def=sid_def,
+                    name=node.name,
                 )
 
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
@@ -140,14 +170,14 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
         #include <gridtools/stencil/global_parameter.hpp>
         #include <gridtools/sid/sid_shift_origin.hpp>
+        #include <gridtools/sid/rename_dimensions.hpp>
         #include "computation.hpp"
         namespace gt = gridtools;
         namespace py = ::pybind11;
-        %if len(entry_params) > 0:
         PYBIND11_MODULE(${module_name}, m) {
-            m.def("run_computation", [](std::array<gt::uint_t, 3> domain,
-            ${','.join(entry_params)},
-            py::object exec_info){
+            m.def("run_computation", [](
+            ${','.join(["std::array<gt::uint_t, 3> domain", *entry_params, 'py::object exec_info'])}
+            ){
                 if (!exec_info.is(py::none()))
                 {
                     auto exec_info_dict = exec_info.cast<py::dict>();
@@ -167,7 +197,6 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                 }
 
             }, "Runs the given computation");}
-        %endif
         """
     )
 
@@ -181,6 +210,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
+    USE_LEGACY_TOOLCHAIN = False
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
         return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=uses_cuda)

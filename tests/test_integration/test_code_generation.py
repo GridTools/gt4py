@@ -14,50 +14,21 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import itertools
-
 import numpy as np
 import pytest
 
-import gt4py as gt
-from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, computation, interval
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS, OLD_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
 
-@pytest.mark.parametrize(
-    ["name", "backend"], itertools.product(stencil_definitions.names, CPU_BACKENDS)
-)
-def test_generation_cpu(name, backend):
-    stencil_definition = stencil_definitions[name]
-    externals = externals_registry[name]
-    stencil = gtscript.stencil(backend, stencil_definition, externals=externals, rebuild=True)
-    args = {}
-    for k, v in stencil_definition.__annotations__.items():
-        if isinstance(v, gtscript._FieldDescriptor):
-            args[k] = gt_storage.ones(
-                dtype=v.dtype,
-                mask=gtscript.mask_from_axes(v.axes),
-                backend=backend,
-                shape=(23, 23, 23),
-                default_origin=(10, 10, 5),
-            )
-        else:
-            args[k] = v(1.5)
-    # vertical domain size >= 16 required for test_large_k_interval
-    stencil(**args, origin=(10, 10, 5), domain=(3, 3, 16))
-
-
-@pytest.mark.requires_gpu
-@pytest.mark.parametrize(
-    ["name", "backend"], itertools.product(stencil_definitions.names, GPU_BACKENDS)
-)
-def test_generation_gpu(name, backend):
+@pytest.mark.parametrize("name", stencil_definitions)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_generation(name, backend):
     stencil_definition = stencil_definitions[name]
     externals = externals_registry[name]
     stencil = gtscript.stencil(backend, stencil_definition, externals=externals)
@@ -73,7 +44,8 @@ def test_generation_gpu(name, backend):
             )
         else:
             args[k] = v(1.5)
-    stencil(**args, origin=(10, 10, 10), domain=(3, 3, 3))
+    # vertical domain size >= 16 required for test_large_k_interval
+    stencil(**args, origin=(10, 10, 5), domain=(3, 3, 16))
 
 
 @pytest.mark.requires_gpu
@@ -182,8 +154,11 @@ def test_stage_merger_induced_interval_block_reordering(backend):
     np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, -1], 2)
 
 
-@pytest.mark.parametrize("backend", OLD_BACKENDS)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_lower_dimensional_inputs(backend):
+    if backend == "gtc:cuda":
+        pytest.xfail("gtc:cuda backend does not support lower dimensional fields")
+
     @gtscript.stencil(backend=backend)
     def stencil(
         field_3d: gtscript.Field[np.float_, gtscript.IJK],
@@ -192,11 +167,16 @@ def test_lower_dimensional_inputs(backend):
     ):
         with computation(FORWARD):
             with interval(0, 1):
-                field_d = field_1d[1] + field_3d[0, 1, 0]
+                field_2d = field_1d[1]
+
+        with computation(PARALLEL):
+            with interval(0, -1):
+                tmp = field_2d[0, 1] + field_1d[1]
+            with interval(-1, None):
+                tmp = field_2d[0, 1] + field_1d[0]
 
         with computation(PARALLEL):
             with interval(0, 1):
-                tmp = field_2d[0, 1] + field_1d[1]
                 field_3d = tmp[1, 0, 0] + field_1d[1]
             with interval(1, None):
                 field_3d = tmp[-1, 0, 0]
@@ -205,18 +185,34 @@ def test_lower_dimensional_inputs(backend):
     default_origin = (1, 1, 0)
     dtype = float
 
-    field_3d = gt_storage.ones(backend, default_origin, full_shape, dtype, mask=None)
+    field_3d = gt_storage.zeros(backend, default_origin, full_shape, dtype, mask=None)
     assert field_3d.shape == full_shape[:]
 
-    field_2d = gt_storage.ones(
+    field_2d = gt_storage.zeros(
         backend, default_origin[:-1], full_shape[:-1], dtype, mask=[True, True, False]
     )
     assert field_2d.shape == full_shape[:-1]
 
-    field_1d = gt_storage.zeros(
+    field_1d = gt_storage.ones(
         backend, (default_origin[-1],), (full_shape[-1],), dtype, mask=[False, False, True]
     )
     assert field_1d.shape == (full_shape[-1],)
 
-    stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0))
+    stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0), domain=(4, 3, 6))
+    field_3d.device_to_host()
+    np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, :1], 3)
+    np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, 1:], 2)
+
     stencil(field_3d, field_2d, field_1d)
+
+
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
+def test_input_order(backend):
+    @gtscript.stencil(backend=backend)
+    def stencil(
+        in_field: gtscript.Field[np.float],
+        parameter: np.float,
+        out_field: gtscript.Field[np.float],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field = in_field * parameter
