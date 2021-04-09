@@ -100,16 +100,7 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
         return self._unique_index
 
     def visit_DataType(self, dtype: DataType, **kwargs):
-        if dtype == DataType.INT64:
-            return "long long"
-        elif dtype == DataType.FLOAT64:
-            return "double"
-        elif dtype == DataType.FLOAT32:
-            return "float"
-        elif dtype == DataType.BOOL:
-            return "bool"
-        else:
-            raise AssertionError(f"Invalid DataType value: {dtype}")
+        return cuir_codegen.CUIRCodegen().visit_DataType(dtype)
 
     def visit_FieldDecl(self, node: cuir.FieldDecl, **kwargs):
         if "external_arg" in kwargs:
