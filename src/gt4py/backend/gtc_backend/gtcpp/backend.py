@@ -26,8 +26,8 @@ from gt4py.backend.gt_backends import (
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
     cuda_is_compatible_type,
-    cuda_layout,
     gtcpu_is_compatible_type,
+    make_cuda_layout_map,
     make_mc_layout_map,
     make_x86_layout_map,
     mc_is_compatible_layout,
@@ -284,7 +284,7 @@ class GTCGTGpuBackend(GTCGTBaseBackend):
     storage_info = {
         "alignment": 32,
         "device": "gpu",
-        "layout_map": cuda_layout,
+        "layout_map": make_cuda_layout_map,
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }
