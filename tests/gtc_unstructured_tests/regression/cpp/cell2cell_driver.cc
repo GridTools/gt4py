@@ -1,46 +1,45 @@
 #include "${STENCIL_IMPL_SOURCE}"
-#include <gridtools/next/test_helper/field_builder.hpp>
-#include <gridtools/next/test_helper/simple_mesh.hpp>
+#include <gridtools/usid/test_helper/field_builder.hpp>
+#include <gridtools/usid/test_helper/simple_mesh.hpp>
 
 #include <gtest/gtest.h>
 #include <tuple>
 
-namespace {
+namespace gridtools::usid {
+    using namespace gridtools::usid::test_helper;
 
-using namespace gridtools::next;
+    TEST(regression, cell2cell) {
+        int k_size = 1;
 
-TEST(regression, cell2cell) {
-  test_helper::simple_mesh mesh;
+        auto in = test_helper::make_field<double>(simple_mesh::cells, k_size);
 
-  auto c2c = mesh::connectivity<std::tuple<cell, cell>>(mesh);
+        auto view = in->host_view();
+        // 1 1 1
+        // 1 2 1
+        // 1 1 1
+        for (std::size_t i = 0; i < simple_mesh::cells; ++i)
+            for (int k = 0; k < k_size; ++k)
+                view(i, k) = 1;
+        for (int k = 0; k < k_size; ++k)
+            view(4, k) = 2;
 
-  auto in = test_helper::make_field<double, cell>(mesh);
+        auto out = test_helper::make_field<double>(simple_mesh::cells, k_size);
+        sten({-1, -1, test_helper::simple_mesh::cells, k_size}, simple_mesh{}.c2c())(in, out);
 
-  // TODO discuss with anstaf what an unstructured field should be, here I steal
-  // the data_store from a SID
-  auto view = in.m_impl->host_view();
-  // 1 1 1
-  // 1 2 1
-  // 1 1 1
-  for (std::size_t i = 0; i < 9; ++i)
-    view(i) = 1;
-  view(4) = 2;
-
-  auto out = test_helper::make_field<double, cell>(mesh);
-  sten(mesh, in, out);
-
-  // 8  9  8
-  // 9 12  9
-  // 8  9  8
-  auto out_view = out.m_impl->const_host_view();
-  EXPECT_DOUBLE_EQ(8, out_view(0));
-  EXPECT_DOUBLE_EQ(9, out_view(1));
-  EXPECT_DOUBLE_EQ(8, out_view(2));
-  EXPECT_DOUBLE_EQ(9, out_view(3));
-  EXPECT_DOUBLE_EQ(12, out_view(4));
-  EXPECT_DOUBLE_EQ(9, out_view(5));
-  EXPECT_DOUBLE_EQ(8, out_view(6));
-  EXPECT_DOUBLE_EQ(9, out_view(7));
-  EXPECT_DOUBLE_EQ(8, out_view(8));
-}
-} // namespace
+        // 8  9  8
+        // 9 12  9
+        // 8  9  8
+        auto out_view = out->const_host_view();
+        for (std::size_t k = 0; k < k_size; ++k) {
+            EXPECT_DOUBLE_EQ(8, out_view(0, k));
+            EXPECT_DOUBLE_EQ(9, out_view(1, k));
+            EXPECT_DOUBLE_EQ(8, out_view(2, k));
+            EXPECT_DOUBLE_EQ(9, out_view(3, k));
+            EXPECT_DOUBLE_EQ(12, out_view(4, k));
+            EXPECT_DOUBLE_EQ(9, out_view(5, k));
+            EXPECT_DOUBLE_EQ(8, out_view(6, k));
+            EXPECT_DOUBLE_EQ(9, out_view(7, k));
+            EXPECT_DOUBLE_EQ(8, out_view(8, k));
+        }
+    }
+} // namespace gridtools::usid

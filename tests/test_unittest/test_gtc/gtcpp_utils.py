@@ -141,7 +141,7 @@ class GTStageFactory(factory.Factory):
         model = gtcpp.GTStage
 
     functor = identifier(gtcpp.GTStage)
-    args: List[gtcpp.Arg] = []
+    args: List[gtcpp.Arg] = factory.List([factory.SubFactory(ArgFactory)])
 
 
 class GTMultiStageFactory(factory.Factory):
@@ -159,7 +159,7 @@ class GTComputationCallFactory(factory.Factory):
 
     arguments: List[gtcpp.Arg] = []
     multi_stages = factory.List([factory.SubFactory(GTMultiStageFactory)])
-    temporaries = undefined_symbol_list(lambda name: FieldDeclFactory(name=name), "multi_stages")
+    temporaries = undefined_symbol_list(lambda name: TemporaryFactory(name=name), "multi_stages")
 
 
 class FieldDeclFactory(factory.Factory):
@@ -167,6 +167,15 @@ class FieldDeclFactory(factory.Factory):
         model = gtcpp.FieldDecl
 
     name = identifier(gtcpp.FieldDecl)
+    dtype = common.DataType.FLOAT32
+    dimensions = (True, True, True)
+
+
+class TemporaryFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.Temporary
+
+    name = identifier(gtcpp.Temporary)
     dtype = common.DataType.FLOAT32
 
 

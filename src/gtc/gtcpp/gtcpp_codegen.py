@@ -30,7 +30,7 @@ def _offset_limit(root: Node) -> int:
         .if_isinstance(gtcpp.GTLevel)
         .getattr("offset")
         .reduce(lambda state, cur: max(state, abs(cur)), init=0)
-    )
+    ) + 1
 
 
 class GTCppCodegen(codegen.TemplatedGenerator):
@@ -97,13 +97,33 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:
-        if func == NativeFunction.SQRT:
-            return "gridtools::math::sqrt"
-        elif func == NativeFunction.MIN:
-            return "gridtools::math::min"
-        elif func == NativeFunction.MAX:
-            return "gridtools::math::max"
-        raise NotImplementedError("Not implemented NativeFunction encountered.")
+        try:
+            return {
+                NativeFunction.ABS: "std::abs",
+                NativeFunction.MIN: "std::min",
+                NativeFunction.MAX: "std::max",
+                NativeFunction.MOD: "std::fmod",
+                NativeFunction.SIN: "std::sin",
+                NativeFunction.COS: "std::cos",
+                NativeFunction.TAN: "std::tan",
+                NativeFunction.ARCSIN: "std::asin",
+                NativeFunction.ARCCOS: "std::acos",
+                NativeFunction.ARCTAN: "std::atan",
+                NativeFunction.SQRT: "std::sqrt",
+                NativeFunction.POW: "std::pow",
+                NativeFunction.EXP: "std::exp",
+                NativeFunction.LOG: "std::log",
+                NativeFunction.ISFINITE: "std::isfinite",
+                NativeFunction.ISINF: "std::isinf",
+                NativeFunction.ISNAN: "std::isnan",
+                NativeFunction.FLOOR: "std::floor",
+                NativeFunction.CEIL: "std::ceil",
+                NativeFunction.TRUNC: "std::trunc",
+            }[func]
+        except KeyError as error:
+            raise NotImplementedError(
+                f"Not implemented NativeFunction '{func}' encountered."
+            ) from error
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
