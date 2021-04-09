@@ -435,7 +435,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         implementation = gtscript.stencil(
             backend=test["backend"],
             definition=test["definition"],
-            name=f"{test['suite']}_{backend_slug}_{test['test_id']}",
+            name=cls.__module__ + f".{test['suite']}_{backend_slug}_{test['test_id']}",
             rebuild=True,
             externals=externals_dict,
         )
