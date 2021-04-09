@@ -589,29 +589,53 @@ class TestTwoOptionalFields(gt_testing.StencilTestSuite):
 
 
 class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
-    backends = list(set(ALL_BACKENDS) - set(DAWN_BACKENDS))
+    backends = set(ALL_BACKENDS) - set(DAWN_BACKENDS)
     symbols = TestTwoOptionalFields.symbols.copy()
     symbols["PHYS_TEND_A"] = gt_testing.global_name(one_of=(False,))
     symbols["phys_tend_a"] = gt_testing.none()
 
 
-class TestNon3DFields(gt_testing.StencilTestSuite):
-    dtypes = {"field_in:K": np.float64, "another_field:IJ": np.float64, "field_out:IJK": np.float64}
-    domain_range = [(1, 15), (2, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
-    symbols = dict(
-        field_in=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        another_field=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        field_out=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-    )
+class TestLowerDimensionalFields(gt_testing.StencilTestSuite):
+    dtypes = {"field_in": np.float64, "another_field": np.float64, "field_out": np.float64}
+    domain_range = [(1, 10), (2, 10), (1, 10)]
+    backends = ["debug"]
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "another_field": gt_testing.field(
+            in_range=(-10, 10), axes="IJ", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
 
     def definition(field_in, another_field, field_out):
         with computation(PARALLEL), interval(...):
-            field_out[0, 0, 0][0] = 100.0 + field_in
-            field_out[0, 0, 0][1] = 200.0 + another_field[0, 0][1]
-            field_out[0, 0, 0][2] = 300.0 + field_in[0] + another_field[0, 0][2]
+            field_out[0, 0, 0] = 100.0 + field_in + another_field[0, 0]
 
     def validation(field_in, another_field, field_out, *, domain, origin):
-        field_out[:, :, :][0] = 100.0 + field_in[:]
-        field_out[:, :, :][1] = 200.0 + another_field[:, :][1]
-        field_out[:, :, :][2] = 300.0 + field_in[:] + another_field[:, :][2]
+        field_out[:, :, :] = 100.0 + field_in[:] + another_field[:, :, None]
+
+
+# class TestNon3DFields(gt_testing.StencilTestSuite):
+#     dtypes = {"field_in": np.float64, "another_field": np.float64, "field_out": np.float64}
+#     domain_range = [(1, 15), (2, 15), (1, 15)]
+#     backends = ["debug"]  # (set(INTERNAL_BACKENDS) - {"gtx86", "gtmc", "gtcuda", "gtc:cuda"})
+#     symbols = dict(
+#         "field_in:K"=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+#         "another_field:IJ"=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+#         field_out=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+#     )
+
+#     def definition(field_in, another_field, field_out):
+#         with computation(PARALLEL), interval(...):
+#             field_out[0, 0, 0][0] = 100.0 + field_in
+#             field_out[0, 0, 0][1] = 200.0 + another_field[0, 0][1]
+#             field_out[0, 0, 0][2] = 300.0 + field_in[0] + another_field[0, 0][2]
+
+#     def validation(field_in, another_field, field_out, *, domain, origin):
+#         field_out[:, :, :][0] = 100.0 + field_in[:]
+#         field_out[:, :, :][1] = 200.0 + another_field[:, :][1]
+#         field_out[:, :, :][2] = 300.0 + field_in[:] + another_field[:, :][2]
