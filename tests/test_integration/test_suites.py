@@ -451,23 +451,25 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
 
 class TestTernaryOp(gt_testing.StencilTestSuite):
 
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
     backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
-        infield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 1), (0, 0)]),
-        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        infield=gt_testing.field(in_range=(-3, 3), boundary=[(0, 0), (0, 1), (0, 0)]),
+        outfield=gt_testing.field(in_range=(0, 0), boundary=[(0, 0), (0, 0), (0, 0)]),
     )
 
     def definition(infield, outfield):
 
         with computation(PARALLEL), interval(...):
             outfield = (  # noqa: F841 # Local name is assigned to but never used
-                infield > 0.0
-            ) * infield + (infield <= 0.0) * (-infield[0, 1, 0])
+                infield if infield > 0.0 else -infield[0, 1, 0]
+            )
 
     def validation(infield, outfield, *, domain, origin, **kwargs):
-        outfield[...] = np.choose(infield[:, :-1, :] > 0, [-infield[:, 1:, :], infield[:, :-1, :]])
+        outfield[...] = (infield[:, :-1, :] > 0.0) * infield[:, :-1, :] + (
+            infield[:, :-1, :] <= 0.0
+        ) * (-infield[:, 1:, :])
 
 
 class TestThreeWayAnd(gt_testing.StencilTestSuite):

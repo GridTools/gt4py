@@ -18,6 +18,7 @@ import inspect
 import sys
 import types
 from itertools import count, product
+from typing import Callable
 
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
@@ -87,7 +88,7 @@ class SuiteMeta(type):
         for symbol in cls_dict["symbols"].values():
             if symbol.kind == "field":
                 max_boundary = tuple(
-                    (max(m[0], abs(b[0])), max(m[0], b[0]))
+                    (max(m[0], b[0]), max(m[1], b[1]))
                     for m, b in zip(max_boundary, symbol.boundary)
                 )
         cls_dict["max_boundary"] = max_boundary
@@ -422,6 +423,8 @@ class StencilTestSuite(metaclass=SuiteMeta):
     """
 
     _skip_ = True  # Avoid processing of this empty test suite
+    validation: Callable
+    definition: Callable
 
     def _test_generation(self, test, externals_dict):
         """Test source code generation for all *backends* and *stencil suites*.
@@ -479,7 +482,11 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
         max_domain = Shape([sys.maxsize] * implementation.domain_info.ndims)
         for name in (k for k, v in fields.items() if isinstance(v, np.ndarray)):
-            upper_boundary = Index(implementation.field_info[name].boundary.upper_indices)
+            field_info = implementation.field_info[name]
+            if field_info is None:
+                # field unreferenced
+                continue
+            upper_boundary = Index(field_info.boundary.upper_indices)
             max_domain &= shape - (Index(origin) + upper_boundary)
         domain = max_domain
         for k, v in implementation.constants.items():
@@ -506,6 +513,9 @@ class StencilTestSuite(metaclass=SuiteMeta):
         validation_inputs = {}
         for name, field in inputs.items():
             if name in implementation.field_info:
+                field_info = implementation.field_info[name]
+                if field_info is None:
+                    continue
                 field_extent_low = implementation.field_info[name].boundary.lower_indices
                 field_extent_high = implementation.field_info[name].boundary.upper_indices
                 field_origin = tuple(o - e for o, e in zip(origin, field_extent_low))
@@ -519,7 +529,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 validation_inputs[name] = field
 
         implementation(**inputs, origin=origin, exec_info=exec_info)
-        domain = exec_info["domain"]
+        assert domain == exec_info["domain"]
 
         cls.validation(
             **validation_inputs,
@@ -532,8 +542,11 @@ class StencilTestSuite(metaclass=SuiteMeta):
         )
 
         # Test values
-        for (name, value), expected_value in zip(inputs.items(), validation_fields.values()):
-            if isinstance(fields[name], np.ndarray):
+        for name, value in inputs.items():
+            if isinstance(value, np.ndarray):
+                if implementation.field_info[name] is None:
+                    continue
+                expected_value = validation_fields[name]
 
                 if gt_backend.from_name(value.backend).storage_info["device"] == "gpu":
                     value.synchronize()
