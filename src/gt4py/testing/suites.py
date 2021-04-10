@@ -30,6 +30,8 @@ from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
+from gt4py.definitions import Boundary, FieldInfo, Shape
+from gt4py.ir.nodes import Index
 from gt4py.stencil_object import StencilObject
 
 from .input_strategies import (
@@ -467,86 +469,99 @@ class StencilTestSuite(metaclass=SuiteMeta):
     def _run_test_implementation(self, parameters_dict, implementation):
 
         cls = type(self)
-        fields, exec_info = parameters_dict
-
-        # Domain
-        from gt4py.definitions import Shape
-        from gt4py.ir.nodes import Index
+        input_data, exec_info = parameters_dict
 
         origin = cls.origin
-        max_boundary = cls.max_boundary
+        max_boundary = Boundary(cls.max_boundary)
 
-        shape_iter = (Shape(v.shape) for v in fields.values() if isinstance(v, np.ndarray))
+        shape_iter = (Shape(v.shape) for v in input_data.values() if isinstance(v, np.ndarray))
         shape = next(shape_iter)
         assert all(shape == sh for sh in shape_iter)
 
-        max_domain = Shape([sys.maxsize] * implementation.domain_info.ndims)
-        for name in (k for k, v in fields.items() if isinstance(v, np.ndarray)):
-            field_info = implementation.field_info[name]
-            if field_info is None:
-                # field unreferenced
-                continue
-            upper_boundary = Index(field_info.boundary.upper_indices)
-            max_domain &= shape - (Index(origin) + upper_boundary)
-        domain = max_domain
+        domain = shape - (Index(max_boundary.lower_indices) + Index(max_boundary.upper_indices))
+
+        referenced_inputs = {
+            name: info for name, info in implementation.field_info.items() if info is not None
+        }
+        referenced_inputs.update(
+            {name: info for name, info in implementation.parameter_info.items() if info is not None}
+        )
+
+        # set externals for validation method
         for k, v in implementation.constants.items():
             sys.modules[self.__module__].__dict__[k] = v
 
+        # copy input data to storages
         inputs = {}
-        for k, f in fields.items():
-            if isinstance(f, np.ndarray):
-                inputs[k] = gt_storage.from_array(
-                    f,
-                    dtype=f.dtype,
-                    shape=shape,
-                    default_origin=origin,
-                    backend=implementation.backend,
-                )
-
+        info: FieldInfo
+        for name, data in input_data.items():
+            data = input_data[name]
+            if name in referenced_inputs:
+                info = referenced_inputs[name]
+                if isinstance(info, FieldInfo):
+                    inputs[name] = gt_storage.from_array(
+                        data,
+                        dtype=data.dtype,
+                        shape=shape,
+                        default_origin=origin,
+                        backend=implementation.backend,
+                    )
+                else:
+                    inputs[name] = data
             else:
-                inputs[k] = f
+                inputs[name] = None
 
-        # remove unused input parameters
-        inputs = {key: value for key, value in inputs.items() if value is not None}
-
-        validation_fields = {}
+        # copy input data for validation
         validation_inputs = {}
-        for name, field in inputs.items():
-            if name in implementation.field_info:
-                field_info = implementation.field_info[name]
-                if field_info is None:
-                    continue
-                field_extent_low = implementation.field_info[name].boundary.lower_indices
-                field_extent_high = implementation.field_info[name].boundary.upper_indices
-                field_origin = tuple(o - e for o, e in zip(origin, field_extent_low))
-                field_extent_high = tuple(b[1] - e for b, e in zip(max_boundary, field_extent_high))
-                validation_slice = tuple(
-                    slice(o, s - h) for o, s, h in zip(field_origin, shape, field_extent_high)
-                )
-                validation_fields[name] = np.array(field, copy=True)
-                validation_inputs[name] = validation_fields[name][validation_slice]
+        info: FieldInfo
+        for name, data in input_data.items():
+            data = input_data[name]
+            if name in referenced_inputs:
+                info = referenced_inputs[name]
+                if isinstance(info, FieldInfo):
+                    validation_inputs[name] = np.array(data)
+                else:
+                    validation_inputs[name] = data
             else:
-                validation_inputs[name] = field
+                validation_inputs[name] = None
 
+        # call implementation
         implementation(**inputs, origin=origin, exec_info=exec_info)
         assert domain == exec_info["domain"]
 
+        # for validation data, data is cropped to actually touched domain, so that origin offseting
+        # does not have to be implemented for every test suite
+        # for the validation method, fields are cropped to the touched area, based on info
+        # specified in test suite
+        cropped_validation_inputs = {}
+        for name, data in validation_inputs.items():
+            field_info = implementation.field_info.get(name, None)
+            if field_info is not None:
+                field_extent_low = implementation.field_info[name].boundary.lower_indices
+                offset_low = tuple(b[0] - e for b, e in zip(max_boundary, field_extent_low))
+                field_extent_high = implementation.field_info[name].boundary.upper_indices
+                offset_high = tuple(b[1] - e for b, e in zip(max_boundary, field_extent_high))
+                validation_slice = tuple(
+                    slice(o, s - h) for o, s, h in zip(offset_low, shape, offset_high)
+                )
+                cropped_validation_inputs[name] = data[validation_slice]
+            else:
+                cropped_validation_inputs[name] = data
+
         cls.validation(
-            **validation_inputs,
+            **cropped_validation_inputs,
             domain=domain,
             origin={
-                name: implementation.field_info[name].boundary.lower_indices
-                for name in validation_fields
-                if name in implementation.field_info
+                name: info.boundary.lower_indices
+                for name, info in implementation.field_info.items()
+                if info is not None
             },
         )
 
         # Test values
         for name, value in inputs.items():
             if isinstance(value, np.ndarray):
-                if implementation.field_info[name] is None:
-                    continue
-                expected_value = validation_fields[name]
+                expected_value = validation_inputs[name]
 
                 if gt_backend.from_name(value.backend).storage_info["device"] == "gpu":
                     value.synchronize()
