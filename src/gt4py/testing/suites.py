@@ -18,7 +18,6 @@ import inspect
 import sys
 import types
 from itertools import count, product
-from typing import Callable
 
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
@@ -425,8 +424,6 @@ class StencilTestSuite(metaclass=SuiteMeta):
     """
 
     _skip_ = True  # Avoid processing of this empty test suite
-    validation: Callable
-    definition: Callable
 
     def _test_generation(self, test, externals_dict):
         """Test source code generation for all *backends* and *stencil suites*.
