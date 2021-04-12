@@ -19,7 +19,7 @@ import enum
 import itertools
 import numbers
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Tuple, Sequence
+from typing import Any, Callable, Optional, Sequence, Tuple
 
 import hypothesis.strategies as hyp_st
 import numpy as np
@@ -183,7 +183,6 @@ def ndarray_in_range_st(dtype, shape_st, value_range):
         elements=scalar_value_st(dtype, min_value=value_range[0], max_value=value_range[1]),
         fill=scalar_value_st(dtype, min_value=value_range[0], max_value=value_range[1]),
     )
-    return result
 
 
 def ndarray_st(dtype, shape_strategy, value_st_factory):

@@ -34,12 +34,12 @@ from gt4py.ir.nodes import Index
 from gt4py.stencil_object import StencilObject
 
 from .input_strategies import (
+    SymbolKind,
     composite_implementation_strategy_factory,
     composite_strategy_factory,
+    derived_shape_st,
     ndarray_shape_st,
     ndarray_st,
-    derived_shape_st,
-    SymbolKind,
 )
 from .utils import annotate_function, standardize_dtype_dict
 
