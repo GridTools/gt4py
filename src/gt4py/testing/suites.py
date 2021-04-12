@@ -32,6 +32,7 @@ from gt4py import utils as gt_utils
 from gt4py.definitions import Boundary, FieldInfo, Shape
 from gt4py.ir.nodes import Index
 from gt4py.stencil_object import StencilObject
+from gt4py.utils import filter_mask, interpolate_mask
 
 from .input_strategies import (
     SymbolKind,
@@ -180,7 +181,7 @@ class SuiteMeta(type):
                                         dtype.type
                                         if (k in cls_dict["constants"] or k in parameters)
                                         else gtscript.Field[
-                                            dtype.type, getattr(gtscript, field_axes.get(k, "IJK"))
+                                            getattr(gtscript, field_axes.get(k, "IJK")), dtype.type
                                         ]
                                     )
                                     for k, dtype in d.items()
@@ -468,18 +469,30 @@ class StencilTestSuite(metaclass=SuiteMeta):
         test["implementations"].append(implementation)
 
     def _run_test_implementation(self, parameters_dict, implementation):
-
         cls = type(self)
         input_data, exec_info = parameters_dict
 
         origin = cls.origin
         max_boundary = Boundary(cls.max_boundary)
+        field_axes = cls.field_axes
+        field_masks = {}
+        for name, value in input_data.items():
+            if isinstance(value, np.ndarray):
+                if name in field_axes:
+                    field_masks[name] = tuple(ax in field_axes[name] for ax in ["I", "J", "K"])
+                else:
+                    field_masks[name] = (True,) * 3
 
-        shape_iter = (Shape(v.shape) for v in input_data.values() if isinstance(v, np.ndarray))
-        shape = next(shape_iter)
-        assert all(shape == sh for sh in shape_iter)
+        data_shape = Shape((sys.maxsize,) * 3)
+        for name, data in input_data.items():
+            if isinstance(data, np.ndarray):
+                data_shape &= Shape(
+                    interpolate_mask(data.shape, field_masks[name], default=sys.maxsize)
+                )
 
-        domain = shape - (Index(max_boundary.lower_indices) + Index(max_boundary.upper_indices))
+        domain = data_shape - (
+            Index(max_boundary.lower_indices) + Index(max_boundary.upper_indices)
+        )
 
         referenced_inputs = {
             name: info for name, info in implementation.field_info.items() if info is not None
@@ -503,7 +516,8 @@ class StencilTestSuite(metaclass=SuiteMeta):
                     inputs[name] = gt_storage.from_array(
                         data,
                         dtype=data.dtype,
-                        shape=shape,
+                        shape=data.shape,
+                        mask=field_masks[name],
                         default_origin=origin,
                         backend=implementation.backend,
                     )
@@ -530,8 +544,9 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 offset_low = tuple(b[0] - e for b, e in zip(max_boundary, field_extent_low))
                 field_extent_high = tuple(b[1] for b in sym.boundary)
                 offset_high = tuple(b[1] - e for b, e in zip(max_boundary, field_extent_high))
-                validation_slice = tuple(
-                    slice(o, s - h) for o, s, h in zip(offset_low, shape, offset_high)
+                validation_slice = filter_mask(
+                    tuple(slice(o, s - h) for o, s, h in zip(offset_low, data_shape, offset_high)),
+                    field_masks[name],
                 )
                 cropped_validation_inputs[name] = data[validation_slice]
             else:

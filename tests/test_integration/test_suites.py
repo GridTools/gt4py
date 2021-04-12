@@ -598,3 +598,27 @@ class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
     symbols = TestTwoOptionalFields.symbols.copy()
     symbols["PHYS_TEND_A"] = gt_testing.global_name(one_of=(False,))
     symbols["phys_tend_a"] = gt_testing.none()
+
+
+class TestLowerDimensionalFields(gt_testing.StencilTestSuite):
+    dtypes = {"field_in": np.float64, "another_field": np.float64, "field_out": np.float64}
+    domain_range = [(1, 10), (2, 10), (1, 10)]
+    backends = ["debug"]
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "another_field": gt_testing.field(
+            in_range=(-10, 10), axes="IJ", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, another_field, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out[0, 0, 0] = 100.0 + field_in + another_field[0, 0]
+
+    def validation(field_in, another_field, field_out, *, domain, origin):
+        field_out[:, :, :] = 100.0 + field_in[:] + another_field[:, :, None]
