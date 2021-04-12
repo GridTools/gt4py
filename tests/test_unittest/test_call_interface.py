@@ -22,10 +22,7 @@ import gt4py.gtscript as gtscript
 import gt4py.storage as gt_storage
 from gt4py.gtscript import Field
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
-
-
-INTERNAL_CPU_BACKENDS = list(set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
+from ..definitions import INTERNAL_CPU_BACKENDS
 
 
 @gtscript.stencil(backend="numpy")

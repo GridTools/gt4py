@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import itertools
 from typing import Iterator, List, Set, Tuple, Union
 
 import pytest
@@ -146,12 +147,7 @@ class TDefinition(TObject):
 
     @property
     def api_fields(self) -> List[FieldDecl]:
-        tmp_field_names = self.field_names.difference(self.fields)
-        tmp_fields = [
-            FieldDecl(name=n, data_type=DataType.AUTO, axes=self.domain.axes_names, is_api=False)
-            for n in tmp_field_names
-        ]
-        return tmp_fields + [
+        return [
             FieldDecl(name=n, data_type=DataType.AUTO, axes=self.domain.axes_names, is_api=True)
             for n in self.fields
         ]
@@ -196,9 +192,20 @@ class TComputationBlock(TObject):
     def width(self) -> int:
         return 0
 
+    @property
+    def fields(self) -> Set[str]:
+        return set(itertools.chain.from_iterable([stmt.field_names for stmt in self.children]))
+
     def build(self) -> ComputationBlock:
         if self.parent:
             self.loc.scope = self.parent.child_scope
+        temp_fields = self.fields.difference(self.parent.fields) if self.parent else set()
+        temp_decls = [
+            FieldDecl(
+                name=n, data_type=DataType.AUTO, axes=self.parent.domain.axes_names, is_api=False
+            )
+            for n in temp_fields
+        ]
         return ComputationBlock(
             interval=AxisInterval(
                 start=AxisBound(level=LevelMarker.START, offset=self.start),
@@ -206,7 +213,7 @@ class TComputationBlock(TObject):
             ),
             iteration_order=self.order,
             body=BlockStmt(
-                stmts=[stmt.build() for stmt in self.children],
+                stmts=temp_decls + [stmt.build() for stmt in self.children],
             ),
             loc=self.loc,
         )
