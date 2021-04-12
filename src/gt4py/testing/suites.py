@@ -516,16 +516,15 @@ class StencilTestSuite(metaclass=SuiteMeta):
         assert domain == exec_info["domain"]
 
         # for validation data, data is cropped to actually touched domain, so that origin offseting
-        # does not have to be implemented for every test suite
-        # for the validation method, fields are cropped to the touched area, based on info
+        # does not have to be implemented for every test suite. This is done based on info
         # specified in test suite
         cropped_validation_inputs = {}
         for name, data in validation_inputs.items():
-            field_info = implementation.field_info.get(name, None)
-            if field_info is not None:
-                field_extent_low = implementation.field_info[name].boundary.lower_indices
+            sym = cls.symbols[name]
+            if data is not None and sym.kind == "field":
+                field_extent_low = tuple(b[0] for b in sym.boundary)
                 offset_low = tuple(b[0] - e for b, e in zip(max_boundary, field_extent_low))
-                field_extent_high = implementation.field_info[name].boundary.upper_indices
+                field_extent_high = tuple(b[1] for b in sym.boundary)
                 offset_high = tuple(b[1] - e for b, e in zip(max_boundary, field_extent_high))
                 validation_slice = tuple(
                     slice(o, s - h) for o, s, h in zip(offset_low, shape, offset_high)
