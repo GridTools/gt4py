@@ -25,20 +25,21 @@ import numpy as np
 import pytest
 
 import gt4py as gt
-import gt4py.definitions as gt_definitions
 from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
+from gt4py.definitions import Boundary, FieldInfo, Shape
+from gt4py.ir.nodes import Index
 from gt4py.stencil_object import StencilObject
 
 from .input_strategies import (
+    SymbolKind,
     composite_implementation_strategy_factory,
     composite_strategy_factory,
+    derived_shape_st,
     ndarray_shape_st,
     ndarray_st,
-    derived_shape_st,
-    SymbolKind,
 )
 from .utils import annotate_function, standardize_dtype_dict
 
@@ -83,16 +84,15 @@ class SuiteMeta(type):
         global_boundaries = cls_dict["global_boundaries"] = dict()
         constants = cls_dict["constants"] = dict()
         singletons = cls_dict["singletons"] = dict()
+        cls_dict["field_axes"] = field_axes = {}
         max_boundary = ((0, 0), (0, 0), (0, 0))
         for symbol in cls_dict["symbols"].values():
             if symbol.kind == SymbolKind.FIELD:
                 max_boundary = tuple(
-                    (max(m[0], abs(b[0])), max(m[0], b[0]))
+                    (max(m[0], b[0]), max(m[1], b[1]))
                     for m, b in zip(max_boundary, symbol.boundary)
                 )
         cls_dict["max_boundary"] = max_boundary
-
-        cls_dict["field_axes"] = field_axes = {}
 
         for name, symbol in cls_dict["symbols"].items():
             if symbol.kind == SymbolKind.GLOBAL_STRATEGY:
@@ -102,15 +102,14 @@ class SuiteMeta(type):
             elif symbol.kind == SymbolKind.SINGLETON:
                 singletons[name] = symbol.values[0]
             elif symbol.kind == SymbolKind.FIELD:
-                extra_shape = [abs(d[0]) + abs(d[1]) for d in max_boundary]
                 if symbol.axes:
                     field_axes[name] = symbol.axes
-                    if "I" not in symbol.axes:
-                        extra_shape[0] = None
-                    if "J" not in symbol.axes:
-                        extra_shape[1] = None
-                    if "K" not in symbol.axes:
-                        extra_shape[2] = None
+                    extra_shape = tuple(
+                        b[0] + b[1] if ax in symbol.axes else None
+                        for b, ax in zip(max_boundary, "IJK")
+                    )
+                else:
+                    extra_shape = tuple(b[0] + b[1] for b in max_boundary)
 
                 global_boundaries[name] = symbol.boundary
                 shape_strategy = derived_shape_st(domain_strategy, extra_shape)
@@ -181,7 +180,7 @@ class SuiteMeta(type):
                                         dtype.type
                                         if (k in cls_dict["constants"] or k in parameters)
                                         else gtscript.Field[
-                                            getattr(gtscript, field_axes.get(k, "IJK")), dtype.type
+                                            dtype.type, getattr(gtscript, field_axes.get(k, "IJK"))
                                         ]
                                     )
                                     for k, dtype in d.items()
@@ -441,7 +440,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         implementation = gtscript.stencil(
             backend=test["backend"],
             definition=test["definition"],
-            name=f"{test['suite']}_{backend_slug}_{test['test_id']}",
+            name=cls.__module__ + f".{test['suite']}_{backend_slug}_{test['test_id']}",
             rebuild=True,
             externals=externals_dict,
         )
@@ -469,129 +468,89 @@ class StencilTestSuite(metaclass=SuiteMeta):
         test["implementations"].append(implementation)
 
     def _run_test_implementation(self, parameters_dict, implementation):
-        from gt4py.definitions import Shape
-        from gt4py.ir.nodes import Index
-        from gt4py.utils import filter_mask, interpolate_mask
 
         cls = type(self)
-        field_axes = cls.field_axes
-        args, exec_info = parameters_dict
+        input_data, exec_info = parameters_dict
 
         origin = cls.origin
-        shapes = {}
-        masks = {}
-        for name, value in args.items():
-            if isinstance(value, np.ndarray):
-                if name in field_axes:
-                    masks[name] = mask = (
-                        "I" in field_axes[name],
-                        "J" in field_axes[name],
-                        "K" in field_axes[name],
-                    )
-                    shapes[name] = Shape(
-                        interpolate_mask(value.shape[: sum(mask)], mask, sys.maxsize)
-                    )
-                else:
-                    shapes[name] = Shape(value.shape)
+        max_boundary = Boundary(cls.max_boundary)
 
-        max_domain = Shape([sys.maxsize] * implementation.domain_info.ndims)
-        for name, shape in shapes.items():
-            upper_boundary = Index([b[1] for b in cls.symbols[name].boundary])
-            max_domain &= shape - (Index(origin) + upper_boundary)
-        domain = max_domain
+        shape_iter = (Shape(v.shape) for v in input_data.values() if isinstance(v, np.ndarray))
+        shape = next(shape_iter)
+        assert all(shape == sh for sh in shape_iter)
 
-        max_boundary = ((abs(a), abs(b)) for a, b in cls.max_boundary)
-        for info in implementation.field_info.values():
-            if isinstance(info, gt_definitions.FieldInfo):
-                max_boundary = tuple(
-                    (max(m[0], abs(b[0])), max(m[1], b[1]))
-                    for m, b in zip(max_boundary, info.boundary)
-                )
+        domain = shape - (Index(max_boundary.lower_indices) + Index(max_boundary.upper_indices))
 
-        patched_origin = tuple(mb[0] for mb in max_boundary)
-        patching_origin = tuple(po - o for po, o in zip(patched_origin, origin))
-        patched_shape = tuple(mb[0] + mb[1] + d for mb, d in zip(max_boundary, domain))
-        patching_slices = [slice(po, po + s) for po, s in zip(patching_origin, patched_shape)]
+        referenced_inputs = {
+            name: info for name, info in implementation.field_info.items() if info is not None
+        }
+        referenced_inputs.update(
+            {name: info for name, info in implementation.parameter_info.items() if info is not None}
+        )
 
-        for name, v in implementation.constants.items():
-            sys.modules[self.__module__].__dict__[name] = v
+        # set externals for validation method
+        for k, v in implementation.constants.items():
+            sys.modules[self.__module__].__dict__[k] = v
 
+        # copy input data
         inputs = {}
-        for name, arg in args.items():
-            if isinstance(arg, np.ndarray):
-                mask = masks.get(name, (True,) * 3)
-                shape = filter_mask(patched_shape, mask)
-                slices = filter_mask(patching_slices, mask)
-                patched_f = np.empty(shape=shape)
-                patched_f[slices] = arg
-                inputs[name] = gt_storage.from_array(
-                    patched_f,
-                    dtype=arg.dtype,
-                    mask=mask,
-                    shape=patched_f.shape,
-                    default_origin=patched_origin,
-                    backend=implementation.backend,
-                )
-
+        validation_inputs = {}
+        for name, data in input_data.items():
+            data = input_data[name]
+            if name in referenced_inputs:
+                info = referenced_inputs[name]
+                if isinstance(info, FieldInfo):
+                    inputs[name] = gt_storage.from_array(
+                        data,
+                        dtype=data.dtype,
+                        shape=shape,
+                        default_origin=origin,
+                        backend=implementation.backend,
+                    )
+                    validation_inputs[name] = np.array(data)
+                else:
+                    inputs[name] = data
+                    validation_inputs[name] = data
             else:
-                inputs[name] = arg
+                inputs[name] = None
+                validation_inputs[name] = None
 
-        # remove unused input parameters
-        inputs = {key: value for key, value in inputs.items() if value is not None}
-        validation_fields = {name: np.array(field, copy=True) for name, field in inputs.items()}
+        # call implementation
+        implementation(**inputs, origin=origin, exec_info=exec_info)
+        assert domain == exec_info["domain"]
 
-        implementation(**inputs, origin=patched_origin, exec_info=exec_info)
-        domain = exec_info["domain"]
-
-        validation_origins = {
-            name: filter_mask(
-                tuple(nb[0] - g[0] for nb, g in zip(max_boundary, cls.symbols[name].boundary)),
-                masks.get(name, (True,) * 3),
-            )
-            for name in inputs
-            if name in implementation.field_info
-        }
-
-        validation_shapes = {
-            name: filter_mask(
-                tuple(d + g[0] + g[1] for d, g in zip(domain, cls.symbols[name].boundary)),
-                masks.get(name, (True,) * 3),
-            )
-            for name in inputs
-            if name in implementation.field_info
-        }
-
-        validation_field_views = {
-            name: value[
-                tuple(
-                    slice(o, o + s)
-                    for o, s in zip(validation_origins[name], validation_shapes[name])
+        # for validation data, data is cropped to actually touched domain, so that origin offseting
+        # does not have to be implemented for every test suite. This is done based on info
+        # specified in test suite
+        cropped_validation_inputs = {}
+        for name, data in validation_inputs.items():
+            sym = cls.symbols[name]
+            if data is not None and sym.kind == SymbolKind.FIELD:
+                field_extent_low = tuple(b[0] for b in sym.boundary)
+                offset_low = tuple(b[0] - e for b, e in zip(max_boundary, field_extent_low))
+                field_extent_high = tuple(b[1] for b in sym.boundary)
+                offset_high = tuple(b[1] - e for b, e in zip(max_boundary, field_extent_high))
+                validation_slice = tuple(
+                    slice(o, s - h) for o, s, h in zip(offset_low, shape, offset_high)
                 )
-            ]
-            if name in implementation.field_info
-            else value  # parameters
-            for name, value in validation_fields.items()
-        }
+                cropped_validation_inputs[name] = data[validation_slice]
+            else:
+                cropped_validation_inputs[name] = data
+
         cls.validation(
-            **validation_field_views,
+            **cropped_validation_inputs,
             domain=domain,
             origin={
-                name: tuple(b[0] for b in cls.symbols[name].boundary)
-                for name in validation_fields
-                if name in implementation.field_info
+                name: info.boundary.lower_indices
+                for name, info in implementation.field_info.items()
+                if info is not None
             },
         )
 
         # Test values
-        for (name, value), expected_value in zip(inputs.items(), validation_fields.values()):
-            if isinstance(args[name], np.ndarray):
-                domain_slice = filter_mask(
-                    [
-                        slice(max_boundary[d][0], max_boundary[d][0] + domain[d])
-                        for d in range(len(domain))
-                    ],
-                    masks.get(name, (True,) * 3),
-                )
+        for name, value in inputs.items():
+            if isinstance(value, np.ndarray):
+                expected_value = validation_inputs[name]
 
                 if gt_backend.from_name(value.backend).storage_info["device"] == "gpu":
                     value.synchronize()
@@ -600,8 +559,8 @@ class StencilTestSuite(metaclass=SuiteMeta):
                     value = value.data
 
                 np.testing.assert_allclose(
-                    value[domain_slice],
-                    expected_value[domain_slice],
+                    value,
+                    expected_value,
                     rtol=RTOL,
                     atol=ATOL,
                     equal_nan=EQUAL_NAN,

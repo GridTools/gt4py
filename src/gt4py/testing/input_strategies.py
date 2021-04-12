@@ -19,7 +19,7 @@ import enum
 import itertools
 import numbers
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Tuple, Sequence
+from typing import Any, Callable, Optional, Sequence, Tuple
 
 import hypothesis.strategies as hyp_st
 import numpy as np
@@ -89,6 +89,7 @@ def field(*, in_range, boundary=None, axes=None, extent=None):
     boundary = boundary or [(abs(e[0]), abs(e[1])) for e in extent]
     extent = extent or [(-b[0], b[1]) for b in boundary]
     assert all((-b[0], b[1]) == (e[0], e[1]) for b, e in zip(boundary, extent))
+    assert all((b[0] >= 0 and b[1]) >= 0 for b in boundary)
     return _SymbolStrategy(
         kind=SymbolKind.FIELD,
         boundary=boundary,
@@ -174,7 +175,7 @@ def derived_shape_st(shape_st, extra: Sequence[Optional[int]]):
     )
 
 
-def ndarray_in_range_st(dtype, axes, shape_st, value_range):
+def ndarray_in_range_st(dtype, shape_st, value_range):
     """Hypothesis strategy for ndarrays generated using the provided `dtype` and `shape` strategies and the `value_range`."""
     return hyp_np.arrays(
         dtype=dtype,
@@ -182,7 +183,6 @@ def ndarray_in_range_st(dtype, axes, shape_st, value_range):
         elements=scalar_value_st(dtype, min_value=value_range[0], max_value=value_range[1]),
         fill=scalar_value_st(dtype, min_value=value_range[0], max_value=value_range[1]),
     )
-    return result
 
 
 def ndarray_st(dtype, shape_strategy, value_st_factory):
