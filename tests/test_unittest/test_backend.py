@@ -18,11 +18,13 @@ import inspect
 
 import pytest
 
+import gt4py.backend as gt_backend
 from gt4py.backend import REGISTRY as backend_registry
+from gt4py.backend.module_generator import make_args_data_from_gtir, make_args_data_from_iir
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, DAWN_CPU_BACKENDS, GPU_BACKENDS
+from ..definitions import ALL_BACKENDS, GPU_BACKENDS
 
 
 def stencil_def(
@@ -56,30 +58,30 @@ def test_make_args_data_from_iir(backend_name, mode):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
     iir = builder.implementation_ir
-    args_data = backend_cls.make_args_data_from_iir(iir)
+    args_data = make_args_data_from_iir(iir)
 
     args_list = set(inspect.signature(stencil_def).parameters.keys())
     args_found = set()
 
-    for key in args_data["field_info"]:
+    for key in args_data.field_info:
         assert key in args_list
         if key in field_info_val[mode]:
-            assert args_data["field_info"][key] is not None
+            assert args_data.field_info[key] is not None
         else:
-            assert args_data["field_info"][key] is None
+            assert args_data.field_info[key] is None
         assert key not in args_found
         args_found.add(key)
 
-    for key in args_data["parameter_info"]:
+    for key in args_data.parameter_info:
         assert key in args_list
         if key in parameter_info_val[mode]:
-            assert args_data["parameter_info"][key] is not None
+            assert args_data.parameter_info[key] is not None
         else:
-            assert args_data["parameter_info"][key] is None
+            assert args_data.parameter_info[key] is None
         assert key not in args_found
         args_found.add(key)
 
-    for key in args_data["unreferenced"]:
+    for key in args_data.unreferenced:
         assert key in args_list
         assert key not in field_info_val[mode]
         assert key not in parameter_info_val[mode]
@@ -89,18 +91,31 @@ def test_make_args_data_from_iir(backend_name, mode):
 
 @pytest.mark.parametrize("backend_name", ALL_BACKENDS)
 @pytest.mark.parametrize("mode", (0, 1, 2))
+def test_make_args_data_from_gtir(backend_name, mode):
+    backend_cls = backend_registry[backend_name]
+    builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
+    args_data = make_args_data_from_gtir(builder.gtir_pipeline)
+    iir_args_data = make_args_data_from_iir(builder.implementation_ir)
+
+    assert args_data.field_info == iir_args_data.field_info
+    assert args_data.parameter_info == iir_args_data.parameter_info
+    assert args_data.unreferenced == iir_args_data.unreferenced
+
+
+@pytest.mark.parametrize("backend_name", ALL_BACKENDS)
+@pytest.mark.parametrize("mode", (0, 1, 2))
 def test_generate_pre_run(backend_name, mode):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
     iir = builder.implementation_ir
-    args_data = backend_cls.make_args_data_from_iir(iir)
+    args_data = make_args_data_from_iir(iir)
 
     module_generator = backend_cls.MODULE_GENERATOR_CLASS()
     module_generator.args_data = args_data
     source = module_generator.generate_pre_run()
 
-    if backend_name in CPU_BACKENDS:
-        if backend_name not in DAWN_CPU_BACKENDS:
+    if gt_backend.from_name(backend_name).storage_info["device"] == "cpu":
+        if "dawn:" not in backend_name:
             assert source == ""
     else:
         for key in field_info_val[mode]:
@@ -115,13 +130,13 @@ def test_generate_post_run(backend_name, mode):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
     iir = builder.implementation_ir
-    args_data = backend_cls.make_args_data_from_iir(iir)
+    args_data = make_args_data_from_iir(iir)
 
     module_generator = backend_cls.MODULE_GENERATOR_CLASS()
     module_generator.args_data = args_data
     source = module_generator.generate_post_run()
 
-    if backend_name in CPU_BACKENDS:
+    if gt_backend.from_name(backend_name).storage_info["device"] == "cpu":
         assert source == ""
     else:
         assert source == "out._set_device_modified()"

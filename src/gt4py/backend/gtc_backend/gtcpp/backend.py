@@ -26,8 +26,8 @@ from gt4py.backend.gt_backends import (
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
     cuda_is_compatible_type,
-    cuda_layout,
     gtcpu_is_compatible_type,
+    make_cuda_layout_map,
     make_mc_layout_map,
     make_x86_layout_map,
     mc_is_compatible_layout,
@@ -37,9 +37,7 @@ from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
-from gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-from gtc.passes.gtir_upcaster import upcast
+from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,
     KCacheDetection,
@@ -67,11 +65,8 @@ class GTCGTExtGenerator:
         self.options = options
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = DefIRToGTIR.apply(definition_ir)
-        gtir_without_unused_params = prune_unused_parameters(gtir)
-        dtype_deduced = resolve_dtype(gtir_without_unused_params)
-        upcasted = upcast(dtype_deduced)
-        oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
+        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+        oir = gtir_to_oir.GTIRToOIR().visit(gtir)
         oir = self._optimize_oir(oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
@@ -179,11 +174,10 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         #include "computation.hpp"
         namespace gt = gridtools;
         namespace py = ::pybind11;
-        %if len(entry_params) > 0:
         PYBIND11_MODULE(${module_name}, m) {
-            m.def("run_computation", [](std::array<gt::uint_t, 3> domain,
-            ${','.join(entry_params)},
-            py::object exec_info){
+            m.def("run_computation", [](
+            ${','.join(["std::array<gt::uint_t, 3> domain", *entry_params, 'py::object exec_info'])}
+            ){
                 if (!exec_info.is(py::none()))
                 {
                     auto exec_info_dict = exec_info.cast<py::dict>();
@@ -203,7 +197,6 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                 }
 
             }, "Runs the given computation");}
-        %endif
         """
     )
 
@@ -217,6 +210,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
+    USE_LEGACY_TOOLCHAIN = False
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
         return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=uses_cuda)
@@ -290,7 +284,7 @@ class GTCGTGpuBackend(GTCGTBaseBackend):
     storage_info = {
         "alignment": 32,
         "device": "gpu",
-        "layout_map": cuda_layout,
+        "layout_map": make_cuda_layout_map,
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }

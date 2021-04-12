@@ -31,6 +31,7 @@ from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
 
 from . import pyext_builder
+from .module_generator import CUDAPyExtModuleGenerator, PyExtModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -100,14 +101,14 @@ def mc_is_compatible_layout(field: "Storage") -> bool:
     return True
 
 
-def cuda_layout(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
+def make_cuda_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     ctr = reversed(range(sum(mask)))
     return tuple([next(ctr) if m else None for m in mask])
 
 
 def cuda_is_compatible_layout(field: "Storage") -> bool:
     stride = 0
-    layout_map = cuda_layout(field.mask)
+    layout_map = make_cuda_layout_map(field.mask)
     flattened_layout = [index for index in layout_map if index is not None]
     if len(field.strides) < len(flattened_layout):
         return False
@@ -542,7 +543,9 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     GT_BACKEND_T: str
 
-    MODULE_GENERATOR_CLASS = gt_backend.PyExtModuleGenerator
+    MODULE_GENERATOR_CLASS = PyExtModuleGenerator
+
+    USE_LEGACY_TOOLCHAIN = True
 
     PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
@@ -691,12 +694,10 @@ class GTMCBackend(BaseGTBackend):
         return self.make_extension(uses_cuda=False)
 
 
-class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
+class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
     def generate_pre_run(self) -> str:
         field_names = [
-            key
-            for key in self.args_data["field_info"]
-            if self.args_data["field_info"][key] is not None
+            key for key in self.args_data.field_info if self.args_data.field_info[key] is not None
         ]
 
         return "\n".join([f + ".host_to_device()" for f in field_names])
@@ -704,7 +705,7 @@ class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
     def generate_post_run(self) -> str:
         output_field_names = [
             name
-            for name, info in self.args_data["field_info"].items()
+            for name, info in self.args_data.field_info.items()
             if info is not None and info.access == gt_definitions.AccessKind.READ_WRITE
         ]
 
@@ -724,7 +725,7 @@ class GTCUDABackend(BaseGTBackend):
     storage_info = {
         "alignment": 32,
         "device": "gpu",
-        "layout_map": cuda_layout,
+        "layout_map": make_cuda_layout_map,
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }
