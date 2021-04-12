@@ -38,7 +38,8 @@ from .input_strategies import (
     composite_strategy_factory,
     ndarray_shape_st,
     ndarray_st,
-    padded_shape_st,
+    derived_shape_st,
+    SymbolKind,
 )
 from .utils import annotate_function, standardize_dtype_dict
 
@@ -73,9 +74,7 @@ class SuiteMeta(type):
     }
 
     def collect_symbols(cls_name, bases, cls_dict):
-
         domain_range = cls_dict["domain_range"]
-
         domain_strategy = cls_dict["domain_strategy"] = hyp_st.shared(
             ndarray_shape_st(domain_range), key=cls_name
         )
@@ -85,9 +84,10 @@ class SuiteMeta(type):
         global_boundaries = cls_dict["global_boundaries"] = dict()
         constants = cls_dict["constants"] = dict()
         singletons = cls_dict["singletons"] = dict()
+        cls_dict["field_axes"] = field_axes = {}
         max_boundary = ((0, 0), (0, 0), (0, 0))
         for symbol in cls_dict["symbols"].values():
-            if symbol.kind == "field":
+            if symbol.kind == SymbolKind.FIELD:
                 max_boundary = tuple(
                     (max(m[0], b[0]), max(m[1], b[1]))
                     for m, b in zip(max_boundary, symbol.boundary)
@@ -95,29 +95,35 @@ class SuiteMeta(type):
         cls_dict["max_boundary"] = max_boundary
 
         for name, symbol in cls_dict["symbols"].items():
-
-            if symbol.kind == "global_strategy":
+            if symbol.kind == SymbolKind.GLOBAL_STRATEGY:
                 generation_strategy_factories[name] = symbol.value_st_factory
-            elif symbol.kind == "global_set":
+            elif symbol.kind == SymbolKind.GLOBAL_SET:
                 constants[name] = symbol.values
-            elif symbol.kind == "singleton":
+            elif symbol.kind == SymbolKind.SINGLETON:
                 singletons[name] = symbol.values[0]
-            elif symbol.kind == "field":
-                global_boundaries[name] = symbol.boundary
-                shape_strategy = padded_shape_st(
-                    domain_strategy, [abs(d[0]) + abs(d[1]) for d in max_boundary]
-                )
+            elif symbol.kind == SymbolKind.FIELD:
+                if symbol.axes:
+                    field_axes[name] = symbol.axes
+                    extra_shape = tuple(
+                        b[0] + b[1] if ax in symbol.axes else None
+                        for b, ax in zip(max_boundary, "IJK")
+                    )
+                else:
+                    extra_shape = tuple(b[0] + b[1] for b in max_boundary)
 
-                # default arguments necessary to avoid late binding
+                global_boundaries[name] = symbol.boundary
+                shape_strategy = derived_shape_st(domain_strategy, extra_shape)
+
+                # Use default arguments to pass values avoiding late binding problems
                 def implementation_strategy_factory(
                     dt, shape=shape_strategy, value_st_factory=symbol.value_st_factory
                 ):
-                    return ndarray_st(dt, shape_strategy, value_st_factory)
+                    return ndarray_st(dt, shape, value_st_factory)
 
                 implementation_strategy_factories[name] = implementation_strategy_factory
-            elif symbol.kind == "parameter":
+            elif symbol.kind == SymbolKind.PARAMETER:
                 implementation_strategy_factories[name] = symbol.value_st_factory
-            elif symbol.kind == "none":
+            elif symbol.kind == SymbolKind.NONE:
                 implementation_strategy_factories[name] = symbol.value_st_factory
 
             else:
@@ -126,8 +132,8 @@ class SuiteMeta(type):
         cls_dict["origin"] = tuple(o[0] for o in max_boundary)
 
     def parametrize_generation_tests(cls_name, bases, cls_dict):
-
         dtypes = cls_dict["dtypes"]
+        field_axes = cls_dict["field_axes"]
         backends = cls_dict["backends"]
         generation_strategy_factories = cls_dict["generation_strategy_factories"]
 
@@ -135,13 +141,10 @@ class SuiteMeta(type):
             grouped_combinations = [
                 {k: v for k, v in zip(dtypes.keys(), p)} for p in product(*dtypes.values())
             ]
-            ret = []
-            for combination in grouped_combinations:
-                d = dict()
-                for ktuple in combination:
-                    for k in ktuple:
-                        d[k] = combination[ktuple]
-                ret.append(d)
+            ret = [
+                {k: combination[ktuple] for ktuple in combination for k in ktuple}
+                for combination in grouped_combinations
+            ]
             return ret
 
         def get_globals_combinations(dtypes):
@@ -176,7 +179,9 @@ class SuiteMeta(type):
                                     k: (
                                         dtype.type
                                         if (k in cls_dict["constants"] or k in parameters)
-                                        else gtscript.Field[dtype.type, gtscript.IJK]
+                                        else gtscript.Field[
+                                            dtype.type, getattr(gtscript, field_axes.get(k, "IJK"))
+                                        ]
                                     )
                                     for k, dtype in d.items()
                                 },
@@ -211,12 +216,12 @@ class SuiteMeta(type):
                 )
                 param = pytest.param(test, marks=marks, id=name)
                 pytest_params.append(param)
+
         cls_dict["test_generation"] = pytest.mark.parametrize("test", pytest_params)(
             generation_test_wrapper
         )
 
     def parametrize_implementation_tests(cls_name, bases, cls_dict):
-
         implementation_strategy_factories = cls_dict["implementation_strategy_factories"]
         global_boundaries = cls_dict["global_boundaries"]
 
@@ -228,27 +233,28 @@ class SuiteMeta(type):
             hyp_wrapper(test)
 
         runtime_pytest_params = []
-        for test in (t for t in cls_dict["tests"] if t["suite"] == cls_name):
-            marks = (
-                [pytest.mark.requires_gpu]
-                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu"
-                else ()
-            )
-            name = test["backend"]
-            name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
-            name += "".join(
-                "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
-            )
-            runtime_pytest_params.append(
-                pytest.param(
-                    test,
-                    composite_implementation_strategy_factory(
-                        test["dtypes"], implementation_strategy_factories, global_boundaries
-                    ),
-                    marks=marks,
-                    id=name,
+        for test in cls_dict["tests"]:
+            if test["suite"] == cls_name:
+                marks = (
+                    [pytest.mark.requires_gpu]
+                    if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu"
+                    else ()
                 )
-            )
+                name = test["backend"]
+                name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
+                name += "".join(
+                    "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
+                )
+                runtime_pytest_params.append(
+                    pytest.param(
+                        test,
+                        composite_implementation_strategy_factory(
+                            test["dtypes"], implementation_strategy_factories, global_boundaries
+                        ),
+                        marks=marks,
+                        id=name,
+                    )
+                )
 
         cls_dict["test_implementation"] = pytest.mark.parametrize(
             ("test", "implementation_strategy"), runtime_pytest_params
@@ -286,9 +292,7 @@ class SuiteMeta(type):
         ), "'dtypes' must be a sequence or a mapping object"
 
         # Check backends
-        assert isinstance(backends, collections.abc.Sequence) and all(
-            isinstance(b, str) for b in backends
-        ), "'backends' must be a sequence of strings"
+        assert gt_utils.is_iterable_of(backends, str), "'backends' must be a sequence of strings"
         for b in backends:
             assert b in gt.backend.REGISTRY.names, "backend '{backend}' not supported".format(
                 backend=b
@@ -521,7 +525,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         cropped_validation_inputs = {}
         for name, data in validation_inputs.items():
             sym = cls.symbols[name]
-            if data is not None and sym.kind == "field":
+            if data is not None and sym.kind == SymbolKind.FIELD:
                 field_extent_low = tuple(b[0] for b in sym.boundary)
                 offset_low = tuple(b[0] - e for b, e in zip(max_boundary, field_extent_low))
                 field_extent_high = tuple(b[1] for b in sym.boundary)
