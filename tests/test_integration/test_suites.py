@@ -21,8 +21,11 @@ from gt4py import gtscript
 from gt4py import testing as gt_testing
 from gt4py.gtscript import PARALLEL, computation, interval
 
-from ..definitions import ALL_BACKENDS, DAWN_BACKENDS, DAWN_GPU_BACKENDS, INTERNAL_BACKENDS
+from ..definitions import INTERNAL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields
+
+
+INTERNAL_BACKENDS_NAMES = [b.values[0] for b in INTERNAL_BACKENDS]
 
 
 # ---- Identity stencil ----
@@ -31,7 +34,7 @@ class TestIdentity(gt_testing.StencilTestSuite):
 
     dtypes = {("field_a",): (np.float64, np.float32)}
     domain_range = [(1, 25), (1, 25), (1, 25)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(field_a):
@@ -49,7 +52,7 @@ class TestCopy(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 25), (1, 25), (1, 25)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         field_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -68,7 +71,7 @@ class TestAugAssign(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 25), (1, 25), (1, 25)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         field_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -92,7 +95,7 @@ class TestGlobalScale(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         SCALE_FACTOR=gt_testing.global_name(one_of=(1.0, 1e3, 1e6)),
         field_a=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -114,7 +117,7 @@ class TestParametricScale(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         scale=gt_testing.parameter(in_range=(-100, 100)),
@@ -139,7 +142,7 @@ class TestParametricMix(gt_testing.StencilTestSuite):
         ("weight", "alpha_factor"): np.float_,
     }
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         USE_ALPHA=gt_testing.global_name(one_of=(True, False)),
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -178,7 +181,7 @@ class TestParametricMix(gt_testing.StencilTestSuite):
 class TestHeatEquation_FTCS_3D(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         u=gt_testing.field(in_range=(-10, 10), extent=[(-1, 1), (0, 0), (0, 0)]),
         v=gt_testing.field(in_range=(-10, 10), extent=[(0, 0), (-1, 1), (0, 0)]),
@@ -207,7 +210,7 @@ class TestHorizontalDiffusion(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (2, 2), (0, 0)]),
         diffusion=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -270,7 +273,7 @@ class TestHorizontalDiffusionSubroutines(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         fwd_diff=gt_testing.global_name(singleton=wrap1arg2return),
         u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (2, 2), (0, 0)]),
@@ -304,7 +307,7 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         fwd_diff=gt_testing.global_name(singleton=fwd_diff_op_xy),
         BRANCH=gt_testing.global_name(one_of=(True, False)),
@@ -344,7 +347,7 @@ class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(outfield):
@@ -365,7 +368,7 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(outfield):
@@ -393,7 +396,7 @@ class Test3FoldNestedIf(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(3, 3), (3, 3), (3, 3)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(field_a=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(field_a):
@@ -414,7 +417,7 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(3, 3), (3, 3), (3, 3)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         factor=gt_testing.parameter(in_range=(-100, 100)),
         field_a=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -450,7 +453,7 @@ class TestTernaryOp(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         infield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 1), (0, 0)]),
         outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -471,7 +474,7 @@ class TestThreeWayAnd(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         a=gt_testing.parameter(in_range=(-100, 100)),
@@ -495,7 +498,7 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         a=gt_testing.parameter(in_range=(-100, 100)),
@@ -518,7 +521,7 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
 class TestOptionalField(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 32), (1, 32), (1, 32)]
-    backends = list(set(ALL_BACKENDS) - set(DAWN_GPU_BACKENDS))
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         PHYS_TEND=gt_testing.global_name(one_of=(False, True)),
         in_field=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -538,7 +541,7 @@ class TestOptionalField(gt_testing.StencilTestSuite):
 
 
 class TestNotSpecifiedOptionalField(TestOptionalField):
-    backends = list(set(ALL_BACKENDS) - set(DAWN_BACKENDS))
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = TestOptionalField.symbols.copy()
     symbols["PHYS_TEND"] = gt_testing.global_name(one_of=(False,))
     symbols["phys_tend"] = gt_testing.none()
@@ -547,7 +550,7 @@ class TestNotSpecifiedOptionalField(TestOptionalField):
 class TestTwoOptionalFields(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 32), (1, 32), (1, 32)]
-    backends = list(set(ALL_BACKENDS) - set(DAWN_GPU_BACKENDS))
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = dict(
         PHYS_TEND_A=gt_testing.global_name(one_of=(False, True)),
         PHYS_TEND_B=gt_testing.global_name(one_of=(False, True)),
@@ -589,7 +592,7 @@ class TestTwoOptionalFields(gt_testing.StencilTestSuite):
 
 
 class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
-    backends = list(set(ALL_BACKENDS) - set(DAWN_BACKENDS))
+    backends = INTERNAL_BACKENDS_NAMES
     symbols = TestTwoOptionalFields.symbols.copy()
     symbols["PHYS_TEND_A"] = gt_testing.global_name(one_of=(False,))
     symbols["phys_tend_a"] = gt_testing.none()
