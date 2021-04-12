@@ -414,6 +414,10 @@ class FrameTuple(tuple):
         return all(d[0] == d[1] for d in self)
 
     @property
+    def is_zero(self):
+        return all(d[0] == d[1] == 0 for d in self)
+
+    @property
     def lower_indices(self):
         return NumericTuple(*(d[0] for d in self))
 
