@@ -488,9 +488,9 @@ class StencilTestSuite(metaclass=SuiteMeta):
         for k, v in implementation.constants.items():
             sys.modules[self.__module__].__dict__[k] = v
 
-        # copy input data to storages
+        # copy input data
         inputs = {}
-        info: FieldInfo
+        validation_inputs = {}
         for name, data in input_data.items():
             data = input_data[name]
             if name in referenced_inputs:
@@ -503,23 +503,12 @@ class StencilTestSuite(metaclass=SuiteMeta):
                         default_origin=origin,
                         backend=implementation.backend,
                     )
-                else:
-                    inputs[name] = data
-            else:
-                inputs[name] = None
-
-        # copy input data for validation
-        validation_inputs = {}
-        info: FieldInfo
-        for name, data in input_data.items():
-            data = input_data[name]
-            if name in referenced_inputs:
-                info = referenced_inputs[name]
-                if isinstance(info, FieldInfo):
                     validation_inputs[name] = np.array(data)
                 else:
+                    inputs[name] = data
                     validation_inputs[name] = data
             else:
+                inputs[name] = None
                 validation_inputs[name] = None
 
         # call implementation
