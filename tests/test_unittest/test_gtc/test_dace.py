@@ -2,12 +2,32 @@ from copy import deepcopy
 
 import dace
 import dace.sdfg.graph
+import hypothesis as hyp
+import hypothesis.strategies as hyp_st
 import networkx as nx
 import pytest
 
+from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
+from gt4py.definitions import BuildOptions
+from gt4py.frontend.gtscript_frontend import GTScriptFrontend
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace_to_oir import convert
+from gtc.gtir_to_oir import GTIRToOIR, oir_iteration_space_computation
 from gtc.oir_to_dace import OirSDFGBuilder
+from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_optimizations.caches import (
+    IJCacheDetection,
+    KCacheDetection,
+    PruneKCacheFills,
+    PruneKCacheFlushes,
+)
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
+from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.passes.oir_optimizations.temporaries import (
+    LocalTemporariesToScalars,
+    WriteBeforeReadTemporariesToScalars,
+)
+from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 
 from ...test_integration.stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from ...test_integration.stencil_definitions import REGISTRY as stencil_registry
@@ -15,25 +35,14 @@ from ...test_integration.stencil_definitions import REGISTRY as stencil_registry
 
 def stencil_def_to_oir(stencil_def, externals):
 
-    from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-    from gt4py.definitions import BuildOptions
-    from gt4py.frontend.gtscript_frontend import GTScriptFrontend
-    from gtc.gtir_to_oir import GTIRToOIR
-    from gtc.passes.gtir_dtype_resolver import resolve_dtype
-    from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-    from gtc.passes.gtir_upcaster import upcast
-
     build_options = BuildOptions(
         name=stencil_def.__name__, module=__name__, rebuild=True, backend_opts={}, build_info=None
     )
     definition_ir = GTScriptFrontend.generate(
         stencil_def, externals=externals, options=build_options
     )
-    gtir = DefIRToGTIR.apply(definition_ir)
-    gtir = prune_unused_parameters(gtir)
-    dtype_deduced = resolve_dtype(gtir)
-    upcasted = upcast(dtype_deduced)
-    return GTIRToOIR().visit(upcasted)
+    gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+    return GTIRToOIR().visit(gtir)
 
 
 def edge_match(edge1, edge2):
@@ -104,11 +113,76 @@ def assert_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG):
 
 
 @pytest.mark.parametrize("stencil_name", stencil_registry.keys())
-def test_stencils_roundtrip(stencil_name):
+def test_stencils_roundtrip_raw(stencil_name):
 
     stencil_def = stencil_registry[stencil_name]
     externals = externals_registry[stencil_name]
     oir = stencil_def_to_oir(stencil_def, externals)
+    sdfg = OirSDFGBuilder.build(oir.name, oir)
+
+    sdfg_pre = deepcopy(sdfg)
+
+    oir = convert(sdfg)
+    sdfg_post = OirSDFGBuilder.build(oir.name, oir)
+    assert_sdfg_equal(sdfg_pre, sdfg_post)
+
+
+@pytest.mark.parametrize("stencil_name", stencil_registry.keys())
+@hyp.given(
+    use_greedy_merging=hyp_st.booleans(),
+    use_adjacent_loop_merging=hyp_st.booleans(),
+    use_local_temporaries_to_scalars=hyp_st.booleans(),
+    use_write_before_read_temporaries_to_scalars=hyp_st.booleans(),
+    use_on_the_fly_merging=hyp_st.booleans(),
+    use_no_field_access_pruning=hyp_st.booleans(),
+    use_ij_cache_detection=hyp_st.booleans(),
+    use_k_cache_detection=hyp_st.booleans(),
+    use_prune_k_cache_fills=hyp_st.booleans(),
+    use_prune_k_cache_flushes=hyp_st.booleans(),
+)
+def test_stencils_roundtrip_optimized(
+    stencil_name,
+    use_greedy_merging,
+    use_adjacent_loop_merging,
+    use_local_temporaries_to_scalars,
+    use_write_before_read_temporaries_to_scalars,
+    use_on_the_fly_merging,
+    use_no_field_access_pruning,
+    use_ij_cache_detection,
+    use_k_cache_detection,
+    use_prune_k_cache_fills,
+    use_prune_k_cache_flushes,
+):
+
+    stencil_def = stencil_registry[stencil_name]
+    externals = externals_registry[stencil_name]
+    oir = stencil_def_to_oir(stencil_def, externals)
+    use_greedy_merging = False
+    use_adjacent_loop_merging = True
+    use_local_temporaries_to_scalars = True
+    use_write_before_read_temporaries_to_scalars = True
+    use_on_the_fly_merging = True
+    if use_greedy_merging:
+        oir = GreedyMerging().visit(oir)
+    if use_adjacent_loop_merging:
+        oir = AdjacentLoopMerging().visit(oir)
+    if use_local_temporaries_to_scalars:
+        oir = LocalTemporariesToScalars().visit(oir)
+    if use_write_before_read_temporaries_to_scalars:
+        oir = WriteBeforeReadTemporariesToScalars().visit(oir)
+    if use_on_the_fly_merging:
+        oir = OnTheFlyMerging().visit(oir)
+    if use_no_field_access_pruning:
+        oir = NoFieldAccessPruning().visit(oir)
+    if use_ij_cache_detection:
+        oir = IJCacheDetection().visit(oir)
+    if use_k_cache_detection:
+        oir = KCacheDetection().visit(oir)
+    if use_prune_k_cache_fills:
+        oir = PruneKCacheFills().visit(oir)
+    if use_prune_k_cache_flushes:
+        oir = PruneKCacheFlushes().visit(oir)
+    oir = oir_iteration_space_computation(oir)
     sdfg = OirSDFGBuilder.build(oir.name, oir)
 
     sdfg_pre = deepcopy(sdfg)
