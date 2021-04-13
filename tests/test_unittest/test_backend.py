@@ -24,7 +24,7 @@ from gt4py.backend.module_generator import make_args_data_from_gtir, make_args_d
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
-from ..definitions import ALL_BACKENDS
+from ..definitions import ALL_BACKENDS, GPU_BACKENDS
 
 
 def stencil_def(
@@ -140,6 +140,29 @@ def test_generate_post_run(backend_name, mode):
         assert source == ""
     else:
         assert source == "out._set_device_modified()"
+
+
+@pytest.mark.parametrize("backend_name", GPU_BACKENDS)
+@pytest.mark.parametrize("mode", (2,))
+@pytest.mark.parametrize("device_sync", (True, False))
+def test_device_sync_option(backend_name, mode, device_sync):
+    backend_cls = backend_registry[backend_name]
+    builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
+    builder.options.backend_opts["device_sync"] = device_sync
+    args_data = backend_cls.make_args_data_from_iir(builder.implementation_ir)
+
+    module_generator = backend_cls.MODULE_GENERATOR_CLASS()
+    source = module_generator(
+        args_data,
+        builder,
+        pyext_module_name=builder.module_name,
+        pyext_file_path=str(builder.module_path),
+    )
+
+    if device_sync:
+        assert ".synchronize()" in source
+    else:
+        assert ".synchronize()" not in source
 
 
 if __name__ == "__main__":
