@@ -593,3 +593,22 @@ class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
     symbols = TestTwoOptionalFields.symbols.copy()
     symbols["PHYS_TEND_A"] = gt_testing.global_name(one_of=(False,))
     symbols["phys_tend_a"] = gt_testing.none()
+
+
+class TestConstantFolding(gt_testing.StencilTestSuite):
+    dtypes = {("outfield",):np.float64,("cond",): np.float64}
+    domain_range = [(1, 15)]
+    backends = INTERNAL_BACKENDS
+    symbols = dict(
+        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        cond=gt_testing.field(in_range=(1, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+    )
+
+    def definition(outfield, cond):
+        with computation(PARALLEL), interval(...):
+            if cond != 0:
+                tmp = 1
+            outfield = tmp
+
+    def validation(outfield, cond, *,domain, origin, **kwargs):
+        outfield[np.array(cond, dtype=np.bool_)] = 1

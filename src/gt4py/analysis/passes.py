@@ -1378,13 +1378,21 @@ class ConstantFoldingPass(TransformPass):
             self.visit(node)
             return set(self.constants.keys())
 
-        def visit_Assign(self, node: gt_ir.Assign) -> None:
+        def visit_If(self, node: gt_ir.If, **kwargs: Any) -> None:
+            for stmt in node.main_body.stmts:
+                self.visit(stmt, in_condition=True)
+            if node.else_body:
+                for stmt in node.else_body.stmts:
+                    self.visit(stmt, in_condition=True)
+
+        def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
             target_name = node.target.name
             if target_name in self.constants:
                 self.constants[target_name] += 1
                 if (
                     not isinstance(node.value, gt_ir.ScalarLiteral)
                     or self.constants[target_name] > 1
+                    or kwargs.get("in_condition", False)
                 ):
                     self.constants.pop(target_name)
 
@@ -1479,14 +1487,6 @@ class HousekeepingPass(TransformPass):
         def __call__(self, node: gt_ir.StencilImplementation) -> None:
             assert isinstance(node, gt_ir.StencilImplementation)
             self.visit(node)
-
-        def visit_HorizontalIf(
-            self, path: tuple, node_name: str, node: gt_ir.HorizontalIf
-        ) -> Tuple[bool, Optional[gt_ir.HorizontalIf]]:
-            if node.body.stmts:
-                return True, node
-            else:
-                return False, None
 
         def visit_ApplyBlock(
             self, path: tuple, node_name: str, node: gt_ir.ApplyBlock
