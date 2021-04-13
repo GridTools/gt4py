@@ -601,7 +601,7 @@ class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
 
 
 class TestConstantFolding(gt_testing.StencilTestSuite):
-    dtypes = {("outfield",):np.float64,("cond",): np.float64}
+    dtypes = {("outfield",): np.float64, ("cond",): np.float64}
     domain_range = [(15, 15), (15, 15), (15, 15)]
     backends = INTERNAL_BACKENDS
     symbols = dict(
@@ -613,7 +613,7 @@ class TestConstantFolding(gt_testing.StencilTestSuite):
         with computation(PARALLEL), interval(...):
             if cond != 0:
                 tmp = 1
-            outfield = tmp
+            outfield = tmp  # noqa: F841  # local variable assigned to but never used
 
-    def validation(outfield, cond, *,domain, origin, **kwargs):
+    def validation(outfield, cond, *, domain, origin, **kwargs):
         outfield[np.array(cond, dtype=np.bool_)] = 1

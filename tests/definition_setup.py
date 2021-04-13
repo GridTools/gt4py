@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import itertools
 from typing import Any, Iterator, List, Set, Tuple, Union
 
 import pytest

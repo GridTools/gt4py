@@ -1246,6 +1246,7 @@ class BuildIIRPass(TransformPass):
 
         return result
 
+
 class ConstantFoldingPass(TransformPass):
     class CollectConstants(gt_ir.IRNodeVisitor):
         @classmethod
@@ -1272,9 +1273,7 @@ class ConstantFoldingPass(TransformPass):
             return instance(node)
 
         def __init__(self, constants: Set[str]):
-            self.literals: Dict[str, gt_ir.ScalarLiteral] = {
-                name: None for name in constants
-            }
+            self.literals: Dict[str, gt_ir.ScalarLiteral] = {name: None for name in constants}
 
         def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
             return self.visit(node)
