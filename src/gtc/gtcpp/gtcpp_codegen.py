@@ -30,7 +30,7 @@ def _offset_limit(root: Node) -> int:
         .if_isinstance(gtcpp.GTLevel)
         .getattr("offset")
         .reduce(lambda state, cur: max(state, abs(cur)), init=0)
-    )
+    ) + 1
 
 
 class GTCppCodegen(codegen.TemplatedGenerator):
@@ -99,40 +99,59 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:
         try:
             return {
-                NativeFunction.ABS: "gridtools::math::abs",
-                NativeFunction.MIN: "gridtools::math::min",
-                NativeFunction.MAX: "gridtools::math::max",
-                NativeFunction.MOD: "gridtools::math::fmod",
-                NativeFunction.SQRT: "gridtools::math::sqrt",
-                NativeFunction.POW: "gridtools::math::pow",
-                NativeFunction.EXP: "gridtools::math::exp",
-                NativeFunction.LOG: "gridtools::math::log",
-                NativeFunction.TRUNC: "gridtools::math::trunc",
+                NativeFunction.ABS: "std::abs",
+                NativeFunction.MIN: "std::min",
+                NativeFunction.MAX: "std::max",
+                NativeFunction.MOD: "std::fmod",
+                NativeFunction.SIN: "std::sin",
+                NativeFunction.COS: "std::cos",
+                NativeFunction.TAN: "std::tan",
+                NativeFunction.ARCSIN: "std::asin",
+                NativeFunction.ARCCOS: "std::acos",
+                NativeFunction.ARCTAN: "std::atan",
+                NativeFunction.SQRT: "std::sqrt",
+                NativeFunction.POW: "std::pow",
+                NativeFunction.EXP: "std::exp",
+                NativeFunction.LOG: "std::log",
+                NativeFunction.ISFINITE: "std::isfinite",
+                NativeFunction.ISINF: "std::isinf",
+                NativeFunction.ISNAN: "std::isnan",
+                NativeFunction.FLOOR: "std::floor",
+                NativeFunction.CEIL: "std::ceil",
+                NativeFunction.TRUNC: "std::trunc",
             }[func]
         except KeyError as error:
-            raise NotImplementedError("Not implemented NativeFunction encountered.") from error
+            raise NotImplementedError(
+                f"Not implemented NativeFunction '{func}' encountered."
+            ) from error
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
-    def visit_DataType(self, dtype: DataType, **kwargs: Any) -> str:
-        if dtype == DataType.INT64:
-            return "long long"
-        elif dtype == DataType.FLOAT64:
-            return "double"
-        elif dtype == DataType.FLOAT32:
-            return "float"
-        elif dtype == DataType.BOOL:
-            return "bool"
-        raise NotImplementedError("Not implemented NativeFunction encountered.")
+    DATA_TYPE_TO_CODE = {
+        DataType.BOOL: "bool",
+        DataType.INT8: "std::int8_t",
+        DataType.INT16: "std::int16_t",
+        DataType.INT32: "std::int32_t",
+        DataType.INT64: "std::int64_t",
+        DataType.FLOAT32: "float",
+        DataType.FLOAT64: "double",
+    }
 
-    def visit_UnaryOperator(self, op: UnaryOperator, **kwargs: Any) -> str:
-        if op == UnaryOperator.NOT:
-            return "!"
-        elif op == UnaryOperator.NEG:
-            return "-"
-        elif op == UnaryOperator.POS:
-            return "+"
-        raise NotImplementedError("Not implemented UnaryOperator encountered.")
+    def visit_DataType(self, dtype: DataType, **kwargs: Any) -> str:
+        try:
+            return self.DATA_TYPE_TO_CODE[dtype]
+        except KeyError as error:
+            raise NotImplementedError(
+                f"Not implemented DataType '{dtype.name}' encountered."
+            ) from error
+
+    UNARY_OPERATOR_TO_CODE = {
+        UnaryOperator.NOT: "!",
+        UnaryOperator.NEG: "-",
+        UnaryOperator.POS: "+",
+    }
+
+    UnaryOp = as_fmt("({_this_generator.UNARY_OPERATOR_TO_CODE[_this_node.op]}{expr})")
 
     Arg = as_fmt("{name}")
 
