@@ -24,14 +24,7 @@ from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.lazy_stencil import LazyStencil
 from gt4py.stencil_builder import StencilBuilder
 
-
-def has_cupy():
-    try:
-        import cupy  # noqa
-
-        return True
-    except ImportError:
-        return False
+from ..definitions import INTERNAL_BACKENDS
 
 
 def copy_stencil_definition(out_f: Field[float], in_f: Field[float]):  # type: ignore
@@ -53,17 +46,7 @@ def frontend(request):
     yield gt4py.frontend.from_name(request.param)
 
 
-@pytest.fixture(
-    params=[
-        "debug",
-        "numpy",
-        "gtx86",
-        "gtmc",
-        pytest.param(
-            "gtcuda", marks=pytest.mark.skipif(not has_cupy(), reason="cupy not installed")
-        ),
-    ]
-)
+@pytest.fixture(params=INTERNAL_BACKENDS)
 def backend_name(request):
     yield request.param
 

@@ -3,8 +3,11 @@ import pathlib
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
 import gt4py
+from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.definitions import BuildOptions, StencilID
 from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
+from gtc import gtir
+from gtc.passes.gtir_pipeline import GtirPipeline
 
 
 if TYPE_CHECKING:
@@ -247,6 +250,16 @@ class StencilBuilder:
         return self._build_data.get("iir") or self._build_data.setdefault(
             "iir", gt4py.analysis.transform(self.definition_ir, self.options)
         )
+
+    @property
+    def gtir_pipeline(self) -> GtirPipeline:
+        return self._build_data.get("gtir_pipeline") or self._build_data.setdefault(
+            "gtir_pipeline", GtirPipeline(DefIRToGTIR.apply(self.definition_ir))
+        )
+
+    @property
+    def gtir(self) -> gtir.Stencil:
+        return self.gtir_pipeline.full().gtir
 
     @property
     def module_name(self) -> str:

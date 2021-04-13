@@ -217,7 +217,7 @@ def interpolate_mask(seq: Sequence[Any], mask: Sequence[bool], default) -> Tuple
     (0, 1, 0, 2)
     """
     it = iter(seq)
-    return tuple(it.__next__() if m else default for m in mask)
+    return tuple(next(it) if m else default for m in mask)
 
 
 def filter_mask(seq: Sequence[Any], mask: Sequence[bool]) -> Tuple[Any, ...]:
