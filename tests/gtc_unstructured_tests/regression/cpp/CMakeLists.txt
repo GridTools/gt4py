@@ -3,11 +3,12 @@ project(gtc_regression LANGUAGES CXX)
 
 cmake_policy(SET CMP0094 NEW)
 
-set(CMAKE_CXX_STANDARD 17)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/private")
+
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_EXTENSIONS OFF)
-set(CMAKE_CUDA17_STANDARD_COMPILE_OPTION "-std=c++17")
 
 add_compile_options(-Wall)
 
@@ -25,10 +26,11 @@ FetchContent_Declare(GridTools
 )
 FetchContent_MakeAvailable(GridTools)
 
-FetchContent_Declare(cpputil_unstructured
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../src/gtc_unstructured/cpp_util/unstructured/
+FetchContent_Declare(cpputil_usid
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../src/gtc_unstructured/cpp_util
 )
-FetchContent_MakeAvailable(cpputil_unstructured)
+FetchContent_MakeAvailable(cpputil_usid)
+
 
 function(add_regression_test_executable)
     set(options)
@@ -39,10 +41,12 @@ function(add_regression_test_executable)
     message(STATUS "${ARG_NAME}")
 
     # generate c++ from gtscript
-    set(STENCIL_IMPL_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/generated_${ARG_NAME}.hpp)
+    set(STENCIL_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR})
+    set(STENCIL_IMPL_SOURCE ${STENCIL_OUTPUT_DIR}/generated_${ARG_NAME}.hpp)
+    set(BACKEND ${ARG_MODE})
     add_custom_command(OUTPUT ${STENCIL_IMPL_SOURCE}
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT} ${ARG_MODE}
-        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT})
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/generator.py ${ARG_INPUT} ${STENCIL_OUTPUT_DIR} ${ARG_MODE}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT}.py)
     add_custom_target(generated_${ARG_NAME} DEPENDS ${STENCIL_IMPL_SOURCE})
 
 
@@ -68,18 +72,23 @@ endfunction()
 
 function(add_regression_test name)
     set(options)
-    set(oneValueArgs)
+    set(oneValueArgs DRIVER)
     set(multiValueArgs ADDITIONAL_LIBRARIES)
     cmake_parse_arguments(PARSE_ARGV 1 ARG "${options}" "${oneValueArgs}" "${multiValueArgs}")
 
-    set(_sources ${name}_driver.cc)
-    set(libraries GridTools::gridtools gtest gtest_main gmock gtnext)
+    if(ARG_DRIVER)
+        set(_driver ${ARG_DRIVER})
+    else()
+        set(_driver ${name})
+    endif()
+    set(_sources ${_driver}_driver.cc)
+    set(libraries GridTools::gridtools gtest gtest_main gmock)
     list (APPEND libraries ${ARG_ADDITIONAL_LIBRARIES})
 
-    add_regression_test_executable(NAME ${name}_unaive INPUT ${name}.py MODE unaive SOURCES ${_sources} LIBRARIES ${libraries})
+    add_regression_test_executable(NAME ${name}_unaive INPUT ${name} MODE unaive SOURCES ${_sources} LIBRARIES usid_cpu ${libraries})
 
     if(TARGET GridTools::stencil_gpu)
-        add_regression_test_executable(NAME ${name}_ugpu INPUT ${name}.py MODE ugpu SOURCES ${_sources} LIBRARIES ${libraries} GridTools::stencil_gpu)
+        add_regression_test_executable(NAME ${name}_ugpu INPUT ${name} MODE ugpu SOURCES ${_sources} LIBRARIES ${libraries} usid_gpu GridTools::stencil_gpu)
         gridtools_setup_target(${name}_ugpu CUDA_ARCH sm_50)
     endif()
 endfunction()
@@ -91,11 +100,27 @@ if(BUILD_TESTING)
     include(FetchGoogleTest.cmake)
     fetch_googletest()
 
-    find_package(eckit REQUIRED)
-    find_package(Atlas REQUIRED)
+    find_package(Atlas)
 
+    if(Atlas_FOUND)
+        add_subdirectory(usid)
+        add_subdirectory(gtir)
+    endif()
+    # add_subdirectory(fortran) # TODO
+    
     add_regression_test(cell2cell)
     add_regression_test(vertex2edge)
+    add_regression_test(vertex2edge_gtir DRIVER vertex2edge)
+    add_regression_test(sparse_assign_gtir DRIVER sparse_assign)
+    add_regression_test(sparse_assign DRIVER sparse_assign) 
+    add_regression_test(weights_gtir DRIVER weights)
+    add_regression_test(weights DRIVER weights)
+    add_regression_test(copy_with_k_gtir DRIVER copy_with_k)
+    add_regression_test(copy_with_k DRIVER copy_with_k)
     add_regression_test(tmp_field)
-    add_regression_test(fvm_nabla ADDITIONAL_LIBRARIES atlas eckit)
+    if(Atlas_FOUND)
+        add_regression_test(fvm_nabla ADDITIONAL_LIBRARIES atlas)
+    endif()
+    add_regression_test(native_functions)
+    # add_regression_test(k_fields) #TODO
 endif()
