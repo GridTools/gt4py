@@ -463,11 +463,13 @@ class TestTernaryOp(gt_testing.StencilTestSuite):
 
         with computation(PARALLEL), interval(...):
             outfield = (  # noqa: F841 # Local name is assigned to but never used
-                infield > 0.0
-            ) * infield + (infield <= 0.0) * (-infield[0, 1, 0])
+                infield if infield > 0.0 else -infield[0, 1, 0]
+            )
 
     def validation(infield, outfield, *, domain, origin, **kwargs):
-        outfield[...] = np.choose(infield[:, :-1, :] > 0, [-infield[:, 1:, :], infield[:, :-1, :]])
+        outfield[...] = (infield[:, :-1, :] > 0.0) * infield[:, :-1, :] + (
+            infield[:, :-1, :] <= 0.0
+        ) * (-infield[:, 1:, :])
 
 
 class TestThreeWayAnd(gt_testing.StencilTestSuite):

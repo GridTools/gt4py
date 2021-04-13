@@ -43,7 +43,7 @@ class CartesianSpace:
             return self.name
 
     names = [ax.name for ax in Axis]
-    ndims = len(names)
+    ndim = len(names)
 
 
 class NumericTuple(tuple):
@@ -57,10 +57,10 @@ class NumericTuple(tuple):
     def _check_value(cls, value, ndims):
         assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
         assert all(isinstance(d, numbers.Number) for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def is_valid(cls, value, *, ndims=(1, CartesianSpace.ndims)):
+    def is_valid(cls, value, *, ndims=(1, None)):
         if isinstance(ndims, numbers.Integral):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
@@ -74,15 +74,15 @@ class NumericTuple(tuple):
             return True
 
     @classmethod
-    def zeros(cls, ndims=CartesianSpace.ndims):
+    def zeros(cls, ndims=CartesianSpace.ndim):
         return cls([0] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def ones(cls, ndims=CartesianSpace.ndims):
+    def ones(cls, ndims=CartesianSpace.ndim):
         return cls([1] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def from_k(cls, value, ndims=CartesianSpace.ndims):
+    def from_k(cls, value, ndims=CartesianSpace.ndim):
         return cls([value] * ndims, ndims=(ndims, ndims))
 
     @classmethod
@@ -98,11 +98,13 @@ class NumericTuple(tuple):
         else:
             return cls.from_k(value)
 
-    def __new__(cls, sizes, *args, ndims=(1, 3)):
+    def __new__(cls, sizes, *args, ndims=None):
         if len(args) > 0:
             sizes = [sizes, *args]
 
-        if isinstance(ndims, int):
+        if ndims is None:
+            ndims = tuple([len(sizes)] * 2)
+        elif isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
@@ -256,7 +258,7 @@ class Index(NumericTuple):
     def _check_value(cls, value, ndims):
         assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
         assert all(isinstance(d, numbers.Integral) for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
 
 class Shape(NumericTuple):
@@ -270,7 +272,7 @@ class Shape(NumericTuple):
     def _check_value(cls, value, ndims):
         assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
         assert all(isinstance(d, numbers.Integral) and d >= 0 for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
 
 class FrameTuple(tuple):
@@ -285,10 +287,10 @@ class FrameTuple(tuple):
             len(r) == 2 and isinstance(r[0], numbers.Number) and isinstance(r[1], numbers.Number)
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def is_valid(cls, value, *, ndims=(1, CartesianSpace.ndims)):
+    def is_valid(cls, value, *, ndims=(1, None)):
         if isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
@@ -302,15 +304,15 @@ class FrameTuple(tuple):
             return True
 
     @classmethod
-    def zeros(cls, ndims=CartesianSpace.ndims):
+    def zeros(cls, ndims=CartesianSpace.ndim):
         return cls([(0, 0)] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def ones(cls, ndims=CartesianSpace.ndims):
+    def ones(cls, ndims=CartesianSpace.ndim):
         return cls([(1, 1)] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def from_k(cls, value_pair, ndims=CartesianSpace.ndims):
+    def from_k(cls, value_pair, ndims=CartesianSpace.ndim):
         return cls([value_pair] * ndims, ndims=(ndims, ndims))
 
     @classmethod
@@ -318,9 +320,12 @@ class FrameTuple(tuple):
         ndims = max(len(lower), len(upper))
         return cls([(lower[i], upper[i]) for i in range(ndims)], ndims=(ndims, ndims))
 
-    def __new__(cls, ranges, *args, ndims=(1, 3)):
+    def __new__(cls, ranges, *args, ndims=None):
         if len(args) > 0:
             ranges = [ranges, *args]
+
+        if ndims is None:
+            ndims = tuple([len(ranges)] * 2)
         try:
             cls._check_value(ranges, ndims=ndims)
         except Exception as e:
@@ -409,6 +414,10 @@ class FrameTuple(tuple):
         return all(d[0] == d[1] for d in self)
 
     @property
+    def is_zero(self):
+        return all(d[0] == d[1] == 0 for d in self)
+
+    @property
     def lower_indices(self):
         return NumericTuple(*(d[0] for d in self))
 
@@ -483,7 +492,7 @@ class Boundary(FrameTuple):
             # and r[0] >= 0 and r[1] >= 0
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
     def from_offset(cls, offset):
@@ -525,10 +534,10 @@ class Extent(FrameTuple):
             and (r[0] is None or r[1] is None or r[1] <= r[1])
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def empty(cls, ndims=CartesianSpace.ndims):
+    def empty(cls, ndims=CartesianSpace.ndim):
         return cls([(None, None)] * ndims)
 
     @classmethod
@@ -624,10 +633,10 @@ class CenteredExtent(Extent):
             len(r) == 2 and isinstance(r[0], int) and isinstance(r[1], int) and r[0] <= 0 <= r[1]
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def empty(cls, ndims=CartesianSpace.ndims):
+    def empty(cls, ndims=CartesianSpace.ndim):
         return cls.zeros(ndims)
 
     @classmethod
@@ -748,7 +757,7 @@ def normalize_origin(origin) -> Optional[Index]:
         origin = tuple(origin)
         if isinstance(origin, numbers.Integral):
             origin = Index.from_k(int(origin))
-        elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin):
+        elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin, ndims=(1, 3)):
             origin = Index.from_value(origin)
         else:
             raise ValueError("Invalid 'origin' value ({})".format(origin))

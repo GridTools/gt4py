@@ -86,28 +86,23 @@ def allocation_strategy(draw):
 
 @hyp_st.composite
 def mask_strategy(draw):
-    dimension = draw(hyp_st.integers(min_value=0, max_value=4))
+    dimension = draw(hyp_st.integers(min_value=1, max_value=6))
 
-    mask_strats = []
-    shape_strats = []
-    default_origin_strats = []
-
-    for i in range(dimension):
-        shape_strats = shape_strats + [hyp_st.integers(min_value=1, max_value=64)]
-        mask_strats = mask_strats + [hyp_st.booleans()]
+    shape_strats = [hyp_st.integers(min_value=1, max_value=32)] * dimension
     shape = draw(hyp_st.tuples(*shape_strats))
-    for i in range(dimension):
-        default_origin_strats = default_origin_strats + [
-            hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1))
-        ]
+    default_origin_strats = [
+        hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1)) for i in range(dimension)
+    ]
     default_origin = draw(hyp_st.tuples(*default_origin_strats))
+
+    mask_values = [True] * dimension
+    if dimension < 3:
+        mask_values += [False] * (3 - dimension)
+
     mask = draw(
         hyp_st.one_of(
             hyp_st.just(None),
-            hyp_st.tuples(*mask_strats),
-            hyp_st.permutations(
-                ([True] * dimension) + ([False] * draw(hyp_st.integers(min_value=0, max_value=10)))
-            ),
+            hyp_st.permutations(mask_values),
         )
     )
     return dict(shape=shape, default_origin=default_origin, mask=mask)
@@ -317,68 +312,88 @@ def test_allocate_gpu_unmanaged(param_dict):
     assert device_field.shape == shape
 
 
-def test_normalize_default_origin():
-    from gt4py.storage.utils import normalize_shape
+def test_normalize_storage_spec():
+    from gt4py import gtscript
+    from gt4py.storage.utils import normalize_storage_spec
 
-    assert normalize_shape(None) is None
-    assert gt_utils.is_iterable_of(
-        gt_storage_utils.normalize_default_origin([1, 2, 3]),
-        iterable_class=gt_ir.Index,
-        item_class=int,
+    default_origin = (0, 0, 0)
+    shape = (10, 10, 10)
+    dtype = np.float64
+    mask = (True, True, True)
+
+    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        default_origin, shape, dtype, mask
     )
+    assert default_origin_out == default_origin
+    assert shape_out == shape
+    assert dtype_out == dtype
+    assert mask_out == mask
 
-    # test that exceptions are raised for invalid inputs.
-    try:
-        gt_storage_utils.normalize_default_origin("1")
-    except TypeError:
-        pass
-    else:
-        assert False
-
-    try:
-        gt_storage_utils.normalize_default_origin(1)
-    except TypeError:
-        pass
-    else:
-        assert False
-
-    try:
-        gt_storage_utils.normalize_default_origin((-1,))
-    except ValueError:
-        pass
-    else:
-        assert False
-
-
-def test_normalize_shape():
-    from gt4py.storage.utils import normalize_shape
-
-    assert normalize_shape(None) is None
-    assert gt_utils.is_iterable_of(
-        normalize_shape([1, 2, 3]), iterable_class=gt_definitions.Shape, item_class=int
+    # Default origin
+    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        (1, 1, 1), shape, dtype, mask
     )
+    assert default_origin_out == (1, 1, 1)
+    assert shape_out == shape
+    assert dtype_out == dtype
+    assert mask_out == mask
 
-    # test that exceptions are raised for invalid inputs.
-    try:
-        normalize_shape("1")
-    except TypeError:
-        pass
-    else:
-        assert False
+    with pytest.raises(TypeError, match="default_origin"):
+        normalize_storage_spec(None, shape, dtype, mask)
+    with pytest.raises(TypeError, match="default_origin"):
+        normalize_storage_spec(("1", "1", "1"), shape, dtype, mask)
+    with pytest.raises(ValueError, match="default_origin"):
+        normalize_storage_spec((1, 1, 1, 1), shape, dtype, mask)
+    with pytest.raises(ValueError, match="default_origin"):
+        normalize_storage_spec((-1, -1, -1), shape, dtype, mask)
 
-    try:
-        normalize_shape(1)
-    except TypeError:
-        pass
-    else:
-        assert False
+    # Shape
+    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        default_origin, (10, 10), dtype, (True, True, False)
+    )
+    assert default_origin_out == (0, 0)
+    assert shape_out == (10, 10)
+    assert dtype_out == dtype
+    assert mask_out == (True, True, False)
 
-    try:
-        normalize_shape((0,))
-    except ValueError:
-        pass
-    else:
-        assert False
+    with pytest.raises(ValueError, match="non-matching"):
+        normalize_storage_spec(default_origin, (10, 20), dtype, (False, True, False))
+    with pytest.raises(TypeError, match="shape"):
+        normalize_storage_spec(default_origin, "(10,10)", dtype, mask)
+    with pytest.raises(TypeError, match="shape"):
+        normalize_storage_spec(default_origin, None, dtype, mask)
+    with pytest.raises(ValueError, match="shape"):
+        normalize_storage_spec(default_origin, (10, 10, 0), dtype, mask)
+
+    # Mask
+    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        default_origin, (10, 10), dtype, (True, True, False)
+    )
+    assert default_origin_out == (0, 0)
+    assert shape_out == (10, 10)
+    assert dtype_out == dtype
+    assert mask_out == (True, True, False)
+
+    _, __, ___, mask_out = normalize_storage_spec(default_origin, (10, 10), dtype, "IJ")
+    assert mask_out == (True, True, False)
+
+    _, __, ___, mask_out = normalize_storage_spec(default_origin, (10, 10), dtype, gtscript.IJ)
+    assert mask_out == (True, True, False)
+
+    _, __, ___, mask_out = normalize_storage_spec(default_origin, (10, 10, 10), dtype, gtscript.IJK)
+    assert mask_out == (True, True, True)
+
+    with pytest.raises(ValueError, match="mask"):
+        normalize_storage_spec(default_origin, (10, 10), dtype, (False, False, False))
+
+    # Dtype
+    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        default_origin, shape, (dtype, (2,)), mask
+    )
+    assert default_origin_out == tuple([*default_origin, 0])
+    assert shape_out == tuple([*shape, 2])
+    assert dtype_out == dtype
+    assert mask_out == tuple([*mask, True])
 
 
 @pytest.mark.parametrize(
@@ -436,7 +451,6 @@ def test_gpu_constructor(alloc_fun, backend):
     assert stor.is_stencil_view
 
 
-@pytest.mark.skip(reason="does not work with refactored storages")
 @hyp.given(param_dict=mask_strategy())
 def test_masked_storage_cpu(param_dict):
     mask = param_dict["mask"]
@@ -451,7 +465,6 @@ def test_masked_storage_cpu(param_dict):
     assert sum(store.mask) == len(store.data.shape)
 
 
-@pytest.mark.skip(reason="does not work with refactored storages")
 @pytest.mark.requires_gpu
 @hyp.given(param_dict=mask_strategy())
 def test_masked_storage_gpu(param_dict):
@@ -471,21 +484,14 @@ def test_masked_storage_asserts():
     default_origin = (1, 1, 1)
     shape = (2, 2, 2)
 
-    mask = ()
-    try:
+    with pytest.raises(ValueError):
         gt_store.empty(
             dtype=np.float64,
             default_origin=default_origin,
             shape=shape,
-            mask=mask,
+            mask=(),
             backend="gtx86",
         )
-    except ValueError:
-        pass
-    except Exception as e:
-        raise e
-    else:
-        assert False
 
 
 def run_test_slices(backend):
