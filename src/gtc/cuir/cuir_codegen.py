@@ -139,7 +139,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         try:
             return self.DATA_TYPE_TO_CODE[dtype]
         except KeyError as error:
-            raise NotImplementedError("Not implemented NativeFunction encountered.") from error
+            raise NotImplementedError(
+                f"Not implemented DataType '{dtype.name}' encountered."
+            ) from error
 
     IJExtent = as_fmt("extent<{i[0]}, {i[1]}, {j[0]}, {j[1]}>")
 
