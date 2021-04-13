@@ -597,7 +597,7 @@ class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
 
 class TestConstantFolding(gt_testing.StencilTestSuite):
     dtypes = {("outfield",):np.float64,("cond",): np.float64}
-    domain_range = [(1, 15)]
+    domain_range = [(15, 15), (15, 15), (15, 15)]
     backends = INTERNAL_BACKENDS
     symbols = dict(
         outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
