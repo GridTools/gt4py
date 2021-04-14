@@ -64,7 +64,7 @@ class GreedyMerging(NodeTranslator):
                 if field in previous_reads
                 and any(o[:2] != (0, 0) for o in offsets ^ previous_reads[field])
             }
-            if not conflicting and horizontal_execution.mask == horizontal_executions[-1].mask:
+            if not conflicting:
                 horizontal_executions[-1].body += horizontal_execution.body
                 for field, writes in current_writes.items():
                     previous_writes.setdefault(field, set()).update(writes)
@@ -144,15 +144,6 @@ class OnTheFlyMerging(NodeTranslator):
         def first_fields_rewritten_later() -> bool:
             return bool(first_accesses.fields() & other_accesses.write_fields())
 
-        def first_output_used_in_later_mask() -> bool:
-            empty_str_set: Set[str] = set()
-            return bool(
-                first_accesses.write_fields()
-                & empty_str_set.union(
-                    *(AccessCollector.apply(o.mask, is_write=False).fields() for o in others)
-                )
-            )
-
         def first_has_large_body() -> bool:
             return len(first.body) > self.max_horizontal_execution_body_size
 
@@ -175,9 +166,7 @@ class OnTheFlyMerging(NodeTranslator):
             return any(call in expensive_calls for call in calls)
 
         if (
-            first.mask is not None
-            or first_fields_rewritten_later()
-            or first_output_used_in_later_mask()
+            first_fields_rewritten_later()
             or first_has_large_body()
             or first_has_expensive_function_call()
         ):
@@ -208,7 +197,6 @@ class OnTheFlyMerging(NodeTranslator):
 
             merged = oir.HorizontalExecution(
                 body=self.visit(horizontal_execution.body, offset_symbol_map=offset_symbol_map),
-                mask=self.visit(horizontal_execution.mask, offset_symbol_map=offset_symbol_map),
                 declarations=horizontal_execution.declarations
                 + [
                     oir.LocalScalar(name=new_name, dtype=symtable[old_name].dtype)

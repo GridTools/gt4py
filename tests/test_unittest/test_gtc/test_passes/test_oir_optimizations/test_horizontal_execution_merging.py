@@ -19,7 +19,6 @@ from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerg
 
 from ...oir_utils import (
     AssignStmtFactory,
-    FieldAccessFactory,
     HorizontalExecutionFactory,
     NativeFuncCallFactory,
     StencilFactory,
@@ -139,24 +138,6 @@ def test_on_the_fly_merging_with_offsets():
     assert transformed.iter_tree().if_isinstance(oir.FieldAccess).filter(
         lambda x: x.name == "foo"
     ).getattr("offset").map(lambda o: (o.i, o.j, o.k)).to_set() == {(1, 0, 0), (0, 1, 0)}
-
-
-def test_on_the_fly_merging_with_mask():
-    testee = StencilFactory(
-        vertical_loops__0__sections__0__horizontal_executions=[
-            HorizontalExecutionFactory(
-                body=[AssignStmtFactory(left__name="tmp")],
-                mask=FieldAccessFactory(name="mask", dtype=common.DataType.BOOL),
-            ),
-            HorizontalExecutionFactory(
-                body=[AssignStmtFactory(right__name="tmp")],
-            ),
-        ],
-        declarations=[TemporaryFactory(name="tmp")],
-    )
-    transformed = OnTheFlyMerging().visit(testee)
-    assert len(transformed.vertical_loops[0].sections[0].horizontal_executions) == 2
-    assert len(transformed.declarations) == 1
 
 
 def test_on_the_fly_merging_with_expensive_function():
