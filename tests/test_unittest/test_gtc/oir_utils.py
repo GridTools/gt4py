@@ -103,7 +103,6 @@ class HorizontalExecutionFactory(factory.Factory):
         model = oir.HorizontalExecution
 
     body = factory.List([factory.SubFactory(AssignStmtFactory)])
-    mask = None
     declarations: List[oir.LocalScalar] = []
 
 
