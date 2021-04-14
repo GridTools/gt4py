@@ -96,7 +96,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
         source_lines = []
         assert sorted(regions, reverse=iteration_order == gt_ir.IterationOrder.BACKWARD) == regions
 
-        for bounds, body_sources in regions:
+        for bounds, body_sources, has_variable_koffset in regions:
             region_lines = self._make_regional_computation(iteration_order, bounds)
             source_lines.extend(region_lines)
             source_lines.extend(ij_loop_lines)

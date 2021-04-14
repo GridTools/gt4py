@@ -84,13 +84,14 @@ storing a reference to the piece of source code which originated the node.
     Axis(name: str)
 
     Domain(parallel_axes: List[Axis], [sequential_axis: Axis, data_axes: List[Axis]])
-        # LatLonGrids -> parallel_axes: ["I", "J], sequential_axis: "K"
+        # LatLonGrids -> parallel_axes: ["I", "J"], sequential_axis: "K"
 
     Literal     = ScalarLiteral(value: Any (should match DataType), data_type: DataType)
                 | BuiltinLiteral(value: Builtin)
 
     Ref         = VarRef(name: str, [index: int])
-                | FieldRef(name: str, offset: Dict[str, int])
+                | FieldRef(name: str, offset: Dict[str, int | Expr])
+                # Horizontal indices must be ints
 
     NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
@@ -393,7 +394,7 @@ class VarRef(Ref):
 @attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, int])
+    offset = attribute(of=DictOf[str, UnionOf[int, Ref]])
     loc = attribute(of=Location, optional=True)
 
     @classmethod
@@ -1002,3 +1003,27 @@ class IRNodeDumper(IRNodeMapper):
 
 
 dump_ir = IRNodeDumper.apply
+
+
+def filter_nodes_dfs(root_node, node_type):
+    """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
+    stack = [root_node]
+    while stack:
+        curr = stack.pop()
+        assert isinstance(curr, Node)
+
+        for node_class in curr.__class__.__mro__:
+            if node_class is node_type:
+                yield curr
+
+        for key, value in iter_attributes(curr):
+            if isinstance(curr, collections.abc.Iterable):
+                if isinstance(curr, collections.abc.Mapping):
+                    children = curr.values()
+                else:
+                    children = curr
+            else:
+                children = gt_utils.listify(value)
+
+            for value in filter(lambda x: isinstance(x, Node), children):
+                stack.append(value)

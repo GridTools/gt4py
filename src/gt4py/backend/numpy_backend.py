@@ -113,7 +113,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
         else:
             range_args = [loop_bounds[1] + " -1", loop_bounds[0] + " -1", "-1"]
 
-        if iteration_order != gt_ir.IterationOrder.PARALLEL:
+        needs_explicit_kloop = (
+            iteration_order != gt_ir.IterationOrder.PARALLEL or self.block_info.has_variable_koffset
+        )
+
+        if needs_explicit_kloop:
             range_expr = "range({args})".format(args=", ".join(a for a in range_args))
             seq_axis = self.impl_node.domain.sequential_axis.name
             source_lines.append(
@@ -177,17 +181,13 @@ class NumPySourceGenerator(PythonSourceGenerator):
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
         assert node.name in self.block_info.accessors
 
-        is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
         extent = self.block_info.extent
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
-        parallel_axes_dims = [
-            self.impl_node.domain.index(axis)
-            for axis in self.impl_node.fields[node.name].axes
-            if axis != self.domain.sequential_axis.name
-        ]
+        parallel_axes_names = [axis.name for axis in self.domain.parallel_axes]
+        parallel_axes_dims = [self.impl_node.domain.index(axis) for axis in parallel_axes_names]
 
-        for d, ax in enumerate(self.domain.axes_names):
+        for d, ax in enumerate(parallel_axes_names):
             idx = node.offset.get(ax, 0)
             if idx:
                 lower_extent[d] += idx
@@ -209,9 +209,20 @@ class NumPySourceGenerator(PythonSourceGenerator):
             )
 
         k_ax = self.domain.sequential_axis.name
+        k_offset = node.offset.get(k_ax, 0)
+        if isinstance(k_offset, gt_ir.Expr):
+            variable_koffset = True
+            is_parallel = False
+            k_offset = self.visit(k_offset)
+        else:
+            variable_koffset = False
+            is_parallel = (
+                self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
+                and not self.has_variable_koffset
+            )
+
         if k_ax in self.impl_node.fields[node.name].axes:
             fd = self.impl_node.fields[node.name].axes.index(k_ax)
-            k_offset = node.offset.get(k_ax, 0)
             if is_parallel:
                 start_expr = self.interval_k_start_name
                 start_expr += " {:+d}".format(k_offset) if k_offset else ""
@@ -226,7 +237,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                         fd=fd,
                     )
                 )
-            else:
+            elif not variable_koffset:
                 idx = "{:+d}".format(k_offset) if k_offset else ""
                 index.append(
                     "{name}{marker}[{fd}] + {ax}{idx}".format(
@@ -238,7 +249,12 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     )
                 )
 
-        source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
+        if not variable_koffset:
+            source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
+        else:
+            source = (
+                f"{self.numpy_prefix}.take({node.name}[{', '.join(index)}, :], {k_ax} + {k_offset})"
+            )
         if not parallel_axes_dims and not is_parallel:
             source = f"np.asarray([{source}])"
 

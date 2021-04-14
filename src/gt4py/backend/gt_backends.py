@@ -271,7 +271,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         assert node.name in self.apply_block_symbols
         offset = [node.offset.get(name, 0) for name in self.domain.axes_names]
         if not all(i == 0 for i in offset):
-            idx = ", ".join(str(i) for i in offset)
+            source_offsets = [
+                self.visit(i) if isinstance(i, gt_ir.Expr) else str(i) for i in offset
+            ]
+            idx = ", ".join(source_offsets)
         else:
             idx = ""
         source = "eval({name}({idx}))".format(name=node.name, idx=idx)

@@ -259,6 +259,12 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         interval_definition = self.visit(node.interval)
         self.block_info.interval = interval_definition
         self.block_info.symbols = node.local_symbols
+
+        self.block_info.has_variable_koffset = False
+        for ref_node in gt_ir.filter_nodes_dfs(node, gt_ir.FieldRef):
+            if not all(isinstance(offset, int) for offset in ref_node.offset):
+                self.block_info.has_variable_koffset = True
+
         body_sources = self.visit(node.body)
 
         return interval_definition, body_sources

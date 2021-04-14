@@ -945,14 +945,18 @@ class IRMaker(ast.NodeVisitor):
         assert isinstance(node.ctx, (ast.Load, ast.Store))
 
         # Python 3.9 skips wrapping the ast.Tuple in an ast.Index
-        tuple_or_constant = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
-        constant_nodes = gt_utils.listify(
-            tuple_or_constant.elts
-            if isinstance(tuple_or_constant, ast.Tuple)
-            else tuple_or_constant
+        tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
+        index_nodes = gt_utils.listify(
+            tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
         )
 
-        index = [ast.literal_eval(cn) for cn in constant_nodes]
+        index = []
+        for index_node in index_nodes:
+            if isinstance(index_node, ast.Constant):
+                index.append(int(index_node.value))
+            else:
+                index.append(self.visit(index_node))
+
         result = self.visit(node.value)
         if isinstance(result, gt_ir.VarRef):
             result.index = index[0]
@@ -965,6 +969,11 @@ class IRMaker(ast.NodeVisitor):
                     f"with dimensions {axes_str}"
                 )
             result.offset = {axis: value for axis, value in zip(field_axes, index)}
+
+            # Enforce that parallel axes are integers
+            parallel_axes_names = {axis.name for axis in self.domain.parallel_axes}
+            for name in parallel_axes_names:
+                assert isinstance(result.offset[name], int)
 
         return result
 
