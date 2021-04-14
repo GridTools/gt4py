@@ -85,7 +85,6 @@ class HorizontalExecutionFactory(factory.Factory):
         model = cuir.HorizontalExecution
 
     body = factory.List([factory.SubFactory(AssignStmtFactory)])
-    mask = None
     declarations = factory.List([])
     extent = factory.SubFactory(IJExtentFactory)
 
