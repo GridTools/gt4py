@@ -377,6 +377,15 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         body_sources.append("}")
         return body_sources
 
+    def visit_While(self, node: gt_ir.While) -> gt_text.TextBlock:
+        body_sources = gt_text.TextBlock()
+        body_sources.append("while ({condition}) {{".format(condition=self.visit(node.condition)))
+        for stmt in node.body.stmts:
+            body_sources.extend(self.visit(stmt))
+
+        body_sources.append("}")
+        return body_sources
+
     def visit_AxisBound(self, node: gt_ir.AxisBound) -> Tuple[int, int]:
         if node.level == gt_ir.LevelMarker.START:
             level = 0

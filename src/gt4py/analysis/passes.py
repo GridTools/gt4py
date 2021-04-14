@@ -327,6 +327,18 @@ class InitInfoPass(TransformPass):
 
             return result
 
+        def visit_While(self, node: gt_ir.While) -> StatementInfo:
+            body_stmt_info = self.visit(node.body)
+            condition_input_extents = self.visit(node.condition)
+
+            inputs = self._merge_extents(
+                list(body_stmt_info.inputs.items()) + condition_input_extents
+            )
+
+            result = StatementInfo(self.data.id_generator.new, node, inputs, body_stmt_info.outputs)
+
+            return result
+
         def visit_BlockStmt(self, node: gt_ir.BlockStmt):
             inputs = {}
             outputs = set()

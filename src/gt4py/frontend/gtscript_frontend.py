@@ -1113,6 +1113,17 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
+    def visit_While(self, node: ast.While) -> gt_ir.While:
+        if node.orelse:
+            raise GTScriptSyntaxError("orelse is not support on while loops")
+        stmts = []
+        for stmt in node.body:
+            stmts.extend(self.visit(stmt))
+        return gt_ir.While(
+            condition=self.visit(node.test),
+            body=gt_ir.BlockStmt(stmts=stmts),
+        )
+
     def visit_Call(self, node: ast.Call):
         native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 
