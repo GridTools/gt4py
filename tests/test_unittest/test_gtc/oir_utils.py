@@ -56,6 +56,14 @@ class AssignStmtFactory(factory.Factory):
     right = factory.SubFactory(FieldAccessFactory)
 
 
+class IfStmtFactory(factory.Factory):
+    class Meta:
+        model = oir.IfStmt
+
+    mask = factory.SubFactory(FieldAccessFactory, dtype=common.DataType.BOOL)
+    body = factory.List([factory.SubFactory(AssignStmtFactory)])
+
+
 class NativeFuncCallFactory(factory.Factory):
     class Meta:
         model = oir.NativeFuncCall
