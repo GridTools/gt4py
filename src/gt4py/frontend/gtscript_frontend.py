@@ -970,11 +970,6 @@ class IRMaker(ast.NodeVisitor):
                 )
             result.offset = {axis: value for axis, value in zip(field_axes, index)}
 
-            # Enforce that parallel axes are integers
-            parallel_axes_names = {axis.name for axis in self.domain.parallel_axes}
-            for name in parallel_axes_names:
-                assert isinstance(result.offset[name], int)
-
         return result
 
     # -- Expressions nodes --
