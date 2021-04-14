@@ -465,7 +465,7 @@ class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
             source += textwrap.dedent(
                 """
                     cupy.cuda.Device(0).synchronize()
-                    """
+                """
             )
         return source
 
