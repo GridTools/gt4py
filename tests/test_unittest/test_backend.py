@@ -149,8 +149,10 @@ def test_device_sync_option(backend_name, mode, device_sync):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
     builder.options.backend_opts["device_sync"] = device_sync
-    args_data = backend_cls.make_args_data_from_iir(builder.implementation_ir)
-
+    if backend_cls.USE_LEGACY_TOOLCHAIN:
+        args_data = make_args_data_from_iir(builder.implementation_ir)
+    else:
+        args_data = make_args_data_from_gtir(builder.gtir_pipeline)
     module_generator = backend_cls.MODULE_GENERATOR_CLASS()
     source = module_generator(
         args_data,
@@ -160,9 +162,9 @@ def test_device_sync_option(backend_name, mode, device_sync):
     )
 
     if device_sync:
-        assert ".synchronize()" in source
+        assert "cupy.cuda.Device(0).synchronize()" in source
     else:
-        assert ".synchronize()" not in source
+        assert "cupy.cuda.Device(0).synchronize()" not in source
 
 
 if __name__ == "__main__":
