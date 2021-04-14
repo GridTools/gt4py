@@ -1039,7 +1039,7 @@ class ComputeUsedSymbolsPass(TransformPass):
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
             domain = self.data.definition_ir.domain
-            sequential_offset = node.offset[domain.sequential_axis.name]
+            sequential_offset = node.offset.get(domain.sequential_axis.name, None)
             if isinstance(sequential_offset, gt_ir.Expr):
                 self.visit(sequential_offset)
             self.data.symbols[node.name].in_use = True
