@@ -218,7 +218,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
             variable_koffset = False
             is_parallel = (
                 self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
-                and not self.has_variable_koffset
+                and not self.block_info.has_variable_koffset
             )
 
         if k_ax in self.impl_node.fields[node.name].axes:
