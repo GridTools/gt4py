@@ -44,7 +44,6 @@ class ComputeExtents(NodeTranslator):
             horizontal_executions.append(
                 cuir.HorizontalExecution(
                     body=horizontal_execution.body,
-                    mask=horizontal_execution.mask,
                     declarations=horizontal_execution.declarations,
                     extent=extent,
                 )

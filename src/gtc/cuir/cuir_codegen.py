@@ -36,6 +36,14 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
+    IfStmt = as_mako(
+        """
+        if (${mask}) {
+            ${'\\n'.join(body)}
+        }
+        """
+    )
+
     FieldAccess = as_mako(
         "*${f'sid::multi_shifted<tag::{name}>({name}, m_strides, {offset})' if offset else name}"
     )
@@ -148,7 +156,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     HorizontalExecution = as_mako(
         """
         // ${id_}
-        if (validator(${extent}())${' && ' + mask if _this_node.mask else ''}) {
+        if (validator(${extent}())) {
             ${'\\n'.join(declarations)}
             ${'\\n'.join(body)}
         }
