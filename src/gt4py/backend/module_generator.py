@@ -111,7 +111,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     referenced_field_params = {
         param.name for param in node.params if isinstance(param, gtir.FieldDecl)
     }
-    for name in referenced_field_params:
+    for name in sorted(referenced_field_params):
         data.field_info[name] = FieldInfo(
             access=AccessKind.READ_WRITE if name in write_fields else AccessKind.READ_ONLY,
             boundary=field_extents[name].to_boundary(),
@@ -121,19 +121,19 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         )
 
     referenced_scalar_params = set(node.param_names).difference(referenced_field_params)
-    for name in referenced_scalar_params:
+    for name in sorted(referenced_scalar_params):
         data.parameter_info[name] = ParameterInfo(
             dtype=numpy.dtype(node.symtable_[name].dtype.name.lower())
         )
 
     unref_params = get_unused_params_from_gtir(pipeline)
-    for param in unref_params:
+    for param in sorted(unref_params, key=lambda decl: decl.name):
         if isinstance(param, gtir.FieldDecl):
             data.field_info[param.name] = None
         elif isinstance(param, gtir.ScalarDecl):
             data.parameter_info[param.name] = None
 
-    data.unreferenced = {param.name for param in unref_params}
+    data.unreferenced = {*sorted(param.name for param in unref_params)}
     return data
 
 
@@ -305,7 +305,7 @@ class BaseModuleGenerator(abc.ABC):
             DomainInfo(
                 parallel_axes=tuple(ax.name for ax in parallel_axes),
                 sequential_axis=sequential_axis,
-                ndims=len(parallel_axes) + (1 if sequential_axis else 0),
+                ndim=len(parallel_axes) + (1 if sequential_axis else 0),
             )
         )
         return domain_info

@@ -174,12 +174,9 @@ def test_default_arguments(backend):
     np.testing.assert_equal(arg1, 196 * np.ones((3, 3, 3)))
     branch_false(arg1, arg2, arg3, par1=2.0, par3=2.0)
     np.testing.assert_equal(arg1, 56 * np.ones((3, 3, 3)))
-    try:
+
+    with pytest.raises((ValueError, AssertionError)):
         branch_false(arg1, arg2, par1=2.0, par3=2.0)
-    except ValueError:
-        pass
-    else:
-        assert False
 
     arg1 = gt_storage.ones(
         backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
@@ -199,12 +196,9 @@ def test_default_arguments(backend):
     np.testing.assert_equal(arg1, 100 * np.ones((3, 3, 3)))
     branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0, par3=3.0)
     np.testing.assert_equal(arg1, 60 * np.ones((3, 3, 3)))
-    try:
+
+    with pytest.raises((TypeError, AssertionError)):
         branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0)
-    except ValueError:
-        pass
-    else:
-        assert False
 
 
 @pytest.mark.parametrize("backend", INTERNAL_CPU_BACKENDS)
@@ -390,8 +384,8 @@ class TestAxesMismatch:
 
     def test_storage(self, sample_stencil):
         with pytest.raises(
-            ValueError,
-            match="Storage for '.*' has domain mask '.*' but the API signature expects '\['I', 'J'\]'",
+            Exception,
+            match="Storage for '.*' has domain mask '.*' but the API signature expects '\[I, J\]'",
         ):
             sample_stencil(
                 field_out=gt_storage.empty(

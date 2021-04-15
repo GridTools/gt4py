@@ -20,7 +20,7 @@ import enum
 import numbers
 import operator
 from dataclasses import dataclass
-from typing import Mapping, Optional, Tuple
+from typing import Mapping, Optional, Sequence, Tuple
 
 import numpy
 
@@ -55,7 +55,7 @@ class NumericTuple(tuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
         assert all(isinstance(d, numbers.Number) for d in value)
         assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
@@ -63,7 +63,7 @@ class NumericTuple(tuple):
     def is_valid(cls, value, *, ndims=(1, None)):
         if isinstance(ndims, numbers.Integral):
             ndims = tuple([ndims] * 2)
-        elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
+        elif not isinstance(ndims, tuple) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
 
         try:
@@ -106,7 +106,7 @@ class NumericTuple(tuple):
             ndims = tuple([len(sizes)] * 2)
         elif isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
-        elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
+        elif not isinstance(ndims, tuple) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
 
         try:
@@ -256,7 +256,7 @@ class Index(NumericTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
         assert all(isinstance(d, numbers.Integral) for d in value)
         assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
@@ -270,7 +270,7 @@ class Shape(NumericTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
         assert all(isinstance(d, numbers.Integral) and d >= 0 for d in value)
         assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
@@ -282,7 +282,7 @@ class FrameTuple(tuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
         assert all(
             len(r) == 2 and isinstance(r[0], numbers.Number) and isinstance(r[1], numbers.Number)
             for r in value
@@ -293,7 +293,7 @@ class FrameTuple(tuple):
     def is_valid(cls, value, *, ndims=(1, None)):
         if isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
-        elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
+        elif not isinstance(ndims, tuple) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
 
         try:
@@ -486,7 +486,7 @@ class Boundary(FrameTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
         assert all(
             len(r) == 2 and isinstance(r[0], int) and isinstance(r[1], int)
             # and r[0] >= 0 and r[1] >= 0
@@ -526,7 +526,7 @@ class Extent(FrameTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
         assert all(
             len(r) == 2
             and isinstance(r[0], (int, type(None)))
@@ -628,7 +628,7 @@ class CenteredExtent(Extent):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
         assert all(
             len(r) == 2 and isinstance(r[0], int) and isinstance(r[1], int) and r[0] <= 0 <= r[1]
             for r in value
@@ -658,10 +658,11 @@ class AccessKind(enum.Enum):
         return self.name
 
 
-class DomainInfo(
-    collections.namedtuple("DomainInfoNamedTuple", ["parallel_axes", "sequential_axis", "ndims"])
-):
-    pass
+@dataclass(frozen=True)
+class DomainInfo:
+    parallel_axes: Tuple[str, ...]
+    sequential_axis: str
+    ndim: int
 
 
 @dataclass(frozen=True)
@@ -740,42 +741,3 @@ class GTSpecificationError(GTError):
 class GTSemanticError(GTError):
     def __init__(self, message):
         super().__init__(message)
-
-
-def normalize_domain(domain):
-    if domain is not None:
-        domain = tuple(domain)
-    if not isinstance(domain, Shape):
-        if not Shape.is_valid(domain):
-            raise ValueError("Invalid 'domain' value ({})".format(domain))
-        domain = Shape(domain)
-
-    return domain
-
-
-def normalize_origin(origin) -> Optional[Index]:
-    if origin is not None:
-        origin = tuple(origin)
-        if isinstance(origin, numbers.Integral):
-            origin = Index.from_k(int(origin))
-        elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin, ndims=(1, 3)):
-            origin = Index.from_value(origin)
-        else:
-            raise ValueError("Invalid 'origin' value ({})".format(origin))
-
-    return origin
-
-
-def normalize_origin_mapping(origin_mapping) -> Mapping[str, Index]:
-    origin_mapping = origin_mapping if origin_mapping is not None else {}
-    if isinstance(origin_mapping, collections.abc.Mapping):
-        origin_mapping = {
-            key: normalize_origin(value)
-            for key, value in gt_utils.normalize_mapping(
-                origin_mapping, key_types=[str], filter_none=True
-            ).items()
-        }
-    else:
-        origin_mapping = {"_all_": normalize_origin(origin_mapping)}
-
-    return origin_mapping
