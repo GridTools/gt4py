@@ -14,8 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from collections import defaultdict
 import copy
+from collections import defaultdict
 from typing import Any, Dict
 
 from eve import NodeTranslator

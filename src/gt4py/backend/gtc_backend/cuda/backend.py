@@ -132,7 +132,6 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
                     name=node.name,
                 )
 
-
     def visit_ScalarDecl(self, node: cuir.ScalarDecl, **kwargs):
         if "external_arg" in kwargs:
             if kwargs["external_arg"]:
