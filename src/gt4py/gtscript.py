@@ -440,9 +440,9 @@ class _FieldDescriptor:
         self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
         if data_dims:
             if not isinstance(data_dims, collections.abc.Collection):
-                self.data_dims = [data_dims]
+                self.data_dims = (data_dims,)
             else:
-                self.data_dims = [*data_dims]
+                self.data_dims = tuple(data_dims)
         else:
             self.data_dims = data_dims
 

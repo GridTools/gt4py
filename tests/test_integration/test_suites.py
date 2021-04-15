@@ -602,14 +602,14 @@ class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
 
 class TestLowerDimensionalFields(gt_testing.StencilTestSuite):
     dtypes = {"field_in": np.float64, "another_field": np.float64, "field_out": np.float64}
-    domain_range = [(1, 10), (2, 10), (1, 10)]
-    backends = ["debug"]
+    domain_range = [(4, 10), (4, 10), (4, 10)]
+    backends = ["debug", "numpy", "gtc:gt:cpu_ifirst"]
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]
         ),
         "another_field": gt_testing.field(
-            in_range=(-10, 10), axes="IJ", boundary=[(0, 0), (0, 0), (0, 0)]
+            in_range=(-10, 10), axes="IJ", extent=[(0, 0), (0, 0), (0, 0)]
         ),
         "field_out": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]

@@ -183,7 +183,7 @@ class Decl(LocNode):  # TODO probably Stmt
 
 class FieldDecl(Decl):
     dimensions: Tuple[bool, bool, bool]
-    data_dims: List[int] = field(default_factory=list)
+    data_dims: Tuple[int, ...] = field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):
