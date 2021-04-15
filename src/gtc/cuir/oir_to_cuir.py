@@ -27,7 +27,7 @@ class OIRToCUIR(eve.NodeTranslator):
         return cuir.Literal(value=node.value, dtype=node.dtype)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> cuir.FieldDecl:
-        return cuir.FieldDecl(name=node.name, dtype=node.dtype)
+        return cuir.FieldDecl(name=node.name, dtype=node.dtype, dimensions=node.dimensions)
 
     def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> cuir.FieldDecl:
         return cuir.ScalarDecl(name=node.name, dtype=node.dtype)
