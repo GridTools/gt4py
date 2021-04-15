@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Any, Dict, List, Set, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import dace
 import dace.properties
@@ -10,10 +9,6 @@ import networkx as nx
 import numpy as np
 from dace import SDFG
 
-from eve.concepts import TreeNode
-from eve.utils import XIterator, xiter
-from eve.visitors import NodeVisitor
-from gtc import oir
 from gtc.common import AxisBound, CartesianOffset, LevelMarker, data_type_to_typestr
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.oir import (
@@ -25,102 +20,11 @@ from gtc.oir import (
     Temporary,
     VerticalLoopSection,
 )
-
-
-@dataclass(frozen=True)
-class Access:
-    field: str
-    offset: Tuple[int, int, int]
-    is_write: bool
-
-    @property
-    def is_read(self) -> bool:
-        return not self.is_write
+from gtc.passes.oir_optimizations.utils import AccessCollector
 
 
 class BaseOirSDFGBuilder(ABC):
     has_transients = True
-
-    class AccessCollector(NodeVisitor):
-        """Collects all field accesses and corresponding offsets."""
-
-        def visit_FieldAccess(
-            self,
-            node: oir.FieldAccess,
-            *,
-            accesses: List[Access],
-            is_write: bool,
-            **kwargs: Any,
-        ) -> None:
-            accesses.append(
-                Access(
-                    field=node.name,
-                    offset=(node.offset.i, node.offset.j, node.offset.k),
-                    is_write=is_write,
-                )
-            )
-
-        def visit_AssignStmt(
-            self,
-            node: oir.AssignStmt,
-            **kwargs: Any,
-        ) -> None:
-            self.visit(node.right, is_write=False, **kwargs)
-            self.visit(node.left, is_write=True, **kwargs)
-
-        def visit_HorizontalExecution(
-            self,
-            node: oir.HorizontalExecution,
-            **kwargs: Any,
-        ) -> None:
-            if node.mask is not None:
-                self.visit(node.mask, is_write=False, **kwargs)
-            for stmt in node.body:
-                self.visit(stmt, **kwargs)
-
-        @dataclass
-        class Result:
-            _ordered_accesses: List["Access"]
-
-            @staticmethod
-            def _offset_dict(accesses: XIterator) -> Dict[str, Set[Tuple[int, int, int]]]:
-                return accesses.reduceby(
-                    lambda acc, x: acc | {x.offset}, "field", init=set(), as_dict=True
-                )
-
-            def offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
-                """Get a dictonary, mapping all accessed fields' names to sets of offset tuples."""
-                return self._offset_dict(xiter(self._ordered_accesses))
-
-            def read_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
-                """Get a dictonary, mapping read fields' names to sets of offset tuples."""
-                return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
-
-            def write_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
-                """Get a dictonary, mapping written fields' names to sets of offset tuples."""
-                return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
-
-            def fields(self) -> Set[str]:
-                """Get a set of all accessed fields' names."""
-                return {acc.field for acc in self._ordered_accesses}
-
-            def read_fields(self) -> Set[str]:
-                """Get a set of all read fields' names."""
-                return {acc.field for acc in self._ordered_accesses if acc.is_read}
-
-            def write_fields(self) -> Set[str]:
-                """Get a set of all written fields' names."""
-                return {acc.field for acc in self._ordered_accesses if acc.is_write}
-
-            def ordered_accesses(self) -> List[Access]:
-                """Get a list of ordered accesses."""
-                return self._ordered_accesses
-
-        @classmethod
-        def apply(cls, node: TreeNode, **kwargs: Any) -> "Result":
-            result = cls.Result([])
-            cls().visit(node, accesses=result._ordered_accesses, **kwargs)
-            return result
 
     def __init__(self, name, stencil, extents):
         self._stencil = stencil
@@ -179,9 +83,9 @@ class BaseOirSDFGBuilder(ABC):
 
     def _get_access_collection(
         self, node: "Union[HorizontalExecutionLibraryNode, VerticalLoopLibraryNode, SDFG]"
-    ) -> "BaseOirSDFGBuilder.AccessCollector.Result":
+    ) -> "AccessCollector.Result":
         if isinstance(node, SDFG):
-            res = BaseOirSDFGBuilder.AccessCollector.Result([])
+            res = AccessCollector.Result([])
             for node in node.states()[0].nodes():
                 if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
                     collection = self._get_access_collection(node)
@@ -189,13 +93,13 @@ class BaseOirSDFGBuilder(ABC):
             return res
         elif isinstance(node, HorizontalExecutionLibraryNode):
             if node.oir_node.id_ not in self._access_collection_cache:
-                self._access_collection_cache[
-                    node.oir_node.id_
-                ] = BaseOirSDFGBuilder.AccessCollector.apply(node.oir_node)
+                self._access_collection_cache[node.oir_node.id_] = AccessCollector.apply(
+                    node.oir_node
+                )
             return self._access_collection_cache[node.oir_node.id_]
         else:
             assert isinstance(node, VerticalLoopLibraryNode)
-            res = BaseOirSDFGBuilder.AccessCollector.Result([])
+            res = AccessCollector.Result([])
             for _, sdfg in node.sections:
                 collection = self._get_access_collection(sdfg)
                 res._ordered_accesses.extend(collection._ordered_accesses)
