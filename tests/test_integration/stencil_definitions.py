@@ -63,7 +63,7 @@ def arithmetic_ops(field_a: Field3D, field_b: Field3D):
 @register
 def data_types(
     bool_field: gtscript.Field[bool],
-    npbool_field: gtscript.Field[np.bool],
+    npbool_field: gtscript.Field[np.bool_],
     int_field: gtscript.Field[int],
     int8_field: gtscript.Field[np.int8],
     int16_field: gtscript.Field[np.int16],

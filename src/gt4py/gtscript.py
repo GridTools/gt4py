@@ -444,7 +444,12 @@ class _FieldDescriptor:
         if isinstance(dtype, str):
             self.dtype = dtype
         else:
-            if dtype not in _VALID_DATA_TYPES:
+            try:
+                dtype = np.dtype(dtype)
+                actual_dtype = dtype.subdtype[0] if dtype.subdtype else dtype
+                if actual_dtype not in _VALID_DATA_TYPES:
+                    raise ValueError("Invalid data type descriptor")
+            except:
                 raise ValueError("Invalid data type descriptor")
             self.dtype = np.dtype(dtype)
         self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
