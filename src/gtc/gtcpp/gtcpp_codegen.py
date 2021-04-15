@@ -127,25 +127,31 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
-    def visit_DataType(self, dtype: DataType, **kwargs: Any) -> str:
-        if dtype == DataType.INT64:
-            return "long long"
-        elif dtype == DataType.FLOAT64:
-            return "double"
-        elif dtype == DataType.FLOAT32:
-            return "float"
-        elif dtype == DataType.BOOL:
-            return "bool"
-        raise NotImplementedError("Not implemented NativeFunction encountered.")
+    DATA_TYPE_TO_CODE = {
+        DataType.BOOL: "bool",
+        DataType.INT8: "std::int8_t",
+        DataType.INT16: "std::int16_t",
+        DataType.INT32: "std::int32_t",
+        DataType.INT64: "std::int64_t",
+        DataType.FLOAT32: "float",
+        DataType.FLOAT64: "double",
+    }
 
-    def visit_UnaryOperator(self, op: UnaryOperator, **kwargs: Any) -> str:
-        if op == UnaryOperator.NOT:
-            return "!"
-        elif op == UnaryOperator.NEG:
-            return "-"
-        elif op == UnaryOperator.POS:
-            return "+"
-        raise NotImplementedError("Not implemented UnaryOperator encountered.")
+    def visit_DataType(self, dtype: DataType, **kwargs: Any) -> str:
+        try:
+            return self.DATA_TYPE_TO_CODE[dtype]
+        except KeyError as error:
+            raise NotImplementedError(
+                f"Not implemented DataType '{dtype.name}' encountered."
+            ) from error
+
+    UNARY_OPERATOR_TO_CODE = {
+        UnaryOperator.NOT: "!",
+        UnaryOperator.NEG: "-",
+        UnaryOperator.POS: "+",
+    }
+
+    UnaryOp = as_fmt("({_this_generator.UNARY_OPERATOR_TO_CODE[_this_node.op]}{expr})")
 
     Arg = as_fmt("{name}")
 

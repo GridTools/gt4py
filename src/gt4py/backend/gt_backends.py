@@ -723,7 +723,7 @@ class GTCUDABackend(BaseGTBackend):
     GT_BACKEND_T = "cuda"
 
     name = "gtcuda"
-    options = BaseGTBackend.GT_BACKEND_OPTS
+    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
     storage_info = {
         "alignment": 32,
         "device": "gpu",
