@@ -161,7 +161,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
-    def visit_IfStmt(self, node: oir.IfStmt, **kwargs: Any) -> gtcpp.IfStmt:
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> gtcpp.IfStmt:
         return gtcpp.IfStmt(
             cond=self.visit(node.mask, **kwargs),
             true_branch=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),

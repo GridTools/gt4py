@@ -72,7 +72,7 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
-class IfStmt(Stmt):
+class MaskStmt(Stmt):
     mask: Expr
     body: List[Stmt]
 

@@ -36,7 +36,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
-    IfStmt = as_mako(
+    MaskStmt = as_mako(
         """
         if (${mask}) {
             ${'\\n'.join(body)}
