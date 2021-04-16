@@ -106,16 +106,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return self._unique_index
 
     def visit_DataType(self, dtype: DataType, **kwargs):
-        if dtype == DataType.INT64:
-            return "long long"
-        elif dtype == DataType.FLOAT64:
-            return "double"
-        elif dtype == DataType.FLOAT32:
-            return "float"
-        elif dtype == DataType.BOOL:
-            return "bool"
-        else:
-            raise AssertionError(f"Invalid DataType value: {dtype}")
+        return gtcpp_codegen.GTCppCodegen().visit_DataType(dtype)
 
     def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
         assert "gt_backend_t" in kwargs
