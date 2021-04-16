@@ -434,8 +434,6 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         left = self.visit(node.left, is_target=True, **kwargs)
         return f"{left} = {right}"
 
-    ScalarAccess = as_fmt("{name}")
-
     BinaryOp = as_fmt("({left} {op} {right})")
 
     UnaryOp = as_fmt("({op}{expr})")
@@ -459,20 +457,20 @@ class TaskletCodegen(codegen.TemplatedGenerator):
                 common.NativeFunction.MIN: "min",
                 common.NativeFunction.MAX: "max",
                 common.NativeFunction.MOD: "fmod",
-                common.NativeFunction.SIN: "math.sin",
-                common.NativeFunction.COS: "math.cos",
-                common.NativeFunction.TAN: "math.tan",
+                common.NativeFunction.SIN: "dace.math.sin",
+                common.NativeFunction.COS: "dace.math.cos",
+                common.NativeFunction.TAN: "dace.math.tan",
                 common.NativeFunction.ARCSIN: "asin",
                 common.NativeFunction.ARCCOS: "acos",
                 common.NativeFunction.ARCTAN: "atan",
-                common.NativeFunction.SQRT: "math.sqrt",
-                common.NativeFunction.POW: "math.pow",
-                common.NativeFunction.EXP: "math.exp",
-                common.NativeFunction.LOG: "math.log",
+                common.NativeFunction.SQRT: "dace.math.sqrt",
+                common.NativeFunction.POW: "dace.math.pow",
+                common.NativeFunction.EXP: "dace.math.exp",
+                common.NativeFunction.LOG: "dace.math.log",
                 common.NativeFunction.ISFINITE: "isfinite",
                 common.NativeFunction.ISINF: "isinf",
                 common.NativeFunction.ISNAN: "isnan",
-                common.NativeFunction.FLOOR: "floor",
+                common.NativeFunction.FLOOR: "dace.math.ifloor",
                 common.NativeFunction.CEIL: "ceil",
                 common.NativeFunction.TRUNC: "trunc",
             }[func]
@@ -482,15 +480,21 @@ class TaskletCodegen(codegen.TemplatedGenerator):
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
     def visit_DataType(self, dtype: common.DataType, **kwargs: Any) -> str:
-        if dtype == common.DataType.INT64:
+        if dtype == common.DataType.BOOL:
+            return "dace.bool_"
+        elif dtype == common.DataType.INT8:
+            return "dace.int8"
+        elif dtype == common.DataType.INT16:
+            return "dace.int16"
+        elif dtype == common.DataType.INT32:
+            return "dace.int32"
+        elif dtype == common.DataType.INT64:
             return "dace.int64"
-        elif dtype == common.DataType.FLOAT64:
-            return "dace.float64"
         elif dtype == common.DataType.FLOAT32:
             return "dace.float32"
-        elif dtype == common.DataType.BOOL:
-            return "dace.bool_"
-        raise NotImplementedError("Not implemented NativeFunction encountered.")
+        elif dtype == common.DataType.FLOAT64:
+            return "dace.float64"
+        raise NotImplementedError("Not implemented DataType encountered.")
 
     def visit_UnaryOperator(self, op: common.UnaryOperator, **kwargs: Any) -> str:
         if op == common.UnaryOperator.NOT:

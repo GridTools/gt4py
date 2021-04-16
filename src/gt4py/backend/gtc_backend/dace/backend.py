@@ -117,80 +117,79 @@ class DaCeBindingsCodegen:
 
     mako_template = as_mako(
         """
-#include <chrono>
-#include <iostream>
-#include <cmath>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <gridtools/storage/adapter/python_sid_adapter.hpp>
-#include <gridtools/stencil/global_parameter.hpp>
-#include <gridtools/sid/sid_shift_origin.hpp>
-#include <gridtools/sid/rename_dimensions.hpp>
-#include "computation.hpp"
-using std::fmod;
-namespace gt = gridtools;
-namespace py = ::pybind11;
-%if len(entry_params) > 0:
-
-class ${name}_functor {
-  const int __I;
-  const int __J;
-  const int __K;
-  ${name}_t *dace_handle;
-
-public:
-  ${name}_functor(std::array<gt::uint_t, 3> domain)
-      : __I(domain[0]), __J(domain[1]), __K(domain[2]),
-        dace_handle(__dace_init_${name}(${zeros_init_func})){};
-  ~${name}_functor() {
-    __dace_exit_${name}(dace_handle);
-  };
-  void operator()(${functor_args}) {
-
-    ${get_strides_and_ptr}
-
-    __program_${name}(
-        dace_handle, ${dace_args});
-
-  }
-};
-
-std::tuple<gt::uint_t, gt::uint_t, gt::uint_t> last_size;
-${name}_functor *${name}_ptr(nullptr);
-${name}_functor & get_${name}(std::array<gt::uint_t, 3> domain) {
-  auto this_size = std::tuple_cat(domain);
-  if (${name}_ptr!=nullptr || this_size!=last_size){
-      delete ${name}_ptr;
-      ${name}_ptr = new ${name}_functor(domain);
-  }
-  return *${name}_ptr;
-}
-
-PYBIND11_MODULE(${module_name}, m) {
-    m.def("run_computation", [](std::array<gt::uint_t, 3> domain,
-    ${entry_params},
-    py::object exec_info){
-        if (!exec_info.is(py::none()))
-        {
-            auto exec_info_dict = exec_info.cast<py::dict>();
-            exec_info_dict["run_cpp_start_time"] = static_cast<double>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+        #include <chrono>
+        #include <pybind11/pybind11.h>
+        #include <pybind11/stl.h>
+        #include <gridtools/storage/adapter/python_sid_adapter.hpp>
+        #include <gridtools/stencil/global_parameter.hpp>
+        #include <gridtools/sid/sid_shift_origin.hpp>
+        #include <gridtools/sid/rename_dimensions.hpp>
+        #include "computation.hpp"
+        namespace gt = gridtools;
+        namespace py = ::pybind11;
+        %if len(entry_params) > 0:
+        
+        class ${name}_functor {
+          const int __I;
+          const int __J;
+          const int __K;
+          ${name}_t *dace_handle;
+        
+        public:
+          ${name}_functor(std::array<gt::uint_t, 3> domain)
+              : __I(domain[0]), __J(domain[1]), __K(domain[2]),
+                dace_handle(__dace_init_${name}(${zeros_init_func})){};
+          ~${name}_functor() {
+            __dace_exit_${name}(dace_handle);
+          };
+          void operator()(${functor_args}) {
+        
+            ${get_strides_and_ptr}
+        
+            __program_${name}(
+                dace_handle, ${dace_args});
+        
+          }
+        };
+        
+        std::tuple<gt::uint_t, gt::uint_t, gt::uint_t> last_size;
+        ${name}_functor *${name}_ptr(nullptr);
+        ${name}_functor & get_${name}(std::array<gt::uint_t, 3> domain) {
+          auto this_size = std::tuple_cat(domain);
+          if (${name}_ptr!=nullptr || this_size!=last_size){
+              delete ${name}_ptr;
+              ${name}_ptr = new ${name}_functor(domain);
+          }
+          return *${name}_ptr;
         }
+        
+        PYBIND11_MODULE(${module_name}, m) {
+            m.def("run_computation", [](
+            ${','.join(["std::array<gt::uint_t, 3> domain", *entry_params, 'py::object exec_info'])}
+            ){
+                if (!exec_info.is(py::none()))
+                {
+                    auto exec_info_dict = exec_info.cast<py::dict>();
+                    exec_info_dict["run_cpp_start_time"] = static_cast<double>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+                }
 
-        get_${name}(domain)(${sid_params});
+                std::cout << "PRE!" << std::endl;
+                get_${name}(domain)(${sid_params});
+                std::cout << "POST!" << std::endl;
+                
+                if (!exec_info.is(py::none()))
+                {
+                    auto exec_info_dict = exec_info.cast<py::dict>();
+                    exec_info_dict["run_cpp_end_time"] = static_cast<double>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
+                }
 
-        if (!exec_info.is(py::none()))
-        {
-            auto exec_info_dict = exec_info.cast<py::dict>();
-            exec_info_dict["run_cpp_end_time"] = static_cast<double>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
-        }
-
-    }, "Runs the given computation");}
-%endif
-"""
+            }, "Runs the given computation");}
+        %endif
+        """
     )
 
     def generate_strides_and_ptr(self, sdfg, offset_dict):
@@ -226,7 +225,7 @@ PYBIND11_MODULE(${module_name}, m) {
             elif name in sdfg.symbols and not name.startswith("__"):
                 assert name in sdfg.symbols
                 res[name] = "{dtype} {name}".format(dtype=sdfg.symbols[name].ctype, name=name)
-        return ",".join(res[node.name] for node in oir.params)
+        return list(res[node.name] for node in oir.params)
 
     def generate_sid_params(self, sdfg: dace.SDFG):
         res = []
