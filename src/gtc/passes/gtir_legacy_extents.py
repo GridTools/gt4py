@@ -32,7 +32,7 @@ class LegacyExtentsVisitor(NodeVisitor):
 
     @dataclass
     class StencilContext:
-        assign_conditions: Dict[str, List[gtir.FieldAccess]] = field(default_factory=dict)
+        assign_conditions: Dict[int, List[gtir.FieldAccess]] = field(default_factory=dict)
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> FIELD_EXT_T:
         field_extents = {name: Extent.zeros() for name in _iter_field_names(node)}
@@ -54,7 +54,7 @@ class LegacyExtentsVisitor(NodeVisitor):
         left_extent = field_extents.setdefault(node.left.name, Extent.zeros())
         pa_ctx = self.AssignContext(left_extent=left_extent)
         self.visit(
-            ctx.assign_conditions.get(str(node.id_), []),
+            ctx.assign_conditions.get(id(node), []),
             field_extents=field_extents,
             pa_ctx=pa_ctx,
             **kwargs,
@@ -66,7 +66,7 @@ class LegacyExtentsVisitor(NodeVisitor):
     def visit_FieldIfStmt(
         self, node: gtir.FieldIfStmt, *, ctx: StencilContext, **kwargs: Any
     ) -> None:
-        for assign_id in node.iter_tree().if_isinstance(gtir.ParAssignStmt).getattr("id_"):
+        for assign_id in node.iter_tree().if_isinstance(gtir.ParAssignStmt).map(id):
             ctx.assign_conditions.setdefault(assign_id, []).extend(
                 node.cond.iter_tree().if_isinstance(gtir.FieldAccess).to_list()
             )
