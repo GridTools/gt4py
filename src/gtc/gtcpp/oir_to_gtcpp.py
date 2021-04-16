@@ -193,15 +193,16 @@ class OIRToGTCpp(eve.NodeTranslator):
             }
         )
 
+        functor_name = type(node).__name__ + str(id(node))
         prog_ctx.add_functor(
             gtcpp.GTFunctor(
-                name=node.id_,
+                name=functor_name,
                 applies=[apply_method],
                 param_list=gtcpp.GTParamList(accessors=accessors),
             )
         ),
 
-        return gtcpp.GTStage(functor=node.id_, args=stage_args)
+        return gtcpp.GTStage(functor=functor_name, args=stage_args)
 
     def visit_VerticalLoop(
         self,
