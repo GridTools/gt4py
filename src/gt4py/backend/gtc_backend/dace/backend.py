@@ -66,11 +66,7 @@ class GTCDaCeExtGenerator:
         oir = self._optimize_oir(oir)
         oir = gtir_to_oir.oir_iteration_space_computation(oir)
         sdfg = OirSDFGBuilder.build(oir.name, oir)
-
         sdfg.expand_library_nodes(recursive=True)
-        for n, _ in sdfg.all_nodes_recursive():
-            if isinstance(n, dace.nodes.MapEntry):
-                n.map.schedule = dace.ScheduleType.Sequential
         sdfg.validate()
         code_objects = sdfg.generate_code()
         implementation = code_objects[[co.title for co in code_objects].index("Frame")].clean_code
@@ -175,9 +171,7 @@ class DaCeBindingsCodegen:
                             std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
                 }
 
-                std::cout << "PRE!" << std::endl;
                 get_${name}(domain)(${sid_params});
-                std::cout << "POST!" << std::endl;
                 
                 if (!exec_info.is(py::none()))
                 {

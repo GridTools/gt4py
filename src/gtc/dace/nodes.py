@@ -83,21 +83,22 @@ class NaiveVerticalLoopExpander:
     origins: Dict[str, Tuple[int, int, oir.AxisBound]]
 
     def get_ij_origins(self, node: "VerticalLoopLibraryNode"):
-        min_offsets: Dict[str, Tuple[int, int, int]] = {}
+        origins: Dict[str, Tuple[int, int]] = {}
         for _, section in node.sections:
-            access_collection = self._get_access_collection(section)
-            min_offsets.update(
-                {name: off.pop() for name, off in access_collection.offsets().items()}
-            )
-            for name, offsets in access_collection.offsets().items():
-                off: Tuple[int, int, int]
-                for off in offsets:
-                    min_offsets[name] = (
-                        min(min_offsets[name][0], off[0]),
-                        min(min_offsets[name][1], off[1]),
-                        min(min_offsets[name][2], off[2]),
-                    )
-        return {k: (-v[0], -v[1]) for k, v in min_offsets.items()}
+            for he in (ln for ln, _ in  section.all_nodes_recursive() if isinstance(ln, HorizontalExecutionLibraryNode)):
+                access_collection = self._get_access_collection(he)
+
+                for name, offsets in access_collection.offsets().items():
+                    off: Tuple[int, int]
+                    for off in offsets:
+                        origin = (-off[0]-he.oir_node.iteration_space.i_interval.start.offset,
+                                  -off[1] - he.oir_node.iteration_space.j_interval.start.offset)
+                        if name not in origins:
+                            origins[name] = origin
+                        origins[name] = (max(origins[name][0], origin[0]),
+                            max(origins[name][1], origin[1]),
+                        )
+        return origins
 
     def get_k_origins(self, node: "VerticalLoopLibraryNode"):
         k_origs: Dict[str, oir.AxisBound] = {}
@@ -157,12 +158,11 @@ class NaiveVerticalLoopExpander:
 
         for name, subset in subsets.items():
             dtype = self.parent_sdfg.arrays[name].dtype
+            strides = self.parent_sdfg.arrays[name].strides
             self.res_sdfg.add_array(
                 name,
                 shape=subset.bounding_box_size(),
-                strides=tuple(
-                    dace.symbolic.pystr_to_symbolic(f"__{name}_{var}_stride") for var in "IJK"
-                ),
+                strides=strides,
                 dtype=dtype,
             )
 
@@ -198,31 +198,51 @@ class NaiveVerticalLoopExpander:
             return res
 
     def get_mapped_subsets_dicts(self, interval: Interval, section: dace.SDFG):
-        access_collection: AccessCollector.Result = self._get_access_collection(section)
-        min_offsets = {name: off.pop() for name, off in access_collection.offsets().items()}
 
         in_subsets = dict()
         out_subsets = dict()
+        section_origins: Dict[str, Tuple[int, int]] = dict()
+        min_k_offsets: Dict[str, int] = dict()
+        for he in (ln for ln, _ in section.all_nodes_recursive() if isinstance(ln, HorizontalExecutionLibraryNode)):
+            access_collection: AccessCollector.Result = self._get_access_collection(he)
 
-        for name, offsets in access_collection.offsets().items():
-            for off in offsets:
-                min_offsets[name] = (
-                    min(min_offsets[name][0], off[0]),
-                    min(min_offsets[name][1], off[1]),
-                    min(min_offsets[name][2], off[2]),
-                )
-        for name, off in min_offsets.items():
+            for name, offsets in access_collection.offsets().items():
+                off: Tuple[int, int]
+                for off in offsets:
+                    origin = (-off[0] - he.oir_node.iteration_space.i_interval.start.offset,
+                              -off[1] - he.oir_node.iteration_space.j_interval.start.offset)
+                    if name not in section_origins:
+                        section_origins[name] = origin
+                    if name not in min_k_offsets:
+                        min_k_offsets[name] = off[2]
+                    section_origins[name] = (max(section_origins[name][0], origin[0]),
+                                     max(section_origins[name][1], origin[1]),
+                                     )
+                    min_k_offsets[name] = min(min_k_offsets[name], off[2])
+        access_collection = self._get_access_collection(section)
+        for name, section_origin in section_origins.items():
+            vl_origin = self.origins[name]
             shape = section.arrays[name].shape
-
-            subset_str = "{i:+d}:{i:+d}+({I}),{j:+d}:{j:+d}+({J}),k-({k_orig}){k:+d}:k-({k_orig}){k:+d}{K:+d}".format(
-                i=self.origins[name][0] + off[0],
-                j=self.origins[name][1] + off[1],
-                k_orig=get_axis_bound_str(self.origins[name][2], "__K"),
-                k=off[2],
-                I=shape[0],
-                J=shape[1],
-                K=shape[2],
+            strides = section.arrays[name].strides
+            dimensions = list(
+                any(dace.symbol(f"__{name}_{k}_stride") in s.free_symbols for s in strides ) for k in "IJK"
             )
+            subset_strs = []
+            idx = iter(range(3))
+            if dimensions[0]:
+                subset_strs.append("{i:+d}:{i:+d}+({I})".format(
+                i=vl_origin[0] -section_origin[0],
+                I=shape[next(idx)],))
+            if dimensions[1]:
+                subset_strs.append("{j:+d}:{j:+d}+({J})".format(
+                j=vl_origin[1] -section_origin[1],
+                J=shape[next(idx)]))
+            if dimensions[2]:
+                subset_strs.append("k-({k_orig}){k:+d}:k-({k_orig}){k:+d}{K:+d}".format(
+                k_orig=get_axis_bound_str(vl_origin[2], "__K"),
+                k=min_k_offsets[name],
+                K=shape[next(idx)]))
+            subset_str = ",".join(subset_strs)
             if name in access_collection.read_fields():
                 in_subsets[name] = subset_str
             if name in access_collection.write_fields():
@@ -318,21 +338,25 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
                 section.name + "_map", ndrange={"k": interval_str}
             )
 
+            section_inputs = set()
+            section_outputs = set()
             for acc in (
                 n for n, _ in section.all_nodes_recursive() if isinstance(n, dace.nodes.AccessNode)
             ):
                 if acc.access != dace.AccessType.WriteOnly:
                     if acc.data not in in_accesses:
                         in_accesses[acc.data] = res_state.add_read(acc.data)
+                    section_inputs.add(acc.data)
                 if acc.access != dace.AccessType.ReadOnly:
                     if acc.data not in out_accesses:
                         out_accesses[acc.data] = res_state.add_write(acc.data)
+                    section_outputs.add(acc.data)
 
             nsdfg = res_state.add_nested_sdfg(
                 sdfg=section,
                 parent=None,
-                inputs={k for k in in_accesses},
-                outputs={k for k in out_accesses},
+                inputs=section_inputs,
+                outputs=section_outputs,
             )
             in_subsets, out_subsets = self.get_mapped_subsets_dicts(interval, section)
             if len(in_subsets) == 0:
@@ -575,14 +599,14 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
 
         for name, subset in subsets.items():
             dtype = parent_sdfg.arrays[name].dtype
+            strides = parent_sdfg.arrays[name].strides
             res_sdfg.add_array(
                 name,
                 shape=subset.bounding_box_size(),
-                strides=tuple(
-                    dace.symbolic.pystr_to_symbolic(f"__{name}_{var}_stride") for var in "IJK"
-                ),
+                strides=strides,
                 dtype=dtype,
             )
+
 
         return dace.nodes.NestedSDFG(
             res_sdfg.name + "_nsdfg",
@@ -613,7 +637,7 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
             return res
 
     @staticmethod
-    def get_innermost_memlets(node):
+    def get_innermost_memlets(node, parent_arrays):
 
         access_collection: AccessCollector.Result = (
             NaiveHorizontalExecutionExpansion._get_access_collection(node)
@@ -622,7 +646,6 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
 
         in_memlets = dict()
         out_memlets = dict()
-
         for name, offsets in access_collection.offsets().items():
             for off in offsets:
                 min_offsets[name] = (
@@ -630,13 +653,19 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                     min(min_offsets[name][1], off[1]),
                     min(min_offsets[name][2], off[2]),
                 )
-        for name, offsets in access_collection.read_offsets().items():
-            for off in offsets:
-                subset_str = "i{i:+d},j{j:+d},{k:+d}".format(
-                    i=-min_offsets[name][0] + off[0],
-                    j=-min_offsets[name][1] + off[1],
-                    k=-min_offsets[name][2] + off[2],
+            min_offsets[name] = (
+                    min(min_offsets[name][0], node.oir_node.iteration_space.i_interval.start.offset),
+                    min(min_offsets[name][1], node.oir_node.iteration_space.j_interval.start.offset),
+                    min_offsets[name][2], off[2],
                 )
+        for name, offsets in access_collection.read_offsets().items():
+            dimensions = list(
+                any(dace.symbol(f"__{name}_{k}_stride") in s.free_symbols for s in parent_arrays[name].strides) for k in "IJK"
+            )
+
+            for off in offsets:
+                subset_strs = [f"{var}{-min_offsets[name][dim] + off[dim]:+d}" for dim, var in enumerate("ij0") if dimensions[dim]]
+                subset_str = ",".join(subset_strs)
                 acc_name = name + "__"
                 suffix = "_".join(
                     var + ("m" if o < 0 else "p") + f"{abs(o):d}"
@@ -647,9 +676,12 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                     acc_name += suffix
                 in_memlets[acc_name] = dace.memlet.Memlet.simple(name, subset_str)
         for name in access_collection.write_fields():
-            subset_str = "i{i:+d},j{j:+d},{k:+d}".format(
-                i=-min_offsets[name][0], j=-min_offsets[name][1], k=-min_offsets[name][2]
+            dimensions = list(
+                any(dace.symbol(f"__{name}_{k}_stride") in s.free_symbols for s in parent_arrays[name].strides) for k in "IJK"
             )
+            subset_strs = [f"{var}{-min_offsets[name][dim]:+d}" for dim, var in enumerate("ij0") if
+                           dimensions[dim]]
+            subset_str = ",".join(subset_strs)
             acc_name = "__" + name
             out_memlets[acc_name] = dace.memlet.Memlet.simple(
                 name, subset_str, dynamic=node.oir_node.mask is not None
@@ -668,7 +700,7 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
         )
 
         res_state = res_sdfg.add_state(node.name + "_state")
-        in_memlets, out_memlets = NaiveHorizontalExecutionExpansion.get_innermost_memlets(node)
+        in_memlets, out_memlets = NaiveHorizontalExecutionExpansion.get_innermost_memlets(node, parent_sdfg.arrays)
         map_ranges = {
             "i": get_interval_range_str(node.oir_node.iteration_space.i_interval, "__I"),
             "j": get_interval_range_str(node.oir_node.iteration_space.j_interval, "__J"),

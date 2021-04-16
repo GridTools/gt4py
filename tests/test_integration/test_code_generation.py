@@ -159,25 +159,46 @@ def test_lower_dimensional_inputs(backend):
     if backend == "gtc:cuda":
         pytest.xfail("gtc:cuda backend does not support lower dimensional fields")
 
+    # @gtscript.stencil(backend=backend)
+    # def stencil(
+    #     field_3d: gtscript.Field[np.float_, gtscript.IJK],
+    #     field_2d: gtscript.Field[np.float_, gtscript.IJ],
+    #     field_1d: gtscript.Field[np.float_, gtscript.K],
+    # ):
+    #     with computation(FORWARD):
+    #         with interval(0, 1):
+    #             field_2d = field_1d[1]
+    #
+    #     with computation(PARALLEL):
+    #         with interval(0, -1):
+    #             tmp = field_2d[0, 1] + field_1d[1]
+    #         with interval(-1, None):
+    #             tmp = field_2d[0, 1] + field_1d[0]
+    #
+    #     with computation(PARALLEL):
+    #         with interval(0, 1):
+    #             field_3d = tmp[1, 0, 0] + field_1d[1]
+    #         with interval(1, None):
+    #             field_3d = tmp[-1, 0, 0]
     @gtscript.stencil(backend=backend)
     def stencil(
         field_3d: gtscript.Field[np.float_, gtscript.IJK],
-        field_2d: gtscript.Field[np.float_, gtscript.IJ],
-        field_1d: gtscript.Field[np.float_, gtscript.K],
+        field_2d: gtscript.Field[np.float_, gtscript.IJK],
+        field_1d: gtscript.Field[np.float_, gtscript.IJK],
     ):
         with computation(FORWARD):
             with interval(0, 1):
-                field_2d = field_1d[1]
+                field_2d = field_1d[0, 0, 1]
 
         with computation(PARALLEL):
             with interval(0, -1):
-                tmp = field_2d[0, 1] + field_1d[1]
+                tmp = field_2d[0, 1, 0] + field_1d[0, 0, 1]
             with interval(-1, None):
-                tmp = field_2d[0, 1] + field_1d[0]
+                tmp = field_2d[0, 1, 0] + field_1d[0, 0, 0]
 
         with computation(PARALLEL):
             with interval(0, 1):
-                field_3d = tmp[1, 0, 0] + field_1d[1]
+                field_3d = tmp[1, 0, 0] + field_1d[0, 0, 1]
             with interval(1, None):
                 field_3d = tmp[-1, 0, 0]
 
