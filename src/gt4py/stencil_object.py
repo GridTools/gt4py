@@ -121,10 +121,6 @@ class StencilObject(abc.ABC):
         pass
 
     @staticmethod
-    def _get_domain_mask(field_info: FieldInfo) -> Tuple[bool]:
-        return tuple(axis in field_info.axes for axis in CartesianSpace.names)
-
-    @staticmethod
     def _make_origin_dict(origin) -> Dict[str, Index]:
         try:
             if isinstance(origin, dict):
@@ -164,8 +160,8 @@ class StencilObject(abc.ABC):
             if field_info is not None:
                 assert field_args.get(name, None) is not None, f"Invalid value for '{name}' field."
                 field = field_args[name]
-                api_domain_mask = self._get_domain_mask(field_info)
-                api_domain_ndim = sum(api_domain_mask)
+                api_domain_mask = field_info.domain_mask
+                api_domain_ndim = field_info.domain_ndim
                 assert (
                     not isinstance(field, gt_storage.storage.Storage)
                     or tuple(field.mask)[:domain_ndim] == api_domain_mask
@@ -252,26 +248,28 @@ class StencilObject(abc.ABC):
 
                 # Check: domain + halo vs field size
                 field_info = self.field_info[name]
-                field_mask = self._get_domain_mask(field_info)
-                spatial_ndim = sum(field_mask)
-                field_domain_origin = Index.from_mask(origin[name], field_mask[:domain_ndim])
+                field_domain_mask = field_info.domain_mask
+                field_domain_ndim = field_info.domain_ndim
+                field_domain_origin = Index.from_mask(origin[name], field_domain_mask[:domain_ndim])
 
-                if field.ndim != spatial_ndim + len(field_info.data_dims):
+                if field.ndim != field_domain_ndim + len(field_info.data_dims):
                     raise ValueError(
                         f"Storage for '{name}' has {field.ndim} dimensions but the API signature "
-                        f"expects {spatial_ndim + len(field_info.data_dims)} ('{field_info.axes}[{field_info.data_dims}]')"
+                        f"expects {field_domain_ndim + len(field_info.data_dims)} ('{field_info.axes}[{field_info.data_dims}]')"
                     )
 
                 min_origin = gt_utils.interpolate_mask(
-                    field_info.boundary.lower_indices.filter_mask(field_mask), field_mask, default=0
+                    field_info.boundary.lower_indices.filter_mask(field_domain_mask),
+                    field_domain_mask,
+                    default=0,
                 )
                 if field_domain_origin < min_origin:
                     raise ValueError(
                         f"Origin for field {name} too small. Must be at least {min_origin}, is {field_domain_origin}"
                     )
 
-                spatial_domain = domain.filter_mask(field_mask)
-                upper_indices = field_info.boundary.upper_indices.filter_mask(field_mask)
+                spatial_domain = domain.filter_mask(field_domain_mask)
+                upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
                 min_shape = tuple(
                     o + d + h for o, d, h in zip(field_domain_origin, spatial_domain, upper_indices)
                 )
@@ -354,22 +352,31 @@ class StencilObject(abc.ABC):
         zero_origin = Shape((0,) * domain_ndim)
         all_origin = origin.get("_all_", None)
 
-        # Set an origin in the domain for all fields
+        # Set an appropriate origin for all fields
         for name, field_info in self.field_info.items():
             if field_info is not None:
                 assert name in field_args, f"Missing value for '{name}' field."
-                if name not in origin:
-                    if all_origin is not None:
-                        origin[name] = all_origin
-                    elif isinstance(field_arg := field_args[name], gt_storage.storage.Storage):
-                        origin[name] = field_arg.default_origin
-                    else:
-                        origin[name] = zero_origin
+                field_origin = origin.get(name, None)
 
-                if len(field_origin := origin[name]) > len(field_info.axes):
-                    origin[name] = gt_utils.filter_mask(
-                        field_origin, self._get_domain_mask(field_info)
+                if field_origin is not None:
+                    field_origin_ndim = len(field_origin)
+                    if field_origin_ndim != field_info.ndim:
+                        assert (
+                            field_origin_ndim == field_info.domain_ndim
+                        ), f"Invalid origin specification ({field_origin}) for '{name}' field."
+                        origin[name] = (*field_origin, *((0,) * len(field_info.data_dims)))
+
+                elif all_origin is not None:
+                    origin[name] = (
+                        *gt_utils.filter_mask(all_origin, field_info.domain_mask),
+                        *((0,) * len(field_info.data_dims)),
                     )
+
+                elif isinstance(field_arg := field_args[name], gt_storage.storage.Storage):
+                    origin[name] = field_arg.default_origin
+
+                else:
+                    origin[name] = (0,) * field_info.ndim
 
         # Domain
         if domain is None:

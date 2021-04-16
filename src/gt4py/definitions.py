@@ -17,6 +17,7 @@
 
 import collections
 import enum
+import functools
 import numbers
 import operator
 from dataclasses import dataclass
@@ -681,6 +682,22 @@ class FieldInfo:
             data_dims=repr(self.data_dims),
             dtype=repr(self.dtype),
         )
+
+    @functools.cached_property
+    def domain_mask(self):
+        return tuple(axis in self.axes for axis in CartesianSpace.names)
+
+    @functools.cached_property
+    def domain_ndim(self):
+        return len(self.axes)
+
+    @functools.cached_property
+    def mask(self):
+        return (*self.domain_mask, *((True,) * len(self.data_dims)))
+
+    @functools.cached_property
+    def ndim(self):
+        return len(self.axes) + len(self.data_dims)
 
 
 @dataclass(frozen=True)
