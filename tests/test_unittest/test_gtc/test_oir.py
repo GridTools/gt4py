@@ -19,7 +19,7 @@ from pydantic.error_wrappers import ValidationError
 
 from gtc.common import DataType
 
-from .oir_utils import AssignStmtFactory, FieldAccessFactory, IfStmtFactory
+from .oir_utils import AssignStmtFactory, FieldAccessFactory, MaskStmtFactory
 
 
 def test_no_horizontal_offset_allowed():
@@ -29,4 +29,4 @@ def test_no_horizontal_offset_allowed():
 
 def test_mask_must_be_bool():
     with pytest.raises(ValidationError, match=r".*must be.* bool.*"):
-        IfStmtFactory(mask=FieldAccessFactory(dtype=DataType.INT32))
+        MaskStmtFactory(mask=FieldAccessFactory(dtype=DataType.INT32))

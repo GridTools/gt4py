@@ -56,9 +56,9 @@ class AssignStmtFactory(factory.Factory):
     right = factory.SubFactory(FieldAccessFactory)
 
 
-class IfStmtFactory(factory.Factory):
+class MaskStmtFactory(factory.Factory):
     class Meta:
-        model = oir.IfStmt
+        model = oir.MaskStmt
 
     mask = factory.SubFactory(FieldAccessFactory, dtype=common.DataType.BOOL)
     body = factory.List([factory.SubFactory(AssignStmtFactory)])

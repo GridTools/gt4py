@@ -82,8 +82,8 @@ class OIRToCUIR(eve.NodeTranslator):
             left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
-    def visit_IfStmt(self, node: oir.IfStmt, **kwargs: Any) -> cuir.IfStmt:
-        return cuir.IfStmt(
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> cuir.MaskStmt:
+        return cuir.MaskStmt(
             mask=self.visit(node.mask, **kwargs), body=self.visit(node.body, **kwargs)
         )
 
