@@ -48,7 +48,7 @@ class OIRIterationSpaceTranslator(NodeTranslator):
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
-        iteration_spaces: Dict[str, oir.CartesianIterationSpace],
+        iteration_spaces: Dict[int, oir.CartesianIterationSpace],
     ) -> oir.HorizontalExecution:
         assert id(node) in iteration_spaces
         return oir.HorizontalExecution(

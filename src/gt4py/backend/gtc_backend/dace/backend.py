@@ -129,13 +129,13 @@ class DaCeBindingsCodegen:
         namespace gt = gridtools;
         namespace py = ::pybind11;
         %if len(entry_params) > 0:
-        
+
         class ${name}_functor {
           const int __I;
           const int __J;
           const int __K;
           ${name}_t *dace_handle;
-        
+
         public:
           ${name}_functor(std::array<gt::uint_t, 3> domain)
               : __I(domain[0]), __J(domain[1]), __K(domain[2]),
@@ -144,15 +144,15 @@ class DaCeBindingsCodegen:
             __dace_exit_${name}(dace_handle);
           };
           void operator()(${functor_args}) {
-        
+
             ${get_strides_and_ptr}
-        
+
             __program_${name}(
                 dace_handle, ${dace_args});
-        
+
           }
         };
-        
+
         std::tuple<gt::uint_t, gt::uint_t, gt::uint_t> last_size;
         ${name}_functor *${name}_ptr(nullptr);
         ${name}_functor & get_${name}(std::array<gt::uint_t, 3> domain) {
@@ -163,8 +163,8 @@ class DaCeBindingsCodegen:
           }
           return *${name}_ptr;
         }
-        
-        PYBIND11_MODULE(${module_name}, m) {
+
+       PYBIND11_MODULE(${module_name}, m) {
             m.def("run_computation", [](
             ${','.join(["std::array<gt::uint_t, 3> domain", *entry_params, 'py::object exec_info'])}
             ){
@@ -177,7 +177,7 @@ class DaCeBindingsCodegen:
                 }
 
                 get_${name}(domain)(${sid_params});
-                
+
                 if (!exec_info.is(py::none()))
                 {
                     auto exec_info_dict = exec_info.cast<py::dict>();

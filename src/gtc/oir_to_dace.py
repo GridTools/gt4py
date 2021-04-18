@@ -8,8 +8,9 @@ import dace.properties
 import networkx as nx
 import numpy as np
 from dace import SDFG
+from dace.sdfg.graph import MultiConnectorEdge
 
-from gtc.common import AxisBound, CartesianOffset, LevelMarker, data_type_to_typestr
+from gtc.common import CartesianOffset, LevelMarker, data_type_to_typestr
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.oir import (
     CartesianIterationSpace,
@@ -84,7 +85,7 @@ class CartesianIJIndexSpace(tuple):
 def nodes_extent_calculation(
     nodes: Collection[Union[VerticalLoopLibraryNode, HorizontalExecutionLibraryNode]]
 ) -> Dict[str, Tuple[Tuple[int, int], Tuple[int, int]]]:
-    access_spaces: Dict[str, Tuple[Tuple[int, int], Tuple[int, int]]] = dict()
+    access_spaces: Dict[str, Tuple[Tuple[int, int], ...]] = dict()
     inner_nodes = []
     for node in nodes:
         if isinstance(node, VerticalLoopLibraryNode):
@@ -117,8 +118,8 @@ def nodes_extent_calculation(
                     if name not in access_spaces:
                         access_spaces[name] = access_extent
                     access_spaces[name] = tuple(
-                        (min(l[0], r[0]), max(l[1], r[1]))
-                        for l, r in zip(access_spaces[name], access_extent)
+                        (min(asp[0], ext[0]), max(asp[1], ext[1]))
+                        for asp, ext in zip(access_spaces[name], access_extent)
                     )
 
     return {
@@ -143,13 +144,13 @@ class BaseOirSDFGBuilder(ABC):
             if isinstance(decl, FieldDecl)
         }
 
-        self._recent_write_acc = dict()
-        self._recent_read_acc = dict()
+        self._recent_write_acc: Dict[str, dace.nodes.AccessNode] = dict()
+        self._recent_read_acc: Dict[str, dace.nodes.AccessNode] = dict()
 
-        self._access_nodes = dict()
-        self._access_collection_cache = dict()
-        self._source_nodes = dict()
-        self._delete_candidates = list()
+        self._access_nodes: Dict[str, dace.nodes.AccessNode] = dict()
+        self._access_collection_cache: Dict[int, AccessCollector.Result] = dict()
+        self._source_nodes: Dict[str, dace.nodes.AccessNode] = dict()
+        self._delete_candidates: List[MultiConnectorEdge] = list()
 
     def _access_space_to_subset(self, name, access_space):
         extent = self._extents[name]
@@ -410,8 +411,6 @@ class BaseOirSDFGBuilder(ABC):
 
     @classmethod
     def _build(cls, name, stencil: Stencil, nodes):
-        from gtc.gtir_to_oir import oir_field_boundary_computation
-
         builder = cls(name, stencil, nodes)
         for n in nodes:
             builder.add_write_after_write_edges(n)

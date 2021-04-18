@@ -218,7 +218,7 @@ class NaiveVerticalLoopExpander:
             access_collection: AccessCollector.Result = self._get_access_collection(he)
 
             for name, offsets in access_collection.offsets().items():
-                off: Tuple[int, int]
+                off: Tuple[int, int, int]
                 for off in offsets:
                     origin = (
                         -off[0] - he.oir_node.iteration_space.i_interval.start.offset,
