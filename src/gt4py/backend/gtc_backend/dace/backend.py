@@ -207,7 +207,9 @@ class DaCeBindingsCodegen:
 
             res.extend(
                 [
-                    f"int __{name}_{dim_name}_stride = gt::sid::get_stride<gt::stencil::dim::{dim_name.lower()}>(__{name}_strides);" if len(array.shape) !=3 else f"int __{name}_{dim_name}_stride = __{name}_strides[{dim_idx}];"
+                    f"int __{name}_{dim_name}_stride = gt::sid::get_stride<gt::stencil::dim::{dim_name.lower()}>(__{name}_strides);"
+                    if len(array.shape) != 3
+                    else f"int __{name}_{dim_name}_stride = __{name}_strides[{dim_idx}];"
                     for dim_idx, dim_name in enumerate("IJK")
                     if any(
                         dace.symbolic.pystr_to_symbolic(f"__{dim_name}") in s.free_symbols

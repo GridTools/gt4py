@@ -50,12 +50,12 @@ class OIRIterationSpaceTranslator(NodeTranslator):
         node: oir.HorizontalExecution,
         iteration_spaces: Dict[str, oir.CartesianIterationSpace],
     ) -> oir.HorizontalExecution:
-        assert node.id_ in iteration_spaces
+        assert id(node) in iteration_spaces
         return oir.HorizontalExecution(
             body=node.body,
             mask=node.mask,
             declarations=node.declarations,
-            iteration_space=iteration_spaces[node.id_],
+            iteration_space=iteration_spaces[id(node)],
         )
 
 
@@ -76,15 +76,15 @@ def oir_iteration_space_computation(stencil: oir.Stencil) -> oir.Stencil:
             if node.left.kind == ExprKind.FIELD:
                 outputs.add(node.left.name)
         elif isinstance(node, oir.HorizontalExecution):
-            iteration_spaces[node.id_] = oir.CartesianIterationSpace.domain()
+            iteration_spaces[id(node)] = oir.CartesianIterationSpace.domain()
             for name in outputs:
                 access_space = access_spaces.get(name, oir.CartesianIterationSpace.domain())
-                iteration_spaces[node.id_] = iteration_spaces[node.id_] | access_space
+                iteration_spaces[id(node)] = iteration_spaces[id(node)] | access_space
             for name in offsets:
                 access_space = oir.CartesianIterationSpace.domain()
                 for offset in offsets[name]:
                     access_space = access_space | oir.CartesianIterationSpace.from_offset(offset)
-                accumulated_extent = iteration_spaces[node.id_].compose(access_space)
+                accumulated_extent = iteration_spaces[id(node)].compose(access_space)
                 access_spaces[name] = (
                     access_spaces.get(name, oir.CartesianIterationSpace.domain())
                     | accumulated_extent

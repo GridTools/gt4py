@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple, Union
+from typing import Collection, Dict, List, Tuple, Union
 
 import dace
 import dace.properties
@@ -22,8 +22,6 @@ from gtc.oir import (
     VerticalLoopSection,
 )
 from gtc.passes.oir_optimizations.utils import AccessCollector
-
-from typing import Collection
 
 
 class CartesianIJIndexSpace(tuple):
@@ -210,11 +208,11 @@ class BaseOirSDFGBuilder(ABC):
                     res._ordered_accesses.extend(collection._ordered_accesses)
             return res
         elif isinstance(node, HorizontalExecutionLibraryNode):
-            if node.oir_node.id_ not in self._access_collection_cache:
-                self._access_collection_cache[node.oir_node.id_] = AccessCollector.apply(
+            if id(node.oir_node) not in self._access_collection_cache:
+                self._access_collection_cache[id(node.oir_node)] = AccessCollector.apply(
                     node.oir_node
                 )
-            return self._access_collection_cache[node.oir_node.id_]
+            return self._access_collection_cache[id(node.oir_node)]
         else:
             assert isinstance(node, VerticalLoopLibraryNode)
             res = AccessCollector.Result([])

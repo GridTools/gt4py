@@ -191,11 +191,11 @@ class NaiveVerticalLoopExpander:
                     res._ordered_accesses.extend(collection._ordered_accesses)
             return res
         elif isinstance(node, HorizontalExecutionLibraryNode):
-            if node.oir_node.id_ not in self._access_collection_cache:
-                self._access_collection_cache[node.oir_node.id_] = AccessCollector.apply(
+            if id(node.oir_node) not in self._access_collection_cache:
+                self._access_collection_cache[id(node.oir_node)] = AccessCollector.apply(
                     node.oir_node
                 )
-            return self._access_collection_cache[node.oir_node.id_]
+            return self._access_collection_cache[id(node.oir_node)]
         else:
             assert isinstance(node, VerticalLoopLibraryNode)
             res = AccessCollector.Result([])
@@ -433,14 +433,16 @@ class VerticalLoopLibraryNode(dace.nodes.LibraryNode):
         from gtc.oir_to_dace import VerticalLoopSectionOirSDFGBuilder
 
         if oir_node is not None:
-            name = oir_node.id_
+            name = "VerticalLoop_" + str(id(oir_node))
 
         if stencil is not None:
             self.loop_order = oir_node.loop_order
             self.sections = [
                 (
                     section.interval,
-                    VerticalLoopSectionOirSDFGBuilder.build(section.id_, stencil, section),
+                    VerticalLoopSectionOirSDFGBuilder.build(
+                        "VerticalLoopSection_" + str(id(section)), stencil, section
+                    ),
                 )
                 for section in oir_node.sections
             ]
@@ -781,7 +783,7 @@ class HorizontalExecutionLibraryNode(dace.nodes.LibraryNode):
 
     def __init__(self, name="unnamed_vloop", oir_node: HorizontalExecution = None, *args, **kwargs):
         if oir_node is not None:
-            name = oir_node.id_
+            name = "HorizontalExecution_" + str(id(oir_node))
             self.oir_node = oir_node
 
         super().__init__(name=name, *args, **kwargs)

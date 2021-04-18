@@ -159,6 +159,7 @@ class Interval(LocNode):
     def full(cls):
         return cls(start=AxisBound.start(), end=AxisBound.end())
 
+
 class CartesianIterationSpace(LocNode):
     i_interval: Interval
     j_interval: Interval

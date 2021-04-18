@@ -157,7 +157,7 @@ def test_stencils_roundtrip_optimized(
     stencil_def = stencil_registry[stencil_name]
     externals = externals_registry[stencil_name]
     oir = stencil_def_to_oir(stencil_def, externals)
-
+    use_on_the_fly_merging = False
     if use_greedy_merging:
         oir = GreedyMerging().visit(oir)
     if use_adjacent_loop_merging:
