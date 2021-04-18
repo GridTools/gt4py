@@ -23,18 +23,127 @@ from gtc.oir import (
 )
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
+from typing import Collection
+
+
+class CartesianIJIndexSpace(tuple):
+    def __new__(cls, *args, **kwargs):
+        return super(CartesianIJIndexSpace, cls).__new__(cls, *args, **kwargs)
+
+    def __init__(self, *args, **kwargs):
+        msg = "CartesianIJIndexSpace must be a pair of pairs of integers."
+        if not len(self) == 2:
+            raise ValueError(msg)
+        if not all(len(v) == 2 for v in self):
+            raise ValueError(msg)
+        if not all(isinstance(v[0], int) and isinstance(v[1], int) for v in self):
+            raise ValueError(msg)
+
+    @classmethod
+    def from_offset(
+        cls, offset: Union[Tuple[int, ...], CartesianOffset]
+    ) -> "CartesianIJIndexSpace":
+        if isinstance(offset, CartesianOffset):
+            return cls((offset.i, offset.i), (offset.j, offset.j))
+        return cls(((offset[0], offset[0]), (offset[1], offset[1])))
+
+    @classmethod
+    def from_iteration_space(
+        cls, iteration_space: CartesianIterationSpace
+    ) -> "CartesianIJIndexSpace":
+        return cls(
+            (
+                (iteration_space.i_interval.start.offset, iteration_space.i_interval.end.offset),
+                (iteration_space.j_interval.start.offset, iteration_space.j_interval.end.offset),
+            )
+        )
+
+    def compose(
+        self, other: Union["CartesianIterationSpace", "CartesianIJIndexSpace"]
+    ) -> "CartesianIJIndexSpace":
+        if isinstance(other, CartesianIterationSpace):
+            other = CartesianIJIndexSpace.from_iteration_space(other)
+        return CartesianIJIndexSpace(
+            (
+                (self[0][0] + other[0][0], (self[0][1] + other[0][1])),
+                (self[1][0] + other[1][0], (self[1][1] + other[1][1])),
+            )
+        )
+
+    def __or__(
+        self, other: Union["CartesianIterationSpace", "CartesianIJIndexSpace"]
+    ) -> "CartesianIJIndexSpace":
+        if isinstance(other, CartesianIterationSpace):
+            other = CartesianIJIndexSpace.from_iteration_space(other)
+        return CartesianIJIndexSpace(
+            (
+                (min(self[0][0], other[0][0]), max(self[0][1], other[0][1])),
+                (min(self[1][0], other[1][0]), max(self[1][1], other[1][1])),
+            )
+        )
+
+
+def nodes_extent_calculation(
+    nodes: Collection[Union[VerticalLoopLibraryNode, HorizontalExecutionLibraryNode]]
+) -> Dict[str, Tuple[Tuple[int, int], Tuple[int, int]]]:
+    access_spaces: Dict[str, Tuple[Tuple[int, int], Tuple[int, int]]] = dict()
+    inner_nodes = []
+    for node in nodes:
+        if isinstance(node, VerticalLoopLibraryNode):
+            for _, section_sdfg in node.sections:
+                for he in (
+                    ln
+                    for ln, _ in section_sdfg.all_nodes_recursive()
+                    if isinstance(ln, HorizontalExecutionLibraryNode)
+                ):
+                    inner_nodes.append(he)
+        else:
+            assert isinstance(node, HorizontalExecutionLibraryNode)
+            inner_nodes.append(node)
+    for node in inner_nodes:
+        access_collection = AccessCollector.apply(node.oir_node)
+        iteration_space = node.oir_node.iteration_space
+        if iteration_space is not None:
+            for name, offsets in access_collection.offsets().items():
+                for off in offsets:
+                    access_extent = (
+                        (
+                            iteration_space.i_interval.start.offset + off[0],
+                            iteration_space.i_interval.end.offset + off[0],
+                        ),
+                        (
+                            iteration_space.j_interval.start.offset + off[1],
+                            iteration_space.j_interval.end.offset + off[1],
+                        ),
+                    )
+                    if name not in access_spaces:
+                        access_spaces[name] = access_extent
+                    access_spaces[name] = tuple(
+                        (min(l[0], r[0]), max(l[1], r[1]))
+                        for l, r in zip(access_spaces[name], access_extent)
+                    )
+
+    return {
+        name: ((-asp[0][0], asp[0][1]), (-asp[1][0], asp[1][1]))
+        for name, asp in access_spaces.items()
+    }
+
 
 class BaseOirSDFGBuilder(ABC):
     has_transients = True
 
-    def __init__(self, name, stencil: Stencil, extents):
+    def __init__(self, name, stencil: Stencil, nodes):
         self._stencil = stencil
         self._sdfg = SDFG(name)
         self._state = self._sdfg.add_state(name + "_state")
-        self._extents = extents
+        self._extents = nodes_extent_calculation(nodes)
 
-        self._dtypes = {decl.name: decl.dtype for decl in stencil.declarations+stencil.params}
-        self._axes = {decl.name: decl.dimensions for decl in stencil.declarations+stencil.params if isinstance(decl,FieldDecl)}
+        self._dtypes = {decl.name: decl.dtype for decl in stencil.declarations + stencil.params}
+        self._axes = {
+            decl.name: decl.dimensions
+            for decl in stencil.declarations + stencil.params
+            if isinstance(decl, FieldDecl)
+        }
 
         self._recent_write_acc = dict()
         self._recent_read_acc = dict()
@@ -46,18 +155,22 @@ class BaseOirSDFGBuilder(ABC):
 
     def _access_space_to_subset(self, name, access_space):
         extent = self._extents[name]
-        origin = (-extent[0][0], -extent[1][0])
+        origin = (extent[0][0], extent[1][0])
         subsets = []
         if self._axes[name][0]:
-            subsets.append("{start}:__I{end:+d}".format(
-                start=origin[0] + access_space.i_interval.start.offset,
-                end=origin[0] + access_space.i_interval.end.offset,
-            ))
+            subsets.append(
+                "{start}:__I{end:+d}".format(
+                    start=origin[0] + access_space[0][0],
+                    end=origin[0] + access_space[0][1],
+                )
+            )
         if self._axes[name][1]:
-            subsets.append("{start}:__J{end:+d}".format(
-                start=origin[1] + access_space.j_interval.start.offset,
-                end=origin[1] + access_space.j_interval.end.offset,
-            ))
+            subsets.append(
+                "{start}:__J{end:+d}".format(
+                    start=origin[1] + access_space[1][0],
+                    end=origin[1] + access_space[1][1],
+                )
+            )
         return subsets
 
     def _are_nodes_ordered(self, name, node1, node2):
@@ -276,27 +389,22 @@ class BaseOirSDFGBuilder(ABC):
         for decl in self._stencil.params + self._stencil.declarations:
             name = decl.name
             dtype = dace.dtypes.typeclass(np.dtype(data_type_to_typestr(self._dtypes[name])).name)
+            shapes = self.get_shapes()
             if isinstance(decl, ScalarDecl):
                 self._sdfg.add_symbol(name, stype=dtype)
             else:
                 if name not in self._get_access_collection(self._sdfg).offsets():
                     continue
                 assert name in self._dtypes
-                shape = []
-                if self._axes[name][0]:
-                    di = self._extents[name][0][1] - self._extents[name][0][0]
-                    shape.append((f"__I{di:+d}"))
-                if self._axes[name][1]:
-                    dj = self._extents[name][1][1] - self._extents[name][1][0]
-                    shape.append((f"__J{dj:+d}"))
-                if self._axes[name][2]:
-                    shape.append(self.get_k_size(name))
+
                 self._sdfg.add_array(
                     name,
                     dtype=dtype,
-                    shape=shape,
+                    shape=shapes[name],
                     strides=tuple(
-                        dace.symbolic.pystr_to_symbolic(f"__{name}_{var}_stride") for is_axis, var in zip(self._axes[name],"IJK") if is_axis
+                        dace.symbolic.pystr_to_symbolic(f"__{name}_{var}_stride")
+                        for is_axis, var in zip(self._axes[name], "IJK")
+                        if is_axis
                     ),
                     transient=isinstance(decl, Temporary) and self.has_transients,
                     lifetime=dace.AllocationLifetime.Persistent,
@@ -306,12 +414,7 @@ class BaseOirSDFGBuilder(ABC):
     def _build(cls, name, stencil: Stencil, nodes):
         from gtc.gtir_to_oir import oir_field_boundary_computation
 
-        extents = dict()
-        for n, access_space in oir_field_boundary_computation(stencil).items():
-            i_extent = (access_space.i_interval.start.offset, access_space.i_interval.end.offset)
-            j_extent = (access_space.j_interval.start.offset, access_space.j_interval.end.offset)
-            extents[n] = (i_extent, j_extent)
-        builder = cls(name, stencil, extents)
+        builder = cls(name, stencil, nodes)
         for n in nodes:
             builder.add_write_after_write_edges(n)
             builder.add_read_edges(n)
@@ -327,6 +430,10 @@ class BaseOirSDFGBuilder(ABC):
 
     @abstractmethod
     def get_access_spaces(self, node):
+        pass
+
+    @abstractmethod
+    def get_shapes(self):
         pass
 
     def add_subsets(self):
@@ -361,13 +468,26 @@ class BaseOirSDFGBuilder(ABC):
 class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
     has_transients = False
 
+    def get_shapes(self):
+        import dace.subsets
+
+        subsets = dict()
+        for edge in self._state.edges():
+            if edge.data.data is not None:
+                if edge.data.data not in subsets:
+                    subsets[edge.data.data] = edge.data.subset
+                subsets[edge.data.data] = dace.subsets.union(
+                    subsets[edge.data.data], edge.data.subset
+                )
+        return {name: subset.bounding_box_size() for name, subset in subsets.items()}
+
     def get_k_size(self, name):
         if not self._axes[name][2]:
             return None
         collection = self._get_access_collection(self._sdfg)
         min_k = min(o[2] for o in collection.offsets()[name])
         max_k = max(o[2] for o in collection.offsets()[name])
-        return str(max_k-min_k+1)
+        return str(max_k - min_k + 1)
 
     def get_k_subsets(self, node):
         assert isinstance(node, HorizontalExecutionLibraryNode)
@@ -423,23 +543,37 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         assert iteration_space is not None
         collection = self._get_access_collection(node)
         for name in collection.read_fields():
-            access_space = CartesianIterationSpace.domain()
+            access_space = CartesianIJIndexSpace.from_offset(collection.read_offsets()[name].pop())
             for offset in collection.read_offsets()[name]:
-                access_space = access_space | CartesianIterationSpace.from_offset(
-                    CartesianOffset(i=offset[0], j=offset[1], k=offset[2])
-                )
+                access_space = access_space | CartesianIJIndexSpace.from_offset(offset)
             input_spaces[name] = access_space.compose(iteration_space)
         for name in collection.write_fields():
-            access_space = CartesianIterationSpace.domain()
+            access_space = CartesianIJIndexSpace.from_offset(collection.write_offsets()[name].pop())
             for offset in collection.write_offsets()[name]:
-                access_space = access_space | CartesianIterationSpace.from_offset(
-                    CartesianOffset(i=offset[0], j=offset[1], k=offset[2])
-                )
+                access_space = access_space | CartesianIJIndexSpace.from_offset(offset)
             output_spaces[name] = access_space.compose(iteration_space)
         return input_spaces, output_spaces
 
 
 class OirSDFGBuilder(BaseOirSDFGBuilder):
+    def get_shapes(self):
+        shapes = dict()
+        for decl in self._stencil.params + self._stencil.declarations:
+            name = decl.name
+            if name not in self._axes:
+                continue
+            shape = []
+            if self._axes[name][0]:
+                di = self._extents[name][0][1] + self._extents[name][0][0]
+                shape.append((f"__I{di:+d}"))
+            if self._axes[name][1]:
+                dj = self._extents[name][1][1] + self._extents[name][1][0]
+                shape.append((f"__J{dj:+d}"))
+            if self._axes[name][2]:
+                shape.append(self.get_k_size(name))
+            shapes[name] = shape
+        return shapes
+
     def get_k_size(self, name):
         if not self._axes[name][2]:
             return None
@@ -500,11 +634,11 @@ class OirSDFGBuilder(BaseOirSDFGBuilder):
                 assert iteration_space is not None
                 collection = self._get_access_collection(n)
                 for name in collection.read_fields():
-                    access_space = CartesianIterationSpace.domain()
+                    access_space = CartesianIJIndexSpace.from_offset(
+                        collection.read_offsets()[name].pop()
+                    )
                     for offset in collection.read_offsets()[name]:
-                        access_space = access_space | CartesianIterationSpace.from_offset(
-                            CartesianOffset(i=offset[0], j=offset[1], k=offset[2])
-                        )
+                        access_space = access_space | CartesianIJIndexSpace.from_offset(offset)
                     if name not in input_spaces:
                         input_spaces[name] = access_space.compose(iteration_space)
                     else:
@@ -512,11 +646,11 @@ class OirSDFGBuilder(BaseOirSDFGBuilder):
                             iteration_space
                         )
                 for name in collection.write_fields():
-                    access_space = CartesianIterationSpace.domain()
+                    access_space = CartesianIJIndexSpace.from_offset(
+                        collection.write_offsets()[name].pop()
+                    )
                     for offset in collection.write_offsets()[name]:
-                        access_space = access_space | CartesianIterationSpace.from_offset(
-                            CartesianOffset(i=offset[0], j=offset[1], k=offset[2])
-                        )
+                        access_space = access_space | CartesianIJIndexSpace.from_offset(offset)
                     if name not in output_spaces:
                         output_spaces[name] = access_space.compose(iteration_space)
                     else:

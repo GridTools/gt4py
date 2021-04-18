@@ -66,8 +66,12 @@ class GTCDaCeExtGenerator:
         oir = self._optimize_oir(oir)
         oir = gtir_to_oir.oir_iteration_space_computation(oir)
         sdfg = OirSDFGBuilder.build(oir.name, oir)
-        sdfg.expand_library_nodes(recursive=True)
+        sdfg.expand_library_nodes(recursive=False)
+        sdfg.save("expand1.sdfg")
         sdfg.validate()
+        sdfg.expand_library_nodes(recursive=False)
+        sdfg.validate()
+        sdfg.save("expand2.sdfg")
         code_objects = sdfg.generate_code()
         implementation = code_objects[[co.title for co in code_objects].index("Frame")].clean_code
         lines = implementation.split("\n")
@@ -117,6 +121,7 @@ class DaCeBindingsCodegen:
         #include <pybind11/pybind11.h>
         #include <pybind11/stl.h>
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
+        #include <gridtools/stencil/cartesian.hpp>
         #include <gridtools/stencil/global_parameter.hpp>
         #include <gridtools/sid/sid_shift_origin.hpp>
         #include <gridtools/sid/rename_dimensions.hpp>
@@ -194,13 +199,24 @@ class DaCeBindingsCodegen:
             dtype = array.dtype.ctype
             res.append(
                 f"""
-                       auto __{name}_outer =gt::sid::shift_sid_origin(__{name}_sid, std::array<gt::int_t, 3>{{0, 0, 0}});
+                       auto __{name}_outer =gt::sid::shift_sid_origin(__{name}_sid, std::array<gt::int_t, {len(array.shape)}>{{{",".join("0" for _ in array.shape)}}});
                        {dtype}* {name} = gt::sid::sid_get_origin(__{name}_outer)();
                        auto __{name}_strides = gt::sid::sid_get_strides(__{name}_sid);
-                       int __{name}_I_stride = __{name}_strides[0];
-                       int __{name}_J_stride = __{name}_strides[1];
-                       int __{name}_K_stride = __{name}_strides[2];
-                       {name} -= ({"+".join(f"__{name}_{var}_stride*({offset_dict[name][idx]})" for idx, var in enumerate("IJK"))});"""
+                """
+            )
+
+            res.extend(
+                [
+                    f"int __{name}_{dim_name}_stride = gt::sid::get_stride<gt::stencil::dim::{dim_name.lower()}>(__{name}_strides);" if len(array.shape) !=3 else f"int __{name}_{dim_name}_stride = __{name}_strides[{dim_idx}];"
+                    for dim_idx, dim_name in enumerate("IJK")
+                    if any(
+                        dace.symbolic.pystr_to_symbolic(f"__{dim_name}") in s.free_symbols
+                        for s in array.shape
+                    )
+                ]
+            )
+            res.append(
+                f"{name} -= ({'+'.join(f'__{name}_{var}_stride*({offset_dict[name][idx]})' for idx, var in enumerate('IJK') if any(dace.symbolic.pystr_to_symbolic(f'__{var}') in s.free_symbols for s in array.shape))});"
             )
         return "\n".join(res)
 
@@ -228,6 +244,7 @@ class DaCeBindingsCodegen:
         for name, array in sdfg.arrays.items():
             if array.transient:
                 continue
+            #
             num_dims = len(array.shape)
             sid_def = """gt::as_{sid_type}<{dtype}, {num_dims},
                 std::integral_constant<int, {unique_index}>>({name})""".format(
@@ -239,10 +256,21 @@ class DaCeBindingsCodegen:
                 unique_index=self.unique_index(),
                 num_dims=num_dims,
             )
+            if num_dims != 3:
+                gt_dims = [
+                    f"gt::stencil::dim::{dim}"
+                    for dim in "ijk"
+                    if any(
+                        dace.symbolic.pystr_to_symbolic(f"__{dim.upper()}") in s.free_symbols
+                        for s in array.shape
+                    )
+                ]
+                sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
+                    gt_dims=", ".join(gt_dims), sid_def=sid_def
+                )
             res.append(
                 "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-                    sid_def=sid_def,
-                    name=name,
+                    sid_def=sid_def, name=name
                 )
             )
         for name in (n for n in sdfg.symbols.keys() if not n.startswith("__")):

@@ -157,11 +157,7 @@ def test_stencils_roundtrip_optimized(
     stencil_def = stencil_registry[stencil_name]
     externals = externals_registry[stencil_name]
     oir = stencil_def_to_oir(stencil_def, externals)
-    use_greedy_merging = False
-    use_adjacent_loop_merging = True
-    use_local_temporaries_to_scalars = True
-    use_write_before_read_temporaries_to_scalars = True
-    use_on_the_fly_merging = True
+
     if use_greedy_merging:
         oir = GreedyMerging().visit(oir)
     if use_adjacent_loop_merging:
