@@ -27,6 +27,7 @@ class FieldDeclFactory(factory.Factory):
 
     name = identifier(cuir.FieldDecl)
     dtype = cuir.DataType.FLOAT32
+    dimensions = (True, True, True)
 
 
 class TemporaryFactory(factory.Factory):
