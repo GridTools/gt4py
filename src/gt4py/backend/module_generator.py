@@ -462,10 +462,10 @@ class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
     def generate_implementation(self) -> str:
         source = super().generate_implementation()
         if self.builder.options.backend_opts.get("device_sync", True):
-            textwrap.dedent(
+            source += textwrap.dedent(
                 """
                     cupy.cuda.Device(0).synchronize()
-                    """
+                """
             )
         return source
 

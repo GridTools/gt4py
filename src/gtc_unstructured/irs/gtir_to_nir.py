@@ -118,7 +118,7 @@ class GtirToNir(eve.NodeTranslator):
         **kwargs,
     ):
         location_ref_deref = symtable[node.location_ref.name]
-        name = node.id_
+        name = type(node).__name__ + str(id(node))
         hloop_ctx.add_declaration(
             nir.LocalFieldVar(
                 name=name,
@@ -174,7 +174,7 @@ class GtirToNir(eve.NodeTranslator):
     ):
         connectivity_deref: gtir.Connectivity = kwargs["symtable"][node.neighbors.of.name]
 
-        reduce_var_name = "local" + str(node.id_)
+        reduce_var_name = "local" + str(id(node))
         hloop_ctx.add_declaration(
             nir.LocalVar(
                 name=reduce_var_name,

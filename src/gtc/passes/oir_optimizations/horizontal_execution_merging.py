@@ -64,7 +64,7 @@ class GreedyMerging(NodeTranslator):
                 if field in previous_reads
                 and any(o[:2] != (0, 0) for o in offsets ^ previous_reads[field])
             }
-            if not conflicting and horizontal_execution.mask == horizontal_executions[-1].mask:
+            if not conflicting:
                 horizontal_executions[-1].body += horizontal_execution.body
                 for field, writes in current_writes.items():
                     previous_writes.setdefault(field, set()).update(writes)
@@ -124,7 +124,6 @@ class OnTheFlyMerging(NodeTranslator):
         self,
         horizontal_executions: List[oir.HorizontalExecution],
         symtable: Dict[str, Any],
-        tmps_to_remove: Set[str],
         new_symbol_name: Callable[[str], str],
     ) -> List[oir.HorizontalExecution]:
         """Recursively merge horizontal executions.
@@ -143,15 +142,6 @@ class OnTheFlyMerging(NodeTranslator):
 
         def first_fields_rewritten_later() -> bool:
             return bool(first_accesses.fields() & other_accesses.write_fields())
-
-        def first_output_used_in_later_mask() -> bool:
-            empty_str_set: Set[str] = set()
-            return bool(
-                first_accesses.write_fields()
-                & empty_str_set.union(
-                    *(AccessCollector.apply(o.mask, is_write=False).fields() for o in others)
-                )
-            )
 
         def first_has_large_body() -> bool:
             return len(first.body) > self.max_horizontal_execution_body_size
@@ -175,16 +165,13 @@ class OnTheFlyMerging(NodeTranslator):
             return any(call in expensive_calls for call in calls)
 
         if (
-            first.mask is not None
-            or first_fields_rewritten_later()
-            or first_output_used_in_later_mask()
+            first_fields_rewritten_later()
             or first_has_large_body()
             or first_has_expensive_function_call()
         ):
-            return [first] + self._merge(others, symtable, tmps_to_remove, new_symbol_name)
+            return [first] + self._merge(others, symtable, new_symbol_name)
 
         writes = first_accesses.write_fields()
-        tmps_to_remove |= writes
         others_otf = []
         for horizontal_execution in others:
             read_offsets: Set[Tuple[int, int, int]] = set()
@@ -208,7 +195,6 @@ class OnTheFlyMerging(NodeTranslator):
 
             merged = oir.HorizontalExecution(
                 body=self.visit(horizontal_execution.body, offset_symbol_map=offset_symbol_map),
-                mask=self.visit(horizontal_execution.mask, offset_symbol_map=offset_symbol_map),
                 declarations=horizontal_execution.declarations
                 + [
                     oir.LocalScalar(name=new_name, dtype=symtable[old_name].dtype)
@@ -223,7 +209,7 @@ class OnTheFlyMerging(NodeTranslator):
                 )
             others_otf.append(merged)
 
-        return self._merge(others_otf, symtable, tmps_to_remove, new_symbol_name)
+        return self._merge(others_otf, symtable, new_symbol_name)
 
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, **kwargs: Any
@@ -233,30 +219,28 @@ class OnTheFlyMerging(NodeTranslator):
             horizontal_executions=self._merge(node.horizontal_executions, **kwargs),
         )
 
-    def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, tmps_to_remove: Set[str], **kwargs: Any
-    ) -> oir.VerticalLoop:
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
         if node.loop_order != common.LoopOrder.PARALLEL:
             return node
-        sections = self.visit(node.sections, tmps_to_remove=tmps_to_remove, **kwargs)
+        sections = self.visit(node.sections, **kwargs)
+        accessed = AccessCollector.apply(sections).fields()
         return oir.VerticalLoop(
             loop_order=node.loop_order,
             sections=sections,
-            caches=[c for c in node.caches if c.name not in tmps_to_remove],
+            caches=[c for c in node.caches if c.name in accessed],
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        tmps_to_remove: Set[str] = set()
         vertical_loops = self.visit(
             node.vertical_loops,
             symtable=node.symtable_,
             new_symbol_name=symbol_name_creator(set(node.symtable_)),
-            tmps_to_remove=tmps_to_remove,
             **kwargs,
         )
+        accessed = AccessCollector.apply(vertical_loops).fields()
         return oir.Stencil(
             name=node.name,
             params=node.params,
             vertical_loops=vertical_loops,
-            declarations=[d for d in node.declarations if d.name not in tmps_to_remove],
+            declarations=[d for d in node.declarations if d.name in accessed],
         )
