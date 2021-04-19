@@ -8,61 +8,6 @@ from gtc import common, oir
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 
 
-class HorizontalExecutionFieldRenamer(eve.NodeTranslator):
-    def visit_FieldAccess(self, node: oir.FieldAccess):
-        if node.name not in self._field_table:
-            return node
-        return oir.FieldAccess(
-            name=self._field_table[node.name], offset=node.offset, dtype=node.dtype
-        )
-
-    def visit_ScalarAccess(self, node: oir.ScalarAccess):
-        if node.name not in self._field_table:
-            return node
-        return oir.ScalarAccess(name=self._field_table[node.name], dtype=node.dtype)
-
-    def visit_HorizontalExecution(self, node: oir.HorizontalExecution):
-        assert all(
-            decl.name not in self._field_table or self._field_table[decl.name] == decl.name
-            for decl in node.declarations
-        )
-        return node
-
-    def __init__(self, field_table):
-        self._field_table = field_table
-
-
-def get_node_name_mapping(state: dace.SDFGState, node: dace.nodes.LibraryNode):
-
-    name_mapping = dict()
-    for edge in state.in_edges(node):
-        if edge.dst_conn is not None:
-            assert edge.dst_conn.startswith("IN_")
-            internal_name = edge.dst_conn[len("IN_") :]
-            outer_name = edge.data.data
-            if internal_name not in name_mapping:
-                name_mapping[internal_name] = outer_name
-            else:
-                msg = (
-                    f"input and output of field '{internal_name}' to node'{node.name}' refer to "
-                    + "different arrays"
-                )
-                assert name_mapping[internal_name] == outer_name, msg
-    for edge in state.out_edges(node):
-        if edge.src_conn is not None:
-            assert edge.src_conn.startswith("OUT_")
-            internal_name = edge.src_conn[len("OUT_") :]
-            outer_name = edge.data.data
-            if internal_name not in name_mapping:
-                name_mapping[internal_name] = outer_name
-            else:
-                msg = (
-                    f"input and output of field '{internal_name}' to node'{node.name}' refer to"
-                    + "different arrays"
-                )
-                assert name_mapping[internal_name] == outer_name, msg
-    return name_mapping
-
 
 def convert(sdfg: dace.SDFG) -> oir.Stencil:
     vertical_loops = list()

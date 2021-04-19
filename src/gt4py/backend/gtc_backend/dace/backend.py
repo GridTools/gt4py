@@ -27,7 +27,7 @@ from gt4py.backend.gt_backends import make_x86_layout_map, x86_is_compatible_lay
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.ir import StencilDefinition
 from gtc import gtir_to_oir, oir
-from gtc.oir_to_dace import OirSDFGBuilder
+from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast

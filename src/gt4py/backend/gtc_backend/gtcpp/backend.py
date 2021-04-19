@@ -16,7 +16,7 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
-import gtc.dace_to_oir as dace_to_oir
+import gtc.dace.dace_to_oir as dace_to_oir
 import gtc.utils as gtc_utils
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
@@ -38,7 +38,7 @@ from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
-from gtc.oir_to_dace import OirSDFGBuilder
+from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,
