@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABC, abstractmethod
-from typing import Collection, Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import dace
 import dace.properties
@@ -10,10 +10,10 @@ import numpy as np
 from dace import SDFG
 from dace.sdfg.graph import MultiConnectorEdge
 
-from gtc.common import CartesianOffset, LevelMarker, data_type_to_typestr
+from gtc.common import LevelMarker, data_type_to_typestr
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
+from gtc.dace.utils import CartesianIJIndexSpace, nodes_extent_calculation
 from gtc.oir import (
-    CartesianIterationSpace,
     FieldDecl,
     Interval,
     IntervalMapping,
@@ -23,7 +23,6 @@ from gtc.oir import (
     VerticalLoopSection,
 )
 from gtc.passes.oir_optimizations.utils import AccessCollector
-from gtc.dace.utils import nodes_extent_calculation, CartesianIJIndexSpace
 
 
 class BaseOirSDFGBuilder(ABC):

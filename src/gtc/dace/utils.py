@@ -1,18 +1,21 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Collection, Dict, Tuple, Union
 
+import dace
 from dace import SDFG, InterstateEdge
+
 import eve
-from gtc.passes.oir_optimizations.utils import AccessCollector
 import gtc.oir as oir
 from gtc.common import CartesianOffset
 from gtc.oir import CartesianIterationSpace
-import dace
-from typing import Union, Tuple, Collection, Dict, TYPE_CHECKING
+from gtc.passes.oir_optimizations.utils import AccessCollector
+
+
 if TYPE_CHECKING:
-    from gtc.dace.nodes import VerticalLoopLibraryNode, HorizontalExecutionLibraryNode
+    from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 
 if TYPE_CHECKING:
     from gtc.oir import VerticalLoopSection
+
 
 def get_axis_bound_str(axis_bound, var_name):
     from gtc.common import LevelMarker
@@ -52,6 +55,7 @@ def get_interval_length_str(interval, var_name):
         get_axis_bound_str(interval.end, var_name), get_axis_bound_str(interval.start, var_name)
     )
 
+
 def get_vertical_loop_section_sdfg(section: "VerticalLoopSection") -> SDFG:
     sdfg = SDFG("VerticalLoopSection_" + str(id(section)))
     old_state = sdfg.add_state("start_state", is_start_state=True)
@@ -62,6 +66,7 @@ def get_vertical_loop_section_sdfg(section: "VerticalLoopSection") -> SDFG:
 
         old_state = new_state
     return sdfg
+
 
 class HorizontalExecutionFieldRenamer(eve.NodeTranslator):
     def visit_FieldAccess(self, node: oir.FieldAccess):
@@ -117,6 +122,7 @@ def get_node_name_mapping(state: dace.SDFGState, node: dace.nodes.LibraryNode):
                 )
                 assert name_mapping[internal_name] == outer_name, msg
     return name_mapping
+
 
 class CartesianIJIndexSpace(tuple):
     def __new__(cls, *args, **kwargs):
@@ -180,7 +186,8 @@ def nodes_extent_calculation(
 ) -> Dict[str, Tuple[Tuple[int, int], Tuple[int, int]]]:
     access_spaces: Dict[str, Tuple[Tuple[int, int], ...]] = dict()
     inner_nodes = []
-    from gtc.dace.nodes import VerticalLoopLibraryNode, HorizontalExecutionLibraryNode
+    from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
+
     for node in nodes:
         if isinstance(node, VerticalLoopLibraryNode):
             for _, section_sdfg in node.sections:
@@ -220,4 +227,3 @@ def nodes_extent_calculation(
         name: ((-asp[0][0], asp[0][1]), (-asp[1][0], asp[1][1]))
         for name, asp in access_spaces.items()
     }
-

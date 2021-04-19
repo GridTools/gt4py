@@ -3,10 +3,9 @@ import dace
 import dace.data
 import networkx as nx
 
-import eve
 from gtc import common, oir
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
-
+from gtc.dace.utils import HorizontalExecutionFieldRenamer, get_node_name_mapping
 
 
 def convert(sdfg: dace.SDFG) -> oir.Stencil:

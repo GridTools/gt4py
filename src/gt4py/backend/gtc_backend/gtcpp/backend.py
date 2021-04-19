@@ -37,8 +37,8 @@ from gt4py.backend.gt_backends import (
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
-from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.dace.oir_to_dace import OirSDFGBuilder
+from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,

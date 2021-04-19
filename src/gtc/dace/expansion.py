@@ -1,18 +1,23 @@
-import gtc.oir as oir
-import gtc.common as common
-from eve import codegen
-from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from typing import Any, Dict, List, Tuple
-from gtc.oir import Interval
-from gtc.common import LoopOrder
-import dace.library
-from gtc.passes.oir_optimizations.utils import AccessCollector
-from gtc.dace.utils import get_interval_range_str,get_axis_bound_str
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Set, Tuple, Union
+
 import dace
+import dace.library
+from dace import SDFG
+
+import gtc.common as common
+import gtc.oir as oir
+from eve import codegen
+from eve.codegen import FormatTemplate as as_fmt
+from eve.codegen import MakoTemplate as as_mako
+from gtc.common import LoopOrder
+from gtc.dace.utils import get_axis_bound_str, get_interval_range_str
+from gtc.oir import Interval
+from gtc.passes.oir_optimizations.utils import AccessCollector
+
 
 if TYPE_CHECKING:
-    from gtc.dace.nodes import VerticalLoopLibraryNode
+    from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
+
 
 class TaskletCodegen(codegen.TemplatedGenerator):
 
@@ -266,6 +271,7 @@ class NaiveVerticalLoopExpander:
     ) -> "AccessCollector.Result":
 
         from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
+
         if isinstance(node, dace.SDFG):
             res = AccessCollector.Result([])
             for node in node.states()[0].nodes():
@@ -294,9 +300,7 @@ class NaiveVerticalLoopExpander:
         section_origins: Dict[str, Tuple[int, int]] = dict()
         min_k_offsets: Dict[str, int] = dict()
         for he in (
-            ln
-            for ln, _ in section.all_nodes_recursive()
-            if isinstance(ln, dace.nodes.LibraryNode)
+            ln for ln, _ in section.all_nodes_recursive() if isinstance(ln, dace.nodes.LibraryNode)
         ):
             access_collection: AccessCollector.Result = self._get_access_collection(he)
 
@@ -488,6 +492,7 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
                     memlet=dace.memlet.Memlet.simple(name, subset, dynamic=False),
                 )
 
+
 @dace.library.expansion
 class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
     environments: List = []
@@ -553,6 +558,7 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
         node: "Union[HorizontalExecutionLibraryNode, VerticalLoopLibraryNode, SDFG]",
     ) -> "AccessCollector.Result":
         from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
+
         if isinstance(node, dace.SDFG):
             res = AccessCollector.Result([])
             for node in node.states()[0].nodes():

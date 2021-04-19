@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
-from typing import Any, Dict, List, Set, Tuple, Union
+from typing import List, Tuple
 
 import dace.properties
 import dace.subsets
-from dace import SDFG, library
+from dace import library
 
-from gtc.dace.expansion import NaiveVerticalLoopExpansion, NaiveHorizontalExecutionExpansion
 from gtc.common import LoopOrder
+from gtc.dace.expansion import NaiveHorizontalExecutionExpansion, NaiveVerticalLoopExpansion
 from gtc.oir import CacheDesc, HorizontalExecution, Interval, Stencil, VerticalLoop
-
 
 
 @library.node
@@ -59,10 +58,6 @@ class VerticalLoopLibraryNode(dace.nodes.LibraryNode):
         for _, sdfg in self.sections:
             sdfg.validate()
         super().validate(*args, **kwargs)
-
-
-
-
 
 
 @library.node

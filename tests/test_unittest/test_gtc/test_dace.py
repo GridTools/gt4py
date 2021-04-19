@@ -10,10 +10,10 @@ import pytest
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.definitions import BuildOptions
 from gt4py.frontend.gtscript_frontend import GTScriptFrontend
-from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.dace_to_oir import convert
-from gtc.gtir_to_oir import GTIRToOIR, oir_iteration_space_computation
+from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.oir_to_dace import OirSDFGBuilder
+from gtc.gtir_to_oir import GTIRToOIR, oir_iteration_space_computation
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,
