@@ -82,6 +82,11 @@ class OIRToCUIR(eve.NodeTranslator):
             left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> cuir.MaskStmt:
+        return cuir.MaskStmt(
+            mask=self.visit(node.mask, **kwargs), body=self.visit(node.body, **kwargs)
+        )
+
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> cuir.Cast:
         return cuir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 
@@ -103,7 +108,6 @@ class OIRToCUIR(eve.NodeTranslator):
     ) -> cuir.HorizontalExecution:
         return cuir.HorizontalExecution(
             body=self.visit(node.body, **kwargs),
-            mask=self.visit(node.mask, **kwargs),
             declarations=self.visit(node.declarations),
         )
 

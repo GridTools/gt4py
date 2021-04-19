@@ -70,10 +70,12 @@ class GTIRToOIR(NodeTranslator):
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> None:
+        body = [oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))]
+        if mask is not None:
+            body = [oir.MaskStmt(body=body, mask=mask)]
         ctx.add_horizontal_execution(
             oir.HorizontalExecution(
-                body=[oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))],
-                mask=mask,
+                body=body,
                 declarations=[],
             ),
         )
