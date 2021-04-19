@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Dict, List, Set, Tuple, Union
+from typing import Any, Dict, List, Set, Tuple, Union
 
 import dace
 import dace.library
@@ -10,13 +10,10 @@ from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from gtc.common import LoopOrder
+from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.utils import get_axis_bound_str, get_interval_range_str
 from gtc.oir import Interval
 from gtc.passes.oir_optimizations.utils import AccessCollector
-
-
-if TYPE_CHECKING:
-    from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 
 
 class TaskletCodegen(codegen.TemplatedGenerator):
@@ -142,7 +139,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         return formatted_code
 
 
-@dace.library.expansion
+@dace.library.register_expansion(VerticalLoopLibraryNode, "naive")
 class NaiveVerticalLoopExpansion(dace.library.ExpandTransformation):
     environments: List = []
 
@@ -493,7 +490,7 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
                 )
 
 
-@dace.library.expansion
+@dace.library.register_expansion(HorizontalExecutionLibraryNode, "naive")
 class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
     environments: List = []
 

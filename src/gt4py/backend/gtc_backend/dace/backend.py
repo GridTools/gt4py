@@ -26,7 +26,7 @@ from gt4py.backend import BaseGTBackend, CLIBackendMixin
 from gt4py.backend.gt_backends import make_x86_layout_map, x86_is_compatible_layout
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.ir import StencilDefinition
-from gtc import gtir_to_oir, oir
+from gtc import gtir, gtir_to_oir
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
@@ -65,27 +65,15 @@ class GTCDaCeExtGenerator:
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
         oir = self._optimize_oir(oir)
         oir = gtir_to_oir.oir_iteration_space_computation(oir)
-        sdfg = OirSDFGBuilder.build(oir.name, oir)
-        sdfg.expand_library_nodes(recursive=False)
-        sdfg.save("expand1.sdfg")
-        sdfg.validate()
-        sdfg.expand_library_nodes(recursive=False)
-        sdfg.validate()
-        sdfg.save("expand2.sdfg")
+        sdfg = OirSDFGBuilder().visit(oir)
+        sdfg.expand_library_nodes(recursive=True)
         code_objects = sdfg.generate_code()
         implementation = code_objects[[co.title for co in code_objects].index("Frame")].clean_code
         lines = implementation.split("\n")
-        implementation = "\n".join(lines[0:2] + lines[3:])
+        implementation = "\n".join(lines[0:2] + lines[3:])  # remove import of not generated file
         implementation = codegen.format_source("cpp", implementation, style="LLVM")
-        from gtc.gtir_to_oir import oir_field_boundary_computation
 
-        origins = {
-            k: (-v.i_interval.start.offset, -v.j_interval.start.offset, 0)
-            for k, v in oir_field_boundary_computation(oir).items()
-        }
-        bindings = DaCeBindingsCodegen.apply(
-            oir, sdfg, module_name=self.module_name, origins=origins
-        )
+        bindings = DaCeBindingsCodegen.apply(gtir, sdfg, module_name=self.module_name)
 
         bindings_ext = ".cu" if self.gt_backend_t == "gpu" else ".cpp"
         return {
@@ -191,7 +179,12 @@ class DaCeBindingsCodegen:
         """
     )
 
-    def generate_strides_and_ptr(self, sdfg, offset_dict):
+    def generate_strides_and_ptr(self, gtir, sdfg):
+        from gt4py.backend.module_generator import compute_legacy_extents
+
+        offset_dict: Dict[str, Tuple[int, int, int]] = {
+            k: (-v[0][0], -v[1][0], -v[2][0]) for k, v in compute_legacy_extents(gtir).items()
+        }
         res = []
         for name, array in sdfg.arrays.items():
             if array.transient:
@@ -222,7 +215,7 @@ class DaCeBindingsCodegen:
             )
         return "\n".join(res)
 
-    def generate_entry_params(self, oir: oir.Stencil, sdfg: dace.SDFG):
+    def generate_entry_params(self, gtir: gtir.Stencil, sdfg: dace.SDFG):
         res = {}
         import dace.data
 
@@ -237,7 +230,7 @@ class DaCeBindingsCodegen:
             elif name in sdfg.symbols and not name.startswith("__"):
                 assert name in sdfg.symbols
                 res[name] = "{dtype} {name}".format(dtype=sdfg.symbols[name].ctype, name=name)
-        return list(res[node.name] for node in oir.params)
+        return list(res[node.name] for node in gtir.params if node.name in res)
 
     def generate_sid_params(self, sdfg: dace.SDFG):
         res = []
@@ -317,24 +310,22 @@ class DaCeBindingsCodegen:
             res.append(dtype.as_arg(name))
         return ", ".join(res)
 
-    def generate_sdfg_bindings(self, oir, sdfg, module_name, origins):
+    def generate_sdfg_bindings(self, gtir, sdfg, module_name):
 
         return self.mako_template.render_values(
             name=sdfg.name,
             module_name=module_name,
-            get_strides_and_ptr=self.generate_strides_and_ptr(sdfg, origins),
+            get_strides_and_ptr=self.generate_strides_and_ptr(gtir, sdfg),
             dace_args=self.generate_dace_args(sdfg),
-            entry_params=self.generate_entry_params(oir, sdfg),
+            entry_params=self.generate_entry_params(gtir, sdfg),
             sid_params=self.generate_sid_params(sdfg),
             functor_args=self.generate_functor_args(sdfg),
             zeros_init_func=self.generate_transient_strides(sdfg),
         )
 
     @classmethod
-    def apply(cls, oir: oir.Stencil, sdfg: dace.SDFG, module_name: str, origins) -> str:
-        generated_code = cls().generate_sdfg_bindings(
-            oir, sdfg, module_name=module_name, origins=origins
-        )
+    def apply(cls, gtir: gtir.Stencil, sdfg: dace.SDFG, module_name: str) -> str:
+        generated_code = cls().generate_sdfg_bindings(gtir, sdfg, module_name=module_name)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
 

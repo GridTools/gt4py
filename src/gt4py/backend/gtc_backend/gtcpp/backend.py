@@ -69,7 +69,7 @@ class GTCGTExtGenerator:
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
         oir = gtir_to_oir.GTIRToOIR().visit(gtir)
-        sdfg = OirSDFGBuilder.build(oir.name, oir)
+        sdfg = OirSDFGBuilder().visit(oir)
         oir = dace_to_oir.convert(sdfg)
         oir = self._optimize_oir(oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)

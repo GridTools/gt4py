@@ -160,8 +160,8 @@ def run_tridiagonal_solver(backend, id_version, domain):
 @hyp.given(
     domain=hyp_st.tuples(
         *(
-            [hyp_st.integers(min_value=1, max_value=32)] * 2
-            + [hyp_st.integers(min_value=2, max_value=32)]
+            [hyp_st.integers(min_value=2, max_value=32)] * 2
+            + [hyp_st.integers(min_value=5, max_value=32)]
         )
     )
 )

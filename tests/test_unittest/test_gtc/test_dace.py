@@ -118,12 +118,12 @@ def test_stencils_roundtrip_raw(stencil_name):
     stencil_def = stencil_registry[stencil_name]
     externals = externals_registry[stencil_name]
     oir = stencil_def_to_oir(stencil_def, externals)
-    sdfg = OirSDFGBuilder.build(oir.name, oir)
+    sdfg = OirSDFGBuilder().visit(oir)
 
     sdfg_pre = deepcopy(sdfg)
 
     oir = convert(sdfg)
-    sdfg_post = OirSDFGBuilder.build(oir.name, oir)
+    sdfg_post = OirSDFGBuilder().visit(oir)
     assert_sdfg_equal(sdfg_pre, sdfg_post)
 
 
@@ -179,10 +179,10 @@ def test_stencils_roundtrip_optimized(
     if use_prune_k_cache_flushes:
         oir = PruneKCacheFlushes().visit(oir)
     oir = oir_iteration_space_computation(oir)
-    sdfg = OirSDFGBuilder.build(oir.name, oir)
+    sdfg = OirSDFGBuilder().visit(oir)
 
     sdfg_pre = deepcopy(sdfg)
 
     oir = convert(sdfg)
-    sdfg_post = OirSDFGBuilder.build(oir.name, oir)
+    sdfg_post = OirSDFGBuilder().visit(oir)
     assert_sdfg_equal(sdfg_pre, sdfg_post)

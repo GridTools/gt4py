@@ -10,18 +10,12 @@ import numpy as np
 from dace import SDFG
 from dace.sdfg.graph import MultiConnectorEdge
 
+import eve
+import gtc.oir as oir
 from gtc.common import LevelMarker, data_type_to_typestr
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.utils import CartesianIJIndexSpace, nodes_extent_calculation
-from gtc.oir import (
-    FieldDecl,
-    Interval,
-    IntervalMapping,
-    ScalarDecl,
-    Stencil,
-    Temporary,
-    VerticalLoopSection,
-)
+from gtc.oir import FieldDecl, Interval, IntervalMapping, ScalarDecl, Stencil, Temporary
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
 
@@ -234,7 +228,7 @@ class BaseOirSDFGBuilder(ABC):
     def add_node(self, node):
         self._state.add_node(node)
 
-    def _get_sdfg(self):
+    def finalize(self):
         for edge in self._delete_candidates:
             assert edge.src_conn is None
             assert edge.dst_conn is None
@@ -259,6 +253,9 @@ class BaseOirSDFGBuilder(ABC):
             else:
                 assert is_write
                 acc.access = dace.AccessType.WriteOnly
+
+    def _get_sdfg(self):
+        self.finalize()
         return self._sdfg
 
     @abstractmethod
@@ -307,7 +304,7 @@ class BaseOirSDFGBuilder(ABC):
                 )
 
     @classmethod
-    def _build(cls, name, stencil: Stencil, nodes):
+    def _build(cls, name, stencil: Stencil, nodes: List[dace.nodes.LibraryNode]):
         builder = cls(name, stencil, nodes)
         for n in nodes:
             builder.add_write_after_write_edges(n)
@@ -424,8 +421,7 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         )
 
     @classmethod
-    def build(cls, name, stencil: Stencil, node: VerticalLoopSection):
-        nodes = [HorizontalExecutionLibraryNode(oir_node=he) for he in node.horizontal_executions]
+    def build(cls, name, stencil: Stencil, nodes: List[HorizontalExecutionLibraryNode]):
         return super()._build(name, stencil, nodes)
 
     def get_access_spaces(self, node):
@@ -449,7 +445,7 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         return input_spaces, output_spaces
 
 
-class OirSDFGBuilder(BaseOirSDFGBuilder):
+class OirStencilSDFGBuilder(BaseOirSDFGBuilder):
     def get_shapes(self):
         shapes = dict()
         for decl in self._stencil.params + self._stencil.declarations:
@@ -577,8 +573,30 @@ class OirSDFGBuilder(BaseOirSDFGBuilder):
         return self._add_write_after_read_edges(node, collections)
 
     @classmethod
-    def build(cls, name, stencil: Stencil):
-        nodes = [
-            VerticalLoopLibraryNode(stencil=stencil, oir_node=vl) for vl in stencil.vertical_loops
-        ]
+    def build(cls, name, stencil: Stencil, nodes):
         return super()._build(name, stencil, nodes)
+
+
+class OirSDFGBuilder(eve.NodeVisitor):
+    def visit_HorizontalExecution(self, node: oir.HorizontalExecution, **kwargs):
+        return HorizontalExecutionLibraryNode(name=f"HorizontalExecution_{id(node)}", oir_node=node)
+
+    def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection, **kwargs):
+        nodes = [self.visit(he, **kwargs) for he in node.horizontal_executions]
+        sdfg = VerticalLoopSectionOirSDFGBuilder.build(
+            f"VerticalLoopSection_{id(node)}", kwargs["stencil"], nodes
+        )
+        return node.interval, sdfg
+
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs):
+        sections = [self.visit(section, **kwargs) for section in node.sections]
+        return VerticalLoopLibraryNode(
+            name=f"VerticalLoop_{id(node)}",
+            loop_order=node.loop_order,
+            sections=sections,
+            caches=node.caches,
+        )
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs):
+        nodes = [self.visit(vl, stencil=node, **kwargs) for vl in node.vertical_loops]
+        return OirStencilSDFGBuilder.build(node.name, node, nodes)

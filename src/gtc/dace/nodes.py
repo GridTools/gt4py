@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import dace.properties
 import dace.subsets
 from dace import library
 
 from gtc.common import LoopOrder
-from gtc.dace.expansion import NaiveHorizontalExecutionExpansion, NaiveVerticalLoopExpansion
-from gtc.oir import CacheDesc, HorizontalExecution, Interval, Stencil, VerticalLoop
+from gtc.oir import CacheDesc, HorizontalExecution, Interval
 
 
 @library.node
 class VerticalLoopLibraryNode(dace.nodes.LibraryNode):
-    implementations = {"naive": NaiveVerticalLoopExpansion}
+    implementations: Dict[str, dace.library.ExpandTransformation] = {}
     default_implementation = "naive"
 
     loop_order = dace.properties.Property(dtype=LoopOrder, default=None, allow_none=True)
@@ -28,29 +27,17 @@ class VerticalLoopLibraryNode(dace.nodes.LibraryNode):
     def __init__(
         self,
         name="unnamed_vloop",
-        stencil: Stencil = None,
-        oir_node: VerticalLoop = None,
+        loop_order: LoopOrder = None,
+        sections: List[Tuple[Interval, dace.SDFG]] = None,
+        caches: List[CacheDesc] = None,
         *args,
         **kwargs,
     ):
 
-        from gtc.dace.oir_to_dace import VerticalLoopSectionOirSDFGBuilder
-
-        if oir_node is not None:
-            name = "VerticalLoop_" + str(id(oir_node))
-
-        if stencil is not None:
-            self.loop_order = oir_node.loop_order
-            self.sections = [
-                (
-                    section.interval,
-                    VerticalLoopSectionOirSDFGBuilder.build(
-                        "VerticalLoopSection_" + str(id(section)), stencil, section
-                    ),
-                )
-                for section in oir_node.sections
-            ]
-            self.caches = oir_node.caches
+        if loop_order is not None:
+            self.loop_order = loop_order
+            self.sections = sections
+            self.caches = caches
 
         super().__init__(name=name, *args, **kwargs)
 
@@ -62,9 +49,7 @@ class VerticalLoopLibraryNode(dace.nodes.LibraryNode):
 
 @library.node
 class HorizontalExecutionLibraryNode(dace.nodes.LibraryNode):
-    implementations = {
-        "naive": NaiveHorizontalExecutionExpansion,
-    }
+    implementations: Dict[str, dace.library.ExpandTransformation] = {}
     default_implementation = "naive"
 
     oir_node = dace.properties.DataclassProperty(
