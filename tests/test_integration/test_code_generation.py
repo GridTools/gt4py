@@ -156,9 +156,6 @@ def test_stage_merger_induced_interval_block_reordering(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_lower_dimensional_inputs(backend):
-    if backend == "gtc:cuda":
-        pytest.xfail("gtc:cuda backend does not support lower dimensional fields")
-
     @gtscript.stencil(backend=backend)
     def stencil(
         field_3d: gtscript.Field[np.float_, gtscript.IJK],

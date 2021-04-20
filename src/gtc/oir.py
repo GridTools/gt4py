@@ -72,13 +72,15 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
-# TODO(havogt) consider introducing BlockStmt
-# class BlockStmt(common.BlockStmt[Stmt], Stmt):
-#     pass
+class MaskStmt(Stmt):
+    mask: Expr
+    body: List[Stmt]
 
-# TODO(havogt) should we have an IfStmt or is masking the final solution?
-# class IfStmt(common.IfStmt[List[Stmt], Expr], Stmt):  # TODO replace List[Stmt] by BlockStmt?
-#     pass
+    @validator("mask")
+    def mask_is_boolean_field_expr(cls, v: Expr) -> Expr:
+        if v.dtype != common.DataType.BOOL:
+            raise ValueError("Mask must be a boolean expression.")
+        return v
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):
@@ -249,33 +251,12 @@ class CartesianIterationSpace(LocNode):
 
 class HorizontalExecution(LocNode):
     body: List[Stmt]
-    mask: Optional[Expr]
     declarations: List[LocalScalar]
     iteration_space: Optional[CartesianIterationSpace]
-
-    @validator("mask")
-    def mask_is_boolean_field_expr(cls, v: Optional[Expr]) -> Optional[Expr]:
-        if v:
-            if v.dtype != common.DataType.BOOL:
-                raise ValueError("Mask must be a boolean expression.")
-        return v
 
 
 class CacheDesc(LocNode):
     name: SymbolRef
-
-    def covers(self, other: "Interval") -> bool:
-        outer_starts_lower = self.start < other.start or self.start == other.start
-        outer_ends_higher = self.end > other.end or self.end == other.end
-        return outer_starts_lower and outer_ends_higher
-
-    def intersects(self, other: "Interval") -> bool:
-        return not (other.start >= self.end or self.start >= other.end)
-
-    def shift(self, offset: int) -> "Interval":
-        start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
-        end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
-        return Interval(start=start, end=end)
 
 
 class IJCache(CacheDesc):

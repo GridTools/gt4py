@@ -263,7 +263,6 @@ class FillFlushToLocalKCaches(NodeTranslator):
     ) -> oir.HorizontalExecution:
         return oir.HorizontalExecution(
             body=fills + self.visit(node.body, name_map=name_map, **kwargs) + flushes,
-            mask=self.visit(node.mask, name_map=name_map, **kwargs),
             declarations=node.declarations,
         )
 

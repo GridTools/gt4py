@@ -53,7 +53,6 @@ class TemporariesToScalarsBase(NodeTranslator):
 
         return oir.HorizontalExecution(
             body=self.visit(node.body, tmps_name_map=tmps_name_map, **kwargs),
-            mask=self.visit(node.mask, tmps_name_map=tmps_name_map, **kwargs),
             declarations=node.declarations
             + [
                 oir.LocalScalar(
