@@ -258,26 +258,6 @@ class BaseOirSDFGBuilder(ABC):
         self.finalize()
         return self._sdfg
 
-    @abstractmethod
-    def get_k_size(self, name):
-        pass
-
-    @abstractmethod
-    def add_read_edges(self, node):
-        pass
-
-    @abstractmethod
-    def add_write_edges(self, node):
-        pass
-
-    @abstractmethod
-    def add_write_after_read_edges(self, node):
-        pass
-
-    @abstractmethod
-    def add_write_after_write_edges(self, node):
-        pass
-
     def add_arrays(self):
         for decl in self._stencil.params + self._stencil.declarations:
             name = decl.name
@@ -302,30 +282,6 @@ class BaseOirSDFGBuilder(ABC):
                     transient=isinstance(decl, Temporary) and self.has_transients,
                     lifetime=dace.AllocationLifetime.Persistent,
                 )
-
-    @classmethod
-    def _build(cls, name, stencil: Stencil, nodes: List[dace.nodes.LibraryNode]):
-        builder = cls(name, stencil, nodes)
-        for n in nodes:
-            builder.add_write_after_write_edges(n)
-            builder.add_read_edges(n)
-            builder.add_write_edges(n)
-        builder._reset_writes()
-        for n in reversed(nodes):
-            builder.add_write_after_read_edges(n)
-        return builder._get_sdfg()
-
-    @abstractmethod
-    def get_k_subsets(self, node):
-        pass
-
-    @abstractmethod
-    def get_access_spaces(self, node):
-        pass
-
-    @abstractmethod
-    def get_shapes(self):
-        pass
 
     def add_subsets(self):
         for node in self._state.nodes():
@@ -354,6 +310,50 @@ class BaseOirSDFGBuilder(ABC):
                     edge.data = dace.Memlet.simple(
                         data=name, subset_str=",".join(subset_strs), dynamic=dynamic
                     )
+
+    @abstractmethod
+    def get_k_size(self, name):
+        pass
+
+    @abstractmethod
+    def add_read_edges(self, node):
+        pass
+
+    @abstractmethod
+    def add_write_edges(self, node):
+        pass
+
+    @abstractmethod
+    def add_write_after_read_edges(self, node):
+        pass
+
+    @abstractmethod
+    def add_write_after_write_edges(self, node):
+        pass
+
+    @abstractmethod
+    def get_k_subsets(self, node):
+        pass
+
+    @abstractmethod
+    def get_access_spaces(self, node):
+        pass
+
+    @abstractmethod
+    def get_shapes(self):
+        pass
+
+    @classmethod
+    def build(cls, name, stencil: Stencil, nodes: List[dace.nodes.LibraryNode]):
+        builder = cls(name, stencil, nodes)
+        for n in nodes:
+            builder.add_write_after_write_edges(n)
+            builder.add_read_edges(n)
+            builder.add_write_edges(n)
+        builder._reset_writes()
+        for n in reversed(nodes):
+            builder.add_write_after_read_edges(n)
+        return builder._get_sdfg()
 
 
 class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
@@ -420,10 +420,6 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
             node, [(interval, self._get_access_collection(node))]
         )
 
-    @classmethod
-    def build(cls, name, stencil: Stencil, nodes: List[HorizontalExecutionLibraryNode]):
-        return super()._build(name, stencil, nodes)
-
     def get_access_spaces(self, node):
         assert isinstance(node, HorizontalExecutionLibraryNode)
         input_spaces = dict()
@@ -445,7 +441,7 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         return input_spaces, output_spaces
 
 
-class OirStencilSDFGBuilder(BaseOirSDFGBuilder):
+class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
     def get_shapes(self):
         shapes = dict()
         for decl in self._stencil.params + self._stencil.declarations:
@@ -572,19 +568,15 @@ class OirStencilSDFGBuilder(BaseOirSDFGBuilder):
         collections = self._get_collection_from_sections(node.sections)
         return self._add_write_after_read_edges(node, collections)
 
-    @classmethod
-    def build(cls, name, stencil: Stencil, nodes):
-        return super()._build(name, stencil, nodes)
-
 
 class OirSDFGBuilder(eve.NodeVisitor):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, **kwargs):
         return HorizontalExecutionLibraryNode(name=f"HorizontalExecution_{id(node)}", oir_node=node)
 
     def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection, **kwargs):
-        nodes = [self.visit(he, **kwargs) for he in node.horizontal_executions]
+        library_nodes = [self.visit(he, **kwargs) for he in node.horizontal_executions]
         sdfg = VerticalLoopSectionOirSDFGBuilder.build(
-            f"VerticalLoopSection_{id(node)}", kwargs["stencil"], nodes
+            f"VerticalLoopSection_{id(node)}", kwargs["stencil"], library_nodes
         )
         return node.interval, sdfg
 
@@ -598,5 +590,5 @@ class OirSDFGBuilder(eve.NodeVisitor):
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
-        nodes = [self.visit(vl, stencil=node, **kwargs) for vl in node.vertical_loops]
-        return OirStencilSDFGBuilder.build(node.name, node, nodes)
+        library_nodes = [self.visit(vl, stencil=node, **kwargs) for vl in node.vertical_loops]
+        return StencilOirSDFGBuilder.build(node.name, node, library_nodes)
