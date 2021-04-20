@@ -45,7 +45,7 @@ def test_demote_temporaries_to_variables_pass_parallel():
 
     for i in range(len(multi_stage.groups)):
         stage = multi_stage.groups[i].stages[0]
-        assert len(stage.apply_blocks[0].body.stmts) == 1
+        assert len(stage.apply_blocks[0].body.stmts) == 2
 
 
 def test_demote_temporaries_to_variables_pass_forward():
@@ -58,4 +58,4 @@ def test_demote_temporaries_to_variables_pass_forward():
 
     for i in range(len(multi_stage.groups)):
         stage = multi_stage.groups[i].stages[0]
-        assert len(stage.apply_blocks[0].body.stmts) == 1
+        assert len(stage.apply_blocks[0].body.stmts) == 2
