@@ -51,7 +51,10 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
 
         super().__init__(name=name, *args, **kwargs)
 
-    def validate(self, *args, **kwargs):
+    def validate(self, parent_sdfg: dace.SDFG, parent_state: dace.SDFGState, *args, **kwargs):
+
+        get_node_name_mapping(parent_state, self)
+
         for _, sdfg in self.sections:
             sdfg.validate()
             is_correct_node_types = all(
@@ -68,7 +71,7 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
             if not is_correct_node_types or not is_correct_data_and_dtype:
                 raise ValueError("Tried to convert incompatible SDFG to OIR.")
 
-        super().validate(*args, **kwargs)
+        super().validate(parent_sdfg, parent_state, *args, **kwargs)
 
     def as_oir(self):
 
@@ -116,3 +119,6 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
 
     def as_oir(self):
         return self.oir_node
+
+    def validate(self, parent_sdfg: dace.SDFG, parent_state: dace.SDFGState, *args, **kwargs):
+        get_node_name_mapping(parent_state, self)
