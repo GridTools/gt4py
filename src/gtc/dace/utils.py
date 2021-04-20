@@ -1,8 +1,8 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterator
 
 from dace import SDFG, InterstateEdge
 
-from .nodes import HorizontalExecutionLibraryNode
+from .nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 
 
 if TYPE_CHECKING:
@@ -19,3 +19,9 @@ def get_vertical_loop_section_sdfg(section: "VerticalLoopSection") -> SDFG:
 
         old_state = new_state
     return sdfg
+
+
+def iter_vertical_loop_section_sub_sdfgs(graph: SDFG) -> Iterator[SDFG]:
+    for node, _ in graph.all_nodes_recursive():
+        if isinstance(node, VerticalLoopLibraryNode):
+            yield from (subgraph for _, subgraph in node.sections)
