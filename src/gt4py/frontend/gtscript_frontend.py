@@ -37,6 +37,10 @@ from gt4py.utils import meta as gt_meta
 
 class GTScriptSyntaxError(gt_definitions.GTSyntaxError):
     def __init__(self, message, *, loc=None):
+        if loc is not None:
+            message = "{message} (in '{scope}' line: {line}, col: {col})".format(
+                message=message, line=loc.line, col=loc.column
+            )
         super().__init__(message, frontend=GTScriptFrontend.name)
         self.loc = loc
 
@@ -44,14 +48,7 @@ class GTScriptSyntaxError(gt_definitions.GTSyntaxError):
 class GTScriptSymbolError(GTScriptSyntaxError):
     def __init__(self, name, message=None, *, loc=None):
         if message is None:
-            if loc is None:
-                message = "Unknown symbol '{name}' symbol".format(name=name)
-            else:
-                message = (
-                    "Unknown symbol '{name}' symbol in '{scope}' (line: {line}, col: {col})".format(
-                        name=name, scope=loc.scope, line=loc.line, col=loc.column
-                    )
-                )
+            message = "Unknown symbol '{name}' symbol".format(name=name)
         super().__init__(message, loc=loc)
         self.name = name
 
@@ -59,12 +56,7 @@ class GTScriptSymbolError(GTScriptSyntaxError):
 class GTScriptDefinitionError(GTScriptSyntaxError):
     def __init__(self, name, value, message=None, *, loc=None):
         if message is None:
-            if loc is None:
-                message = "Invalid definition for '{name}' symbol".format(name=name)
-            else:
-                message = "Invalid definition for '{name}' symbol in '{scope}' (line: {line}, col: {col})".format(
-                    name=name, scope=loc.scope, line=loc.line, col=loc.column
-                )
+            message = "Invalid definition for '{name}' symbol".format(name=name)
         super().__init__(message, loc=loc)
         self.name = name
         self.value = value
@@ -73,38 +65,14 @@ class GTScriptDefinitionError(GTScriptSyntaxError):
 class GTScriptValueError(GTScriptDefinitionError):
     def __init__(self, name, value, message=None, *, loc=None):
         if message is None:
-            if loc is None:
-                message = "Invalid value for '{name}' symbol ".format(name=name)
-            else:
-                message = (
-                    "Invalid value for '{name}' in '{scope}' (line: {line}, col: {col})".format(
-                        name=name, scope=loc.scope, line=loc.line, col=loc.column
-                    )
-                )
+            message = "Invalid value for '{name}' symbol".format(name=name)
         super().__init__(name, value, message, loc=loc)
 
 
-# class GTScriptConstValueError(GTScriptValueError):
-#     def __init__(self, name, value, message=None, *, loc=None):
-#         if message is None:
-#             if loc is None:
-#                 message = "Non-constant definition of constant '{name}' symbol ".format(name=name)
-#             else:
-#                 message = "Non-constant definition of constant '{name}' in '{scope}' (line: {line}, col: {col})".format(
-#                     name=name, scope=loc.scope, line=loc.line, col=loc.column
-#                 )
-#         super().__init__(name, value, message, loc=loc)
-#
-#
 class GTScriptDataTypeError(GTScriptSyntaxError):
     def __init__(self, name, data_type, message=None, *, loc=None):
         if message is None:
-            if loc is None:
-                message = "Invalid data type for '{name}' numeric symbol ".format(name=name)
-            else:
-                message = "Invalid data type for '{name}' numeric symbol in '{scope}' (line: {line}, col: {col})".format(
-                    name=name, scope=loc.scope, line=loc.line, col=loc.column
-                )
+            message = "Invalid data type for '{name}' numeric symbol".format(name=name)
         super().__init__(message, loc=loc)
         self.name = name
         self.data_type = data_type
