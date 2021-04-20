@@ -1,20 +1,74 @@
-from typing import TYPE_CHECKING, Collection, Dict, Tuple, Union
+import re
+from typing import TYPE_CHECKING, Any, Collection, Dict, Tuple, Union
 
 import dace
+import dace.data
 from dace import SDFG, InterstateEdge
 
 import eve
 import gtc.oir as oir
-from gtc.common import CartesianOffset
+from gtc.common import CartesianOffset, DataType, typestr_to_data_type
 from gtc.oir import CartesianIterationSpace
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
 
 if TYPE_CHECKING:
     from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
-
-if TYPE_CHECKING:
     from gtc.oir import VerticalLoopSection
+
+
+def internal_symbols(sdfg: dace.SDFG):
+    res = ["__I", "__J", "__K"]
+    for name, array in sdfg.arrays.items():
+        if isinstance(array, dace.data.Array):
+            res.extend(
+                [
+                    f"__{name}_{var}_stride"
+                    for idx, var in enumerate("IJK")
+                    if array_dimensions(array)[idx]
+                ]
+            )
+    return res
+
+
+def validate_oir_sdfg(sdfg: dace.SDFG):
+
+    from gtc.dace.nodes import VerticalLoopLibraryNode
+
+    sdfg.validate()
+    is_correct_node_types = all(
+        isinstance(n, (dace.SDFGState, dace.nodes.AccessNode, VerticalLoopLibraryNode))
+        for n, _ in sdfg.all_nodes_recursive()
+    )
+    is_correct_data_and_dtype = all(
+        isinstance(array, dace.data.Array)
+        and typestr_to_data_type(dace_dtype_to_typestr(array.dtype)) != DataType.INVALID
+        for array in sdfg.arrays.values()
+    )
+    if not is_correct_node_types or not is_correct_data_and_dtype:
+        raise ValueError("Not a valid OIR-level SDFG")
+
+
+def dace_dtype_to_typestr(dtype: Any):
+    if not isinstance(dtype, dace.typeclass):
+        dtype = dace.typeclass(dtype)
+    return dtype.as_numpy_dtype().str
+
+
+def array_dimensions(array: dace.data.Array):
+    stride_dims = [
+        any(
+            re.match(f"__.*_{k}_stride", str(sym))
+            for st in array.strides
+            for sym in st.free_symbols
+        )
+        for k in "IJK"
+    ]
+    shape_dims = [
+        any(dace.symbol(f"__{k}") in sh.free_symbols for sh in array.shape) for k in "IJK"
+    ]
+    assert all(st == sh for st, sh in zip(stride_dims, shape_dims))
+    return stride_dims
 
 
 def get_axis_bound_str(axis_bound, var_name):
@@ -68,7 +122,7 @@ def get_vertical_loop_section_sdfg(section: "VerticalLoopSection") -> SDFG:
     return sdfg
 
 
-class HorizontalExecutionFieldRenamer(eve.NodeTranslator):
+class OIRFieldRenamer(eve.NodeTranslator):
     def visit_FieldAccess(self, node: oir.FieldAccess):
         if node.name not in self._field_table:
             return node

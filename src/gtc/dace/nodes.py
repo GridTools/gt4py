@@ -1,16 +1,26 @@
 # -*- coding: utf-8 -*-
+from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
+import dace.data
 import dace.properties
 import dace.subsets
+import networkx as nx
 from dace import library
 
-from gtc.common import LoopOrder
-from gtc.oir import CacheDesc, HorizontalExecution, Interval
+from gtc.common import DataType, LoopOrder, typestr_to_data_type
+from gtc.dace.utils import OIRFieldRenamer, dace_dtype_to_typestr, get_node_name_mapping
+from gtc.oir import CacheDesc, HorizontalExecution, Interval, VerticalLoop, VerticalLoopSection
+
+
+class OIRLibraryNode(ABC, dace.nodes.LibraryNode):
+    @abstractmethod
+    def as_oir(self):
+        raise NotImplementedError("Implement in child class.")
 
 
 @library.node
-class VerticalLoopLibraryNode(dace.nodes.LibraryNode):
+class VerticalLoopLibraryNode(OIRLibraryNode):
     implementations: Dict[str, dace.library.ExpandTransformation] = {}
     default_implementation = "naive"
 
@@ -44,11 +54,50 @@ class VerticalLoopLibraryNode(dace.nodes.LibraryNode):
     def validate(self, *args, **kwargs):
         for _, sdfg in self.sections:
             sdfg.validate()
+            is_correct_node_types = all(
+                isinstance(
+                    n, (dace.SDFGState, dace.nodes.AccessNode, HorizontalExecutionLibraryNode)
+                )
+                for n, _ in sdfg.all_nodes_recursive()
+            )
+            is_correct_data_and_dtype = all(
+                isinstance(array, dace.data.Array)
+                and typestr_to_data_type(dace_dtype_to_typestr(array.dtype)) != DataType.INVALID
+                for array in sdfg.arrays.values()
+            )
+            if not is_correct_node_types or not is_correct_data_and_dtype:
+                raise ValueError("Tried to convert incompatible SDFG to OIR.")
+
         super().validate(*args, **kwargs)
+
+    def as_oir(self):
+
+        sections = []
+        for interval, sdfg in self.sections:
+            horizontal_executions = []
+            for state in sdfg.topological_sort(sdfg.start_state):
+
+                for node in (
+                    n
+                    for n in nx.topological_sort(state.nx)
+                    if isinstance(n, HorizontalExecutionLibraryNode)
+                ):
+                    horizontal_executions.append(
+                        OIRFieldRenamer(get_node_name_mapping(state, node)).visit(node.as_oir())
+                    )
+            sections.append(
+                VerticalLoopSection(interval=interval, horizontal_executions=horizontal_executions)
+            )
+
+        return VerticalLoop(
+            sections=sections,
+            loop_order=self.loop_order,
+            caches=self.caches,
+        )
 
 
 @library.node
-class HorizontalExecutionLibraryNode(dace.nodes.LibraryNode):
+class HorizontalExecutionLibraryNode(OIRLibraryNode):
     implementations: Dict[str, dace.library.ExpandTransformation] = {}
     default_implementation = "naive"
 
@@ -64,3 +113,6 @@ class HorizontalExecutionLibraryNode(dace.nodes.LibraryNode):
             self.oir_node = oir_node
 
         super().__init__(name=name, *args, **kwargs)
+
+    def as_oir(self):
+        return self.oir_node

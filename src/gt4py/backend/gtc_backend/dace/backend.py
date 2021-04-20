@@ -25,6 +25,7 @@ from gt4py import gt_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
 from gt4py.backend.gt_backends import make_x86_layout_map, x86_is_compatible_layout
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
+from gt4py.backend.module_generator import compute_legacy_extents
 from gt4py.ir import StencilDefinition
 from gtc import gtir, gtir_to_oir
 from gtc.dace.oir_to_dace import OirSDFGBuilder
@@ -95,41 +96,29 @@ class DaCeComputationCodegen:
 
     template = as_mako(
         """
-                        class ${name}_functor {
-                              const int __I;
-                              const int __J;
-                              const int __K;
-                              ${name}_t *dace_handle;
-
-                            public:
-                              ${name}_functor(std::array<gt::uint_t, 3> domain)
-                                  : __I(domain[0]), __J(domain[1]), __K(domain[2]),
-                                    dace_handle(__dace_init_${name}(${",".join(zeros_init_func)})){};
-                              ~${name}_functor() {
-                                __dace_exit_${name}(dace_handle);
-                              };
-                              void operator()(${",".join(functor_args)}) {
-
-                                ${'\\n'.join(strides_and_ptr)}
-
-                                __program_${name}(
-                                    ${",".join(["dace_handle", *dace_args])});
-
-                              }
-                            };
-
-                            std::tuple<gt::uint_t, gt::uint_t, gt::uint_t> last_size;
-                            ${name}_functor *${name}_ptr(nullptr);
-                            ${name}_functor & ${name}(std::array<gt::uint_t, 3> domain) {
-                              auto this_size = std::tuple_cat(domain);
-                              if (${name}_ptr!=nullptr || this_size!=last_size){
-                                  delete ${name}_ptr;
-                                  ${name}_ptr = new ${name}_functor(domain);
-                              }
-                              return *${name}_ptr;
-                            }
-                        """
+        auto ${name}(const std::array<gt::uint_t, 3>& domain) {
+            return [domain](${",".join(functor_args)}) {
+                const int __I = domain[0];
+                const int __J = domain[1];
+                const int __K = domain[2];
+                ${name}_t dace_handle;
+                auto allocator = gt::sid::make_cached_allocator(&std::make_unique<char[]>);
+                ${"\\n".join(tmp_allocs)}
+                __program_${name}(${",".join(["&dace_handle", *dace_args])});
+            };
+        }
+        """
     )
+
+    def generate_tmp_allocs(self, sdfg):
+        fmt = """dace_handle.{name} =
+                        allocate(allocator, gt::meta::lazy::id<{dtype}>(),
+                                {size})();"""
+        return [
+            fmt.format(name=name, dtype=array.dtype.ctype, size=array.total_size)
+            for name, array in sdfg.arrays.items()
+            if array.transient and array.lifetime == dace.AllocationLifetime.Persistent
+        ]
 
     @classmethod
     def apply(cls, gtir, sdfg: dace.SDFG):
@@ -141,13 +130,14 @@ class DaCeComputationCodegen:
         computations = codegen.format_source("cpp", computations, style="LLVM")
         interface = cls.template.definition.render(
             name=sdfg.name,
-            strides_and_ptr=self.generate_strides_and_ptr(gtir, sdfg),
             zeros_init_func=self.generate_transient_strides(sdfg),
-            dace_args=self.generate_dace_args(sdfg),
+            dace_args=self.generate_dace_args(gtir, sdfg),
             functor_args=self.generate_functor_args(sdfg),
+            tmp_allocs=self.generate_tmp_allocs(sdfg),
         )
         generated_code = f"""
-                            #include <gridtools/sid/sid_shift_origin.hpp>;
+                            #include <gridtools/sid/sid_shift_origin.hpp>
+                            #include <gridtools/sid/allocator.hpp>
                             #include <gridtools/stencil/cartesian.hpp>
                             namespace gt = gridtools;
                             {computations}
@@ -158,42 +148,6 @@ class DaCeComputationCodegen:
 
     def __init__(self):
         self._unique_index = 0
-
-    def generate_strides_and_ptr(self, gtir, sdfg):
-        from gt4py.backend.module_generator import compute_legacy_extents
-
-        offset_dict: Dict[str, Tuple[int, int, int]] = {
-            k: (-v[0][0], -v[1][0], -v[2][0]) for k, v in compute_legacy_extents(gtir).items()
-        }
-        res = []
-        for name, array in sdfg.arrays.items():
-            if array.transient:
-                continue
-            dtype = array.dtype.ctype
-            res.append(
-                f"""
-                       auto __{name}_outer =gt::sid::shift_sid_origin(__{name}_sid, std::array<gt::int_t, {len(array.shape)}>{{{",".join("0" for _ in array.shape)}}});
-                       {dtype}* {name} = gt::sid::sid_get_origin(__{name}_outer)();
-                       auto __{name}_strides = gt::sid::sid_get_strides(__{name}_sid);
-                """
-            )
-
-            res.extend(
-                [
-                    f"int __{name}_{dim_name}_stride = gt::sid::get_stride<gt::stencil::dim::{dim_name.lower()}>(__{name}_strides);"
-                    if len(array.shape) != 3
-                    else f"int __{name}_{dim_name}_stride = __{name}_strides[{dim_idx}];"
-                    for dim_idx, dim_name in enumerate("IJK")
-                    if any(
-                        dace.symbolic.pystr_to_symbolic(f"__{dim_name}") in s.free_symbols
-                        for s in array.shape
-                    )
-                ]
-            )
-            res.append(
-                f"{name} -= ({'+'.join(f'__{name}_{var}_stride*({offset_dict[name][idx]})' for idx, var in enumerate('IJK') if any(dace.symbolic.pystr_to_symbolic(f'__{var}') in s.free_symbols for s in array.shape))});"
-            )
-        return res
 
     def generate_transient_strides(self, sdfg):
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
@@ -211,13 +165,47 @@ class DaCeComputationCodegen:
             if s in symbols
         ]
 
-    def generate_dace_args(self, sdfg):
+    def generate_dace_args(self, gtir, sdfg):
+        offset_dict: Dict[str, Tuple[int, int, int]] = {
+            k: (-v[0][0], -v[1][0], -v[2][0]) for k, v in compute_legacy_extents(gtir).items()
+        }
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
         for name, array in sdfg.arrays.items():
             if array.transient:
                 symbols[f"__{name}_K_stride"] = "1"
                 symbols[f"__{name}_J_stride"] = str(array.shape[2])
                 symbols[f"__{name}_I_stride"] = str(array.shape[1] * array.shape[2])
+            else:
+                # api field strides
+                fmt = """gt::sid::get_stride<gt::stencil::dim::{dim}>(
+                            gt::sid::sid_get_strides(__{name}_sid))
+                            """
+                symbols.update(
+                    {
+                        f"__{name}_{dim}_stride": fmt.format(dim=dim.lower(), name=name)
+                        for dim in "IJK"
+                        if any(
+                            dace.symbolic.pystr_to_symbolic(f"__{dim}") in s.free_symbols
+                            for s in array.shape
+                        )
+                    }
+                )
+
+                # api field pointers
+                fmt = """gt::sid::multi_shifted(gt::sid::get_origin(__{name}_sid)(),
+                            gt::sid::get_strides(__{name}_sid), std::array<gt::int_t, {ndim}>{{{origin}}})
+                            """
+                origin = tuple(
+                    -offset_dict[name][idx]
+                    for idx, var in enumerate("IJK")
+                    if any(
+                        dace.symbolic.pystr_to_symbolic(f"__{var}") in s.free_symbols
+                        for s in array.shape
+                    )
+                )
+                symbols[name] = fmt.format(
+                    name=name, ndim=len(array.shape), origin=",".join(str(o) for o in origin)
+                )
         for sym in sdfg.signature_arglist(with_types=False, for_call=True):
             if sym not in symbols:
                 symbols[sym] = sym
@@ -228,7 +216,7 @@ class DaCeComputationCodegen:
         for name, array in sdfg.arrays.items():
             if array.transient:
                 continue
-            res.append(f"auto &&__{name}_sid")
+            res.append(f"auto && __{name}_sid")
         for name, dtype in ((n, d) for n, d in sdfg.symbols.items() if not n.startswith("__")):
             res.append(dtype.as_arg(name))
         return res
@@ -243,8 +231,7 @@ class DaCeBindingsCodegen:
         return self._unique_index
 
     mako_template = as_mako(
-        """
-        #include <chrono>
+        """#include <chrono>
         #include <pybind11/pybind11.h>
         #include <pybind11/stl.h>
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
