@@ -1,5 +1,5 @@
 import re
-from typing import TYPE_CHECKING, Any, Collection, Dict, Tuple, Union
+from typing import TYPE_CHECKING, Any, Collection, Dict, Iterator, Tuple, Union
 
 import dace
 import dace.data
@@ -111,6 +111,8 @@ def get_interval_length_str(interval, var_name):
 
 
 def get_vertical_loop_section_sdfg(section: "VerticalLoopSection") -> SDFG:
+    from gtc.dace.node import HorizontalExecutionLibraryNode
+
     sdfg = SDFG("VerticalLoopSection_" + str(id(section)))
     old_state = sdfg.add_state("start_state", is_start_state=True)
     for he in section.horizontal_executions:
@@ -281,3 +283,9 @@ def nodes_extent_calculation(
         name: ((-asp[0][0], asp[0][1]), (-asp[1][0], asp[1][1]))
         for name, asp in access_spaces.items()
     }
+
+
+def iter_vertical_loop_section_sub_sdfgs(graph: SDFG) -> Iterator[SDFG]:
+    for node, _ in graph.all_nodes_recursive():
+        if isinstance(node, VerticalLoopLibraryNode):
+            yield from (subgraph for _, subgraph in node.sections)
