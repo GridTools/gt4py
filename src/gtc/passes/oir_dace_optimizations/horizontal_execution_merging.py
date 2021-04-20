@@ -7,7 +7,7 @@ Merging is performed by merging the body of "right" into "left" within this modu
 This is equivalent to merging the later into the earlier occurring horizontal execution
 by order within the OIR. This is consistently reflected in variable and parameter names.
 """
-from typing import Dict, Set, Tuple
+from typing import Dict, List, Set, Tuple, Union
 
 import dace
 from dace import SDFGState
@@ -74,11 +74,15 @@ def unwire_access_node(
         state.remove_edge_and_connectors(removable_edge)
 
 
-def rewire_edge(state: SDFGState, edge: graph.Edge, **kwargs) -> None:
+def rewire_edge(
+    state: SDFGState,
+    edge: graph.Edge,
+    **kwargs: Union[dace.nodes.AccessNode, HorizontalExecutionLibraryNode],
+) -> None:
     src = kwargs.get("src", edge.src)
-    src_conn = kwargs.get("src_conn", edge.src_conn)
+    src_conn = edge.src_conn
     dst = kwargs.get("dst", edge.dst)
-    dst_conn = kwargs.get("dst_conn", edge.dst_conn)
+    dst_conn = edge.dst_conn
     if src_conn and src_conn not in src.out_connectors:
         src.add_out_connector(src_conn)
     if dst_conn and dst_conn not in dst.in_connectors:
@@ -93,7 +97,9 @@ def rewire_edge(state: SDFGState, edge: graph.Edge, **kwargs) -> None:
     state.add_edge(src, src_conn, dst, dst_conn, dace.Memlet())
 
 
-def chained_access_pattern(left, access, right, access_chained):
+def chained_access_pattern(
+    left: PatternNode, access: PatternNode, right: PatternNode, access_chained: PatternNode
+) -> graph.OrderedMultiDiGraph:
     pattern = graph.OrderedMultiDiGraph()
     pattern.add_node(left)
     pattern.add_node(access)
@@ -105,19 +111,9 @@ def chained_access_pattern(left, access, right, access_chained):
     return pattern
 
 
-def multi_access_pattern(left, access, right, other):
-    pattern = graph.OrderedMultiDiGraph()
-    pattern.add_node(left)
-    pattern.add_node(access)
-    pattern.add_edge(left, access, None)
-    pattern.add_node(right)
-    pattern.add_edge(access, right, None)
-    pattern.add_node(other)
-    pattern.add_edge(access, other, None)
-    return pattern
-
-
-def parallel_pattern(left, access, right):
+def parallel_pattern(
+    left: PatternNode, access: PatternNode, right: PatternNode
+) -> graph.OrderedMultiDiGraph:
     pattern = graph.OrderedMultiDiGraph()
     pattern.add_node(access)
     pattern.add_node(left)
@@ -135,18 +131,25 @@ class _IntermediateAccessChained(Transformation):
     access_chained = PatternNode(dace.nodes.AccessNode)
 
     @classmethod
-    def expressions(cls):
+    def expressions(cls) -> List[graph.OrderedMultiDiGraph]:
         return [chained_access_pattern(cls.left, cls.access, cls.right, cls.access_chained)]
 
     @classmethod
-    def can_be_applied(cls, graph, candidate, expr_index, sdfg, strict=False):
+    def can_be_applied(
+        cls,
+        graph: SDFGState,
+        candidate: Dict[str, dace.Node],
+        expr_index: int,
+        sdfg: Union[dace.SDFG, SDFGState],
+        strict: bool = False,
+    ) -> bool:
         access = graph.node(candidate[cls.access])
         access_chained = graph.node(candidate[cls.access_chained])
         if access.label != access_chained.label:
             return False
         return True
 
-    def apply(self, sdfg):
+    def apply(self, sdfg: dace.SDFG) -> None:
         state = sdfg.node(self.state_id)
         left = self.left(sdfg)
         access = self.access(sdfg)
@@ -165,7 +168,7 @@ class GraphMerging(Transformation):
     access = PatternNode(dace.nodes.AccessNode)
 
     @classmethod
-    def expressions(cls):
+    def expressions(cls) -> List[graph.OrderedMultiDiGraph]:
         return [
             node_path_graph(cls.left, cls.right),
             node_path_graph(cls.left, cls.access, cls.right),
@@ -173,12 +176,19 @@ class GraphMerging(Transformation):
         ]
 
     @classmethod
-    def can_be_applied(cls, graph, candidate, expr_index, sdfg, strict=False):
+    def can_be_applied(
+        cls,
+        graph: SDFGState,
+        candidate: Dict[str, dace.Node],
+        expr_index: int,
+        sdfg: Union[dace.SDFG, SDFGState],
+        strict: bool = False,
+    ) -> bool:
         left = graph.node(candidate[cls.left])
         right = graph.node(candidate[cls.right])
         return masks_match(left, right) and offsets_match(left, right)
 
-    def apply(self, sdfg):
+    def apply(self, sdfg: dace.SDFG) -> None:
         state = sdfg.node(self.state_id)
         left = self.left(sdfg)
         right = self.right(sdfg)
