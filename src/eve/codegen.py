@@ -557,7 +557,6 @@ class MakoTemplate(BaseTemplate):
                 message += f" rendering error at template line: {e.lineno}, column: {getattr(e, 'pos', '?')}"  # type: ignore  # assume Mako exception
             except Exception:
                 message += " rendering error."
-
             raise TemplateRenderingError(message, template=self) from e
 
 
