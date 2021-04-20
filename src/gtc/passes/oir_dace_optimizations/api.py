@@ -1,8 +1,9 @@
 from dace.transformation.transformation import Transformation
 
-from gtc import dace_to_oir, oir
+from gtc import oir
+from gtc.dace import dace_to_oir
+from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import iter_vertical_loop_section_sub_sdfgs
-from gtc.oir_to_dace import OirSDFGBuilder
 
 
 def optimize_horizontal_executions(

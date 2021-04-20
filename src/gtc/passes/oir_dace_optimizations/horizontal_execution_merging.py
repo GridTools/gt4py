@@ -138,7 +138,7 @@ class _IntermediateAccessChained(Transformation):
     def can_be_applied(
         cls,
         graph: SDFGState,
-        candidate: Dict[str, dace.Node],
+        candidate: Dict[str, dace.nodes.Node],
         expr_index: int,
         sdfg: Union[dace.SDFG, SDFGState],
         strict: bool = False,
@@ -179,7 +179,7 @@ class GraphMerging(Transformation):
     def can_be_applied(
         cls,
         graph: SDFGState,
-        candidate: Dict[str, dace.Node],
+        candidate: Dict[str, dace.nodes.Node],
         expr_index: int,
         sdfg: Union[dace.SDFG, SDFGState],
         strict: bool = False,
