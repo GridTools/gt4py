@@ -39,7 +39,7 @@ class GTScriptSyntaxError(gt_definitions.GTSyntaxError):
     def __init__(self, message, *, loc=None):
         if loc is not None:
             message = "{message} (in '{scope}' line: {line}, col: {col})".format(
-                message=message, line=loc.line, col=loc.column
+                message=message, scope=loc.scope, line=loc.line, col=loc.column
             )
         super().__init__(message, frontend=GTScriptFrontend.name)
         self.loc = loc
