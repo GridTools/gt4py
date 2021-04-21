@@ -105,7 +105,10 @@ class AssertionChecker(ast.NodeTransformer):
 
     def visit_Assert(self, assert_node: ast.Assert) -> None:
         if assert_node.test.func.id != "__INLINED":
-            raise GTScriptSyntaxError("Run-time assertions are not supported.")
+            raise GTScriptSyntaxError(
+                "Run-time assertions are not supported.",
+                loc=gt_ir.Location.from_ast_node(assert_node),
+            )
         eval_node = assert_node.test.args[0]
 
         condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
@@ -116,7 +119,8 @@ class AssertionChecker(ast.NodeTransformer):
                 raise GTScriptAssertionError(source_lines[loc.line - 1], loc=loc)
         else:
             raise GTScriptSyntaxError(
-                "Evaluation of compile-time assertion condition failed at the preprocessing step."
+                "Evaluation of compile-time assertion condition failed at the preprocessing step.",
+                loc=gt_ir.Location.from_ast_node(assert_node),
             )
 
         return None
@@ -177,8 +181,9 @@ class AxisIntervalParser(ast.NodeVisitor):
         self.loc = loc
 
         # initialize possible exceptions
-        self.interval_error = ValueError(
-            f"Invalid 'interval' specification at line {loc.line} (column {loc.column})"
+        self.interval_error = GTScriptSyntaxError(
+            f"Invalid 'interval' specification at line {loc.line} (column {loc.column})",
+            loc=loc if loc else None,
         )
 
     @staticmethod
@@ -260,8 +265,6 @@ class AxisIntervalParser(ast.NodeVisitor):
             return gt_ir.AxisBound(level=new_level, offset=-axis_bound.offset, loc=self.loc)
         else:
             raise self.interval_error
-
-        return gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0, loc=self.loc)
 
     def visit_Subscript(self, node: ast.Subscript) -> gt_ir.AxisBound:
         if node.value.id != self.axis_name:
@@ -579,7 +582,8 @@ class CompiledIfInliner(ast.NodeTransformer):
                 node = node.body if condition_value else node.orelse
             else:
                 raise GTScriptSyntaxError(
-                    "Evaluation of compile-time 'IF' condition failed at the preprocessing step"
+                    "Evaluation of compile-time 'IF' condition failed at the preprocessing step",
+                    loc=gt_ir.Location.from_ast_node(node),
                 )
 
         return node if node else None
@@ -788,7 +792,7 @@ class IRMaker(ast.NodeVisitor):
         if len(args) == 2:
             if any(isinstance(arg, ast.Subscript) for arg in args):
                 raise GTScriptSyntaxError(
-                    "Two-argument syntax should not use AxisOffsets or AxisIntervals"
+                    "Two-argument syntax should not use AxisOffsets or AxisIntervals", loc=loc
                 )
             interval_node = ast.Slice(lower=args[0], upper=args[1])
             ast.copy_location(interval_node, node)
@@ -930,7 +934,8 @@ class IRMaker(ast.NodeVisitor):
                 axes_str = "(" + ", ".join(field_axes) + ")"
                 raise GTScriptSyntaxError(
                     f"Incorrect offset {index} to field '{result.name}' "
-                    f"with dimensions {axes_str}"
+                    f"with dimensions {axes_str}",
+                    loc=gt_ir.Location.from_ast_node(node),
                 )
             result.offset = {axis: value for axis, value in zip(field_axes, index)}
 
