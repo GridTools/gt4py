@@ -952,9 +952,10 @@ class IRMaker(ast.NodeVisitor):
 
         index = []
         for index_node in index_nodes:
-            if isinstance(index_node, ast.Constant):
-                index.append(int(index_node.value))
-            else:
+            try:
+                offset = ast.literal_eval(index_node)
+                index.append(offset)
+            except:
                 index.append(self.visit(index_node))
 
         result = self.visit(node.value)

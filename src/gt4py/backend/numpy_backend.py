@@ -97,6 +97,35 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
+    def _make_variable_koffset_arrays(self, name: str) -> str:
+        extent = self.block_info.extent
+        lower_extent = list(extent.lower_indices)
+        upper_extent = list(extent.upper_indices)
+        parallel_axes_names = [axis.name for axis in self.domain.parallel_axes]
+        parallel_axes_dims = [self.impl_node.domain.index(axis) for axis in parallel_axes_names]
+
+        args = []
+        for fd, d in enumerate(parallel_axes_dims):
+            start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
+            size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
+            size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
+            arange = "np.arange({name}{marker}[{fd}]{start}, {name}{marker}[{fd}] + {size})".format(
+                name=name,
+                start=start_expr,
+                marker=self.origin_marker,
+                fd=fd,
+                size=size_expr,
+            )
+            args.append(
+                f"{arange}["
+                + ", ".join(":" if fd == i else "None" for i in range(len(parallel_axes_dims)))
+                + "]"
+            )
+
+        ret_vals = ", ".join([f"{axis_name.upper()}_{name}" for axis_name in parallel_axes_names])
+
+        return f"{ret_vals} = {self.numpy_prefix}.broadcast_arrays({', '.join(args)})"
+
     def _make_regional_computation(
         self, iteration_order, interval_definition, body_sources
     ) -> List[str]:
@@ -114,7 +143,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
             range_args = [loop_bounds[1] + " -1", loop_bounds[0] + " -1", "-1"]
 
         needs_explicit_kloop = (
-            iteration_order != gt_ir.IterationOrder.PARALLEL or self.block_info.has_variable_koffset
+            iteration_order != gt_ir.IterationOrder.PARALLEL or self.block_info.variable_koffsets
         )
 
         if needs_explicit_kloop:
@@ -123,6 +152,10 @@ class NumPySourceGenerator(PythonSourceGenerator):
             source_lines.append(
                 "for {ax} in {range_expr}:".format(ax=seq_axis, range_expr=range_expr)
             )
+            for name in self.block_info.variable_koffsets:
+                source_lines.append(
+                    " " * self.indent_size + self._make_variable_koffset_arrays(name)
+                )
             source_lines.extend(" " * self.indent_size + line for line in body_sources)
         else:
             source_lines.append(
@@ -137,6 +170,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
             )
             source_lines.extend(body_sources)
             source_lines.extend("\n")
+
         return source_lines
 
     def make_temporary_field(
@@ -218,7 +252,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
             variable_koffset = False
             is_parallel = (
                 self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
-                and not self.block_info.has_variable_koffset
+                and not self.block_info.variable_koffsets
             )
 
         if k_ax in self.impl_node.fields[node.name].axes:
@@ -253,7 +287,10 @@ class NumPySourceGenerator(PythonSourceGenerator):
             source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
         else:
             source = (
-                f"{self.numpy_prefix}.take({node.name}[{', '.join(index)}, :], {k_ax} + {k_offset})"
+                f"{node.name}["
+                + ", ".join(f"{axis_name.upper()}_{node.name}" for axis_name in parallel_axes_names)
+                + f", {k_ax} + {k_offset}"
+                + "]"
             )
         if not parallel_axes_dims and not is_parallel:
             source = f"np.asarray([{source}])"
