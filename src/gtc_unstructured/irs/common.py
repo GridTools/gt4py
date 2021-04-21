@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Generic, TypeVar
+from typing import ClassVar, Dict, Generic, TypeVar
 
 from pydantic import root_validator
 
@@ -64,6 +64,61 @@ class DataType(IntEnum):
     UINT32 = 6
 
 
+@enum.unique
+class NativeFunction(StrEnum):
+    ABS = "abs"
+    MIN = "min"
+    MAX = "max"
+    MOD = "mod"
+
+    SIN = "sin"
+    COS = "cos"
+    TAN = "tan"
+    ARCSIN = "arcsin"
+    ARCCOS = "arccos"
+    ARCTAN = "arctan"
+
+    SQRT = "sqrt"
+    EXP = "exp"
+    LOG = "log"
+
+    ISFINITE = "isfinite"
+    ISINF = "isinf"
+    ISNAN = "isnan"
+    FLOOR = "floor"
+    CEIL = "ceil"
+    TRUNC = "trunc"
+
+    IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
+
+    @property
+    def arity(self) -> int:
+        return self.IR_OP_TO_NUM_ARGS[self]
+
+
+NativeFunction.IR_OP_TO_NUM_ARGS = {
+    NativeFunction.ABS: 1,
+    NativeFunction.MIN: 2,
+    NativeFunction.MAX: 2,
+    NativeFunction.MOD: 2,
+    NativeFunction.SIN: 1,
+    NativeFunction.COS: 1,
+    NativeFunction.TAN: 1,
+    NativeFunction.ARCSIN: 1,
+    NativeFunction.ARCCOS: 1,
+    NativeFunction.ARCTAN: 1,
+    NativeFunction.SQRT: 1,
+    NativeFunction.EXP: 1,
+    NativeFunction.LOG: 1,
+    NativeFunction.ISFINITE: 1,
+    NativeFunction.ISINF: 1,
+    NativeFunction.ISNAN: 1,
+    NativeFunction.FLOOR: 1,
+    NativeFunction.CEIL: 1,
+    NativeFunction.TRUNC: 1,
+}
+
+
 # TODO not really common
 @enum.unique
 class LoopOrder(IntEnum):
@@ -80,6 +135,13 @@ class LocationType(IntEnum):
     Edge = 1
     Cell = 2
     NoLocation = 3
+
+
+@enum.unique
+class VerticalLocationType(IntEnum):
+    NoLocation = -1
+    Horizontal = 0
+    K = 1
 
 
 @enum.unique

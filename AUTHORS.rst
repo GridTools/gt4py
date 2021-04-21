@@ -15,7 +15,12 @@ Authors
 * Häuselmann, Rico. ETH Zurich - CSCS
 * Madonna, Alberto. ETH Zurich - CSCS
 * Mariotti, Kean. ETH Zurich - CSCS
+* Müller, Christoph. MeteoSwiss
+* Osuna, Carlos. MeteoSwiss
+* Röthlin, Matthias. MeteoSwiss
+* Serafini, Giacomo. MeteoSwiss
 * Thaler, Felix. ETH Zurich - CSCS
 * Ubbiali, Stefano. ETH Zurich
 * Vogt, Hannes. ETH Zurich - CSCS
+* Weber, Benjamin. MeteoSwiss
 * Wicky, Tobias. Vulcan Inc.

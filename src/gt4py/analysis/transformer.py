@@ -26,6 +26,7 @@ from .passes import (
     BuildIIRPass,
     ComputeExtentsPass,
     ComputeUsedSymbolsPass,
+    ConstantFoldingPass,
     DataTypePass,
     DemoteLocalTemporariesToVariablesPass,
     HousekeepingPass,
@@ -111,6 +112,9 @@ class IRTransformer:
         # turn temporary fields that are only written and read within the same function
         # into local scalars
         DemoteLocalTemporariesToVariablesPass.apply(self.transform_data)
+
+        # Replace temporary fields only assigned to scalar literals with the actual values
+        ConstantFoldingPass.apply(self.transform_data)
 
         # Reduce temporary 3D (IJK) fields to 2D (IJ) fields
         ReduceTemporaryStoragesPass.apply(self.transform_data)
