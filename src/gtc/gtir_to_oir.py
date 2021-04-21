@@ -53,7 +53,6 @@ class OIRIterationSpaceTranslator(NodeTranslator):
         assert id(node) in iteration_spaces
         return oir.HorizontalExecution(
             body=node.body,
-            mask=node.mask,
             declarations=node.declarations,
             iteration_space=iteration_spaces[id(node)],
         )

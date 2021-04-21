@@ -293,9 +293,8 @@ class BaseOirSDFGBuilder(ABC):
                         name = edge.src.data
                         access_space = access_spaces_input[name]
                         subset_str_k = k_subset_strs_input.get(name, None)
-                        dynamic = (
-                            isinstance(node, HorizontalExecutionLibraryNode)
-                            and node.oir_node.mask is not None
+                        dynamic = isinstance(node, HorizontalExecutionLibraryNode) and any(
+                            isinstance(stmt, oir.MaskStmt) for stmt in node.oir_node.body
                         )
                     elif edge.src_conn is not None:
                         name = edge.dst.data

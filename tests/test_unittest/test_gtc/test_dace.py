@@ -84,8 +84,10 @@ def node_match(n1, n2):
             assert len(n1.oir_node.body) == len(n2.oir_node.body)
             assert list(sorted(n1.in_connectors)) == list(sorted(n2.in_connectors))
             assert list(sorted(n1.out_connectors)) == list(sorted(n2.out_connectors))
-            if n1.oir_node.mask is None:
-                assert n2.oir_node.mask is None
+            assert all(
+                isinstance(stmt1, type(stmt2)) and isinstance(stmt2, type(stmt1))
+                for stmt1, stmt2 in zip(n1.oir_node.body, n2.oir_node.body)
+            )
     except AssertionError:
         return False
     return True

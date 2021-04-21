@@ -286,6 +286,8 @@ def nodes_extent_calculation(
 
 
 def iter_vertical_loop_section_sub_sdfgs(graph: SDFG) -> Iterator[SDFG]:
+    from gtc.dace.nodes import VerticalLoopLibraryNode
+
     for node, _ in graph.all_nodes_recursive():
         if isinstance(node, VerticalLoopLibraryNode):
             yield from (subgraph for _, subgraph in node.sections)

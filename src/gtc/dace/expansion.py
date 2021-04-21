@@ -118,15 +118,19 @@ class TaskletCodegen(codegen.TemplatedGenerator):
 
     Param = as_fmt("{name}")
 
+    LocalScalar = as_fmt("{name} = {dtype}()")
+
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution):
         targets: Set[str] = set()
+        return "\n".join([*self.visit(node.declarations), *self.visit(node.body, targets=targets)])
+
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs):
         mask_str = ""
         indent = ""
         if node.mask is not None:
-            mask_str = f"if {self.visit(node.mask, is_target=False, targets=targets)}:"
+            mask_str = f"if {self.visit(node.mask, is_target=False, **kwargs)}:"
             indent = "    "
-
-        body_code = self.visit(node.body, targets=targets)
+        body_code = self.visit(node.body, targets=kwargs["targets"])
         body_code = [indent + b for b in body_code]
         return "\n".join([mask_str] + body_code)
 
@@ -636,7 +640,9 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
             subset_str = ",".join(subset_strs)
             acc_name = "__" + name
             out_memlets[acc_name] = dace.memlet.Memlet.simple(
-                name, subset_str, dynamic=node.oir_node.mask is not None
+                name,
+                subset_str,
+                dynamic=any(isinstance(stmt, oir.MaskStmt) for stmt in node.oir_node.body),
             )
 
         return in_memlets, out_memlets
@@ -673,6 +679,7 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
             code=NaiveHorizontalExecutionExpansion.code_generate(node.oir_node),
             external_edges=True,
         )
+        res_sdfg.save("tmp.sdfg")
         res.symbol_mapping = {s: s for s in res_sdfg.free_symbols}
         for s in list(res_sdfg.free_symbols):
             if s not in res_sdfg.symbols:

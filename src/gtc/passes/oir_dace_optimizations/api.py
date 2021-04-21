@@ -9,7 +9,7 @@ from gtc.dace.utils import iter_vertical_loop_section_sub_sdfgs
 def optimize_horizontal_executions(
     stencil: oir.Stencil, transformation: Transformation
 ) -> oir.Stencil:
-    sdfg = OirSDFGBuilder.build(stencil.name, stencil)
+    sdfg = OirSDFGBuilder().visit(stencil)
     for subgraph in iter_vertical_loop_section_sub_sdfgs(sdfg):
         subgraph.apply_transformations_repeated(transformation, validate_all=True)
     return dace_to_oir.convert(sdfg)
