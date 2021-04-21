@@ -1324,8 +1324,7 @@ class ReduceTemporaryStoragesPass(TransformPass):
                     # Do not reduce fields accessed from parallel k-intervals
                     self.reduced_fields.pop(field_name)
                 else:
-                    offsets: List[int] = list(node.offset.values())
-                    if offsets[-1] != 0:
+                    if "K" in node.offset and node.offset["K"] != 0:
                         # Do not reduce fields with k-offsets
                         self.reduced_fields.pop(field_name)
                     else:
@@ -1353,18 +1352,26 @@ class ReduceTemporaryStoragesPass(TransformPass):
             self, path: tuple, node_name: str, node: gt_ir.StencilImplementation
         ) -> gt_ir.StencilImplementation:
             self.iir = node
-            for field_name in self.reduced_fields:
-                assert field_name in node.temporary_fields, "Tried to reduce API field to 2D."
-                field_decl = node.fields[field_name]
-                field_decl.axes.pop()
             return self.generic_visit(path, node_name, node)
+
+        def visit_FieldDecl(
+            self, path: tuple, node_name: str, node: gt_ir.FieldDecl
+        ) -> Tuple[bool, gt_ir.FieldDecl]:
+            if node_name in self.reduced_fields:
+                assert node_name in self.iir.temporary_fields, "Tried to reduce API field to 2D."
+                return True, gt_ir.FieldDecl(
+                    name=node_name, data_type=node.data_type, axes=["I", "J"], is_api=False
+                )
+            return True, node
 
         def visit_FieldRef(
             self, path: tuple, node_name: str, node: gt_ir.FieldRef
-        ) -> Tuple[bool, Union[gt_ir.FieldRef, gt_ir.VarRef]]:
+        ) -> Tuple[bool, gt_ir.FieldRef]:
             if node.name in self.reduced_fields:
-                field_decl = self.iir.fields[node.name]
-                node.offset = {axis: node.offset[axis] for axis in field_decl.axes}
+                axes = self.iir.fields[node.name].axes
+                return True, gt_ir.FieldRef(
+                    name=node_name, offset={axis: node.offset[axis] for axis in axes}
+                )
             return True, node
 
     @classmethod
