@@ -375,17 +375,35 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 level=self.conditions_depth, condition=self.visit(node.condition)
             )
         )
+        sources.append("print('If __condition_{level}')".format(level=self.conditions_depth))
+        sources.append("print(__condition_{level})".format(level=self.conditions_depth))
 
         for stmt in node.main_body.stmts:
             sources.extend(self._visit_branch_stmt(stmt))
+            if isinstance(stmt, gt_ir.Assign):
+                sources.extend(
+                    [
+                        f"print('If {sources[-1].split('=')[0]}')",
+                        f"print({sources[-1].split('=')[0]})",
+                    ]
+                )
         if node.else_body is not None:
             sources.append(
                 "__condition_{level} = np.logical_not(__condition_{level})".format(
                     level=self.conditions_depth, condition=self.visit(node.condition)
                 )
             )
+            sources.append("print('Else __condition_{level}')".format(level=self.conditions_depth))
+            sources.append("print(__condition_{level})".format(level=self.conditions_depth))
             for stmt in node.else_body.stmts:
                 sources.extend(self._visit_branch_stmt(stmt))
+                if isinstance(stmt, gt_ir.Assign):
+                    sources.extend(
+                        [
+                            f"print('Else {sources[-1].split('=')[0]}')",
+                            f"print({sources[-1].split('=')[0]})",
+                        ]
+                    )
 
         self.conditions_depth -= 1
         # return "\n".join(sources)
@@ -393,8 +411,13 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
     def visit_While(self, node: gt_ir.While) -> List[str]:
         sources = []
-        condition_statement = f"__while_condition = {self.visit(node.condition)}"
+        condition = self.visit(node.condition)
+        if self.conditions_depth > 0:
+            condition_statement = f"__while_condition = np.logical_and({condition}, __condition_{self.conditions_depth})"
+        else:
+            condition_statement = f"__while_condition = {condition}"
         sources.append(condition_statement)
+        sources.extend(["print('__while_condition')", "print(__while_condition)"])
         sources.append(f"while {self.numpy_prefix}.any(__while_condition):")
         for stmt in node.body.stmts:
             target = self.visit(stmt.target)
@@ -414,10 +437,24 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     else_expr=target if is_possible_else else "np.nan",
                 )
             )
+            spaces = " " * self.indent_size
+            sources.extend(
+                [
+                    f"{spaces}print('Else {sources[-1].split('=')[0]}')",
+                    f"{spaces}print({sources[-1].split('=')[0]})",
+                ]
+            )
+
             if isinstance(target_expr, gt_ir.VarRef):
                 self.var_refs_defined.add(target_expr.name)
 
         sources.append(" " * self.indent_size + condition_statement)
+        sources.extend(
+            [
+                " " * self.indent_size + "print('__while_condition')",
+                " " * self.indent_size + "print(__while_condition)",
+            ]
+        )
         return sources
 
 
