@@ -7,13 +7,12 @@ Merging is performed by merging the body of "right" into "left" within this modu
 This is equivalent to merging the later into the earlier occurring horizontal execution
 by order within the OIR. This is consistently reflected in variable and parameter names.
 """
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import dace
 from dace import SDFGState
 from dace.sdfg import graph
 from dace.sdfg.utils import node_path_graph
-from dace.transformation.optimizer import Optimizer
 from dace.transformation.transformation import PatternNode, Transformation
 
 from gtc import oir
@@ -30,7 +29,6 @@ def masks_match(
 ) -> bool:
     left_masks = left.as_oir().iter_tree().if_isinstance(oir.MaskStmt).to_set()
     right_masks = right.as_oir().iter_tree().if_isinstance(oir.MaskStmt).to_set()
-    print(f"left_masks: {left_masks}\nright_masks: {right_masks}")
     return left_masks == right_masks
 
 
@@ -101,20 +99,6 @@ def rewire_edge(
     state.add_edge(src, src_conn, dst, dst_conn, dace.Memlet())
 
 
-def chained_access_pattern(
-    left: PatternNode, access: PatternNode, right: PatternNode, access_chained: PatternNode
-) -> graph.OrderedMultiDiGraph:
-    pattern = graph.OrderedMultiDiGraph()
-    pattern.add_node(left)
-    pattern.add_node(access)
-    pattern.add_node(right)
-    pattern.add_node(access_chained)
-    pattern.add_edge(left, access, None)
-    pattern.add_edge(access, right, None)
-    pattern.add_edge(right, access_chained, None)
-    return pattern
-
-
 def parallel_pattern(
     left: PatternNode, access: PatternNode, right: PatternNode
 ) -> graph.OrderedMultiDiGraph:
@@ -127,42 +111,13 @@ def parallel_pattern(
     return pattern
 
 
-@dace.registry.autoregister_params(singlestate=True)
-class _IntermediateAccessChained(Transformation):
-    left = PatternNode(HorizontalExecutionLibraryNode)
-    access = PatternNode(dace.nodes.AccessNode)
-    right = PatternNode(HorizontalExecutionLibraryNode)
-    access_chained = PatternNode(dace.nodes.AccessNode)
-
-    @classmethod
-    def expressions(cls) -> List[graph.OrderedMultiDiGraph]:
-        return [chained_access_pattern(cls.left, cls.access, cls.right, cls.access_chained)]
-
-    @classmethod
-    def can_be_applied(
-        cls,
-        graph: SDFGState,
-        candidate: Dict[str, dace.nodes.Node],
-        expr_index: int,
-        sdfg: Union[dace.SDFG, SDFGState],
-        strict: bool = False,
-    ) -> bool:
-        access = graph.node(candidate[cls.access])
-        access_chained = graph.node(candidate[cls.access_chained])
-        if access.label != access_chained.label:
-            return False
-        return True
-
-    def apply(self, sdfg: dace.SDFG) -> None:
-        state = sdfg.node(self.state_id)
-        left = self.left(sdfg)
-        access = self.access(sdfg)
-        right = self.right(sdfg)
-        access_chained = self.access_chained(sdfg)
-
-        rewire_edge(state, state.edges_between(left, access)[0], dst=access_chained)
-        state.remove_node(access)
-        state.remove_edge(state.edges_between(right, access_chained)[0])
+def optional_node(pattern_node: PatternNode, sdfg: dace.SDFG) -> Optional[dace.nodes.Node]:
+    node = None
+    try:
+        node = pattern_node(sdfg)
+    except KeyError:
+        pass
+    return node
 
 
 @dace.registry.autoregister_params(singlestate=True)
@@ -170,56 +125,53 @@ class GraphMerging(Transformation):
     left = PatternNode(HorizontalExecutionLibraryNode)
     right = PatternNode(HorizontalExecutionLibraryNode)
     access = PatternNode(dace.nodes.AccessNode)
+    access_thru = PatternNode(dace.nodes.AccessNode)
 
     @classmethod
     def expressions(cls) -> List[graph.OrderedMultiDiGraph]:
         return [
             node_path_graph(cls.left, cls.right),
+            node_path_graph(cls.left, cls.access, cls.right, cls.access_thru),
             node_path_graph(cls.left, cls.access, cls.right),
             parallel_pattern(cls.left, cls.access, cls.right),
         ]
 
-    @classmethod
     def can_be_applied(
-        cls,
+        self,
         graph: SDFGState,
         candidate: Dict[str, dace.nodes.Node],
         expr_index: int,
         sdfg: Union[dace.SDFG, SDFGState],
         strict: bool = False,
     ) -> bool:
-        left = graph.node(candidate[cls.left])
-        right = graph.node(candidate[cls.right])
+        left = self.left(sdfg)
+        access = optional_node(self.access, sdfg)
+        right = self.right(sdfg)
+        access_thru = optional_node(self.access_thru, sdfg)
+        if access and access_thru and access.label != access_thru.label:
+            return False
         return masks_match(left, right) and offsets_match(left, right)
 
     def apply(self, sdfg: dace.SDFG) -> None:
         state = sdfg.node(self.state_id)
         left = self.left(sdfg)
+        access = optional_node(self.access, sdfg)
         right = self.right(sdfg)
+        access_thru = optional_node(self.access_thru, sdfg)
 
         # rewire access chains
-        for match in Optimizer(sdfg).get_pattern_matches(patterns=[_IntermediateAccessChained]):
-            if match.left(sdfg) == left and match.right(sdfg) == right:
-                _IntermediateAccessChained.apply_to(
-                    sdfg,
-                    left=left,
-                    access=match.access(sdfg),
-                    right=right,
-                    access_chained=match.access_chained(sdfg),
-                    verify=True,
-                    save=False,
-                )
+        if access and access_thru:
+            rewire_edge(state, state.edges_between(left, access)[0], dst=access_thru)
+            state.remove_node(access)
+            access = None
+            state.remove_edge(state.edges_between(right, access_thru)[0])
 
         # Disconnect the intermediate access node if it exists.
         # If it becomes an island, remove the access node.
-        access_node = None
-        try:
-            access_node = self.access(sdfg)
-            unwire_access_node(state, left, access_node, right)
-            if not state.all_edges(access_node):
-                state.remove_node(access_node)
-        except KeyError:
-            pass
+        if access:
+            unwire_access_node(state, left, access, right)
+            if not state.all_edges(access):
+                state.remove_node(access)
 
         # merge oir nodes
         left.as_oir().body += right.as_oir().body
