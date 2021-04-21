@@ -16,6 +16,7 @@ from dace.sdfg.utils import node_path_graph
 from dace.transformation.optimizer import Optimizer
 from dace.transformation.transformation import PatternNode, Transformation
 
+from gtc import oir
 from gtc.dace.nodes import HorizontalExecutionLibraryNode
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
@@ -27,7 +28,10 @@ IJ_OFFSETS_T = Dict[str, Set[Tuple[int, int]]]
 def masks_match(
     left: HorizontalExecutionLibraryNode, right: HorizontalExecutionLibraryNode
 ) -> bool:
-    return left.oir_node.mask == right.oir_node.mask
+    left_masks = left.as_oir().iter_tree().if_isinstance(oir.MaskStmt).to_set()
+    right_masks = right.as_oir().iter_tree().if_isinstance(oir.MaskStmt).to_set()
+    print(f"left_masks: {left_masks}\nright_masks: {right_masks}")
+    return left_masks == right_masks
 
 
 def ij_offsets(offsets: OFFSETS_T) -> IJ_OFFSETS_T:
@@ -53,8 +57,8 @@ def write_after_read_conflicts(left_reads: IJ_OFFSETS_T, right_writes: IJ_OFFSET
 def offsets_match(
     left: HorizontalExecutionLibraryNode, right: HorizontalExecutionLibraryNode
 ) -> bool:
-    left_accesses = AccessCollector.apply(left.oir_node)
-    right_accesses = AccessCollector.apply(right.oir_node)
+    left_accesses = AccessCollector.apply(left.as_oir())
+    right_accesses = AccessCollector.apply(right.as_oir())
     conflicting = read_after_write_conflicts(
         ij_offsets(left_accesses.write_offsets()), ij_offsets(right_accesses.read_offsets())
     ) | write_after_read_conflicts(
@@ -218,7 +222,7 @@ class GraphMerging(Transformation):
             pass
 
         # merge oir nodes
-        left.oir_node.body += right.oir_node.body
+        left.as_oir().body += right.as_oir().body
 
         # rewire edges and connectors to left and delete right
         for edge in state.edges_between(left, right):
