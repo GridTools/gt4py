@@ -233,13 +233,6 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
                 body_sources.extend(stmt_source)
             else:
                 body_sources.append(stmt_source)
-            if isinstance(stmt, gt_ir.Assign):
-                body_sources.extend(
-                    [
-                        f"print('{body_sources[-1].split('=')[0]}')",
-                        f"print({body_sources[-1].split('=')[0]})",
-                    ]
-                )
 
         return body_sources
 
