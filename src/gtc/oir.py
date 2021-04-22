@@ -72,13 +72,15 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
-# TODO(havogt) consider introducing BlockStmt
-# class BlockStmt(common.BlockStmt[Stmt], Stmt):
-#     pass
+class MaskStmt(Stmt):
+    mask: Expr
+    body: List[Stmt]
 
-# TODO(havogt) should we have an IfStmt or is masking the final solution?
-# class IfStmt(common.IfStmt[List[Stmt], Expr], Stmt):  # TODO replace List[Stmt] by BlockStmt?
-#     pass
+    @validator("mask")
+    def mask_is_boolean_field_expr(cls, v: Expr) -> Expr:
+        if v.dtype != common.DataType.BOOL:
+            raise ValueError("Mask must be a boolean expression.")
+        return v
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):
@@ -130,15 +132,7 @@ class Temporary(FieldDecl):
 
 class HorizontalExecution(LocNode):
     body: List[Stmt]
-    mask: Optional[Expr]
     declarations: List[LocalScalar]
-
-    @validator("mask")
-    def mask_is_boolean_field_expr(cls, v: Optional[Expr]) -> Optional[Expr]:
-        if v:
-            if v.dtype != common.DataType.BOOL:
-                raise ValueError("Mask must be a boolean expression.")
-        return v
 
 
 class Interval(LocNode):

@@ -190,7 +190,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     def visit_GTComputationCall(
         self, node: gtcpp.GTComputationCall, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        return self.generic_visit(node, computation_name=node.id_, **kwargs)
+        computation_name = type(node).__name__ + str(id(node))
+        return self.generic_visit(node, computation_name=computation_name, **kwargs)
 
     GTComputationCall = as_mako(
         """

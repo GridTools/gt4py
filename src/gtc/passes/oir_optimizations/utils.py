@@ -62,15 +62,9 @@ class AccessCollector(NodeVisitor):
         self.visit(node.right, is_write=False, **kwargs)
         self.visit(node.left, is_write=True, **kwargs)
 
-    def visit_HorizontalExecution(
-        self,
-        node: oir.HorizontalExecution,
-        **kwargs: Any,
-    ) -> None:
-        if node.mask is not None:
-            self.visit(node.mask, is_write=False, **kwargs)
-        for stmt in node.body:
-            self.visit(stmt, **kwargs)
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
+        self.visit(node.mask, is_write=False, **kwargs)
+        self.visit(node.body, **kwargs)
 
     @dataclass
     class Result:

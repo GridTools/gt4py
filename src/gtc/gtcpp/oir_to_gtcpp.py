@@ -172,6 +172,12 @@ class OIRToGTCpp(eve.NodeTranslator):
             left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> gtcpp.IfStmt:
+        return gtcpp.IfStmt(
+            cond=self.visit(node.mask, **kwargs),
+            true_branch=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),
+        )
+
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
@@ -182,13 +188,9 @@ class OIRToGTCpp(eve.NodeTranslator):
         **kwargs: Any,
     ) -> gtcpp.GTStage:
         assert "stencil_symtable" in kwargs
-        body = self.visit(node.body, **kwargs)
-        mask = self.visit(node.mask, **kwargs)
-        if mask:
-            body = [gtcpp.IfStmt(cond=mask, true_branch=gtcpp.BlockStmt(body=body))]
         apply_method = gtcpp.GTApplyMethod(
             interval=self.visit(interval, **kwargs),
-            body=body,
+            body=self.visit(node.body, **kwargs),
             local_variables=self.visit(node.declarations, **kwargs),
         )
         accessors = _extract_accessors(apply_method)
@@ -202,15 +204,16 @@ class OIRToGTCpp(eve.NodeTranslator):
             }
         )
 
+        functor_name = type(node).__name__ + str(id(node))
         prog_ctx.add_functor(
             gtcpp.GTFunctor(
-                name=node.id_,
+                name=functor_name,
                 applies=[apply_method],
                 param_list=gtcpp.GTParamList(accessors=accessors),
             )
         ),
 
-        return gtcpp.GTStage(functor=node.id_, args=stage_args)
+        return gtcpp.GTStage(functor=functor_name, args=stage_args)
 
     def visit_VerticalLoop(
         self,

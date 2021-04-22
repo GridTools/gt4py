@@ -56,6 +56,14 @@ class AssignStmtFactory(factory.Factory):
     right = factory.SubFactory(FieldAccessFactory)
 
 
+class MaskStmtFactory(factory.Factory):
+    class Meta:
+        model = oir.MaskStmt
+
+    mask = factory.SubFactory(FieldAccessFactory, dtype=common.DataType.BOOL)
+    body = factory.List([factory.SubFactory(AssignStmtFactory)])
+
+
 class NativeFuncCallFactory(factory.Factory):
     class Meta:
         model = oir.NativeFuncCall
@@ -95,7 +103,6 @@ class HorizontalExecutionFactory(factory.Factory):
         model = oir.HorizontalExecution
 
     body = factory.List([factory.SubFactory(AssignStmtFactory)])
-    mask = None
     declarations: List[oir.LocalScalar] = []
 
 

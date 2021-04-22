@@ -70,10 +70,12 @@ class GTIRToOIR(NodeTranslator):
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> None:
+        body = [oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))]
+        if mask is not None:
+            body = [oir.MaskStmt(body=body, mask=mask)]
         ctx.add_horizontal_execution(
             oir.HorizontalExecution(
-                body=[oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))],
-                mask=mask,
+                body=body,
                 declarations=[],
             ),
         )
@@ -121,7 +123,7 @@ class GTIRToOIR(NodeTranslator):
     def visit_FieldIfStmt(
         self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> None:
-        mask_field_decl = _create_mask(ctx, f"mask_{node.id_}", self.visit(node.cond))
+        mask_field_decl = _create_mask(ctx, f"mask_{id(node)}", self.visit(node.cond))
         current_mask = oir.FieldAccess(
             name=mask_field_decl.name, offset=CartesianOffset.zero(), dtype=mask_field_decl.dtype
         )

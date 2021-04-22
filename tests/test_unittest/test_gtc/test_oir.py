@@ -25,6 +25,7 @@ from .oir_utils import (
     FieldAccessFactory,
     FieldDeclFactory,
     HorizontalExecutionFactory,
+    MaskStmtFactory,
     StencilFactory,
     VerticalLoopFactory,
     VerticalLoopSectionFactory,
@@ -38,7 +39,7 @@ def test_no_horizontal_offset_allowed():
 
 def test_mask_must_be_bool():
     with pytest.raises(ValidationError, match=r".*must be.* bool.*"):
-        HorizontalExecutionFactory(mask=FieldAccessFactory(dtype=DataType.INT32))
+        MaskStmtFactory(mask=FieldAccessFactory(dtype=DataType.INT32))
 
 
 def test_temporary_default_3d():
