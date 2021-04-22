@@ -477,7 +477,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         test["implementations"].append(implementation)
 
     @classmethod
-    def _run_test_implementation(cls, parameters_dict, implementation):
+    def _run_test_implementation(cls, parameters_dict, implementation):  # noqa: C901  # too complex
         input_data, exec_info = parameters_dict
 
         origin = cls.origin
