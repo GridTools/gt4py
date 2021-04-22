@@ -122,8 +122,7 @@ def test_stencil_without_effect(backend):
     stencil2(field_in, domain=(3, 3, 3))
 
     # test without domain specified
-    with pytest.raises(ValueError):
-        stencil1(field_in)
+    stencil1(field_in)
 
 
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
@@ -158,9 +157,9 @@ def test_stage_merger_induced_interval_block_reordering(backend):
 def test_lower_dimensional_inputs(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
-        field_3d: gtscript.Field[np.float_, gtscript.IJK],
-        field_2d: gtscript.Field[np.float_, gtscript.IJ],
-        field_1d: gtscript.Field[np.float_, gtscript.K],
+        field_3d: gtscript.Field[gtscript.IJK, np.float_],
+        field_2d: gtscript.Field[gtscript.IJ, np.float_],
+        field_1d: gtscript.Field[gtscript.K, np.float_],
     ):
         with computation(FORWARD):
             with interval(0, 1):

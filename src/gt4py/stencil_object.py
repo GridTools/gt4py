@@ -137,7 +137,11 @@ class StencilObject(abc.ABC):
         raise ValueError("Invalid 'origin' value ({})".format(origin))
 
     def _get_max_domain(
-        self, field_args: Dict[str, Any], origin: Dict[str, Tuple[int, ...]]
+        self,
+        field_args: Dict[str, Any],
+        origin: Dict[str, Tuple[int, ...]],
+        *,
+        squeeze: bool = True,
     ) -> Shape:
         """Return the maximum domain size possible
 
@@ -177,7 +181,10 @@ class StencilObject(abc.ABC):
                 )
                 max_domain &= Shape.from_mask(field_domain, api_domain_mask, default=max_size)
 
-        return Shape([i if i != max_size else 1 for i in max_domain])
+        if squeeze:
+            return Shape([i if i != max_size else 1 for i in max_domain])
+        else:
+            return max_domain
 
     def _validate_args(self, field_args, param_args, domain, origin):
         """Validate input arguments to _call_run.
@@ -206,7 +213,7 @@ class StencilObject(abc.ABC):
         if not domain > Shape.zeros(domain_ndim):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")
 
-        if not domain <= (max_domain := self._get_max_domain(field_args, origin)):
+        if not domain <= (max_domain := self._get_max_domain(field_args, origin, squeeze=False)):
             raise ValueError(
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
