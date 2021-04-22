@@ -211,7 +211,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    Program = as_mako("""
+    Program = as_mako(
+        """
         #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
 

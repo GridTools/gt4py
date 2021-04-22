@@ -562,7 +562,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 )
                 data_dims = field_params[name][1]
                 if data_dims:
-                    validation_slice = tuple([*validation_slice] + [slice(None)] * len(data_dims) )
+                    validation_slice = tuple([*validation_slice] + [slice(None)] * len(data_dims))
                 cropped_validation_values[name] = data[validation_slice]
             else:
                 cropped_validation_values[name] = data

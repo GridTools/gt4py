@@ -661,4 +661,6 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
     def validation(field_in, another_field, field_out, *, domain, origin):
         field_out[:, :, :, 0] = field_in[:] + another_field[:-2, :-2, None, 0]
         field_out[:, :, :, 1] = field_in[:] + another_field[2:, 2:, None, 1]
-        field_out[:, :, :, 2] = field_in[:] + another_field[1:-1, 1:-1, None, 2] + another_field[:-2, 2:, None, 2]
+        field_out[:, :, :, 2] = (
+            field_in[:] + another_field[1:-1, 1:-1, None, 2] + another_field[:-2, 2:, None, 2]
+        )
