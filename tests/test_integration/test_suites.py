@@ -645,7 +645,7 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
             in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]
         ),
         "another_field": gt_testing.field(
-            in_range=(-10, 10), axes="IJ", data_dims=(3,), boundary=[(0, 0), (0, 0), (0, 0)]
+            in_range=(-10, 10), axes="IJ", data_dims=(3,), boundary=[(1, 1), (1, 1), (0, 0)]
         ),
         "field_out": gt_testing.field(
             in_range=(-10, 10), axes="IJK", data_dims=(3,), boundary=[(0, 0), (0, 0), (0, 0)]
@@ -654,13 +654,11 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
 
     def definition(field_in, another_field, field_out):
         with computation(PARALLEL), interval(...):
-            field_out[0, 0, 0][0] = 100.0 + field_in[0]
-            field_out[0, 0, 0][1] = 200.0 + 2 * another_field[0, 0][1]
-            field_out[0, 0, 0][2] = 300.0 + 2 * field_in[0] + 3 * another_field[0, 0][2]
+            field_out[0, 0, 0][0] = field_in[0] + another_field[-1, -1][0]
+            field_out[0, 0, 0][1] = field_in[0] + another_field[1, 1][1]
+            field_out[0, 0, 0][2] = field_in[0] + another_field[0, 0][2] + another_field[-1, 1][2]
 
     def validation(field_in, another_field, field_out, *, domain, origin):
-        field_out[:, :, :, 0] = 100.0 + field_in[:]
-        field_out[:, :, :, 1] = 200.0 + 2 * another_field[:, :, None, 1]
-        field_out[:, :, :, 2] = (
-            300.0 + 2 * field_in[:] + 3 * another_field[:, :, None, 2]
-        )
+        field_out[:, :, :, 0] = field_in[:] + another_field[:-2, :-2, None, 0]
+        field_out[:, :, :, 1] = field_in[:] + another_field[2:, 2:, None, 1]
+        field_out[:, :, :, 2] = field_in[:] + another_field[1:-1, 1:-1, None, 2] + another_field[:-2, 2:, None, 2]

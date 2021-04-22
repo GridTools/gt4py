@@ -117,7 +117,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                 )
             else:
                 sid_def = """gt::as_{sid_type}<{dtype}, {sid_ndim},
-                    std::integral_constant<int, {unique_index}>>({name})""".format(
+                    gt::integral_constant<int, {unique_index}>>({name})""".format(
                     sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
                     name=node.name,
                     dtype=self.visit(node.dtype),
@@ -131,7 +131,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                     ]
                     if data_ndim:
                         gt_dims += [
-                            f"std::integral_constant<int, {3 + dim}>" for dim in range(data_ndim)
+                            f"gt::integral_constant<int, {3 + dim}>" for dim in range(data_ndim)
                         ]
                     sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
                         gt_dims=", ".join(gt_dims), sid_def=sid_def

@@ -205,14 +205,14 @@ class GTCppCodegen(codegen.TemplatedGenerator):
                 return multi_pass(${ ','.join(multi_stages) });
             };
 
-            run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(arguments)});
+            run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(f"std::forward<decltype({arg})>({arg})" for arg in arguments)});
         }
         %endif
         """
     )
 
-    Program = as_mako(
-        """#include <gridtools/stencil/${gt_backend_t}.hpp>
+    Program = as_mako("""
+        #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
 
         namespace ${ name }_impl_{
