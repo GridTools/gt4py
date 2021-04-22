@@ -39,16 +39,16 @@ class StencilObject(abc.ABC):
             cls._instance = object.__new__(cls)
         return cls._instance
 
-    def __setattr__(self, key, value):
+    def __setattr__(self, key, value) -> None:
         raise AttributeError("Attempting a modification of an attribute in a frozen class")
 
-    def __delattr__(self, item):
+    def __delattr__(self, item) -> None:
         raise AttributeError("Attempting a deletion of an attribute in a frozen class")
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return type(self) == type(other)
 
-    def __str__(self):
+    def __str__(self) -> str:
         result = """
 <StencilObject: {name}> [backend="{backend}"]
     - I/O fields: {fields}
@@ -69,7 +69,7 @@ class StencilObject(abc.ABC):
 
         return result
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return int.from_bytes(type(self)._gt_id_.encode(), byteorder="little")
 
     # Those attributes are added to the class at loading time:
@@ -84,7 +84,7 @@ class StencilObject(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def source(self):
+    def source(self) -> str:
         pass
 
     @property
@@ -113,15 +113,15 @@ class StencilObject(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def run(self, *args, **kwargs):
+    def run(self, *args, **kwargs) -> None:
         pass
 
     @abc.abstractmethod
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> None:
         pass
 
     @staticmethod
-    def _make_origin_dict(origin) -> Dict[str, Index]:
+    def _make_origin_dict(origin: Any) -> Dict[str, Index]:
         try:
             if isinstance(origin, dict):
                 return origin
@@ -151,6 +151,8 @@ class StencilObject(abc.ABC):
                 Mapping from field names to actually passed data arrays.
             origin:
                 The origin for each field.
+            squeeze:
+                Convert non-used domain dimensions to singleton dimensions.
 
         Returns
         -------
@@ -186,7 +188,7 @@ class StencilObject(abc.ABC):
         else:
             return max_domain
 
-    def _validate_args(self, field_args, param_args, domain, origin):
+    def _validate_args(self, field_args, param_args, domain, origin) -> None:
         """Validate input arguments to _call_run.
 
         Raises
@@ -297,7 +299,7 @@ class StencilObject(abc.ABC):
 
     def _call_run(
         self, field_args, parameter_args, domain, origin, *, validate_args=True, exec_info=None
-    ):
+    ) -> None:
         """Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
 
         Note that this function will always try to expand simple parameter values to
@@ -356,7 +358,6 @@ class StencilObject(abc.ABC):
 
         domain_ndim = self.domain_info.ndim
         origin = self._make_origin_dict(origin)
-        zero_origin = Shape((0,) * domain_ndim)
         all_origin = origin.get("_all_", None)
 
         # Set an appropriate origin for all fields
