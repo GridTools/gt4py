@@ -1283,6 +1283,9 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
         def visit_FieldRef(
             self, path: tuple, node_name: str, node: gt_ir.FieldRef
         ) -> Tuple[bool, Union[gt_ir.FieldRef, gt_ir.VarRef]]:
+            for axis in node.offset:
+                if isinstance(node.offset[axis], gt_ir.Expr):
+                    node.offset[axis] = self.visit(node.offset[axis])
             if node.name in self.demotables:
                 if node.name not in self.local_symbols:
                     field_decl = self.fields[node.name]
