@@ -36,7 +36,6 @@ from .typingx import (
     Optional,
     Set,
     Tuple,
-    Type,
     TypedDict,
     TypeVar,
     Union,
@@ -185,18 +184,6 @@ class BaseNode(pydantic.BaseModel, metaclass=NodeMetaclass):
 
     __node_impl_fields__: ClassVar[NodeImplFieldMetadataDict]
     __node_children__: ClassVar[NodeChildrenMetadataDict]
-
-    # Node fields
-    #: Unique node-id (implementation field)
-    id_: Optional[Str] = None
-
-    @pydantic.validator("id_", pre=True, always=True)
-    def _id_validator(cls: Type[AnyNode], v: Optional[str]) -> str:  # type: ignore  # validators are classmethods
-        if v is None:
-            v = utils.UIDGenerator.sequential_id(prefix=cls.__qualname__)
-        if not isinstance(v, str):
-            raise TypeError(f"id_ is not an 'str' instance ({type(v)})")
-        return v
 
     def iter_impl_fields(self) -> Generator[Tuple[str, Any], None, None]:
         for name, _ in self.__fields__.items():

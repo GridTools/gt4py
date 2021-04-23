@@ -28,6 +28,7 @@ from gt4py.utils.attrib import Set as SetOf
 from gt4py.utils.attrib import attribkwclass as attribclass
 from gt4py.utils.attrib import attribute
 
+from .module_generator import BaseModuleGenerator
 from .python_generator import PythonSourceGenerator
 
 
@@ -428,7 +429,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return sources
 
 
-class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
+class NumPyModuleGenerator(BaseModuleGenerator):
     def __init__(self):
         super().__init__()
         self.source_generator = NumPySourceGenerator(
@@ -495,3 +496,5 @@ class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
     languages = {"computation": "python", "bindings": []}
 
     MODULE_GENERATOR_CLASS = NumPyModuleGenerator
+
+    USE_LEGACY_TOOLCHAIN = True
