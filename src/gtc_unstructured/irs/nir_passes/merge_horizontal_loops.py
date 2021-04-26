@@ -71,7 +71,7 @@ class _FindMergeCandidatesAnalysis(NodeVisitor):
             self.candidate.append(node)
             return
         elif (
-            self.candidate[-1].location_type == node.location_type
+            self.candidate[-1].iteration_space.location_type == node.iteration_space.location_type
         ):  # same location type as previous
             dependencies = generate_dependency_graph(self.candidate + [node])
             if not self.has_read_with_offset_after_write(dependencies):
@@ -98,7 +98,7 @@ class MergeHorizontalLoops(NodeTranslator):
         for candidate in merge_candidates:
             declarations = []
             statements = []
-            location_type = candidate[0].location_type
+            location_type = candidate[0].iteration_space.location_type
 
             first_index = node.horizontal_loops.index(candidate[0])
             last_index = node.horizontal_loops.index(candidate[-1])
@@ -114,7 +114,7 @@ class MergeHorizontalLoops(NodeTranslator):
                         statements=statements,
                         location_type=location_type,
                     ),
-                    location_type=location_type,
+                    iteration_space=node.horizontal_loops[first_index].iteration_space,
                 )
             ]
 

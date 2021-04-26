@@ -83,7 +83,18 @@ __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
 
 
-_VALID_DATA_TYPES = (bool, np.bool, int, np.int32, np.int64, float, np.float32, np.float64)
+_VALID_DATA_TYPES = (
+    bool,
+    np.bool,
+    int,
+    np.int8,
+    np.int16,
+    np.int32,
+    np.int64,
+    float,
+    np.float32,
+    np.float64,
+)
 
 
 def _set_arg_dtypes(definition, dtypes):

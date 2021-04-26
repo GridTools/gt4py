@@ -21,6 +21,7 @@ from ...oir_utils import (
     AssignStmtFactory,
     FieldAccessFactory,
     HorizontalExecutionFactory,
+    MaskStmtFactory,
     StencilFactory,
     TemporaryFactory,
 )
@@ -37,11 +38,21 @@ def test_access_collector():
             ),
             HorizontalExecutionFactory(
                 body=[
-                    AssignStmtFactory(left__name="baz", right__name="tmp", right__offset__j=1),
+                    MaskStmtFactory(
+                        body=[
+                            AssignStmtFactory(
+                                left__name="baz", right__name="tmp", right__offset__j=1
+                            ),
+                        ],
+                        mask=FieldAccessFactory(
+                            name="mask",
+                            dtype=DataType.BOOL,
+                            offset__i=-1,
+                            offset__j=-1,
+                            offset__k=1,
+                        ),
+                    )
                 ],
-                mask=FieldAccessFactory(
-                    name="mask", dtype=DataType.BOOL, offset__i=-1, offset__j=-1, offset__k=1
-                ),
             ),
         ],
         declarations=[TemporaryFactory(name="tmp")],
