@@ -18,7 +18,6 @@ import pytest
 from pydantic.error_wrappers import ValidationError
 
 from gtc.common import DataType, LoopOrder
-from gtc.oir import Temporary
 
 from .oir_utils import (
     AssignStmtFactory,
@@ -40,11 +39,6 @@ def test_no_horizontal_offset_allowed():
 def test_mask_must_be_bool():
     with pytest.raises(ValidationError, match=r".*must be.* bool.*"):
         MaskStmtFactory(mask=FieldAccessFactory(dtype=DataType.INT32))
-
-
-def test_temporary_dimensions():
-    temp1d = Temporary(name="b", dtype=DataType.INT64, dimensions=(True, False, False))
-    assert temp1d.dimensions == (True, False, False)
 
 
 def test_assign_to_ik_fwd():

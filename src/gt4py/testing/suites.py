@@ -29,7 +29,7 @@ from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
-from gt4py.definitions import Boundary, FieldInfo, Shape
+from gt4py.definitions import Boundary, CartesianSpace, FieldInfo, Shape
 from gt4py.ir.nodes import Index
 from gt4py.stencil_object import StencilObject
 from gt4py.utils import filter_mask, interpolate_mask
@@ -486,7 +486,9 @@ class StencilTestSuite(metaclass=SuiteMeta):
         field_masks = {}
         for name, value in input_data.items():
             if isinstance(value, np.ndarray):
-                field_masks[name] = tuple(ax in field_params[name][0] for ax in ["I", "J", "K"])
+                field_masks[name] = tuple(
+                    ax in field_params[name][0] for ax in CartesianSpace.names
+                )
 
         data_shape = Shape((sys.maxsize,) * 3)
         for name, data in input_data.items():
