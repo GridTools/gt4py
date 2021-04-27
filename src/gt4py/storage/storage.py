@@ -249,7 +249,7 @@ class Storage(np.ndarray):
 
 
 class GPUStorage(Storage):
-    _dirty_storages: set = {}
+    _modified_storages: dict = {}
 
     @classmethod
     def _construct(cls, backend, dtype, default_origin, shape, alignment, layout_map):
@@ -298,7 +298,7 @@ class GPUStorage(Storage):
             gpu_view = storage_utils.gpu_view(self)
             gpu_view[key] = cp.asarray(value.data)
             cp.cuda.Device(0).synchronize()
-            self._dirty_storages.clear()
+            self._modified_storages.clear()
             return value
         else:
             return super().__setitem__(key, value)
@@ -313,17 +313,17 @@ class GPUStorage(Storage):
 
     @property
     def _is_device_modified(self):
-        return self in self._dirty_storages
+        return id(self) in self._modified_storages
 
     def _set_clean(self):
         if not self._is_clean():
-            self._dirty_storages.discard(self)
+            self._modified_storages.pop(id(self))
 
     def _set_host_modified(self):
         pass
 
     def _set_device_modified(self):
-        self._dirty_storages.add(self)
+        self._modified_storages[id(self)] = self
 
     def synchronize(self):
         self.device_to_host()
@@ -331,7 +331,7 @@ class GPUStorage(Storage):
     def device_to_host(self, force=False):
         if force or self._is_device_modified:
             cp.cuda.Device(0).synchronize()
-            self._dirty_storages.clear()
+            self._modified_storages.clear()
 
 
 class CPUStorage(Storage):
