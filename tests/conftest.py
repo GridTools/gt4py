@@ -30,6 +30,7 @@ from .analysis_setup import (
     build_iir_pass,
     compute_extents_pass,
     compute_used_symbols_pass,
+    constant_folding_pass,
     demote_locals_pass,
     init_pass,
     merge_blocks_pass,
