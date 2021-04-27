@@ -1522,7 +1522,7 @@ class ReduceTemporaryStoragesPass(TransformPass):
             if node.name in self.reduced_fields:
                 axes = self.iir.fields[node.name].axes
                 return True, gt_ir.FieldRef(
-                    name=node_name, offset={axis: node.offset[axis] for axis in axes}
+                    name=node.name, offset={axis: node.offset[axis] for axis in axes}
                 )
             return True, node
 
