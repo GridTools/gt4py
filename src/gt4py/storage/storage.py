@@ -297,8 +297,7 @@ class GPUStorage(Storage):
         if hasattr(value, "__cuda_array_interface__"):
             gpu_view = storage_utils.gpu_view(self)
             gpu_view[key] = cp.asarray(value.data)
-            cp.cuda.Device(0).synchronize()
-            self._modified_storages.clear()
+            self.device_to_host(True)
             return value
         else:
             return super().__setitem__(key, value)
