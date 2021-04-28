@@ -289,6 +289,20 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     return _decorator
 
 
+def abc(original_class: type) -> type:
+    """Mark a class as abstract."""
+
+    class AbstractClass(original_class):  # type: ignore
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            if self.__class__.__mro__[0] is AbstractClass:
+                raise TypeError(
+                    f"Trying to instantiate `{original_class.__name__}` abstract class."
+                )
+            super().__init__(*args, **kwargs)
+
+    return AbstractClass
+
+
 def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
     """Stable hash function.
 

@@ -140,6 +140,20 @@ def unique_data_items(request):
     ]
 
 
+def test_instantiate_abstract_class():
+    @eve.utils.abc
+    class TestClass(pydantic.BaseModel):
+        pass
+
+    with pytest.raises(TypeError, match="Trying to instantiate `TestClass` abstract class"):
+        TestClass()
+
+    class Another(TestClass):
+        pass
+
+    Another()
+
+
 @pytest.fixture(
     params=[None, hashlib.md5(), "md5", hashlib.sha1(), "sha1", hashlib.sha256(), "sha256"]
 )
