@@ -25,8 +25,7 @@ from gt4py.gtscript import Field
 from ..definitions import INTERNAL_CPU_BACKENDS
 
 
-@gtscript.stencil(backend="numpy")
-def stencil(
+def base_stencil(
     field1: Field[np.float64],
     field2: Field[np.float64],
     field3: Field[np.float32],
@@ -40,6 +39,8 @@ def stencil(
 
 
 def test_origin_selection():
+    stencil = gtscript.stencil(definition=base_stencil, backend="numpy")
+
     A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
@@ -47,6 +48,7 @@ def test_origin_selection():
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
+
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
     assert A[1, 1, 1] == 4
@@ -90,6 +92,8 @@ def test_origin_selection():
 
 
 def test_domain_selection():
+    stencil = gtscript.stencil(definition=base_stencil, backend="numpy")
+
     A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
@@ -97,6 +101,7 @@ def test_domain_selection():
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
+
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
     assert A[1, 1, 1] == 4
