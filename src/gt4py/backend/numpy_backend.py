@@ -102,7 +102,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         extent = self.block_info.extent
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
-        parallel_axes_names = [axis.name for axis in self.domain.parallel_axes]
+        parallel_axes_names = [axis.name for axis in self.impl_node.fields[name].axes]
         parallel_axes_dims = [self.impl_node.domain.index(axis) for axis in parallel_axes_names]
 
         args = []
