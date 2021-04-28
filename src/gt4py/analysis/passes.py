@@ -17,12 +17,14 @@
 """Definitions and utilities used by all the analysis pipeline components.
 """
 
+import copy
 import itertools
 import warnings
 from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     Iterator,
     List,
     Optional,
@@ -535,9 +537,7 @@ class MultiStageMergingWrapper:
             return False
         if candidate.iteration_order != self.iteration_order:
             return False
-        if candidate.has_disallowed_read_after_write_in(self):
-            return False
-        if candidate.has_disallowed_write_after_read_in(self):
+        if candidate.has_disallowed_read_with_offset_and_write(self):
             return False
         return True
 
@@ -552,26 +552,35 @@ class MultiStageMergingWrapper:
             else:
                 self._multi_stage.inputs[name] = extent
 
-    def has_disallowed_read_after_write_in(self, target: "MultiStageMergingWrapper") -> bool:
-        if not self.k_offset_extends_domain:
-            return False
-        return any(extent[-1] != (0, 0) for extent in self.read_after_write_extents_in(target))
-
-    def has_disallowed_write_after_read_in(self, target: "MultiStageMergingWrapper") -> bool:
-        write_after_read_fields = self.write_after_read_fields_in(target)
-        return write_after_read_fields and (
-            self.has_reads_with_offset(restrict_to=write_after_read_fields)
-            or target.has_reads_with_offset(restrict_to=write_after_read_fields)
-            or self.has_extended_domain
-            or target.has_extended_domain
+    def has_disallowed_read_with_offset_and_write(self, target: "MultiStageMergingWrapper") -> bool:
+        write_after_read_fields = {"all": self.write_after_read_fields_in(target)}
+        write_after_read_fields["api"] = write_after_read_fields["all"].intersection(
+            self.api_fields_names
         )
 
-    def has_reads_with_offset(self, *, restrict_to: Optional[Set[str]]) -> bool:
-        checked_axes = slice(None) if self.k_offset_extends_domain else slice(None, -1)
-        fields = restrict_to.intersection(self.inputs) if restrict_to else set(self.inputs)
-        return any(
-            self.inputs[name][checked_axes] != Extent.zeros()[checked_axes] for name in fields
+        read_after_write_fields = {"all": self.read_after_write_fields_in(target)}
+        read_after_write_fields["api"] = read_after_write_fields["all"].intersection(
+            self.api_fields_names
         )
+
+        blocks_inputs = (
+            (target, write_after_read_fields),
+            (self, read_after_write_fields),
+        )
+
+        if any(
+            block.nonzero_extents_on_axes(inputs["api"], self.parallel_axes_indices)
+            for block, inputs in blocks_inputs
+        ):
+            return True
+
+        if self.k_offset_extends_domain and any(
+            block.nonzero_extents_on_axes(inputs["all"], (self.sequential_axis_index,))
+            for block, inputs in blocks_inputs
+        ):
+            return True
+
+        return False
 
     def read_after_write_fields_in(self, target: "MultiStageMergingWrapper") -> Set[str]:
         previous_writes = set(target.outputs)
@@ -583,27 +592,30 @@ class MultiStageMergingWrapper:
         current_writes = set(self.outputs)
         return previous_reads.intersection(current_writes)
 
-    def read_after_write_extents_in(self, target: "MultiStageMergingWrapper") -> Set[Extent]:
-        return {self.inputs[name] for name in self.read_after_write_fields_in(target)}
+    def access_extent_for(self, field: str) -> Extent:
+        extent = Extent.zeros()
+        for ij_block in self.ij_blocks:
+            if field in ij_block.inputs:
+                extent |= ij_block.compute_extent + ij_block.inputs[field]
+        return extent
 
-    @staticmethod
-    def accumulate_extents(extents: Sequence[Extent]) -> Extent:
-        full_extent = Extent.zeros()
-        for extent in extents:
-            full_extent |= extent
-        return full_extent
-
-    @property
-    def extents(self) -> Iterator[Extent]:
-        return (ij_block.compute_extent for ij_block in self.ij_blocks)
+    def nonzero_extents_on_axes(self, fields: Set[str], axes: List[int]) -> bool:
+        extents = (self.access_extent_for(field) for field in fields)
+        specific_extents = (Extent([extent[axis] for axis in axes]) for extent in extents)
+        return not all(extent.is_zero for extent in specific_extents)
 
     @property
-    def full_extent(self) -> Extent:
-        return self.accumulate_extents(self.extents)
+    def api_fields_names(self) -> List[str]:
+        return [decl.name for decl in self.parent.definition_ir.api_fields]
 
     @property
-    def has_extended_domain(self) -> bool:
-        return self.full_extent != Extent.zeros()
+    def parallel_axes_indices(self) -> List[int]:
+        axes = self.domain.axes if self.k_offset_extends_domain else self.domain.parallel_axes
+        return [self.domain.index(axis) for axis in axes]
+
+    @property
+    def sequential_axis_index(self) -> int:
+        return self.domain.index(self.domain.sequential_axis)
 
     @property
     def k_offset_extends_domain(self) -> bool:
@@ -633,12 +645,16 @@ class MultiStageMergingWrapper:
         return self._multi_stage.outputs
 
     @property
+    def wrapped(self) -> DomainBlockInfo:
+        return self._multi_stage
+
+    @property
     def parent(self) -> TransformData:
         return self._parent
 
     @property
-    def wrapped(self) -> DomainBlockInfo:
-        return self._multi_stage
+    def domain(self) -> gt_ir.Domain:
+        return self.parent.definition_ir.domain
 
 
 class StageMergingWrapper:
@@ -672,7 +688,9 @@ class StageMergingWrapper:
         if self.has_data_dependencies_with(candidate):
             return False
 
-        self.has_incompatible_intervals_with(candidate)
+        # Check for read with offset and write on parallel axes between stages
+        if self.has_disallowed_read_with_offset_and_write(candidate):
+            return False
 
         return True
 
@@ -748,6 +766,7 @@ class StageMergingWrapper:
                     read_interval, self.min_k_interval_sizes
                 ):
                     return True
+
         return False
 
     def intervals_overlap_or_imply_reorder(
@@ -759,9 +778,49 @@ class StageMergingWrapper:
             interval_b, self.min_k_interval_sizes
         )
 
+    def has_disallowed_read_with_offset_and_write(self, candidate: "StageMergingWrapper") -> bool:
+        write_after_read_fields = self.write_after_read_fields_in(candidate)
+        read_after_write_fields = self.read_after_write_fields_in(candidate)
+
+        blocks_inputs = (
+            (candidate, write_after_read_fields),
+            (self, read_after_write_fields),
+        )
+
+        if any(
+            block.nonzero_extents_on_axes(inputs, self.parallel_axes_indices)
+            for block, inputs in blocks_inputs
+        ):
+            return True
+
+        return False
+
+    def read_after_write_fields_in(self, candidate: "StageMergingWrapper") -> Set[str]:
+        previous_writes = set(candidate.outputs)
+        current_reads = set(self.inputs)
+        return previous_writes.intersection(current_reads)
+
+    def write_after_read_fields_in(self, candidate: "StageMergingWrapper") -> Set[str]:
+        previous_reads = set(candidate.inputs)
+        current_writes = set(self.outputs)
+        return previous_reads.intersection(current_writes)
+
+    def nonzero_extents_on_axes(self, fields: Set[str], axes: List[int]) -> bool:
+        extents = (self.inputs[field] for field in fields)
+        specific_extents = (Extent([extent[axis] for axis in axes]) for extent in extents)
+        return not all(extent.is_zero for extent in specific_extents)
+
     @property
-    def parent_block(self) -> TransformData:
-        return self._parent_block
+    def parallel_axes_indices(self) -> List[int]:
+        axes = self.domain.axes if self.k_offset_extends_domain else self.domain.parallel_axes
+        return [self.domain.index(axis) for axis in axes]
+
+    @property
+    def k_offset_extends_domain(self) -> bool:
+        return (
+            self.parent_block.iteration_order == gt_ir.IterationOrder.PARALLEL
+            and self.parent.has_sequential_axis
+        )
 
     @property
     def compute_extent(self) -> Extent:
@@ -792,12 +851,20 @@ class StageMergingWrapper:
         return self._parent.min_k_interval_sizes
 
     @property
+    def wrapped(self) -> IJBlockInfo:
+        return self._stage
+
+    @property
+    def parent_block(self) -> DomainBlockInfo:
+        return self._parent_block
+
+    @property
     def parent(self) -> TransformData:
         return self._parent
 
     @property
-    def wrapped(self) -> IJBlockInfo:
-        return self._stage
+    def domain(self) -> gt_ir.Domain:
+        return self.parent.definition_ir.domain
 
 
 def greedy_merging(items: Sequence[MergeableType]) -> List[MergeableType]:
@@ -1295,7 +1362,6 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
         def visit_FieldRef(
             self, path: tuple, node_name: str, node: gt_ir.FieldRef
         ) -> Tuple[bool, Union[gt_ir.FieldRef, gt_ir.VarRef]]:
-            # First, potentially visit the offsets
             for axis in node.offset:
                 if isinstance(node.offset[axis], gt_ir.Expr):
                     node.offset[axis] = self.visit(node.offset[axis])
@@ -1318,6 +1384,91 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
     def apply(cls, transform_data: TransformData) -> None:
         demotables = cls.CollectDemotableSymbols.apply(transform_data.implementation_ir)
         cls.DemoteSymbols.apply(transform_data.implementation_ir, demotables)
+
+
+class ConstantFoldingPass(TransformPass):
+    """Demote temporary fields to constants if only assigned to a single scalar value."""
+
+    class CollectConstants(gt_ir.IRNodeVisitor):
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation) -> Set[str]:
+            collector = cls()
+            return collector(node)
+
+        def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
+            assert isinstance(node, gt_ir.StencilImplementation)
+            self.constants = {field: 0 for field in node.temporary_fields}
+            self.visit(node)
+            return set(self.constants.keys())
+
+        def visit_If(self, node: gt_ir.If, **kwargs: Any) -> None:
+            for stmt in node.main_body.stmts:
+                self.visit(stmt, in_condition=True)
+            if node.else_body:
+                for stmt in node.else_body.stmts:
+                    self.visit(stmt, in_condition=True)
+
+        def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
+            target_name = node.target.name
+            if target_name in self.constants:
+                self.constants[target_name] += 1
+                if (
+                    not isinstance(node.value, gt_ir.ScalarLiteral)
+                    or self.constants[target_name] > 1
+                    or kwargs.get("in_condition", False)
+                ):
+                    self.constants.pop(target_name)
+
+    class ConstantFolder(gt_ir.IRNodeMapper):
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation, constants: Set[str]) -> None:
+            instance = cls(constants)
+            return instance(node)
+
+        def __init__(self, constants: Set[str]):
+            self.literals: Dict[str, gt_ir.ScalarLiteral] = {name: None for name in constants}
+
+        def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
+            return self.visit(node)
+
+        def visit_StencilImplementation(
+            self, path: tuple, node_name: str, node: gt_ir.StencilImplementation
+        ) -> gt_ir.StencilImplementation:
+            res = self.generic_visit(path, node_name, node)
+            for name in self.literals:
+                node.fields.pop(name)
+                node.fields_extents.pop(name)
+            return res
+
+        def visit_FieldAccessor(
+            self, path: tuple, node_name: str, node: gt_ir.FieldAccessor
+        ) -> Tuple[bool, Optional[gt_ir.FieldAccessor]]:
+            if node.symbol in self.literals:
+                return False, None
+            else:
+                return True, node
+
+        def visit_Assign(self, path: tuple, node_name: str, node: gt_ir.Assign):
+            node.value = self.visit(node.value)
+            target_name = node.target.name
+            if target_name in self.literals:
+                self.literals[target_name] = copy.deepcopy(node.value)
+                return False, None
+            return True, node
+
+        def visit_FieldRef(
+            self, path: tuple, node_name: str, node: gt_ir.FieldRef
+        ) -> Tuple[bool, gt_ir.FieldRef]:
+            if node.name in self.literals:
+                return True, self.literals[node.name]
+            return True, node
+
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        constants = cls.CollectConstants.apply(transform_data.implementation_ir)
+        if constants:
+            cls.ConstantFolder.apply(transform_data.implementation_ir, constants)
+        return transform_data
 
 
 class HousekeepingPass(TransformPass):
@@ -1360,14 +1511,27 @@ class HousekeepingPass(TransformPass):
             assert isinstance(node, gt_ir.StencilImplementation)
             self.visit(node)
 
+        def visit_ApplyBlock(
+            self, path: tuple, node_name: str, node: gt_ir.ApplyBlock
+        ) -> Tuple[bool, Optional[gt_ir.ApplyBlock]]:
+            self.generic_visit(path, node_name, node.body)
+            if node.body.stmts:
+                return True, node
+            else:
+                return False, None
+
         def visit_Stage(
             self, path: tuple, node_name: str, node: gt_ir.Stage
         ) -> Tuple[bool, Optional[gt_ir.Stage]]:
             self.generic_visit(path, node_name, node)
 
-            if any(
-                isinstance(a, gt_ir.FieldAccessor) and (a.intent is gt_ir.AccessIntent.READ_WRITE)
-                for a in node.accessors
+            if (
+                any(
+                    isinstance(a, gt_ir.FieldAccessor)
+                    and (a.intent is gt_ir.AccessIntent.READ_WRITE)
+                    for a in node.accessors
+                )
+                and node.apply_blocks
             ):
                 return True, node
             else:

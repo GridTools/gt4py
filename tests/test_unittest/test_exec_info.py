@@ -26,10 +26,10 @@ from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 
-from ..definitions import CPU_BACKENDS
+from ..definitions import INTERNAL_BACKENDS
 
 
-backend_list = [backend for backend in CPU_BACKENDS if backend != "debug"]
+backend_list = [backend for backend in INTERNAL_BACKENDS if backend.values[0] != "debug"]
 
 
 class TestExecInfo:

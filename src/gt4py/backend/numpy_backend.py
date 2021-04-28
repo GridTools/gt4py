@@ -28,6 +28,7 @@ from gt4py.utils.attrib import Set as SetOf
 from gt4py.utils.attrib import attribkwclass as attribclass
 from gt4py.utils.attrib import attribute
 
+from .module_generator import BaseModuleGenerator
 from .python_generator import PythonSourceGenerator
 
 
@@ -101,7 +102,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
         extent = self.block_info.extent
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
-        parallel_axes_names = [axis.name for axis in self.domain.parallel_axes]
+        parallel_axes_names = [
+            axis.name
+            for axis in self.impl_node.fields[name].axes
+            if axis.name != self.domain.sequential_axis.name
+        ]
         parallel_axes_dims = [self.impl_node.domain.index(axis) for axis in parallel_axes_names]
 
         args = []
@@ -197,12 +202,12 @@ class NumPySourceGenerator(PythonSourceGenerator):
     def visit_ShapedExpr(self, node: ShapedExpr) -> str:
         code = self.visit(node.expr)
         if not isinstance(node.expr, ShapedExpr):
-            parallel_axes = (
+            all_parallel_axes = (
                 self.impl_node.domain.axes
                 if self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
                 else self.impl_node.domain.parallel_axes
             )
-            parallel_axes_names = [axis.name for axis in parallel_axes]
+            parallel_axes_names = [axis.name for axis in all_parallel_axes]
             leftover_axes = set(parallel_axes_names) - set(node.axes)
             if leftover_axes:
                 np_newaxis = "{np}.newaxis".format(np=self.numpy_prefix)
@@ -218,7 +223,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
         extent = self.block_info.extent
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
-        parallel_axes_names = [axis.name for axis in self.domain.parallel_axes]
+        parallel_axes_names = [
+            axis.name
+            for axis in self.domain.parallel_axes
+            if axis.name != self.domain.sequential_axis.name
+        ]
         parallel_axes_dims = [self.impl_node.domain.index(axis) for axis in parallel_axes_names]
 
         for d, ax in enumerate(parallel_axes_names):
@@ -462,7 +471,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return sources
 
 
-class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
+class NumPyModuleGenerator(BaseModuleGenerator):
     def __init__(self):
         super().__init__()
         self.source_generator = NumPySourceGenerator(
@@ -529,3 +538,5 @@ class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
     languages = {"computation": "python", "bindings": []}
 
     MODULE_GENERATOR_CLASS = NumPyModuleGenerator
+
+    USE_LEGACY_TOOLCHAIN = True
