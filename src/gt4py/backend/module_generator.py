@@ -4,7 +4,7 @@ import os
 import textwrap
 from dataclasses import dataclass, field
 from inspect import getdoc
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import jinja2
 import numpy
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 class ModuleData:
     field_info: Dict[str, Optional[FieldInfo]] = field(default_factory=dict)
     parameter_info: Dict[str, Optional[ParameterInfo]] = field(default_factory=dict)
-    unreferenced: Set[str] = field(default_factory=set)
+    unreferenced: List[str] = field(default_factory=list)
 
     @property
     def field_names(self):
@@ -74,7 +74,7 @@ def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> M
             else:
                 data.parameter_info[arg.name] = None
 
-    data.unreferenced = set(implementation_ir.unreferenced)
+    data.unreferenced = implementation_ir.unreferenced
 
     return data
 
@@ -133,7 +133,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         elif isinstance(param, gtir.ScalarDecl):
             data.parameter_info[param.name] = None
 
-    data.unreferenced = {*sorted(param.name for param in unref_params)}
+    data.unreferenced = [*sorted(param.name for param in unref_params)]
     return data
 
 
