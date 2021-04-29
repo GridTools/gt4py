@@ -39,9 +39,8 @@ def register(func=None, *, externals=None, name=None):
     return _register_decorator(func) if func else _register_decorator
 
 
-Field0D = gtscript.Field[np.float_, ()]
 Field3D = gtscript.Field[np.float_]
-Field3DBool = gtscript.Field[np.bool]
+Field3DBool = gtscript.Field[np.bool_]
 
 
 @register
@@ -64,7 +63,7 @@ def arithmetic_ops(field_a: Field3D, field_b: Field3D):
 @register
 def data_types(
     bool_field: gtscript.Field[bool],
-    npbool_field: gtscript.Field[np.bool],
+    npbool_field: gtscript.Field[np.bool_],
     int_field: gtscript.Field[int],
     int8_field: gtscript.Field[np.int8],
     int16_field: gtscript.Field[np.int16],
@@ -277,7 +276,7 @@ def single_level_with_offset(in_field: Field3D, out_field: Field3D):
 
 
 @register
-def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
+def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool_]):
     with computation(PARALLEL), interval(...):
         mask = in_field >= 0
 
