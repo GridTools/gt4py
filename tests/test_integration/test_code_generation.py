@@ -21,7 +21,7 @@ from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, computation, interval
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, OLD_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, OLD_BACKENDS, make_backend_params
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
@@ -122,8 +122,7 @@ def test_stencil_without_effect(backend):
     stencil2(field_in, domain=(3, 3, 3))
 
     # test without domain specified
-    with pytest.raises(ValueError):
-        stencil1(field_in)
+    stencil1(field_in)
 
 
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
@@ -158,9 +157,9 @@ def test_stage_merger_induced_interval_block_reordering(backend):
 def test_lower_dimensional_inputs(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
-        field_3d: gtscript.Field[np.float_, gtscript.IJK],
-        field_2d: gtscript.Field[np.float_, gtscript.IJ],
-        field_1d: gtscript.Field[np.float_, gtscript.K],
+        field_3d: gtscript.Field[gtscript.IJK, np.float_],
+        field_2d: gtscript.Field[gtscript.IJ, np.float_],
+        field_1d: gtscript.Field[gtscript.K, np.float_],
     ):
         with computation(FORWARD):
             with interval(0, 1):
@@ -203,6 +202,56 @@ def test_lower_dimensional_inputs(backend):
     stencil(field_3d, field_2d, field_1d)
 
 
+@pytest.mark.parametrize(
+    "backend", make_backend_params("debug", "numpy", "gtc:gt:cpu_ifirst", "gtc:gt:cpu_kfirst")
+)
+def test_higher_dimensional_fields(backend):
+    FLOAT64_VEC2 = (np.float64, (2,))
+    FLOAT64_MAT22 = (np.float64, (2, 2))
+
+    @gtscript.stencil(backend=backend)
+    def stencil(
+        field: gtscript.Field[np.float64],
+        vec_field: gtscript.Field[FLOAT64_VEC2],
+        mat_field: gtscript.Field[FLOAT64_MAT22],
+    ):
+        with computation(PARALLEL), interval(...):
+            tmp = vec_field[0, 0, 0][0] + vec_field[0, 0, 0][1]
+
+        with computation(FORWARD):
+            with interval(0, 1):
+                vec_field[0, 0, 0][0] = field[1, 0, 0]
+                vec_field[0, 0, 0][1] = field[0, 1, 0]
+            with interval(1, -1):
+                vec_field[0, 0, 0][0] = 2 * field[1, 0, -1]
+                vec_field[0, 0, 0][1] = 2 * field[0, 1, -1]
+            with interval(-1, None):
+                vec_field[0, 0, 0][0] = field[1, 0, 0]
+                vec_field[0, 0, 0][1] = field[0, 1, 0]
+
+        with computation(PARALLEL), interval(...):
+            mat_field[0, 0, 0][0, 0] = vec_field[0, 0, 0][0] + tmp[0, 0, 0]
+            mat_field[0, 0, 0][1, 1] = vec_field[0, 0, 0][1] + tmp[1, 1, 0]
+
+    full_shape = (6, 6, 6)
+    default_origin = (1, 1, 0)
+
+    field = gt_storage.ones(backend, default_origin, full_shape, dtype=np.float64)
+    assert field.shape == full_shape[:]
+
+    vec_field = 2.0 * gt_storage.ones(backend, default_origin, full_shape, dtype=FLOAT64_VEC2)
+    assert vec_field.shape[:-1] == full_shape
+
+    mat_field = gt_storage.ones(backend, default_origin, full_shape, dtype=FLOAT64_MAT22)
+    assert mat_field.shape[:-2] == full_shape
+
+    stencil(field, vec_field, mat_field, origin=(1, 1, 0), domain=(4, 4, 6))
+    mat_field.device_to_host()
+    np.testing.assert_allclose(mat_field.view(np.ndarray)[1:-1, 1:-1, 1:1], 2.0 + 5.0)
+
+    stencil(field, vec_field, mat_field)
+
+
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_input_order(backend):
     @gtscript.stencil(backend=backend)
@@ -221,7 +270,7 @@ def test_variable_offsets(backend):
     def stencil_ij(
         in_field: gtscript.Field[np.float_],
         out_field: gtscript.Field[np.float_],
-        index_field: gtscript.Field[int, gtscript.IJ],
+        index_field: gtscript.Field[gtscript.IJ, int],
     ):
         with computation(FORWARD), interval(...):
             out_field = in_field[0, 0, index_field]

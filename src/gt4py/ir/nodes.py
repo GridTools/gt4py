@@ -83,7 +83,7 @@ storing a reference to the piece of source code which originated the node.
 
     Axis(name: str)
 
-    Domain(parallel_axes: List[Axis], [sequential_axis: Axis, data_axes: List[Axis]])
+    Domain(parallel_axes: List[Axis], [sequential_axis: Axis])
         # LatLonGrids -> parallel_axes: ["I", "J"], sequential_axis: "K"
 
     Literal     = ScalarLiteral(value: Any (should match DataType), data_type: DataType)
@@ -221,7 +221,6 @@ class Axis(Node):
 class Domain(Node):
     parallel_axes = attribute(of=ListOf[Axis])
     sequential_axis = attribute(of=Axis, optional=True)
-    data_axes = attribute(of=ListOf[Axis], optional=True)
 
     @classmethod
     def LatLonGrid(cls):
@@ -238,8 +237,6 @@ class Domain(Node):
         result = list(self.parallel_axes)
         if self.sequential_axis:
             result.append(self.sequential_axis)
-        if self.data_axes:
-            result.extend(self.data_axes)
         return result
 
     @property
@@ -247,16 +244,10 @@ class Domain(Node):
         return [ax.name for ax in self.axes]
 
     @property
-    def ndims(self):
-        return self.domain_ndims + self.data_ndims
-
-    @property
     def domain_ndims(self):
         return len(self.parallel_axes) + (1 if self.sequential_axis else 0)
 
-    @property
-    def data_ndims(self):
-        return len(self.data_axes) if self.data_axes else 0
+    ndims = domain_ndims
 
     def index(self, axis):
         if isinstance(axis, Axis):
@@ -395,6 +386,7 @@ class VarRef(Ref):
 class FieldRef(Ref):
     name = attribute(of=str)
     offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
+    data_index = attribute(of=ListOf[int], factory=list)
     loc = attribute(of=Location, optional=True)
 
     @classmethod
@@ -610,6 +602,7 @@ class FieldDecl(Decl):
     data_type = attribute(of=DataType)
     axes = attribute(of=ListOf[str])
     is_api = attribute(of=bool)
+    data_dims = attribute(of=ListOf[int], factory=list)
     layout_id = attribute(of=str, default="_default_")
     loc = attribute(of=Location, optional=True)
 

@@ -291,8 +291,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     )
                 )
 
+        data_idx = f", {','.join(str(i) for i in node.data_index)}" if node.data_index else ""
         if not variable_koffset:
-            source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
+            source = f"{node.name}[{', '.join(index)}{data_idx}]"
         else:
             source = (
                 f"{node.name}["
