@@ -239,7 +239,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     )
                 )
 
-        source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
+        data_idx = f", {','.join(str(i) for i in node.data_index)}" if node.data_index else ""
+        source = f"{node.name}[{', '.join(index)}{data_idx}]"
         if not parallel_axes_dims and not is_parallel:
             source = f"np.asarray([{source}])"
 

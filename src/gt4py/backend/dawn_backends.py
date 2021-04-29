@@ -621,13 +621,14 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
                 access = sir_field_info[arg.name]["access"]
                 if access is None:
                     access = gt_definitions.AccessKind.READ_ONLY
-                    data.unreferenced.add(arg.name)
+                    data.unreferenced.append(arg.name)
                 extent = sir_field_info[arg.name]["extent"]
                 boundary = gt_definitions.Boundary([(-pair[0], pair[1]) for pair in extent])
                 data.field_info[arg.name] = gt_definitions.FieldInfo(
                     access=access,
                     boundary=boundary,
-                    axes=fields[arg.name].axes,
+                    axes=tuple(fields[arg.name].axes),
+                    data_dims=tuple(fields[arg.name].data_dims),
                     dtype=fields[arg.name].data_type.dtype,
                 )
             else:
