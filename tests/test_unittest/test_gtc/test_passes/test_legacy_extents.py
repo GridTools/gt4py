@@ -82,7 +82,7 @@ def test_offset_chain():
 
 
 def test_ij():
-    def stencil(field_a: gs.Field[float], field_b: gs.Field[float, gs.IJ]):
+    def stencil(field_a: gs.Field[float], field_b: gs.Field[gs.IJ, float]):
         with computation(PARALLEL), interval(...):
             field_a = field_b[0, 1]
 
@@ -95,7 +95,7 @@ def test_ij():
 
 
 def test_j():
-    def stencil(field_a: gs.Field[float], field_b: gs.Field[float, gs.J]):
+    def stencil(field_a: gs.Field[float], field_b: gs.Field[gs.J, float]):
         with computation(PARALLEL), interval(...):
             field_a = field_b[1] + field_b[-2]
 
