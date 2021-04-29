@@ -103,9 +103,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
         parallel_axes_names = [
-            axis.name
+            axis
             for axis in self.impl_node.fields[name].axes
-            if axis.name != self.domain.sequential_axis.name
+            if axis != self.domain.sequential_axis.name
         ]
         parallel_axes_dims = [self.impl_node.domain.index(axis) for axis in parallel_axes_names]
 
@@ -223,9 +223,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
         parallel_axes_names = [
-            axis.name
-            for axis in self.domain.parallel_axes
-            if axis.name != self.domain.sequential_axis.name
+            axis
+            for axis in self.impl_node.fields[node.name].axes
+            if axis != self.domain.sequential_axis.name
         ]
         parallel_axes_dims = [self.impl_node.domain.index(axis) for axis in parallel_axes_names]
 
