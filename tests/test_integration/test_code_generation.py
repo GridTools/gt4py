@@ -21,7 +21,7 @@ from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, computation, interval
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, OLD_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
@@ -213,3 +213,25 @@ def test_input_order(backend):
     ):
         with computation(PARALLEL), interval(...):
             out_field = in_field * parameter
+
+
+@pytest.mark.parametrize("backend", OLD_BACKENDS)
+def test_variable_offsets(backend):
+    @gtscript.stencil(backend=backend)
+    def stencil_ij(
+        in_field: gtscript.Field[np.float_],
+        out_field: gtscript.Field[np.float_],
+        index_field: gtscript.Field[int, gtscript.IJ],
+    ):
+        with computation(FORWARD), interval(...):
+            out_field = in_field[0, 0, index_field]
+            index_field = index_field + 1
+
+    @gtscript.stencil(backend=backend)
+    def stencil_ijk(
+        in_field: gtscript.Field[np.float_],
+        out_field: gtscript.Field[np.float_],
+        index_field: gtscript.Field[int],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field = in_field[0, 0, index_field]

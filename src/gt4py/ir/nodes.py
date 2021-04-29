@@ -394,7 +394,7 @@ class VarRef(Ref):
 @attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, UnionOf[int, Ref]])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
     loc = attribute(of=Location, optional=True)
 
     @classmethod
