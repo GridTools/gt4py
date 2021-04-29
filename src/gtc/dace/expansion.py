@@ -24,9 +24,14 @@ class TaskletCodegen(codegen.TemplatedGenerator):
 
         if (is_target or node.name in targets) and self.visit(node.offset) == "":
             targets.add(node.name)
-            return "__" + node.name
+            name = "__" + node.name
         else:
-            return node.name + "__" + self.visit(node.offset)
+            name = node.name + "__" + self.visit(node.offset)
+        if node.data_index:
+            offset_str = str(node.data_index)
+        else:
+            offset_str = ""
+        return name + offset_str
 
     def visit_CartesianOffset(self, node: common.CartesianOffset):
         res = []
@@ -353,6 +358,8 @@ class NaiveVerticalLoopExpander:
                         K=shape[next(idx)],
                     )
                 )
+            data_dims = shape[sum(dimensions) :]
+            subset_strs.extend([f"0:{d}" for d in data_dims])
             subset_str = ",".join(subset_strs)
             if name in access_collection.read_fields():
                 in_subsets[name] = subset_str
@@ -584,7 +591,6 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
             NaiveHorizontalExecutionExpansion._get_access_collection(node)
         )
         min_offsets = {name: off.pop() for name, off in access_collection.offsets().items()}
-
         in_memlets = dict()
         out_memlets = dict()
         for name, offsets in access_collection.offsets().items():
@@ -607,6 +613,7 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                 )
                 for k in "IJK"
             )
+            data_dims = parent_arrays[name].shape[sum(dimensions) :]
 
             for off in offsets:
                 subset_strs = [
@@ -614,6 +621,7 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                     for dim, var in enumerate("ij0")
                     if dimensions[dim]
                 ]
+                subset_strs.extend(f"0:{dim}" for dim in data_dims)
                 subset_str = ",".join(subset_strs)
                 acc_name = name + "__"
                 suffix = "_".join(
@@ -632,11 +640,13 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                 )
                 for k in "IJK"
             )
+            data_dims = parent_arrays[name].shape[sum(dimensions) :]
             subset_strs = [
                 f"{var}{-min_offsets[name][dim]:+d}"
                 for dim, var in enumerate("ij0")
                 if dimensions[dim]
             ]
+            subset_strs.extend(f"0:{dim}" for dim in data_dims)
             subset_str = ",".join(subset_strs)
             acc_name = "__" + name
             out_memlets[acc_name] = dace.memlet.Memlet.simple(

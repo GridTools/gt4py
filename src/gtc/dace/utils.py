@@ -21,13 +21,12 @@ def internal_symbols(sdfg: dace.SDFG):
     res = ["__I", "__J", "__K"]
     for name, array in sdfg.arrays.items():
         if isinstance(array, dace.data.Array):
+            dimensions = array_dimensions(array)
+            n_data_dims = len(array.shape) - sum(dimensions)
             res.extend(
-                [
-                    f"__{name}_{var}_stride"
-                    for idx, var in enumerate("IJK")
-                    if array_dimensions(array)[idx]
-                ]
+                [f"__{name}_{var}_stride" for idx, var in enumerate("IJK") if dimensions[idx]]
             )
+            res.extend([f"__{name}_d{dim}_stride" for dim in range(n_data_dims)])
     return res
 
 
@@ -65,7 +64,12 @@ def array_dimensions(array: dace.data.Array):
         for k in "IJK"
     ]
     shape_dims = [
-        any(dace.symbol(f"__{k}") in sh.free_symbols for sh in array.shape) for k in "IJK"
+        any(
+            dace.symbol(f"__{k}") in sh.free_symbols
+            for sh in array.shape
+            if hasattr(sh, "free_symbols")
+        )
+        for k in "IJK"
     ]
     assert all(st == sh for st, sh in zip(stride_dims, shape_dims))
     return stride_dims
@@ -129,7 +133,10 @@ class OIRFieldRenamer(eve.NodeTranslator):
         if node.name not in self._field_table:
             return node
         return oir.FieldAccess(
-            name=self._field_table[node.name], offset=node.offset, dtype=node.dtype
+            name=self._field_table[node.name],
+            offset=node.offset,
+            dtype=node.dtype,
+            data_index=node.data_index,
         )
 
     def visit_ScalarAccess(self, node: oir.ScalarAccess):

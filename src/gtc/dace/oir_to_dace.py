@@ -259,31 +259,35 @@ class BaseOirSDFGBuilder(ABC):
         return self._sdfg
 
     def add_arrays(self):
+        shapes = self.get_shapes()
         for decl in self._stencil.params + self._stencil.declarations:
             name = decl.name
             dtype = dace.dtypes.typeclass(np.dtype(data_type_to_typestr(self._dtypes[name])).name)
-            shapes = self.get_shapes()
             if isinstance(decl, ScalarDecl):
                 self._sdfg.add_symbol(name, stype=dtype)
             else:
                 if name not in self._get_access_collection(self._sdfg).offsets():
                     continue
                 assert name in self._dtypes
-
+                strides = tuple(
+                    dace.symbolic.pystr_to_symbolic(f"__{name}_{var}_stride")
+                    for is_axis, var in zip(self._axes[name], "IJK")
+                    if is_axis
+                ) + tuple(
+                    dace.symbolic.pystr_to_symbolic(f"__{name}_d{dim}_stride")
+                    for dim, _ in enumerate(decl.data_dims)
+                )
                 self._sdfg.add_array(
                     name,
                     dtype=dtype,
                     shape=shapes[name],
-                    strides=tuple(
-                        dace.symbolic.pystr_to_symbolic(f"__{name}_{var}_stride")
-                        for is_axis, var in zip(self._axes[name], "IJK")
-                        if is_axis
-                    ),
+                    strides=strides,
                     transient=isinstance(decl, Temporary) and self.has_transients,
                     lifetime=dace.AllocationLifetime.Persistent,
                 )
 
     def add_subsets(self):
+        decls = {decl.name: decl for decl in self._stencil.params + self._stencil.declarations}
         for node in self._state.nodes():
             if isinstance(node, dace.nodes.LibraryNode):
                 access_spaces_input, access_spaces_output = self.get_access_spaces(node)
@@ -306,6 +310,8 @@ class BaseOirSDFGBuilder(ABC):
                     subset_strs = self._access_space_to_subset(name, access_space)
                     if subset_str_k is not None:
                         subset_strs.append(subset_str_k)
+                    for dim in decls[name].data_dims:
+                        subset_strs.append(f"0:{dim}")
                     edge.data = dace.Memlet.simple(
                         data=name, subset_str=",".join(subset_strs), dynamic=dynamic
                     )
@@ -352,7 +358,9 @@ class BaseOirSDFGBuilder(ABC):
         builder._reset_writes()
         for n in reversed(nodes):
             builder.add_write_after_read_edges(n)
-        return builder._get_sdfg()
+        res = builder._get_sdfg()
+        res.validate()
+        return res
 
 
 class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
@@ -450,12 +458,14 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
             shape = []
             if self._axes[name][0]:
                 di = self._extents[name][0][1] + self._extents[name][0][0]
-                shape.append((f"__I{di:+d}"))
+                shape.append(f"__I{di:+d}")
             if self._axes[name][1]:
                 dj = self._extents[name][1][1] + self._extents[name][1][0]
-                shape.append((f"__J{dj:+d}"))
+                shape.append(f"__J{dj:+d}")
             if self._axes[name][2]:
                 shape.append(self.get_k_size(name))
+            for dim in decl.data_dims:
+                shape.append(str(dim))
             shapes[name] = shape
         return shapes
 

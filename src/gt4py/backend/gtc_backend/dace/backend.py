@@ -29,6 +29,7 @@ from gt4py.backend.module_generator import compute_legacy_extents
 from gt4py.ir import StencilDefinition
 from gtc import gtir, gtir_to_oir
 from gtc.dace.oir_to_dace import OirSDFGBuilder
+from gtc.dace.utils import array_dimensions
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
@@ -67,7 +68,13 @@ class GTCDaCeExtGenerator:
         oir = self._optimize_oir(oir)
         oir = gtir_to_oir.oir_iteration_space_computation(oir)
         sdfg = OirSDFGBuilder().visit(oir)
-        sdfg.expand_library_nodes(recursive=True)
+        sdfg.save("outer.sdfg")
+        sdfg.expand_library_nodes(recursive=False)
+        sdfg.save("expand1.sdfg")
+        sdfg.validate()
+        sdfg.expand_library_nodes(recursive=False)
+        sdfg.save("expand2.sdfg")
+        sdfg.validate()
 
         implementation = DaCeComputationCodegen.apply(gtir, sdfg)
         bindings = DaCeBindingsCodegen.apply(gtir, sdfg, module_name=self.module_name)
@@ -176,18 +183,31 @@ class DaCeComputationCodegen:
                 symbols[f"__{name}_J_stride"] = str(array.shape[2])
                 symbols[f"__{name}_I_stride"] = str(array.shape[1] * array.shape[2])
             else:
+                data_ndim = len(array.shape) - sum(array_dimensions(array))
+
                 # api field strides
-                fmt = """gt::sid::get_stride<gt::stencil::dim::{dim}>(
+                fmt = """gt::sid::get_stride<{dim}>(
                             gt::sid::sid_get_strides(__{name}_sid))
                             """
                 symbols.update(
                     {
-                        f"__{name}_{dim}_stride": fmt.format(dim=dim.lower(), name=name)
+                        f"__{name}_{dim}_stride": fmt.format(
+                            dim=f"gt::stencil::dim::{dim.lower()}", name=name
+                        )
                         for dim in "IJK"
                         if any(
                             dace.symbolic.pystr_to_symbolic(f"__{dim}") in s.free_symbols
                             for s in array.shape
+                            if hasattr(s, "free_symbols")
                         )
+                    }
+                )
+                symbols.update(
+                    {
+                        f"__{name}_d{dim}_stride": fmt.format(
+                            dim=f"gt::integral_constant<int, {3 + dim}>", name=name
+                        )
+                        for dim in range(data_ndim)
                     }
                 )
 
@@ -201,6 +221,7 @@ class DaCeComputationCodegen:
                     if any(
                         dace.symbolic.pystr_to_symbolic(f"__{var}") in s.free_symbols
                         for s in array.shape
+                        if hasattr(s, "free_symbols")
                     )
                 )
                 symbols[name] = fmt.format(
@@ -292,8 +313,9 @@ class DaCeBindingsCodegen:
         for name, array in sdfg.arrays.items():
             if array.transient:
                 continue
-            #
-            num_dims = len(array.shape)
+            dimensions = array_dimensions(array)
+            domain_ndim = sum(dimensions)
+            data_ndim = len(array.shape) - domain_ndim
             sid_def = """gt::as_{sid_type}<{dtype}, {num_dims},
                 std::integral_constant<int, {unique_index}>>({name})""".format(
                 sid_type="cuda_sid"
@@ -302,20 +324,26 @@ class DaCeBindingsCodegen:
                 name=name,
                 dtype=array.dtype.ctype,
                 unique_index=self.unique_index(),
-                num_dims=num_dims,
+                num_dims=len(array.shape),
             )
-            if num_dims != 3:
+            if domain_ndim != 3:
                 gt_dims = [
                     f"gt::stencil::dim::{dim}"
                     for dim in "ijk"
                     if any(
                         dace.symbolic.pystr_to_symbolic(f"__{dim.upper()}") in s.free_symbols
                         for s in array.shape
+                        if hasattr(s, "free_symbols")
                     )
                 ]
+                if data_ndim:
+                    gt_dims += [
+                        f"gt::integral_constant<int, {3 + dim}>" for dim in range(data_ndim)
+                    ]
                 sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
                     gt_dims=", ".join(gt_dims), sid_def=sid_def
                 )
+
             res.append(
                 "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
                     sid_def=sid_def, name=name

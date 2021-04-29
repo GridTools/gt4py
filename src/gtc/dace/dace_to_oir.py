@@ -27,9 +27,23 @@ def sdfg_arrays_to_oir_decls(sdfg: dace.SDFG) -> Tuple[List[oir.Decl], List[oir.
         if isinstance(array, dace.data.Array):
             dimensions = array_dimensions(array)
             if not array.transient:
-                params.append(oir.FieldDecl(name=name, dtype=dtype, dimensions=dimensions))
+                params.append(
+                    oir.FieldDecl(
+                        name=name,
+                        dtype=dtype,
+                        dimensions=dimensions,
+                        data_dims=array.shape[sum(dimensions) :],
+                    )
+                )
             else:
-                decls.append(oir.Temporary(name=name, dtype=dtype, dimensions=dimensions))
+                decls.append(
+                    oir.Temporary(
+                        name=name,
+                        dtype=dtype,
+                        dimensions=dimensions,
+                        data_dims=array.shape[sum(dimensions) :],
+                    )
+                )
         else:
             assert isinstance(array, dace.data.Scalar)
             params.append(oir.ScalarDecl(name=name, dtype=dtype))
