@@ -56,7 +56,7 @@ class NumericTuple(tuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(isinstance(d, numbers.Number) for d in value)
         assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
@@ -257,7 +257,7 @@ class Index(NumericTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(isinstance(d, numbers.Integral) for d in value)
         assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
@@ -271,7 +271,7 @@ class Shape(NumericTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(isinstance(d, numbers.Integral) and d >= 0 for d in value)
         assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
@@ -283,7 +283,7 @@ class FrameTuple(tuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2 and isinstance(r[0], numbers.Number) and isinstance(r[1], numbers.Number)
             for r in value
@@ -487,7 +487,7 @@ class Boundary(FrameTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2 and isinstance(r[0], int) and isinstance(r[1], int)
             # and r[0] >= 0 and r[1] >= 0
@@ -527,7 +527,7 @@ class Extent(FrameTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2
             and isinstance(r[0], (int, type(None)))
@@ -629,7 +629,7 @@ class CenteredExtent(Extent):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Collection), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2 and isinstance(r[0], int) and isinstance(r[1], int) and r[0] <= 0 <= r[1]
             for r in value
