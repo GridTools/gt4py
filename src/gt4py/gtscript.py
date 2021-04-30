@@ -86,7 +86,18 @@ __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
 
 
-_VALID_DATA_TYPES = (bool, np.bool, int, np.int32, np.int64, float, np.float32, np.float64)
+_VALID_DATA_TYPES = (
+    bool,
+    np.bool_,
+    int,
+    np.int8,
+    np.int16,
+    np.int32,
+    np.int64,
+    float,
+    np.float32,
+    np.float64,
+)
 
 
 def _set_arg_dtypes(definition, dtypes):
@@ -96,7 +107,9 @@ def _set_arg_dtypes(definition, dtypes):
     for arg, value in annotations.items():
         if isinstance(value, _FieldDescriptor) and isinstance(value.dtype, str):
             if value.dtype in dtypes:
-                annotations[arg] = _FieldDescriptor(dtypes[value.dtype], value.axes)
+                annotations[arg] = _FieldDescriptor(
+                    dtypes[value.dtype], value.axes, value.data_dims
+                )
             else:
                 raise ValueError(f"Missing '{value.dtype}' dtype definition for arg '{arg}'")
         elif isinstance(value, str):
@@ -430,31 +443,69 @@ PARALLEL = 0
 
 
 class _FieldDescriptor:
-    def __init__(self, dtype, axes):
+    def __init__(self, dtype, axes, data_dims=tuple()):
         if isinstance(dtype, str):
             self.dtype = dtype
         else:
-            if dtype not in _VALID_DATA_TYPES:
+            try:
+                dtype = np.dtype(dtype)
+                actual_dtype = dtype.subdtype[0] if dtype.subdtype else dtype
+                if actual_dtype not in _VALID_DATA_TYPES:
+                    raise ValueError("Invalid data type descriptor")
+            except:
                 raise ValueError("Invalid data type descriptor")
             self.dtype = np.dtype(dtype)
         self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
+        if data_dims:
+            if not isinstance(data_dims, collections.abc.Collection):
+                self.data_dims = (data_dims,)
+            else:
+                self.data_dims = tuple(data_dims)
+        else:
+            self.data_dims = data_dims
 
     def __repr__(self):
-        return f"_FieldDescriptor(dtype={repr(self.dtype)}, axes={repr(self.axes)})"
+        args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}, data_dims={repr(self.data_dims)}"
+        return f"_FieldDescriptor({args})"
 
     def __str__(self):
-        return f"Field<{str(self.dtype)}, [{', '.join(str(ax) for ax in self.axes)}]>"
+        return (
+            f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
+        )
 
 
 class _FieldDescriptorMaker:
-    def __getitem__(self, dtype_and_axes):
-        if isinstance(dtype_and_axes, collections.abc.Collection) and not isinstance(
-            dtype_and_axes, str
-        ):
-            dtype, axes = dtype_and_axes
+    @staticmethod
+    def _is_axes_spec(spec) -> bool:
+        return (
+            isinstance(spec, _Axis)
+            or isinstance(spec, collections.abc.Collection)
+            and all(isinstance(i, _Axis) for i in spec)
+        )
+
+    def __getitem__(self, field_spec):
+        axes = IJK
+        data_dims = ()
+
+        if isinstance(field_spec, str) or not isinstance(field_spec, collections.abc.Collection):
+            # Field[dtype]
+            dtype = field_spec
+        elif _FieldDescriptorMaker._is_axes_spec(field_spec[0]):
+            # Field[axes, dtype]
+            assert len(field_spec) == 2
+            axes, dtype = field_spec
+        elif len(field_spec) == 2 and not _FieldDescriptorMaker._is_axes_spec(field_spec[1]):
+            # Field[high_dimensional_dtype]
+            dtype = field_spec
         else:
-            dtype, axes = [dtype_and_axes, IJK]
-        return _FieldDescriptor(dtype, axes)
+            raise ValueError("Invalid field type descriptor")
+
+        if isinstance(dtype, collections.abc.Collection) and not isinstance(dtype, str):
+            # high dimensional dtype also includes data axes
+            assert len(dtype) == 2
+            dtype, data_dims = dtype
+
+        return _FieldDescriptor(dtype, axes, data_dims)
 
 
 # GTScript builtins: variable annotations

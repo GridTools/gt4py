@@ -307,11 +307,18 @@ class ScalarAccess(LocNode):
 class FieldAccess(LocNode):
     name: SymbolRef
     offset: CartesianOffset
+    data_index: List[int] = []
     kind = ExprKind.FIELD
 
     @classmethod
     def centered(cls, *, name: str, loc: SourceLocation = None) -> "FieldAccess":
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
+
+    @validator("data_index")
+    def nonnegative_data_index(cls, data_index: List[int]) -> List[int]:
+        if data_index and any(index < 0 for index in data_index):
+            raise ValueError("Data indices must be nonnegative")
+        return data_index
 
 
 class BlockStmt(GenericNode, SymbolTableTrait, Generic[StmtT]):
@@ -504,6 +511,9 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> RootValidatorT
     def _impl(
         cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
     ) -> RootValidatorValuesType:
+        if values["func"] in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
+            values["dtype"] = DataType.BOOL
+            return values
         # assumes all NativeFunction args have a common dtype
         common_dtype = verify_and_get_common_dtype(cls, values["args"], strict=strict)
         if common_dtype:
@@ -549,7 +559,7 @@ def validate_symbol_refs() -> RootValidatorType:
                     if isinstance(metadata["definition"].type_, type) and issubclass(
                         metadata["definition"].type_, SymbolRef
                     ):
-                        if getattr(node, name) not in symtable:
+                        if getattr(node, name) and getattr(node, name) not in symtable:
                             self.missing_symbols.append(getattr(node, name))
 
                 if isinstance(node, SymbolTableTrait):

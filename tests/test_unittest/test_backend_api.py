@@ -59,7 +59,7 @@ def test_generate_computation(backend, tmp_path):
     )
     # TODO(havogt) remove once gtc:gt produces a cpp-file for computation
     gtc_result = (
-        backend.name.startswith("gtc:gt")
+        (backend.name.startswith("gtc:gt") or backend.name.startswith("gtc:cuda"))
         and "computation.hpp" in result["init_1_src"]
         and "bindings.cpp" not in result["init_1_src"]
     )

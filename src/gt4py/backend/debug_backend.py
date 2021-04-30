@@ -23,6 +23,7 @@ from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.utils import text as gt_text
 
+from .module_generator import BaseModuleGenerator
 from .python_generator import PythonSourceGenerator
 
 
@@ -118,6 +119,8 @@ class DebugSourceGenerator(PythonSourceGenerator):
         source = "{name}{marker}[{index}]".format(
             marker=self.origin_marker, name=node.name, index=index_str
         )
+        if node.data_index:
+            source = f"{source}[{','.join(str(i) for i in node.data_index)}]"
 
         return source
 
@@ -163,7 +166,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
         return ["".join([str(item) for item in line]) for line in body_sources.lines]
 
 
-class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
+class DebugModuleGenerator(BaseModuleGenerator):
     def __init__(self):
         super().__init__()
         self.source_generator = DebugSourceGenerator(
@@ -240,3 +243,4 @@ class DebugBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
     languages = {"computation": "python", "bindings": []}
 
     MODULE_GENERATOR_CLASS = DebugModuleGenerator
+    USE_LEGACY_TOOLCHAIN = True

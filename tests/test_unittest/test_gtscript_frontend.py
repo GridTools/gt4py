@@ -650,9 +650,9 @@ class TestCompileTimeAssertions:
 class TestReducedDimensions:
     def test_syntax(self, id_version):
         def definition_func(
-            field_3d: gtscript.Field[np.float_, gtscript.IJK],
-            field_2d: gtscript.Field[np.float_, gtscript.IJ],
-            field_1d: gtscript.Field[np.float_, gtscript.K],
+            field_3d: gtscript.Field[gtscript.IJK, np.float_],
+            field_2d: gtscript.Field[gtscript.IJ, np.float_],
+            field_1d: gtscript.Field[gtscript.K, np.float_],
         ):
             with computation(FORWARD), interval(...):
                 field_2d = field_1d[1]
@@ -686,15 +686,15 @@ class TestReducedDimensions:
         externals = {}
 
         def definition(
-            field_in: gtscript.Field[np.float_, gtscript.K],
-            field_out: gtscript.Field[np.float_, gtscript.IJK],
+            field_in: gtscript.Field[gtscript.K, np.float_],
+            field_out: gtscript.Field[gtscript.IJK, np.float_],
         ):
             with computation(PARALLEL), interval(...):
                 field_out = field_in[0, 0, 1]
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Incorrect offset .* to field .* with dimensions .*",
+            match="Incorrect offset specification detected. Found .* but the field has dimensions .*",
         ):
             compile_definition(definition, "test_error_syntax", module, externals=externals)
 
@@ -703,8 +703,8 @@ class TestReducedDimensions:
         externals = {}
 
         def definition(
-            field_in: gtscript.Field[np.float_, gtscript.IJK],
-            field_out: gtscript.Field[np.float_, gtscript.K],
+            field_in: gtscript.Field[gtscript.IJK, np.float_],
+            field_out: gtscript.Field[gtscript.K, np.float_],
         ):
             with computation(PARALLEL), interval(...):
                 field_out = field_in[0, 0, 0]
@@ -714,6 +714,24 @@ class TestReducedDimensions:
             match="Cannot assign to field .* as all parallel axes .* are not present",
         ):
             compile_definition(definition, "test_error_annotation", module, externals=externals)
+
+
+class TestDataDimensions:
+    def test_syntax(self, id_version):
+        module = f"TestDataDimensions_test_syntax_{id_version}"
+        externals = {}
+
+        def definition(
+            field_in: gtscript.Field[np.float_],
+            another_field: gtscript.Field[(np.float_, 3)],
+            field_out: gtscript.Field[gtscript.IJK, (np.float_, (3,))],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out[0, 0, 0][0] = field_in
+                field_out[0, 0, 0][1] = field_in
+                field_out[0, 0, 0][2] = field_in[0, 0, 0] + another_field[0, 0, 0][2]
+
+        compile_definition(definition, "test_syntax", module, externals=externals)
 
 
 class TestImports:
@@ -776,7 +794,7 @@ class TestImports:
 class TestDTypes:
     @pytest.mark.parametrize(
         "id_case,test_dtype",
-        list(enumerate([bool, np.bool, int, np.int32, np.int64, float, np.float32, np.float64])),
+        list(enumerate([bool, np.bool_, int, np.int32, np.int64, float, np.float32, np.float64])),
     )
     def test_all_legal_dtypes(self, id_case, test_dtype, id_version):
         def definition_func(
