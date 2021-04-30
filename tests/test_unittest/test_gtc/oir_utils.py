@@ -32,6 +32,22 @@ class FieldAccessFactory(factory.Factory):
     dtype = common.DataType.FLOAT32
 
 
+class ScalarAccessFactory(factory.Factory):
+    class Meta:
+        model = oir.ScalarAccess
+
+    name = identifier(oir.ScalarAccess)
+    dtype = common.DataType.FLOAT32
+
+
+class LiteralFactory(factory.Factory):
+    class Meta:
+        model = oir.Literal
+
+    value = "42"
+    dtype = common.DataType.FLOAT32
+
+
 class AssignStmtFactory(factory.Factory):
     class Meta:
         model = oir.AssignStmt
@@ -40,11 +56,36 @@ class AssignStmtFactory(factory.Factory):
     right = factory.SubFactory(FieldAccessFactory)
 
 
+class MaskStmtFactory(factory.Factory):
+    class Meta:
+        model = oir.MaskStmt
+
+    mask = factory.SubFactory(FieldAccessFactory, dtype=common.DataType.BOOL)
+    body = factory.List([factory.SubFactory(AssignStmtFactory)])
+
+
+class NativeFuncCallFactory(factory.Factory):
+    class Meta:
+        model = oir.NativeFuncCall
+
+    func = common.NativeFunction.ABS
+    args = factory.List([factory.SubFactory(FieldAccessFactory)])
+
+
 class TemporaryFactory(factory.Factory):
     class Meta:
         model = oir.Temporary
 
     name = identifier(oir.Temporary)
+    dtype = common.DataType.FLOAT32
+    dimensions = (True, True, True)
+
+
+class LocalScalarFactory(factory.Factory):
+    class Meta:
+        model = oir.LocalScalar
+
+    name = identifier(oir.LocalScalar)
     dtype = common.DataType.FLOAT32
 
 
@@ -54,6 +95,7 @@ class FieldDeclFactory(factory.Factory):
 
     name = identifier(oir.FieldDecl)
     dtype = common.DataType.FLOAT32
+    dimensions = (True, True, True)
 
 
 class HorizontalExecutionFactory(factory.Factory):
@@ -61,7 +103,6 @@ class HorizontalExecutionFactory(factory.Factory):
         model = oir.HorizontalExecution
 
     body = factory.List([factory.SubFactory(AssignStmtFactory)])
-    mask = None
     declarations: List[oir.LocalScalar] = []
 
 
@@ -71,6 +112,19 @@ class IntervalFactory(factory.Factory):
 
     start = common.AxisBound.start()
     end = common.AxisBound.end()
+
+
+class IJCacheFactory(factory.Factory):
+    class Meta:
+        model = oir.IJCache
+
+
+class KCacheFactory(factory.Factory):
+    class Meta:
+        model = oir.KCache
+
+    fill = True
+    flush = True
 
 
 class VerticalLoopSectionFactory(factory.Factory):
@@ -97,4 +151,6 @@ class StencilFactory(factory.Factory):
     name = identifier(oir.Stencil)
     vertical_loops = factory.List([factory.SubFactory(VerticalLoopFactory)])
     declarations: List[oir.Temporary] = []
-    params = undefined_symbol_list(lambda name: FieldDeclFactory(name=name), "vertical_loops")
+    params = undefined_symbol_list(
+        lambda name: FieldDeclFactory(name=name), "vertical_loops", "declarations"
+    )

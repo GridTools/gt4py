@@ -51,7 +51,7 @@ def standardize_dtype_dict(dtypes):
     ), "Invalid key in 'dtypes'."
     assert all(
         (
-            isinstance(k, type)
+            isinstance(k, (type, np.dtype))
             or gt_utils.is_iterable_of(k, type)
             or gt_utils.is_iterable_of(k, np.dtype)
         )
@@ -64,7 +64,7 @@ def standardize_dtype_dict(dtypes):
             key = (key,)
         else:
             key = (*key,)
-        if isinstance(value, type):
+        if isinstance(value, (type, np.dtype)):
             value = (value,)
         else:
             value = (*value,)

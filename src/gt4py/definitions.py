@@ -17,9 +17,13 @@
 
 import collections
 import enum
+import functools
 import numbers
 import operator
-from typing import Mapping, Optional
+from dataclasses import dataclass
+from typing import Mapping, Optional, Sequence, Tuple
+
+import numpy
 
 from gt4py import utils as gt_utils
 from gt4py.utils.attrib import Any, AttributeClassLike
@@ -40,7 +44,7 @@ class CartesianSpace:
             return self.name
 
     names = [ax.name for ax in Axis]
-    ndims = len(names)
+    ndim = len(names)
 
 
 class NumericTuple(tuple):
@@ -52,15 +56,15 @@ class NumericTuple(tuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(isinstance(d, numbers.Number) for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def is_valid(cls, value, *, ndims=(1, CartesianSpace.ndims)):
+    def is_valid(cls, value, *, ndims=(1, None)):
         if isinstance(ndims, numbers.Integral):
             ndims = tuple([ndims] * 2)
-        elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
+        elif not isinstance(ndims, tuple) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
 
         try:
@@ -71,15 +75,15 @@ class NumericTuple(tuple):
             return True
 
     @classmethod
-    def zeros(cls, ndims=CartesianSpace.ndims):
+    def zeros(cls, ndims=CartesianSpace.ndim):
         return cls([0] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def ones(cls, ndims=CartesianSpace.ndims):
+    def ones(cls, ndims=CartesianSpace.ndim):
         return cls([1] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def from_k(cls, value, ndims=CartesianSpace.ndims):
+    def from_k(cls, value, ndims=CartesianSpace.ndim):
         return cls([value] * ndims, ndims=(ndims, ndims))
 
     @classmethod
@@ -95,13 +99,15 @@ class NumericTuple(tuple):
         else:
             return cls.from_k(value)
 
-    def __new__(cls, sizes, *args, ndims=(1, 3)):
+    def __new__(cls, sizes, *args, ndims=None):
         if len(args) > 0:
             sizes = [sizes, *args]
 
-        if isinstance(ndims, int):
+        if ndims is None:
+            ndims = tuple([len(sizes)] * 2)
+        elif isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
-        elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
+        elif not isinstance(ndims, tuple) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
 
         try:
@@ -251,9 +257,9 @@ class Index(NumericTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(isinstance(d, numbers.Integral) for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
 
 class Shape(NumericTuple):
@@ -265,9 +271,9 @@ class Shape(NumericTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(isinstance(d, numbers.Integral) and d >= 0 for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
 
 class FrameTuple(tuple):
@@ -277,18 +283,18 @@ class FrameTuple(tuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2 and isinstance(r[0], numbers.Number) and isinstance(r[1], numbers.Number)
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def is_valid(cls, value, *, ndims=(1, CartesianSpace.ndims)):
+    def is_valid(cls, value, *, ndims=(1, None)):
         if isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
-        elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
+        elif not isinstance(ndims, tuple) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
 
         try:
@@ -299,15 +305,15 @@ class FrameTuple(tuple):
             return True
 
     @classmethod
-    def zeros(cls, ndims=CartesianSpace.ndims):
+    def zeros(cls, ndims=CartesianSpace.ndim):
         return cls([(0, 0)] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def ones(cls, ndims=CartesianSpace.ndims):
+    def ones(cls, ndims=CartesianSpace.ndim):
         return cls([(1, 1)] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def from_k(cls, value_pair, ndims=CartesianSpace.ndims):
+    def from_k(cls, value_pair, ndims=CartesianSpace.ndim):
         return cls([value_pair] * ndims, ndims=(ndims, ndims))
 
     @classmethod
@@ -315,9 +321,12 @@ class FrameTuple(tuple):
         ndims = max(len(lower), len(upper))
         return cls([(lower[i], upper[i]) for i in range(ndims)], ndims=(ndims, ndims))
 
-    def __new__(cls, ranges, *args, ndims=(1, 3)):
+    def __new__(cls, ranges, *args, ndims=None):
         if len(args) > 0:
             ranges = [ranges, *args]
+
+        if ndims is None:
+            ndims = tuple([len(ranges)] * 2)
         try:
             cls._check_value(ranges, ndims=ndims)
         except Exception as e:
@@ -406,6 +415,10 @@ class FrameTuple(tuple):
         return all(d[0] == d[1] for d in self)
 
     @property
+    def is_zero(self):
+        return all(d[0] == d[1] == 0 for d in self)
+
+    @property
     def lower_indices(self):
         return NumericTuple(*(d[0] for d in self))
 
@@ -474,13 +487,13 @@ class Boundary(FrameTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2 and isinstance(r[0], int) and isinstance(r[1], int)
             # and r[0] >= 0 and r[1] >= 0
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
     def from_offset(cls, offset):
@@ -514,7 +527,7 @@ class Extent(FrameTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2
             and isinstance(r[0], (int, type(None)))
@@ -522,10 +535,10 @@ class Extent(FrameTuple):
             and (r[0] is None or r[1] is None or r[1] <= r[1])
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def empty(cls, ndims=CartesianSpace.ndims):
+    def empty(cls, ndims=CartesianSpace.ndim):
         return cls([(None, None)] * ndims)
 
     @classmethod
@@ -616,15 +629,15 @@ class CenteredExtent(Extent):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2 and isinstance(r[0], int) and isinstance(r[1], int) and r[0] <= 0 <= r[1]
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def empty(cls, ndims=CartesianSpace.ndims):
+    def empty(cls, ndims=CartesianSpace.ndim):
         return cls.zeros(ndims)
 
     @classmethod
@@ -646,27 +659,50 @@ class AccessKind(enum.Enum):
         return self.name
 
 
-class DomainInfo(
-    collections.namedtuple("DomainInfoNamedTuple", ["parallel_axes", "sequential_axis", "ndims"])
-):
-    pass
+@dataclass(frozen=True)
+class DomainInfo:
+    parallel_axes: Tuple[str, ...]
+    sequential_axis: str
+    ndim: int
 
 
-class FieldInfo(
-    collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "axes", "dtype"])
-):
+@dataclass(frozen=True)
+class FieldInfo:
+    access: AccessKind
+    boundary: Boundary
+    axes: Tuple[str, ...]
+    data_dims: Tuple[int, ...]
+    dtype: numpy.dtype
+
     def __repr__(self):
-        result = "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, dtype={dtype})".format(
+        return "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, data_dims={data_dims}, dtype={dtype})".format(
             access=self.access.name,
             boundary=repr(self.boundary),
             axes=repr(self.axes),
+            data_dims=repr(self.data_dims),
             dtype=repr(self.dtype),
         )
-        return result
+
+    @functools.cached_property
+    def domain_mask(self):
+        return tuple(axis in self.axes for axis in CartesianSpace.names)
+
+    @functools.cached_property
+    def domain_ndim(self):
+        return len(self.axes)
+
+    @functools.cached_property
+    def mask(self):
+        return (*self.domain_mask, *((True,) * len(self.data_dims)))
+
+    @functools.cached_property
+    def ndim(self):
+        return len(self.axes) + len(self.data_dims)
 
 
-class ParameterInfo(collections.namedtuple("ParameterInfoNamedTuple", ["dtype"])):
-    pass
+@dataclass(frozen=True)
+class ParameterInfo:
+    dtype: numpy.dtype
 
 
 @attribkwclass
@@ -722,42 +758,3 @@ class GTSpecificationError(GTError):
 class GTSemanticError(GTError):
     def __init__(self, message):
         super().__init__(message)
-
-
-def normalize_domain(domain):
-    if domain is not None:
-        domain = tuple(domain)
-    if not isinstance(domain, Shape):
-        if not Shape.is_valid(domain):
-            raise ValueError("Invalid 'domain' value ({})".format(domain))
-        domain = Shape(domain)
-
-    return domain
-
-
-def normalize_origin(origin) -> Optional[Index]:
-    if origin is not None:
-        origin = tuple(origin)
-        if isinstance(origin, numbers.Integral):
-            origin = Index.from_k(int(origin))
-        elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin):
-            origin = Index.from_value(origin)
-        else:
-            raise ValueError("Invalid 'origin' value ({})".format(origin))
-
-    return origin
-
-
-def normalize_origin_mapping(origin_mapping) -> Mapping[str, Index]:
-    origin_mapping = origin_mapping if origin_mapping is not None else {}
-    if isinstance(origin_mapping, collections.abc.Mapping):
-        origin_mapping = {
-            key: normalize_origin(value)
-            for key, value in gt_utils.normalize_mapping(
-                origin_mapping, key_types=[str], filter_none=True
-            ).items()
-        }
-    else:
-        origin_mapping = {"_all_": normalize_origin(origin_mapping)}
-
-    return origin_mapping

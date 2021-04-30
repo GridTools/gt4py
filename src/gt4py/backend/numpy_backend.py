@@ -28,6 +28,7 @@ from gt4py.utils.attrib import Set as SetOf
 from gt4py.utils.attrib import attribkwclass as attribclass
 from gt4py.utils.attrib import attribute
 
+from .module_generator import BaseModuleGenerator
 from .python_generator import PythonSourceGenerator
 
 
@@ -242,7 +243,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     )
                 )
 
-        source = "{name}[{index}]".format(name=node.name, index=", ".join(index))
+        data_idx = f", {','.join(str(i) for i in node.data_index)}" if node.data_index else ""
+        source = f"{node.name}[{', '.join(index)}{data_idx}]"
         if not parallel_axes_dims and not is_parallel:
             source = f"np.asarray([{source}])"
 
@@ -380,7 +382,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return sources
 
 
-class NumPyModuleGenerator(gt_backend.BaseModuleGenerator):
+class NumPyModuleGenerator(BaseModuleGenerator):
     def __init__(self):
         super().__init__()
         self.source_generator = NumPySourceGenerator(
@@ -447,3 +449,5 @@ class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
     languages = {"computation": "python", "bindings": []}
 
     MODULE_GENERATOR_CLASS = NumPyModuleGenerator
+
+    USE_LEGACY_TOOLCHAIN = True

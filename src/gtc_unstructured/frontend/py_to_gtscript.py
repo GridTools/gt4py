@@ -18,16 +18,45 @@ import enum
 import inspect
 import sys
 import typing
+from typing import Union
 
 import typing_inspect
+from pydantic import StrictFloat, StrictInt, StrictStr
 
 import gtc_unstructured.irs.common
 from eve import type_definitions
 from eve.utils import UIDGenerator
+from gtc import common as stable_gtc_common
 
 from . import ast_node_matcher as anm
 from . import gtscript_ast
-from .ast_node_matcher import Capture
+from .ast_node_matcher import Capture, Transformer
+
+
+class StrToSymbolTransformer(Transformer):
+    @staticmethod
+    def transform(capture: str):
+        return ast.Name(id=capture)
+
+    @staticmethod
+    def invert(transformed_capture: ast.Name):
+        assert isinstance(transformed_capture, ast.Name)
+        return transformed_capture.id
+
+
+class SubscriptTransformer(Transformer):
+    @staticmethod
+    def transform(capture: Union[ast.Name, ast.Tuple]):
+        if isinstance(capture, ast.Tuple):
+            assert len(capture.elts) > 1
+            return capture.elts
+        return [capture]
+
+    @staticmethod
+    def invert(transformed_capture):
+        if len(transformed_capture) > 1:
+            return ast.Tuple(elts=transformed_capture)
+        return transformed_capture
 
 
 class PyToGTScript:
@@ -59,6 +88,7 @@ class PyToGTScript:
             gtc_unstructured.irs.common.AssignmentKind,
             gtc_unstructured.irs.common.UnaryOperator,
             gtc_unstructured.irs.common.BinaryOperator,
+            stable_gtc_common.UnaryOperator,
         ]:
             # note: other types in gtc_unstructured.irs.common, e.g. gtc_unstructured.irs.common.DataType are not valid leaf nodes here as they
             #  map to symbols in the gtscript ast and are resolved there
@@ -81,6 +111,8 @@ class PyToGTScript:
             type_definitions.Str,
             type_definitions.Int,
             type_definitions.Float,
+            type_definitions.SymbolRef,
+            type_definitions.SymbolName,
             str,
             int,
             float,
@@ -98,7 +130,9 @@ class PyToGTScript:
         field types and all understood sementic is encoded in the structure.
         """
 
-        Symbol = ast.Name(id=Capture("name"))
+        SymbolName = ast.Name(id=Capture(0))
+
+        SymbolRef = ast.Name(id=Capture("name"))
 
         IterationOrder = ast.withitem(
             context_expr=ast.Call(
@@ -114,30 +148,30 @@ class PyToGTScript:
             )
         )
 
-        # TODO(tehrengruber): this needs to be a function, since the uid must be generated each time
         LocationSpecification = ast.withitem(
-            context_expr=ast.Call(
-                func=ast.Name(id="location"), args=[ast.Name(id=Capture("location_type"))]
-            ),
+            context_expr=ast.Call(func=ast.Name(id="location"), args=[Capture("location_type")]),
             optional_vars=Capture(
-                "name", default=ast.Name(id=UIDGenerator.sequential_id(prefix="location"))
+                "name", default=lambda: ast.Name(id=UIDGenerator.sequential_id(prefix="location"))
             ),
         )
 
-        SubscriptSingle = ast.Subscript(
-            value=Capture("value"), slice=ast.Index(value=ast.Name(id=Capture("index")))
-        )
-
-        SubscriptMultiple = ast.Subscript(
-            value=Capture("value"), slice=ast.Index(value=ast.Tuple(elts=Capture("indices")))
+        Subscript = ast.Subscript(
+            value=Capture("value"),
+            slice=ast.Index(Capture("indices", transformer=SubscriptTransformer)),
         )
 
         BinaryOp = ast.BinOp(op=Capture("op"), left=Capture("left"), right=Capture("right"))
 
-        Call = ast.Call(args=Capture("args"), func=ast.Name(id=Capture("func")))
+        Call = ast.Call(args=Capture("args"), func=Capture("func", expected_type=ast.Name))
+
+        SubscriptCall = ast.Call(
+            args=Capture("args"), func=Capture("func", expected_type=ast.Subscript)
+        )
+
+        List_ = ast.List(elts=Capture("elts"))
 
         LocationComprehension = ast.comprehension(
-            target=Capture("target"), iter=Capture("iterator")
+            target=Capture("target"), iter=Capture("iterable")
         )
 
         Generator = ast.GeneratorExp(generators=Capture("generators"), elt=Capture("elt"))
@@ -148,23 +182,40 @@ class PyToGTScript:
 
         Pass = ast.Pass()
 
-        Argument = ast.arg(arg=Capture("name"), annotation=Capture("type_"))
+        Argument = ast.arg(
+            arg=Capture("name", transformer=StrToSymbolTransformer), annotation=Capture("type_")
+        )
 
         Computation = ast.FunctionDef(
-            args=ast.arguments(args=Capture("arguments")),
+            # args=ast.arguments(args=Capture("arguments")), # noqa E800
             body=Capture("stencils"),
             name=Capture("name"),
         )
 
+        UnaryOp = ast.UnaryOp(op=Capture("op"), operand=Capture("operand"))
+
     leaf_map = {
         ast.Mult: gtc_unstructured.irs.common.BinaryOperator.MUL,
         ast.Add: gtc_unstructured.irs.common.BinaryOperator.ADD,
+        ast.Sub: gtc_unstructured.irs.common.BinaryOperator.SUB,
         ast.Div: gtc_unstructured.irs.common.BinaryOperator.DIV,
         ast.Pass: gtscript_ast.Pass,
+        ast.USub: stable_gtc_common.UnaryOperator.NEG,
+        ast.UAdd: stable_gtc_common.UnaryOperator.POS,
+    }
+
+    # Some types appearing in the python ast are mapped to different types in the gtscript_ast. This dictionary
+    #  maps from the type appearing in the python ast to potential types in the gtscript ast. Note that this
+    #  mapping does not break the 1-to-1 correspondence between python and gtscript ast, as the mapped types
+    #  must only appear once for a given field.
+    pseudo_polymorphic_types = {
+        str: set([type_definitions.SymbolRef, StrictStr]),
+        int: set([StrictInt]),
+        float: set([StrictFloat]),
     }
 
     # todo(tehrengruber): enhance docstring describing the algorithm
-    def transform(self, node, eligible_node_types=None):
+    def transform(self, node, eligible_node_types=None, node_init_args=None):
         """Transform python ast into GTScript ast recursively."""
         if eligible_node_types is None:
             eligible_node_types = [gtscript_ast.Computation]
@@ -190,8 +241,15 @@ class PyToGTScript:
                     ):
                         continue
                     module = sys.modules[node_type.__module__]
-                    transformed_captures = {}
-                    for name, capture in captures.items():
+
+                    if node_init_args:
+                        captures = {**node_init_args, **captures}
+
+                    args = list(value for key, value in captures.items() if isinstance(key, int))
+                    kwargs = {key: value for key, value in captures.items() if isinstance(key, str)}
+
+                    transformed_kwargs = {}
+                    for name, capture in kwargs.items():
                         assert (
                             name in node_type.__annotations__
                         ), f"Invalid capture. No field named `{name}` in `{str(node_type)}`"
@@ -202,19 +260,23 @@ class PyToGTScript:
                             eligible_capture_types = self._all_subclasses(el_type, module=module)
 
                             # transform captures recursively
-                            transformed_captures[name] = []
+                            transformed_kwargs[name] = []
                             for child_capture in capture:
-                                transformed_captures[name].append(
+                                transformed_kwargs[name].append(
                                     self.transform(child_capture, eligible_capture_types)
                                 )
                         else:
                             # determine eligible capture types
                             eligible_capture_types = self._all_subclasses(field_type, module=module)
                             # transform captures recursively
-                            transformed_captures[name] = self.transform(
+                            transformed_kwargs[name] = self.transform(
                                 capture, eligible_capture_types
                             )
-                    return node_type(**transformed_captures)
+
+                    assert len(args) + len(transformed_kwargs) == len(captures)
+
+                    return node_type(*args, **transformed_kwargs)
+
                 raise ValueError(
                     "Expected a node of type {}".format(
                         ", ".join([ent.__name__ for ent in eligible_node_types])
@@ -222,6 +284,16 @@ class PyToGTScript:
                 )
         elif type(node) in eligible_node_types:
             return node
+        elif (
+            type(node) in self.pseudo_polymorphic_types
+            and len(self.pseudo_polymorphic_types[type(node)] & set(eligible_node_types)) > 0
+        ):
+            valid_types = self.pseudo_polymorphic_types[type(node)] & set(eligible_node_types)
+            if len(valid_types) > 1:
+                raise RuntimeError(
+                    "Invalid gtscript ast specification. The node {node} has multiple valid types in the gtscript ast: {valid_types}"
+                )
+            return next(iter(valid_types))(node)
 
         raise ValueError(
             "Expected a node of type {}, but got {}".format(

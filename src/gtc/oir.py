@@ -21,11 +21,11 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import root_validator, validator
 
-from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
+from eve import Str, SymbolName, SymbolRef, SymbolTableTrait, field
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
@@ -72,13 +72,15 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
-# TODO(havogt) consider introducing BlockStmt
-# class BlockStmt(common.BlockStmt[Stmt], Stmt):
-#     pass
+class MaskStmt(Stmt):
+    mask: Expr
+    body: List[Stmt]
 
-# TODO(havogt) should we have an IfStmt or is masking the final solution?
-# class IfStmt(common.IfStmt[List[Stmt], Expr], Stmt):  # TODO replace List[Stmt] by BlockStmt?
-#     pass
+    @validator("mask")
+    def mask_is_boolean_field_expr(cls, v: Expr) -> Expr:
+        if v.dtype != common.DataType.BOOL:
+            raise ValueError("Mask must be a boolean expression.")
+        return v
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):
@@ -112,8 +114,8 @@ class Decl(LocNode):
 
 
 class FieldDecl(Decl):
-    # TODO dimensions
-    pass
+    dimensions: Tuple[bool, bool, bool]
+    data_dims: Tuple[int, ...] = field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):
@@ -124,21 +126,13 @@ class LocalScalar(Decl):
     pass
 
 
-class Temporary(Decl):
+class Temporary(FieldDecl):
     pass
 
 
 class HorizontalExecution(LocNode):
     body: List[Stmt]
-    mask: Optional[Expr]
     declarations: List[LocalScalar]
-
-    @validator("mask")
-    def mask_is_boolean_field_expr(cls, v: Optional[Expr]) -> Optional[Expr]:
-        if v:
-            if v.dtype != common.DataType.BOOL:
-                raise ValueError("Mask must be a boolean expression.")
-        return v
 
 
 class Interval(LocNode):
@@ -212,3 +206,4 @@ class Stencil(LocNode, SymbolTableTrait):
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()
+    _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)

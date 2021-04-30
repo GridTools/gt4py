@@ -39,7 +39,7 @@ class _GTIRResolveAuto(NodeTranslator):
         ) -> gtir.FieldDecl:
             if node.dtype == DataType.AUTO:
                 dtype = new_symbols[node.name].dtype
-                return gtir.FieldDecl(name=node.name, dtype=dtype)
+                return gtir.FieldDecl(name=node.name, dtype=dtype, dimensions=node.dimensions)
             else:
                 return node
 
@@ -49,7 +49,12 @@ class _GTIRResolveAuto(NodeTranslator):
         if symtable[node.name].dtype == DataType.AUTO:
             assert "new_dtype" in kwargs
             symtable[node.name].dtype = kwargs["new_dtype"]
-        return gtir.FieldAccess(name=node.name, offset=node.offset, dtype=symtable[node.name].dtype)
+        return gtir.FieldAccess(
+            name=node.name,
+            offset=node.offset,
+            data_index=node.data_index,
+            dtype=symtable[node.name].dtype,
+        )
 
     def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> gtir.ParAssignStmt:
         right = self.visit(node.right, **kwargs)
@@ -83,7 +88,12 @@ class _GTIRPropagateDtypeToAccess(NodeTranslator):
     def visit_FieldAccess(
         self, node: gtir.FieldAccess, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> gtir.FieldAccess:
-        return gtir.FieldAccess(name=node.name, offset=node.offset, dtype=symtable[node.name].dtype)
+        return gtir.FieldAccess(
+            name=node.name,
+            offset=node.offset,
+            data_index=node.data_index,
+            dtype=symtable[node.name].dtype,
+        )
 
     def visit_ScalarAccess(
         self, node: gtir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any

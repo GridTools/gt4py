@@ -23,7 +23,7 @@ from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 
 
 def _create_mask(ctx: "GTIRToOIR.Context", name: str, cond: oir.Expr) -> oir.Temporary:
-    mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL)
+    mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL, dimensions=(True, True, True))
     ctx.add_decl(mask_field_decl)
 
     fill_mask_field = oir.HorizontalExecution(
@@ -70,16 +70,20 @@ class GTIRToOIR(NodeTranslator):
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> None:
+        body = [oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))]
+        if mask is not None:
+            body = [oir.MaskStmt(body=body, mask=mask)]
         ctx.add_horizontal_execution(
             oir.HorizontalExecution(
-                body=[oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))],
-                mask=mask,
+                body=body,
                 declarations=[],
             ),
         )
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> oir.FieldAccess:
-        return oir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
+        return oir.FieldAccess(
+            name=node.name, offset=node.offset, data_index=node.data_index, dtype=node.dtype
+        )
 
     def visit_ScalarAccess(self, node: gtir.ScalarAccess, **kwargs: Any) -> oir.ScalarAccess:
         return oir.ScalarAccess(name=node.name, dtype=node.dtype)
@@ -104,7 +108,9 @@ class GTIRToOIR(NodeTranslator):
         return oir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 
     def visit_FieldDecl(self, node: gtir.FieldDecl, **kwargs: Any) -> oir.FieldDecl:
-        return oir.FieldDecl(name=node.name, dtype=node.dtype)
+        return oir.FieldDecl(
+            name=node.name, dtype=node.dtype, dimensions=node.dimensions, data_dims=node.data_dims
+        )
 
     def visit_ScalarDecl(self, node: gtir.ScalarDecl, **kwargs: Any) -> oir.ScalarDecl:
         return oir.ScalarDecl(name=node.name, dtype=node.dtype)
@@ -117,7 +123,7 @@ class GTIRToOIR(NodeTranslator):
     def visit_FieldIfStmt(
         self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> None:
-        mask_field_decl = _create_mask(ctx, f"mask_{node.id_}", self.visit(node.cond))
+        mask_field_decl = _create_mask(ctx, f"mask_{id(node)}", self.visit(node.cond))
         current_mask = oir.FieldAccess(
             name=mask_field_decl.name, offset=CartesianOffset.zero(), dtype=mask_field_decl.dtype
         )
@@ -170,7 +176,9 @@ class GTIRToOIR(NodeTranslator):
         self.visit(node.body, ctx=ctx)
 
         for temp in node.temporaries:
-            ctx.add_decl(oir.Temporary(name=temp.name, dtype=temp.dtype))
+            ctx.add_decl(
+                oir.Temporary(name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions)
+            )
 
         return oir.VerticalLoop(
             loop_order=node.loop_order,
