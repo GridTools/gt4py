@@ -290,7 +290,6 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     def visit_StencilImplementation(self, node: gt_ir.StencilImplementation):
         # Splitters declarations
         self.sources.empty_line()
-        self.sources.append(f"print('Stencil = {node.name}')")
         self.sources.append("# K splitters")
         self.sources.append(
             "{} = [{}]".format(self.splitters_name, ", ".join(self.k_splitters_value))

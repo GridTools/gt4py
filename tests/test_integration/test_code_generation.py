@@ -265,22 +265,21 @@ def test_input_order(backend):
 
 
 @pytest.mark.parametrize("backend", OLD_BACKENDS)
-def test_variable_offsets(backend):
+def test_variable_offsets_and_while_loop(backend):
     @gtscript.stencil(backend=backend)
-    def stencil_ij(
-        in_field: gtscript.Field[np.float_],
-        out_field: gtscript.Field[np.float_],
-        index_field: gtscript.Field[gtscript.IJ, int],
+    def stencil(
+        pe1: gtscript.Field[np.float_],
+        pe2: gtscript.Field[np.float_],
+        qin: gtscript.Field[np.float_],
+        qout: gtscript.Field[np.float_],
+        lev: gtscript.Field[gtscript.IJ, np.int_],
     ):
         with computation(FORWARD), interval(...):
-            out_field = in_field[0, 0, index_field]
-            index_field = index_field + 1
-
-    @gtscript.stencil(backend=backend)
-    def stencil_ijk(
-        in_field: gtscript.Field[np.float_],
-        out_field: gtscript.Field[np.float_],
-        index_field: gtscript.Field[int],
-    ):
-        with computation(PARALLEL), interval(...):
-            out_field = in_field[0, 0, index_field]
+            if pe2[0, 0, 1] <= pe1[0, 0, lev]:
+                qout = qin[0, 0, 1]
+            else:
+                qsum = pe1[0, 0, lev + 1] - pe2[0, 0, lev]
+                while pe1[0, 0, lev + 1] < pe2[0, 0, 1]:
+                    qsum += qin[0, 0, lev] / (pe2[0, 0, 1] - pe1[0, 0, lev])
+                    lev = lev + 1
+                qout = qsum / (pe2[0, 0, 1] - pe2)
