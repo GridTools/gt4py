@@ -266,14 +266,14 @@ def test_input_order(backend):
 
 @pytest.mark.parametrize("backend", OLD_BACKENDS)
 def test_variable_offsets(backend):
-    @gtscript.stencil(backend=backend)
+    @gtscript.stencil(backend=backend, verbose=True)
     def stencil_ij(
         in_field: gtscript.Field[np.float_],
         out_field: gtscript.Field[np.float_],
         index_field: gtscript.Field[gtscript.IJ, int],
     ):
         with computation(FORWARD), interval(...):
-            out_field = in_field[0, 0, index_field]
+            out_field = in_field[0, 0, 1] + in_field[0, 0, index_field + 1]
             index_field = index_field + 1
 
     @gtscript.stencil(backend=backend)
@@ -283,4 +283,4 @@ def test_variable_offsets(backend):
         index_field: gtscript.Field[int],
     ):
         with computation(PARALLEL), interval(...):
-            out_field = in_field[0, 0, index_field]
+            out_field = in_field[0, 0, 1] + in_field[0, 0, index_field + 1]

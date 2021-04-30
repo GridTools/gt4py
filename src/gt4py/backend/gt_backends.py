@@ -277,7 +277,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         offset = [node.offset.get(name, 0) for name in self.domain.axes_names]
         if not all(i == 0 for i in offset):
             source_offsets = [
-                self.visit(i) if isinstance(i, gt_ir.Expr) else str(i) for i in offset
+                f"int({self.visit(i)})" if isinstance(i, gt_ir.Expr) else str(i) for i in offset
             ]
             idx = ", ".join(source_offsets)
         else:
@@ -428,6 +428,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         # Initialize symbols for the generation of references in this stage
         self.stage_symbols = {}
         args = []
+        fields_with_variable_offset = set()
+        for field_ref in gt_ir.filter_nodes_dfs(node, gt_ir.FieldRef):
+            if isinstance(field_ref.offset.get(self.domain.sequential_axis.name, None), gt_ir.Expr):
+                fields_with_variable_offset.add(field_ref.name)
         for accessor in node.accessors:
             self.stage_symbols[accessor.symbol] = accessor
             arg = {"name": accessor.symbol, "access_type": "in", "extent": None}
@@ -435,7 +439,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 arg["access_type"] = (
                     "in" if accessor.intent == gt_ir.AccessIntent.READ_ONLY else "inout"
                 )
-                arg["extent"] = gt_utils.flatten(accessor.extent)
+                if accessor.symbol not in fields_with_variable_offset:
+                    arg["extent"] = gt_utils.flatten(accessor.extent)
+                else:
+                    arg["extent"] = gt_utils.flatten(accessor.extent[:-1]) + [-1000, 1000]
             args.append(arg)
 
         # Create regions and computations
