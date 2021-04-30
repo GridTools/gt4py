@@ -141,18 +141,18 @@ class AssertionChecker(ast.NodeTransformer):
                 raise GTScriptAssertionError(source_lines[loc.line - 1], loc=loc)
         else:
             raise GTScriptSyntaxError(
-                "Evaluation of external_assert condition failed at the preprocessing step."
+                "Evaluation of compile_assert condition failed at the preprocessing step."
             )
         return None
 
     def _process_call(self, node: ast.Call) -> Optional[ast.Call]:
         name = gt_meta.get_qualified_name_from_node(node.func)
-        if name != "external_assert":
+        if name != "compile_assert":
             return node
         else:
             if len(node.args) != 1:
                 raise GTScriptSyntaxError(
-                    "Invalid assertion. Correct syntax: external_assert(condition)"
+                    "Invalid assertion. Correct syntax: compile_assert(condition)"
                 )
             return self._process_assertion(node.args[0])
 
