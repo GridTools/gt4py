@@ -293,7 +293,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                         % for i in range(data_dims):
                             , auto dim_${i + 3}
                         % endfor
-                        ) -> auto& {
+                        ) -> auto&& {
                         return *sid::multi_shifted<tag::${field}>(
                             device::at_key<tag::${field}>(_ptr),
                             m_strides,
