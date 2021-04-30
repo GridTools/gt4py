@@ -17,7 +17,12 @@
 from gtc import common
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
 
-from ...oir_utils import FieldAccessFactory, HorizontalExecutionFactory, MaskStmtFactory
+from ...oir_utils import (
+    AssignStmtFactory,
+    FieldAccessFactory,
+    HorizontalExecutionFactory,
+    MaskStmtFactory,
+)
 
 
 def test_basic_merging():
@@ -62,6 +67,26 @@ def test_not_merging_different_masks():
         body=[
             MaskStmtFactory(mask=FieldAccessFactory(name="mask", dtype=common.DataType.BOOL)),
             MaskStmtFactory(mask=FieldAccessFactory(name="mask2", dtype=common.DataType.BOOL)),
+        ]
+    )
+    transformed = MaskStmtMerging().visit(testee)
+    assert transformed == testee
+
+
+def test_not_merging_rewritten_mask():
+    testee = HorizontalExecutionFactory(
+        body=[
+            MaskStmtFactory(
+                mask=FieldAccessFactory(name="mask", dtype=common.DataType.BOOL),
+                body=[
+                    AssignStmtFactory(
+                        left__name="mask",
+                        left__dtype=common.DataType.BOOL,
+                        right__dtype=common.DataType.BOOL,
+                    )
+                ],
+            ),
+            MaskStmtFactory(mask=FieldAccessFactory(name="mask", dtype=common.DataType.BOOL)),
         ]
     )
     transformed = MaskStmtMerging().visit(testee)
