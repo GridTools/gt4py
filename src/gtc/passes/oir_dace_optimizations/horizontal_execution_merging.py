@@ -10,6 +10,7 @@ by order within the OIR. This is consistently reflected in variable and paramete
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import dace
+import dace.subsets
 from dace import SDFGState
 from dace.sdfg import graph
 from dace.sdfg.utils import node_path_graph
@@ -78,25 +79,34 @@ def unwire_access_node(
 
 def rewire_edge(
     state: SDFGState,
-    edge: graph.Edge,
+    edge: graph.MultiConnectorEdge,
     **kwargs: Union[dace.nodes.AccessNode, HorizontalExecutionLibraryNode],
 ) -> None:
     src = kwargs.get("src", edge.src)
     src_conn = edge.src_conn
     dst = kwargs.get("dst", edge.dst)
     dst_conn = edge.dst_conn
+
     if src_conn and src_conn not in src.out_connectors:
         src.add_out_connector(src_conn)
     if dst_conn and dst_conn not in dst.in_connectors:
         dst.add_in_connector(dst_conn)
+
     state.remove_edge(edge)
-    if [
+    existing_edges = [
         e
         for e in state.edges_between(src, dst)
         if src_conn == e.src_conn and dst_conn == e.dst_conn
-    ]:
-        return None
-    state.add_edge(src, src_conn, dst, dst_conn, dace.Memlet())
+    ]
+    if existing_edges:
+        assert len(existing_edges) == 1
+        existing_edges[0].data.subset = dace.subsets.union(
+            edge.data.subset, existing_edges[0].data.subset
+        )
+    else:
+        state.add_edge(
+            src, src_conn, dst, dst_conn, dace.Memlet.simple(edge.data.data, edge.data.subset)
+        )
 
 
 def parallel_pattern(
@@ -174,13 +184,24 @@ class GraphMerging(Transformation):
                 state.remove_node(access)
 
         # merge oir nodes
-        left.as_oir().body += right.as_oir().body
-
+        res = HorizontalExecutionLibraryNode(
+            oir_node=oir.HorizontalExecution(
+                body=left.as_oir().body + right.as_oir().body,
+                declarations=left.as_oir().declarations + right.as_oir().declarations,
+            ),
+            iteration_space=left.iteration_space,
+        )
+        state.add_node(res)
         # rewire edges and connectors to left and delete right
         for edge in state.edges_between(left, right):
             state.remove_edge_and_connectors(edge)
+        for edge in state.in_edges(left):
+            rewire_edge(state, edge, dst=res)
         for edge in state.in_edges(right):
-            rewire_edge(state, edge, dst=left)
+            rewire_edge(state, edge, dst=res)
+        for edge in state.out_edges(left):
+            rewire_edge(state, edge, src=res)
         for edge in state.out_edges(right):
-            rewire_edge(state, edge, src=left)
+            rewire_edge(state, edge, src=res)
+        state.remove_node(left)
         state.remove_node(right)
