@@ -9,7 +9,12 @@ import networkx as nx
 from dace import library
 
 from gtc.common import DataType, LoopOrder, typestr_to_data_type
-from gtc.dace.utils import OIRFieldRenamer, dace_dtype_to_typestr, get_node_name_mapping
+from gtc.dace.utils import (
+    CartesianIterationSpace,
+    OIRFieldRenamer,
+    dace_dtype_to_typestr,
+    get_node_name_mapping,
+)
 from gtc.oir import CacheDesc, HorizontalExecution, Interval, VerticalLoop, VerticalLoopSection
 
 
@@ -107,13 +112,23 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
     oir_node = dace.properties.DataclassProperty(
         dtype=HorizontalExecution, default=None, allow_none=True
     )
-
+    iteration_space = dace.properties.Property(
+        dtype=CartesianIterationSpace, default=None, allow_none=True
+    )
     _dace_library_name = "oir.HorizontalExecution"
 
-    def __init__(self, name="unnamed_vloop", oir_node: HorizontalExecution = None, *args, **kwargs):
+    def __init__(
+        self,
+        name="unnamed_vloop",
+        oir_node: HorizontalExecution = None,
+        iteration_space: CartesianIterationSpace = None,
+        *args,
+        **kwargs,
+    ):
         if oir_node is not None:
             name = "HorizontalExecution_" + str(id(oir_node))
             self.oir_node = oir_node
+            self.iteration_space = iteration_space
 
         super().__init__(name=name, *args, **kwargs)
 

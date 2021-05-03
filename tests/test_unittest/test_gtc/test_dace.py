@@ -13,7 +13,7 @@ from gt4py.frontend.gtscript_frontend import GTScriptFrontend
 from gtc.dace.dace_to_oir import convert
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.oir_to_dace import OirSDFGBuilder
-from gtc.gtir_to_oir import GTIRToOIR, oir_iteration_space_computation
+from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,
@@ -180,7 +180,6 @@ def test_stencils_roundtrip_optimized(
         oir = PruneKCacheFills().visit(oir)
     if use_prune_k_cache_flushes:
         oir = PruneKCacheFlushes().visit(oir)
-    oir = oir_iteration_space_computation(oir)
     sdfg = OirSDFGBuilder().visit(oir)
 
     sdfg_pre = deepcopy(sdfg)

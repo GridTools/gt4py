@@ -1,4 +1,3 @@
-from gtc.gtir_to_oir import oir_iteration_space_computation
 from gtc.passes.oir_dace_optimizations.api import optimize_horizontal_executions
 from gtc.passes.oir_dace_optimizations.horizontal_execution_merging import GraphMerging
 
@@ -29,7 +28,7 @@ def test_zero_extent_merging():
     )
     transformed = (
         optimize_horizontal_executions(
-            oir_iteration_space_computation(StencilFactory(vertical_loops__0__sections__0=testee)),
+            StencilFactory(vertical_loops__0__sections__0=testee),
             GraphMerging,
         )
         .vertical_loops[0]
@@ -58,7 +57,7 @@ def test_mixed_merging():
     )
     transformed = (
         optimize_horizontal_executions(
-            oir_iteration_space_computation(StencilFactory(vertical_loops__0__sections__0=testee)),
+            StencilFactory(vertical_loops__0__sections__0=testee),
             GraphMerging,
         )
         .vertical_loops[0]
@@ -80,7 +79,7 @@ def test_write_after_read_with_offset():
     )
     transformed = (
         optimize_horizontal_executions(
-            oir_iteration_space_computation(StencilFactory(vertical_loops__0__sections__0=testee)),
+            StencilFactory(vertical_loops__0__sections__0=testee),
             GraphMerging,
         )
         .vertical_loops[0]
@@ -101,7 +100,7 @@ def test_nonzero_extent_merging():
     )
     transformed = (
         optimize_horizontal_executions(
-            oir_iteration_space_computation(StencilFactory(vertical_loops__0__sections__0=testee)),
+            StencilFactory(vertical_loops__0__sections__0=testee),
             GraphMerging,
         )
         .vertical_loops[0]

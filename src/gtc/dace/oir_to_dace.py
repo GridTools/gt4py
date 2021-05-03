@@ -14,7 +14,11 @@ import eve
 import gtc.oir as oir
 from gtc.common import LevelMarker, data_type_to_typestr
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
-from gtc.dace.utils import CartesianIJIndexSpace, nodes_extent_calculation
+from gtc.dace.utils import (
+    CartesianIJIndexSpace,
+    nodes_extent_calculation,
+    oir_iteration_space_computation,
+)
 from gtc.oir import FieldDecl, Interval, IntervalMapping, ScalarDecl, Stencil, Temporary
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
@@ -432,7 +436,7 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         input_spaces = dict()
         output_spaces = dict()
 
-        iteration_space = node.oir_node.iteration_space
+        iteration_space = node.iteration_space
         assert iteration_space is not None
         collection = self._get_access_collection(node)
         for name in collection.read_fields():
@@ -525,7 +529,7 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
 
                 if not isinstance(n, HorizontalExecutionLibraryNode):
                     continue
-                iteration_space = n.oir_node.iteration_space
+                iteration_space = n.iteration_space
                 assert iteration_space is not None
                 collection = self._get_access_collection(n)
                 for name in collection.read_fields():
@@ -579,8 +583,14 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
 
 
 class OirSDFGBuilder(eve.NodeVisitor):
-    def visit_HorizontalExecution(self, node: oir.HorizontalExecution, **kwargs):
-        return HorizontalExecutionLibraryNode(name=f"HorizontalExecution_{id(node)}", oir_node=node)
+    def visit_HorizontalExecution(
+        self, node: oir.HorizontalExecution, *, iteration_spaces, **kwargs
+    ):
+        return HorizontalExecutionLibraryNode(
+            name=f"HorizontalExecution_{id(node)}",
+            oir_node=node,
+            iteration_space=iteration_spaces[id(node)],
+        )
 
     def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection, **kwargs):
         library_nodes = [self.visit(he, **kwargs) for he in node.horizontal_executions]
@@ -599,5 +609,9 @@ class OirSDFGBuilder(eve.NodeVisitor):
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
-        library_nodes = [self.visit(vl, stencil=node, **kwargs) for vl in node.vertical_loops]
+        iteration_spaces = oir_iteration_space_computation(node)
+        library_nodes = [
+            self.visit(vl, stencil=node, iteration_spaces=iteration_spaces, **kwargs)
+            for vl in node.vertical_loops
+        ]
         return StencilOirSDFGBuilder.build(node.name, node, library_nodes)

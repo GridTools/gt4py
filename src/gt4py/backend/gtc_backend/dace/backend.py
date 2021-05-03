@@ -66,7 +66,6 @@ class GTCDaCeExtGenerator:
         upcasted = upcast(dtype_deduced)
         oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
         oir = self._optimize_oir(oir)
-        oir = gtir_to_oir.oir_iteration_space_computation(oir)
         sdfg = OirSDFGBuilder().visit(oir)
         sdfg.save("outer.sdfg")
         sdfg.expand_library_nodes(recursive=False)

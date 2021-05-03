@@ -188,8 +188,8 @@ class NaiveVerticalLoopExpander:
                     off: Tuple[int, int]
                     for off in offsets:
                         origin = (
-                            -off[0] - he.oir_node.iteration_space.i_interval.start.offset,
-                            -off[1] - he.oir_node.iteration_space.j_interval.start.offset,
+                            -off[0] - he.iteration_space.i_interval.start.offset,
+                            -off[1] - he.iteration_space.j_interval.start.offset,
                         )
                         if name not in origins:
                             origins[name] = origin
@@ -314,8 +314,8 @@ class NaiveVerticalLoopExpander:
                 off: Tuple[int, int, int]
                 for off in offsets:
                     origin = (
-                        -off[0] - he.oir_node.iteration_space.i_interval.start.offset,
-                        -off[1] - he.oir_node.iteration_space.j_interval.start.offset,
+                        -off[0] - he.iteration_space.i_interval.start.offset,
+                        -off[1] - he.iteration_space.j_interval.start.offset,
                     )
                     if name not in section_origins:
                         section_origins[name] = origin
@@ -601,8 +601,8 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                     min(min_offsets[name][2], off[2]),
                 )
             min_offsets[name] = (
-                min_offsets[name][0] + node.oir_node.iteration_space.i_interval.start.offset,
-                min_offsets[name][1] + node.oir_node.iteration_space.j_interval.start.offset,
+                min_offsets[name][0] + node.iteration_space.i_interval.start.offset,
+                min_offsets[name][1] + node.iteration_space.j_interval.start.offset,
                 min_offsets[name][2],
             )
         for name, offsets in access_collection.read_offsets().items():
@@ -672,8 +672,8 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
             node, parent_sdfg.arrays
         )
         map_ranges = {
-            "i": get_interval_range_str(node.oir_node.iteration_space.i_interval, "__I"),
-            "j": get_interval_range_str(node.oir_node.iteration_space.j_interval, "__J"),
+            "i": get_interval_range_str(node.iteration_space.i_interval, "__I"),
+            "j": get_interval_range_str(node.iteration_space.j_interval, "__J"),
         }
         inputs = [name[len("IN_") :] for name in node.in_connectors]
         outputs = [name[len("OUT_") :] for name in node.out_connectors]
