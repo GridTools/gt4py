@@ -123,7 +123,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
 
     Param = as_fmt("{name}")
 
-    LocalScalar = as_fmt("{name} = {dtype}()")
+    LocalScalar = as_fmt("{name}: {dtype}")
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution):
         targets: Set[str] = set()
