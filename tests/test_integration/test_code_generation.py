@@ -266,7 +266,7 @@ def test_input_order(backend):
 
 @pytest.mark.parametrize("backend", OLD_BACKENDS)
 def test_variable_offsets(backend):
-    @gtscript.stencil(backend=backend, verbose=True)
+    @gtscript.stencil(backend=backend)
     def stencil_ij(
         in_field: gtscript.Field[np.float_],
         out_field: gtscript.Field[np.float_],
