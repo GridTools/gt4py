@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 import dace
 import dace.library
+import dace.subsets
 
 import gtc.common as common
 import gtc.oir as oir
@@ -180,6 +181,9 @@ class OIRLibraryNodeExpander:
             else:
                 self.context_subsets[name] = edge.data.subset
         self.origins = self.get_origins()
+
+    def get_origins(self):
+        raise NotImplementedError("Implement in subclass")
 
     def add_arrays(self):
         for name, subset in self.context_subsets.items():
