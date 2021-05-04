@@ -446,6 +446,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         else:
             condition_statement = f"__while_condition = {condition}"
         sources.append(condition_statement)
+        sources.append(f"while {self.numpy_prefix}.any(__while_condition):")
         for stmt in node.body.stmts:
             target = self.visit(stmt.target)
             value = self.visit(stmt.value)
