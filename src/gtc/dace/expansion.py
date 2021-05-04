@@ -154,23 +154,75 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         return formatted_code
 
 
-@dace.library.register_expansion(VerticalLoopLibraryNode, "naive")
-class NaiveVerticalLoopExpansion(dace.library.ExpandTransformation):
-    environments: List = []
+class OIRLibraryNodeExpander:
+    def __init__(self, node, parent_state, parent_sdfg):
+        self.res_sdfg = dace.SDFG(node.name + "_sdfg")
+        self.res_state = self.res_sdfg.add_state(node.name + "_state", is_start_state=True)
 
-    @staticmethod
-    def expansion(
-        node: "VerticalLoopLibraryNode", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
-    ) -> dace.SDFG:
-        from gtc.common import LoopOrder
+        self.node = node
+        self.parent_sdfg = parent_sdfg
+        self.parent_state = parent_state
 
-        if node.loop_order == LoopOrder.PARALLEL:
-            return ParallelNaiveVerticalLoopExpander(node, parent_state, parent_sdfg).expand()
-        else:
-            return SequentialNaiveVerticalLoopExpander(node, parent_state, parent_sdfg).expand()
+        self.context_subsets = {
+            edge.dst_conn[len("IN_") :]: edge.data.subset
+            for edge in parent_state.in_edges(node)
+            if edge.dst_conn is not None
+        }
+
+        for edge in self.parent_state.out_edges(self.node):
+            if edge.src_conn is None:
+                continue
+            name = edge.src_conn[len("OUT_") :]
+            if name in self.context_subsets:
+                self.context_subsets[name] = dace.subsets.union(
+                    edge.data.subset, self.context_subsets[name]
+                )
+            else:
+                self.context_subsets[name] = edge.data.subset
+        self.origins = self.get_origins()
+
+    def add_arrays(self):
+        for name, subset in self.context_subsets.items():
+            dtype = self.parent_sdfg.arrays[name].dtype
+            strides = self.parent_sdfg.arrays[name].strides
+            self.res_sdfg.add_array(
+                name,
+                shape=subset.bounding_box_size(),
+                strides=strides,
+                dtype=dtype,
+            )
+
+    def fix_context_memlets_and_get_nsdfg(self):
+
+        in_connectors = set()
+        out_connectors = set()
+        for conn in self.node.in_connectors:
+            in_connectors.add(conn[len("IN_") :])
+        for conn in self.node.out_connectors:
+            out_connectors.add(conn[len("OUT_") :])
+
+        for edge in self.parent_state.in_edges(self.node):
+            if edge.dst_conn is None:
+                continue
+            name = edge.dst_conn[len("IN_") :]
+            edge.data.subset = self.context_subsets[name]
+            edge.dst_conn = name
+        for edge in self.parent_state.out_edges(self.node):
+            if edge.src_conn is None:
+                continue
+            name = edge.src_conn[len("OUT_") :]
+            edge.data.subset = self.context_subsets[name]
+            edge.src_conn = name
+
+        return dace.nodes.NestedSDFG(
+            self.res_sdfg.name + "_nsdfg",
+            self.res_sdfg,
+            inputs=in_connectors,
+            outputs=out_connectors,
+        )
 
 
-class NaiveVerticalLoopExpander:
+class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
 
     node: VerticalLoopLibraryNode
     parent_state: dace.SDFGState
@@ -178,11 +230,13 @@ class NaiveVerticalLoopExpander:
     res_sdfg: dace.SDFG
     origins: Dict[str, Tuple[int, int, oir.AxisBound]]
 
-    def get_ij_origins(self, node: VerticalLoopLibraryNode):
+    def get_ij_origins(
+        self,
+    ):
 
         origins: Dict[str, Tuple[int, int]] = {}
 
-        for _, section in node.sections:
+        for _, section in self.node.sections:
             for he in (
                 ln
                 for ln, _ in section.all_nodes_recursive()
@@ -205,9 +259,9 @@ class NaiveVerticalLoopExpander:
                         )
         return origins
 
-    def get_k_origins(self, node: "VerticalLoopLibraryNode"):
+    def get_k_origins(self):
         k_origs: Dict[str, oir.AxisBound] = {}
-        for interval, section in node.sections:
+        for interval, section in self.node.sections:
             access_collection = get_access_collection(section)
             for name, offsets in access_collection.offsets().items():
                 for off in offsets:
@@ -218,65 +272,10 @@ class NaiveVerticalLoopExpander:
                     k_origs[name] = k_orig
         return k_origs
 
-    def get_origins(self, node: "VerticalLoopLibraryNode"):
-        ij_origins = self.get_ij_origins(node)
-        k_origins = self.get_k_origins(node)
+    def get_origins(self):
+        ij_origins = self.get_ij_origins()
+        k_origins = self.get_k_origins()
         return {name: (*ij_origins[name], k_origins[name]) for name in ij_origins.keys()}
-
-    def __init__(
-        self, node: "VerticalLoopLibraryNode", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
-    ):
-        self.node = node
-        self.parent_state = parent_state
-        self.parent_sdfg = parent_sdfg
-        self.res_sdfg = dace.SDFG(node.name + "_sdfg")
-        self._access_collection_cache: Dict[Any, AccessCollector.Result] = dict()
-        self.origins = self.get_origins(node)
-
-    def fix_context_memlets_and_get_nsdfg_add_arrays(self):
-        in_connectors = set()
-        out_connectors = set()
-        for conn in self.node.in_connectors:
-            in_connectors.add(conn[len("IN_") :])
-        for conn in self.node.out_connectors:
-            out_connectors.add(conn[len("OUT_") :])
-        subsets = {
-            edge.data.data: edge.data.subset
-            for edge in self.parent_state.in_edges(self.node)
-            if edge.data.data is not None
-        }
-        for edge in self.parent_state.out_edges(self.node):
-            if edge.data.data in subsets:
-                subsets[edge.data.data] = dace.subsets.union(
-                    edge.data.subset, subsets[edge.data.data]
-                )
-            elif edge.data.data is not None:
-                subsets[edge.data.data] = edge.data.subset
-        for edge in self.parent_state.in_edges(self.node):
-            if edge.dst_conn is not None:
-                edge.data.subset = subsets[edge.data.data]
-                edge.dst_conn = edge.dst_conn[len("IN_") :]
-        for edge in self.parent_state.out_edges(self.node):
-            if edge.src_conn is not None:
-                edge.data.subset = subsets[edge.data.data]
-                edge.src_conn = edge.src_conn[len("OUT_") :]
-
-        for name, subset in subsets.items():
-            dtype = self.parent_sdfg.arrays[name].dtype
-            strides = self.parent_sdfg.arrays[name].strides
-            self.res_sdfg.add_array(
-                name,
-                shape=subset.bounding_box_size(),
-                strides=strides,
-                dtype=dtype,
-            )
-
-        return dace.nodes.NestedSDFG(
-            self.res_sdfg.name + "_nsdfg",
-            self.res_sdfg,
-            inputs=in_connectors,
-            outputs=out_connectors,
-        )
 
     def get_mapped_subsets_dicts(self, interval: Interval, section: dace.SDFG):
 
@@ -346,13 +345,31 @@ class NaiveVerticalLoopExpander:
         raise NotImplementedError("Implement in Subclass")
 
     def expand(self):
-        res = self.fix_context_memlets_and_get_nsdfg_add_arrays()
+        self.add_arrays()
+
         self._expand()
+        res = self.fix_context_memlets_and_get_nsdfg()
         res.symbol_mapping = {s: s for s in self.res_sdfg.free_symbols}
         for s in list(self.res_sdfg.free_symbols):
             if s not in self.res_sdfg.symbols:
                 self.res_sdfg.add_symbol(s, self.parent_sdfg.symbols[s])
         return res
+
+
+@dace.library.register_expansion(VerticalLoopLibraryNode, "naive")
+class NaiveVerticalLoopExpansion(dace.library.ExpandTransformation):
+    environments: List = []
+
+    @staticmethod
+    def expansion(
+        node: "VerticalLoopLibraryNode", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
+    ) -> dace.nodes.NestedSDFG:
+        from gtc.common import LoopOrder
+
+        if node.loop_order == LoopOrder.PARALLEL:
+            return ParallelNaiveVerticalLoopExpander(node, parent_state, parent_sdfg).expand()
+        else:
+            return SequentialNaiveVerticalLoopExpander(node, parent_state, parent_sdfg).expand()
 
 
 class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
@@ -370,7 +387,7 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
 
     def _expand(self):
         loop_order = self.node.loop_order
-        recent_state = self.res_sdfg.add_state("start_state", is_start_state=True)
+        recent_state = self.res_state
 
         # for each section
         for interval, section in self.node.sections:
@@ -412,13 +429,7 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
 
 
 class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
-    def __init__(
-        self, node: "VerticalLoopLibraryNode", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
-    ):
-        super().__init__(node, parent_state, parent_sdfg)
-
     def _expand(self):
-        res_state = self.res_sdfg.add_state(self.node.name + "_state")
         # for each section
         # acc -> map over k -> nsdfg with HE's
         in_accesses = dict()
@@ -427,7 +438,7 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
         for interval, section in self.node.sections:
 
             interval_str = get_interval_range_str(interval, "__K")
-            map_entry, map_exit = res_state.add_map(
+            map_entry, map_exit = self.res_state.add_map(
                 section.name + "_map", ndrange={"k": interval_str}
             )
 
@@ -438,14 +449,14 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
             ):
                 if acc.access != dace.AccessType.WriteOnly:
                     if acc.data not in in_accesses:
-                        in_accesses[acc.data] = res_state.add_read(acc.data)
+                        in_accesses[acc.data] = self.res_state.add_read(acc.data)
                     section_inputs.add(acc.data)
                 if acc.access != dace.AccessType.ReadOnly:
                     if acc.data not in out_accesses:
-                        out_accesses[acc.data] = res_state.add_write(acc.data)
+                        out_accesses[acc.data] = self.res_state.add_write(acc.data)
                     section_outputs.add(acc.data)
 
-            nsdfg = res_state.add_nested_sdfg(
+            nsdfg = self.res_state.add_nested_sdfg(
                 sdfg=section,
                 parent=None,
                 inputs=section_inputs,
@@ -453,11 +464,11 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
             )
             in_subsets, out_subsets = self.get_mapped_subsets_dicts(interval, section)
             if len(in_subsets) == 0:
-                res_state.add_edge(map_entry, None, nsdfg, None, memlet=dace.memlet.Memlet())
+                self.res_state.add_edge(map_entry, None, nsdfg, None, memlet=dace.memlet.Memlet())
             if len(out_subsets) == 0:
-                res_state.add_edge(nsdfg, None, map_exit, None, memlet=dace.memlet.Memlet())
+                self.res_state.add_edge(nsdfg, None, map_exit, None, memlet=dace.memlet.Memlet())
             for name, subset in in_subsets.items():
-                res_state.add_memlet_path(
+                self.res_state.add_memlet_path(
                     in_accesses[name],
                     map_entry,
                     nsdfg,
@@ -466,7 +477,7 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
                     memlet=dace.memlet.Memlet.simple(name, subset),
                 )
             for name, subset in out_subsets.items():
-                res_state.add_memlet_path(
+                self.res_state.add_memlet_path(
                     nsdfg,
                     map_exit,
                     out_accesses[name],
@@ -476,118 +487,59 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
                 )
 
 
-class NaiveHorizontalExecutionExpander:
-    def __init__(self, node, parent_state, parent_sdfg):
-        self.res_sdfg = dace.SDFG(node.name + "_sdfg")
-        self.res_state = self.res_sdfg.add_state(node.name + "_state")
+class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
+    def get_origins(self):
+        access_collection: AccessCollector.Result = get_access_collection(self.node)
 
-        self.node = node
-        self.parent_sdfg = parent_sdfg
-        self.parent_state = parent_state
-
-        self.context_subsets = {
-            edge.dst_conn[len("IN_") :]: edge.data.subset
-            for edge in parent_state.in_edges(node)
-            if edge.dst_conn is not None
-        }
-
-        for edge in self.parent_state.out_edges(self.node):
-            if edge.src_conn is None:
-                continue
-            name = edge.src_conn[len("OUT_") :]
-            if name in self.context_subsets:
-                self.context_subsets[name] = dace.subsets.union(
-                    edge.data.subset, self.context_subsets[name]
+        origins = dict()
+        for name, offsets in access_collection.offsets().items():
+            origins[name] = access_collection.offsets()[name].pop()
+            for off in offsets:
+                origins[name] = (
+                    min(origins[name][0], off[0]),
+                    min(origins[name][1], off[1]),
+                    min(origins[name][2], off[2]),
                 )
-            else:
-                self.context_subsets[name] = edge.data.subset
-
-    def add_arrays(self):
-        for name, subset in self.context_subsets.items():
-            dtype = self.parent_sdfg.arrays[name].dtype
-            strides = self.parent_sdfg.arrays[name].strides
-            self.res_sdfg.add_array(
-                name,
-                shape=subset.bounding_box_size(),
-                strides=strides,
-                dtype=dtype,
+            origins[name] = (
+                origins[name][0] + self.node.iteration_space.i_interval.start.offset,
+                origins[name][1] + self.node.iteration_space.j_interval.start.offset,
+                origins[name][2],
             )
-
-    def fix_context_memlets_and_get_nsdfg(self):
-
-        in_connectors = set()
-        out_connectors = set()
-        for conn in self.node.in_connectors:
-            in_connectors.add(conn[len("IN_") :])
-        for conn in self.node.out_connectors:
-            out_connectors.add(conn[len("OUT_") :])
-
-        for edge in self.parent_state.in_edges(self.node):
-            if edge.dst_conn is None:
-                continue
-            name = edge.dst_conn[len("IN_") :]
-            edge.data.subset = self.context_subsets[name]
-            edge.dst_conn = name
-        for edge in self.parent_state.out_edges(self.node):
-            if edge.src_conn is None:
-                continue
-            name = edge.src_conn[len("OUT_") :]
-            edge.data.subset = self.context_subsets[name]
-            edge.src_conn = name
-
-        return dace.nodes.NestedSDFG(
-            self.res_sdfg.name + "_nsdfg",
-            self.res_sdfg,
-            inputs=in_connectors,
-            outputs=out_connectors,
-        )
+        return origins
 
     def get_innermost_memlets(self):
 
         access_collection: AccessCollector.Result = get_access_collection(self.node)
-        min_offsets = {name: off.pop() for name, off in access_collection.offsets().items()}
+
         in_memlets = dict()
-        out_memlets = dict()
-        for name, offsets in access_collection.offsets().items():
-            for off in offsets:
-                min_offsets[name] = (
-                    min(min_offsets[name][0], off[0]),
-                    min(min_offsets[name][1], off[1]),
-                    min(min_offsets[name][2], off[2]),
-                )
-            min_offsets[name] = (
-                min_offsets[name][0] + self.node.iteration_space.i_interval.start.offset,
-                min_offsets[name][1] + self.node.iteration_space.j_interval.start.offset,
-                min_offsets[name][2],
-            )
         for name, offsets in access_collection.read_offsets().items():
             dimensions = array_dimensions(self.parent_sdfg.arrays[name])
             data_dims = self.parent_sdfg.arrays[name].shape[sum(dimensions) :]
 
             for off in offsets:
                 subset_strs = [
-                    f"{var}{-min_offsets[name][dim] + off[dim]:+d}"
+                    f"{var}{-self.origins[name][dim] + off[dim]:+d}"
                     for dim, var in enumerate("ij0")
                     if dimensions[dim]
                 ]
                 subset_strs.extend(f"0:{dim}" for dim in data_dims)
-                subset_str = ",".join(subset_strs)
                 acc_name = get_tasklet_symbol(name, off, is_target=False)
-                in_memlets[acc_name] = dace.memlet.Memlet.simple(name, subset_str)
+                in_memlets[acc_name] = dace.memlet.Memlet.simple(name, ",".join(subset_strs))
+
+        out_memlets = dict()
         for name in access_collection.write_fields():
             dimensions = array_dimensions(self.parent_sdfg.arrays[name])
             data_dims = self.parent_sdfg.arrays[name].shape[sum(dimensions) :]
             subset_strs = [
-                f"{var}{-min_offsets[name][dim]:+d}"
+                f"{var}{-self.origins[name][dim]:+d}"
                 for dim, var in enumerate("ij0")
                 if dimensions[dim]
             ]
             subset_strs.extend(f"0:{dim}" for dim in data_dims)
-            subset_str = ",".join(subset_strs)
             acc_name = "__" + name
             out_memlets[acc_name] = dace.memlet.Memlet.simple(
                 name,
-                subset_str,
+                ",".join(subset_strs),
                 dynamic=any(isinstance(stmt, oir.MaskStmt) for stmt in self.node.oir_node.body),
             )
 
