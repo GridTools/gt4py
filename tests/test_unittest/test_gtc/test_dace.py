@@ -2,8 +2,6 @@ from copy import deepcopy
 
 import dace
 import dace.sdfg.graph
-import hypothesis as hyp
-import hypothesis.strategies as hyp_st
 import networkx as nx
 import pytest
 
@@ -15,19 +13,6 @@ from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNo
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_optimizations.caches import (
-    IJCacheDetection,
-    KCacheDetection,
-    PruneKCacheFills,
-    PruneKCacheFlushes,
-)
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
-from gtc.passes.oir_optimizations.temporaries import (
-    LocalTemporariesToScalars,
-    WriteBeforeReadTemporariesToScalars,
-)
-from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 
 from ...test_integration.stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from ...test_integration.stencil_definitions import REGISTRY as stencil_registry
@@ -75,19 +60,15 @@ def node_match(n1, n2):
             assert n1.data == n2.data
         elif isinstance(n1, VerticalLoopLibraryNode):
             assert isinstance(n2, VerticalLoopLibraryNode)
+            assert n1.loop_order == n2.loop_order
+            assert n1.caches == n2.caches
             assert len(n1.sections) == len(n2.sections)
             for (interval1, he_sdfg1), (interval2, he_sdfg2) in zip(n1.sections, n2.sections):
-                assert interval1.covers(interval2) and interval2.covers(interval1)
+                assert interval1 == interval2
                 assert_sdfg_equal(he_sdfg1, he_sdfg2)
         else:
             assert isinstance(n2, HorizontalExecutionLibraryNode)
-            assert len(n1.oir_node.body) == len(n2.oir_node.body)
-            assert list(sorted(n1.in_connectors)) == list(sorted(n2.in_connectors))
-            assert list(sorted(n1.out_connectors)) == list(sorted(n2.out_connectors))
-            assert all(
-                isinstance(stmt1, type(stmt2)) and isinstance(stmt2, type(stmt1))
-                for stmt1, stmt2 in zip(n1.oir_node.body, n2.oir_node.body)
-            )
+            assert n1.as_oir() == n2.as_oir()
     except AssertionError:
         return False
     return True
@@ -120,66 +101,6 @@ def test_stencils_roundtrip_raw(stencil_name):
     stencil_def = stencil_registry[stencil_name]
     externals = externals_registry[stencil_name]
     oir = stencil_def_to_oir(stencil_def, externals)
-    sdfg = OirSDFGBuilder().visit(oir)
-
-    sdfg_pre = deepcopy(sdfg)
-
-    oir = convert(sdfg)
-    sdfg_post = OirSDFGBuilder().visit(oir)
-    assert_sdfg_equal(sdfg_pre, sdfg_post)
-
-
-@pytest.mark.parametrize("stencil_name", stencil_registry.keys())
-@hyp.given(
-    use_greedy_merging=hyp_st.booleans(),
-    use_adjacent_loop_merging=hyp_st.booleans(),
-    use_local_temporaries_to_scalars=hyp_st.booleans(),
-    use_write_before_read_temporaries_to_scalars=hyp_st.booleans(),
-    use_on_the_fly_merging=hyp_st.booleans(),
-    use_no_field_access_pruning=hyp_st.booleans(),
-    use_ij_cache_detection=hyp_st.booleans(),
-    use_k_cache_detection=hyp_st.booleans(),
-    use_prune_k_cache_fills=hyp_st.booleans(),
-    use_prune_k_cache_flushes=hyp_st.booleans(),
-)
-def test_stencils_roundtrip_optimized(
-    stencil_name,
-    use_greedy_merging,
-    use_adjacent_loop_merging,
-    use_local_temporaries_to_scalars,
-    use_write_before_read_temporaries_to_scalars,
-    use_on_the_fly_merging,
-    use_no_field_access_pruning,
-    use_ij_cache_detection,
-    use_k_cache_detection,
-    use_prune_k_cache_fills,
-    use_prune_k_cache_flushes,
-):
-
-    stencil_def = stencil_registry[stencil_name]
-    externals = externals_registry[stencil_name]
-    oir = stencil_def_to_oir(stencil_def, externals)
-    use_on_the_fly_merging = False
-    if use_greedy_merging:
-        oir = GreedyMerging().visit(oir)
-    if use_adjacent_loop_merging:
-        oir = AdjacentLoopMerging().visit(oir)
-    if use_local_temporaries_to_scalars:
-        oir = LocalTemporariesToScalars().visit(oir)
-    if use_write_before_read_temporaries_to_scalars:
-        oir = WriteBeforeReadTemporariesToScalars().visit(oir)
-    if use_on_the_fly_merging:
-        oir = OnTheFlyMerging().visit(oir)
-    if use_no_field_access_pruning:
-        oir = NoFieldAccessPruning().visit(oir)
-    if use_ij_cache_detection:
-        oir = IJCacheDetection().visit(oir)
-    if use_k_cache_detection:
-        oir = KCacheDetection().visit(oir)
-    if use_prune_k_cache_fills:
-        oir = PruneKCacheFills().visit(oir)
-    if use_prune_k_cache_flushes:
-        oir = PruneKCacheFlushes().visit(oir)
     sdfg = OirSDFGBuilder().visit(oir)
 
     sdfg_pre = deepcopy(sdfg)
