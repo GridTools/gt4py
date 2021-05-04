@@ -1,8 +1,7 @@
-from typing import Any, Dict, List, Set, Tuple, Union
+from typing import Any, Dict, List, Set, Tuple
 
 import dace
 import dace.library
-from dace import SDFG
 
 import gtc.common as common
 import gtc.oir as oir
@@ -11,7 +10,13 @@ from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from gtc.common import LoopOrder
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
-from gtc.dace.utils import get_axis_bound_str, get_interval_range_str
+from gtc.dace.utils import (
+    array_dimensions,
+    get_access_collection,
+    get_axis_bound_str,
+    get_interval_range_str,
+    get_tasklet_symbol,
+)
 from gtc.oir import Interval
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
@@ -62,6 +67,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         raise NotImplementedError("Not implemented BuiltInLiteral encountered.")
 
     Literal = as_fmt("{dtype}({value})")
+
     Cast = as_fmt("{dtype}({expr})")
 
     def visit_NativeFunction(self, func: common.NativeFunction, **kwargs: Any) -> str:
@@ -166,13 +172,13 @@ class NaiveVerticalLoopExpansion(dace.library.ExpandTransformation):
 
 class NaiveVerticalLoopExpander:
 
-    node: "VerticalLoopLibraryNode"
+    node: VerticalLoopLibraryNode
     parent_state: dace.SDFGState
     parent_sdfg: dace.SDFG
     res_sdfg: dace.SDFG
     origins: Dict[str, Tuple[int, int, oir.AxisBound]]
 
-    def get_ij_origins(self, node: "VerticalLoopLibraryNode"):
+    def get_ij_origins(self, node: VerticalLoopLibraryNode):
 
         origins: Dict[str, Tuple[int, int]] = {}
 
@@ -180,9 +186,9 @@ class NaiveVerticalLoopExpander:
             for he in (
                 ln
                 for ln, _ in section.all_nodes_recursive()
-                if isinstance(ln, dace.nodes.LibraryNode)
+                if isinstance(ln, HorizontalExecutionLibraryNode)
             ):
-                access_collection = self._get_access_collection(he)
+                access_collection = get_access_collection(he)
 
                 for name, offsets in access_collection.offsets().items():
                     off: Tuple[int, int]
@@ -202,7 +208,7 @@ class NaiveVerticalLoopExpander:
     def get_k_origins(self, node: "VerticalLoopLibraryNode"):
         k_origs: Dict[str, oir.AxisBound] = {}
         for interval, section in node.sections:
-            access_collection = self._get_access_collection(section)
+            access_collection = get_access_collection(section)
             for name, offsets in access_collection.offsets().items():
                 for off in offsets:
                     k_level = oir.AxisBound(
@@ -272,33 +278,6 @@ class NaiveVerticalLoopExpander:
             outputs=out_connectors,
         )
 
-    def _get_access_collection(
-        self, node: "Union[HorizontalExecutionLibraryNode, VerticalLoopLibraryNode, SDFG]"
-    ) -> "AccessCollector.Result":
-
-        from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
-
-        if isinstance(node, dace.SDFG):
-            res = AccessCollector.Result([])
-            for node in node.states()[0].nodes():
-                if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
-                    collection = self._get_access_collection(node)
-                    res._ordered_accesses.extend(collection._ordered_accesses)
-            return res
-        elif isinstance(node, HorizontalExecutionLibraryNode):
-            if id(node.oir_node) not in self._access_collection_cache:
-                self._access_collection_cache[id(node.oir_node)] = AccessCollector.apply(
-                    node.oir_node
-                )
-            return self._access_collection_cache[id(node.oir_node)]
-        else:
-            assert isinstance(node, VerticalLoopLibraryNode)
-            res = AccessCollector.Result([])
-            for _, sdfg in node.sections:
-                collection = self._get_access_collection(sdfg)
-                res._ordered_accesses.extend(collection._ordered_accesses)
-            return res
-
     def get_mapped_subsets_dicts(self, interval: Interval, section: dace.SDFG):
 
         in_subsets = dict()
@@ -308,7 +287,7 @@ class NaiveVerticalLoopExpander:
         for he in (
             ln for ln, _ in section.all_nodes_recursive() if isinstance(ln, dace.nodes.LibraryNode)
         ):
-            access_collection: AccessCollector.Result = self._get_access_collection(he)
+            access_collection: AccessCollector.Result = get_access_collection(he)
 
             for name, offsets in access_collection.offsets().items():
                 off: Tuple[int, int, int]
@@ -326,15 +305,11 @@ class NaiveVerticalLoopExpander:
                         max(section_origins[name][1], origin[1]),
                     )
                     min_k_offsets[name] = min(min_k_offsets[name], off[2])
-        access_collection = self._get_access_collection(section)
+        access_collection = get_access_collection(section)
         for name, section_origin in section_origins.items():
             vl_origin = self.origins[name]
             shape = section.arrays[name].shape
-            strides = section.arrays[name].strides
-            dimensions = list(
-                any(dace.symbol(f"__{name}_{k}_stride") in s.free_symbols for s in strides)
-                for k in "IJK"
-            )
+            dimensions = array_dimensions(section.arrays[name])
             subset_strs = []
             idx = iter(range(3))
             if dimensions[0]:
@@ -501,95 +476,75 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
                 )
 
 
-@dace.library.register_expansion(HorizontalExecutionLibraryNode, "naive")
-class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
-    environments: List = []
+class NaiveHorizontalExecutionExpander:
+    def __init__(self, node, parent_state, parent_sdfg):
+        self.res_sdfg = dace.SDFG(node.name + "_sdfg")
+        self.res_state = self.res_sdfg.add_state(node.name + "_state")
 
-    @staticmethod
-    def code_generate(node):
-        return TaskletCodegen.apply(node)
+        self.node = node
+        self.parent_sdfg = parent_sdfg
+        self.parent_state = parent_state
 
-    @staticmethod
-    def fix_context_memlets_and_get_nsdfg_add_arrays(node, res_sdfg, parent_sdfg, parent_state):
-
-        in_connectors = set()
-        out_connectors = set()
-        for conn in node.in_connectors:
-            in_connectors.add(conn[len("IN_") :])
-        for conn in node.out_connectors:
-            out_connectors.add(conn[len("OUT_") :])
-        subsets = {
+        self.context_subsets = {
             edge.dst_conn[len("IN_") :]: edge.data.subset
             for edge in parent_state.in_edges(node)
             if edge.dst_conn is not None
         }
-        for edge in parent_state.out_edges(node):
-            if edge.src_conn is None:
-                continue
-            name = edge.src_conn[len("OUT_") :]
-            if name in subsets:
-                subsets[name] = dace.subsets.union(edge.data.subset, subsets[name])
-            else:
-                subsets[name] = edge.data.subset
-        for edge in parent_state.in_edges(node):
-            if edge.dst_conn is None:
-                continue
-            name = edge.dst_conn[len("IN_") :]
-            edge.data.subset = subsets[name]
-            edge.dst_conn = name
-        for edge in parent_state.out_edges(node):
-            if edge.src_conn is None:
-                continue
-            name = edge.src_conn[len("OUT_") :]
-            edge.data.subset = subsets[name]
-            edge.src_conn = name
 
-        for name, subset in subsets.items():
-            dtype = parent_sdfg.arrays[name].dtype
-            strides = parent_sdfg.arrays[name].strides
-            res_sdfg.add_array(
+        for edge in self.parent_state.out_edges(self.node):
+            if edge.src_conn is None:
+                continue
+            name = edge.src_conn[len("OUT_") :]
+            if name in self.context_subsets:
+                self.context_subsets[name] = dace.subsets.union(
+                    edge.data.subset, self.context_subsets[name]
+                )
+            else:
+                self.context_subsets[name] = edge.data.subset
+
+    def add_arrays(self):
+        for name, subset in self.context_subsets.items():
+            dtype = self.parent_sdfg.arrays[name].dtype
+            strides = self.parent_sdfg.arrays[name].strides
+            self.res_sdfg.add_array(
                 name,
                 shape=subset.bounding_box_size(),
                 strides=strides,
                 dtype=dtype,
             )
 
+    def fix_context_memlets_and_get_nsdfg(self):
+
+        in_connectors = set()
+        out_connectors = set()
+        for conn in self.node.in_connectors:
+            in_connectors.add(conn[len("IN_") :])
+        for conn in self.node.out_connectors:
+            out_connectors.add(conn[len("OUT_") :])
+
+        for edge in self.parent_state.in_edges(self.node):
+            if edge.dst_conn is None:
+                continue
+            name = edge.dst_conn[len("IN_") :]
+            edge.data.subset = self.context_subsets[name]
+            edge.dst_conn = name
+        for edge in self.parent_state.out_edges(self.node):
+            if edge.src_conn is None:
+                continue
+            name = edge.src_conn[len("OUT_") :]
+            edge.data.subset = self.context_subsets[name]
+            edge.src_conn = name
+
         return dace.nodes.NestedSDFG(
-            res_sdfg.name + "_nsdfg",
-            res_sdfg,
+            self.res_sdfg.name + "_nsdfg",
+            self.res_sdfg,
             inputs=in_connectors,
             outputs=out_connectors,
         )
 
-    @staticmethod
-    def _get_access_collection(
-        node: "Union[HorizontalExecutionLibraryNode, VerticalLoopLibraryNode, SDFG]",
-    ) -> "AccessCollector.Result":
-        from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
+    def get_innermost_memlets(self):
 
-        if isinstance(node, dace.SDFG):
-            res = AccessCollector.Result([])
-            for node in node.states()[0].nodes():
-                if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
-                    collection = NaiveHorizontalExecutionExpansion._get_access_collection(node)
-                    res._ordered_accesses.extend(collection._ordered_accesses)
-            return res
-        elif isinstance(node, HorizontalExecutionLibraryNode):
-            return AccessCollector.apply(node.oir_node)
-        else:
-            assert isinstance(node, VerticalLoopLibraryNode)
-            res = AccessCollector.Result([])
-            for _, sdfg in node.sections:
-                collection = NaiveHorizontalExecutionExpansion._get_access_collection(sdfg)
-                res._ordered_accesses.extend(collection._ordered_accesses)
-            return res
-
-    @staticmethod
-    def get_innermost_memlets(node, parent_arrays):
-
-        access_collection: AccessCollector.Result = (
-            NaiveHorizontalExecutionExpansion._get_access_collection(node)
-        )
+        access_collection: AccessCollector.Result = get_access_collection(self.node)
         min_offsets = {name: off.pop() for name, off in access_collection.offsets().items()}
         in_memlets = dict()
         out_memlets = dict()
@@ -601,19 +556,13 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                     min(min_offsets[name][2], off[2]),
                 )
             min_offsets[name] = (
-                min_offsets[name][0] + node.iteration_space.i_interval.start.offset,
-                min_offsets[name][1] + node.iteration_space.j_interval.start.offset,
+                min_offsets[name][0] + self.node.iteration_space.i_interval.start.offset,
+                min_offsets[name][1] + self.node.iteration_space.j_interval.start.offset,
                 min_offsets[name][2],
             )
         for name, offsets in access_collection.read_offsets().items():
-            dimensions = list(
-                any(
-                    dace.symbol(f"__{name}_{k}_stride") in s.free_symbols
-                    for s in parent_arrays[name].strides
-                )
-                for k in "IJK"
-            )
-            data_dims = parent_arrays[name].shape[sum(dimensions) :]
+            dimensions = array_dimensions(self.parent_sdfg.arrays[name])
+            data_dims = self.parent_sdfg.arrays[name].shape[sum(dimensions) :]
 
             for off in offsets:
                 subset_strs = [
@@ -623,24 +572,11 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
                 ]
                 subset_strs.extend(f"0:{dim}" for dim in data_dims)
                 subset_str = ",".join(subset_strs)
-                acc_name = name + "__"
-                suffix = "_".join(
-                    var + ("m" if o < 0 else "p") + f"{abs(o):d}"
-                    for var, o in zip("ijk", off)
-                    if o != 0
-                )
-                if suffix != "":
-                    acc_name += suffix
+                acc_name = get_tasklet_symbol(name, off, is_target=False)
                 in_memlets[acc_name] = dace.memlet.Memlet.simple(name, subset_str)
         for name in access_collection.write_fields():
-            dimensions = list(
-                any(
-                    dace.symbol(f"__{name}_{k}_stride") in s.free_symbols
-                    for s in parent_arrays[name].strides
-                )
-                for k in "IJK"
-            )
-            data_dims = parent_arrays[name].shape[sum(dimensions) :]
+            dimensions = array_dimensions(self.parent_sdfg.arrays[name])
+            data_dims = self.parent_sdfg.arrays[name].shape[sum(dimensions) :]
             subset_strs = [
                 f"{var}{-min_offsets[name][dim]:+d}"
                 for dim, var in enumerate("ij0")
@@ -652,46 +588,53 @@ class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
             out_memlets[acc_name] = dace.memlet.Memlet.simple(
                 name,
                 subset_str,
-                dynamic=any(isinstance(stmt, oir.MaskStmt) for stmt in node.oir_node.body),
+                dynamic=any(isinstance(stmt, oir.MaskStmt) for stmt in self.node.oir_node.body),
             )
 
         return in_memlets, out_memlets
 
-    @staticmethod
-    def expansion(
-        node: "HorizontalExecutionLibraryNode", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
-    ) -> dace.SDFG:
+    def expand(self):
+        self.add_arrays()
 
-        res_sdfg = dace.SDFG(node.name + "_sdfg")
-        res = NaiveHorizontalExecutionExpansion.fix_context_memlets_and_get_nsdfg_add_arrays(
-            node, res_sdfg, parent_sdfg, parent_state
-        )
-
-        res_state = res_sdfg.add_state(node.name + "_state")
-        in_memlets, out_memlets = NaiveHorizontalExecutionExpansion.get_innermost_memlets(
-            node, parent_sdfg.arrays
-        )
+        in_memlets, out_memlets = self.get_innermost_memlets()
         map_ranges = {
-            "i": get_interval_range_str(node.iteration_space.i_interval, "__I"),
-            "j": get_interval_range_str(node.iteration_space.j_interval, "__J"),
+            "i": get_interval_range_str(self.node.iteration_space.i_interval, "__I"),
+            "j": get_interval_range_str(self.node.iteration_space.j_interval, "__J"),
         }
-        inputs = [name[len("IN_") :] for name in node.in_connectors]
-        outputs = [name[len("OUT_") :] for name in node.out_connectors]
-        input_nodes = {name: res_state.add_read(name) for name in inputs}
-        output_nodes = {name: res_state.add_write(name) for name in outputs}
-        tasklet, _, _ = res_state.add_mapped_tasklet(
-            node.name + "_tasklet",
+        inputs = [name[len("IN_") :] for name in self.node.in_connectors]
+        outputs = [name[len("OUT_") :] for name in self.node.out_connectors]
+        input_nodes = {name: self.res_state.add_read(name) for name in inputs}
+        output_nodes = {name: self.res_state.add_write(name) for name in outputs}
+
+        tasklet, _, _ = self.res_state.add_mapped_tasklet(
+            self.node.name + "_tasklet",
             map_ranges=map_ranges,
             inputs=in_memlets,
             outputs=out_memlets,
             input_nodes=input_nodes,
             output_nodes=output_nodes,
-            code=NaiveHorizontalExecutionExpansion.code_generate(node.oir_node),
+            code=TaskletCodegen.apply(self.node.oir_node),
             external_edges=True,
         )
-        res_sdfg.save("tmp.sdfg")
-        res.symbol_mapping = {s: s for s in res_sdfg.free_symbols}
-        for s in list(res_sdfg.free_symbols):
-            if s not in res_sdfg.symbols:
-                res_sdfg.add_symbol(s, parent_sdfg.symbols[s])
+
+        res = self.fix_context_memlets_and_get_nsdfg()
+
+        # inherit symbols from parent sdfg
+        res.symbol_mapping = {s: s for s in self.res_sdfg.free_symbols}
+        for s in list(self.res_sdfg.free_symbols):
+            # res_sdfg already contains symbols for domain and strides where type is always int.
+            # The type of API parameters still needs to be set.
+            if s not in self.res_sdfg.symbols:
+                self.res_sdfg.add_symbol(s, self.parent_sdfg.symbols[s])
         return res
+
+
+@dace.library.register_expansion(HorizontalExecutionLibraryNode, "naive")
+class NaiveHorizontalExecutionExpansion(dace.library.ExpandTransformation):
+    environments: List = []
+
+    @staticmethod
+    def expansion(
+        node: "HorizontalExecutionLibraryNode", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
+    ) -> dace.SDFG:
+        return NaiveHorizontalExecutionExpander(node, parent_state, parent_sdfg).expand()

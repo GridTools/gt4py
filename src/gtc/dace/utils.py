@@ -56,7 +56,7 @@ def dace_dtype_to_typestr(dtype: Any):
 
 
 def array_dimensions(array: dace.data.Array):
-    stride_dims = [
+    dims = [
         any(
             re.match(f"__.*_{k}_stride", str(sym))
             for st in array.strides
@@ -64,16 +64,20 @@ def array_dimensions(array: dace.data.Array):
         )
         for k in "IJK"
     ]
-    shape_dims = [
-        any(
-            dace.symbol(f"__{k}") in sh.free_symbols
-            for sh in array.shape
-            if hasattr(sh, "free_symbols")
-        )
-        for k in "IJK"
-    ]
-    assert all(st == sh for st, sh in zip(stride_dims, shape_dims))
-    return stride_dims
+    return dims
+
+
+def get_tasklet_symbol(name, offset, is_target):
+    if is_target:
+        return f"__{name}"
+
+    acc_name = name + "__"
+    suffix = "_".join(
+        var + ("m" if o < 0 else "p") + f"{abs(o):d}" for var, o in zip("ijk", offset) if o != 0
+    )
+    if suffix != "":
+        acc_name += suffix
+    return acc_name
 
 
 def get_axis_bound_str(axis_bound, var_name):
@@ -390,6 +394,29 @@ def oir_field_boundary_computation(stencil: oir.Stencil) -> Dict[str, CartesianI
             offsets = dict()
 
     return access_spaces
+
+
+def get_access_collection(
+    node: Union[dace.SDFG, "HorizontalExecutionLibraryNode", "VerticalLoopLibraryNode"]
+):
+    from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
+
+    if isinstance(node, dace.SDFG):
+        res = AccessCollector.Result([])
+        for node in node.states()[0].nodes():
+            if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
+                collection = get_access_collection(node)
+                res._ordered_accesses.extend(collection._ordered_accesses)
+        return res
+    elif isinstance(node, HorizontalExecutionLibraryNode):
+        return AccessCollector.apply(node.oir_node)
+    else:
+        assert isinstance(node, VerticalLoopLibraryNode)
+        res = AccessCollector.Result([])
+        for _, sdfg in node.sections:
+            collection = get_access_collection(sdfg)
+            res._ordered_accesses.extend(collection._ordered_accesses)
+        return res
 
 
 def nodes_extent_calculation(
