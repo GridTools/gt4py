@@ -307,11 +307,18 @@ class ScalarAccess(LocNode):
 class FieldAccess(LocNode):
     name: SymbolRef
     offset: CartesianOffset
+    data_index: List[int] = []
     kind = ExprKind.FIELD
 
     @classmethod
     def centered(cls, *, name: str, loc: SourceLocation = None) -> "FieldAccess":
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
+
+    @validator("data_index")
+    def nonnegative_data_index(cls, data_index: List[int]) -> List[int]:
+        if data_index and any(index < 0 for index in data_index):
+            raise ValueError("Data indices must be nonnegative")
+        return data_index
 
 
 class BlockStmt(GenericNode, SymbolTableTrait, Generic[StmtT]):
