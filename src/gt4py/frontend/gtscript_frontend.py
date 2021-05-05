@@ -22,7 +22,7 @@ import itertools
 import numbers
 import textwrap
 import types
-from typing import List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -124,34 +124,44 @@ class AssertionChecker(ast.NodeTransformer):
     """Check assertions and remove from the AST for further parsing."""
 
     @classmethod
-    def apply(cls, func_node: ast.FunctionDef, context: dict, source: str):
+    def apply(cls, func_node: ast.FunctionDef, context: Dict[str, Any], source: str):
         checker = cls(context, source)
-        checker(func_node)
+        checker.visit(func_node)
 
-    def __init__(self, context, source):
+    def __init__(self, context: Dict[str, Any], source: str):
         self.context = context
         self.source = source
 
-    def __call__(self, func_node: ast.FunctionDef):
-        self.visit(func_node)
-
-    def visit_Assert(self, assert_node: ast.Assert) -> None:
-        if assert_node.test.func.id != "__INLINED":
-            raise GTScriptSyntaxError("Run-time assertions are not supported.")
-        eval_node = assert_node.test.args[0]
-
-        condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
+    def _process_assertion(self, expr_node: ast.Expr) -> None:
+        condition_value = gt_utils.meta.ast_eval(expr_node, self.context, default=NOTHING)
         if condition_value is not NOTHING:
             if not condition_value:
                 source_lines = textwrap.dedent(self.source).split("\n")
-                loc = gt_ir.Location.from_ast_node(assert_node)
+                loc = gt_ir.Location.from_ast_node(expr_node)
                 raise GTScriptAssertionError(source_lines[loc.line - 1], loc=loc)
         else:
             raise GTScriptSyntaxError(
-                "Evaluation of compile-time assertion condition failed at the preprocessing step."
+                "Evaluation of compile_assert condition failed at the preprocessing step."
             )
-
         return None
+
+    def _process_call(self, node: ast.Call) -> Optional[ast.Call]:
+        name = gt_meta.get_qualified_name_from_node(node.func)
+        if name != "compile_assert":
+            return node
+        else:
+            if len(node.args) != 1:
+                raise GTScriptSyntaxError(
+                    "Invalid assertion. Correct syntax: compile_assert(condition)"
+                )
+            return self._process_assertion(node.args[0])
+
+    def visit_Expr(self, node: ast.Expr) -> Optional[ast.AST]:
+        if isinstance(node.value, ast.Call):
+            ret = self._process_call(node.value)
+            return ast.Expr(value=ret) if ret else None
+        else:
+            return node
 
 
 class AxisIntervalParser(ast.NodeVisitor):
@@ -451,8 +461,8 @@ class CallInliner(ast.NodeTransformer):
     def visit_Call(self, node: ast.Call, *, target_node=None):
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
-        if call_name in gtscript.MATH_BUILTINS:
-            # A math function -- visit arguments and return as-is.
+        if call_name in gtscript.IGNORE_WHEN_INLINING:
+            # Not a function to inline. Visit arguments and return as-is.
             node.args = [self.visit(arg) for arg in node.args]
             return node
         elif any(
@@ -579,9 +589,9 @@ class CallInliner(ast.NodeTransformer):
         return result_node
 
     def visit_Expr(self, node: ast.Expr):
-        """ignore pure string statements in callee"""
-        if not isinstance(node.value, ast.Str):
-            return super().visit(node)
+        """Ignore pure string statements in callee."""
+        if not isinstance(node.value, (ast.Constant, ast.Str)):
+            return super().visit(node.value)
 
 
 class CompiledIfInliner(ast.NodeTransformer):
