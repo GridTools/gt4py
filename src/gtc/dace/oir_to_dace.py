@@ -16,10 +16,11 @@ from gtc.common import LevelMarker, data_type_to_typestr
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.utils import (
     CartesianIJIndexSpace,
+    IntervalMapping,
     nodes_extent_calculation,
     oir_iteration_space_computation,
 )
-from gtc.oir import FieldDecl, Interval, IntervalMapping, ScalarDecl, Stencil, Temporary
+from gtc.oir import FieldDecl, Interval, ScalarDecl, Stencil, Temporary
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
 
