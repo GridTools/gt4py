@@ -68,7 +68,8 @@ class GTCDaCeExtGenerator:
         oir = self._optimize_oir(oir)
         sdfg = OirSDFGBuilder().visit(oir)
         sdfg.expand_library_nodes(recursive=True)
-        sdfg.apply_strict_transformations(validate=True)
+        # TODO uncomment once the branch dace/linus-fixes-8 is merged into dace/master
+        # sdfg.apply_strict_transformations(validate=True) # noqa: E800 Found commented out code
 
         implementation = DaCeComputationCodegen.apply(gtir, sdfg)
         bindings = DaCeBindingsCodegen.apply(gtir, sdfg, module_name=self.module_name)
