@@ -225,6 +225,24 @@ class OIRLibraryNodeExpander:
             outputs=out_connectors,
         )
 
+    def add_nodes_and_edges(self):
+        raise NotImplementedError("Implement in Subclass")
+
+    def expand(self):
+        self.add_arrays()
+
+        self.add_nodes_and_edges()
+        res = self.fix_context_memlets_and_get_nsdfg()
+
+        # inherit symbols from parent sdfg
+        res.symbol_mapping = {s: s for s in self.res_sdfg.free_symbols}
+        for s in list(self.res_sdfg.free_symbols):
+            # res_sdfg already contains symbols for domain and strides where type is always int.
+            # The type of API parameters still needs to be set.
+            if s not in self.res_sdfg.symbols:
+                self.res_sdfg.add_symbol(s, self.parent_sdfg.symbols[s])
+        return res
+
 
 class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
 
@@ -288,7 +306,9 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
         section_origins: Dict[str, Tuple[int, int]] = dict()
         min_k_offsets: Dict[str, int] = dict()
         for he in (
-            ln for ln, _ in section.all_nodes_recursive() if isinstance(ln, dace.nodes.LibraryNode)
+            ln
+            for ln, _ in section.all_nodes_recursive()
+            if isinstance(ln, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode))
         ):
             access_collection: AccessCollector.Result = get_access_collection(he)
 
@@ -345,20 +365,6 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
                 out_subsets[name] = subset_str
         return in_subsets, out_subsets
 
-    def _expand(self):
-        raise NotImplementedError("Implement in Subclass")
-
-    def expand(self):
-        self.add_arrays()
-
-        self._expand()
-        res = self.fix_context_memlets_and_get_nsdfg()
-        res.symbol_mapping = {s: s for s in self.res_sdfg.free_symbols}
-        for s in list(self.res_sdfg.free_symbols):
-            if s not in self.res_sdfg.symbols:
-                self.res_sdfg.add_symbol(s, self.parent_sdfg.symbols[s])
-        return res
-
 
 @dace.library.register_expansion(VerticalLoopLibraryNode, "naive")
 class NaiveVerticalLoopExpansion(dace.library.ExpandTransformation):
@@ -389,11 +395,9 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
             increment_expr = "k+1"
         return initialize_expr, condition_expr, increment_expr
 
-    def _expand(self):
-        loop_order = self.node.loop_order
-        recent_state = self.res_state
+    def add_nodes_and_edges(self):
 
-        # for each section
+        recent_state = self.res_state
         for interval, section in self.node.sections:
             loop_state = self.res_sdfg.add_state(section.name + "_state")
             _, _, recent_state = self.res_sdfg.add_loop(
@@ -401,7 +405,9 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
                 loop_state,
                 None,
                 "k",
-                *SequentialNaiveVerticalLoopExpander._get_loop_controls(interval, loop_order),
+                *SequentialNaiveVerticalLoopExpander._get_loop_controls(
+                    interval, self.node.loop_order
+                ),
             )
 
             in_accesses = dict()
@@ -433,7 +439,7 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
 
 
 class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
-    def _expand(self):
+    def add_nodes_and_edges(self):
         # for each section
         # acc -> map over k -> nsdfg with HE's
         in_accesses = dict()
@@ -505,9 +511,9 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
                     min(origins[name][2], off[2]),
                 )
             origins[name] = (
-                origins[name][0] + self.node.iteration_space.i_interval.start.offset,
-                origins[name][1] + self.node.iteration_space.j_interval.start.offset,
-                origins[name][2],
+                -origins[name][0] - self.node.iteration_space.i_interval.start.offset,
+                -origins[name][1] - self.node.iteration_space.j_interval.start.offset,
+                -origins[name][2],
             )
         return origins
 
@@ -522,7 +528,7 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
 
             for off in offsets:
                 subset_strs = [
-                    f"{var}{-self.origins[name][dim] + off[dim]:+d}"
+                    f"{var}{self.origins[name][dim] + off[dim]:+d}"
                     for dim, var in enumerate("ij0")
                     if dimensions[dim]
                 ]
@@ -535,7 +541,7 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
             dimensions = array_dimensions(self.parent_sdfg.arrays[name])
             data_dims = self.parent_sdfg.arrays[name].shape[sum(dimensions) :]
             subset_strs = [
-                f"{var}{-self.origins[name][dim]:+d}"
+                f"{var}{self.origins[name][dim]:+d}"
                 for dim, var in enumerate("ij0")
                 if dimensions[dim]
             ]
@@ -549,9 +555,7 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
 
         return in_memlets, out_memlets
 
-    def expand(self):
-        self.add_arrays()
-
+    def add_nodes_and_edges(self):
         in_memlets, out_memlets = self.get_innermost_memlets()
         map_ranges = {
             "i": get_interval_range_str(self.node.iteration_space.i_interval, "__I"),
@@ -562,7 +566,7 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
         input_nodes = {name: self.res_state.add_read(name) for name in inputs}
         output_nodes = {name: self.res_state.add_write(name) for name in outputs}
 
-        tasklet, _, _ = self.res_state.add_mapped_tasklet(
+        self.res_state.add_mapped_tasklet(
             self.node.name + "_tasklet",
             map_ranges=map_ranges,
             inputs=in_memlets,
@@ -572,17 +576,6 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
             code=TaskletCodegen.apply(self.node.oir_node),
             external_edges=True,
         )
-
-        res = self.fix_context_memlets_and_get_nsdfg()
-
-        # inherit symbols from parent sdfg
-        res.symbol_mapping = {s: s for s in self.res_sdfg.free_symbols}
-        for s in list(self.res_sdfg.free_symbols):
-            # res_sdfg already contains symbols for domain and strides where type is always int.
-            # The type of API parameters still needs to be set.
-            if s not in self.res_sdfg.symbols:
-                self.res_sdfg.add_symbol(s, self.parent_sdfg.symbols[s])
-        return res
 
 
 @dace.library.register_expansion(HorizontalExecutionLibraryNode, "naive")
