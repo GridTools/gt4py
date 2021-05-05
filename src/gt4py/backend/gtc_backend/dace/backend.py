@@ -112,9 +112,7 @@ class DaCeComputationCodegen:
     )
 
     def generate_tmp_allocs(self, sdfg):
-        fmt = """dace_handle.{name} =
-                        allocate(allocator, gt::meta::lazy::id<{dtype}>(),
-                                {size})();"""
+        fmt = "dace_handle.{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
         return [
             fmt.format(name=name, dtype=array.dtype.ctype, size=array.total_size)
             for name, array in sdfg.arrays.items()
@@ -131,40 +129,22 @@ class DaCeComputationCodegen:
         computations = codegen.format_source("cpp", computations, style="LLVM")
         interface = cls.template.definition.render(
             name=sdfg.name,
-            zeros_init_func=self.generate_transient_strides(sdfg),
             dace_args=self.generate_dace_args(gtir, sdfg),
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
         )
-        generated_code = f"""
-                            #include <gridtools/sid/sid_shift_origin.hpp>
-                            #include <gridtools/sid/allocator.hpp>
-                            #include <gridtools/stencil/cartesian.hpp>
-                            namespace gt = gridtools;
-                            {computations}
-                            {interface}
-                            """
+        generated_code = f"""#include <gridtools/sid/sid_shift_origin.hpp>
+                             #include <gridtools/sid/allocator.hpp>
+                             #include <gridtools/stencil/cartesian.hpp>
+                             namespace gt = gridtools;
+                             {computations}
+                             {interface}
+                             """
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
 
     def __init__(self):
         self._unique_index = 0
-
-    def generate_transient_strides(self, sdfg):
-        symbols = {f"__{var}": f"__{var}" for var in "IJK"}
-        for name, array in sdfg.arrays.items():
-            if array.transient:
-                symbols[f"__{name}_K_stride"] = "1"
-                symbols[f"__{name}_J_stride"] = str(array.shape[2])
-                symbols[f"__{name}_I_stride"] = str(array.shape[1] * array.shape[2])
-        for sym in sdfg.symbols.keys():
-            if sym not in symbols:
-                symbols[sym] = "0"
-        return [
-            symbols[s]
-            for s in sdfg.signature_arglist(with_types=False, for_call=True)
-            if s in symbols
-        ]
 
     def generate_dace_args(self, gtir, sdfg):
         offset_dict: Dict[str, Tuple[int, int, int]] = {
@@ -180,9 +160,7 @@ class DaCeComputationCodegen:
                 data_ndim = len(array.shape) - sum(array_dimensions(array))
 
                 # api field strides
-                fmt = """gt::sid::get_stride<{dim}>(
-                            gt::sid::sid_get_strides(__{name}_sid))
-                            """
+                fmt = "gt::sid::get_stride<{dim}>(gt::sid::sid_get_strides(__{name}_sid))"
                 symbols.update(
                     {
                         f"__{name}_{dim}_stride": fmt.format(
@@ -206,9 +184,11 @@ class DaCeComputationCodegen:
                 )
 
                 # api field pointers
-                fmt = """gt::sid::multi_shifted(gt::sid::get_origin(__{name}_sid)(),
-                            gt::sid::get_strides(__{name}_sid), std::array<gt::int_t, {ndim}>{{{origin}}})
-                            """
+                fmt = """gt::sid::multi_shifted(
+                             gt::sid::get_origin(__{name}_sid)(),
+                             gt::sid::get_strides(__{name}_sid),
+                             std::array<gt::int_t, {ndim}>{{{origin}}}
+                         )"""
                 origin = tuple(
                     -offset_dict[name][idx]
                     for idx, var in enumerate("IJK")
@@ -221,9 +201,12 @@ class DaCeComputationCodegen:
                 symbols[name] = fmt.format(
                     name=name, ndim=len(array.shape), origin=",".join(str(o) for o in origin)
                 )
+        # the remaining arguments are variables and can be passed by name
         for sym in sdfg.signature_arglist(with_types=False, for_call=True):
             if sym not in symbols:
                 symbols[sym] = sym
+
+        # return strings in order of sdfg signature
         return [symbols[s] for s in sdfg.signature_arglist(with_types=False, for_call=True)]
 
     def generate_functor_args(self, sdfg: dace.SDFG):
@@ -247,39 +230,39 @@ class DaCeBindingsCodegen:
 
     mako_template = as_mako(
         """#include <chrono>
-        #include <pybind11/pybind11.h>
-        #include <pybind11/stl.h>
-        #include <gridtools/storage/adapter/python_sid_adapter.hpp>
-        #include <gridtools/stencil/cartesian.hpp>
-        #include <gridtools/stencil/global_parameter.hpp>
-        #include <gridtools/sid/sid_shift_origin.hpp>
-        #include <gridtools/sid/rename_dimensions.hpp>
-        #include "computation.hpp"
-        namespace gt = gridtools;
-        namespace py = ::pybind11;
-        PYBIND11_MODULE(${module_name}, m) {
-            m.def("run_computation", [](
-            ${','.join(["std::array<gt::uint_t, 3> domain", *entry_params, 'py::object exec_info'])}
-            ){
-                if (!exec_info.is(py::none()))
-                {
-                    auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_start_time"] = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
-                }
+           #include <pybind11/pybind11.h>
+           #include <pybind11/stl.h>
+           #include <gridtools/storage/adapter/python_sid_adapter.hpp>
+           #include <gridtools/stencil/cartesian.hpp>
+           #include <gridtools/stencil/global_parameter.hpp>
+           #include <gridtools/sid/sid_shift_origin.hpp>
+           #include <gridtools/sid/rename_dimensions.hpp>
+           #include "computation.hpp"
+           namespace gt = gridtools;
+           namespace py = ::pybind11;
+           PYBIND11_MODULE(${module_name}, m) {
+               m.def("run_computation", [](
+               ${','.join(["std::array<gt::uint_t, 3> domain", *entry_params, 'py::object exec_info'])}
+               ){
+                   if (!exec_info.is(py::none()))
+                   {
+                       auto exec_info_dict = exec_info.cast<py::dict>();
+                       exec_info_dict["run_cpp_start_time"] = static_cast<double>(
+                           std::chrono::duration_cast<std::chrono::nanoseconds>(
+                               std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+                   }
 
-                ${name}(domain)(${','.join(sid_params)});
+                   ${name}(domain)(${','.join(sid_params)});
 
-                if (!exec_info.is(py::none()))
-                {
-                    auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_end_time"] = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
-                }
+                   if (!exec_info.is(py::none()))
+                   {
+                       auto exec_info_dict = exec_info.cast<py::dict>();
+                       exec_info_dict["run_cpp_end_time"] = static_cast<double>(
+                           std::chrono::duration_cast<std::chrono::nanoseconds>(
+                               std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
+                   }
 
-            }, "Runs the given computation");}
+               }, "Runs the given computation");}
         """
     )
 
@@ -343,6 +326,7 @@ class DaCeBindingsCodegen:
                     sid_def=sid_def, name=name
                 )
             )
+        # pass scalar parameters as variables
         for name in (n for n in sdfg.symbols.keys() if not n.startswith("__")):
             res.append(name)
         return res
