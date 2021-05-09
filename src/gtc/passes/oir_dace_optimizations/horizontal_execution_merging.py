@@ -27,6 +27,7 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 
 import dace
 import dace.subsets
+import networkx as nx
 from dace import SDFGState
 from dace.sdfg import graph
 from dace.sdfg.utils import node_path_graph
@@ -39,14 +40,6 @@ from gtc.passes.oir_optimizations.utils import AccessCollector
 
 OFFSETS_T = Dict[str, Set[Tuple[int, int, int]]]
 IJ_OFFSETS_T = Dict[str, Set[Tuple[int, int]]]
-
-
-def masks_match(
-    left: HorizontalExecutionLibraryNode, right: HorizontalExecutionLibraryNode
-) -> bool:
-    left_masks = left.as_oir().iter_tree().if_isinstance(oir.MaskStmt).to_set()
-    right_masks = right.as_oir().iter_tree().if_isinstance(oir.MaskStmt).to_set()
-    return left_masks == right_masks
 
 
 def ij_offsets(offsets: OFFSETS_T) -> IJ_OFFSETS_T:
@@ -109,20 +102,22 @@ def rewire_edge(
         dst.add_in_connector(dst_conn)
 
     state.remove_edge(edge)
-    existing_edges = [
+    existing_edges = {
         e
         for e in state.edges_between(src, dst)
         if src_conn == e.src_conn and dst_conn == e.dst_conn
-    ]
+    }
+    if src_conn is not None:
+        existing_edges |= {e for e in state.out_edges(src) if src_conn == e.src_conn}
+    if dst_conn is not None:
+        existing_edges |= {e for e in state.in_edges(dst) if dst_conn == e.dst_conn}
+
     if existing_edges:
         assert len(existing_edges) == 1
-        existing_edges[0].data.subset = dace.subsets.union(
-            edge.data.subset, existing_edges[0].data.subset
-        )
+        existing_edge = next(iter(existing_edges))
+        existing_edge.data.subset = dace.subsets.union(edge.data.subset, existing_edge.data.subset)
     else:
-        state.add_edge(
-            src, src_conn, dst, dst_conn, dace.Memlet.simple(edge.data.data, edge.data.subset)
-        )
+        state.add_edge(src, src_conn, dst, dst_conn, edge.data)
 
 
 def parallel_pattern(
@@ -134,6 +129,13 @@ def parallel_pattern(
     pattern.add_edge(access, left, None)
     pattern.add_node(right)
     pattern.add_edge(access, right, None)
+    return pattern
+
+
+def any_two_pattern(left: PatternNode, right: PatternNode) -> graph.OrderedMultiDiGraph:
+    pattern = graph.OrderedMultiDiGraph()
+    pattern.add_node(left)
+    pattern.add_node(right)
     return pattern
 
 
@@ -151,15 +153,14 @@ class GraphMerging(Transformation):
     left = PatternNode(HorizontalExecutionLibraryNode)
     right = PatternNode(HorizontalExecutionLibraryNode)
     access = PatternNode(dace.nodes.AccessNode)
-    access_thru = PatternNode(dace.nodes.AccessNode)
 
     @classmethod
     def expressions(cls) -> List[graph.OrderedMultiDiGraph]:
         return [
             node_path_graph(cls.left, cls.right),
-            node_path_graph(cls.left, cls.access, cls.right, cls.access_thru),
             node_path_graph(cls.left, cls.access, cls.right),
             parallel_pattern(cls.left, cls.access, cls.right),
+            any_two_pattern(cls.left, cls.right),
         ]
 
     def can_be_applied(
@@ -171,33 +172,37 @@ class GraphMerging(Transformation):
         strict: bool = False,
     ) -> bool:
         left = self.left(sdfg)
-        access = optional_node(self.access, sdfg)
         right = self.right(sdfg)
-        access_thru = optional_node(self.access_thru, sdfg)
-        if access and access_thru and access.label != access_thru.label:
+        if expr_index >= 2:
+            if nx.has_path(graph.nx, right, left):
+                return False
+        intermediate_accesses = set(
+            n for path in nx.all_simple_paths(graph.nx, left, right) for n in path[1:-1]
+        )
+        if not all(
+            isinstance(n, dace.nodes.AccessNode)
+            and (graph.edges_between(left, n) and graph.edges_between(n, right))
+            for n in intermediate_accesses
+        ):
             return False
-        return masks_match(left, right) and offsets_match(left, right)
+
+        protected_intermediate_names = set(
+            n.label
+            for n in intermediate_accesses
+            if any(edge.dst is not right for edge in graph.out_edges(n))
+        )
+        output_names = set(
+            edge.data.data for edge in graph.out_edges(right) if edge.data is not None
+        )
+        if len(protected_intermediate_names & output_names) > 0:
+            return False
+
+        return offsets_match(left, right)
 
     def apply(self, sdfg: dace.SDFG) -> None:
         state = sdfg.node(self.state_id)
         left = self.left(sdfg)
-        access = optional_node(self.access, sdfg)
         right = self.right(sdfg)
-        access_thru = optional_node(self.access_thru, sdfg)
-
-        # rewire access chains
-        if access and access_thru:
-            rewire_edge(state, state.edges_between(left, access)[0], dst=access_thru)
-            state.remove_node(access)
-            access = None
-            state.remove_edge(state.edges_between(right, access_thru)[0])
-
-        # Disconnect the intermediate access node if it exists.
-        # If it becomes an island, remove the access node.
-        if access:
-            unwire_access_node(state, left, access, right)
-            if not state.all_edges(access):
-                state.remove_node(access)
 
         # merge oir nodes
         res = HorizontalExecutionLibraryNode(
@@ -208,16 +213,44 @@ class GraphMerging(Transformation):
             iteration_space=left.iteration_space,
         )
         state.add_node(res)
+
+        intermediate_accesses = set(
+            n for path in nx.all_simple_paths(state.nx, left, right) for n in path[1:-1]
+        )
+
         # rewire edges and connectors to left and delete right
         for edge in state.edges_between(left, right):
             state.remove_edge_and_connectors(edge)
+        for acc in intermediate_accesses:
+            for edge in state.in_edges(acc):
+                if edge.src is not left:
+                    rewire_edge(state, edge, dst=res)
+                else:
+                    state.remove_edge_and_connectors(edge)
+            for edge in state.out_edges(acc):
+                if edge.dst is not right:
+                    rewire_edge(state, edge, src=res)
+                else:
+                    state.remove_edge_and_connectors(edge)
         for edge in state.in_edges(left):
             rewire_edge(state, edge, dst=res)
-        for edge in state.in_edges(right):
-            rewire_edge(state, edge, dst=res)
-        for edge in state.out_edges(left):
-            rewire_edge(state, edge, src=res)
         for edge in state.out_edges(right):
             rewire_edge(state, edge, src=res)
+        for edge in state.out_edges(left):
+            rewire_edge(state, edge, src=res)
+        for edge in state.in_edges(right):
+            rewire_edge(state, edge, dst=res)
         state.remove_node(left)
         state.remove_node(right)
+        for acc in intermediate_accesses:
+            if not state.in_edges(acc):
+                if not state.out_edges(acc):
+                    state.remove_node(acc)
+                else:
+                    assert (
+                        len(state.edges_between(acc, res)) == 1 and len(state.out_edges(acc)) == 1
+                    ), "Previously written array now read-only."
+                    state.remove_node(acc)
+                    res.remove_in_connector("IN_" + acc.label)
+            elif not state.out_edges:
+                acc.access = dace.AccessType.WriteOnly

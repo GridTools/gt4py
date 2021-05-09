@@ -108,3 +108,5 @@ venv.bak/
 
 # DaCe
 *.sdfg
+.dace.conf
+

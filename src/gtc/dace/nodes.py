@@ -136,6 +136,9 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
             return False
         return True
 
+    def __hash__(self):
+        return super(OIRLibraryNode, self).__hash__()
+
 
 @library.node
 class HorizontalExecutionLibraryNode(OIRLibraryNode):
@@ -170,3 +173,11 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
 
     def validate(self, parent_sdfg: dace.SDFG, parent_state: dace.SDFGState, *args, **kwargs):
         get_node_name_mapping(parent_state, self)
+
+    def __eq__(self, other):
+        if not isinstance(other, HorizontalExecutionLibraryNode):
+            return False
+        return self.as_oir() == other.as_oir()
+
+    def __hash__(self):
+        return super(OIRLibraryNode, self).__hash__()
