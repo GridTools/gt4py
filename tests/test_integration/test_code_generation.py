@@ -212,7 +212,7 @@ def test_lower_dimensional_inputs(backend):
         pytest.param("gtcuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
         "gtc:gt:cpu_ifirst",
         "gtc:gt:cpu_kfirst",
-        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu]),
+        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
         pytest.param("gtc:cuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
         "gtc:dace",
     ],
