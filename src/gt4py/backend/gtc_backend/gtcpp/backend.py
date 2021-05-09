@@ -45,7 +45,7 @@ from gtc.passes.oir_optimizations.caches import (
     PruneKCacheFills,
     PruneKCacheFlushes,
 )
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
+from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
@@ -82,7 +82,6 @@ class GTCGTExtGenerator:
 
     def _optimize_oir(self, oir):
         oir = optimize_horizontal_executions(oir, GraphMerging)
-        oir = GreedyMerging().visit(oir)
         oir = AdjacentLoopMerging().visit(oir)
         oir = LocalTemporariesToScalars().visit(oir)
         oir = WriteBeforeReadTemporariesToScalars().visit(oir)
