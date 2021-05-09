@@ -153,7 +153,7 @@ class Interval(LocNode):
     def intersects(self, other: "Interval") -> bool:
         return not (other.start >= self.end or self.start >= other.end)
 
-    def shift(self, offset: int) -> "Interval":
+    def shifted(self, offset: int) -> "Interval":
         start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
         end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
         return Interval(start=start, end=end)

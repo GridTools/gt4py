@@ -16,7 +16,6 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
-import gtc.dace.dace_to_oir as dace_to_oir
 import gtc.utils as gtc_utils
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
@@ -37,9 +36,9 @@ from gt4py.backend.gt_backends import (
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
-from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_dace_optimizations import GraphMerging, optimize_horizontal_executions
 from gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,
     KCacheDetection,
@@ -69,8 +68,6 @@ class GTCGTExtGenerator:
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
         oir = gtir_to_oir.GTIRToOIR().visit(gtir)
-        sdfg = OirSDFGBuilder().visit(oir)
-        oir = dace_to_oir.convert(sdfg)
         oir = self._optimize_oir(oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
@@ -84,6 +81,7 @@ class GTCGTExtGenerator:
         }
 
     def _optimize_oir(self, oir):
+        oir = optimize_horizontal_executions(oir, GraphMerging)
         oir = GreedyMerging().visit(oir)
         oir = AdjacentLoopMerging().visit(oir)
         oir = LocalTemporariesToScalars().visit(oir)

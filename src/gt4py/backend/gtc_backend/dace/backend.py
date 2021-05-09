@@ -33,6 +33,7 @@ from gtc.dace.utils import array_dimensions
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
+from gtc.passes.oir_dace_optimizations import GraphMerging, optimize_horizontal_executions
 from gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,
     KCacheDetection,
@@ -81,6 +82,7 @@ class GTCDaCeExtGenerator:
         }
 
     def _optimize_oir(self, oir):
+        oir = optimize_horizontal_executions(oir, GraphMerging)
         oir = GreedyMerging().visit(oir)
         oir = AdjacentLoopMerging().visit(oir)
         oir = LocalTemporariesToScalars().visit(oir)
@@ -365,6 +367,7 @@ class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCDaCeExtGenerator  # type: ignore
+    USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self) -> Tuple[str, str]:
         return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=False)

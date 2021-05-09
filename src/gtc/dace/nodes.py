@@ -27,6 +27,7 @@ from gtc.common import DataType, LoopOrder, typestr_to_data_type
 from gtc.dace.utils import (
     CartesianIterationSpace,
     OIRFieldRenamer,
+    assert_sdfg_equal,
     dace_dtype_to_typestr,
     get_node_name_mapping,
 )
@@ -36,6 +37,10 @@ from gtc.oir import CacheDesc, HorizontalExecution, Interval, VerticalLoop, Vert
 class OIRLibraryNode(ABC, dace.nodes.LibraryNode):
     @abstractmethod
     def as_oir(self):
+        raise NotImplementedError("Implement in child class.")
+
+    @abstractmethod
+    def __eq__(self, other):
         raise NotImplementedError("Implement in child class.")
 
 
@@ -117,6 +122,19 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
             loop_order=self.loop_order,
             caches=self.caches,
         )
+
+    def __eq__(self, other):
+        try:
+            assert isinstance(other, VerticalLoopLibraryNode)
+            assert self.loop_order == other.loop_order
+            assert self.caches == other.caches
+            assert len(self.sections) == len(other.sections)
+            for (interval1, he_sdfg1), (interval2, he_sdfg2) in zip(self.sections, other.sections):
+                assert interval1 == interval2
+                assert_sdfg_equal(he_sdfg1, he_sdfg2)
+        except AssertionError:
+            return False
+        return True
 
 
 @library.node

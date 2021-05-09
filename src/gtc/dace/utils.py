@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Collection, Dict, Iterator, List, Tuple, 
 
 import dace
 import dace.data
+import networkx as nx
 from dace import SDFG, InterstateEdge
 from pydantic import validator
 
@@ -223,15 +224,15 @@ class CartesianIterationSpace(oir.LocNode):
             raise ValueError("iteration space must include the whole domain")
         return v
 
-    @classmethod
-    def domain(cls) -> "CartesianIterationSpace":
+    @staticmethod
+    def domain() -> "CartesianIterationSpace":
         return CartesianIterationSpace(
             i_interval=oir.Interval(start=oir.AxisBound.start(), end=oir.AxisBound.end()),
             j_interval=oir.Interval(start=oir.AxisBound.start(), end=oir.AxisBound.end()),
         )
 
-    @classmethod
-    def from_offset(cls, offset: CartesianOffset) -> "CartesianIterationSpace":
+    @staticmethod
+    def from_offset(offset: CartesianOffset) -> "CartesianIterationSpace":
 
         return CartesianIterationSpace(
             i_interval=oir.Interval(
@@ -308,19 +309,15 @@ class CartesianIJIndexSpace(tuple):
         if not all(isinstance(v[0], int) and isinstance(v[1], int) for v in self):
             raise ValueError(msg)
 
-    @classmethod
-    def from_offset(
-        cls, offset: Union[Tuple[int, ...], CartesianOffset]
-    ) -> "CartesianIJIndexSpace":
+    @staticmethod
+    def from_offset(offset: Union[Tuple[int, ...], CartesianOffset]) -> "CartesianIJIndexSpace":
         if isinstance(offset, CartesianOffset):
-            return cls((offset.i, offset.i), (offset.j, offset.j))
-        return cls(((offset[0], offset[0]), (offset[1], offset[1])))
+            return CartesianIJIndexSpace((offset.i, offset.i), (offset.j, offset.j))
+        return CartesianIJIndexSpace(((offset[0], offset[0]), (offset[1], offset[1])))
 
-    @classmethod
-    def from_iteration_space(
-        cls, iteration_space: CartesianIterationSpace
-    ) -> "CartesianIJIndexSpace":
-        return cls(
+    @staticmethod
+    def from_iteration_space(iteration_space: CartesianIterationSpace) -> "CartesianIJIndexSpace":
+        return CartesianIJIndexSpace(
             (
                 (iteration_space.i_interval.start.offset, iteration_space.i_interval.end.offset),
                 (iteration_space.j_interval.start.offset, iteration_space.j_interval.end.offset),
@@ -605,3 +602,63 @@ class IntervalMapping:
             if key.intersects(oir.Interval(start=start, end=end)):
                 res.append(value)
         return res
+
+
+def assert_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG):
+    from gtc.dace.nodes import (
+        HorizontalExecutionLibraryNode,
+        OIRLibraryNode,
+        VerticalLoopLibraryNode,
+    )
+
+    def edge_match(edge1, edge2):
+        edge1 = next(iter(edge1.values()))
+        edge2 = next(iter(edge2.values()))
+        try:
+            if edge1["src_conn"] is not None:
+                assert edge2["src_conn"] is not None
+                assert edge1["src_conn"] == edge2["src_conn"]
+            else:
+                assert edge2["src_conn"] is None
+            assert edge1["data"] == edge2["data"]
+            assert edge1["data"].data == edge2["data"].data
+        except AssertionError:
+            return False
+        return True
+
+    def node_match(n1, n2):
+        n1 = n1["node"]
+        n2 = n2["node"]
+        try:
+            if not isinstance(
+                n1, (dace.nodes.AccessNode, VerticalLoopLibraryNode, HorizontalExecutionLibraryNode)
+            ):
+                raise TypeError
+            if isinstance(n1, dace.nodes.AccessNode):
+                assert isinstance(n2, dace.nodes.AccessNode)
+                assert n1.access == n2.access
+                assert n1.data == n2.data
+            elif isinstance(n1, OIRLibraryNode):
+                assert n1 == n2
+        except AssertionError:
+            return False
+        return True
+
+    assert len(sdfg1.states()) == 1
+    assert len(sdfg2.states()) == 1
+    state1 = sdfg1.states()[0]
+    state2 = sdfg2.states()[0]
+
+    # SDFGState.nx does not contain any node info in the networkx node attrs (but does for edges),
+    # so we add it here manually.
+    nx.set_node_attributes(state1.nx, {n: n for n in state1.nx.nodes}, "node")
+    nx.set_node_attributes(state2.nx, {n: n for n in state2.nx.nodes}, "node")
+
+    assert nx.is_isomorphic(state1.nx, state2.nx, edge_match=edge_match, node_match=node_match)
+
+    for name in sdfg1.arrays.keys():
+        assert isinstance(sdfg1.arrays[name], type(sdfg2.arrays[name]))
+        assert isinstance(sdfg2.arrays[name], type(sdfg1.arrays[name]))
+        assert sdfg1.arrays[name].dtype == sdfg2.arrays[name].dtype
+        assert sdfg1.arrays[name].transient == sdfg2.arrays[name].transient
+        assert sdfg1.arrays[name].shape == sdfg2.arrays[name].shape

@@ -27,5 +27,5 @@ def optimize_horizontal_executions(
 ) -> oir.Stencil:
     sdfg = OirSDFGBuilder().visit(stencil)
     for subgraph in iter_vertical_loop_section_sub_sdfgs(sdfg):
-        subgraph.apply_transformations_repeated(transformation, validate_all=True)
+        subgraph.apply_transformations_repeated(transformation, validate=True)
     return dace_to_oir.convert(sdfg)

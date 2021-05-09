@@ -169,7 +169,7 @@ class BaseOirSDFGBuilder(ABC):
 
             for name in access_collection.read_fields():
                 for offset in access_collection.read_offsets()[name]:
-                    read_interval = interval.shift(offset[2])
+                    read_interval = interval.shifted(offset[2])
                     for candidate_access in self._get_recent_writes(name, read_interval):
                         if name not in read_accesses or self._are_nodes_ordered(
                             name, read_accesses[name], candidate_access
@@ -180,7 +180,7 @@ class BaseOirSDFGBuilder(ABC):
         for interval, access_collection in collections:
             for name in access_collection.read_fields():
                 for offset in access_collection.read_offsets()[name]:
-                    read_interval = interval.shift(offset[2])
+                    read_interval = interval.shifted(offset[2])
                     if name not in read_accesses:
                         read_accesses[name] = self._get_source(name)
                     self._set_read(name, read_interval, read_accesses[name])
@@ -235,7 +235,7 @@ class BaseOirSDFGBuilder(ABC):
         for interval, collection in collections:
             for name in collection.read_fields():
                 for offset in collection.read_offsets()[name]:
-                    read_interval = interval.shift(offset[2])
+                    read_interval = interval.shifted(offset[2])
                     for dst in self._get_recent_writes(name, read_interval):
                         edge = self._state.add_edge(node, None, dst, None, dace.Memlet())
                         self._delete_candidates.append(edge)
@@ -257,7 +257,7 @@ class BaseOirSDFGBuilder(ABC):
 
         self.add_subsets()
         self.add_arrays()
-        self._sdfg.validate()
+
         for acc in (n for n in self._state.nodes() if isinstance(n, dace.nodes.AccessNode)):
             is_write = len(self._state.in_edges(acc)) > 0 and all(
                 edge.data.data is not None for edge in self._state.in_edges(acc)
@@ -503,7 +503,7 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
             for name, offsets in collection.read_offsets().items():
                 if self._axes[name][2]:
                     for offset in offsets:
-                        read_interval = interval.shift(offset[2])
+                        read_interval = interval.shifted(offset[2])
                         read_intervals.setdefault(name, read_interval)
                         read_intervals[name] = Interval(
                             start=min(read_intervals[name].start, read_interval.start),

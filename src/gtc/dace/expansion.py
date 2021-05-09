@@ -268,9 +268,7 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
     res_sdfg: dace.SDFG
     origins: Dict[str, Tuple[int, int, oir.AxisBound]]
 
-    def get_ij_origins(
-        self,
-    ):
+    def get_ij_origins(self):
 
         origins: Dict[str, Tuple[int, int]] = {}
 
