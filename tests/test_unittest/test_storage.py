@@ -917,10 +917,10 @@ def test_auto_sync_storage():
         inp: Field[float],  # type: ignore
         out: Field[float],  # type: ignore
     ):
-         with computation(PARALLEL), interval(...):
-             tmp = inp
-             inp = out
-             out = tmp
+        with computation(PARALLEL), interval(...):
+            tmp = inp
+            inp = out
+            out = tmp
 
     shape = (5, 5, 5)
     q0 = gt_store.from_array(
