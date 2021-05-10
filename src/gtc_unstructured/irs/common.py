@@ -97,25 +97,28 @@ class NativeFunction(StrEnum):
 
 
 NativeFunction.IR_OP_TO_NUM_ARGS = {
-    NativeFunction.ABS: 1,
-    NativeFunction.MIN: 2,
-    NativeFunction.MAX: 2,
-    NativeFunction.MOD: 2,
-    NativeFunction.SIN: 1,
-    NativeFunction.COS: 1,
-    NativeFunction.TAN: 1,
-    NativeFunction.ARCSIN: 1,
-    NativeFunction.ARCCOS: 1,
-    NativeFunction.ARCTAN: 1,
-    NativeFunction.SQRT: 1,
-    NativeFunction.EXP: 1,
-    NativeFunction.LOG: 1,
-    NativeFunction.ISFINITE: 1,
-    NativeFunction.ISINF: 1,
-    NativeFunction.ISNAN: 1,
-    NativeFunction.FLOOR: 1,
-    NativeFunction.CEIL: 1,
-    NativeFunction.TRUNC: 1,
+    NativeFunction(k): v  # to avoid noqa on every entry
+    for k, v in {
+        NativeFunction.ABS: 1,
+        NativeFunction.MIN: 2,
+        NativeFunction.MAX: 2,
+        NativeFunction.MOD: 2,
+        NativeFunction.SIN: 1,
+        NativeFunction.COS: 1,
+        NativeFunction.TAN: 1,
+        NativeFunction.ARCSIN: 1,
+        NativeFunction.ARCCOS: 1,
+        NativeFunction.ARCTAN: 1,
+        NativeFunction.SQRT: 1,
+        NativeFunction.EXP: 1,
+        NativeFunction.LOG: 1,
+        NativeFunction.ISFINITE: 1,
+        NativeFunction.ISINF: 1,
+        NativeFunction.ISNAN: 1,
+        NativeFunction.FLOOR: 1,
+        NativeFunction.CEIL: 1,
+        NativeFunction.TRUNC: 1,
+    }.items()
 }
 
 

@@ -45,6 +45,8 @@ from .input_strategies import (
 from .utils import annotate_function, standardize_dtype_dict
 
 
+ParameterSet = type(pytest.param())
+
 counter = count()
 RTOL = 1e-05
 ATOL = 1e-08
@@ -142,6 +144,7 @@ class SuiteMeta(type):
         cls_dict["origin"] = tuple(o[0] for o in max_boundary)
 
     def parametrize_generation_tests(cls_name, cls_dict):
+
         backends = cls_dict["backends"]
         dtypes = cls_dict["dtypes"]
         field_params = cls_dict["field_params"]
@@ -171,9 +174,11 @@ class SuiteMeta(type):
         for d in get_dtype_combinations(dtypes):
             for g in get_globals_combinations(d):
                 for b in backends:
+
                     cls_dict["tests"].append(
                         dict(
-                            backend=b,
+                            backend=b if isinstance(b, str) else b.values[0],
+                            marks=[] if isinstance(b, str) else b.marks,
                             suite=cls_name,
                             constants=g,
                             dtypes=d,
@@ -213,11 +218,9 @@ class SuiteMeta(type):
 
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
-                marks = (
-                    [pytest.mark.requires_gpu]
-                    if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu"
-                    else ()
-                )
+                marks = test["marks"]
+                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                    marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
                 name += "".join(
@@ -244,11 +247,9 @@ class SuiteMeta(type):
         runtime_pytest_params = []
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
-                marks = (
-                    [pytest.mark.requires_gpu]
-                    if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu"
-                    else ()
-                )
+                marks = test["marks"]
+                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                    marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
                 name += "".join(
@@ -301,11 +302,16 @@ class SuiteMeta(type):
         ), "'dtypes' must be a sequence or a mapping object"
 
         # Check backends
-        assert gt_utils.is_iterable_of(backends, str), "'backends' must be a sequence of strings"
+        if not all(
+            isinstance(b, str)
+            or (isinstance(b, ParameterSet) and len(b.values) == 1 and isinstance(b.values[0], str))
+            for b in backends
+        ):
+            raise TypeError("'backends' must be a sequence of strings")
+        backends = [pytest.param(b) if isinstance(b, str) else b for b in backends]
         for b in backends:
-            assert b in gt.backend.REGISTRY.names, "backend '{backend}' not supported".format(
-                backend=b
-            )
+            if b.values[0] not in gt.backend.REGISTRY.names:
+                raise ValueError("backend '{backend}' not supported".format(backend=b))
 
         # Check definition and validation functions
         if not isinstance(cls_dict["definition"], types.FunctionType):
