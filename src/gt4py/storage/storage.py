@@ -263,6 +263,10 @@ class GPUStorage(Storage):
         obj.default_origin = default_origin
         return obj
 
+    @classmethod
+    def get_modified_storages(cls):
+        return cls._modified_storages
+
     @property
     def __cuda_array_interface__(self):
         array_interface = self.__array_interface__
@@ -312,17 +316,17 @@ class GPUStorage(Storage):
 
     @property
     def _is_device_modified(self):
-        return id(self) in self._modified_storages
+        return id(self) in self.__class__._modified_storages
 
     def _set_clean(self):
         if not self._is_clean():
-            self._modified_storages.pop(id(self))
+            self.__class__._modified_storages.pop(id(self))
 
     def _set_host_modified(self):
         pass
 
     def _set_device_modified(self):
-        self._modified_storages[id(self)] = self
+        self.__class__._modified_storages[id(self)] = self
 
     def synchronize(self):
         self.device_to_host()
@@ -330,7 +334,7 @@ class GPUStorage(Storage):
     def device_to_host(self, force=False):
         if force or self._is_device_modified:
             cp.cuda.Device(0).synchronize()
-            self._modified_storages.clear()
+            self.__class__._modified_storages.clear()
 
 
 class CPUStorage(Storage):

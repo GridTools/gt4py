@@ -31,6 +31,7 @@ import gt4py.ir as gt_ir
 import gt4py.storage as gt_store
 import gt4py.storage.utils as gt_storage_utils
 import gt4py.utils as gt_utils
+from gt4py.gtscript import PARALLEL, Field, computation, interval, stencil
 
 from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 
@@ -905,3 +906,45 @@ def test_sum_gpu():
     )
 
     q1[i1 : i2 + 1, jslice, 0] = cp.sum(q2[i1 : i2 + 1, jslice, :], axis=2)
+
+
+@pytest.mark.requires_gpu
+def test_auto_sync_storage():
+    BACKEND = "gtcuda"
+
+    @stencil(backend=BACKEND, device_sync=False)
+    def swap_stencil(
+        inp: Field[float],  # type: ignore
+        out: Field[float],  # type: ignore
+    ):
+         with computation(PARALLEL), interval(...):
+             tmp = inp
+             inp = out
+             out = tmp
+
+    shape = (5, 5, 5)
+    q0 = gt_store.from_array(
+        cp.zeros(shape),
+        backend=BACKEND,
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+        managed_memory=True,
+    )
+
+    q1 = gt_store.from_array(
+        cp.ones(shape),
+        backend=BACKEND,
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+        managed_memory=True,
+    )
+
+    assert not gt_store.storage.GPUStorage.get_modified_storages()
+
+    swap_stencil(q0, q1)
+    assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 2
+
+    q0.device_to_host()
+    assert not gt_store.storage.GPUStorage.get_modified_storages()
