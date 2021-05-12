@@ -25,7 +25,7 @@ import gt4py.ir as gt_ir
 import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
-from gt4py.gtscript import __INLINED, PARALLEL, computation, interval
+from gt4py.gtscript import __INLINED, PARALLEL, compile_assert, computation, interval
 
 from ..definitions import id_version
 
@@ -603,7 +603,7 @@ class TestCompileTimeAssertions:
             from __externals__ import EXTERNAL
 
             with computation(PARALLEL), interval(...):
-                assert __INLINED(EXTERNAL < 1)
+                compile_assert(EXTERNAL < 1)
                 inout_field = inout_field[0, 0, 0] + EXTERNAL
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
@@ -612,22 +612,10 @@ class TestCompileTimeAssertions:
         with pytest.raises(gt_frontend.GTScriptAssertionError, match="Assertion failed"):
             compile_definition(definition, "test_assert_nomsg", module, externals={"EXTERNAL": 1})
 
-    def test_msg(self, id_version):
-        def definition(inout_field: gtscript.Field[float]):
-            from __externals__ import EXTERNAL
-
-            with computation(PARALLEL), interval(...):
-                assert __INLINED(EXTERNAL < 1), "An error occurred"
-                inout_field = inout_field[0, 0, 0] + EXTERNAL
-
-        module = f"TestCompileTimeAssertions_test_module_{id_version}"
-        with pytest.raises(gt_frontend.GTScriptAssertionError, match="An error occurred"):
-            compile_definition(definition, "test_assert_msg", module, externals={"EXTERNAL": 1})
-
     def test_nested_attribute(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
             with computation(PARALLEL), interval(...):
-                assert __INLINED(GLOBAL_VERY_NESTED_CONSTANTS.nested.A > 1), "An error occurred"
+                compile_assert(GLOBAL_VERY_NESTED_CONSTANTS.nested.A > 1)
                 inout_field = inout_field[0, 0, 0] + GLOBAL_VERY_NESTED_CONSTANTS.nested.A
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
@@ -636,7 +624,7 @@ class TestCompileTimeAssertions:
     def test_inside_func(self, id_version):
         @gtscript.function
         def assert_in_func(field):
-            assert __INLINED(GLOBAL_CONSTANT < 2), "An error occurred"
+            compile_assert(GLOBAL_CONSTANT < 2)
             return field[0, 0, 0] + GLOBAL_CONSTANT
 
         def definition(inout_field: gtscript.Field[float]):
@@ -649,12 +637,12 @@ class TestCompileTimeAssertions:
     def test_runtime_error(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
             with computation(PARALLEL), interval(...):
-                assert __INLINED(inout_field[0, 0, 0] < 0), "An error occurred"
+                compile_assert(inout_field[0, 0, 0] < 0)
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Evaluation of compile-time assertion condition failed",
+            match="Evaluation of compile_assert condition failed",
         ):
             compile_definition(definition, "test_definition_error", module)
 

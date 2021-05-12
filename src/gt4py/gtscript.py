@@ -74,8 +74,11 @@ builtins = {
     "__gtscript__",
     "__externals__",
     "__INLINED",
+    "compile_assert",
     *MATH_BUILTINS,
 }
+
+IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert"}
 
 __all__ = list(builtins) + ["function", "stencil", "lazy_stencil"]
 
@@ -552,6 +555,11 @@ def interval(*args):
 
 def __INLINED(compile_if_expression):
     """Evaluate condition at compile time and inline statements from selected branch."""
+    pass
+
+
+def compile_assert(expr):
+    """Assert that expr evaluates to True at compile-time."""
     pass
 
 
