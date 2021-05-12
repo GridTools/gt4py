@@ -203,7 +203,19 @@ def test_lower_dimensional_inputs(backend):
 
 
 @pytest.mark.parametrize(
-    "backend", make_backend_params("debug", "numpy", "gtc:gt:cpu_ifirst", "gtc:gt:cpu_kfirst")
+    "backend",
+    [
+        "debug",
+        "numpy",
+        pytest.param("gtx86", marks=[pytest.mark.xfail]),
+        pytest.param("gtmc", marks=[pytest.mark.xfail]),
+        pytest.param("gtcuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
+        "gtc:gt:cpu_ifirst",
+        "gtc:gt:cpu_kfirst",
+        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
+        pytest.param("gtc:cuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
+        "gtc:dace",
+    ],
 )
 def test_higher_dimensional_fields(backend):
     FLOAT64_VEC2 = (np.float64, (2,))
