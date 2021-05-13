@@ -951,6 +951,46 @@ class IRMaker(ast.NodeVisitor):
         index = self.visit(node.value)
         return index
 
+    def visit_For(self, node: ast.For) -> gt_ir.For:
+        assert isinstance(node.iter, ast.Call)
+        assert (
+            isinstance(node.iter.func, ast.Name)
+            and node.iter.func.id == "interval"
+            and len(node.iter.args) == 2
+        )
+
+        gt_ir_args = []
+        for arg in node.iter.args:
+            if isinstance(arg, ast.Constant):
+                # Something like 0, None
+                # These get translated to AxisBounds
+                if arg.value is None:
+                    gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0))
+                elif arg.value == 0:
+                    gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0))
+            else:
+                gt_ir_args.append(self.visit(arg))
+
+        assert isinstance(node.target, ast.Name)
+        target_name = node.target.id
+
+        stmts = []
+        for stmt in node.body:
+            ret = self.visit(stmt)
+            if isinstance(ret, (list, tuple)):
+                stmts.extend(ret)
+            else:
+                stmts.append(ret)
+
+        return gt_ir.For(
+            target=gt_ir.VarDecl(
+                name=target_name, data_type=gt_ir.DataType.INT32, length=1, is_api=False
+            ),
+            start=gt_ir_args[0],
+            stop=gt_ir_args[1],
+            body=gt_ir.BlockStmt(stmts=stmts),
+        )
+
     def _eval_index(self, node: ast.Subscript) -> Optional[List[int]]:
         invalid_target = GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
 
@@ -1141,20 +1181,25 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_Call(self, node: ast.Call):
-        native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
+        if isinstance(node.func, ast.Name) and node.func.id == "index":
+            assert len(node.args) == 1
+            axis_name = node.args[0].id
+            return gt_ir.AxisIndex(name=axis_name)
+        else:
+            native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 
-        args = [self.visit(arg) for arg in node.args]
-        if len(args) != native_fcn.arity:
-            raise GTScriptSyntaxError(
-                "Invalid native function call", loc=gt_ir.Location.from_ast_node(node)
+            args = [self.visit(arg) for arg in node.args]
+            if len(args) != native_fcn.arity:
+                raise GTScriptSyntaxError(
+                    "Invalid native function call", loc=gt_ir.Location.from_ast_node(node)
+                )
+
+            return gt_ir.NativeFuncCall(
+                func=native_fcn,
+                args=args,
+                data_type=gt_ir.DataType.AUTO,
+                loc=gt_ir.Location.from_ast_node(node),
             )
-
-        return gt_ir.NativeFuncCall(
-            func=native_fcn,
-            args=args,
-            data_type=gt_ir.DataType.AUTO,
-            loc=gt_ir.Location.from_ast_node(node),
-        )
 
     # -- Statement nodes --
     def _parse_assign_target(

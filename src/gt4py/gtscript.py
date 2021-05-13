@@ -75,10 +75,11 @@ builtins = {
     "__externals__",
     "__INLINED",
     "compile_assert",
+    "index",
     *MATH_BUILTINS,
 }
 
-IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert"}
+IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert", "index", "interval"}
 
 __all__ = list(builtins) + ["function", "stencil", "lazy_stencil"]
 
@@ -550,6 +551,11 @@ def computation(order):
 
 def interval(*args):
     """Define the interval of computation in the 'K' sequential axis."""
+    pass
+
+
+def index(axis):
+    """Current axis index."""
     pass
 
 

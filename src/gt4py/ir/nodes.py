@@ -9,7 +9,7 @@
 # GT4Py is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
+# version. See the LICENSE.txindex(K)t file at the top-level directory of this
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
@@ -96,7 +96,9 @@ storing a reference to the piece of source code which originated the node.
 
     Cast(dtype: DataType, expr: Expr)
 
-    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch
+    AxisIndex(name: str)
+
+    Expr        = Literal | Ref | NativeFuncCall | Cast | AxisIndex | CompositeExpr | InvalidBranch
 
     CompositeExpr   = UnaryOpExpr(op: UnaryOperator, arg: Expr)
                     | BinOpExpr(op: BinaryOperator, lhs: Expr, rhs: Expr)
@@ -112,6 +114,7 @@ storing a reference to the piece of source code which originated the node.
     Statement   = Decl
                 | Assign(target: Ref, value: Expr)
                 | If(condition: expr, main_body: BlockStmt, else_body: BlockStmt)
+                | For(target: Decl, start: AxisBound | Expr, stop: AxisBound | Expr, body: BlockStmt)
                 | BlockStmt
 
     AxisBound(level: LevelMarker | VarRef, offset: int)
@@ -398,6 +401,11 @@ class Cast(Expr):
     data_type = attribute(of=DataType)
     expr = attribute(of=Expr)
     loc = attribute(of=Location, optional=True)
+
+
+@attribclass
+class AxisIndex(Expr):
+    name = attribute(of=str)
 
 
 @enum.unique
@@ -707,6 +715,17 @@ class AxisInterval(Node):
             )
 
         return interval
+
+
+# TODO: Relocate this in the file next to other Statement nodes
+# Issue: depends on AxisInterval which is defined below
+@attribclass
+class For(Statement):
+    target = attribute(of=VarDecl)
+    start = attribute(of=UnionOf[AxisBound, Expr])
+    stop = attribute(of=UnionOf[AxisBound, Expr])
+    body = attribute(of=BlockStmt)
+    loc = attribute(of=Location, optional=True)
 
 
 @attribclass
