@@ -242,7 +242,12 @@ class FillFlushToLocalKCaches(NodeTranslator):
         self, node: oir.FieldAccess, *, name_map: Dict[str, str], **kwargs: Any
     ) -> oir.FieldAccess:
         if node.name in name_map:
-            return oir.FieldAccess(name=name_map[node.name], dtype=node.dtype, offset=node.offset)
+            return oir.FieldAccess(
+                name=name_map[node.name],
+                data_index=node.data_index,
+                dtype=node.dtype,
+                offset=node.offset,
+            )
         return node
 
     def visit_VerticalLoopSection(
@@ -263,7 +268,6 @@ class FillFlushToLocalKCaches(NodeTranslator):
     ) -> oir.HorizontalExecution:
         return oir.HorizontalExecution(
             body=fills + self.visit(node.body, name_map=name_map, **kwargs) + flushes,
-            mask=self.visit(node.mask, name_map=name_map, **kwargs),
             declarations=node.declarations,
         )
 

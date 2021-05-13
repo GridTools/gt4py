@@ -27,6 +27,7 @@ class FieldDeclFactory(factory.Factory):
 
     name = identifier(cuir.FieldDecl)
     dtype = cuir.DataType.FLOAT32
+    dimensions = (True, True, True)
 
 
 class TemporaryFactory(factory.Factory):
@@ -85,7 +86,6 @@ class HorizontalExecutionFactory(factory.Factory):
         model = cuir.HorizontalExecution
 
     body = factory.List([factory.SubFactory(AssignStmtFactory)])
-    mask = None
     declarations = factory.List([])
     extent = factory.SubFactory(IJExtentFactory)
 

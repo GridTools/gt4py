@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import root_validator, validator
 
-from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
+from eve import Str, SymbolName, SymbolRef, SymbolTableTrait, field
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
@@ -72,13 +72,15 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
-# TODO(havogt) consider introducing BlockStmt
-# class BlockStmt(common.BlockStmt[Stmt], Stmt):
-#     pass
+class MaskStmt(Stmt):
+    mask: Expr
+    body: List[Stmt]
 
-# TODO(havogt) should we have an IfStmt or is masking the final solution?
-# class IfStmt(common.IfStmt[List[Stmt], Expr], Stmt):  # TODO replace List[Stmt] by BlockStmt?
-#     pass
+    @validator("mask")
+    def mask_is_boolean_field_expr(cls, v: Expr) -> Expr:
+        if v.dtype != common.DataType.BOOL:
+            raise ValueError("Mask must be a boolean expression.")
+        return v
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):
@@ -113,6 +115,7 @@ class Decl(LocNode):
 
 class FieldDecl(Decl):
     dimensions: Tuple[bool, bool, bool]
+    data_dims: Tuple[int, ...] = field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):
@@ -125,19 +128,6 @@ class LocalScalar(Decl):
 
 class Temporary(FieldDecl):
     pass
-
-
-class HorizontalExecution(LocNode):
-    body: List[Stmt]
-    mask: Optional[Expr]
-    declarations: List[LocalScalar]
-
-    @validator("mask")
-    def mask_is_boolean_field_expr(cls, v: Optional[Expr]) -> Optional[Expr]:
-        if v:
-            if v.dtype != common.DataType.BOOL:
-                raise ValueError("Mask must be a boolean expression.")
-        return v
 
 
 class Interval(LocNode):
@@ -154,6 +144,28 @@ class Interval(LocNode):
                 "Start offset must be smaller than end offset if start and end levels are equal"
             )
         return values
+
+    def covers(self, other: "Interval") -> bool:
+        outer_starts_lower = self.start < other.start or self.start == other.start
+        outer_ends_higher = self.end > other.end or self.end == other.end
+        return outer_starts_lower and outer_ends_higher
+
+    def intersects(self, other: "Interval") -> bool:
+        return not (other.start >= self.end or self.start >= other.end)
+
+    def shifted(self, offset: int) -> "Interval":
+        start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
+        end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
+        return Interval(start=start, end=end)
+
+    @classmethod
+    def full(cls):
+        return cls(start=AxisBound.start(), end=AxisBound.end())
+
+
+class HorizontalExecution(LocNode):
+    body: List[Stmt]
+    declarations: List[LocalScalar]
 
 
 class CacheDesc(LocNode):

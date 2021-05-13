@@ -27,7 +27,7 @@ class OIRToCUIR(eve.NodeTranslator):
         return cuir.Literal(value=node.value, dtype=node.dtype)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> cuir.FieldDecl:
-        return cuir.FieldDecl(name=node.name, dtype=node.dtype)
+        return cuir.FieldDecl(name=node.name, dtype=node.dtype, dimensions=node.dimensions)
 
     def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> cuir.FieldDecl:
         return cuir.ScalarDecl(name=node.name, dtype=node.dtype)
@@ -66,7 +66,9 @@ class OIRToCUIR(eve.NodeTranslator):
                 name=k_caches[node.name].name, offset=node.offset, dtype=node.dtype
             )
         accessed_fields.add(node.name)
-        return cuir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
+        return cuir.FieldAccess(
+            name=node.name, offset=node.offset, data_index=node.data_index, dtype=node.dtype
+        )
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any
@@ -80,6 +82,11 @@ class OIRToCUIR(eve.NodeTranslator):
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> cuir.AssignStmt:
         return cuir.AssignStmt(
             left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
+        )
+
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> cuir.MaskStmt:
+        return cuir.MaskStmt(
+            mask=self.visit(node.mask, **kwargs), body=self.visit(node.body, **kwargs)
         )
 
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> cuir.Cast:
@@ -103,7 +110,6 @@ class OIRToCUIR(eve.NodeTranslator):
     ) -> cuir.HorizontalExecution:
         return cuir.HorizontalExecution(
             body=self.visit(node.body, **kwargs),
-            mask=self.visit(node.mask, **kwargs),
             declarations=self.visit(node.declarations),
         )
 

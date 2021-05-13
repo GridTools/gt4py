@@ -1,10 +1,26 @@
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import abc
 import numbers
 import os
 import textwrap
 from dataclasses import dataclass, field
 from inspect import getdoc
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import jinja2
 import numpy
@@ -26,7 +42,7 @@ if TYPE_CHECKING:
 class ModuleData:
     field_info: Dict[str, Optional[FieldInfo]] = field(default_factory=dict)
     parameter_info: Dict[str, Optional[ParameterInfo]] = field(default_factory=dict)
-    unreferenced: Set[str] = field(default_factory=set)
+    unreferenced: List[str] = field(default_factory=list)
 
     @property
     def field_names(self):
@@ -60,7 +76,8 @@ def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> M
                 data.field_info[arg.name] = FieldInfo(
                     access=access,
                     boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
-                    axes=field_decl.axes,
+                    axes=tuple(field_decl.axes),
+                    data_dims=tuple(field_decl.data_dims),
                     dtype=field_decl.data_type.dtype,
                 )
             else:
@@ -73,7 +90,7 @@ def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> M
             else:
                 data.parameter_info[arg.name] = None
 
-    data.unreferenced = set(implementation_ir.unreferenced)
+    data.unreferenced = implementation_ir.unreferenced
 
     return data
 
@@ -110,28 +127,29 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     referenced_field_params = {
         param.name for param in node.params if isinstance(param, gtir.FieldDecl)
     }
-    for name in referenced_field_params:
+    for name in sorted(referenced_field_params):
         data.field_info[name] = FieldInfo(
             access=AccessKind.READ_WRITE if name in write_fields else AccessKind.READ_ONLY,
             boundary=field_extents[name].to_boundary(),
-            axes=list(dimension_flags_to_names(node.symtable_[name].dimensions).upper()),
+            axes=tuple(dimension_flags_to_names(node.symtable_[name].dimensions).upper()),
+            data_dims=tuple(node.symtable_[name].data_dims),
             dtype=numpy.dtype(node.symtable_[name].dtype.name.lower()),
         )
 
     referenced_scalar_params = set(node.param_names).difference(referenced_field_params)
-    for name in referenced_scalar_params:
+    for name in sorted(referenced_scalar_params):
         data.parameter_info[name] = ParameterInfo(
             dtype=numpy.dtype(node.symtable_[name].dtype.name.lower())
         )
 
     unref_params = get_unused_params_from_gtir(pipeline)
-    for param in unref_params:
+    for param in sorted(unref_params, key=lambda decl: decl.name):
         if isinstance(param, gtir.FieldDecl):
             data.field_info[param.name] = None
         elif isinstance(param, gtir.ScalarDecl):
             data.parameter_info[param.name] = None
 
-    data.unreferenced = {param.name for param in unref_params}
+    data.unreferenced = [*sorted(param.name for param in unref_params)]
     return data
 
 
@@ -303,7 +321,7 @@ class BaseModuleGenerator(abc.ABC):
             DomainInfo(
                 parallel_axes=tuple(ax.name for ax in parallel_axes),
                 sequential_axis=sequential_axis,
-                ndims=len(parallel_axes) + (1 if sequential_axis else 0),
+                ndim=len(parallel_axes) + (1 if sequential_axis else 0),
             )
         )
         return domain_info
@@ -462,10 +480,10 @@ class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
     def generate_implementation(self) -> str:
         source = super().generate_implementation()
         if self.builder.options.backend_opts.get("device_sync", True):
-            textwrap.dedent(
+            source += textwrap.dedent(
                 """
                     cupy.cuda.Device(0).synchronize()
-                    """
+                """
             )
         return source
 

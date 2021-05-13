@@ -37,7 +37,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     GTExtent = as_fmt("extent<{i[0]},{i[1]},{j[0]},{j[1]},{k[0]},{k[1]}>")
 
-    GTAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}>;")
+    GTAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}, {ndim}>;")
 
     GTParamList = as_mako(
         """${ '\\n'.join(accessors) }
@@ -73,7 +73,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
-    AccessorRef = as_fmt("eval({name}({offset}))")
+    AccessorRef = as_fmt("eval({name}({', '.join([offset, *data_index])}))")
 
     ScalarAccess = as_fmt("{name}")
 
@@ -190,7 +190,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     def visit_GTComputationCall(
         self, node: gtcpp.GTComputationCall, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        return self.generic_visit(node, computation_name=node.id_, **kwargs)
+        computation_name = type(node).__name__ + str(id(node))
+        return self.generic_visit(node, computation_name=computation_name, **kwargs)
 
     GTComputationCall = as_mako(
         """
@@ -205,14 +206,15 @@ class GTCppCodegen(codegen.TemplatedGenerator):
                 return multi_pass(${ ','.join(multi_stages) });
             };
 
-            run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(arguments)});
+            run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(f"std::forward<decltype({arg})>({arg})" for arg in arguments)});
         }
         %endif
         """
     )
 
     Program = as_mako(
-        """#include <gridtools/stencil/${gt_backend_t}.hpp>
+        """
+        #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
 
         namespace ${ name }_impl_{

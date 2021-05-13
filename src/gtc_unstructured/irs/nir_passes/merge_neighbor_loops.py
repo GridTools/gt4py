@@ -86,19 +86,19 @@ class MergeNeighborLoops(NodeTranslator):
         merge_groups: Dict[str, List[List[nir.NeighborLoop]]],
         **kwargs,
     ):
-        assert node.id_ in merge_groups
-        groups: List[List[nir.NeighborLoop]] = merge_groups[node.id_]
+        assert id(node) in merge_groups
+        groups: List[List[nir.NeighborLoop]] = merge_groups[id(node)]
 
         # the target neighbor loops where groups will be merged
-        heads: List[str] = [group[0].id_ for group in groups]
+        heads: List[str] = [id(group[0]) for group in groups]
 
-        # mapping from NeighborLoop.id_ to its target loop where it should be merged
+        # mapping from id(NeighborLoop) to its target loop where it should be merged
         # (only for non targets)
-        targets: Dict[str, nir.NeighborLoop] = {}
+        targets: Dict[int, nir.NeighborLoop] = {}
 
-        # mapping from NeighborLoop.id_ to the new initialization statements from the
+        # mapping from id(NeighborLoop) to the new initialization statements from the
         # merged loops to add in front of the neighbor loop
-        targets_init: Dict[str, List[nir.AssignStmt]] = {}
+        targets_init: Dict[int, List[nir.AssignStmt]] = {}
 
         stmt_declarations = node.stmt.declarations
         stmt_statements = []
@@ -107,22 +107,22 @@ class MergeNeighborLoops(NodeTranslator):
         for i, hl_stmt in enumerate(node.stmt.statements):
             # Traverse all the statements in the horizontal loop
             if isinstance(hl_stmt, nir.NeighborLoop):
-                if hl_stmt.id_ in heads:
+                if id(hl_stmt) in heads:
                     # If it is a target neighbor loop, create the dicts
-                    # from NeighborLoop.id_ to this loop, for all the other
+                    # from id(NeighborLoop) to this loop, for all the other
                     # loops that will be merged into this
-                    current_group = groups[heads.index(hl_stmt.id_)]
+                    current_group = groups[heads.index(id(hl_stmt))]
                     target_n_loop = copy.deepcopy(current_group[0])
-                    assert target_n_loop.id_ == hl_stmt.id_
+                    assert id(target_n_loop) == id(hl_stmt)
                     for other_n_loop in current_group[1:]:
-                        targets[other_n_loop.id_] = target_n_loop
+                        targets[id(other_n_loop)] = target_n_loop
                     stmt_statements.append(target_n_loop)
 
                 else:
                     # If it is a neighbor loop that should be merged,
                     # merge body into target loop
-                    assert hl_stmt.id_ in targets
-                    target_n_loop = targets[hl_stmt.id_]
+                    assert id(hl_stmt) in targets
+                    target_n_loop = targets[id(hl_stmt)]
                     other_body: nir.BlockStmt = RenameSymbol.apply(
                         hl_stmt.body, hl_stmt.name, target_n_loop.name
                     )
@@ -133,11 +133,11 @@ class MergeNeighborLoops(NodeTranslator):
                 isinstance(hl_stmt, nir.AssignStmt)
                 and i < num_stmts - 1
                 and isinstance(node.stmt.statements[i + 1], nir.NeighborLoop)
-                and node.stmt.statements[i + 1].id_ in targets
+                and id(node.stmt.statements[i + 1]) in targets
             ):
                 # If it is the initialization statement of a reduce neighbor loop,
                 # save it for later in the list of inits associated to the target loop
-                targets_init.setdefault(targets[node.stmt.statements[i + 1].id_].id_, []).append(
+                targets_init.setdefault(id(targets[id(node.stmt.statements[i + 1])]), []).append(
                     hl_stmt
                 )
 
@@ -149,9 +149,9 @@ class MergeNeighborLoops(NodeTranslator):
         # in front of the target neighbor loop in which they were merged into.
         i = 0
         while i < len(stmt_statements):
-            if stmt_statements[i].id_ in targets_init:
-                offset = len(targets_init[stmt_statements[i].id_]) + 1
-                for init_stmt in targets_init[stmt_statements[i].id_]:
+            if id(stmt_statements[i]) in targets_init:
+                offset = len(targets_init[id(stmt_statements[i])]) + 1
+                for init_stmt in targets_init[id(stmt_statements[i])]:
                     stmt_statements.insert(i, init_stmt)
                 i += offset
             else:
@@ -165,7 +165,7 @@ class MergeNeighborLoops(NodeTranslator):
 
 def find_and_merge_neighbor_loops(root: Node):
     horizontal_loops = eve.iter_tree(root).if_isinstance(nir.HorizontalLoop).to_list()
-    merge_groups = {h_loop.id_: _find_merge_candidates(h_loop) for h_loop in horizontal_loops}
+    merge_groups = {id(h_loop): _find_merge_candidates(h_loop) for h_loop in horizontal_loops}
     new_root = MergeNeighborLoops.apply(root, merge_groups)
 
     return new_root

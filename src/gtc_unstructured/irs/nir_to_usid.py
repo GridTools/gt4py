@@ -237,7 +237,7 @@ class NirToUsid(eve.NodeTranslator):
             usid.SidComposite(name=name, entries=entries) for name, entries in composites.items()
         ]
 
-        kernel_name = "kernel_" + node.id_
+        kernel_name = "kernel_" + str(id(node))
         debug(primary_composite)
         debug(secondary_composites)
         kernel = usid.Kernel(

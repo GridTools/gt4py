@@ -50,6 +50,11 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
         .getattr("name")
         .to_set()
     )
+    ndims = dict(
+        node.iter_tree()
+        .if_isinstance(gtcpp.AccessorRef)
+        .map(lambda accessor: (accessor.name, 3 + len(accessor.data_index)))
+    )
 
     return [
         gtcpp.GTAccessor(
@@ -57,6 +62,7 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
             id=i,
             intent=gtcpp.Intent.INOUT if name in inout_fields else gtcpp.Intent.IN,
             extent=extent,
+            ndim=ndims[name],
         )
         for i, (name, extent) in enumerate(extents.items())
     ]
@@ -121,7 +127,12 @@ class OIRToGTCpp(eve.NodeTranslator):
         return node
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> gtcpp.AccessorRef:
-        return gtcpp.AccessorRef(name=node.name, offset=self.visit(node.offset), dtype=node.dtype)
+        return gtcpp.AccessorRef(
+            name=node.name,
+            offset=self.visit(node.offset),
+            data_index=node.data_index,
+            dtype=node.dtype,
+        )
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, **kwargs: Any
@@ -161,6 +172,12 @@ class OIRToGTCpp(eve.NodeTranslator):
             left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> gtcpp.IfStmt:
+        return gtcpp.IfStmt(
+            cond=self.visit(node.mask, **kwargs),
+            true_branch=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),
+        )
+
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
@@ -171,13 +188,9 @@ class OIRToGTCpp(eve.NodeTranslator):
         **kwargs: Any,
     ) -> gtcpp.GTStage:
         assert "stencil_symtable" in kwargs
-        body = self.visit(node.body, **kwargs)
-        mask = self.visit(node.mask, **kwargs)
-        if mask:
-            body = [gtcpp.IfStmt(cond=mask, true_branch=gtcpp.BlockStmt(body=body))]
         apply_method = gtcpp.GTApplyMethod(
             interval=self.visit(interval, **kwargs),
-            body=body,
+            body=self.visit(node.body, **kwargs),
             local_variables=self.visit(node.declarations, **kwargs),
         )
         accessors = _extract_accessors(apply_method)
@@ -191,15 +204,16 @@ class OIRToGTCpp(eve.NodeTranslator):
             }
         )
 
+        functor_name = type(node).__name__ + str(id(node))
         prog_ctx.add_functor(
             gtcpp.GTFunctor(
-                name=node.id_,
+                name=functor_name,
                 applies=[apply_method],
                 param_list=gtcpp.GTParamList(accessors=accessors),
             )
         ),
 
-        return gtcpp.GTStage(functor=node.id_, args=stage_args)
+        return gtcpp.GTStage(functor=functor_name, args=stage_args)
 
     def visit_VerticalLoop(
         self,
@@ -233,7 +247,9 @@ class OIRToGTCpp(eve.NodeTranslator):
         return gtcpp.KCache(name=node.name, fill=node.fill, flush=node.flush, loc=node.loc)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> gtcpp.FieldDecl:
-        return gtcpp.FieldDecl(name=node.name, dtype=node.dtype, dimensions=node.dimensions)
+        return gtcpp.FieldDecl(
+            name=node.name, dtype=node.dtype, dimensions=node.dimensions, data_dims=node.data_dims
+        )
 
     def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> gtcpp.GlobalParamDecl:
         return gtcpp.GlobalParamDecl(name=node.name, dtype=node.dtype)
