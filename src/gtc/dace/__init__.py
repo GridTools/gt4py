@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 #
-# GT4Py - GridTools4Py - GridTools for Python
+# GTC Toolchain - GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
-# This file is part the GT4Py project and the GridTools framework.
+# This file is part of the GT4Py project and the GridTools framework.
 # GT4Py is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or any later
@@ -14,15 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from .cuda.backend import GTCCudaBackend
-from .dace.backend import GTCDaceBackend
-from .gtcpp.backend import GTCGTCpuIfirstBackend, GTCGTCpuKfirstBackend, GTCGTGpuBackend
+# need to import expansion so that implementation of expansion is registered
+from .expansion import NaiveHorizontalExecutionExpansion, NaiveVerticalLoopExpansion  # noqa: F401
+from .nodes import VerticalLoopLibraryNode
 
 
-__all__ = [
-    "GTCCudaBackend",
-    "GTCDaceBackend",
-    "GTCGTCpuIfirstBackend",
-    "GTCGTCpuKfirstBackend",
-    "GTCGTGpuBackend",
-]
+__all__ = ["VerticalLoopLibraryNode"]
