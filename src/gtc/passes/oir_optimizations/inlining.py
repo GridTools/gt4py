@@ -31,7 +31,7 @@ class MaskInlining(NodeTranslator):
     ) -> oir.Expr:
         if node.name in masks_to_inline:
             return cp.deepcopy(masks_to_inline[node.name])
-        return self.generic_visit(node, **kwargs)
+        return self.generic_visit(node, masks_to_inline=masks_to_inline, **kwargs)
 
     def visit_AssignStmt(
         self,
