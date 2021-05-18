@@ -44,6 +44,7 @@ from gtc.passes.oir_optimizations.caches import (
     PruneKCacheFlushes,
 )
 from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
+from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
@@ -82,6 +83,7 @@ class GTCCudaExtGenerator:
     def _optimize_oir(self, oir):
         oir = optimize_horizontal_executions(oir, GraphMerging)
         oir = AdjacentLoopMerging().visit(oir)
+        oir = MaskInlining().visit(oir)
         oir = LocalTemporariesToScalars().visit(oir)
         oir = WriteBeforeReadTemporariesToScalars().visit(oir)
         oir = OnTheFlyMerging().visit(oir)
