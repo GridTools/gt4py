@@ -48,6 +48,11 @@ class OIRToCUIR(eve.NodeTranslator):
     def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> cuir.Temporary:
         return cuir.Temporary(name=node.name, dtype=node.dtype)
 
+    def visit_VariableOffset(
+        self, node: common.VariableOffset, **kwargs: Any
+    ) -> cuir.VariableOffset:
+        return cuir.VariableOffset(i=node.i, j=node.j, k=self.visit(node.k, **kwargs))
+
     def visit_FieldAccess(
         self,
         node: oir.FieldAccess,

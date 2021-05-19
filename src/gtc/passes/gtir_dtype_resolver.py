@@ -90,9 +90,18 @@ class _GTIRPropagateDtypeToAccess(NodeTranslator):
     ) -> gtir.FieldAccess:
         return gtir.FieldAccess(
             name=node.name,
-            offset=node.offset,
+            offset=self.visit(node.offset, symtable=symtable),
             data_index=node.data_index,
             dtype=symtable[node.name].dtype,
+        )
+
+    def visit_VariableOffset(
+        self, node: gtir.VariableOffset, *, symtable: Dict[str, Any], **kwargs: Any
+    ) -> gtir.VariableOffset:
+        return gtir.VariableOffset(
+            i=node.i,
+            j=node.j,
+            k=self.visit(node.k, symtable=symtable)
         )
 
     def visit_ScalarAccess(

@@ -49,7 +49,7 @@ class AccessCollector(NodeVisitor):
         accesses.append(
             Access(
                 field=node.name,
-                offset=(node.offset.i, node.offset.j, node.offset.k),
+                offset=node.offset.to_tuple(),
                 is_write=is_write,
             )
         )

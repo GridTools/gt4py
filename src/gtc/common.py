@@ -302,6 +302,16 @@ class CartesianOffset(Node):
     def to_dict(self) -> Dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.k}
 
+    def to_tuple(self) -> Tuple[int, int, int]:
+        return (self.i, self.j, self.k)
+
+
+class VariableOffset(CartesianOffset):
+    k: Expr
+
+    def to_tuple(self) -> Tuple[int, int, int]:
+        return (self.i, self.j, 0)
+
 
 class ScalarAccess(LocNode):
     name: SymbolRef

@@ -112,6 +112,10 @@ class Cast(common.Cast[Expr], Expr):  # type: ignore
     pass
 
 
+class VariableOffset(common.VariableOffset):
+    pass
+
+
 class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 

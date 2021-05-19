@@ -48,13 +48,6 @@ from gtc import common, gtir
 from gtc.common import ExprKind
 
 
-def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:
-    i = offset["I"] if "I" in offset else 0
-    j = offset["J"] if "J" in offset else 0
-    k = offset["K"] if "K" in offset else 0
-    return gtir.CartesianOffset(i=i, j=j, k=k)
-
-
 class DefIRToGTIR(IRNodeVisitor):
 
     GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER = {
@@ -228,9 +221,9 @@ class DefIRToGTIR(IRNodeVisitor):
             args=[self.visit(arg) for arg in node.args],
         )
 
-    def visit_FieldRef(self, node: FieldRef):
+    def visit_FieldRef(self, node: FieldRef) -> Union[gtir.FieldIfStmt, gtir.ScalarIfStmt]:
         return gtir.FieldAccess(
-            name=node.name, offset=transform_offset(node.offset), data_index=node.data_index
+            name=node.name, offset=self._transform_offset(node.offset), data_index=node.data_index
         )
 
     def visit_If(self, node: If):
@@ -285,3 +278,11 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_VarDecl(self, node: VarDecl):
         # datatype conversion works via same ID
         return gtir.ScalarDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
+
+    def _transform_offset(self, offset: Dict[str, int]) -> gtir.CartesianOffset:
+        i = offset["I"] if "I" in offset else 0
+        j = offset["J"] if "J" in offset else 0
+        k = offset["K"] if "K" in offset else 0
+        if isinstance(k, int):
+            return gtir.CartesianOffset(i=i, j=j, k=k)
+        return gtir.VariableOffset(i=i, j=j, k=self.visit(k))
