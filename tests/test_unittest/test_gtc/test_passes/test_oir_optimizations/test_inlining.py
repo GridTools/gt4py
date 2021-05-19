@@ -14,12 +14,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.gtscript import Field, stencil
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.definitions import BuildOptions
 from gt4py.frontend.gtscript_frontend import GTScriptFrontend
+from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gtc.gtir_to_oir import GTIRToOIR
-from gtc.oir import FieldAccess, BinaryOp
+from gtc.oir import BinaryOp, FieldAccess
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 
@@ -37,9 +37,7 @@ def test_mask_inlining():
                 a4_2 = 6.0 * a4_1 - 3.0 * a4_2
 
     build_options = BuildOptions(name=stencil_def.__name__, module=__name__)
-    definition_ir = GTScriptFrontend.generate(
-        stencil_def, options=build_options, externals={}
-    )
+    definition_ir = GTScriptFrontend.generate(stencil_def, options=build_options, externals={})
     gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
 
     pre_oir = GTIRToOIR().visit(gtir)

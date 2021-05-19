@@ -108,7 +108,5 @@ class MaskInlining(NodeTranslator):
                 node.vertical_loops,
                 masks_to_inline=masks_to_inline,
             ),
-            declarations=[
-                d for d in node.declarations if d.name not in masks_to_inline
-            ],
+            declarations=[d for d in node.declarations if d.name not in masks_to_inline],
         )
