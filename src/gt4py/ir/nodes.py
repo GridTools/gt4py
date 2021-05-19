@@ -721,7 +721,7 @@ class AxisInterval(Node):
 # Issue: depends on AxisInterval which is defined below
 @attribclass
 class For(Statement):
-    target = attribute(of=VarDecl)
+    target = attribute(of=str)  # attribute(of=VarDecl)
     start = attribute(of=UnionOf[AxisBound, Expr])
     stop = attribute(of=UnionOf[AxisBound, Expr])
     body = attribute(of=BlockStmt)

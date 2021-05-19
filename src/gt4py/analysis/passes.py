@@ -319,6 +319,12 @@ class InitInfoPass(TransformPass):
 
             return result
 
+        def visit_For(self, node: gt_ir.For):
+            body_stmt_info = self.visit(node.body)
+            inputs = self._merge_extents(list(body_stmt_info.inputs.items()))
+            result = StatementInfo(self.data.id_generator.new, node, inputs, body_stmt_info.outputs)
+            return result
+
         def visit_BlockStmt(self, node: gt_ir.BlockStmt):
             inputs = {}
             outputs = set()
@@ -1277,6 +1283,11 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             self.visit(node.value, **kwargs)
             if node.target.name in self.demotables:
                 self.demotables[node.target.name] = kwargs["stage_name"]
+
+        def visit_For(self, node: gt_ir.For, **kwargs: Any) -> None:
+            assert node.target in self.demotables
+            self.demotables[node.target] = kwargs["stage_name"]
+            self.visit(node.body, **kwargs)
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> None:
             field_name = node.name

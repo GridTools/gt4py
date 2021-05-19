@@ -113,8 +113,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
             range_args = loop_bounds
         else:
             range_args = [loop_bounds[1] + " -1", loop_bounds[0] + " -1", "-1"]
-
-        if iteration_order != gt_ir.IterationOrder.PARALLEL:
+        if self.block_info.explicit_K_loop:
             range_expr = "range({args})".format(args=", ".join(a for a in range_args))
             seq_axis = self.impl_node.domain.sequential_axis.name
             source_lines.append(
@@ -178,7 +177,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
         assert node.name in self.block_info.accessors
 
-        is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
+        is_parallel = (
+            not self.block_info.explicit_K_loop
+        )  # self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
         extent = self.block_info.extent
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
@@ -307,6 +308,36 @@ class NumPySourceGenerator(PythonSourceGenerator):
         )
 
         return source
+
+    def _visit_ForLoopBound(self, node: gt_ir.AxisBound, axis: int) -> str:
+        if node.level == gt_ir.LevelMarker.START:
+            return str(node.offset)
+        else:
+            return f"domain[{axis}] + {node.offset}"
+
+    def visit_For(self, node: gt_ir.For) -> List[str]:
+        self.block_info.explicit_K_loop = True
+        k_ax = gt_ir.Domain.LatLonGrid().sequential_axis
+        k_index = gt_ir.Domain.LatLonGrid().index(k_ax)
+
+        sources = []
+        if isinstance(node.start, gt_ir.AxisBound):
+            start = self._visit_ForLoopBound(node.start, k_index)
+        else:
+            start = self.visit(node.start)
+        if isinstance(node.stop, gt_ir.AxisBound):
+            stop = self._visit_ForLoopBound(node.stop, k_index)
+        else:
+            stop = self.visit(node.stop)
+
+        sources.append(f"for {node.target} in range({start},{stop}):")
+        for stmt in node.body.stmts:
+            sources.append(self.indent_size * " " + self.visit(stmt))
+        return sources
+
+    def visit_AxisIndex(self, node: gt_ir.AxisIndex):
+        assert node.name == "K"
+        return node.name
 
     def _visit_branch_stmt(self, stmt: gt_ir.Statement) -> List[str]:
         sources = []

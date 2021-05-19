@@ -941,7 +941,7 @@ class IRMaker(ast.NodeVisitor):
         elif self._is_parameter(symbol):
             result = gt_ir.VarRef(name=symbol)
         elif self._is_local_symbol(symbol):
-            assert False  # result = gt_ir.VarRef(name=symbol)
+            result = gt_ir.VarRef(name=symbol)
         else:
             assert False, "Missing '{}' symbol definition".format(symbol)
 
@@ -951,7 +951,7 @@ class IRMaker(ast.NodeVisitor):
         index = self.visit(node.value)
         return index
 
-    def visit_For(self, node: ast.For) -> gt_ir.For:
+    def visit_For(self, node: ast.For) -> list:
         assert isinstance(node.iter, ast.Call)
         assert (
             isinstance(node.iter.func, ast.Name)
@@ -973,7 +973,14 @@ class IRMaker(ast.NodeVisitor):
 
         assert isinstance(node.target, ast.Name)
         target_name = node.target.id
-
+        target_decl = gt_ir.FieldDecl(
+            name=target_name,
+            data_type=gt_ir.DataType.INT32,
+            axes=gt_ir.Domain.LatLonGrid().axes_names,
+            # layout_id=t.id,
+            is_api=False,
+        )
+        self.fields[target_name] = target_decl
         stmts = []
         for stmt in node.body:
             ret = self.visit(stmt)
@@ -982,14 +989,15 @@ class IRMaker(ast.NodeVisitor):
             else:
                 stmts.append(ret)
 
-        return gt_ir.For(
-            target=gt_ir.VarDecl(
-                name=target_name, data_type=gt_ir.DataType.INT32, length=1, is_api=False
+        return [
+            target_decl,
+            gt_ir.For(
+                target=target_name,
+                start=gt_ir_args[0],
+                stop=gt_ir_args[1],
+                body=gt_ir.BlockStmt(stmts=stmts),
             ),
-            start=gt_ir_args[0],
-            stop=gt_ir_args[1],
-            body=gt_ir.BlockStmt(stmts=stmts),
-        )
+        ]
 
     def _eval_index(self, node: ast.Subscript) -> Optional[List[int]]:
         invalid_target = GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
@@ -1399,6 +1407,10 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
                     self.local_symbols.add(name_node.id)
                 else:
                     raise invalid_target
+
+    def visit_For(self, node: ast.For):
+        assert isinstance(node.target, ast.Name)
+        self.local_symbols.add(node.target.id)
 
 
 class GTScriptParser(ast.NodeVisitor):
