@@ -14,28 +14,42 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc import oir
+from gt4py.gtscript import Field, stencil
+from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
+from gt4py.definitions import BuildOptions
+from gt4py.frontend.gtscript_frontend import GTScriptFrontend
+from gtc.gtir_to_oir import GTIRToOIR
+from gtc.oir import FieldAccess, BinaryOp
+from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.inlining import MaskInlining
-
-from ...oir_utils import (
-    AssignStmtFactory,
-    HorizontalExecutionFactory,
-    StencilFactory,
-    TemporaryFactory,
-)
 
 
 def test_mask_inlining():
-    testee = StencilFactory(
-        vertical_loops__0__sections__0__horizontal_executions__0__body=[
-            AssignStmtFactory(left__name="tmp"),
-            AssignStmtFactory(right__name="tmp"),
-        ],
-        declarations=[TemporaryFactory(name="tmp")],
+    def stencil_def(
+        extm: Field[float],
+        a4_1: Field[float],
+        a4_2: Field[float],
+    ):
+        with computation(PARALLEL), interval(...):
+            if extm != 0.0 and (extm[0, 0, -1] != 0.0 or extm[0, 0, 1] != 0.0):
+                a4_2 = a4_1
+            else:
+                a4_2 = 6.0 * a4_1 - 3.0 * a4_2
+
+    build_options = BuildOptions(name=stencil_def.__name__, module=__name__)
+    definition_ir = GTScriptFrontend.generate(
+        stencil_def, options=build_options, externals={}
     )
-    transformed = MaskInlining().visit(testee)
-    hexec = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
-    # assert isinstance(hexec.body[0].left, oir.ScalarAccess)
-    # assert isinstance(hexec.body[1].right, oir.ScalarAccess)
-    # assert not transformed.declarations
-    # assert len(hexec.declarations) == 1
+    gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+
+    pre_oir = GTIRToOIR().visit(gtir)
+    pre_section = pre_oir.vertical_loops[0].sections[0]
+    assert pre_section.horizontal_executions[0].body
+    pre_mask = pre_section.horizontal_executions[1].body[0].mask
+    assert isinstance(pre_mask, FieldAccess)
+
+    post_oir = MaskInlining().visit(pre_oir)
+    post_section = post_oir.vertical_loops[0].sections[0]
+    assert not post_section.horizontal_executions[0].body
+    post_mask = post_section.horizontal_executions[1].body[0].mask
+    assert isinstance(post_mask, BinaryOp)

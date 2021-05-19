@@ -25,7 +25,6 @@ class MaskInlining(NodeTranslator):
     def visit_FieldAccess(
         self,
         node: oir.FieldAccess,
-        *,
         masks_to_inline: Dict[str, Optional[oir.Expr]],
         **kwargs: Any,
     ) -> oir.Expr:
@@ -62,15 +61,6 @@ class MaskInlining(NodeTranslator):
         masks_to_inline: Dict[str, Optional[oir.Expr]],
         **kwargs: Any,
     ) -> oir.HorizontalExecution:
-        local_masks_to_inline = (
-            node.iter_tree()
-            .if_isinstance(oir.FieldAccess)
-            .getattr("name")
-            .filter(lambda name: name.startswith("mask_"))
-            .to_set()
-        )
-        for mask_to_inline in local_masks_to_inline:
-            masks_to_inline[mask_to_inline] = None
         return oir.HorizontalExecution(
             body=[
                 stmt
@@ -90,6 +80,15 @@ class MaskInlining(NodeTranslator):
         masks_to_inline: Dict[str, Optional[oir.Expr]],
         **kwargs: Any,
     ) -> oir.VerticalLoop:
+        local_masks_to_inline = (
+            node.iter_tree()
+            .if_isinstance(oir.FieldAccess)
+            .getattr("name")
+            .filter(lambda name: name.startswith("mask_"))
+            .to_set()
+        )
+        for mask_to_inline in local_masks_to_inline:
+            masks_to_inline[mask_to_inline] = None
         return oir.VerticalLoop(
             loop_order=node.loop_order,
             sections=self.visit(
