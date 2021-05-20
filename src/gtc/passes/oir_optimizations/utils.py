@@ -46,13 +46,14 @@ class AccessCollector(NodeVisitor):
         is_write: bool,
         **kwargs: Any,
     ) -> None:
-        accesses.append(
-            Access(
-                field=node.name,
-                offset=node.offset.to_tuple(),
-                is_write=is_write,
+        if isinstance(node.offset.k, int):
+            accesses.append(
+                Access(
+                    field=node.name,
+                    offset=(node.offset.i, node.offset.j, node.offset.k),
+                    is_write=is_write,
+                )
             )
-        )
 
     def visit_AssignStmt(
         self,
