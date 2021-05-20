@@ -44,6 +44,7 @@
     }
     - stencil_unique_name: str
     - tmp_fields: [{ "name": str, "dtype": str }]
+    - positional_computation: bool
 #}
 
 {%- if gt_backend == "cuda" %}
@@ -273,7 +274,11 @@ void run(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- endfor %}
 
     // Run computation and wait for the synchronization of the output stores
+{%- if positional_computation %}
+    computation_t gt_computation = gt::make_positional_computation<backend_t>(
+{% else %}
     computation_t gt_computation = gt::make_computation<backend_t>(
+{% endif -%}
         make_grid(domain),
 
 {%- set multi_comma = joiner(",") %}

@@ -228,6 +228,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         self.stage_symbols = None
         self.apply_block_symbols = None
         self.declared_symbols = None
+        self.requires_positional = False
 
     def __call__(self, impl_node: gt_ir.StencilImplementation) -> Dict[str, Dict[str, str]]:
         assert isinstance(impl_node, gt_ir.StencilImplementation)
@@ -379,6 +380,39 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         body_sources.append("}")
         return body_sources
 
+    def _visit_ForLoopBound(self, node: gt_ir.AxisBound, axis):
+        if node.level == gt_ir.LevelMarker.END:
+            raise NotImplementedError("More coffee needed")
+        else:
+            return str(node.offset)
+
+    def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
+        self.requires_positional = True
+        return f"eval.{node.name.lower()}()"
+
+    def visit_For(self, node: gt_ir.For) -> str:
+        body_sources = gt_text.TextBlock()
+
+        k_ax = gt_ir.Domain.LatLonGrid().sequential_axis
+        k_index = gt_ir.Domain.LatLonGrid().index(k_ax)
+
+        sources = []
+        if isinstance(node.start, gt_ir.AxisBound):
+            start = self._visit_ForLoopBound(node.start, k_index)
+        else:
+            start = self.visit(node.start)
+        if isinstance(node.stop, gt_ir.AxisBound):
+            stop = self._visit_ForLoopBound(node.stop, k_index)
+        else:
+            stop = self.visit(node.stop)
+
+        body_sources.append(f"for ({node.target}={start}; {node.target}<{stop}; {node.target}++){{")
+        for stmt in node.body.stmts:
+            body_sources.append(self.visit(stmt))
+        body_sources.append("}")
+
+        return body_sources.text
+
     def visit_AxisBound(self, node: gt_ir.AxisBound) -> Tuple[int, int]:
         if node.level == gt_ir.LevelMarker.START:
             level = 0
@@ -523,6 +557,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             stage_functors=stage_functors,
             stencil_unique_name=self.class_name,
             tmp_fields=tmp_fields,
+            positional_computation=self.requires_positional,
         )
 
         sources: Dict[str, Dict[str, str]] = {"computation": {}, "bindings": {}}
