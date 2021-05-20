@@ -308,9 +308,10 @@ class CartesianOffset(Node):
 
 class VariableOffset(CartesianOffset):
     k: Expr
+    LARGE_NUM: ClassVar[int] = 10000
 
     def to_tuple(self) -> Tuple[int, int, int]:
-        return (self.i, self.j, 0)
+        return (self.i, self.j, self.LARGE_NUM)
 
 
 class ScalarAccess(LocNode):
