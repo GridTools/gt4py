@@ -44,9 +44,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    FieldAccess = as_mako(
-        "*${f'sid::multi_shifted<tag::{name}>({name}, m_strides, {offset})' if offset else name}"
-    )
+    FieldAccess = as_mako("${name}(${offset}${''.join(f', {i}_c' for i in _this_node.data_index)})")
 
     def visit_IJCacheAccess(
         self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
@@ -69,9 +67,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     ScalarAccess = as_fmt("{name}")
 
-    CartesianOffset = as_mako(
-        "${'' if _this_node.i == _this_node.j == _this_node.k == 0 else f'offsets({i}_c, {j}_c, {k}_c)'}"
-    )
+    CartesianOffset = as_fmt("{i}_c, {j}_c, {k}_c")
 
     BinaryOp = as_fmt("({left} {op} {right})")
 
@@ -249,7 +245,11 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
         return self.generic_visit(
             node,
-            fields=node.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set(),
+            fields=node.iter_tree()
+            .if_isinstance(cuir.FieldAccess)
+            .getattr("name", "data_index")
+            .map(lambda x: (x[0], len(x[1])))
+            .to_set(),
             k_cache_decls=node.k_caches,
             order=node.loop_order,
             symtable=symtable,
@@ -288,8 +288,25 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                            _k_block);
                 % endif
 
-                % for field in fields:
-                    auto &&${field} = device::at_key<tag::${field}>(_ptr);
+                % for field, data_dims in fields:
+                    const auto ${field} = [&](auto i, auto j, auto k
+                        % for i in range(data_dims):
+                            , auto dim_${i + 3}
+                        % endfor
+                        ) -> auto&& {
+                        return *sid::multi_shifted<tag::${field}>(
+                            device::at_key<tag::${field}>(_ptr),
+                            m_strides,
+                            tuple_util::device::make<hymap::keys<dim::i, dim::j, dim::k
+                            % for i in range(data_dims):
+                                , integral_constant<int, ${i + 3}>
+                            % endfor
+                            >::template values>(i, j, k
+                            % for i in range(data_dims):
+                                , dim_${i + 3}
+                            % endfor
+                            ));
+                    };
                 % endfor
 
                 % for ij_cache in ij_caches:
@@ -377,7 +394,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         #include <gridtools/stencil/common/dim.hpp>
         #include <gridtools/stencil/common/extent.hpp>
         #include <gridtools/stencil/gpu/launch_kernel.hpp>
-        #include <gridtools/stencil/gpu/shared_allocator.hpp>
         #include <gridtools/stencil/gpu/tmp_storage_sid.hpp>
 
         namespace ${name}_impl_{
@@ -394,11 +410,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 return sid::block(std::move(storage),
                     tuple_util::make<hymap::keys<dim::i, dim::j>::values>(
                         i_block_size_t(), j_block_size_t()));
-            }
-
-            template <class I, class J, class K>
-            GT_FUNCTION_DEVICE auto offsets(I i, J j, K k) {
-                return tuple_util::device::make<hymap::keys<dim::i, dim::j, dim::k>::template values>(i, j, k);
             }
 
             namespace tag {
@@ -435,7 +446,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                     % for kernel in _this_node.kernels:
 
                         // kernel ${id(kernel)}
-                        gpu_backend::shared_allocator shared_alloc_${id(kernel)};
 
                         % for vertical_loop in kernel.vertical_loops:
                             // vertical loop ${id(vertical_loop)}
@@ -487,7 +497,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                                 1,
                             %endif
                             kernel_${id(kernel)},
-                            shared_alloc_${id(kernel)}.size());
+                            0);
                     % endfor
 
                     GT_CUDA_CHECK(cudaDeviceSynchronize());

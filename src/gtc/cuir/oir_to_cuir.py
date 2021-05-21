@@ -27,7 +27,9 @@ class OIRToCUIR(eve.NodeTranslator):
         return cuir.Literal(value=node.value, dtype=node.dtype)
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> cuir.FieldDecl:
-        return cuir.FieldDecl(name=node.name, dtype=node.dtype, dimensions=node.dimensions)
+        return cuir.FieldDecl(
+            name=node.name, dtype=node.dtype, dimensions=node.dimensions, data_dims=node.data_dims
+        )
 
     def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> cuir.FieldDecl:
         return cuir.ScalarDecl(name=node.name, dtype=node.dtype)
@@ -66,7 +68,9 @@ class OIRToCUIR(eve.NodeTranslator):
                 name=k_caches[node.name].name, offset=node.offset, dtype=node.dtype
             )
         accessed_fields.add(node.name)
-        return cuir.FieldAccess(name=node.name, offset=node.offset, dtype=node.dtype)
+        return cuir.FieldAccess(
+            name=node.name, offset=node.offset, data_index=node.data_index, dtype=node.dtype
+        )
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any
