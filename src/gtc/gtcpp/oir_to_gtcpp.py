@@ -22,7 +22,7 @@ from devtools import debug  # noqa: F401
 
 import eve
 from gtc import common, oir
-from gtc.common import CartesianOffset
+from gtc.common import CartesianOffset, VariableOffset
 from gtc.gtcpp import gtcpp
 
 
@@ -41,6 +41,10 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
             as_dict=True,
         )
     )
+    # TODO(eddied): Find a more functional way to achieve this.
+    for extent in extents.values():
+        if extent.k[1] == VariableOffset.LARGE_NUM:
+            extent.k = (-extent.k[1], extent.k[1])
 
     inout_fields: Set[str] = (
         node.iter_tree()
