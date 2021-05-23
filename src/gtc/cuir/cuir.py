@@ -181,7 +181,7 @@ class KExtent(LocNode):
 
     @classmethod
     def from_offset(cls, offset: CartesianOffset) -> "KExtent":
-        k_offset = offset.to_tuple()[2]
+        k_offset = offset.to_dict()["k"]
         return cls(k=(k_offset, k_offset))
 
     def union(*extents: "KExtent") -> "KExtent":

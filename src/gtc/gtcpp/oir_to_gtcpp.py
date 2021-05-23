@@ -31,20 +31,21 @@ from gtc.gtcpp import gtcpp
 
 
 def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
-    extents = (
+    def _check_extent(extent):
+        if extent[1].k[1] == VariableOffset.LARGE_NUM:
+            extent[1].k = (-extent[1].k[1], extent[1].k[1])
+        return extent
+
+    extents = dict(
         node.iter_tree()
         .if_isinstance(gtcpp.AccessorRef)
         .reduceby(
             (lambda extent, accessor_ref: extent + accessor_ref.offset),
             "name",
             init=gtcpp.GTExtent.zero(),
-            as_dict=True,
         )
+        .map(_check_extent)
     )
-    # TODO(eddied): Find a more functional way to achieve this.
-    for extent in extents.values():
-        if extent.k[1] == VariableOffset.LARGE_NUM:
-            extent.k = (-extent.k[1], extent.k[1])
 
     inout_fields: Set[str] = (
         node.iter_tree()

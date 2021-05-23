@@ -162,11 +162,11 @@ class GTExtent(LocNode):
 
     def __add__(self, offset: common.CartesianOffset) -> "GTExtent":
         if isinstance(offset, common.CartesianOffset):
-            offsets = offset.to_tuple()
+            offsets = offset.to_dict()
             return GTExtent(
-                i=(min(self.i[0], offsets[0]), max(self.i[1], offsets[0])),
-                j=(min(self.j[0], offsets[1]), max(self.j[1], offsets[1])),
-                k=(min(self.k[0], offsets[2]), max(self.k[1], offsets[2])),
+                i=(min(self.i[0], offsets["i"]), max(self.i[1], offsets["i"])),
+                j=(min(self.j[0], offsets["j"]), max(self.j[1], offsets["j"])),
+                k=(min(self.k[0], offsets["k"]), max(self.k[1], offsets["k"])),
             )
         else:
             raise AssertionError("Can only add CartesianOffsets")
