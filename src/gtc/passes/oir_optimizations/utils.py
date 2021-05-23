@@ -21,8 +21,7 @@ from typing import Any, Callable, Dict, List, Set, Tuple
 from eve import NodeVisitor
 from eve.concepts import TreeNode
 from eve.utils import XIterator, xiter
-from gtc import common
-from gtc import oir
+from gtc import common, oir
 
 
 @dataclass(frozen=True)
