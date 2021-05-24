@@ -14,33 +14,73 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gt4py.definitions import BuildOptions
-from gt4py.frontend.gtscript_frontend import GTScriptFrontend
-from gt4py.gtscript import PARALLEL, Field, computation, interval
-from gtc.gtir_to_oir import GTIRToOIR
+from gtc.common import ComparisonOperator, DataType, LoopOrder
 from gtc.oir import BinaryOp, FieldAccess
-from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.inlining import MaskInlining
+
+from ...oir_utils import (
+    AssignStmtFactory,
+    FieldAccessFactory,
+    FieldDeclFactory,
+    HorizontalExecutionFactory,
+    LiteralFactory,
+    MaskStmtFactory,
+    StencilFactory,
+    TemporaryFactory,
+    VerticalLoopFactory,
+    VerticalLoopSectionFactory,
+)
 
 
 def test_mask_inlining():
-    def stencil_def(
-        extm: Field[float],
-        a4_1: Field[float],
-        a4_2: Field[float],
-    ):
-        with computation(PARALLEL), interval(...):
-            if extm != 0.0 and (extm[0, 0, -1] != 0.0 or extm[0, 0, 1] != 0.0):
-                a4_2 = a4_1
-            else:
-                a4_2 = 6.0 * a4_1 - 3.0 * a4_2
+    out_name = "out_f"
+    in_name = "in_f"
+    cond_name = "cond_f"
+    mask_name = "mask_f"
 
-    build_options = BuildOptions(name=stencil_def.__name__, module=__name__)
-    definition_ir = GTScriptFrontend.generate(stencil_def, options=build_options, externals={})
-    gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+    pre_oir = StencilFactory(
+        params=[
+            FieldDeclFactory(name=out_name),
+            FieldDeclFactory(name=in_name),
+            FieldDeclFactory(name=cond_name),
+        ],
+        vertical_loops__0=VerticalLoopFactory(
+            loop_order=LoopOrder.PARALLEL,
+            sections=[
+                VerticalLoopSectionFactory(
+                    horizontal_executions=[
+                        HorizontalExecutionFactory(
+                            body=[
+                                AssignStmtFactory(
+                                    left__name=mask_name,
+                                    left__dtype=DataType.BOOL,
+                                    right=BinaryOp(
+                                        op=ComparisonOperator.EQ,
+                                        left=FieldAccessFactory(name=cond_name),
+                                        right=LiteralFactory(value="0"),
+                                    ),
+                                )
+                            ]
+                        ),
+                        HorizontalExecutionFactory(
+                            body=[
+                                MaskStmtFactory(
+                                    mask=FieldAccessFactory(name=mask_name, dtype=DataType.BOOL),
+                                    body=[
+                                        AssignStmtFactory(left__name=out_name, right__name=in_name)
+                                    ],
+                                )
+                            ]
+                        ),
+                    ]
+                )
+            ],
+        ),
+        declarations=[
+            TemporaryFactory(name=mask_name, dtype=DataType.BOOL),
+        ],
+    )
 
-    pre_oir = GTIRToOIR().visit(gtir)
     pre_section = pre_oir.vertical_loops[0].sections[0]
     assert pre_section.horizontal_executions[0].body
     pre_mask = pre_section.horizontal_executions[1].body[0].mask
