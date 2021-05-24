@@ -77,7 +77,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     FieldAccessorRef = as_fmt("eval({name}({', '.join([offset, *data_index])}))")
 
-    ParamAccessorRef = as_fmt("eval({name})")
+    ParamAccessorRef = as_fmt("eval({name}())")
 
     LocalAccess = as_fmt("{name}")
 
