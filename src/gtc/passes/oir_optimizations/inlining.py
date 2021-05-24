@@ -17,8 +17,33 @@
 import copy as cp
 from typing import Any, Dict, Optional
 
-from eve import NodeTranslator
+from eve import NodeTranslator, NodeVisitor
 from gtc import oir
+
+
+class MaskDetection(NodeVisitor):
+    def visit_AssignStmt(
+        self,
+        node: oir.AssignStmt,
+        masks_to_inline: Dict[str, Optional[oir.Expr]],
+    ) -> None:
+        if node.left.name in masks_to_inline:
+            masks_to_inline[node.left.name] = node.right
+
+    def visit_VerticalLoop(
+        self,
+        node: oir.VerticalLoop,
+        masks_to_inline: Dict[str, Optional[oir.Expr]],
+        **kwargs: Any,
+    ) -> oir.VerticalLoop:
+        for mask_statement in node.iter_tree().if_isinstance(oir.MaskStmt):
+            masks_to_inline[mask_statement.mask.name] = None
+        self.visit(node.sections, masks_to_inline=masks_to_inline, **kwargs)
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> Dict[str, oir.Expr]:
+        masks_to_inline: Dict[str, oir.Expr] = {}
+        self.visit(node.vertical_loops, masks_to_inline=masks_to_inline, **kwargs)
+        return masks_to_inline
 
 
 class MaskInlining(NodeTranslator):
@@ -38,9 +63,7 @@ class MaskInlining(NodeTranslator):
         masks_to_inline: Dict[str, Optional[oir.Expr]],
         **kwargs: Any,
     ) -> oir.AssignStmt:
-        target_name = node.left.name
-        if target_name in masks_to_inline:
-            masks_to_inline[target_name] = node.right
+        if node.left.name in masks_to_inline:
             return None
         return self.generic_visit(node, masks_to_inline=masks_to_inline, **kwargs)
 
@@ -80,15 +103,6 @@ class MaskInlining(NodeTranslator):
         masks_to_inline: Dict[str, Optional[oir.Expr]],
         **kwargs: Any,
     ) -> oir.VerticalLoop:
-        local_masks_to_inline = (
-            node.iter_tree()
-            .if_isinstance(oir.FieldAccess)
-            .getattr("name")
-            .filter(lambda name: name.startswith("mask_"))
-            .to_set()
-        )
-        for mask_to_inline in local_masks_to_inline:
-            masks_to_inline[mask_to_inline] = None
         return oir.VerticalLoop(
             loop_order=node.loop_order,
             sections=self.visit(
@@ -96,17 +110,18 @@ class MaskInlining(NodeTranslator):
                 masks_to_inline=masks_to_inline,
                 **kwargs,
             ),
-            caches=[c for c in node.caches if c.name not in masks_to_inline],
+            caches=[cache for cache in node.caches if cache.name not in masks_to_inline],
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        masks_to_inline = dict(kwargs.get("masks_to_inline", {}))
+        masks_to_inline = MaskDetection().visit(node)
         return oir.Stencil(
             name=node.name,
             params=node.params,
             vertical_loops=self.visit(
                 node.vertical_loops,
                 masks_to_inline=masks_to_inline,
+                **kwargs,
             ),
-            declarations=[d for d in node.declarations if d.name not in masks_to_inline],
+            declarations=[decl for decl in node.declarations if decl.name not in masks_to_inline],
         )
