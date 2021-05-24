@@ -59,10 +59,11 @@ class AccessCollector(NodeVisitor):
         is_write: bool,
         **kwargs: Any,
     ) -> None:
+        offsets = node.to_dict()
         accesses.append(
             Access(
                 field=field_name,
-                offset=(node.i, node.j, node.k),
+                offset=(offsets["i"], offsets["j"], offsets["k"]),
                 is_write=is_write,
             )
         )

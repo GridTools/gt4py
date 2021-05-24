@@ -120,16 +120,15 @@ class DefIRToGTIR(IRNodeVisitor):
         self._scalar_params = None
 
     def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
-        field_params = {f.name: self.visit(f) for f in node.api_fields}
-        scalar_params = {p.name: self.visit(p) for p in node.parameters}
-        self._scalar_params = scalar_params
+        self._field_params = {f.name: self.visit(f) for f in node.api_fields}
+        self._scalar_params = {p.name: self.visit(p) for p in node.parameters}
         vertical_loops = [self.visit(c) for c in node.computations]
         return gtir.Stencil(
             name=node.name.split(".")[
                 -1
             ],  # TODO probably definition IR should not contain '.' in the name
             params=[
-                self.visit(f, all_params={**field_params, **scalar_params})
+                self.visit(f, all_params={**self._field_params, **self._scalar_params})
                 for f in node.api_signature
             ],
             vertical_loops=vertical_loops,
@@ -223,7 +222,10 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_FieldRef(self, node: FieldRef) -> gtir.FieldAccess:
         return gtir.FieldAccess(
-            name=node.name, offset=self._transform_offset(node.offset), data_index=node.data_index
+            name=node.name,
+            offset=self._transform_offset(node.offset),
+            data_index=node.data_index,
+            dtype=self._field_params[node.name].dtype if node.name in self._field_params else None,
         )
 
     def visit_If(self, node: If) -> Union[gtir.FieldIfStmt, gtir.ScalarIfStmt]:
