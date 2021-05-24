@@ -46,20 +46,23 @@ class AccessCollector(NodeVisitor):
         is_write: bool,
         **kwargs: Any,
     ) -> None:
-        self.visit(node.offset, accesses=accesses, is_write=is_write, **kwargs)
+        self.visit(
+            node.offset, accesses=accesses, field_name=node.name, is_write=is_write, **kwargs
+        )
 
     def visit_CartesianOffset(
         self,
         node: common.CartesianOffset,
         *,
         accesses: List[Access],
+        field_name: str,
         is_write: bool,
         **kwargs: Any,
     ) -> None:
         accesses.append(
             Access(
-                field=node.name,
-                offset=(node.offset.i, node.offset.j, node.offset.k),
+                field=field_name,
+                offset=(node.i, node.j, node.k),
                 is_write=is_write,
             )
         )
