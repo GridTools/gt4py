@@ -360,7 +360,7 @@ class TestIntervalSyntax:
         for kstart in (3, gtscript.K[3]):
             # An implementation quirk allows us to use gtscript.K[3] here,
             # although it is not great form to do so, since two-argument syntax
-            # should not use AxisOffsets.
+            # should not use AxisIndex objects.
             externals = {"kstart": kstart}
             stencil_id, def_ir = compile_definition(
                 definition_func, "test_externals", module, externals=externals

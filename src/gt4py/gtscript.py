@@ -352,13 +352,13 @@ def lazy_stencil(
     return _decorator(definition)
 
 
-class AxisOffset:
+class AxisIndex:
     def __init__(self, axis: str, offset: int):
         self.axis = axis
         self.offset = offset
 
     def __repr__(self):
-        return f"AxisOffset(axis={self.axis}, offset={self.offset})"
+        return f"AxisIndex(axis={self.axis}, offset={self.offset})"
 
     def __str__(self):
         return f"{self.axis}[{self.offset}]"
@@ -397,7 +397,7 @@ class Axis:
         if isinstance(interval, slice):
             return AxisInterval(self.name, interval.start, interval.stop)
         elif isinstance(interval, int):
-            return AxisOffset(self.name, interval)
+            return AxisIndex(self.name, interval)
         else:
             raise TypeError("Unrecognized index type")
 
