@@ -24,12 +24,20 @@ from gtc.gtcpp import gtcpp
 from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
 
 
-class AccessorRefFactory(factory.Factory):
+class FieldAccessorRefFactory(factory.Factory):
     class Meta:
-        model = gtcpp.AccessorRef
+        model = gtcpp.FieldAccessorRef
 
-    name = identifier(gtcpp.AccessorRef)
+    name = identifier(gtcpp.FieldAccessorRef)
     offset = factory.SubFactory(CartesianOffsetFactory)
+    dtype = common.DataType.FLOAT32
+
+
+class ParamAccessorRefFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.ParamAccessorRef
+
+    name = identifier(gtcpp.ParamAccessorRef)
     dtype = common.DataType.FLOAT32
 
 
@@ -37,8 +45,8 @@ class AssignStmtFactory(factory.Factory):
     class Meta:
         model = gtcpp.AssignStmt
 
-    left = factory.SubFactory(AccessorRefFactory)
-    right = factory.SubFactory(AccessorRefFactory)
+    left = factory.SubFactory(FieldAccessorRefFactory)
+    right = factory.SubFactory(FieldAccessorRefFactory)
 
 
 class GTLevelFactory(factory.Factory):
@@ -99,14 +107,22 @@ class GTExtentFactory(factory.Factory):
     k = (0, 0)
 
 
-class GTAccessorFactory(factory.Factory):
+class GTFieldAccessorFactory(factory.Factory):
     class Meta:
-        model = gtcpp.GTAccessor
+        model = gtcpp.GTFieldAccessor
 
-    name = identifier(gtcpp.GTAccessor)
+    name = identifier(gtcpp.GTFieldAccessor)
     id = factory.Sequence(lambda i: i)  # noqa: A003
     intent = gtcpp.Intent.INOUT
     extent = factory.SubFactory(GTExtentFactory)
+
+
+class GTParamAccessorFactory(factory.Factory):
+    class Meta:
+        model = gtcpp.GTParamAccessor
+
+    name = identifier(gtcpp.GTParamAccessor)
+    id = factory.Sequence(lambda i: i)  # noqa: A003
 
 
 class GTParamListFactory(factory.Factory):
@@ -123,7 +139,7 @@ class GTFunctorFactory(factory.Factory):
     name = identifier(gtcpp.GTFunctor)
     applies = factory.List([factory.SubFactory(GTApplyMethodFactory)])
     param_list = undefined_symbol_list(
-        lambda name: GTAccessorFactory(name=name),
+        lambda name: GTFieldAccessorFactory(name=name),
         "applies",
         list_creator=lambda l: GTParamListFactory(accessors=l),
     )

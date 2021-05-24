@@ -37,7 +37,9 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     GTExtent = as_fmt("extent<{i[0]},{i[1]},{j[0]},{j[1]},{k[0]},{k[1]}>")
 
-    GTAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}, {ndim}>;")
+    GTFieldAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}, {ndim}>;")
+
+    GTParamAccessor = as_fmt("using {name} = in_accessor<{id}>;")
 
     GTParamList = as_mako(
         """${ '\\n'.join(accessors) }
@@ -73,9 +75,11 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
-    AccessorRef = as_fmt("eval({name}({', '.join([offset, *data_index])}))")
+    FieldAccessorRef = as_fmt("eval({name}({', '.join([offset, *data_index])}))")
 
-    ScalarAccess = as_fmt("{name}")
+    ParamAccessorRef = as_fmt("eval({name})")
+
+    LocalAccess = as_fmt("{name}")
 
     CartesianOffset = as_fmt("{i}, {j}, {k}")
 

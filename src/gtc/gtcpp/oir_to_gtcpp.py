@@ -22,7 +22,6 @@ from devtools import debug  # noqa: F401
 
 import eve
 from gtc import common, oir
-from gtc.common import CartesianOffset
 from gtc.gtcpp import gtcpp
 
 
@@ -33,7 +32,7 @@ from gtc.gtcpp import gtcpp
 def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
     extents = (
         node.iter_tree()
-        .if_isinstance(gtcpp.AccessorRef)
+        .if_isinstance(gtcpp.FieldAccessorRef)
         .reduceby(
             (lambda extent, accessor_ref: extent + accessor_ref.offset),
             "name",
@@ -46,18 +45,20 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
         node.iter_tree()
         .if_isinstance(gtcpp.AssignStmt)
         .getattr("left")
-        .if_isinstance(gtcpp.AccessorRef)
+        .if_isinstance(gtcpp.FieldAccessorRef)
         .getattr("name")
         .to_set()
     )
     ndims = dict(
         node.iter_tree()
-        .if_isinstance(gtcpp.AccessorRef)
+        .if_isinstance(gtcpp.FieldAccessorRef)
         .map(lambda accessor: (accessor.name, 3 + len(accessor.data_index)))
     )
 
-    return [
-        gtcpp.GTAccessor(
+    params = node.iter_tree().if_isinstance(gtcpp.ParamAccessorRef).getattr("name")
+
+    field_accessors = [
+        gtcpp.GTFieldAccessor(
             name=name,
             id=i,
             intent=gtcpp.Intent.INOUT if name in inout_fields else gtcpp.Intent.IN,
@@ -66,6 +67,14 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
         )
         for i, (name, extent) in enumerate(extents.items())
     ]
+
+    num_field_accessors = len(field_accessors)
+    param_accessors = [
+        gtcpp.GTParamAccessor(name=name, id=num_field_accessors + i)
+        for i, name in enumerate(params)
+    ]
+
+    return field_accessors + param_accessors
 
 
 class OIRToGTCpp(eve.NodeTranslator):
@@ -126,7 +135,7 @@ class OIRToGTCpp(eve.NodeTranslator):
     ) -> common.CartesianOffset:
         return node
 
-    def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> gtcpp.AccessorRef:
+    def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> gtcpp.FieldAccessorRef:
         return gtcpp.AccessorRef(
             name=node.name,
             offset=self.visit(node.offset),
@@ -136,16 +145,14 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, **kwargs: Any
-    ) -> Union[gtcpp.AccessorRef, gtcpp.ScalarAccess]:
+    ) -> Union[gtcpp.ParamAccessorRef, gtcpp.LocalAccess]:
         assert "stencil_symtable" in kwargs
         if node.name in kwargs["stencil_symtable"]:
             symbol = kwargs["stencil_symtable"][node.name]
             if isinstance(symbol, oir.ScalarDecl):
-                return gtcpp.AccessorRef(
-                    name=symbol.name, offset=CartesianOffset.zero(), dtype=symbol.dtype
-                )
+                return gtcpp.ParamAccessorRef(name=symbol.name, dtype=symbol.dtype)
             assert isinstance(symbol, oir.LocalScalar)
-        return gtcpp.ScalarAccess(name=node.name, dtype=node.dtype)
+        return gtcpp.LocalAccess(name=node.name, dtype=node.dtype)
 
     def visit_AxisBound(
         self, node: oir.AxisBound, *, is_start: bool, **kwargs: Any
