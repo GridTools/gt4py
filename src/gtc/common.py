@@ -310,6 +310,12 @@ class VariableOffset(CartesianOffset):
     def to_dict(self) -> Dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.LARGE_NUM}
 
+    @validator("k")
+    def integer_k_offset(cls, k: Expr) -> Expr:
+        if k and k.dtype not in (DataType.INT8, DataType.INT16, DataType.INT32, DataType.INT64):
+            raise ValueError("Variable k-offset must have an integer type")
+        return k
+
 
 class ScalarAccess(LocNode):
     name: SymbolRef

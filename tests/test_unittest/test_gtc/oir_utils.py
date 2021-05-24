@@ -48,6 +48,15 @@ class LiteralFactory(factory.Factory):
     dtype = common.DataType.FLOAT32
 
 
+class VariableOffsetFactory(factory.Factory):
+    class Meta:
+        model = common.VariableOffset
+
+    i = 0
+    j = 0
+    k = factory.SubFactory(FieldAccessFactory)
+
+
 class AssignStmtFactory(factory.Factory):
     class Meta:
         model = oir.AssignStmt
