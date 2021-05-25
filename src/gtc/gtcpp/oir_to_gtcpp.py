@@ -55,7 +55,9 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
         .map(lambda accessor: (accessor.name, 3 + len(accessor.data_index)))
     )
 
-    params = node.iter_tree().if_isinstance(gtcpp.ParamAccessorRef).getattr("name")
+    params = sorted(
+        list(node.iter_tree().if_isinstance(gtcpp.ParamAccessorRef).getattr("name").to_set())
+    )
 
     field_accessors = [
         gtcpp.GTFieldAccessor(
