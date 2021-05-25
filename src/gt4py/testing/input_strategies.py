@@ -15,10 +15,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import collections
+import dataclasses
 import enum
 import itertools
 import numbers
-from dataclasses import dataclass
 from typing import Any, Callable, Optional, Sequence, Tuple
 
 import hypothesis.strategies as hyp_st
@@ -36,15 +36,16 @@ class SymbolKind(enum.Enum):
     FIELD = 5
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class _SymbolStrategy:
     kind: SymbolKind
     boundary: Optional[Sequence[Tuple[int, int]]]
     axes: Optional[str]
+    data_dims: Optional[Tuple[int, ...]]
     value_st_factory: Callable[..., hyp_st.SearchStrategy]
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class _SymbolValueTuple:
     kind: str
     boundary: Sequence[Tuple[int, int]]
@@ -76,6 +77,7 @@ def global_name(*, singleton=None, symbol=None, one_of=None, in_range=None):
             kind=SymbolKind.GLOBAL_STRATEGY,
             boundary=None,
             axes=None,
+            data_dims=None,
             value_st_factory=lambda dt: scalar_value_st(dt, in_range[0], in_range[1]),
         )
 
@@ -83,17 +85,19 @@ def global_name(*, singleton=None, symbol=None, one_of=None, in_range=None):
         raise AssertionError("Missing value descriptor")
 
 
-def field(*, in_range, boundary=None, axes=None, extent=None):
+def field(*, in_range, boundary=None, axes=None, data_dims=None, extent=None):
     """Define a *field* symbol."""
     assert (boundary is not None or extent is not None) and len(in_range) == 2
     boundary = boundary or [(abs(e[0]), abs(e[1])) for e in extent]
     extent = extent or [(-b[0], b[1]) for b in boundary]
     assert all((-b[0], b[1]) == (e[0], e[1]) for b, e in zip(boundary, extent))
     assert all((b[0] >= 0 and b[1]) >= 0 for b in boundary)
+
     return _SymbolStrategy(
         kind=SymbolKind.FIELD,
         boundary=boundary,
         axes=axes,
+        data_dims=data_dims or tuple(),
         value_st_factory=lambda dt: scalar_value_st(dt, in_range[0], in_range[1]),
     )
 
@@ -106,6 +110,7 @@ def parameter(*, one_of=None, in_range=None):
             kind=SymbolKind.PARAMETER,
             boundary=None,
             axes=None,
+            data_dims=None,
             value_st_factory=lambda dt: one_of_values_st(one_of).map(dt),
         )
 
@@ -115,6 +120,7 @@ def parameter(*, one_of=None, in_range=None):
             kind=SymbolKind.PARAMETER,
             boundary=None,
             axes=None,
+            data_dims=None,
             value_st_factory=lambda dt: scalar_value_st(dt, in_range[0], in_range[1]),
         )
 
@@ -125,7 +131,11 @@ def parameter(*, one_of=None, in_range=None):
 def none():
     """Define the symbol ``None``."""
     return _SymbolStrategy(
-        kind=SymbolKind.NONE, boundary=None, axes=None, value_st_factory=lambda dt: hyp_st.none()
+        kind=SymbolKind.NONE,
+        boundary=None,
+        axes=None,
+        data_dims=None,
+        value_st_factory=lambda dt: hyp_st.none(),
     )
 
 

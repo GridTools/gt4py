@@ -25,7 +25,7 @@ import gt4py.ir as gt_ir
 import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
-from gt4py.gtscript import __INLINED, PARALLEL, computation, interval
+from gt4py.gtscript import __INLINED, PARALLEL, compile_assert, computation, interval
 
 from ..definitions import id_version
 
@@ -603,7 +603,7 @@ class TestCompileTimeAssertions:
             from __externals__ import EXTERNAL
 
             with computation(PARALLEL), interval(...):
-                assert __INLINED(EXTERNAL < 1)
+                compile_assert(EXTERNAL < 1)
                 inout_field = inout_field[0, 0, 0] + EXTERNAL
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
@@ -612,22 +612,10 @@ class TestCompileTimeAssertions:
         with pytest.raises(gt_frontend.GTScriptAssertionError, match="Assertion failed"):
             compile_definition(definition, "test_assert_nomsg", module, externals={"EXTERNAL": 1})
 
-    def test_msg(self, id_version):
-        def definition(inout_field: gtscript.Field[float]):
-            from __externals__ import EXTERNAL
-
-            with computation(PARALLEL), interval(...):
-                assert __INLINED(EXTERNAL < 1), "An error occurred"
-                inout_field = inout_field[0, 0, 0] + EXTERNAL
-
-        module = f"TestCompileTimeAssertions_test_module_{id_version}"
-        with pytest.raises(gt_frontend.GTScriptAssertionError, match="An error occurred"):
-            compile_definition(definition, "test_assert_msg", module, externals={"EXTERNAL": 1})
-
     def test_nested_attribute(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
             with computation(PARALLEL), interval(...):
-                assert __INLINED(GLOBAL_VERY_NESTED_CONSTANTS.nested.A > 1), "An error occurred"
+                compile_assert(GLOBAL_VERY_NESTED_CONSTANTS.nested.A > 1)
                 inout_field = inout_field[0, 0, 0] + GLOBAL_VERY_NESTED_CONSTANTS.nested.A
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
@@ -636,7 +624,7 @@ class TestCompileTimeAssertions:
     def test_inside_func(self, id_version):
         @gtscript.function
         def assert_in_func(field):
-            assert __INLINED(GLOBAL_CONSTANT < 2), "An error occurred"
+            compile_assert(GLOBAL_CONSTANT < 2)
             return field[0, 0, 0] + GLOBAL_CONSTANT
 
         def definition(inout_field: gtscript.Field[float]):
@@ -649,12 +637,12 @@ class TestCompileTimeAssertions:
     def test_runtime_error(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
             with computation(PARALLEL), interval(...):
-                assert __INLINED(inout_field[0, 0, 0] < 0), "An error occurred"
+                compile_assert(inout_field[0, 0, 0] < 0)
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Evaluation of compile-time assertion condition failed",
+            match="Evaluation of compile_assert condition failed",
         ):
             compile_definition(definition, "test_definition_error", module)
 
@@ -662,9 +650,9 @@ class TestCompileTimeAssertions:
 class TestReducedDimensions:
     def test_syntax(self, id_version):
         def definition_func(
-            field_3d: gtscript.Field[np.float_, gtscript.IJK],
-            field_2d: gtscript.Field[np.float_, gtscript.IJ],
-            field_1d: gtscript.Field[np.float_, gtscript.K],
+            field_3d: gtscript.Field[gtscript.IJK, np.float_],
+            field_2d: gtscript.Field[gtscript.IJ, np.float_],
+            field_1d: gtscript.Field[gtscript.K, np.float_],
         ):
             with computation(FORWARD), interval(...):
                 field_2d = field_1d[1]
@@ -698,15 +686,15 @@ class TestReducedDimensions:
         externals = {}
 
         def definition(
-            field_in: gtscript.Field[np.float_, gtscript.K],
-            field_out: gtscript.Field[np.float_, gtscript.IJK],
+            field_in: gtscript.Field[gtscript.K, np.float_],
+            field_out: gtscript.Field[gtscript.IJK, np.float_],
         ):
             with computation(PARALLEL), interval(...):
                 field_out = field_in[0, 0, 1]
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Incorrect offset .* to field .* with dimensions .*",
+            match="Incorrect offset specification detected. Found .* but the field has dimensions .*",
         ):
             compile_definition(definition, "test_error_syntax", module, externals=externals)
 
@@ -715,8 +703,8 @@ class TestReducedDimensions:
         externals = {}
 
         def definition(
-            field_in: gtscript.Field[np.float_, gtscript.IJK],
-            field_out: gtscript.Field[np.float_, gtscript.K],
+            field_in: gtscript.Field[gtscript.IJK, np.float_],
+            field_out: gtscript.Field[gtscript.K, np.float_],
         ):
             with computation(PARALLEL), interval(...):
                 field_out = field_in[0, 0, 0]
@@ -726,6 +714,24 @@ class TestReducedDimensions:
             match="Cannot assign to field .* as all parallel axes .* are not present",
         ):
             compile_definition(definition, "test_error_annotation", module, externals=externals)
+
+
+class TestDataDimensions:
+    def test_syntax(self, id_version):
+        module = f"TestDataDimensions_test_syntax_{id_version}"
+        externals = {}
+
+        def definition(
+            field_in: gtscript.Field[np.float_],
+            another_field: gtscript.Field[(np.float_, 3)],
+            field_out: gtscript.Field[gtscript.IJK, (np.float_, (3,))],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out[0, 0, 0][0] = field_in
+                field_out[0, 0, 0][1] = field_in
+                field_out[0, 0, 0][2] = field_in[0, 0, 0] + another_field[0, 0, 0][2]
+
+        compile_definition(definition, "test_syntax", module, externals=externals)
 
 
 class TestImports:
@@ -788,7 +794,7 @@ class TestImports:
 class TestDTypes:
     @pytest.mark.parametrize(
         "id_case,test_dtype",
-        list(enumerate([bool, np.bool, int, np.int32, np.int64, float, np.float32, np.float64])),
+        list(enumerate([bool, np.bool_, int, np.int32, np.int64, float, np.float32, np.float64])),
     )
     def test_all_legal_dtypes(self, id_case, test_dtype, id_version):
         def definition_func(
