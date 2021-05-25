@@ -76,10 +76,11 @@ builtins = {
     "__INLINED",
     "compile_assert",
     "index",
+    "range",
     *MATH_BUILTINS,
 }
 
-IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert", "index", "interval"}
+IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert", "index", "range"}
 
 __all__ = list(builtins) + ["function", "stencil", "lazy_stencil"]
 
@@ -556,6 +557,11 @@ def interval(*args):
 
 def index(axis):
     """Current axis index."""
+    pass
+
+
+def range(start, stop):
+    """Range from start to stop"""
     pass
 
 

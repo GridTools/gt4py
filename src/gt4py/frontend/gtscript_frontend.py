@@ -955,7 +955,7 @@ class IRMaker(ast.NodeVisitor):
         assert isinstance(node.iter, ast.Call)
         assert (
             isinstance(node.iter.func, ast.Name)
-            and node.iter.func.id == "interval"
+            and node.iter.func.id == "range"
             and len(node.iter.args) == 2
         )
 
