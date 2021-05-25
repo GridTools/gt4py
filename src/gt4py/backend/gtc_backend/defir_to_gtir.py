@@ -117,7 +117,8 @@ class DefIRToGTIR(IRNodeVisitor):
         return cls().visit(root)
 
     def __init__(self):
-        self._scalar_params = None
+        self._field_params = {}
+        self._scalar_params = {}
 
     def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
         self._field_params = {f.name: self.visit(f) for f in node.api_fields}
