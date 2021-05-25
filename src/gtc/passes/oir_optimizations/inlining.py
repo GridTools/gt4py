@@ -21,7 +21,9 @@ from eve import NodeTranslator, NodeVisitor
 from gtc import oir
 
 
-class MaskDetection(NodeVisitor):
+class MaskCollector(NodeVisitor):
+    """Collects the boolean expressions definine mask statements that are boolean fields."""
+
     def visit_AssignStmt(
         self,
         node: oir.AssignStmt,
@@ -30,23 +32,24 @@ class MaskDetection(NodeVisitor):
         if node.left.name in masks_to_inline:
             masks_to_inline[node.left.name] = node.right
 
-    def visit_VerticalLoop(
-        self,
-        node: oir.VerticalLoop,
-        masks_to_inline: Dict[str, Optional[oir.Expr]],
-        **kwargs: Any,
-    ) -> oir.VerticalLoop:
-        for mask_statement in node.iter_tree().if_isinstance(oir.MaskStmt):
-            masks_to_inline[mask_statement.mask.name] = None
-        self.visit(node.sections, masks_to_inline=masks_to_inline, **kwargs)
-
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> Dict[str, oir.Expr]:
-        masks_to_inline: Dict[str, oir.Expr] = {}
+        masks_to_inline: Dict[str, oir.Expr] = {
+            mask_stmt.mask.name: None
+            for mask_stmt in node.iter_tree()
+            .if_isinstance(oir.MaskStmt)
+            .filter(lambda stmt: isinstance(stmt.mask, oir.FieldAccess))
+        }
         self.visit(node.vertical_loops, masks_to_inline=masks_to_inline, **kwargs)
         return masks_to_inline
 
 
 class MaskInlining(NodeTranslator):
+    """Inlines mask statements that are boolean mask fields with the expression that generates the field.
+
+    Preconditions: Mask statements exist as boolean temporary field accesses.
+    Postcondition: Mask statements exist as boolean expressions.
+    """
+
     def visit_FieldAccess(
         self,
         node: oir.FieldAccess,
@@ -114,7 +117,7 @@ class MaskInlining(NodeTranslator):
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        masks_to_inline = MaskDetection().visit(node)
+        masks_to_inline = MaskCollector().visit(node)
         return oir.Stencil(
             name=node.name,
             params=node.params,
