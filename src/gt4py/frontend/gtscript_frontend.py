@@ -968,6 +968,14 @@ class IRMaker(ast.NodeVisitor):
                     gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0))
                 elif arg.value == 0:
                     gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0))
+                elif arg.value > 0:
+                    gt_ir_args.append(
+                        gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=arg.value)
+                    )
+                else:  # TODO: do we want to support this?
+                    gt_ir_args.append(
+                        gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=abs(arg.value))
+                    )
             else:
                 gt_ir_args.append(self.visit(arg))
 
@@ -1192,7 +1200,7 @@ class IRMaker(ast.NodeVisitor):
         if isinstance(node.func, ast.Name) and node.func.id == "index":
             assert len(node.args) == 1
             axis_name = node.args[0].id
-            return gt_ir.AxisIndex(name=axis_name)
+            return gt_ir.AxisIndex(name=axis_name, data_type=gt_ir.DataType.INT32)
         else:
             native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 

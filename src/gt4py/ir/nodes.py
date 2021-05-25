@@ -406,6 +406,7 @@ class Cast(Expr):
 @attribclass
 class AxisIndex(Expr):
     name = attribute(of=str)
+    data_type = attribute(of=DataType)
 
 
 @enum.unique
