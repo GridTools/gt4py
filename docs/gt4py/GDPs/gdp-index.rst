@@ -24,6 +24,7 @@ Open GDPs (under consideration)
    :maxdepth: 1
 
    gdp-0002-regions
+   gdp-0003-variable-offsets-loops
 
 Provisional GDPs (provisionally accepted; interface may change)
 ---------------------------------------------------------------
