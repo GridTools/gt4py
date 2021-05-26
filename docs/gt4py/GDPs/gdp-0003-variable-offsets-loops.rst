@@ -18,9 +18,14 @@ This GDP extends this capability by additionally supporting a limited set of loo
 
 In order to make the control flow usable, this also extends the field offset to allow the vertical to be a general expression evaluating to an integer type, that could involve fields or parameters.
 
+In order to index vertical loops, we also give access to the current vertical index only in the context of defining loop bounds.
+
 
 Motivation and Scope
 --------------------
+
+While loops
++++++++++++
 
 The FV3 dynamical core has a step in which it remaps a Lagrangian coordinate back to a regular grid.
 This portion of the code reduces sets of adjacent levels, accumulating the results of a field at these levels into an output field.
@@ -28,7 +33,14 @@ Since there are one or more levels being summed, this is a natural fit for a whi
 
 .. code-block:: python
 
-    def vertical_reduction(heights: Field[float], qin: Field[float], qout: Field[float], k_index: Field[IJ, int], next_height: Field[IJ, float], dz: float):
+    def vertical_reduction(
+      heights: Field[float],
+      qin: Field[float],
+      qout: Field[float],
+      k_index: Field[IJ, int],
+      next_height: Field[IJ, float],
+      dz: float
+    ):
       with computation(FORWARD), interval(...):
         next_height += dz
         while current_height < next_height:
@@ -41,9 +53,40 @@ An integer field is used to track the vertical index, which is increased by one 
 
 The variable vertical offset is treated as a regular offset, so cannot be given to field accesses on the left side of assignments.
 
+There is another case where loops are necessary from the top or bottom to the current vertical level.
+In this case, using a ``while`` loop, one would write:
+
+.. code-block:: python
+    # k_index: Field[IJ, float] argument
+    while k_index < index(K):
+      # ...
+      k_index += 1
+
+However exposing ``index(K)`` as a magical built-in gtscript function to get the current index in general increases the scope of the DSL too far.
+Instead, we propose adding a ``for`` loop concept that can use ``index(K)`` only within the scope of defining the loop bounds, and only on the vertical index.
+
 For loops
 +++++++++
 
+The syntax for for loops follows that from Python: there is a target and an iterator to loop over.
+The iterator can one of:
+
+1. The slice of the ``K`` axis array -- or the entire array to iterate over the entire vertical.
+2. A ``range`` call, which can have arguments that are literal integers, or expressions involving ``index(K)`` -- the current vertical index.
+
+To motivate this, here are two different syntaxes for a vertical ``scan`` operation:
+
+.. code-block::
+    with computation(FORWARD), interval(...):
+      for index in range(0, index(K)):
+        field += other[0, 0, index]
+
+The alternative using the ``K`` axis object is:
+
+.. code-block::
+    with computation(FORWARD), interval(...):
+      for index in K[:index(K)]:
+        field += other[0, 0, index]
 
 
 Usage and Impact
