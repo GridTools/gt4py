@@ -110,12 +110,17 @@ class DebugSourceGenerator(PythonSourceGenerator):
     # ---- Visitor handlers ----
     def visit_FieldRef(self, node: gt_ir.FieldRef):
         assert node.name in self.block_info.accessors
+
         index = []
         for ax in self.impl_node.fields[node.name].axes:
-            offset = "{:+d}".format(node.offset[ax]) if ax in node.offset else ""
+            if isinstance(node.offset[ax], gt_ir.Expr):
+                offset = f"+ {self.visit(node.offset[ax])}"
+            else:
+                offset = "{:+d}".format(node.offset[ax])
             index.append("{ax}{offset}".format(ax=ax, offset=offset))
 
         index_str = f"({index[0]},)" if len(index) == 1 else ", ".join(index)
+
         source = "{name}{marker}[{index}]".format(
             marker=self.origin_marker, name=node.name, index=index_str
         )
@@ -164,6 +169,14 @@ class DebugSourceGenerator(PythonSourceGenerator):
                 body_sources.extend(self.visit(stmt))
             body_sources.dedent()
         return ["".join([str(item) for item in line]) for line in body_sources.lines]
+
+    def visit_While(self, node: gt_ir.While):
+        body_sources = gt_text.TextBlock()
+        body_sources.append("while {condition}:".format(condition=self.visit(node.condition)))
+        body_sources.indent()
+        for stmt in node.body.stmts:
+            body_sources.extend(self.visit(stmt))
+        return body_sources.text
 
 
 class DebugModuleGenerator(BaseModuleGenerator):

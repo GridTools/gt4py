@@ -84,13 +84,14 @@ storing a reference to the piece of source code which originated the node.
     Axis(name: str)
 
     Domain(parallel_axes: List[Axis], [sequential_axis: Axis])
-        # LatLonGrids -> parallel_axes: ["I", "J], sequential_axis: "K"
+        # LatLonGrids -> parallel_axes: ["I", "J"], sequential_axis: "K"
 
     Literal     = ScalarLiteral(value: Any (should match DataType), data_type: DataType)
                 | BuiltinLiteral(value: Builtin)
 
     Ref         = VarRef(name: str, [index: int])
-                | FieldRef(name: str, offset: Dict[str, int])
+                | FieldRef(name: str, offset: Dict[str, int | Expr])
+                # Horizontal indices must be ints
 
     NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
@@ -112,6 +113,7 @@ storing a reference to the piece of source code which originated the node.
     Statement   = Decl
                 | Assign(target: Ref, value: Expr)
                 | If(condition: expr, main_body: BlockStmt, else_body: BlockStmt)
+                | While(condition: expr, body: BlockStmt)
                 | BlockStmt
 
     AxisBound(level: LevelMarker | VarRef, offset: int)
@@ -384,7 +386,7 @@ class VarRef(Ref):
 @attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, int])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
     data_index = attribute(of=ListOf[int], factory=list)
     loc = attribute(of=Location, optional=True)
 
@@ -642,6 +644,13 @@ class If(Statement):
     condition = attribute(of=Expr)
     main_body = attribute(of=BlockStmt)
     else_body = attribute(of=BlockStmt, optional=True)
+    loc = attribute(of=Location, optional=True)
+
+
+@attribclass
+class While(Statement):
+    condition = attribute(of=Expr)
+    body = attribute(of=BlockStmt)
     loc = attribute(of=Location, optional=True)
 
 
@@ -998,3 +1007,27 @@ class IRNodeDumper(IRNodeMapper):
 
 
 dump_ir = IRNodeDumper.apply
+
+
+def filter_nodes_dfs(root_node, node_type):
+    """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
+    stack = [root_node]
+    while stack:
+        curr = stack.pop()
+        assert isinstance(curr, Node)
+
+        for node_class in curr.__class__.__mro__:
+            if node_class is node_type:
+                yield curr
+
+        for key, value in iter_attributes(curr):
+            if isinstance(curr, collections.abc.Iterable):
+                if isinstance(curr, collections.abc.Mapping):
+                    children = curr.values()
+                else:
+                    children = curr
+            else:
+                children = gt_utils.listify(value)
+
+            for value in filter(lambda x: isinstance(x, Node), children):
+                stack.append(value)

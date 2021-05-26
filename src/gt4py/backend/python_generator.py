@@ -16,6 +16,8 @@
 
 import types
 
+from numpy import set_printoptions
+
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.utils import text as gt_text
@@ -259,6 +261,12 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         interval_definition = self.visit(node.interval)
         self.block_info.interval = interval_definition
         self.block_info.symbols = node.local_symbols
+
+        self.block_info.variable_koffsets = set()
+        for ref_node in gt_ir.filter_nodes_dfs(node, gt_ir.FieldRef):
+            if isinstance(ref_node.offset.get(self.domain.sequential_axis.name, None), gt_ir.Expr):
+                self.block_info.variable_koffsets.add(ref_node.name)
+
         body_sources = self.visit(node.body)
 
         return interval_definition, body_sources

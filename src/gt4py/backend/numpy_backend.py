@@ -98,6 +98,39 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
+    def _make_variable_koffset_arrays(self, name: str) -> str:
+        extent = self.block_info.extent
+        lower_extent = list(extent.lower_indices)
+        upper_extent = list(extent.upper_indices)
+        parallel_axes_names = [
+            axis
+            for axis in self.impl_node.fields[name].axes
+            if axis != self.domain.sequential_axis.name
+        ]
+        parallel_axes_dims = [self.impl_node.domain.index(axis) for axis in parallel_axes_names]
+
+        args = []
+        for fd, d in enumerate(parallel_axes_dims):
+            start_expr = " {:+d}".format(lower_extent[d]) if lower_extent[d] != 0 else ""
+            size_expr = "{dom}[{d}]".format(dom=self.domain_arg_name, d=d)
+            size_expr += " {:+d}".format(upper_extent[d]) if upper_extent[d] != 0 else ""
+            arange = "np.arange({name}{marker}[{fd}]{start}, {name}{marker}[{fd}] + {size})".format(
+                name=name,
+                start=start_expr,
+                marker=self.origin_marker,
+                fd=fd,
+                size=size_expr,
+            )
+            args.append(
+                f"{arange}["
+                + ", ".join(":" if fd == i else "None" for i in range(len(parallel_axes_dims)))
+                + "]"
+            )
+
+        ret_vals = ", ".join([f"{axis_name.upper()}_{name}" for axis_name in parallel_axes_names])
+
+        return f"{ret_vals} = {self.numpy_prefix}.broadcast_arrays({', '.join(args)})"
+
     def _make_regional_computation(
         self, iteration_order, interval_definition, body_sources
     ) -> List[str]:
@@ -114,12 +147,20 @@ class NumPySourceGenerator(PythonSourceGenerator):
         else:
             range_args = [loop_bounds[1] + " -1", loop_bounds[0] + " -1", "-1"]
 
-        if iteration_order != gt_ir.IterationOrder.PARALLEL:
+        needs_explicit_kloop = (
+            iteration_order != gt_ir.IterationOrder.PARALLEL or self.block_info.variable_koffsets
+        )
+
+        if needs_explicit_kloop:
             range_expr = "range({args})".format(args=", ".join(a for a in range_args))
             seq_axis = self.impl_node.domain.sequential_axis.name
             source_lines.append(
                 "for {ax} in {range_expr}:".format(ax=seq_axis, range_expr=range_expr)
             )
+            for name in self.block_info.variable_koffsets:
+                source_lines.append(
+                    " " * self.indent_size + self._make_variable_koffset_arrays(name)
+                )
             source_lines.extend(" " * self.indent_size + line for line in body_sources)
         else:
             source_lines.append(
@@ -134,6 +175,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
             )
             source_lines.extend(body_sources)
             source_lines.extend("\n")
+
         return source_lines
 
     def make_temporary_field(
@@ -160,12 +202,12 @@ class NumPySourceGenerator(PythonSourceGenerator):
     def visit_ShapedExpr(self, node: ShapedExpr) -> str:
         code = self.visit(node.expr)
         if not isinstance(node.expr, ShapedExpr):
-            parallel_axes = (
+            all_parallel_axes = (
                 self.impl_node.domain.axes
                 if self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
                 else self.impl_node.domain.parallel_axes
             )
-            parallel_axes_names = [axis.name for axis in parallel_axes]
+            parallel_axes_names = [axis.name for axis in all_parallel_axes]
             leftover_axes = set(parallel_axes_names) - set(node.axes)
             if leftover_axes:
                 np_newaxis = "{np}.newaxis".format(np=self.numpy_prefix)
@@ -178,17 +220,17 @@ class NumPySourceGenerator(PythonSourceGenerator):
     def visit_FieldRef(self, node: gt_ir.FieldRef) -> str:
         assert node.name in self.block_info.accessors
 
-        is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
         extent = self.block_info.extent
         lower_extent = list(extent.lower_indices)
         upper_extent = list(extent.upper_indices)
-        parallel_axes_dims = [
-            self.impl_node.domain.index(axis)
+        parallel_axes_names = [
+            axis
             for axis in self.impl_node.fields[node.name].axes
             if axis != self.domain.sequential_axis.name
         ]
+        parallel_axes_dims = [self.impl_node.domain.index(axis) for axis in parallel_axes_names]
 
-        for d, ax in enumerate(self.domain.axes_names):
+        for d, ax in enumerate(parallel_axes_names):
             idx = node.offset.get(ax, 0)
             if idx:
                 lower_extent[d] += idx
@@ -210,9 +252,20 @@ class NumPySourceGenerator(PythonSourceGenerator):
             )
 
         k_ax = self.domain.sequential_axis.name
+        k_offset = node.offset.get(k_ax, 0)
+        if isinstance(k_offset, gt_ir.Expr):
+            variable_koffset = True
+            is_parallel = False
+            k_offset = self.visit(k_offset)
+        else:
+            variable_koffset = False
+            is_parallel = (
+                self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
+                and not self.block_info.variable_koffsets
+            )
+
         if k_ax in self.impl_node.fields[node.name].axes:
             fd = self.impl_node.fields[node.name].axes.index(k_ax)
-            k_offset = node.offset.get(k_ax, 0)
             if is_parallel:
                 start_expr = self.interval_k_start_name
                 start_expr += " {:+d}".format(k_offset) if k_offset else ""
@@ -227,7 +280,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                         fd=fd,
                     )
                 )
-            else:
+            elif not variable_koffset:
                 idx = "{:+d}".format(k_offset) if k_offset else ""
                 index.append(
                     "{name}{marker}[{fd}] + {ax}{idx}".format(
@@ -240,7 +293,15 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 )
 
         data_idx = f", {','.join(str(i) for i in node.data_index)}" if node.data_index else ""
-        source = f"{node.name}[{', '.join(index)}{data_idx}]"
+        if not variable_koffset:
+            source = f"{node.name}[{', '.join(index)}{data_idx}]"
+        else:
+            source = (
+                f"{node.name}["
+                + ", ".join(f"{axis_name.upper()}_{node.name}" for axis_name in parallel_axes_names)
+                + f", {k_ax} + {k_offset}"
+                + "]"
+            )
         if not parallel_axes_dims and not is_parallel:
             source = f"np.asarray([{source}])"
 
@@ -375,6 +436,40 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         self.conditions_depth -= 1
         # return "\n".join(sources)
+        return sources
+
+    def visit_While(self, node: gt_ir.While) -> List[str]:
+        sources = []
+        condition = self.visit(node.condition)
+        if self.conditions_depth > 0:
+            condition_statement = f"__while_condition = np.logical_and({condition}, __condition_{self.conditions_depth})"
+        else:
+            condition_statement = f"__while_condition = {condition}"
+        sources.append(condition_statement)
+        sources.append(f"while {self.numpy_prefix}.any(__while_condition):")
+        for stmt in node.body.stmts:
+            target = self.visit(stmt.target)
+            value = self.visit(stmt.value)
+            target_expr = stmt.target.expr if isinstance(stmt.target, ShapedExpr) else stmt.target
+
+            is_possible_else = not isinstance(target_expr, gt_ir.VarRef) or (
+                target_expr.name in self.var_refs_defined
+            )
+
+            sources.append(
+                "{spaces}{target} = {np}.where(__while_condition, {then_expr}, {else_expr})".format(
+                    spaces=" " * self.indent_size,
+                    np=self.numpy_prefix,
+                    target=target,
+                    then_expr=value,
+                    else_expr=target if is_possible_else else "np.nan",
+                )
+            )
+
+            if isinstance(target_expr, gt_ir.VarRef):
+                self.var_refs_defined.add(target_expr.name)
+
+        sources.append(" " * self.indent_size + condition_statement)
         return sources
 
 
