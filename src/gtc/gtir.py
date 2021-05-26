@@ -39,12 +39,12 @@ from gtc import common
 from gtc.common import AxisBound, LocNode
 
 
-@utils.abc
+@utils.noninstantiable
 class Expr(common.Expr):
     pass
 
 
-@utils.abc
+@utils.noninstantiable
 class Stmt(common.Stmt):
     pass
 

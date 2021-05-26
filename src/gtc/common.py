@@ -214,7 +214,7 @@ class LocNode(Node):
     loc: Optional[SourceLocation]
 
 
-@utils.abc
+@utils.noninstantiable
 class Expr(LocNode):
     """
     Expression base class.
@@ -228,7 +228,7 @@ class Expr(LocNode):
     kind: ExprKind
 
 
-@utils.abc
+@utils.noninstantiable
 class Stmt(LocNode):
     pass
 

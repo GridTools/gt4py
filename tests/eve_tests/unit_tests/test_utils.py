@@ -140,18 +140,18 @@ def unique_data_items(request):
     ]
 
 
-def test_instantiate_abstract_class():
-    @eve.utils.abc
+def test_instantiate_noninstantiable_class():
+    @eve.utils.noninstantiable
     class TestClass(pydantic.BaseModel):
-        pass
+        param: int
 
-    with pytest.raises(TypeError, match="Trying to instantiate `TestClass` abstract class"):
-        TestClass()
+    with pytest.raises(TypeError, match="Trying to instantiate `TestClass` non-instantiable class"):
+        TestClass(param=0)
 
     class Another(TestClass):
         pass
 
-    Another()
+    Another(param=0)
 
 
 @pytest.fixture(

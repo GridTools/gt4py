@@ -30,12 +30,12 @@ from gtc import common
 from gtc.common import AxisBound, LocNode
 
 
-@utils.abc
+@utils.noninstantiable
 class Expr(common.Expr):
     dtype: Optional[common.DataType]
 
 
-@utils.abc
+@utils.noninstantiable
 class Stmt(common.Stmt):
     pass
 
