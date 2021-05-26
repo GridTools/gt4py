@@ -37,9 +37,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     GTExtent = as_fmt("extent<{i[0]},{i[1]},{j[0]},{j[1]},{k[0]},{k[1]}>")
 
-    GTFieldAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}, {ndim}>;")
-
-    GTParamAccessor = as_fmt("using {name} = in_accessor<{id}>;")
+    GTAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}, {ndim}>;")
 
     GTParamList = as_mako(
         """${ '\\n'.join(accessors) }
@@ -75,9 +73,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
-    FieldAccessorRef = as_fmt("eval({name}({', '.join([offset, *data_index])}))")
-
-    ParamAccessorRef = as_fmt("eval({name}())")
+    AccessorRef = as_fmt("eval({name}({', '.join([offset, *data_index])}))")
 
     LocalAccess = as_fmt("{name}")
 
@@ -158,8 +154,6 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     UnaryOp = as_fmt("({_this_generator.UNARY_OPERATOR_TO_CODE[_this_node.op]}{expr})")
 
     Arg = as_fmt("{name}")
-
-    Param = as_fmt("{name}")
 
     ApiParamDecl = as_fmt("{name}")
 

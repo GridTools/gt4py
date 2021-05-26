@@ -30,11 +30,10 @@ from gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 from .gtcpp_utils import (
     ArgFactory,
     FieldDeclFactory,
+    GTAccessorFactory,
     GTApplyMethodFactory,
     GTComputationCallFactory,
-    GTFieldAccessorFactory,
     GTFunctorFactory,
-    GTParamAccessorFactory,
     GTParamListFactory,
     IfStmtFactory,
     ProgramFactory,
@@ -83,7 +82,7 @@ def make_compilation_input_and_expected():
                 functors__0__applies=[],
                 functors__0__param_list=GTParamListFactory(
                     accessors=[
-                        GTFieldAccessorFactory(
+                        GTAccessorFactory(
                             id=0,
                             extent__i=(1, 2),
                             extent__j=(-3, -4),
@@ -94,15 +93,6 @@ def make_compilation_input_and_expected():
                 ),
             ),
             r"inout_accessor<0, extent<1,\s*2,\s*-3,\s*-4,\s*10,\s*-10>",
-        ),
-        (
-            ProgramFactory(
-                functors__0__applies=[],
-                functors__0__param_list=GTParamListFactory(
-                    accessors=[GTParamAccessorFactory(id=0)]
-                ),
-            ),
-            r"in_accessor<0>",
         ),
         (
             ProgramFactory(),

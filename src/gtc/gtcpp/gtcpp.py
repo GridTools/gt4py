@@ -51,15 +51,11 @@ class Literal(common.Literal, Expr):  # type: ignore
     pass
 
 
-class FieldAccessorRef(common.FieldAccess, Expr):
+class LocalAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class ParamAccessorRef(common.ScalarAccess, Expr):
-    pass
-
-
-class LocalAccess(common.ScalarAccess, Expr):
+class AccessorRef(common.FieldAccess, Expr):  # type: ignore
     pass
 
 
@@ -67,12 +63,12 @@ class BlockStmt(common.BlockStmt[Stmt], Stmt):
     pass
 
 
-class AssignStmt(common.AssignStmt[Union[LocalAccess, FieldAccessorRef], Expr], Stmt):
+class AssignStmt(common.AssignStmt[Union[LocalAccess, AccessorRef], Expr], Stmt):
     @validator("left")
     def no_horizontal_offset_in_assignment(
-        cls, v: Union[LocalAccess, FieldAccessorRef]
-    ) -> Union[LocalAccess, FieldAccessorRef]:
-        if isinstance(v, FieldAccessorRef) and (v.offset.i != 0 or v.offset.j != 0):
+        cls, v: Union[LocalAccess, AccessorRef]
+    ) -> Union[LocalAccess, AccessorRef]:
+        if isinstance(v, AccessorRef) and (v.offset.i != 0 or v.offset.j != 0):
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
 
@@ -165,19 +161,12 @@ class GTExtent(LocNode):
             raise AssertionError("Can only add CartesianOffsets")
 
 
-class GTAccessor(LocNode):  # type: ignore
+class GTAccessor(LocNode):
     name: SymbolName
     id: int  # noqa: A003  # shadowing python builtin
-
-
-class GTFieldAccessor(GTAccessor):  # type: ignore
     intent: Intent
     extent: GTExtent
     ndim: int = 3
-
-
-class GTParamAccessor(GTAccessor):
-    pass
 
 
 class GTParamList(LocNode):
