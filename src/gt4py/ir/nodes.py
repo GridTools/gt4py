@@ -281,7 +281,7 @@ class Builtin(enum.Enum):
 class AccessIntent(enum.IntFlag):
     READ = 1
     WRITE = 2
-    READ_WRITE = 3
+    READ_WRITE = READ | WRITE
 
     def __str__(self):
         return self.name
