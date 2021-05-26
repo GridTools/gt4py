@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import root_validator, validator
 
-from eve import Str, SymbolName, SymbolRef, SymbolTableTrait
+from eve import Str, SymbolName, SymbolRef, SymbolTableTrait, field
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
@@ -115,6 +115,7 @@ class Decl(LocNode):
 
 class FieldDecl(Decl):
     dimensions: Tuple[bool, bool, bool]
+    data_dims: Tuple[int, ...] = field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):
@@ -127,11 +128,6 @@ class LocalScalar(Decl):
 
 class Temporary(FieldDecl):
     pass
-
-
-class HorizontalExecution(LocNode):
-    body: List[Stmt]
-    declarations: List[LocalScalar]
 
 
 class Interval(LocNode):
@@ -148,6 +144,28 @@ class Interval(LocNode):
                 "Start offset must be smaller than end offset if start and end levels are equal"
             )
         return values
+
+    def covers(self, other: "Interval") -> bool:
+        outer_starts_lower = self.start < other.start or self.start == other.start
+        outer_ends_higher = self.end > other.end or self.end == other.end
+        return outer_starts_lower and outer_ends_higher
+
+    def intersects(self, other: "Interval") -> bool:
+        return not (other.start >= self.end or self.start >= other.end)
+
+    def shifted(self, offset: int) -> "Interval":
+        start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
+        end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
+        return Interval(start=start, end=end)
+
+    @classmethod
+    def full(cls):
+        return cls(start=AxisBound.start(), end=AxisBound.end())
+
+
+class HorizontalExecution(LocNode):
+    body: List[Stmt]
+    declarations: List[LocalScalar]
 
 
 class CacheDesc(LocNode):

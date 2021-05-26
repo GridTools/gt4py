@@ -21,7 +21,7 @@ from typing import Any, List, Optional, Tuple, Union
 from pydantic.class_validators import validator
 
 import eve
-from eve import Str, StrEnum, SymbolName, SymbolTableTrait
+from eve import Str, StrEnum, SymbolName, SymbolTableTrait, field
 from eve.type_definitions import SymbolRef
 from gtc import common
 from gtc.common import LocNode
@@ -164,7 +164,7 @@ class GTExtent(LocNode):
                 k=(min(self.k[0], offset.k), max(self.k[1], offset.k)),
             )
         else:
-            assert "Can only add CartesianOffsets"
+            raise AssertionError("Can only add CartesianOffsets")
 
 
 class GTAccessor(LocNode):
@@ -172,6 +172,7 @@ class GTAccessor(LocNode):
     id: int  # noqa: A003  # shadowing python builtin
     intent: Intent
     extent: GTExtent
+    ndim: int = 3
 
 
 class GTParamList(LocNode):
@@ -228,6 +229,7 @@ class ApiParamDecl(LocNode):
 
 class FieldDecl(ApiParamDecl):
     dimensions: Tuple[bool, bool, bool]
+    data_dims: Tuple[int, ...] = field(default_factory=tuple)
 
 
 class GlobalParamDecl(ApiParamDecl):

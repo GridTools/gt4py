@@ -119,6 +119,8 @@ class DebugSourceGenerator(PythonSourceGenerator):
         source = "{name}{marker}[{index}]".format(
             marker=self.origin_marker, name=node.name, index=index_str
         )
+        if node.data_index:
+            source = f"{source}[{','.join(str(i) for i in node.data_index)}]"
 
         return source
 

@@ -35,6 +35,7 @@ from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion, oir_to_
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
 from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
+from gtc.passes.oir_dace_optimizations import GraphMerging, optimize_horizontal_executions
 from gtc.passes.oir_optimizations.caches import (
     FillFlushToLocalKCaches,
     IJCacheDetection,
@@ -42,7 +43,7 @@ from gtc.passes.oir_optimizations.caches import (
     PruneKCacheFills,
     PruneKCacheFlushes,
 )
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
+from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
@@ -79,7 +80,7 @@ class GTCCudaExtGenerator:
         }
 
     def _optimize_oir(self, oir):
-        oir = GreedyMerging().visit(oir)
+        oir = optimize_horizontal_executions(oir, GraphMerging)
         oir = AdjacentLoopMerging().visit(oir)
         oir = LocalTemporariesToScalars().visit(oir)
         oir = WriteBeforeReadTemporariesToScalars().visit(oir)
@@ -105,28 +106,35 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
 
     def visit_FieldDecl(self, node: cuir.FieldDecl, **kwargs):
         if "external_arg" in kwargs:
+            domain_ndim = node.dimensions.count(True)
+            data_ndim = len(node.data_dims)
+            sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,{ndim}> {name}_origin".format(
+                return "py::buffer {name}, std::array<gt::uint_t,{sid_ndim}> {name}_origin".format(
                     name=node.name,
-                    ndim=node.dimensions.count(True),
+                    sid_ndim=sid_ndim,
                 )
             else:
-                num_dims = node.dimensions.count(True)
-                sid_def = """gt::as_cuda_sid<{dtype}, {num_dims},
-                    std::integral_constant<int, {unique_index}>>({name})""".format(
+                sid_def = """gt::as_cuda_sid<{dtype}, {sid_ndim},
+                    gt::integral_constant<int, {unique_index}>>({name})""".format(
                     name=node.name,
                     dtype=self.visit(node.dtype),
                     unique_index=self.unique_index(),
-                    num_dims=num_dims,
+                    sid_ndim=sid_ndim,
                 )
-                if num_dims != 3:
+                if domain_ndim != 3:
                     gt_dims = [
                         f"gt::stencil::dim::{dim}"
                         for dim in gtc_utils.dimension_flags_to_names(node.dimensions)
                     ]
+                    if data_ndim:
+                        gt_dims += [
+                            f"gt::integral_constant<int, {3 + dim}>" for dim in range(data_ndim)
+                        ]
                     sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
                         gt_dims=", ".join(gt_dims), sid_def=sid_def
                     )
+
                 return "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
                     sid_def=sid_def,
                     name=node.name,
