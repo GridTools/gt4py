@@ -56,6 +56,7 @@ class GTIRToOIR(NodeTranslator):
 
         decls: List = field(default_factory=list)
         horizontal_executions: List = field(default_factory=list)
+        in_while_loop: bool = False
 
         def add_decl(self, decl: oir.Decl) -> "GTIRToOIR.Context":
             self.decls.append(decl)
@@ -72,7 +73,7 @@ class GTIRToOIR(NodeTranslator):
     ) -> None:
         body = [oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))]
         if mask is not None:
-            body = [oir.MaskStmt(body=body, mask=mask)]
+            body = [oir.MaskStmt(body=body, mask=mask, is_loop=ctx.in_while_loop)]
         ctx.add_horizontal_execution(
             oir.HorizontalExecution(
                 body=body,
@@ -162,6 +163,18 @@ class GTIRToOIR(NodeTranslator):
                 mask=combined_mask,
                 ctx=ctx,
             )
+
+    def visit_While(
+        self, node: gtir.ScalarIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
+    ) -> None:
+        current_mask = self.visit(node.cond)
+        combined_mask = current_mask
+        if mask:
+            combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=current_mask)
+
+        ctx.in_while_loop = True
+        self.visit(node.body, mask=combined_mask, ctx=ctx)
+        ctx.in_while_loop = False
 
     def visit_Interval(self, node: gtir.Interval, **kwargs: Any) -> oir.Interval:
         return oir.Interval(

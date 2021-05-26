@@ -43,6 +43,7 @@ from gt4py.ir.nodes import (
     UnaryOpExpr,
     VarDecl,
     VarRef,
+    While,
 )
 from gtc import common, gtir
 from gtc.common import ExprKind
@@ -228,12 +229,12 @@ class DefIRToGTIR(IRNodeVisitor):
             args=[self.visit(arg) for arg in node.args],
         )
 
-    def visit_FieldRef(self, node: FieldRef):
+    def visit_FieldRef(self, node: FieldRef) -> gtir.FieldAccess:
         return gtir.FieldAccess(
             name=node.name, offset=transform_offset(node.offset), data_index=node.data_index
         )
 
-    def visit_If(self, node: If):
+    def visit_If(self, node: If) -> Union[gtir.FieldIfStmt, gtir.ScalarIfStmt]:
         cond = self.visit(node.condition)
         if cond.kind == ExprKind.FIELD:
             return gtir.FieldIfStmt(
@@ -252,7 +253,13 @@ class DefIRToGTIR(IRNodeVisitor):
                 else None,
             )
 
-    def visit_VarRef(self, node: VarRef, **kwargs):
+    def visit_While(self, node: While) -> gtir.While:
+        return gtir.While(
+            cond=self.visit(node.condition),
+            body=self.visit(node.body),
+        )
+
+    def visit_VarRef(self, node: VarRef) -> Union[gtir.ScalarAccess, gtir.FieldAccess]:
         # TODO(havogt) seems wrong, but check the DefinitionIR for
         # test_code_generation.py::test_generation_cpu[native_functions,
         # there we have a FieldAccess on a VarDecl

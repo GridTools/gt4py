@@ -75,6 +75,7 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
 class MaskStmt(Stmt):
     mask: Expr
     body: List[Stmt]
+    is_loop: bool = False
 
     @validator("mask")
     def mask_is_boolean_field_expr(cls, v: Expr) -> Expr:

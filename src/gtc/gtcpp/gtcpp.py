@@ -81,6 +81,10 @@ class IfStmt(common.IfStmt[Stmt, Expr], Stmt):
     pass
 
 
+class While(common.While[Stmt, Expr], Stmt):
+    pass
+
+
 class UnaryOp(common.UnaryOp[Expr], Expr):
     pass
 

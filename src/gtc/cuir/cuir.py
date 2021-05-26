@@ -94,6 +94,7 @@ class AssignStmt(
 class MaskStmt(Stmt):
     mask: Expr
     body: List[Stmt]
+    is_loop: bool = False
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):
