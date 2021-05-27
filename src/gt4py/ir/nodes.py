@@ -279,6 +279,7 @@ class Builtin(enum.Enum):
 
 @enum.unique
 class AccessIntent(enum.IntFlag):
+    NONE = 0
     READ = 1
     WRITE = 2
     READ_WRITE = READ | WRITE
