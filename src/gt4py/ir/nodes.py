@@ -51,8 +51,8 @@ NativeFunction enumeration (:class:`NativeFunction`)
     `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
 AccessIntent enumeration (:class:`AccessIntent`)
-    An IntFlag with access permissions
-    [`READ`, `WRITE`, `READ_WRITE`]
+    Access permissions
+    [`READ_ONLY`, `READ_WRITE`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
@@ -278,10 +278,9 @@ class Builtin(enum.Enum):
 
 
 @enum.unique
-class AccessIntent(enum.IntFlag):
-    READ = 1
-    WRITE = 2
-    READ_WRITE = READ | WRITE
+class AccessIntent(enum.Enum):
+    READ_ONLY = 0
+    READ_WRITE = 1
 
     def __str__(self):
         return self.name
