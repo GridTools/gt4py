@@ -87,6 +87,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
         self.interval_k_start_name = interval_k_start_name
         self.interval_k_end_name = interval_k_end_name
         self.conditions_depth = 0
+        self.current_k_loop_range = list()
 
     def _make_field_origin(self, name: str, origin=None):
         if origin is None:
@@ -110,18 +111,21 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 loop_bounds[r] += "{:+d}".format(bound[1])
 
         if iteration_order != gt_ir.IterationOrder.BACKWARD:
-            range_args = loop_bounds
+            current_k_loop_range = loop_bounds
         else:
-            range_args = [loop_bounds[1] + " -1", loop_bounds[0] + " -1", "-1"]
+            current_k_loop_range = [loop_bounds[1] + " -1", loop_bounds[0] + " -1", "-1"]
 
         if iteration_order != gt_ir.IterationOrder.PARALLEL:
-            range_expr = "range({args})".format(args=", ".join(a for a in range_args))
-            seq_axis = self.impl_node.domain.sequential_axis.name
-            source_lines.append(
-                "for {ax} in {range_expr}:".format(ax=seq_axis, range_expr=range_expr)
-            )
+            if self.current_k_loop_range != current_k_loop_range:
+                self.current_k_loop_range = current_k_loop_range
+                range_expr = "range({args})".format(args=", ".join(a for a in current_k_loop_range))
+                seq_axis = self.impl_node.domain.sequential_axis.name
+                source_lines.append(
+                    "for {ax} in {range_expr}:".format(ax=seq_axis, range_expr=range_expr)
+                )
             source_lines.extend(" " * self.indent_size + line for line in body_sources)
         else:
+            self.current_k_loop_range.clear()
             source_lines.append(
                 "{interval_k_start_name} = {lb}".format(
                     interval_k_start_name=self.interval_k_start_name, lb=loop_bounds[0]
