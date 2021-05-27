@@ -1181,16 +1181,14 @@ class BuildIIRPass(TransformPass):
         accessors = []
         remaining_outputs = set(ij_block.outputs)
         for name, extent in ij_block.inputs.items():
+            accessor = gt_ir.AccessIntent.READ
             if name in remaining_outputs:
-                read_write = True
+                accessor |= gt_ir.AccessIntent.WRITE
                 remaining_outputs.remove(name)
-                extent |= Extent.zeros()
-            else:
-                read_write = False
-            accessors.append(self._make_accessor(name, extent, read_write))
+            accessors.append(self._make_accessor(name, extent, accessor))
         zero_extent = Extent.zeros(self.data.ndims)
         for name in remaining_outputs:
-            accessors.append(self._make_accessor(name, zero_extent, True))
+            accessors.append(self._make_accessor(name, zero_extent, gt_ir.AccessIntent.WRITE))
 
         stage = gt_ir.Stage(
             name="stage__{}".format(ij_block.id),
@@ -1214,15 +1212,13 @@ class BuildIIRPass(TransformPass):
 
         return result
 
-    def _make_accessor(self, name, extent, read_write: bool) -> gt_ir.Accessor:
+    def _make_accessor(self, name, extent, accessor: gt_ir.AccessIntent) -> gt_ir.Accessor:
         assert name in self.data.symbols
-        intent = gt_ir.AccessIntent.READ_WRITE if read_write else gt_ir.AccessIntent.READ_ONLY
         if self.data.symbols[name].is_field:
             assert extent is not None
-            result = gt_ir.FieldAccessor(symbol=name, intent=intent, extent=extent)
+            result = gt_ir.FieldAccessor(symbol=name, intent=accessor, extent=extent)
         else:
-            # assert extent is None and not read_write
-            assert not read_write
+            assert accessor != gt_ir.AccessIntent.READ_WRITE
             result = gt_ir.ParameterAccessor(symbol=name)
 
         return result
@@ -1498,8 +1494,7 @@ class HousekeepingPass(TransformPass):
 
             if (
                 any(
-                    isinstance(a, gt_ir.FieldAccessor)
-                    and (a.intent is gt_ir.AccessIntent.READ_WRITE)
+                    isinstance(a, gt_ir.FieldAccessor) and bool(a.intent & gt_ir.AccessIntent.WRITE)
                     for a in node.accessors
                 )
                 and node.apply_blocks
