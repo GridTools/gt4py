@@ -148,7 +148,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         access = AccessKind.NONE
         if name in read_fields:
             access |= AccessKind.READ
-        elif name in write_fields:
+        if name in write_fields:
             access |= AccessKind.WRITE
         data.field_info[name] = FieldInfo(
             access=access,
