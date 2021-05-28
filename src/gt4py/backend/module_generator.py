@@ -20,7 +20,7 @@ import os
 import textwrap
 from dataclasses import dataclass, field
 from inspect import getdoc
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
 
 import jinja2
 import numpy
@@ -132,14 +132,9 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         .to_set()
     )
 
-    read_fields = (
-        node.iter_tree()
-        .if_isinstance(gtir.ParAssignStmt)
-        .getattr("right")
-        .if_isinstance(gtir.FieldAccess)
-        .getattr("name")
-        .to_set()
-    )
+    read_fields: Set[str] = set()
+    for expr in node.iter_tree().if_isinstance(gtir.ParAssignStmt).getattr("right"):
+        read_fields |= expr.iter_tree().if_isinstance(gtir.FieldAccess).getattr("name").to_set()
 
     referenced_field_params = [
         param.name for param in node.params if isinstance(param, gtir.FieldDecl)
