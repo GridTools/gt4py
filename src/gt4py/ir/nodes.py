@@ -1018,3 +1018,27 @@ class IRNodeDumper(IRNodeMapper):
 
 
 dump_ir = IRNodeDumper.apply
+
+
+def filter_nodes_dfs(root_node, node_type):
+    """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
+    stack = [root_node]
+    while stack:
+        curr = stack.pop()
+        assert isinstance(curr, Node)
+
+        for node_class in curr.__class__.__mro__:
+            if node_class is node_type:
+                yield curr
+
+        for key, value in iter_attributes(curr):
+            if isinstance(curr, collections.abc.Iterable):
+                if isinstance(curr, collections.abc.Mapping):
+                    children = curr.values()
+                else:
+                    children = curr
+            else:
+                children = gt_utils.listify(value)
+
+            for value in filter(lambda x: isinstance(x, Node), children):
+                stack.append(value)

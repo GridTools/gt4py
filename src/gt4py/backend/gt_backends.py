@@ -381,10 +381,12 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         return body_sources
 
     def _visit_ForLoopBound(self, node: gt_ir.AxisBound, axis):
-        if node.level == gt_ir.LevelMarker.END:
-            raise NotImplementedError("More coffee needed")
-        else:
-            return str(node.offset)
+        return "static_cast<gt::int_t>({endpt}{offset:+d})".format(
+            endpt=f"eval(domain_size_{axis.name}())"
+            if node.level == gt_ir.LevelMarker.END
+            else "0",
+            offset=node.offset,
+        )
 
     def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
         self.requires_positional = True
@@ -398,11 +400,11 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
         sources = []
         if isinstance(node.start, gt_ir.AxisBound):
-            start = self._visit_ForLoopBound(node.start, k_index)
+            start = self._visit_ForLoopBound(node.start, k_ax)
         else:
             start = self.visit(node.start)
         if isinstance(node.stop, gt_ir.AxisBound):
-            stop = self._visit_ForLoopBound(node.stop, k_index)
+            stop = self._visit_ForLoopBound(node.stop, k_ax)
         else:
             stop = self.visit(node.stop)
 
@@ -468,6 +470,18 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 )
                 arg["extent"] = gt_utils.flatten(accessor.extent)
             args.append(arg)
+
+        for for_node in gt_ir.filter_nodes_dfs(node, gt_ir.For):
+            if any(
+                isinstance(bound, gt_ir.AxisBound) and bound.level == gt_ir.LevelMarker.END
+                for bound in (for_node.start, for_node.stop)
+            ):
+                args.extend(
+                    [
+                        {"name": f"domain_size_{name}", "access_type": "in", "extent": None}
+                        for name in self.domain.axes_names
+                    ]
+                )
 
         # Create regions and computations
         regions = []

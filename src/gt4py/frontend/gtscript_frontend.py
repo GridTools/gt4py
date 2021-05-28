@@ -942,6 +942,8 @@ class IRMaker(ast.NodeVisitor):
             result = gt_ir.VarRef(name=symbol)
         elif self._is_local_symbol(symbol):
             result = gt_ir.VarRef(name=symbol)
+        elif node.id == "K":
+            result = gt_ir.VarRef(name=symbol)
         else:
             assert False, "Missing '{}' symbol definition".format(symbol)
 
@@ -951,33 +953,69 @@ class IRMaker(ast.NodeVisitor):
         index = self.visit(node.value)
         return index
 
-    def visit_For(self, node: ast.For) -> list:
-        assert isinstance(node.iter, ast.Call)
+    def _parse_forloop_args_call(self, node: ast.Call) -> list:
+        assert isinstance(node, ast.Call)
         assert (
-            isinstance(node.iter.func, ast.Name)
-            and node.iter.func.id == "range"
-            and len(node.iter.args) == 2
+            isinstance(node.func, ast.Name) and node.func.id == "range" and len(node.iter.args) == 2
         )
 
         gt_ir_args = []
-        for arg in node.iter.args:
+        for arg in node.args:
             if isinstance(arg, ast.Constant):
-                # Something like 0, None
-                # These get translated to AxisBounds
-                if arg.value is None:
-                    gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0))
-                elif arg.value == 0:
+                if arg.value == 0:
                     gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0))
                 elif arg.value > 0:
                     gt_ir_args.append(
                         gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=arg.value)
                     )
-                else:  # TODO: do we want to support this?
-                    gt_ir_args.append(
-                        gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=abs(arg.value))
-                    )
+            elif isinstance(arg, ast.Subscript):
+                assert isinstance(arg.value, ast.Name) and arg.value.id == "K"
+                try:
+                    offset = gt_utils.meta.ast_eval(arg.slice.value, {})
+
+                    if offset >= 0:
+                        gt_ir_args.append(
+                            gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=offset)
+                        )
+                    else:
+                        gt_ir_args.append(
+                            gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=offset)
+                        )
+                except:
+                    raise GTScriptSyntaxError("Unknown index")
             else:
                 gt_ir_args.append(self.visit(arg))
+
+        return gt_ir_args
+
+    def _parse_forloop_args_slice(self, node: ast.Slice) -> list:
+        gt_ir_args = []
+
+        if node.lower is not None:
+            lower_offset = gt_utils.meta.ast_eval(node.lower, {})
+        else:
+            lower_offset = 0
+        if node.upper is not None:
+            upper_offset = gt_utils.meta.ast_eval(node.upper, {})
+        else:
+            upper_offset = -1  # TODO: take care of the +1
+
+        if node.step is not None:
+            raise GTScriptSyntaxError("Slice step is unsupported")
+
+        for offset in (lower_offset, upper_offset):
+            if offset >= 0:
+                gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=offset))
+            else:
+                gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=offset))
+
+        return gt_ir_args
+
+    def visit_For(self, node: ast.For) -> list:
+        if isinstance(node.iter, ast.Call):
+            gt_ir_args = self._parse_forloop_args_call(node.iter)
+        else:
+            gt_ir_args = self._parse_forloop_args_slice(node.iter.slice)
 
         assert isinstance(node.target, ast.Name)
         target_name = node.target.id
@@ -1201,6 +1239,7 @@ class IRMaker(ast.NodeVisitor):
             assert len(node.args) == 1
             axis_name = node.args[0].id
             return gt_ir.AxisIndex(name=axis_name, data_type=gt_ir.DataType.INT32)
+
         else:
             native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 
