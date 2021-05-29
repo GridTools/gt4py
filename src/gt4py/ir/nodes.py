@@ -51,8 +51,8 @@ NativeFunction enumeration (:class:`NativeFunction`)
     `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
 AccessIntent enumeration (:class:`AccessIntent`)
-    An IntFlag with access permissions
-    [`READ`, `WRITE`, `READ_WRITE`]
+    Access permissions
+    [`READ_ONLY`, `READ_WRITE`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels

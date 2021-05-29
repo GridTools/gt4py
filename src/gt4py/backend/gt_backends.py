@@ -429,8 +429,9 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             self.stage_symbols[accessor.symbol] = accessor
             arg = {"name": accessor.symbol, "access_type": "in", "extent": None}
             if isinstance(accessor, gt_ir.FieldAccessor):
-                # Both WRITE and READ_WRITE map to "inout"
-                arg["access_type"] = "in" if accessor.intent == gt_ir.AccessIntent.READ else "inout"
+                arg["access_type"] = (
+                    "in" if accessor.intent == gt_ir.AccessIntent.READ_ONLY else "inout"
+                )
                 arg["extent"] = gt_utils.flatten(accessor.extent)
             args.append(arg)
 
