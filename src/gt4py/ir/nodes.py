@@ -52,7 +52,7 @@ NativeFunction enumeration (:class:`NativeFunction`)
 
 AccessIntent enumeration (:class:`AccessIntent`)
     Access permissions
-    [`READ_ONLY`, `READ_WRITE`]
+    [`NONE`, `READ`, `WRITE`, `READ_WRITE`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels

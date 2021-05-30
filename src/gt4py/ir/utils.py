@@ -75,11 +75,3 @@ def make_api_signature(args_list: list):
         else:
             assert isinstance(item, ArgumentInfo), "Invalid api_signature"
     return api_signature
-
-
-# --- Implementation IR ---
-def make_field_accessor(name: str, intent=False, extent=((0, 0), (0, 0), (0, 0))):
-    if not isinstance(intent, AccessIntent):
-        assert isinstance(intent, bool)
-        intent = AccessIntent.READ_WRITE if intent else AccessIntent.READ_ONLY
-    return FieldAccessor(symbol=name, intent=intent, extent=Extent(extent))
