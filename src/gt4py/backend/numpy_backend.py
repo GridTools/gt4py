@@ -159,7 +159,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                 seq_axis = self.impl_node.domain.sequential_axis.name
                 source_lines.append(
                     "for {ax} in {range_expr}:".format(ax=seq_axis, range_expr=range_expr)
-            )
+                )
             for name in self.block_info.variable_koffsets:
                 source_lines.append(
                     " " * self.indent_size + self._make_variable_koffset_arrays(name)
