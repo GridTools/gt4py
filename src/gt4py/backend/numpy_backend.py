@@ -312,6 +312,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
     def _visit_ForLoopBound(self, node: gt_ir.AxisBound, axis: int) -> str:
         if node.level == gt_ir.LevelMarker.START:
             return str(node.offset)
+        elif node.level == gt_ir.LevelMarker.END:
+            return f"_domain_[2] + {node.offset}"
         else:
             return f"domain[{axis}] + {node.offset}"
 
