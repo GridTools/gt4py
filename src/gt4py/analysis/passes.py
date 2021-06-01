@@ -1186,7 +1186,6 @@ class BuildIIRPass(TransformPass):
                 intent |= gt_ir.AccessIntent.WRITE
                 remaining_outputs.remove(name)
                 extent |= Extent.zeros()
-            else:
             accessors.append(self._make_accessor(name, extent, intent))
         zero_extent = Extent.zeros(self.data.ndims)
         for name in remaining_outputs:
