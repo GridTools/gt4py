@@ -63,12 +63,10 @@ def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> M
         for sg in ms.groups:
             for st in sg.stages:
                 for acc in st.accessors:
-                    if isinstance(acc, gt_ir.FieldAccessor) and bool(
-                        acc.intent & gt_ir.AccessIntent.WRITE
-                    ):
+                    if isinstance(acc, gt_ir.FieldAccessor) and bool(acc.intent & AccessKind.WRITE):
                         out_fields.add(acc.symbol)
                     elif isinstance(acc, gt_ir.FieldAccessor) and bool(
-                        acc.intent & gt_ir.AccessIntent.READ
+                        acc.intent & AccessKind.READ
                     ):
                         in_fields.add(acc.symbol)
 
