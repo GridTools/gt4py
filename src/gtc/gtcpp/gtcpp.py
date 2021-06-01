@@ -21,28 +21,20 @@ from typing import Any, List, Optional, Tuple, Union
 from pydantic.class_validators import validator
 
 import eve
-from eve import Str, StrEnum, SymbolName, SymbolTableTrait, field
+from eve import Str, StrEnum, SymbolName, SymbolTableTrait, field, utils
 from eve.type_definitions import SymbolRef
 from gtc import common
 from gtc.common import LocNode
 
 
+@utils.noninstantiable
 class Expr(common.Expr):
     dtype: Optional[common.DataType]
 
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Expr:
-            raise TypeError("Trying to instantiate `Expr` abstract class.")
-        super().__init__(*args, **kwargs)
 
-
+@utils.noninstantiable
 class Stmt(common.Stmt):
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Stmt:
-            raise TypeError("Trying to instantiate `Stmt` abstract class.")
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class Offset(common.CartesianOffset):

@@ -124,9 +124,9 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         .to_list()
     )
 
-    referenced_field_params = {
+    referenced_field_params = [
         param.name for param in node.params if isinstance(param, gtir.FieldDecl)
-    }
+    ]
     for name in sorted(referenced_field_params):
         data.field_info[name] = FieldInfo(
             access=AccessKind.READ_WRITE if name in write_fields else AccessKind.READ_ONLY,
@@ -136,7 +136,9 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
             dtype=numpy.dtype(node.symtable_[name].dtype.name.lower()),
         )
 
-    referenced_scalar_params = set(node.param_names).difference(referenced_field_params)
+    referenced_scalar_params = [
+        param.name for param in node.params if param.name not in referenced_field_params
+    ]
     for name in sorted(referenced_scalar_params):
         data.parameter_info[name] = ParameterInfo(
             dtype=numpy.dtype(node.symtable_[name].dtype.name.lower())
