@@ -15,22 +15,46 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy as cp
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Set
 
 from eve import NodeTranslator, NodeVisitor
+from eve.concepts import NOTHING
 from gtc import oir
 
 
 class MaskCollector(NodeVisitor):
-    """Collects the boolean expressions definine mask statements that are boolean fields."""
+    """Collects the boolean expressions defining mask statements that are boolean fields."""
 
     def visit_AssignStmt(
         self,
         node: oir.AssignStmt,
-        masks_to_inline: Dict[str, Optional[oir.Expr]],
+        *,
+        masks_to_inline: Dict[str, oir.Expr],
     ) -> None:
         if node.left.name in masks_to_inline:
+            assert masks_to_inline[node.left.name] is None
             masks_to_inline[node.left.name] = node.right
+
+    def visit_MaskStmt(
+        self, node: oir.MaskStmt, *, masks_to_inline: Dict[str, oir.Expr], **kwargs: Any
+    ) -> None:
+        if isinstance(node.mask, oir.FieldAccess) and node.mask.name in masks_to_inline:
+            # Find all reads in condition
+            condition_reads: Set[str] = (
+                masks_to_inline[node.mask.name]
+                .iter_tree()
+                .if_isinstance(oir.FieldAccess, oir.ScalarAccess)
+                .getattr("name")
+                .to_set()
+            )
+            # Find all writes in body
+            body_writes: Set[str] = set()
+            body_writes |= set(
+                [child.left.name for child in node.body if isinstance(child, oir.AssignStmt)]
+            )
+            # Do not inline the mask if there is an intersection
+            if condition_reads.intersection(body_writes):
+                masks_to_inline.pop(node.mask.name)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> Dict[str, oir.Expr]:
         masks_to_inline: Dict[str, oir.Expr] = {
@@ -40,6 +64,7 @@ class MaskCollector(NodeVisitor):
             .filter(lambda stmt: isinstance(stmt.mask, oir.FieldAccess))
         }
         self.visit(node.vertical_loops, masks_to_inline=masks_to_inline, **kwargs)
+        assert all(value is not None for value in masks_to_inline.values())
         return masks_to_inline
 
 
@@ -53,7 +78,8 @@ class MaskInlining(NodeTranslator):
     def visit_FieldAccess(
         self,
         node: oir.FieldAccess,
-        masks_to_inline: Dict[str, Optional[oir.Expr]],
+        *,
+        masks_to_inline: Dict[str, oir.Expr],
         **kwargs: Any,
     ) -> oir.Expr:
         if node.name in masks_to_inline:
@@ -63,68 +89,19 @@ class MaskInlining(NodeTranslator):
     def visit_AssignStmt(
         self,
         node: oir.AssignStmt,
-        masks_to_inline: Dict[str, Optional[oir.Expr]],
+        *,
+        masks_to_inline: Dict[str, oir.Expr],
         **kwargs: Any,
     ) -> oir.AssignStmt:
         if node.left.name in masks_to_inline:
-            return None
+            return NOTHING
         return self.generic_visit(node, masks_to_inline=masks_to_inline, **kwargs)
 
-    def visit_MaskStmt(
-        self,
-        node: oir.MaskStmt,
-        masks_to_inline: Dict[str, Optional[oir.Expr]],
-        **kwargs: Any,
-    ) -> oir.MaskStmt:
-        return oir.MaskStmt(
-            mask=self.visit(node.mask, masks_to_inline=masks_to_inline, **kwargs),
-            body=self.visit(node.body, masks_to_inline=masks_to_inline, **kwargs),
-        )
+    def visit_Temporary(self, node: oir.Temporary, *, masks_to_inline, **kwargs):
+        return node if node.name not in masks_to_inline else NOTHING
 
-    def visit_HorizontalExecution(
-        self,
-        node: oir.HorizontalExecution,
-        masks_to_inline: Dict[str, Optional[oir.Expr]],
-        **kwargs: Any,
-    ) -> oir.HorizontalExecution:
-        return oir.HorizontalExecution(
-            body=[
-                stmt
-                for stmt in self.visit(
-                    node.body,
-                    masks_to_inline=masks_to_inline,
-                    **kwargs,
-                )
-                if stmt is not None
-            ],
-            declarations=node.declarations,
-        )
+    def visit_CacheDesc(self, node: oir.CacheDesc, *, masks_to_inline, **kwargs):
+        return node if node.name not in masks_to_inline else NOTHING
 
-    def visit_VerticalLoop(
-        self,
-        node: oir.VerticalLoop,
-        masks_to_inline: Dict[str, Optional[oir.Expr]],
-        **kwargs: Any,
-    ) -> oir.VerticalLoop:
-        return oir.VerticalLoop(
-            loop_order=node.loop_order,
-            sections=self.visit(
-                node.sections,
-                masks_to_inline=masks_to_inline,
-                **kwargs,
-            ),
-            caches=[cache for cache in node.caches if cache.name not in masks_to_inline],
-        )
-
-    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        masks_to_inline = MaskCollector().visit(node)
-        return oir.Stencil(
-            name=node.name,
-            params=node.params,
-            vertical_loops=self.visit(
-                node.vertical_loops,
-                masks_to_inline=masks_to_inline,
-                **kwargs,
-            ),
-            declarations=[decl for decl in node.declarations if decl.name not in masks_to_inline],
-        )
+    def visit_Stencil(self, node: oir.Stencil, **kwargs):
+        return self.generic_visit(node, masks_to_inline=MaskCollector().visit(node), **kwargs)
