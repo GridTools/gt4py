@@ -352,19 +352,19 @@ def lazy_stencil(
     return _decorator(definition)
 
 
-class _AxisOffset:
+class AxisIndex:
     def __init__(self, axis: str, offset: int):
         self.axis = axis
         self.offset = offset
 
     def __repr__(self):
-        return f"_AxisOffset(axis={self.axis}, offset={self.offset})"
+        return f"AxisIndex(axis={self.axis}, offset={self.offset})"
 
     def __str__(self):
         return f"{self.axis}[{self.offset}]"
 
 
-class _AxisInterval:
+class AxisInterval:
     def __init__(self, axis: str, start: int, end: int):
         assert start < end
         self.axis = axis
@@ -372,7 +372,7 @@ class _AxisInterval:
         self.end = end
 
     def __repr__(self):
-        return f"_AxisInterval(axis={self.axis}, start={self.start}, end={self.end})"
+        return f"AxisInterval(axis={self.axis}, start={self.start}, end={self.end})"
 
     def __str__(self):
         return f"{self.axis}[{self.start}:{self.end}]"
@@ -382,33 +382,33 @@ class _AxisInterval:
 
 
 # GTScript builtins: domain axes
-class _Axis:
+class Axis:
     def __init__(self, name: str):
         assert name
         self.name = name
 
     def __repr__(self):
-        return f"_Axis(name={self.name})"
+        return f"Axis(name={self.name})"
 
     def __str__(self):
         return self.name
 
     def __getitem__(self, interval):
         if isinstance(interval, slice):
-            return _AxisInterval(self.name, interval.start, interval.stop)
+            return AxisInterval(self.name, interval.start, interval.stop)
         elif isinstance(interval, int):
-            return _AxisOffset(self.name, interval)
+            return AxisIndex(self.name, interval)
         else:
             raise TypeError("Unrecognized index type")
 
 
-I = _Axis("I")
+I = Axis("I")
 """I axes (parallel)."""
 
-J = _Axis("J")
+J = Axis("J")
 """J axes (parallel)."""
 
-K = _Axis("K")
+K = Axis("K")
 """K axes (sequential)."""
 
 IJ = (I, J)
@@ -425,7 +425,7 @@ IJK = (I, J, K)
 
 
 def mask_from_axes(axes):
-    if isinstance(axes, _Axis):
+    if isinstance(axes, Axis):
         axes = (axes,)
     axes = list(a.name for a in axes)
     return list(a in axes for a in list(a.name for a in IJK))
@@ -478,9 +478,9 @@ class _FieldDescriptorMaker:
     @staticmethod
     def _is_axes_spec(spec) -> bool:
         return (
-            isinstance(spec, _Axis)
+            isinstance(spec, Axis)
             or isinstance(spec, collections.abc.Collection)
-            and all(isinstance(i, _Axis) for i in spec)
+            and all(isinstance(i, Axis) for i in spec)
         )
 
     def __getitem__(self, field_spec):
