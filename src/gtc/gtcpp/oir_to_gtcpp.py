@@ -175,9 +175,11 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> Union[gtcpp.IfStmt, gtcpp.While]:
         cond = self.visit(node.mask, **kwargs)
         body = self.visit(node.body, **kwargs)
-        if node.is_loop:
-            return gtcpp.While(cond=cond, body=body)
-        return gtcpp.IfStmt(cond=cond, true_branch=gtcpp.BlockStmt(body=body))
+        return (
+            gtcpp.While(cond=cond, body=body)
+            if node.is_loop
+            else gtcpp.IfStmt(cond=cond, true_branch=gtcpp.BlockStmt(body=body))
+        )
 
     def visit_HorizontalExecution(
         self,
