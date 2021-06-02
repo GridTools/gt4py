@@ -88,7 +88,9 @@ class OIRToCUIR(eve.NodeTranslator):
 
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> cuir.MaskStmt:
         return cuir.MaskStmt(
-            mask=self.visit(node.mask, **kwargs), body=self.visit(node.body, **kwargs)
+            mask=self.visit(node.mask, **kwargs),
+            body=self.visit(node.body, **kwargs),
+            is_loop=node.is_loop,
         )
 
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> cuir.Cast:
