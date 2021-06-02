@@ -23,6 +23,7 @@ definitions for the keywords of the DSL.
 import collections
 import inspect
 import types
+from typing import Callable, Dict, Type
 
 import numpy as np
 
@@ -100,7 +101,7 @@ _VALID_DATA_TYPES = (
 )
 
 
-def _set_arg_dtypes(definition, dtypes):
+def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
     assert isinstance(definition, types.FunctionType)
     annotations = getattr(definition, "__annotations__", {})
     original_annotations = {**annotations}
