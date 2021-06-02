@@ -955,9 +955,7 @@ class IRMaker(ast.NodeVisitor):
 
     def _parse_forloop_args_call(self, node: ast.Call) -> list:
         assert isinstance(node, ast.Call)
-        assert (
-            isinstance(node.func, ast.Name) and node.func.id == "range" and len(node.iter.args) == 2
-        )
+        assert isinstance(node.func, ast.Name) and node.func.id == "range" and len(node.args) == 2
 
         gt_ir_args = []
         for arg in node.args:
