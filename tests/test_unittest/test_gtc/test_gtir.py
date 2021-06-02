@@ -39,6 +39,7 @@ from .gtir_utils import (
     ParAssignStmtFactory,
     StencilFactory,
     VerticalLoopFactory,
+    WhileFactory,
 )
 
 
@@ -193,3 +194,14 @@ def test_temporary_write_and_read_with_offset_is_allowed():
 def test_illegal_self_assignment_with_offset():
     with pytest.raises(ValidationError, match=r"Self-assignment"):
         ParAssignStmtFactory(left__name="foo", right__name="foo", right__offset__i=1)
+
+
+def test_while_without_boolean_condition():
+    with pytest.raises(ValueError, match=r"Condition in.*must be boolean."):
+        WhileFactory(
+            cond=BinaryOpFactory(
+                left__name="foo",
+                right__name="bar",
+            ),
+            dtype=DataType.FLOAT32,
+        )

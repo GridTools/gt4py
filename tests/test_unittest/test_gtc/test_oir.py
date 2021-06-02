@@ -288,3 +288,23 @@ def test_assign_to_ik_fwd():
                 ],
             ),
         )
+
+
+def test_loop_mask():
+    StencilFactory(
+        vertical_loops__0=VerticalLoopFactory(
+            sections=[
+                VerticalLoopSectionFactory(
+                    horizontal_executions=[
+                        HorizontalExecutionFactory(
+                            body=[
+                                MaskStmtFactory(
+                                    mask=FieldAccessFactory(dtype=DataType.BOOL), is_loop=True
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ],
+        ),
+    )

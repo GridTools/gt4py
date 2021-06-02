@@ -18,15 +18,17 @@ from typing import Type
 
 from eve import Node
 from gtc import gtir, gtir_to_oir, oir
-from gtc.common import DataType
+from gtc.common import ComparisonOperator, DataType
 from gtc.gtir_to_oir import GTIRToOIR
 
 from . import oir_utils
 from .gtir_utils import (
+    BinaryOpFactory,
     BlockStmtFactory,
     FieldAccessFactory,
     FieldIfStmtFactory,
     ScalarIfStmtFactory,
+    WhileFactory,
 )
 
 
@@ -92,4 +94,11 @@ def test_visit_FieldIfStmt_nesting():
 
 def test_visit_ScalarIfStmt():
     testee = ScalarIfStmtFactory()
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
+
+
+def test_visit_While():
+    testee = WhileFactory(
+        cond=BinaryOpFactory(left__name="foo", right__name="bar", op=ComparisonOperator.LT),
+    )
     GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())

@@ -88,6 +88,14 @@ class ScalarIfStmtFactory(factory.Factory):
     false_branch = None
 
 
+class WhileFactory(factory.Factory):
+    class Meta:
+        model = gtir.While
+
+    cond = factory.SubFactory(BinaryOpFactory, dtype=common.DataType.BOOL)
+    body = []
+
+
 class IntervalFactory(factory.Factory):
     class Meta:
         model = gtir.Interval
