@@ -1381,6 +1381,9 @@ class IRMaker(ast.NodeVisitor):
             and isinstance(node.items[0].context_expr, ast.Call)
             and node.items[0].context_expr.func.id == "horizontal"
         ):
+            if any(isinstance(child_node, ast.With) for child_node in node.body):
+                raise GTScriptSyntaxError("Cannot nest `with` node inside horizontal region")
+
             intervals_dicts = self._visit_with_horizontal(node.items[0], loc)
             all_stmts = gt_utils.flatten([gt_utils.listify(self.visit(stmt)) for stmt in node.body])
             stmts = list(filter(lambda stmt: isinstance(stmt, gt_ir.Decl), all_stmts))
@@ -1393,6 +1396,7 @@ class IRMaker(ast.NodeVisitor):
                     for intervals_dict in intervals_dicts
                 ]
             )
+
             return stmts
         else:
             # If we find nested `with` blocks flatten them, i.e. transform
@@ -1433,9 +1437,6 @@ class IRMaker(ast.NodeVisitor):
 
                 return compute_blocks
             elif self.parsing_context == ParsingContext.CONTROL_FLOW:
-                # and not any(
-                #     isinstance(child_node, ast.With) for child_node in node.body
-                # ):
                 return self._visit_computation_node(node)
             else:
                 # Mixing nested `with` blocks with stmts not allowed

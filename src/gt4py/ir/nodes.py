@@ -709,6 +709,13 @@ class AxisInterval(Node):
 
         return interval
 
+    @property
+    def is_single_index(self) -> bool:
+        if not isinstance(self.start, AxisBound) or not isinstance(self.end, AxisBound):
+            return False
+
+        return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
+
 
 # TODO Find a better place for this in the file.
 @attribclass

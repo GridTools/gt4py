@@ -25,7 +25,18 @@ import gt4py.ir as gt_ir
 import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
-from gt4py.gtscript import __INLINED, PARALLEL, compile_assert, computation, interval
+from gt4py.gtscript import (
+    __INLINED,
+    PARALLEL,
+    I,
+    J,
+    __externals__,
+    compile_assert,
+    computation,
+    horizontal,
+    interval,
+    region,
+)
 
 from ..definitions import id_version
 
@@ -430,6 +441,123 @@ class TestIntervalSyntax:
             gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
         ):
             compile_definition(definition_func, "test_externals", module, externals=externals)
+
+
+class TestRegions:
+    def test_one_interval_only(self):
+        module = f"TestRegions_one_interval_only_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...), horizontal(region[I[0:3], :]):
+                in_f = 1.0
+
+        stencil_id, def_ir = compile_definition(stencil, "stencil", module, externals=externals)
+
+        assert len(def_ir.computations) == 1
+        assert isinstance(def_ir.computations[0].body.stmts[0], gt_ir.HorizontalIf)
+
+    def test_one_interval_only_single(self):
+        module = f"TestRegions_one_interval_only_single_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...), horizontal(region[I[0], :]):
+                in_f = 1.0
+
+        stencil_id, def_ir = compile_definition(stencil, "stencil", module, externals=externals)
+
+        assert len(def_ir.computations) == 1
+        assert def_ir.computations[0].body.stmts[0].intervals["I"].is_single_index
+
+    def test_from_external(self):
+        module = f"TestRegions_test_from_external_{id_version}"
+        externals = {"i1": I[1]}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            from __externals__ import i1
+
+            with computation(PARALLEL), interval(...), horizontal(region[i1, :]):
+                in_f = 1.0
+
+        stencil_id, def_ir = compile_definition(stencil, "stencil", module, externals=externals)
+
+        assert len(def_ir.computations) == 1
+        assert (
+            def_ir.computations[0].body.stmts[0].intervals["I"].start.level
+            == gt_ir.LevelMarker.START
+        )
+        assert def_ir.computations[0].body.stmts[0].intervals["I"].start.offset == 1
+        assert def_ir.computations[0].body.stmts[0].intervals["I"].is_single_index
+
+    def test_multiple_inline(self):
+        module = f"TestRegions_multiple_inline_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_f = in_f + 1.0
+                with horizontal(region[I[0], :], region[:, J[-1]]):
+                    in_f = 1.0
+
+        stencil_id, def_ir = compile_definition(stencil, "stencil", module, externals=externals)
+
+        assert len(def_ir.computations[0].body.stmts) == 3
+
+    def test_inside_function(self):
+        module = f"TestRegions_inside_function_{id_version}"
+        externals = {"ie": I[-1]}
+
+        @gtscript.function
+        def region_func():
+            from __externals__ import ie
+
+            field = 0.0
+            with horizontal(region[ie, :]):
+                field = 1.0
+
+            return field
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_f = region_func()
+
+        stencil_id, def_ir = compile_definition(stencil, "stencil", module, externals=externals)
+
+        # TODO: Does this need to assert anything?
+
+    def test_error_undefined(self):
+        module = f"TestRegions_error_undefined_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            from __externals__ import i0  # forget to add 'ia'
+
+            with computation(PARALLEL), interval(...):
+                in_f = in_f + 1.0
+                with horizontal(region[i0 : 1 + ia, :]):
+                    in_f = 1.0
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Unknown symbol"):
+            compile_definition(stencil, "stencil", module, externals=externals)
+
+    def test_error_nested(self):
+        module = f"TestRegions_error_nested_{id_version}"
+        externals = {}
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_f = in_f + 1.0
+                with horizontal(region[I[0], :]):
+                    in_f = 1.0
+                    with horizontal(region[:, J[-1]]):
+                        in_f = 2.0
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Cannot nest `with` node inside horizontal region",
+        ):
+            compile_definition(stencil, "stencil", module, externals=externals)
 
 
 class TestExternalsWithSubroutines:
