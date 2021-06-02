@@ -1035,11 +1035,11 @@ class TestAnnotations:
     @pytest.mark.parametrize("dtype_in", [int, np.float32, np.float64])
     @pytest.mark.parametrize("dtype_out", [int, np.float32, np.float64])
     @pytest.mark.parametrize("dtype_scalar", [int, np.float32, np.float64])
-    def test_compilation(self, dtype_in, dtype_out, dtype_scalar):
+    def test_parsing(self, dtype_in, dtype_out, dtype_scalar):
         definition = self.sumdiff_defs
         dtypes = {"dtype_in": dtype_in, "dtype_out": dtype_out, "dtype_scalar": dtype_scalar}
 
-        sumdiff = gtscript.stencil("debug", definition, dtypes=dtypes)
+        compile_definition(definition, dtypes=dtypes)
 
         annotations = getattr(definition, "__annotations__", {})
         assert "in_a" in annotations
