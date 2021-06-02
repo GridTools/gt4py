@@ -32,7 +32,7 @@ class TemporariesToScalarsBase(NodeTranslator):
                 node.offset.i == node.offset.j == node.offset.k == 0
             ), "Non-zero offset in temporary that is replaced?!"
             return oir.ScalarAccess(name=tmps_name_map[node.name], dtype=node.dtype)
-        return self.generic_visit(node, **kwargs)
+        return self.generic_visit(node, tmps_name_map=tmps_name_map, **kwargs)
 
     def visit_HorizontalExecution(
         self,
