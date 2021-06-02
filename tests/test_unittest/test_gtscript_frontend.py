@@ -44,7 +44,7 @@ def compile_definition(
     rebuild=False,
     **kwargs,
 ):
-    _, original_annotations = gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
+    original_annotations = gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
     build_options = gt_definitions.BuildOptions(
         name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=None
     )
