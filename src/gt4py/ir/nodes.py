@@ -708,6 +708,36 @@ class AxisInterval(Node):
 
         return interval
 
+    def disjoint_from(self, other: "AxisInterval") -> bool:
+        # This made-up constant must be larger than any LevelMarker.offset used
+        DOMAIN_SIZE = 1000
+
+        s_start = (
+            0 + self.start.offset
+            if self.start.level == LevelMarker.START
+            else DOMAIN_SIZE + self.start.offset
+        )
+
+        s_end = (
+            0 + self.end.offset
+            if self.end.level == LevelMarker.START
+            else DOMAIN_SIZE + self.end.offset
+        )
+
+        o_start = (
+            0 + other.start.offset
+            if other.start.level == LevelMarker.START
+            else DOMAIN_SIZE + other.start.offset
+        )
+
+        o_end = (
+            0 + other.end.offset
+            if other.end.level == LevelMarker.START
+            else DOMAIN_SIZE + other.end.offset
+        )
+
+        return not (s_start <= o_start < s_end) and not (o_start <= s_start < o_end)
+
 
 @attribclass
 class ComputationBlock(Node):
