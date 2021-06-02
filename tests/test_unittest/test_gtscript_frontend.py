@@ -80,9 +80,8 @@ def compile_definition(
         name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=None
     )
 
-    options_id = gt_utils.shashed_id(build_options)
-    stencil_id = gt_frontend.GTScriptFrontend.get_stencil_id(
-        build_options.qualified_name, definition_func, externals, options_id
+    gt_frontend.GTScriptFrontend.prepare_stencil_definition(
+        definition_func, externals=externals or {}
     )
     definition_ir = gt_frontend.GTScriptParser(
         definition_func, externals=externals or {}, options=build_options
