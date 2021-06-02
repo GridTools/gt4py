@@ -48,10 +48,9 @@ class MaskCollector(NodeVisitor):
                 .to_set()
             )
             # Find all writes in body
-            body_writes: Set[str] = set()
-            body_writes |= set(
-                [child.left.name for child in node.body if isinstance(child, oir.AssignStmt)]
-            )
+            body_writes: Set[str] = {
+                child.left.name for child in node.body if isinstance(child, oir.AssignStmt)
+            }
             # Do not inline the mask if there is an intersection
             if condition_reads.intersection(body_writes):
                 masks_to_inline.pop(node.mask.name)
@@ -83,7 +82,7 @@ class MaskInlining(NodeTranslator):
         **kwargs: Any,
     ) -> oir.Expr:
         if node.name in masks_to_inline:
-            return cp.deepcopy(masks_to_inline[node.name])
+            return cp.copy(masks_to_inline[node.name])
         return self.generic_visit(node, masks_to_inline=masks_to_inline, **kwargs)
 
     def visit_AssignStmt(
