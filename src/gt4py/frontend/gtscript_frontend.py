@@ -789,8 +789,9 @@ class IRMaker(ast.NodeVisitor):
         # if sorting didn't change anything it was already sorted
         return compute_blocks == compute_blocks_sorted
 
-    def _are_blocks_nonoverlapping(self, compute_blocks: List[gt_ir.ComputationBlock]):
-        for block, other in itertools.combinations(compute_blocks, 2):
+    def _are_intervals_nonoverlapping(self, compute_blocks: List[gt_ir.ComputationBlock]):
+        for i, block in enumerate(compute_blocks[1:]):
+            other = compute_blocks[i - 1]
             if not block.interval.disjoint_from(other.interval):
                 return False
         return True
@@ -1310,7 +1311,7 @@ class IRMaker(ast.NodeVisitor):
                     f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
                 )
 
-            if not self._are_blocks_nonoverlapping(compute_blocks):
+            if not self._are_intervals_nonoverlapping(compute_blocks):
                 raise GTScriptSyntaxError(
                     f"Overlapping intervals detected at line {loc.line} (column {loc.column})"
                 )
