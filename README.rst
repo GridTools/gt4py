@@ -133,13 +133,13 @@ repository and use an *editable* installation of GT4Py:
     # adding the '-e' flag to get an editable installation
     # For the CUDA backends add the '[cudaXX]' optional dependency
     # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
-    pip install -c constraints.txt -e ./gt4py     # pip install -c constraints.txt -e ./gt4py[cudaXX]
+    pip install -e ./gt4py     # pip install -e ./gt4py[cudaXX]
 
     # Run the command to install GridTools C++ sources
     python -m gt4py.gt_src_manager install
 
     # Install the pre-commit checks
-    pip install -c constraints.txt pre-commit
+    pip install pre-commit
     # You need to have a python3.6 interpreter in your PATH for the following:
     pre-commit install-hooks  # in the repo directory
     # But you can develop using any version >= 3.6
@@ -158,7 +158,7 @@ install the additional development requirements with:
 
 ::
 
-    pip install -c constraints.txt -r ./gt4py/requirements-dev.txt
+    pip install -r ./gt4py/requirements-dev.txt
 
 and then build the docs with:
 
