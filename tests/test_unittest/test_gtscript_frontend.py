@@ -25,7 +25,7 @@ import gt4py.ir as gt_ir
 import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
-from gt4py.gtscript import __INLINED, PARALLEL, computation, interval
+from gt4py.gtscript import __INLINED, PARALLEL, compile_assert, computation, interval
 
 from ..definitions import id_version
 
@@ -73,16 +73,6 @@ GLOBAL_VERY_NESTED_CONSTANTS = types.SimpleNamespace(nested=types.SimpleNamespac
 @gtscript.function
 def add_external_const(a):
     return a + 10.0 + GLOBAL_CONSTANT
-
-
-@gtscript.function
-def identity(field_in):
-    return field_in
-
-
-@gtscript.function
-def sinus(field_in):
-    return sin(field_in)
 
 
 class TestInlinedExternals:
@@ -135,113 +125,62 @@ class TestInlinedExternals:
                 definition_func, "test_missing_nested_symbol", module, externals=externals
             )
 
-    def test_undecorated_delay(self, id_version):
-        A = 0
-
-        def undecorated_function():
-            return A
-
-        module = f"TestInlinedExternals_test_undecorated_delay_{id_version}"
-        externals = {"func": undecorated_function}
-
-        A = 1
-
-        # Direct function
-        def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
-            with computation(PARALLEL), interval(...):
-                inout_field = undecorated_function()
-
-        stencil_id, def_ir = compile_definition(
-            definition_func, "test_undecorated_delay", module, externals=externals
-        )
-
-        stmt = def_ir.computations[0].body.stmts[0]
-        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
-
-        # As external
-        def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__externals__ import func
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
-            with computation(PARALLEL), interval(...):
-                inout_field = func()
-
-        stencil_id, def_ir = compile_definition(
-            definition_func, "test_undecorated_delay", module, externals=externals
-        )
-
-        stmt = def_ir.computations[0].body.stmts[0]
-        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 1
-
-    def test_function_import(self, id_version):
+    def test_recursive_function_imports(self, id_version):
         module = f"TestInlinedExternals_test_recursive_imports_{id_version}"
 
-        def some_function():
+        @gtscript.function
+        def func_deeply_nested():
+            from __externals__ import another_const
+
+            return another_const
+
+        @gtscript.function
+        def func_nested():
             from __externals__ import const
 
-            return const
+            return const + func_deeply_nested()
+
+        @gtscript.function
+        def func():
+            from __externals__ import other_call
+
+            return other_call()
 
         def definition_func(inout_field: gtscript.Field[float]):
             from __externals__ import some_call
 
             with computation(PARALLEL), interval(...):
-                inout_field = some_call()
+                inout_field = func() + some_call()
 
         stencil_id, def_ir = compile_definition(
             definition_func,
             "test_recursive_imports",
             module,
-            externals={"some_call": some_function, "const": GLOBAL_CONSTANT},
+            externals={
+                "some_call": func,
+                "other_call": func_nested,
+                "const": GLOBAL_CONSTANT,
+                "another_const": GLOBAL_CONSTANT,
+            },
         )
         assert set(def_ir.externals.keys()) == {
             "some_call",
             "const",
-        }
-
-    def test_recursive_imports(self, id_version):
-        module = f"TestInlinedExternals_test_recursive_imports_{id_version}"
-
-        def func_nest2():
-            from __externals__ import const
-
-            return const
-
-        def func_nest1():
-            from __externals__ import other
-
-            return other() + func_nest2()
-
-        def definition_func(inout_field: gtscript.Field[float]):
-            from __externals__ import some_call
-
-            with computation(PARALLEL), interval(...):
-                inout_field = func_nest1() + some_call()
-
-        stencil_id, def_ir = compile_definition(
-            definition_func,
-            "test_recursive_imports",
-            module,
-            externals={"some_call": func_nest1, "other": func_nest2, "const": GLOBAL_CONSTANT},
-        )
-        assert set(def_ir.externals.keys()) == {
-            "some_call",
-            "const",
-            "other",
-            "func_nest1",
-            "tests.test_unittest.test_gtscript_frontend.func_nest1.func_nest2",
+            "other_call",
+            "func",
+            "another_const",
+            "tests.test_unittest.test_gtscript_frontend.func_nested.func_deeply_nested",
         }
 
     def test_decorated_freeze(self):
         A = 0
 
         @gtscript.function
-        def undecorated_function():
+        def some_function():
             return A
 
         module = f"TestInlinedExternals_test_undecorated_delay_{id_version}"
-        externals = {"func": undecorated_function}
+        externals = {"func": some_function}
 
         A = 1
 
@@ -249,7 +188,7 @@ class TestInlinedExternals:
             from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
-                inout_field = undecorated_function()
+                inout_field = some_function()
 
         stencil_id, def_ir = compile_definition(
             definition_func, "test_decorated_freeze", module, externals=externals
@@ -273,6 +212,24 @@ class TestInlinedExternals:
 
         with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*WRONG_VALUE_CONSTANT.*"):
             compile_definition(definition_func, "test_wrong_value", module, externals=externals)
+
+
+class TestFunction:
+    def test_error_invalid(self, id_version):
+        module = f"TestFunction_test_module_{id_version}"
+        externals = {}
+
+        def func():
+            return 1.0
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func()
+
+        with pytest.raises(TypeError, match=r"func is not a gtscript function"):
+            compile_definition(definition_func, "test_error_invalid", module, externals=externals)
 
 
 class TestImportedExternals:
@@ -403,7 +360,7 @@ class TestIntervalSyntax:
         for kstart in (3, gtscript.K[3]):
             # An implementation quirk allows us to use gtscript.K[3] here,
             # although it is not great form to do so, since two-argument syntax
-            # should not use AxisOffsets.
+            # should not use AxisIndex objects.
             externals = {"kstart": kstart}
             stencil_id, def_ir = compile_definition(
                 definition_func, "test_externals", module, externals=externals
@@ -496,6 +453,10 @@ class TestExternalsWithSubroutines:
             lap = lap_x[0, 0, 0] + lap_y[0, 0, 0]
 
             return lap
+
+        @gtscript.function
+        def identity(field_in):
+            return field_in
 
         def definition_func(
             in_phi: gtscript.Field[np.float64],
@@ -642,7 +603,7 @@ class TestCompileTimeAssertions:
             from __externals__ import EXTERNAL
 
             with computation(PARALLEL), interval(...):
-                assert __INLINED(EXTERNAL < 1)
+                compile_assert(EXTERNAL < 1)
                 inout_field = inout_field[0, 0, 0] + EXTERNAL
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
@@ -651,38 +612,126 @@ class TestCompileTimeAssertions:
         with pytest.raises(gt_frontend.GTScriptAssertionError, match="Assertion failed"):
             compile_definition(definition, "test_assert_nomsg", module, externals={"EXTERNAL": 1})
 
-    def test_msg(self, id_version):
-        def definition(inout_field: gtscript.Field[float]):
-            from __externals__ import EXTERNAL
-
-            with computation(PARALLEL), interval(...):
-                assert __INLINED(EXTERNAL < 1), "An error occurred"
-                inout_field = inout_field[0, 0, 0] + EXTERNAL
-
-        module = f"TestCompileTimeAssertions_test_module_{id_version}"
-        with pytest.raises(gt_frontend.GTScriptAssertionError, match="An error occurred"):
-            compile_definition(definition, "test_assert_msg", module, externals={"EXTERNAL": 1})
-
     def test_nested_attribute(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
             with computation(PARALLEL), interval(...):
-                assert __INLINED(GLOBAL_VERY_NESTED_CONSTANTS.nested.A > 1), "An error occurred"
+                compile_assert(GLOBAL_VERY_NESTED_CONSTANTS.nested.A > 1)
                 inout_field = inout_field[0, 0, 0] + GLOBAL_VERY_NESTED_CONSTANTS.nested.A
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
         compile_definition(definition, "test_assert_nested_attribute", module)
 
+    def test_inside_func(self, id_version):
+        @gtscript.function
+        def assert_in_func(field):
+            compile_assert(GLOBAL_CONSTANT < 2)
+            return field[0, 0, 0] + GLOBAL_CONSTANT
+
+        def definition(inout_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                inout_field = assert_in_func(inout_field)
+
+        module = f"TestCompileTimeAssertions_test_module_{id_version}"
+        compile_definition(definition, "test_inside_func", module)
+
     def test_runtime_error(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
             with computation(PARALLEL), interval(...):
-                assert __INLINED(inout_field[0, 0, 0] < 0), "An error occurred"
+                compile_assert(inout_field[0, 0, 0] < 0)
 
         module = f"TestCompileTimeAssertions_test_module_{id_version}"
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Evaluation of compile-time assertion condition failed",
+            match="Evaluation of compile_assert condition failed",
         ):
             compile_definition(definition, "test_definition_error", module)
+
+
+class TestReducedDimensions:
+    def test_syntax(self, id_version):
+        def definition_func(
+            field_3d: gtscript.Field[gtscript.IJK, np.float_],
+            field_2d: gtscript.Field[gtscript.IJ, np.float_],
+            field_1d: gtscript.Field[gtscript.K, np.float_],
+        ):
+            with computation(FORWARD), interval(...):
+                field_2d = field_1d[1]
+                field_3d = field_2d + field_1d
+
+        module = f"TestReducedDimensions_test_syntax_{id_version}"
+        externals = {}
+        stencil_id, def_ir = compile_definition(
+            definition_func, "test_syntax", module, externals=externals
+        )
+
+        assert len(def_ir.computations) == 1
+        first_stmt = def_ir.computations[0].body.stmts[0]
+
+        value_ref = first_stmt.value
+        assert value_ref.name == "field_1d"
+        assert set(value_ref.offset.keys()) == {"K"}
+
+        target_ref = first_stmt.target
+        assert target_ref.name == "field_2d"
+        assert set(target_ref.offset.keys()) == {"I", "J"}
+
+        second_stmt = def_ir.computations[0].body.stmts[1]
+
+        target_ref = second_stmt.target
+        assert target_ref.name == "field_3d"
+        assert set(target_ref.offset.keys()) == {"I", "J", "K"}
+
+    def test_error_syntax(self, id_version):
+        module = f"TestReducedDimensions_test_error_syntax_{id_version}"
+        externals = {}
+
+        def definition(
+            field_in: gtscript.Field[gtscript.K, np.float_],
+            field_out: gtscript.Field[gtscript.IJK, np.float_],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out = field_in[0, 0, 1]
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Incorrect offset specification detected. Found .* but the field has dimensions .*",
+        ):
+            compile_definition(definition, "test_error_syntax", module, externals=externals)
+
+    def test_error_write_1d(self, id_version):
+        module = f"TestReducedDimensions_test_error_write_1d_{id_version}"
+        externals = {}
+
+        def definition(
+            field_in: gtscript.Field[gtscript.IJK, np.float_],
+            field_out: gtscript.Field[gtscript.K, np.float_],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out = field_in[0, 0, 0]
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Cannot assign to field .* as all parallel axes .* are not present",
+        ):
+            compile_definition(definition, "test_error_annotation", module, externals=externals)
+
+
+class TestDataDimensions:
+    def test_syntax(self, id_version):
+        module = f"TestDataDimensions_test_syntax_{id_version}"
+        externals = {}
+
+        def definition(
+            field_in: gtscript.Field[np.float_],
+            another_field: gtscript.Field[(np.float_, 3)],
+            field_out: gtscript.Field[gtscript.IJK, (np.float_, (3,))],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out[0, 0, 0][0] = field_in
+                field_out[0, 0, 0][1] = field_in
+                field_out[0, 0, 0][2] = field_in[0, 0, 0] + another_field[0, 0, 0][2]
+
+        compile_definition(definition, "test_syntax", module, externals=externals)
 
 
 class TestImports:
@@ -745,7 +794,7 @@ class TestImports:
 class TestDTypes:
     @pytest.mark.parametrize(
         "id_case,test_dtype",
-        list(enumerate([bool, np.bool, int, np.int32, np.int64, float, np.float32, np.float64])),
+        list(enumerate([bool, np.bool_, int, np.int32, np.int64, float, np.float32, np.float64])),
     )
     def test_all_legal_dtypes(self, id_case, test_dtype, id_version):
         def definition_func(
@@ -969,6 +1018,10 @@ class TestNativeFunctions:
                 in_field += min(abs(sin(add_external_const(in_field))), -0.5)
 
     def test_native_in_function(self):
+        @gtscript.function
+        def sinus(field_in):
+            return sin(field_in)
+
         @gtscript.stencil(backend="debug")
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):

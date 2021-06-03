@@ -27,6 +27,7 @@ import itertools
 import operator
 import pickle
 import re
+import types
 import typing
 import uuid
 import warnings
@@ -51,9 +52,11 @@ from .typingx import (
     Callable,
     Collection,
     Dict,
+    Generic,
     Iterable,
     Iterator,
     List,
+    Literal,
     Optional,
     Set,
     Tuple,
@@ -68,7 +71,9 @@ try:
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz
+    import toolz  # noqa: F401  # imported but unused
+
+T = TypeVar("T")
 
 
 def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
@@ -213,6 +218,49 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
     return lambda obj: getitem_(obj, key, default=default)
 
 
+def optional_lru_cache(
+    func: Callable = None, *, maxsize: Optional[int] = 128, typed: bool = False
+) -> Union[Callable, Callable[[Callable], Callable]]:
+    """Wrap :func:`functools.lru_cache` to fall back to the original function if arguments are not hashable.
+
+    Examples:
+        >>> @optional_lru_cache(typed=True)
+        ... def func(a, b):
+        ...     print(f"Inside func({a}, {b})")
+        ...     return a + b
+        ...
+        >>> print(func(1, 3))
+        Inside func(1, 3)
+        4
+        >>> print(func(1, 3))
+        4
+        >>> print(func([1], [3]))
+        Inside func([1], [3])
+        [1, 3]
+        >>> print(func([1], [3]))
+        Inside func([1], [3])
+        [1, 3]
+
+    Notes:
+        Based on :func:`typing._tp_cache`.
+    """
+
+    def _decorator(func: Callable) -> Callable:
+        cached = functools.lru_cache(maxsize=maxsize, typed=typed)(func)
+
+        @functools.wraps(func)
+        def inner(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return cached(*args, **kwargs)
+            except TypeError:
+                # Catch errors due to non-hashable arguments and fallback to original function
+                return func(*args, **kwargs)
+
+        return inner
+
+    return _decorator(func) if func is not None else _decorator
+
+
 def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     """Class decorator to automatically register virtual subclasses.
 
@@ -241,6 +289,19 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     return _decorator
 
 
+def noninstantiable(cls: Type) -> Type:
+    original_init = cls.__init__
+
+    def _noninstantiable_init(self, *args, **kwargs) -> None:
+        if self.__class__ is cls:
+            raise TypeError(f"Trying to instantiate `{cls.__name__}` non-instantiable class.")
+        else:
+            original_init(self, *args, **kwargs)
+
+    cls.__init__ = _noninstantiable_init
+    return cls
+
+
 def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
     """Stable hash function.
 
@@ -249,7 +310,7 @@ def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
     interpreter reboots) and it does not use hash customizations on user
     classes (it uses `pickle` internally to get a byte stream).
 
-    Args:
+    Arguments:
         hash_algorithm: object implementing the `hash algorithm` interface
             from :mod:`hashlib` or canonical name (`str`) of the
             hash algorithm as defined in :mod:`hashlib`.
@@ -373,6 +434,36 @@ class CaseStyleConverter:
         return name.split("-")
 
 
+class FrozenNamespace(types.SimpleNamespace, Generic[T]):
+    """An immutable `types.SimpleNamespace`-like class.
+
+    Examples:
+        >>> ns = FrozenNamespace(a=10, b="hello")
+        >>> ns.a
+        10
+        >>> ns.a = 20
+        Traceback (most recent call last):
+           ...
+        TypeError: Trying to modify immutable 'FrozenNamespace' instance.
+
+        >>> ns = FrozenNamespace(a=10, b="hello")
+        >>> list(ns.items())
+        [('a', 10), ('b', 'hello')]
+    """
+
+    def __setattr__(self, _name: str, _value: T) -> None:
+        raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
+
+    def items(self) -> Iterable[Tuple[str, T]]:
+        return self.__dict__.items()
+
+    def keys(self) -> Iterable[str]:
+        return self.__dict__.keys()
+
+    def values(self) -> Iterable[T]:
+        return self.__dict__.values()
+
+
 class UIDGenerator:
     """Simple unique id generator using different methods."""
 
@@ -412,8 +503,8 @@ class UIDGenerator:
 
 
 # -- Iterators --
-T = TypeVar("T")
 S = TypeVar("S")
+K = TypeVar("K")
 
 
 def as_xiter(iterator_func: Callable[..., Iterator[T]]) -> Callable[..., XIterator[T]]:
@@ -455,6 +546,7 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         # Forward special methods to wrapped iterator
         if name.startswith("__") and name.endswith("__"):
             return getattr(self.iterator, name)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name: str, value: Any) -> None:
         raise TypeError(f"{type(self).__name__} is immutable.")
@@ -1154,44 +1246,108 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
     @typing.overload
     def reduceby(
         self,
-        bin_op_func: Callable[[Any, T], Any],
+        bin_op_func: Callable[[S, T], S],
         key: str,
-        *other_keys: str,
-        init: Any = NOTHING,
-        as_dict: bool = False,
-    ) -> XIterator[Tuple[Any, Any]]:
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[False],
+    ) -> XIterator[Tuple[str, S]]:
         ...
 
     @typing.overload
     def reduceby(
         self,
-        bin_op_func: Callable[[Any, T], Any],
-        key: List[Any],
-        *,
-        init: Any = NOTHING,
-        as_dict: bool = False,
-    ) -> XIterator[Tuple[Any, Any]]:
-        ...
-
-    @typing.overload
-    def reduceby(
-        self,
-        bin_op_func: Callable[[Any, T], Any],
-        key: Callable[[T], Any],
-        *,
-        init: Any = NOTHING,
-        as_dict: bool = False,
-    ) -> XIterator[Tuple[Any, Any]]:
-        ...
-
-    def reduceby(
-        self,
-        bin_op_func: Callable[[Any, T], Any],
-        key: Union[str, List[Any], Callable[[T], Any]],
+        bin_op_func: Callable[[S, T], S],
+        key: str,
+        __attr_keys1: str,
         *attr_keys: str,
-        init: Any = NOTHING,
+        init: Union[S, NOTHING],
+        as_dict: Literal[False],
+    ) -> XIterator[Tuple[Tuple[str, ...], S]]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: str,
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[True],
+    ) -> Dict[str, S]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: str,
+        __attr_keys1: str,
+        *attr_keys: str,
+        init: Union[S, NOTHING],
+        as_dict: Literal[True],
+    ) -> Dict[Tuple[str, ...], S]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: List[K],
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[False],
+    ) -> XIterator[Tuple[K, S]]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: List[K],
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[True],
+    ) -> Dict[K, S]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: Callable[[T], K],
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[False],
+    ) -> XIterator[Tuple[K, S]]:
+        ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: Callable[[T], K],
+        *,
+        init: Union[S, NOTHING],
+        as_dict: Literal[True],
+    ) -> Dict[K, S]:
+        ...
+
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: Union[str, List[K], Callable[[T], K]],
+        *attr_keys: str,
+        init: Union[S, NOTHING] = NOTHING,
         as_dict: bool = False,
-    ) -> Union[XIterator[Tuple[Any, Any]], Dict]:
+    ) -> Union[
+        XIterator[Tuple[str, S]],
+        Dict[str, S],
+        XIterator[Tuple[Tuple[str, ...], S]],
+        Dict[Tuple[str, ...], S],
+        XIterator[Tuple[K, S]],
+        Dict[K, S],
+    ]:
         """Group a sequence by a given key and simultaneously perform a reduction inside the groups.
 
         More or less equivalent to ``toolz.itertoolz.reduceby(key, bin_op_func, self, init)``
@@ -1207,9 +1363,9 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
               for :func:`operator.itemgetter`.
 
         Keyword Arguments:
+            init: initial value for the reduction.
             as_dict: if `True`, it will return the groups ``dict`` instead of a :class:`XIterator`
                 instance over `groups.items()`.
-            init: initial value for the reduction.
 
         For detailed information check :func:`toolz.itertoolz.reduceby` reference.
 
@@ -1240,7 +1396,7 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
             >>> list(it.reduceby(lambda nvowels, name: nvowels + sum(i in 'aeiou' for i in name), len, init=0))
             [(5, 4), (3, 2), (7, 3)]
 
-        """  # noqa: RST203  # sphinx.napoleon conventions confuses RST validator
+        """  # noqa: RST203, RST301  # sphinx.napoleon conventions confuse RST validator
         if (not callable(key) and not isinstance(key, (int, str, list))) or not all(
             isinstance(i, str) for i in attr_keys
         ):
@@ -1248,10 +1404,10 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         if callable(key):
             groupby_key = key
         elif isinstance(key, list):
-            groupby_key = operator.itemgetter(*key)
+            groupby_key = typing.cast(Callable[[T], K], operator.itemgetter(*key))
         else:
             assert isinstance(key, str)
-            groupby_key = operator.attrgetter(key, *attr_keys)
+            groupby_key = typing.cast(Callable[[T], K], operator.attrgetter(key, *attr_keys))
 
         if init is not NOTHING:
             groups = toolz.itertoolz.reduceby(groupby_key, bin_op_func, self.iterator, init=init)

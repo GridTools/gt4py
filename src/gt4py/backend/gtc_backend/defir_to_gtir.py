@@ -130,7 +130,7 @@ class DefIRToGTIR(IRNodeVisitor):
         field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
         self._scalar_params = scalar_params
-        vertical_loops = [self.visit(c) for c in node.computations]
+        vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
         return gtir.Stencil(
             name=node.name.split(".")[
                 -1
@@ -160,7 +160,13 @@ class DefIRToGTIR(IRNodeVisitor):
                     dtype = cast(
                         common.DataType, common.DataType.FLOAT64
                     )  # see https://github.com/GridTools/gtc/issues/100
-                temporaries.append(gtir.FieldDecl(name=s.name, dtype=dtype))
+                temporaries.append(
+                    gtir.FieldDecl(
+                        name=s.name,
+                        dtype=dtype,
+                        dimensions=(True, True, True),
+                    )
+                )
             else:
                 stmts.append(self.visit(s))
         start, end = self.visit(node.interval)
@@ -186,7 +192,12 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_UnaryOpExpr(self, node: UnaryOpExpr) -> gtir.UnaryOp:
         return gtir.UnaryOp(op=self.GT4PY_UNARYOP_TO_GTIR[node.op], expr=self.visit(node.arg))
 
-    def visit_BinOpExpr(self, node: BinOpExpr) -> gtir.BinaryOp:
+    def visit_BinOpExpr(self, node: BinOpExpr) -> Union[gtir.BinaryOp, gtir.NativeFuncCall]:
+        if node.op in (BinaryOperator.POW, BinaryOperator.MOD):
+            return gtir.NativeFuncCall(
+                func=common.NativeFunction[node.op.name],
+                args=[self.visit(node.lhs), self.visit(node.rhs)],
+            )
         return gtir.BinaryOp(
             left=self.visit(node.lhs),
             right=self.visit(node.rhs),
@@ -209,7 +220,7 @@ class DefIRToGTIR(IRNodeVisitor):
         raise NotImplementedError(f"BuiltIn.{node.value} not implemented in lowering")
 
     def visit_Cast(self, node: Cast) -> gtir.Cast:
-        return gtir.Cast(dtype=common.DataType(node.dtype.value), expr=self.visit(node.expr))
+        return gtir.Cast(dtype=common.DataType(node.data_type.value), expr=self.visit(node.expr))
 
     def visit_NativeFuncCall(self, node: NativeFuncCall) -> gtir.NativeFuncCall:
         return gtir.NativeFuncCall(
@@ -218,7 +229,9 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_FieldRef(self, node: FieldRef):
-        return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))
+        return gtir.FieldAccess(
+            name=node.name, offset=transform_offset(node.offset), data_index=node.data_index
+        )
 
     def visit_If(self, node: If):
         cond = self.visit(node.condition)
@@ -259,8 +272,15 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_FieldDecl(self, node: FieldDecl):
+        dimension_names = ["I", "J", "K"]
+        dimensions = [dim in node.axes for dim in dimension_names]
         # datatype conversion works via same ID
-        return gtir.FieldDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
+        return gtir.FieldDecl(
+            name=node.name,
+            dtype=common.DataType(int(node.data_type.value)),
+            dimensions=dimensions,
+            data_dims=node.data_dims,
+        )
 
     def visit_VarDecl(self, node: VarDecl):
         # datatype conversion works via same ID

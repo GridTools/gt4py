@@ -30,6 +30,7 @@ from .analysis_setup import (
     build_iir_pass,
     compute_extents_pass,
     compute_used_symbols_pass,
+    constant_folding_pass,
     demote_locals_pass,
     init_pass,
     merge_blocks_pass,
@@ -60,10 +61,6 @@ def pytest_configure(config):
     # HealthCheck.too_slow causes more trouble than good -- especially in CIs.
     hyp.settings.register_profile(
         "slow", hyp.settings(suppress_health_check=[hyp.HealthCheck.too_slow], deadline=None)
-    )
-    config.addinivalue_line(
-        "markers",
-        "requires_cudatoolkit: mark tests that require compilation of CUDA stencils (assume cupy is installed)",
     )
     config.addinivalue_line(
         "markers",

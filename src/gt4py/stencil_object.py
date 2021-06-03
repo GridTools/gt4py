@@ -1,23 +1,26 @@
 # -*- coding: utf-8 -*-
 import abc
+import collections.abc
 import sys
 import time
 import warnings
+from typing import Any, Collection, Dict, Tuple
 
 import numpy as np
 
 import gt4py.backend as gt_backend
+import gt4py.ir as gt_ir
 import gt4py.storage as gt_storage
+import gt4py.utils as gt_utils
 from gt4py.definitions import (
     AccessKind,
     Boundary,
+    CartesianSpace,
     DomainInfo,
     FieldInfo,
     Index,
     ParameterInfo,
     Shape,
-    normalize_domain,
-    normalize_origin_mapping,
 )
 
 
@@ -36,16 +39,16 @@ class StencilObject(abc.ABC):
             cls._instance = object.__new__(cls)
         return cls._instance
 
-    def __setattr__(self, key, value):
+    def __setattr__(self, key, value) -> None:
         raise AttributeError("Attempting a modification of an attribute in a frozen class")
 
-    def __delattr__(self, item):
+    def __delattr__(self, item) -> None:
         raise AttributeError("Attempting a deletion of an attribute in a frozen class")
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return type(self) == type(other)
 
-    def __str__(self):
+    def __str__(self) -> str:
         result = """
 <StencilObject: {name}> [backend="{backend}"]
     - I/O fields: {fields}
@@ -66,7 +69,7 @@ class StencilObject(abc.ABC):
 
         return result
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return int.from_bytes(type(self)._gt_id_.encode(), byteorder="little")
 
     # Those attributes are added to the class at loading time:
@@ -81,66 +84,111 @@ class StencilObject(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def source(self):
+    def source(self) -> str:
         pass
 
     @property
     @abc.abstractmethod
-    def domain_info(self):
+    def domain_info(self) -> DomainInfo:
         pass
 
     @property
     @abc.abstractmethod
-    def field_info(self) -> dict:
+    def field_info(self) -> Dict[str, FieldInfo]:
         pass
 
     @property
     @abc.abstractmethod
-    def parameter_info(self) -> dict:
+    def parameter_info(self) -> Dict[str, ParameterInfo]:
         pass
 
     @property
     @abc.abstractmethod
-    def constants(self) -> dict:
+    def constants(self) -> Dict[str, Any]:
         pass
 
     @property
     @abc.abstractmethod
-    def options(self) -> dict:
+    def options(self) -> Dict[str, Any]:
         pass
 
     @abc.abstractmethod
-    def run(self, *args, **kwargs):
+    def run(self, *args, **kwargs) -> None:
         pass
 
     @abc.abstractmethod
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> None:
         pass
 
-    def _get_max_domain(self, field_args, origin):
+    @staticmethod
+    def _make_origin_dict(origin: Any) -> Dict[str, Index]:
+        try:
+            if isinstance(origin, dict):
+                return origin
+            if origin is None:
+                return {}
+            if isinstance(origin, collections.abc.Iterable):
+                return {"_all_": Index.from_value(origin)}
+            if isinstance(origin, int):
+                return {"_all_": Index.from_k(origin)}
+        except:
+            pass
+
+        raise ValueError("Invalid 'origin' value ({})".format(origin))
+
+    def _get_max_domain(
+        self,
+        field_args: Dict[str, Any],
+        origin: Dict[str, Tuple[int, ...]],
+        *,
+        squeeze: bool = True,
+    ) -> Shape:
         """Return the maximum domain size possible
 
         Parameters
         ----------
-            field_args: `dict`
+            field_args:
                 Mapping from field names to actually passed data arrays.
-
-            origin: `{'field_name': [int * ndims]}`
+            origin:
                 The origin for each field.
-
+            squeeze:
+                Convert non-used domain dimensions to singleton dimensions.
 
         Returns
         -------
             `Shape`: the maximum domain size.
         """
-        max_domain = Shape([np.iinfo(np.uintc).max] * self.domain_info.ndims)
-        shapes = {name: Shape(field.shape) for name, field in field_args.items()}
-        for name, shape in shapes.items():
-            upper_boundary = Index(self.field_info[name].boundary.upper_indices)
-            max_domain &= shape - (Index(origin[name]) + upper_boundary)
-        return max_domain
+        domain_ndim = self.domain_info.ndim
+        max_size = sys.maxsize
+        max_domain = Shape([max_size] * domain_ndim)
 
-    def _validate_args(self, used_field_args, used_param_args, domain, origin):
+        for name, field_info in self.field_info.items():
+            if field_info is not None:
+                assert field_args.get(name, None) is not None, f"Invalid value for '{name}' field."
+                field = field_args[name]
+                api_domain_mask = field_info.domain_mask
+                api_domain_ndim = field_info.domain_ndim
+                assert (
+                    not isinstance(field, gt_storage.storage.Storage)
+                    or tuple(field.mask)[:domain_ndim] == api_domain_mask
+                ), (
+                    f"Storage for '{name}' has domain mask '{field.mask}' but the API signature "
+                    f"expects '[{', '.join(field_info.axes)}]'"
+                )
+                upper_indices = field_info.boundary.upper_indices.filter_mask(api_domain_mask)
+                field_origin = Index.from_value(origin[name])
+                field_domain = tuple(
+                    field.shape[i] - (field_origin[i] + upper_indices[i])
+                    for i in range(api_domain_ndim)
+                )
+                max_domain &= Shape.from_mask(field_domain, api_domain_mask, default=max_size)
+
+        if squeeze:
+            return Shape([i if i != max_size else 1 for i in max_domain])
+        else:
+            return max_domain
+
+    def _validate_args(self, field_args, param_args, domain, origin) -> None:
         """Validate input arguments to _call_run.
 
         Raises
@@ -152,75 +200,106 @@ class StencilObject(abc.ABC):
                 If an incorrect field or parameter data type is passed.
         """
 
+        assert isinstance(field_args, dict) and isinstance(param_args, dict)
+
+        # validate domain sizes
+        domain_ndim = self.domain_info.ndim
+        if len(domain) != domain_ndim:
+            raise ValueError(f"Invalid 'domain' value '{domain}'")
+
+        try:
+            domain = Shape(domain)
+        except:
+            raise ValueError("Invalid 'domain' value ({})".format(domain))
+
+        if not domain > Shape.zeros(domain_ndim):
+            raise ValueError(f"Compute domain contains zero sizes '{domain}')")
+
+        if not domain <= (max_domain := self._get_max_domain(field_args, origin, squeeze=False)):
+            raise ValueError(
+                f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
+            )
+
         # assert compatibility of fields with stencil
-        for name, field in used_field_args.items():
-            if not gt_backend.from_name(self.backend).storage_info["is_compatible_layout"](field):
-                raise ValueError(
-                    f"The layout of the field {name} is not compatible with the backend."
-                )
+        for name, field_info in self.field_info.items():
+            if field_info is not None:
+                if name not in field_args:
+                    raise ValueError(f"Missing value for '{name}' field.")
+                field = field_args[name]
 
-            if not gt_backend.from_name(self.backend).storage_info["is_compatible_type"](field):
-                raise ValueError(
-                    f"Field '{name}' has type '{type(field)}', which is not compatible with the '{self.backend}' backend."
-                )
-            elif type(field) is np.ndarray:
-                warnings.warn(
-                    "NumPy ndarray passed as field. This is discouraged and only works with constraints and only for certain backends.",
-                    RuntimeWarning,
-                )
-            if not field.dtype == self.field_info[name].dtype:
-                raise TypeError(
-                    f"The dtype of field '{name}' is '{field.dtype}' instead of '{self.field_info[name].dtype}'"
-                )
-            # ToDo: check if mask is correct: need mask info in stencil object.
+                if not gt_backend.from_name(self.backend).storage_info["is_compatible_layout"](
+                    field
+                ):
+                    raise ValueError(
+                        f"The layout of the field {name} is not compatible with the backend."
+                    )
 
-            if isinstance(field, gt_storage.storage.Storage):
-                if not field.is_stencil_view:
+                if not gt_backend.from_name(self.backend).storage_info["is_compatible_type"](field):
+                    raise ValueError(
+                        f"Field '{name}' has type '{type(field)}', which is not compatible with the '{self.backend}' backend."
+                    )
+                elif type(field) is np.ndarray:
+                    warnings.warn(
+                        "NumPy ndarray passed as field. This is discouraged and only works with constraints and only for certain backends.",
+                        RuntimeWarning,
+                    )
+
+                field_dtype = self.field_info[name].dtype
+                if not field.dtype == field_dtype:
+                    raise TypeError(
+                        f"The dtype of field '{name}' is '{field.dtype}' instead of '{field_dtype}'"
+                    )
+
+                if isinstance(field, gt_storage.storage.Storage) and not field.is_stencil_view:
                     raise ValueError(
                         f"An incompatible view was passed for field {name} to the stencil. "
                     )
 
+                # Check: domain + halo vs field size
+                field_info = self.field_info[name]
+                field_domain_mask = field_info.domain_mask
+                field_domain_ndim = field_info.domain_ndim
+                field_domain_origin = Index.from_mask(origin[name], field_domain_mask[:domain_ndim])
+
+                if field.ndim != field_domain_ndim + len(field_info.data_dims):
+                    raise ValueError(
+                        f"Storage for '{name}' has {field.ndim} dimensions but the API signature "
+                        f"expects {field_domain_ndim + len(field_info.data_dims)} ('{field_info.axes}[{field_info.data_dims}]')"
+                    )
+
+                min_origin = gt_utils.interpolate_mask(
+                    field_info.boundary.lower_indices.filter_mask(field_domain_mask),
+                    field_domain_mask,
+                    default=0,
+                )
+                if field_domain_origin < min_origin:
+                    raise ValueError(
+                        f"Origin for field {name} too small. Must be at least {min_origin}, is {field_domain_origin}"
+                    )
+
+                spatial_domain = domain.filter_mask(field_domain_mask)
+                upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
+                min_shape = tuple(
+                    o + d + h for o, d, h in zip(field_domain_origin, spatial_domain, upper_indices)
+                )
+                if min_shape > field.shape:
+                    raise ValueError(
+                        f"Shape of field {name} is {field.shape} but must be at least {min_shape} for given domain and origin."
+                    )
+
         # assert compatibility of parameters with stencil
-        for name, parameter in used_param_args.items():
-            if not type(parameter) == self.parameter_info[name].dtype:
-                raise TypeError(
-                    f"The type of parameter '{name}' is '{type(parameter)}' instead of '{self.parameter_info[name].dtype}'"
-                )
-
-        assert isinstance(used_field_args, dict) and isinstance(used_param_args, dict)
-
-        if len(domain) != self.domain_info.ndims:
-            raise ValueError(f"Invalid 'domain' value '{domain}'")
-
-        # check domain+halo vs field size
-        if not domain > Shape.zeros(self.domain_info.ndims):
-            raise ValueError(f"Compute domain contains zero sizes '{domain}')")
-
-        max_domain = self._get_max_domain(used_field_args, origin)
-        if not domain <= max_domain:
-            raise ValueError(
-                f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
-            )
-        for name, field in used_field_args.items():
-            min_origin = self.field_info[name].boundary.lower_indices
-            if origin[name] < min_origin:
-                raise ValueError(
-                    f"Origin for field {name} too small. Must be at least {min_origin}, is {origin[name]}"
-                )
-            min_shape = tuple(
-                o + d + h
-                for o, d, h in zip(
-                    origin[name], domain, self.field_info[name].boundary.upper_indices
-                )
-            )
-            if min_shape > field.shape:
-                raise ValueError(
-                    f"Shape of field {name} is {field.shape} but must be at least {min_shape} for given domain and origin."
-                )
+        for name, parameter_info in self.parameter_info.items():
+            if parameter_info is not None:
+                if name not in param_args:
+                    raise ValueError(f"Missing value for '{name}' parameter.")
+                if not type(parameter := param_args[name]) == self.parameter_info[name].dtype:
+                    raise TypeError(
+                        f"The type of parameter '{name}' is '{type(parameter)}' instead of '{self.parameter_info[name].dtype}'"
+                    )
 
     def _call_run(
         self, field_args, parameter_args, domain, origin, *, validate_args=True, exec_info=None
-    ):
+    ) -> None:
         """Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
 
         Note that this function will always try to expand simple parameter values to
@@ -257,7 +336,12 @@ class StencilObject(abc.ABC):
 
             exec_info : `dict`, optional
                 Dictionary used to store information about the stencil execution.
-                (`None` by default).
+                (`None` by default). If the dictionary contains the magic key
+                '__aggregate_data' and it evaluates to `True`, the dictionary is
+                populated with a nested dictionary per class containing different
+                performance statistics. These include the stencil calls count, the
+                cumulative time spent in all stencil calls, and the actual time spent
+                in carrying out the computations.
 
         Returns
         -------
@@ -272,46 +356,46 @@ class StencilObject(abc.ABC):
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
 
-        # Collect used arguments and parameters
-        used_field_args = {
-            name: field
-            for name, field in field_args.items()
-            if self.field_info.get(name, None) is not None
-        }
+        domain_ndim = self.domain_info.ndim
+        origin = self._make_origin_dict(origin)
+        all_origin = origin.get("_all_", None)
+
+        # Set an appropriate origin for all fields
         for name, field_info in self.field_info.items():
-            if field_info is not None and used_field_args[name] is None:
-                raise ValueError(f"Field '{name}' is None.")
+            if field_info is not None:
+                assert name in field_args, f"Missing value for '{name}' field."
+                field_origin = origin.get(name, None)
 
-        used_param_args = {
-            name: param
-            for name, param in parameter_args.items()
-            if self.parameter_info.get(name, None) is not None
-        }
-        for name, parameter_info in self.parameter_info.items():
-            if parameter_info is not None and used_param_args[name] is None:
-                raise ValueError(f"Parameter '{name}' is None.")
+                if field_origin is not None:
+                    field_origin_ndim = len(field_origin)
+                    if field_origin_ndim != field_info.ndim:
+                        assert (
+                            field_origin_ndim == field_info.domain_ndim
+                        ), f"Invalid origin specification ({field_origin}) for '{name}' field."
+                        origin[name] = (*field_origin, *((0,) * len(field_info.data_dims)))
 
-        # Origins
-        if origin is None:
-            origin = {}
-        else:
-            origin = normalize_origin_mapping(origin)
+                elif all_origin is not None:
+                    origin[name] = (
+                        *gt_utils.filter_mask(all_origin, field_info.domain_mask),
+                        *((0,) * len(field_info.data_dims)),
+                    )
 
-        for name, field in used_field_args.items():
-            origin.setdefault(name, origin["_all_"] if "_all_" in origin else field.default_origin)
+                elif isinstance(field_arg := field_args[name], gt_storage.storage.Storage):
+                    origin[name] = field_arg.default_origin
+
+                else:
+                    origin[name] = (0,) * field_info.ndim
 
         # Domain
         if domain is None:
-            domain = self._get_max_domain(used_field_args, origin)
-            if any(axis_bound == np.iinfo(np.uintc).max for axis_bound in domain):
-                raise ValueError(
-                    f"Compute domain could not be deduced. Specifiy the domain explicitly or ensure you reference at least one field."
-                )
-        else:
-            domain = normalize_domain(domain)
+            domain = self._get_max_domain(field_args, origin)
+
+        assert (
+            len(domain) == domain_ndim
+        ), f"Provided domain '{domain}' is not {domain_ndim}-dimensional."
 
         if validate_args:
-            self._validate_args(used_field_args, used_param_args, domain, origin)
+            self._validate_args(field_args, parameter_args, domain, origin)
 
         self.run(
             _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args

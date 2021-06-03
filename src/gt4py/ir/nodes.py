@@ -83,7 +83,7 @@ storing a reference to the piece of source code which originated the node.
 
     Axis(name: str)
 
-    Domain(parallel_axes: List[Axis], [sequential_axis: Axis, data_axes: List[Axis]])
+    Domain(parallel_axes: List[Axis], [sequential_axis: Axis])
         # LatLonGrids -> parallel_axes: ["I", "J], sequential_axis: "K"
 
     Literal     = ScalarLiteral(value: Any (should match DataType), data_type: DataType)
@@ -174,7 +174,7 @@ import collections
 import copy
 import enum
 import operator
-from typing import List
+from typing import List, Sequence
 
 import numpy as np
 
@@ -220,7 +220,6 @@ class Axis(Node):
 class Domain(Node):
     parallel_axes = attribute(of=ListOf[Axis])
     sequential_axis = attribute(of=Axis, optional=True)
-    data_axes = attribute(of=ListOf[Axis], optional=True)
 
     @classmethod
     def LatLonGrid(cls):
@@ -237,8 +236,6 @@ class Domain(Node):
         result = list(self.parallel_axes)
         if self.sequential_axis:
             result.append(self.sequential_axis)
-        if self.data_axes:
-            result.extend(self.data_axes)
         return result
 
     @property
@@ -246,16 +243,10 @@ class Domain(Node):
         return [ax.name for ax in self.axes]
 
     @property
-    def ndims(self):
-        return self.domain_ndims + self.data_ndims
-
-    @property
     def domain_ndims(self):
         return len(self.parallel_axes) + (1 if self.sequential_axis else 0)
 
-    @property
-    def data_ndims(self):
-        return len(self.data_axes) if self.data_axes else 0
+    ndims = domain_ndims
 
     def index(self, axis):
         if isinstance(axis, Axis):
@@ -394,12 +385,17 @@ class VarRef(Ref):
 class FieldRef(Ref):
     name = attribute(of=str)
     offset = attribute(of=DictOf[str, int])
+    data_index = attribute(of=ListOf[int], factory=list)
     loc = attribute(of=Location, optional=True)
+
+    @classmethod
+    def at_center(cls, name: str, axes: Sequence[str], loc=None):
+        return cls(name=name, offset={axis: 0 for axis in axes}, loc=loc)
 
 
 @attribclass
 class Cast(Expr):
-    dtype = attribute(of=DataType)
+    data_type = attribute(of=DataType)
     expr = attribute(of=Expr)
     loc = attribute(of=Location, optional=True)
 
@@ -512,6 +508,7 @@ class BinaryOperator(enum.Enum):
     MUL = 3
     DIV = 4
     POW = 5
+    MOD = 6
 
     AND = 11
     OR = 12
@@ -538,6 +535,7 @@ BinaryOperator.IR_OP_TO_PYTHON_OP = {
     BinaryOperator.MUL: operator.mul,
     BinaryOperator.DIV: operator.truediv,
     BinaryOperator.POW: operator.pow,
+    BinaryOperator.MOD: operator.mod,
     # BinaryOperator.AND: lambda a, b: a and b,  # non short-circuit emulation
     # BinaryOperator.OR: lambda a, b: a or b,  # non short-circuit emulation
     BinaryOperator.LT: operator.lt,
@@ -554,6 +552,7 @@ BinaryOperator.IR_OP_TO_PYTHON_SYMBOL = {
     BinaryOperator.MUL: "*",
     BinaryOperator.DIV: "/",
     BinaryOperator.POW: "**",
+    BinaryOperator.MOD: "%",
     BinaryOperator.AND: "and",
     BinaryOperator.OR: "or",
     BinaryOperator.LT: "<",
@@ -602,6 +601,7 @@ class FieldDecl(Decl):
     data_type = attribute(of=DataType)
     axes = attribute(of=ListOf[str])
     is_api = attribute(of=bool)
+    data_dims = attribute(of=ListOf[int], factory=list)
     layout_id = attribute(of=str, default="_default_")
     loc = attribute(of=Location, optional=True)
 

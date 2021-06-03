@@ -124,15 +124,16 @@ class Storage(np.ndarray):
             at call time.
             when calling a stencil and no origin is specified, the default_origin is used.
 
-        mask: list of booleans
-            False entries indicate that the corresponding dimension is masked, i.e. the storage
+        mask: list of bools or list of spatial axes
+            in a list of bools, ``False`` entries indicate that the corresponding dimension is masked, i.e. the storage
             has reduced dimension and reading and writing from offsets along this axis acces the same element.
+            In a list of spatial axes (IJK), a boolean mask will be generated with ``True`` entries for all
+            dimensions except for the missing spatial axes names.
         """
 
-        if mask is None:
-            mask = [True] * len(shape)
-        default_origin = storage_utils.normalize_default_origin(default_origin, mask)
-        shape = storage_utils.normalize_shape(shape, mask)
+        default_origin, shape, dtype, mask = storage_utils.normalize_storage_spec(
+            default_origin, shape, dtype, mask
+        )
 
         if not backend in gt_backend.REGISTRY:
             ValueError("Backend must be in {}.".format(gt_backend.REGISTRY))
@@ -217,19 +218,18 @@ class Storage(np.ndarray):
             return False
         # check strides
         stride = 0
-        if len(self.strides) < len(self.layout_map):
+        layout_map = [m for m in self.layout_map if m is not None]
+        if len(self.strides) < len(layout_map):
             return False
-        for dim in reversed(np.argsort(self.layout_map)):
+        for dim in reversed(np.argsort(layout_map)):
             if self.strides[dim] < stride:
                 return False
             stride = self.strides[dim]
-
         # check alignment
         if (
             self.ctypes.data + np.sum([o * s for o, s in zip(self.default_origin, self.strides)])
         ) % gt_backend.from_name(self.backend).storage_info["alignment"]:
             return False
-
         return True
 
     def _finalize_view(self, obj):

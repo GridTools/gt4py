@@ -272,7 +272,7 @@ def test_no_merge_with_overlapping_intervals(
     assert "in2" in block.inputs and "out2" in block.outputs
 
 
-SPTYPE = namedtuple("sptype", ("multi_stage", "stage", "interval_block", "statements"))
+SPTYPE = namedtuple("SPTYPE", ("multi_stage", "stage", "interval_block", "statements"))
 
 
 class _StatementPositionVisitor:

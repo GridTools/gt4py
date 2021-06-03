@@ -21,7 +21,6 @@ from eve import SourceLocation
 from gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
 from gtc.gtir import (
     AxisBound,
-    CartesianOffset,
     Decl,
     Expr,
     FieldAccess,
@@ -33,7 +32,14 @@ from gtc.gtir import (
     VerticalLoop,
 )
 
-from .gtir_utils import DummyExpr, FieldAccessBuilder, ParAssignStmtBuilder, StencilBuilder
+from .gtir_utils import (
+    BinaryOpFactory,
+    FieldDeclFactory,
+    FieldIfStmtFactory,
+    ParAssignStmtFactory,
+    StencilFactory,
+    VerticalLoopFactory,
+)
 
 
 ARITHMETIC_TYPE = DataType.FLOAT32
@@ -46,10 +52,10 @@ def copy_assign():
     yield ParAssignStmt(
         loc=SourceLocation(line=3, column=2, source="copy_gtir"),
         left=FieldAccess.centered(
-            name="a", loc=SourceLocation(line=3, column=1, source="copy_gtir")
+            name="foo", loc=SourceLocation(line=3, column=1, source="copy_gtir")
         ),
         right=FieldAccess.centered(
-            name="b", loc=SourceLocation(line=3, column=3, source="copy_gtir")
+            name="bar", loc=SourceLocation(line=3, column=3, source="copy_gtir")
         ),
     )
 
@@ -80,8 +86,16 @@ def copy_computation(copy_v_loop):
         name="copy_gtir",
         loc=SourceLocation(line=1, column=1, source="copy_gtir"),
         params=[
-            FieldDecl(name="a", dtype=DataType.FLOAT32),
-            FieldDecl(name="b", dtype=DataType.FLOAT32),
+            FieldDecl(
+                name="foo",
+                dtype=DataType.FLOAT32,
+                dimensions=(True, True, True),
+            ),
+            FieldDecl(
+                name="bar",
+                dtype=DataType.FLOAT32,
+                dimensions=(True, True, True),
+            ),
         ],
         vertical_loops=[copy_v_loop],
     )
@@ -89,7 +103,7 @@ def copy_computation(copy_v_loop):
 
 def test_copy(copy_computation):
     assert copy_computation
-    assert copy_computation.param_names == ["a", "b"]
+    assert copy_computation.param_names == ["foo", "bar"]
 
 
 @pytest.mark.parametrize(
@@ -102,23 +116,14 @@ def test_abstract_classes_not_instantiatable(invalid_node):
 
 
 def test_can_have_vertical_offset():
-    ParAssignStmt(
-        left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=0, k=1)).build(),
-        right=DummyExpr(),
-    )
+    ParAssignStmtFactory(left__offset__k=1)
 
 
 @pytest.mark.parametrize(
     "assign_stmt_with_offset",
     [
-        lambda: ParAssignStmt(
-            left=FieldAccessBuilder("foo").offset(CartesianOffset(i=1, j=0, k=0)).build(),
-            right=DummyExpr(),
-        ),
-        lambda: ParAssignStmt(
-            left=FieldAccessBuilder("foo").offset(CartesianOffset(i=0, j=1, k=0)).build(),
-            right=DummyExpr(),
-        ),
+        lambda: ParAssignStmtFactory(left__offset__i=1),
+        lambda: ParAssignStmtFactory(left__offset__j=1),
     ],
 )
 def test_no_horizontal_offset_allowed(assign_stmt_with_offset):
@@ -128,6 +133,63 @@ def test_no_horizontal_offset_allowed(assign_stmt_with_offset):
 
 def test_symbolref_without_decl():
     with pytest.raises(ValidationError, match=r"Symbols.*not found"):
-        StencilBuilder().add_par_assign_stmt(
-            ParAssignStmtBuilder("out_field", "in_field").build()
-        ).build()
+        StencilFactory(
+            params=[],
+            vertical_loops__0__body__0=ParAssignStmtFactory(
+                left__name="out_field", right__name="in_field"
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "write_and_read_with_horizontal_offset",
+    [
+        lambda: VerticalLoopFactory(
+            body=[
+                ParAssignStmtFactory(right__name="foo", right__offset__i=1),
+                ParAssignStmtFactory(left__name="foo"),
+            ]
+        ),
+        # nested rhs
+        lambda: VerticalLoopFactory(
+            body=[
+                ParAssignStmtFactory(
+                    right=BinaryOpFactory(
+                        left__name="foo",
+                        right__name="foo",
+                        right__offset__i=1,
+                    )
+                ),
+                ParAssignStmtFactory(left__name="foo"),
+            ]
+        ),
+        # offset access in condition
+        lambda: VerticalLoopFactory(
+            body=[
+                FieldIfStmtFactory(
+                    cond__name="foo",
+                    cond__offset__i=1,
+                ),
+                ParAssignStmtFactory(left__name="foo"),
+            ]
+        ),
+    ],
+)
+def test_write_and_read_with_offset_violation(write_and_read_with_horizontal_offset):
+    with pytest.raises(ValidationError, match=r"Illegal write.*read with.*offset"):
+        write_and_read_with_horizontal_offset()
+
+
+def test_temporary_write_and_read_with_offset_is_allowed():
+    VerticalLoopFactory(
+        body=[
+            ParAssignStmtFactory(right__name="foo", right__offset__i=1),
+            ParAssignStmtFactory(left__name="foo"),
+        ],
+        temporaries=[FieldDeclFactory(name="foo")],
+    )
+
+
+def test_illegal_self_assignment_with_offset():
+    with pytest.raises(ValidationError, match=r"Self-assignment"):
+        ParAssignStmtFactory(left__name="foo", right__name="foo", right__offset__i=1)

@@ -100,6 +100,16 @@ def test_bin_op_expr(defir_to_gtir):
     bin_op = defir_to_gtir.visit_BinOpExpr(bin_op_expr)
     assert isinstance(bin_op, gtir.BinaryOp)
 
+    bin_op_expr = BinOpExpr(
+        op=BinaryOperator.POW, lhs=TFieldRef(name="a").build(), rhs=TFieldRef(name="b").build()
+    )
+    native_func_call = defir_to_gtir.visit_BinOpExpr(bin_op_expr)
+    assert isinstance(native_func_call, gtir.NativeFuncCall)
+    assert native_func_call.func == common.NativeFunction.POW
+    assert len(native_func_call.args) == 2
+    assert native_func_call.args[0].name == "a"
+    assert native_func_call.args[1].name == "b"
+
 
 def test_field_ref(defir_to_gtir):
     field_ref = TFieldRef(name="a", offset=(-1, 3, 0)).build()
@@ -135,3 +145,21 @@ def test_field_decl(defir_to_gtir):
     assert isinstance(gtir_decl, gtir.FieldDecl)
     assert gtir_decl.name == "a"
     assert gtir_decl.dtype == common.DataType.BOOL
+
+
+@pytest.mark.parametrize(
+    ["axes", "expected_mask"],
+    [
+        (["I", "J", "K"], (True, True, True)),
+        (["I", "J"], (True, True, False)),
+        (["I", "K"], (True, False, True)),
+        (["J", "K"], (False, True, True)),
+        (["I"], (True, False, False)),
+        (["J"], (False, True, False)),
+        (["K"], (False, False, True)),
+    ],
+)
+def test_field_decl_dims(defir_to_gtir, axes, expected_mask):
+    field_decl = FieldDecl(name="a", data_type=DataType.INT64, axes=axes, is_api=True)
+    gtir_decl = defir_to_gtir.visit_FieldDecl(field_decl)
+    assert gtir_decl.dimensions == expected_mask

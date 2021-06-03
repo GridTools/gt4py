@@ -14,12 +14,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import collections.abc
 import math
 import numbers
+from typing import Optional, Sequence
 
 import numpy as np
 
 import gt4py.utils as gt_util
+from gt4py.definitions import Index, Shape
 
 
 try:
@@ -33,61 +36,79 @@ def idx_from_order(order):
     return list(np.argsort(order))
 
 
-def check_mask(mask):
-    if not gt_util.is_iterable_of(mask, bool) and not mask is None:
-        raise TypeError("Mask must be an iterable of booleans.")
+def normalize_storage_spec(default_origin, shape, dtype, mask):
+    """Normalize the fields of the storage spec in a homogeneous representation.
 
+    Returns
+    -------
 
-def normalize_shape(shape, mask=None):
+    tuple(default_origin, shape, dtype, mask)
+        The output tuple fields verify the following semantics:
 
-    check_mask(mask)
+            - default_origin: tuple of ints with default origin values for the non-masked dimensions
+            - shape: tuple of ints with shape values for the non-masked dimensions
+            - dtype: scalar numpy.dtype (non-structured and without subarrays)
+            - backend: backend identifier string (debug, numpy, gtx86, gtmc, gtcuda, ...)
+            - mask: a tuple of bools (at least 3d)
+    """
 
-    if shape is None:
-        return None
     if mask is None:
-        mask = (True,) * len(shape)
+        mask = tuple(True if i < len(shape) else False for i in range(max(len(shape), 3)))
+    elif not gt_util.is_iterable_of(mask, bool):
+        # User-friendly axes specification (e.g. "IJK" or gtscript.IJK)
+        str_kind = "".join(str(i) for i in mask) if isinstance(mask, (tuple, list)) else str(mask)
+        axes_set = set(str_kind)
+        if axes_set - {"I", "J", "K"}:
+            raise ValueError(f"Invalid axes names in mask specification: '{mask}'")
+        if len(axes_set) != len(str_kind):
+            raise ValueError(f"Repeated axes names in mask specification: '{mask}'")
+        mask = ("I" in axes_set, "J" in axes_set, "K" in axes_set)
+    elif len(mask) < 3 or not sum(mask):
+        raise ValueError(f"Invalid mask definition: '{mask}'")
 
-    if sum(mask) != len(shape) and len(mask) != len(shape):
-        raise ValueError(
-            "len(shape) must be equal to len(mask) or the number of 'True' entries in mask."
-        )
+    assert len(mask) >= 3
 
-    if not gt_util.is_iterable_of(shape, numbers.Integral):
-        raise TypeError("shape must be a tuple of ints or pairs of ints.")
-    if any(o <= 0 for o in shape):
-        raise ValueError("shape ({}) contains non-positive value.".format(shape))
+    if shape is not None:
+        if not gt_util.is_iterable_of(shape, numbers.Integral):
+            raise TypeError("shape must be an iterable of ints.")
+        if len(shape) not in (sum(mask), len(mask)):
+            raise ValueError(
+                f"Mask ({mask}) and shape ({shape}) have non-matching sizes."
+                f"len(shape)(={len(shape)}) must be equal to len(mask)(={len(mask)}) "
+                f"or the number of 'True' entries in mask '{mask}'."
+            )
+        if sum(mask) < len(shape):
+            shape = tuple(int(d) for i, d in enumerate(shape) if mask[i])
+        if any(i <= 0 for i in shape):
+            raise ValueError(f"shape ({shape}) contains non-positive value.")
+    else:
+        raise TypeError("shape must be an iterable of ints.")
 
-    new_shape = list(shape)
-    if sum(mask) < len(shape):
-        new_shape = [int(h) for i, h in enumerate(new_shape) if mask[i]]
+    if default_origin is not None:
+        if not gt_util.is_iterable_of(default_origin, numbers.Integral):
+            raise TypeError("default_origin must be an iterable of ints.")
+        if len(default_origin) not in (sum(mask), len(mask)):
+            raise ValueError(
+                f"Mask ({mask}) and default_origin ({default_origin}) have non-matching sizes."
+                f"len(default_origin)(={len(default_origin)}) must be equal to len(mask)(={len(mask)}) "
+                f"or the number of 'True' entries in mask '{mask}'."
+            )
+        if sum(mask) < len(default_origin):
+            default_origin = tuple(d for i, d in enumerate(default_origin) if mask[i])
+        if any(i < 0 for i in default_origin):
+            raise ValueError("default_origin ({}) contains negative value.".format(default_origin))
+    else:
+        raise TypeError("default_origin must be an iterable of ints.")
 
-    return tuple(new_shape)
+    dtype = np.dtype(dtype)
+    if dtype.shape:
+        # Subarray dtype
+        default_origin = (*default_origin, *((0,) * dtype.ndim))
+        shape = (*shape, *(dtype.subdtype[1]))
+        mask = (*mask, *((True,) * dtype.ndim))
+        dtype = dtype.subdtype[0]
 
-
-def normalize_default_origin(default_origin, mask=None):
-
-    check_mask(mask)
-
-    if default_origin is None:
-        return None
-    if mask is None:
-        mask = (True,) * len(default_origin)
-
-    if sum(mask) != len(default_origin) and len(mask) != len(default_origin):
-        raise ValueError(
-            "len(default_origin) must be equal to len(mask) or the number of 'True' entries in mask."
-        )
-
-    if not gt_util.is_iterable_of(default_origin, numbers.Integral):
-        raise TypeError("default_origin must be a tuple of ints or pairs of ints.")
-    if any(o < 0 for o in default_origin):
-        raise ValueError("default_origin ({}) contains negative value.".format(default_origin))
-
-    new_default_origin = list(default_origin)
-    if sum(mask) < len(default_origin):
-        new_default_origin = [h for i, h in enumerate(new_default_origin) if mask[i]]
-
-    return tuple(new_default_origin)
+    return default_origin, shape, dtype, mask
 
 
 def compute_padded_shape(shape, items_per_alignment, order_idx):

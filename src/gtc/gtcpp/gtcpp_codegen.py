@@ -30,14 +30,14 @@ def _offset_limit(root: Node) -> int:
         .if_isinstance(gtcpp.GTLevel)
         .getattr("offset")
         .reduce(lambda state, cur: max(state, abs(cur)), init=0)
-    )
+    ) + 1
 
 
 class GTCppCodegen(codegen.TemplatedGenerator):
 
     GTExtent = as_fmt("extent<{i[0]},{i[1]},{j[0]},{j[1]},{k[0]},{k[1]}>")
 
-    GTAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}>;")
+    GTAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}, {ndim}>;")
 
     GTParamList = as_mako(
         """${ '\\n'.join(accessors) }
@@ -59,10 +59,13 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     GTInterval = as_fmt("gridtools::stencil::core::interval<{from_level}, {to_level}>")
 
+    LocalVarDecl = as_fmt("{dtype} {name};")
+
     GTApplyMethod = as_mako(
         """
     template<typename Evaluation>
     GT_FUNCTION static void apply(Evaluation eval, ${interval}) {
+        ${ ' '.join(local_variables) }
         ${ '\\n'.join(body) }
     }
     """
@@ -70,9 +73,9 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
-    AccessorRef = as_fmt("eval({name}({offset}))")
+    AccessorRef = as_fmt("eval({name}({', '.join([offset, *data_index])}))")
 
-    ScalarAccess = as_fmt("{name}")
+    LocalAccess = as_fmt("{name}")
 
     CartesianOffset = as_fmt("{i}, {j}, {k}")
 
@@ -94,45 +97,74 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     Literal = as_mako("static_cast<${dtype}>(${value})")
 
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:
-        if func == NativeFunction.SQRT:
-            return "gridtools::math::sqrt"
-        elif func == NativeFunction.MIN:
-            return "gridtools::math::min"
-        elif func == NativeFunction.MAX:
-            return "gridtools::math::max"
-        raise NotImplementedError("Not implemented NativeFunction encountered.")
+        try:
+            return {
+                NativeFunction.ABS: "std::abs",
+                NativeFunction.MIN: "std::min",
+                NativeFunction.MAX: "std::max",
+                NativeFunction.MOD: "std::fmod",
+                NativeFunction.SIN: "std::sin",
+                NativeFunction.COS: "std::cos",
+                NativeFunction.TAN: "std::tan",
+                NativeFunction.ARCSIN: "std::asin",
+                NativeFunction.ARCCOS: "std::acos",
+                NativeFunction.ARCTAN: "std::atan",
+                NativeFunction.SQRT: "std::sqrt",
+                NativeFunction.POW: "std::pow",
+                NativeFunction.EXP: "std::exp",
+                NativeFunction.LOG: "std::log",
+                NativeFunction.ISFINITE: "std::isfinite",
+                NativeFunction.ISINF: "std::isinf",
+                NativeFunction.ISNAN: "std::isnan",
+                NativeFunction.FLOOR: "std::floor",
+                NativeFunction.CEIL: "std::ceil",
+                NativeFunction.TRUNC: "std::trunc",
+            }[func]
+        except KeyError as error:
+            raise NotImplementedError(
+                f"Not implemented NativeFunction '{func}' encountered."
+            ) from error
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
-    def visit_DataType(self, dtype: DataType, **kwargs: Any) -> str:
-        if dtype == DataType.INT64:
-            return "long long"
-        elif dtype == DataType.FLOAT64:
-            return "double"
-        elif dtype == DataType.FLOAT32:
-            return "float"
-        elif dtype == DataType.BOOL:
-            return "bool"
-        raise NotImplementedError("Not implemented NativeFunction encountered.")
+    DATA_TYPE_TO_CODE = {
+        DataType.BOOL: "bool",
+        DataType.INT8: "std::int8_t",
+        DataType.INT16: "std::int16_t",
+        DataType.INT32: "std::int32_t",
+        DataType.INT64: "std::int64_t",
+        DataType.FLOAT32: "float",
+        DataType.FLOAT64: "double",
+    }
 
-    def visit_UnaryOperator(self, op: UnaryOperator, **kwargs: Any) -> str:
-        if op == UnaryOperator.NOT:
-            return "!"
-        elif op == UnaryOperator.NEG:
-            return "-"
-        elif op == UnaryOperator.POS:
-            return "+"
-        raise NotImplementedError("Not implemented UnaryOperator encountered.")
+    def visit_DataType(self, dtype: DataType, **kwargs: Any) -> str:
+        try:
+            return self.DATA_TYPE_TO_CODE[dtype]
+        except KeyError as error:
+            raise NotImplementedError(
+                f"Not implemented DataType '{dtype.name}' encountered."
+            ) from error
+
+    UNARY_OPERATOR_TO_CODE = {
+        UnaryOperator.NOT: "!",
+        UnaryOperator.NEG: "-",
+        UnaryOperator.POS: "+",
+    }
+
+    UnaryOp = as_fmt("({_this_generator.UNARY_OPERATOR_TO_CODE[_this_node.op]}{expr})")
 
     Arg = as_fmt("{name}")
-
-    Param = as_fmt("{name}")
 
     ApiParamDecl = as_fmt("{name}")
 
     GTStage = as_mako(".stage(${functor}(), ${','.join(args)})")
 
     GTMultiStage = as_mako("execute_${ loop_order }()${''.join(caches)}${''.join(stages)}")
+
+    IJCache = as_fmt(".ij_cached({name})")
+    KCache = as_mako(
+        ".k_cached(${'cache_io_policy::fill(), ' if _this_node.fill else ''}${'cache_io_policy::flush(), ' if _this_node.flush else ''}${name})"
+    )
 
     def visit_LoopOrder(self, looporder: LoopOrder, **kwargs: Any) -> str:
         return {
@@ -156,7 +188,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     def visit_GTComputationCall(
         self, node: gtcpp.GTComputationCall, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        return self.generic_visit(node, computation_name=node.id_, **kwargs)
+        computation_name = type(node).__name__ + str(id(node))
+        return self.generic_visit(node, computation_name=computation_name, **kwargs)
 
     GTComputationCall = as_mako(
         """
@@ -171,14 +204,15 @@ class GTCppCodegen(codegen.TemplatedGenerator):
                 return multi_pass(${ ','.join(multi_stages) });
             };
 
-            run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(arguments)});
+            run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(f"std::forward<decltype({arg})>({arg})" for arg in arguments)});
         }
         %endif
         """
     )
 
     Program = as_mako(
-        """#include <gridtools/stencil/${gt_backend_t}.hpp>
+        """
+        #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
 
         namespace ${ name }_impl_{

@@ -21,31 +21,23 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from pydantic import validator
+from pydantic import root_validator, validator
 
-from eve import Str, SymbolName, SymbolTableTrait
+from eve import Str, SymbolName, SymbolRef, SymbolTableTrait, field, utils
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
 
+@utils.noninstantiable
 class Expr(common.Expr):
     dtype: Optional[common.DataType]
 
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Expr:
-            raise TypeError("Trying to instantiate `Expr` abstract class.")
-        super().__init__(*args, **kwargs)
 
-
+@utils.noninstantiable
 class Stmt(common.Stmt):
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Stmt:
-            raise TypeError("Trying to instantiate `Stmt` abstract class.")
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class Literal(common.Literal, Expr):  # type: ignore
@@ -72,13 +64,15 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
-# TODO(havogt) consider introducing BlockStmt
-# class BlockStmt(common.BlockStmt[Stmt], Stmt):
-#     pass
+class MaskStmt(Stmt):
+    mask: Expr
+    body: List[Stmt]
 
-# TODO(havogt) should we have an IfStmt or is masking the final solution?
-# class IfStmt(common.IfStmt[List[Stmt], Expr], Stmt):  # TODO replace List[Stmt] by BlockStmt?
-#     pass
+    @validator("mask")
+    def mask_is_boolean_field_expr(cls, v: Expr) -> Expr:
+        if v.dtype != common.DataType.BOOL:
+            raise ValueError("Mask must be a boolean expression.")
+        return v
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):
@@ -112,11 +106,15 @@ class Decl(LocNode):
 
 
 class FieldDecl(Decl):
-    # TODO dimensions
-    pass
+    dimensions: Tuple[bool, bool, bool]
+    data_dims: Tuple[int, ...] = field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):
+    pass
+
+
+class LocalScalar(Decl):
     pass
 
 
@@ -124,34 +122,97 @@ class Temporary(FieldDecl):
     pass
 
 
-class HorizontalExecution(LocNode):
-    body: List[Stmt]
-    mask: Optional[Expr]
-
-    @validator("mask")
-    def mask_is_boolean_field_expr(cls, v: Optional[Expr]) -> Optional[Expr]:
-        if v:
-            if v.dtype != common.DataType.BOOL:
-                raise ValueError("Mask must be a boolean expression.")
-        return v
-
-
 class Interval(LocNode):
     start: AxisBound
     end: AxisBound
 
+    @root_validator
+    def check(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        start, end = values["start"], values["end"]
+        if start.level == common.LevelMarker.END and end.level == common.LevelMarker.START:
+            raise ValueError("Start level must be smaller or equal end level")
+        if start.level == end.level and not start.offset < end.offset:
+            raise ValueError(
+                "Start offset must be smaller than end offset if start and end levels are equal"
+            )
+        return values
 
-class VerticalLoop(LocNode):
+    def covers(self, other: "Interval") -> bool:
+        outer_starts_lower = self.start < other.start or self.start == other.start
+        outer_ends_higher = self.end > other.end or self.end == other.end
+        return outer_starts_lower and outer_ends_higher
+
+    def intersects(self, other: "Interval") -> bool:
+        return not (other.start >= self.end or self.start >= other.end)
+
+    def shifted(self, offset: int) -> "Interval":
+        start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
+        end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
+        return Interval(start=start, end=end)
+
+    @classmethod
+    def full(cls):
+        return cls(start=AxisBound.start(), end=AxisBound.end())
+
+
+class HorizontalExecution(LocNode):
+    body: List[Stmt]
+    declarations: List[LocalScalar]
+
+
+class CacheDesc(LocNode):
+    name: SymbolRef
+
+
+class IJCache(CacheDesc):
+    pass
+
+
+class KCache(CacheDesc):
+    fill: bool
+    flush: bool
+
+
+class VerticalLoopSection(LocNode):
     interval: Interval
     horizontal_executions: List[HorizontalExecution]
+
+
+class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
-    declarations: List[Temporary]
+    sections: List[VerticalLoopSection]
+    caches: List[CacheDesc]
+
+    @validator("sections")
+    def nonempty_loop(cls, v: List[VerticalLoopSection]) -> List[VerticalLoopSection]:
+        if not v:
+            raise ValueError("Empty vertical loop is not allowed")
+        return v
+
+    @root_validator
+    def valid_section_intervals(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        loop_order, sections = values["loop_order"], values["sections"]
+        starts, ends = zip(*((s.interval.start, s.interval.end) for s in sections))
+        if loop_order == common.LoopOrder.BACKWARD:
+            starts, ends = starts[:-1], ends[1:]
+        else:
+            starts, ends = starts[1:], ends[:-1]
+
+        if not all(
+            start.level == end.level and start.offset == end.offset
+            for start, end in zip(starts, ends)
+        ):
+            raise ValueError("Loop intervals not contiguous or in wrong order")
+        return values
 
 
 class Stencil(LocNode, SymbolTableTrait):
     name: Str
+    # TODO: fix to be List[Union[ScalarDecl, FieldDecl]]
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
+    declarations: List[Temporary]
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()
+    _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)

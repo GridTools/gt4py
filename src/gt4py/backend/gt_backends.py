@@ -31,6 +31,7 @@ from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
 
 from . import pyext_builder
+from .module_generator import CUDAPyExtModuleGenerator, PyExtModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -54,9 +55,10 @@ def make_x86_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
 def x86_is_compatible_layout(field: "Storage") -> bool:
     stride = 0
     layout_map = make_x86_layout_map(field.mask)
-    if len(field.strides) < len(layout_map):
+    flattened_layout = [index for index in layout_map if index is not None]
+    if len(field.strides) < len(flattened_layout):
         return False
-    for dim in reversed(np.argsort(layout_map)):
+    for dim in reversed(np.argsort(flattened_layout)):
         if field.strides[dim] < stride:
             return False
         stride = field.strides[dim]
@@ -89,26 +91,28 @@ def make_mc_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
 def mc_is_compatible_layout(field: "Storage") -> bool:
     stride = 0
     layout_map = make_mc_layout_map(field.mask)
-    if len(field.strides) < len(layout_map):
+    flattened_layout = [index for index in layout_map if index is not None]
+    if len(field.strides) < len(flattened_layout):
         return False
-    for dim in reversed(np.argsort(layout_map)):
+    for dim in reversed(np.argsort(flattened_layout)):
         if field.strides[dim] < stride:
             return False
         stride = field.strides[dim]
     return True
 
 
-def cuda_layout(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
+def make_cuda_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     ctr = reversed(range(sum(mask)))
     return tuple([next(ctr) if m else None for m in mask])
 
 
 def cuda_is_compatible_layout(field: "Storage") -> bool:
     stride = 0
-    layout_map = cuda_layout(field.mask)
-    if len(field.strides) < len(layout_map):
+    layout_map = make_cuda_layout_map(field.mask)
+    flattened_layout = [index for index in layout_map if index is not None]
+    if len(field.strides) < len(flattened_layout):
         return False
-    for dim in reversed(np.argsort(layout_map)):
+    for dim in reversed(np.argsort(flattened_layout)):
         if field.strides[dim] < stride:
             return False
         stride = field.strides[dim]
@@ -159,7 +163,8 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         gt_ir.BinaryOperator.SUB: "-",
         gt_ir.BinaryOperator.MUL: "*",
         gt_ir.BinaryOperator.DIV: "/",
-        gt_ir.BinaryOperator.POW: lambda lhs, rhs: "pow({lhs}, {rhs})".format(lhs=lhs, rhs=rhs),
+        gt_ir.BinaryOperator.POW: "pow({}, {})".format,
+        gt_ir.BinaryOperator.MOD: "fmod({}, {})".format,
         gt_ir.BinaryOperator.AND: "&&",
         gt_ir.BinaryOperator.OR: "||",
         gt_ir.BinaryOperator.LT: "<",
@@ -266,6 +271,9 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
     def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> str:
         assert node.name in self.apply_block_symbols
+        if node.data_index:
+            raise ValueError("Only scalar fields are supported.")
+
         offset = [node.offset.get(name, 0) for name in self.domain.axes_names]
         if not all(i == 0 for i in offset):
             idx = ", ".join(str(i) for i in offset)
@@ -319,7 +327,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
     def visit_Cast(self, node: gt_ir.Cast) -> str:
         expr = self.visit(node.expr)
-        dtype = self.DATA_TYPE_TO_CPP[node.dtype]
+        dtype = self.DATA_TYPE_TO_CPP[node.data_type]
         return f"static_cast<{dtype}>({expr})"
 
     def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral) -> str:
@@ -458,16 +466,23 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 if value is not None:
                     constants[name] = value
 
+        api_names = [arg_info.name for arg_info in node.api_signature]
         arg_fields = []
         tmp_fields = []
         storage_ids = []
         max_ndim = 0
+
         for name, field_decl in node.fields.items():
             if name not in node.unreferenced:
                 max_ndim = max(max_ndim, len(field_decl.axes))
                 field_attributes = {
                     "name": field_decl.name,
                     "dtype": self._make_cpp_type(field_decl.data_type),
+                    "naxes": len(field_decl.axes),
+                    "axes": field_decl.axes,
+                    "selector": tuple(
+                        axis in field_decl.axes for axis in self.impl_node.domain.axes_names
+                    ),
                 }
                 if field_decl.is_api:
                     if field_decl.layout_id not in storage_ids:
@@ -476,6 +491,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                     arg_fields.append(field_attributes)
                 else:
                     tmp_fields.append(field_attributes)
+        tmp_fields = list(sorted(tmp_fields, key=lambda field: field["name"]))
 
         parameters = [
             {"name": parameter.name, "dtype": self._make_cpp_type(parameter.data_type)}
@@ -495,6 +511,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             multi_stages.append({"exec": str(multi_stage.iteration_order).lower(), "steps": steps})
 
         template_args = dict(
+            api_names=api_names,
             arg_fields=arg_fields,
             constants=constants,
             gt_backend=self.gt_backend_t,
@@ -529,7 +546,9 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     GT_BACKEND_T: str
 
-    MODULE_GENERATOR_CLASS = gt_backend.PyExtModuleGenerator
+    MODULE_GENERATOR_CLASS = PyExtModuleGenerator
+
+    USE_LEGACY_TOOLCHAIN = True
 
     PYEXT_GENERATOR_CLASS = GTPyExtGenerator
 
@@ -678,12 +697,10 @@ class GTMCBackend(BaseGTBackend):
         return self.make_extension(uses_cuda=False)
 
 
-class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
+class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
     def generate_pre_run(self) -> str:
         field_names = [
-            key
-            for key in self.args_data["field_info"]
-            if self.args_data["field_info"][key] is not None
+            key for key in self.args_data.field_info if self.args_data.field_info[key] is not None
         ]
 
         return "\n".join([f + ".host_to_device()" for f in field_names])
@@ -691,7 +708,7 @@ class GTCUDAPyModuleGenerator(gt_backend.CUDAPyExtModuleGenerator):
     def generate_post_run(self) -> str:
         output_field_names = [
             name
-            for name, info in self.args_data["field_info"].items()
+            for name, info in self.args_data.field_info.items()
             if info is not None and info.access == gt_definitions.AccessKind.READ_WRITE
         ]
 
@@ -706,11 +723,11 @@ class GTCUDABackend(BaseGTBackend):
     GT_BACKEND_T = "cuda"
 
     name = "gtcuda"
-    options = BaseGTBackend.GT_BACKEND_OPTS
+    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
     storage_info = {
         "alignment": 32,
         "device": "gpu",
-        "layout_map": cuda_layout,
+        "layout_map": make_cuda_layout_map,
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }

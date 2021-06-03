@@ -158,6 +158,7 @@ def recursive_write(root_path: pathlib.Path, tree: Dict[str, Union[str, dict]]):
             src_path.write_text(cast(str, value))
 
 
+# TODO (ricoh): replace GTCBackendMixin with a pipeline analog to gtir pipeline.
 @register
 class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
     """NumPy backend using gtc."""

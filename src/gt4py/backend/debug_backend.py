@@ -23,6 +23,7 @@ from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.utils import text as gt_text
 
+from .module_generator import BaseModuleGenerator
 from .python_generator import PythonSourceGenerator
 
 
@@ -110,13 +111,16 @@ class DebugSourceGenerator(PythonSourceGenerator):
     def visit_FieldRef(self, node: gt_ir.FieldRef):
         assert node.name in self.block_info.accessors
         index = []
-        for ax in self.domain.axes_names:
+        for ax in self.impl_node.fields[node.name].axes:
             offset = "{:+d}".format(node.offset[ax]) if ax in node.offset else ""
             index.append("{ax}{offset}".format(ax=ax, offset=offset))
 
+        index_str = f"({index[0]},)" if len(index) == 1 else ", ".join(index)
         source = "{name}{marker}[{index}]".format(
-            marker=self.origin_marker, name=node.name, index=", ".join(index)
+            marker=self.origin_marker, name=node.name, index=index_str
         )
+        if node.data_index:
+            source = f"{source}[{','.join(str(i) for i in node.data_index)}]"
 
         return source
 
@@ -162,7 +166,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
         return ["".join([str(item) for item in line]) for line in body_sources.lines]
 
 
-class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
+class DebugModuleGenerator(BaseModuleGenerator):
     def __init__(self):
         super().__init__()
         self.source_generator = DebugSourceGenerator(
@@ -239,3 +243,4 @@ class DebugBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
     languages = {"computation": "python", "bindings": []}
 
     MODULE_GENERATOR_CLASS = DebugModuleGenerator
+    USE_LEGACY_TOOLCHAIN = True

@@ -15,8 +15,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, ClassVar, Dict, Generic, List, Optional, Type, TypeVar, Union, cast
+from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union, cast
 
+import numpy as np
 import pydantic
 from pydantic import validator
 from pydantic.class_validators import root_validator
@@ -32,9 +33,10 @@ from eve import (
     SymbolTableTrait,
 )
 from eve import exceptions as eve_exceptions
+from eve import utils
 from eve.type_definitions import SymbolRef
 from eve.typingx import RootValidatorType, RootValidatorValuesType
-from gtc.utils import flatten_list
+from gtc.utils import dimension_flags_to_names, flatten_list
 
 
 class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
@@ -151,6 +153,7 @@ class NativeFunction(StrEnum):
     ARCTAN = "arctan"
 
     SQRT = "sqrt"
+    POW = "pow"
     EXP = "exp"
     LOG = "log"
 
@@ -169,25 +172,29 @@ class NativeFunction(StrEnum):
 
 
 NativeFunction.IR_OP_TO_NUM_ARGS = {
-    NativeFunction.ABS: 1,
-    NativeFunction.MIN: 2,
-    NativeFunction.MAX: 2,
-    NativeFunction.MOD: 2,
-    NativeFunction.SIN: 1,
-    NativeFunction.COS: 1,
-    NativeFunction.TAN: 1,
-    NativeFunction.ARCSIN: 1,
-    NativeFunction.ARCCOS: 1,
-    NativeFunction.ARCTAN: 1,
-    NativeFunction.SQRT: 1,
-    NativeFunction.EXP: 1,
-    NativeFunction.LOG: 1,
-    NativeFunction.ISFINITE: 1,
-    NativeFunction.ISINF: 1,
-    NativeFunction.ISNAN: 1,
-    NativeFunction.FLOOR: 1,
-    NativeFunction.CEIL: 1,
-    NativeFunction.TRUNC: 1,
+    NativeFunction(f): v  # instead of noqa on every line
+    for f, v in {
+        NativeFunction.ABS: 1,
+        NativeFunction.MIN: 2,
+        NativeFunction.MAX: 2,
+        NativeFunction.MOD: 2,
+        NativeFunction.SIN: 1,
+        NativeFunction.COS: 1,
+        NativeFunction.TAN: 1,
+        NativeFunction.ARCSIN: 1,
+        NativeFunction.ARCCOS: 1,
+        NativeFunction.ARCTAN: 1,
+        NativeFunction.SQRT: 1,
+        NativeFunction.POW: 2,
+        NativeFunction.EXP: 1,
+        NativeFunction.LOG: 1,
+        NativeFunction.ISFINITE: 1,
+        NativeFunction.ISINF: 1,
+        NativeFunction.ISNAN: 1,
+        NativeFunction.FLOOR: 1,
+        NativeFunction.CEIL: 1,
+        NativeFunction.TRUNC: 1,
+    }.items()
 }
 
 
@@ -207,6 +214,7 @@ class LocNode(Node):
     loc: Optional[SourceLocation]
 
 
+@utils.noninstantiable
 class Expr(LocNode):
     """
     Expression base class.
@@ -219,19 +227,10 @@ class Expr(LocNode):
     dtype: Optional[DataType]
     kind: ExprKind
 
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Expr:
-            raise TypeError("Trying to instantiate `Expr` abstract class.")
-        super().__init__(*args, **kwargs)
 
-
+@utils.noninstantiable
 class Stmt(LocNode):
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Stmt:
-            raise TypeError("Trying to instantiate `Stmt` abstract class.")
-        super().__init__(*args, **kwargs)
+    pass
 
 
 def verify_condition_is_boolean(parent_node_cls: Node, cond: Expr) -> Expr:
@@ -305,11 +304,18 @@ class ScalarAccess(LocNode):
 class FieldAccess(LocNode):
     name: SymbolRef
     offset: CartesianOffset
+    data_index: List[int] = []
     kind = ExprKind.FIELD
 
     @classmethod
     def centered(cls, *, name: str, loc: SourceLocation = None) -> "FieldAccess":
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
+
+    @validator("data_index")
+    def nonnegative_data_index(cls, data_index: List[int]) -> List[int]:
+        if data_index and any(index < 0 for index in data_index):
+            raise ValueError("Data indices must be nonnegative")
+        return data_index
 
 
 class BlockStmt(GenericNode, SymbolTableTrait, Generic[StmtT]):
@@ -502,6 +508,9 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> RootValidatorT
     def _impl(
         cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
     ) -> RootValidatorValuesType:
+        if values["func"] in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
+            values["dtype"] = DataType.BOOL
+            return values
         # assumes all NativeFunction args have a common dtype
         common_dtype = verify_and_get_common_dtype(cls, values["args"], strict=strict)
         if common_dtype:
@@ -533,7 +542,7 @@ def validate_dtype_is_set() -> RootValidatorType:
 
 
 def validate_symbol_refs() -> RootValidatorType:
-    """Works only, if only the root node has a symbol table."""
+    """Validate that symbol refs are found in a symbol table valid at the current scope."""
 
     def _impl(
         cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
@@ -547,7 +556,7 @@ def validate_symbol_refs() -> RootValidatorType:
                     if isinstance(metadata["definition"].type_, type) and issubclass(
                         metadata["definition"].type_, SymbolRef
                     ):
-                        if getattr(node, name) not in symtable:
+                        if getattr(node, name) and getattr(node, name) not in symtable:
                             self.missing_symbols.append(getattr(node, name))
 
                 if isinstance(node, SymbolTableTrait):
@@ -572,6 +581,100 @@ def validate_symbol_refs() -> RootValidatorType:
     return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
 
 
+class _LvalueDimsValidator(NodeVisitor):
+    def __init__(self, vertical_loop_type: Type[Node], decl_type: Type[Node]) -> None:
+        if not vertical_loop_type.__annotations__.get("loop_order") is LoopOrder:
+            raise ValueError(
+                f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
+            )
+        if not decl_type.__annotations__.get("dimensions") is Tuple[bool, bool, bool]:
+            raise ValueError(f"Field decl type {decl_type} has no `dimensions` attribute")
+        self.vertical_loop_type = vertical_loop_type
+        self.decl_type = decl_type
+
+    def visit_Node(
+        self,
+        node: Node,
+        *,
+        symtable: Dict[str, Any],
+        loop_order: Optional[LoopOrder] = None,
+        **kwargs: Any,
+    ) -> None:
+        if isinstance(node, self.vertical_loop_type):
+            loop_order = node.loop_order
+        if isinstance(node, SymbolTableTrait):
+            symtable = {**symtable, **node.symtable_}
+        self.generic_visit(node, symtable=symtable, loop_order=loop_order, **kwargs)
+
+    def visit_AssignStmt(
+        self,
+        node: AssignStmt,
+        *,
+        loop_order: LoopOrder,
+        symtable: Dict[str, Any],
+        **kwargs: Any,
+    ) -> None:
+        if not isinstance(symtable[node.left.name], self.decl_type):
+            return None
+        allowed_flags = self._allowed_flags(loop_order)
+        flags = symtable[node.left.name].dimensions
+        if flags not in allowed_flags:
+            dims = dimension_flags_to_names(flags)
+            raise ValueError(
+                f"Not allowed to assign to {dims}-field `{node.left.name}` in {loop_order.name}."
+            )
+        return None
+
+    def _allowed_flags(self, loop_order: LoopOrder) -> List[Tuple[bool, bool, bool]]:
+        allowed_flags = [(True, True, True)]  # ijk always allowed
+        if loop_order is not LoopOrder.PARALLEL:
+            allowed_flags.append((True, True, False))  # ij only allowed in FORWARD and BACKWARD
+        return allowed_flags
+
+
+# TODO(ricoh) consider making gtir.Decl & oir.Decl common and / or adding a VerticalLoop baseclass
+# TODO(ricoh) in common instead of passing type arguments
+def validate_lvalue_dims(
+    vertical_loop_type: Type[Node], decl_type: Type[Node]
+) -> RootValidatorType:
+    """
+    Validate lvalue dimensions using the root node symbol table.
+
+    The following tree structure is expected::
+
+        Root(`SymTableTrait`)
+        |- *
+           |- `vertical_loop_type`
+               |- loop_order: `LoopOrder`
+               |- *
+                  |- AssignStmt(`AssignStmt`)
+                  |- left: `Node`, validated only if reference to `decl_type` in symtable
+        |- symtable_: Symtable[name, Union[`decl_type`, *]]
+
+        DeclType
+        |- dimensions: `Tuple[bool, bool, bool]`
+
+    Parameters
+    ----------
+    vertical_loop_type:
+        A node type with an `LoopOrder` attribute named `loop_order`
+    decl_type:
+        A declaration type with field dimension information in the format
+        `Tuple[bool, bool, bool]` in an attribute named `dimensions`.
+    """
+
+    def _impl(
+        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
+        for _, children in values.items():
+            _LvalueDimsValidator(vertical_loop_type, decl_type).visit(
+                children, symtable=values["symtable_"]
+            )
+        return values
+
+    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+
+
 class AxisBound(Node):
     level: LevelMarker
     offset: int = 0
@@ -591,3 +694,65 @@ class AxisBound(Node):
     @classmethod
     def end(cls) -> "AxisBound":
         return cls.from_end(0)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, AxisBound):
+            return False
+        return self.level == other.level and self.offset == other.offset
+
+    def __lt__(self, other: "AxisBound") -> bool:
+        if not isinstance(other, AxisBound):
+            return NotImplemented
+        return (self.level == LevelMarker.START and other.level == LevelMarker.END) or (
+            self.level == other.level and self.offset < other.offset
+        )
+
+    def __le__(self, other: "AxisBound") -> bool:
+        if not isinstance(other, AxisBound):
+            return NotImplemented
+        return self < other or self == other
+
+    def __gt__(self, other: "AxisBound") -> bool:
+        if not isinstance(other, AxisBound):
+            return NotImplemented
+        return not self < other and not self == other
+
+    def __ge__(self, other: "AxisBound") -> bool:
+        if not isinstance(other, AxisBound):
+            return NotImplemented
+        return not self < other
+
+
+def data_type_to_typestr(dtype: DataType) -> str:
+
+    table = {
+        DataType.BOOL: "bool",
+        DataType.INT8: "int8",
+        DataType.INT16: "int16",
+        DataType.INT32: "int32",
+        DataType.INT64: "int64",
+        DataType.FLOAT32: "float32",
+        DataType.FLOAT64: "float64",
+    }
+    if not isinstance(dtype, DataType):
+        raise TypeError("Can only convert instances of DataType to typestr.")
+
+    if dtype not in table:
+        raise ValueError("Can not convert INVALID, AUTO or DEFAULT to typestr.")
+    return np.dtype(table[dtype]).str
+
+
+def typestr_to_data_type(typestr: str) -> DataType:
+    if not isinstance(typestr, str) or len(typestr) < 3 or not typestr[2:].isnumeric():
+        return DataType.INVALID  # type: ignore
+    table = {
+        ("b", 1): DataType.BOOL,
+        ("i", 1): DataType.INT8,
+        ("i", 2): DataType.INT16,
+        ("i", 4): DataType.INT32,
+        ("i", 8): DataType.INT64,
+        ("f", 4): DataType.FLOAT32,
+        ("f", 8): DataType.FLOAT64,
+    }
+    key = (typestr[1], int(typestr[2:]))
+    return table.get(key, DataType.INVALID)  # type: ignore

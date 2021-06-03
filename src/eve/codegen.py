@@ -132,8 +132,14 @@ def format_python_source(
 def _get_clang_format() -> Optional[str]:
     """Return the clang-format executable, or None if not available."""
     executable = os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format")
-    ret = run([executable, "--version"], capture_output=True)
-    return executable if ret.returncode == 0 else None
+    try:
+        assert isinstance(executable, str)
+        if run([executable, "--version"], capture_output=True).returncode != 0:
+            return None
+    except Exception:
+        return None
+
+    return executable
 
 
 _CLANG_FORMAT_EXECUTABLE = _get_clang_format()
@@ -551,7 +557,6 @@ class MakoTemplate(BaseTemplate):
                 message += f" rendering error at template line: {e.lineno}, column: {getattr(e, 'pos', '?')}"  # type: ignore  # assume Mako exception
             except Exception:
                 message += " rendering error."
-
             raise TemplateRenderingError(message, template=self) from e
 
 

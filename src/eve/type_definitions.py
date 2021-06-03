@@ -31,7 +31,7 @@ from pydantic import NegativeFloat, NegativeInt, PositiveFloat, PositiveInt  # n
 from pydantic import StrictBool as Bool  # noqa: F401
 from pydantic import StrictFloat as Float  # noqa: F401
 from pydantic import StrictInt as Int  # noqa: F401
-from pydantic import StrictStr as Str  # noqa: F401
+from pydantic import StrictStr as Str
 from pydantic.types import ConstrainedStr
 
 from .typingx import Any, Callable, Generator, Type, Union
@@ -45,6 +45,10 @@ NOTHING = boltons.typeutils.make_sentinel(name="NOTHING", var_name="NOTHING")
 #: Typing definitions for `__get_validators__()` methods
 # (defined but not exported in `pydantic.typing`)
 PydanticCallableGenerator = Generator[Callable[..., Any], None, None]
+
+
+#: :class:`bytes subclass for strict field definition
+Bytes = bytes
 
 
 class Enum(enum.Enum):

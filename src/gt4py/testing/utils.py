@@ -40,16 +40,18 @@ def annotate_function(function, dtypes):
 
 def standardize_dtype_dict(dtypes):
     """Standardizes the dtype dict as it can be specified for the stencil test suites.
+
     In the input dictionary, a selection of possible dtypes or just a single dtype can be specified for a set of fields
     or a single field. This function makes sure that all keys are tuples (by wrapping single field names and single
-    dtypes as 1-tuples)"""
+    dtypes as 1-tuples)
+    """
     assert isinstance(dtypes, collections.abc.Mapping)
     assert all(
         (isinstance(k, str) or gt_utils.is_iterable_of(k, str)) for k in dtypes.keys()
     ), "Invalid key in 'dtypes'."
     assert all(
         (
-            isinstance(k, type)
+            isinstance(k, (type, np.dtype))
             or gt_utils.is_iterable_of(k, type)
             or gt_utils.is_iterable_of(k, np.dtype)
         )
@@ -62,14 +64,14 @@ def standardize_dtype_dict(dtypes):
             key = (key,)
         else:
             key = (*key,)
-        if isinstance(value, type):
+        if isinstance(value, (type, np.dtype)):
             value = (value,)
         else:
             value = (*value,)
         result[key] = value
 
     for key, value in result.items():
-        result[key] = [np.dtype(dt) for dt in result[key]]
+        result[key] = [np.dtype(dt) for dt in value]
 
     keys = [k for t in result.keys() for k in t]
     if not len(keys) == len(set(keys)):

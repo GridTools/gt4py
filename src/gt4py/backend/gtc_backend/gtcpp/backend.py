@@ -16,6 +16,7 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
+import gtc.utils as gtc_utils
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
@@ -25,21 +26,33 @@ from gt4py.backend.gt_backends import (
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
     cuda_is_compatible_type,
-    cuda_layout,
     gtcpu_is_compatible_type,
+    make_cuda_layout_map,
     make_mc_layout_map,
     make_x86_layout_map,
     mc_is_compatible_layout,
     x86_is_compatible_layout,
 )
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gt4py.backend.gtc_backend.mixin import GTCBackendMixin
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
-from gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-from gtc.passes.gtir_upcaster import upcast
+from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_dace_optimizations import GraphMerging, optimize_horizontal_executions
+from gtc.passes.oir_optimizations.caches import (
+    IJCacheDetection,
+    KCacheDetection,
+    PruneKCacheFills,
+    PruneKCacheFlushes,
+)
+from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
+from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
+from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.passes.oir_optimizations.temporaries import (
+    LocalTemporariesToScalars,
+    WriteBeforeReadTemporariesToScalars,
+)
+from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 
 
 if TYPE_CHECKING:
@@ -53,7 +66,10 @@ class GTCGTExtGenerator:
         self.gt_backend_t = gt_backend_t
         self.options = options
 
-    def __call__(self, oir) -> Dict[str, Dict[str, str]]:
+    def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
+        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+        oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+        oir = self._optimize_oir(oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
         bindings = GTCppBindingsCodegen.apply(
@@ -65,6 +81,21 @@ class GTCGTExtGenerator:
             "bindings": {"bindings" + bindings_ext: bindings},
         }
 
+    # TODO (ricoh): replace with pipeline analog to gtir pipline
+    def _optimize_oir(self, oir):
+        oir = optimize_horizontal_executions(oir, GraphMerging)
+        oir = AdjacentLoopMerging().visit(oir)
+        oir = LocalTemporariesToScalars().visit(oir)
+        oir = WriteBeforeReadTemporariesToScalars().visit(oir)
+        oir = OnTheFlyMerging().visit(oir)
+        oir = MaskStmtMerging().visit(oir)
+        oir = NoFieldAccessPruning().visit(oir)
+        oir = IJCacheDetection().visit(oir)
+        oir = KCacheDetection().visit(oir)
+        oir = PruneKCacheFills().visit(oir)
+        oir = PruneKCacheFlushes().visit(oir)
+        return oir
+
 
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     def __init__(self):
@@ -75,31 +106,44 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return self._unique_index
 
     def visit_DataType(self, dtype: DataType, **kwargs):
-        if dtype == DataType.INT64:
-            return "long long"
-        elif dtype == DataType.FLOAT64:
-            return "double"
-        elif dtype == DataType.FLOAT32:
-            return "float"
-        elif dtype == DataType.BOOL:
-            return "bool"
-        else:
-            raise AssertionError(f"Invalid DataType value: {dtype}")
+        return gtcpp_codegen.GTCppCodegen().visit_DataType(dtype)
 
     def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
         assert "gt_backend_t" in kwargs
         if "external_arg" in kwargs:
+            domain_ndim = node.dimensions.count(True)
+            data_ndim = len(node.data_dims)
+            sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,3> {name}_origin".format(
-                    name=node.name
+                return "py::buffer {name}, std::array<gt::uint_t,{sid_ndim}> {name}_origin".format(
+                    name=node.name,
+                    sid_ndim=sid_ndim,
                 )
             else:
-                return """gt::sid::shift_sid_origin(gt::as_{sid_type}<{dtype}, 3,
-                    std::integral_constant<int, {unique_index}>>({name}), {name}_origin)""".format(
+                sid_def = """gt::as_{sid_type}<{dtype}, {sid_ndim},
+                    gt::integral_constant<int, {unique_index}>>({name})""".format(
+                    sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
                     name=node.name,
                     dtype=self.visit(node.dtype),
                     unique_index=self.unique_index(),
-                    sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
+                    sid_ndim=sid_ndim,
+                )
+                if domain_ndim != 3:
+                    gt_dims = [
+                        f"gt::stencil::dim::{dim}"
+                        for dim in gtc_utils.dimension_flags_to_names(node.dimensions)
+                    ]
+                    if data_ndim:
+                        gt_dims += [
+                            f"gt::integral_constant<int, {3 + dim}>" for dim in range(data_ndim)
+                        ]
+                    sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
+                        gt_dims=", ".join(gt_dims), sid_def=sid_def
+                    )
+
+                return "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
+                    sid_def=sid_def,
+                    name=node.name,
                 )
 
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
@@ -128,14 +172,14 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
         #include <gridtools/stencil/global_parameter.hpp>
         #include <gridtools/sid/sid_shift_origin.hpp>
+        #include <gridtools/sid/rename_dimensions.hpp>
         #include "computation.hpp"
         namespace gt = gridtools;
         namespace py = ::pybind11;
-        %if len(entry_params) > 0:
         PYBIND11_MODULE(${module_name}, m) {
-            m.def("run_computation", [](std::array<gt::uint_t, 3> domain,
-            ${','.join(entry_params)},
-            py::object exec_info){
+            m.def("run_computation", [](
+            ${','.join(["std::array<gt::uint_t, 3> domain", *entry_params, 'py::object exec_info'])}
+            ){
                 if (!exec_info.is(py::none()))
                 {
                     auto exec_info_dict = exec_info.cast<py::dict>();
@@ -155,7 +199,6 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                 }
 
             }, "Runs the given computation");}
-        %endif
         """
     )
 
@@ -166,12 +209,13 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return formatted_code
 
 
-class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin, GTCBackendMixin):
+class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
+    USE_LEGACY_TOOLCHAIN = False
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.oir, uses_cuda=uses_cuda)
+        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=uses_cuda)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
@@ -242,7 +286,7 @@ class GTCGTGpuBackend(GTCGTBaseBackend):
     storage_info = {
         "alignment": 32,
         "device": "gpu",
-        "layout_map": cuda_layout,
+        "layout_map": make_cuda_layout_map,
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }

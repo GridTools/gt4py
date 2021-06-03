@@ -27,29 +27,26 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-from typing import Any, Dict, List
+from typing import Any, Generator, List, Set, Tuple
 
 from pydantic import validator
+from pydantic.class_validators import root_validator
 
-from eve import Node, Str, SymbolName, SymbolTableTrait
+from eve import Node, Str, SymbolName, SymbolTableTrait, field, utils
+from eve.iterators import TreeIterationItem
+from eve.typingx import RootValidatorValuesType
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
 
+@utils.noninstantiable
 class Expr(common.Expr):
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Expr:
-            raise TypeError("Trying to instantiate `Expr` abstract class.")
-        super().__init__(*args, **kwargs)
+    pass
 
 
+@utils.noninstantiable
 class Stmt(common.Stmt):
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Stmt:
-            raise TypeError("Trying to instantiate `Stmt` abstract class.")
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class BlockStmt(common.BlockStmt[Stmt], Stmt):
@@ -60,17 +57,8 @@ class Literal(common.Literal, Expr):  # type: ignore
     pass
 
 
-class CartesianOffset(Node):
-    i: int
-    j: int
-    k: int
-
-    @classmethod
-    def zero(cls) -> "CartesianOffset":
-        return cls(i=0, j=0, k=0)
-
-    def to_dict(self) -> Dict[str, int]:
-        return {"i": self.i, "j": self.j, "k": self.k}
+class CartesianOffset(common.CartesianOffset):
+    pass
 
 
 class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
@@ -95,6 +83,24 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
         if v.offset.i != 0 or v.offset.j != 0:
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
         return v
+
+    @root_validator(skip_on_failure=True)
+    def no_write_and_read_with_offset_of_same_field(
+        cls, values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
+        if isinstance(values["left"], FieldAccess):
+            offset_reads = (
+                values["right"]
+                .iter_tree()
+                .if_isinstance(FieldAccess)
+                .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
+                .getattr("name")
+                .to_set()
+            )
+            if values["left"].name in offset_reads:
+                raise ValueError("Self-assignment with offset is illegal.")
+
+        return values
 
     _dtype_validation = common.assign_stmt_dtype_validation(strict=False)
 
@@ -170,8 +176,8 @@ class Decl(LocNode):  # TODO probably Stmt
 
 
 class FieldDecl(Decl):
-    # TODO dimensions
-    pass
+    dimensions: Tuple[bool, bool, bool]
+    data_dims: Tuple[int, ...] = field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):
@@ -190,6 +196,53 @@ class VerticalLoop(LocNode):
     temporaries: List[FieldDecl]
     body: List[Stmt]
 
+    @root_validator(skip_on_failure=True)
+    def no_write_and_read_with_horizontal_offset(
+        cls, values: RootValidatorValuesType
+    ) -> RootValidatorValuesType:
+        """
+        In the same VerticalLoop a field must not be written and read with a horizontal offset.
+
+        Temporaries don't have this contraint. Backends are required to implement temporaries with block-private halos.
+        """
+        # TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode
+        @utils.as_xiter
+        def _collection_iter_tree(
+            collection: List[Node],
+        ) -> Generator[TreeIterationItem, None, None]:
+            for elem in collection:
+                yield from elem.iter_tree()
+
+        def _writes(stmts: List[Stmt]) -> Set[str]:
+            result = set()
+            for left in _collection_iter_tree(stmts).if_isinstance(ParAssignStmt).getattr("left"):
+                result |= left.iter_tree().if_isinstance(FieldAccess).getattr("name").to_set()
+            return result
+
+        def _reads_with_offset(stmts: List[Stmt]) -> Set[str]:
+            return (
+                _collection_iter_tree(stmts)
+                .if_isinstance(FieldAccess)
+                .filter(
+                    lambda acc: acc.offset.i != 0 or acc.offset.j != 0
+                )  # writes always have zero offset
+                .getattr("name")
+                .to_set()
+            )
+
+        writes = _writes(values["body"])
+        reads_with_offset = _reads_with_offset(values["body"])
+
+        intersec = writes.intersection(reads_with_offset)
+        non_tmp_fields = {
+            acc for acc in intersec if acc not in {tmp.name for tmp in values["temporaries"]}
+        }
+        if len(non_tmp_fields) > 0:
+            raise ValueError(
+                f"Illegal write and read with horizontal offset detected for {non_tmp_fields}."
+            )
+        return values
+
 
 class Stencil(LocNode, SymbolTableTrait):
     name: Str
@@ -202,3 +255,4 @@ class Stencil(LocNode, SymbolTableTrait):
         return [p.name for p in self.params]
 
     _validate_symbol_refs = common.validate_symbol_refs()
+    _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)

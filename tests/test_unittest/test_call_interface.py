@@ -22,14 +22,10 @@ import gt4py.gtscript as gtscript
 import gt4py.storage as gt_storage
 from gt4py.gtscript import Field
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
+from ..definitions import INTERNAL_CPU_BACKENDS
 
 
-INTERNAL_CPU_BACKENDS = list(set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
-
-
-@gtscript.stencil(backend="numpy")
-def stencil(
+def base_stencil(
     field1: Field[np.float64],
     field2: Field[np.float64],
     field3: Field[np.float32],
@@ -43,6 +39,8 @@ def stencil(
 
 
 def test_origin_selection():
+    stencil = gtscript.stencil(definition=base_stencil, backend="numpy")
+
     A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
@@ -50,6 +48,7 @@ def test_origin_selection():
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
+
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
     assert A[1, 1, 1] == 4
@@ -93,6 +92,8 @@ def test_origin_selection():
 
 
 def test_domain_selection():
+    stencil = gtscript.stencil(definition=base_stencil, backend="numpy")
+
     A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
@@ -100,6 +101,7 @@ def test_domain_selection():
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
+
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
     assert A[1, 1, 1] == 4
@@ -177,12 +179,9 @@ def test_default_arguments(backend):
     np.testing.assert_equal(arg1, 196 * np.ones((3, 3, 3)))
     branch_false(arg1, arg2, arg3, par1=2.0, par3=2.0)
     np.testing.assert_equal(arg1, 56 * np.ones((3, 3, 3)))
-    try:
+
+    with pytest.raises((ValueError, AssertionError)):
         branch_false(arg1, arg2, par1=2.0, par3=2.0)
-    except ValueError:
-        pass
-    else:
-        assert False
 
     arg1 = gt_storage.ones(
         backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
@@ -202,12 +201,9 @@ def test_default_arguments(backend):
     np.testing.assert_equal(arg1, 100 * np.ones((3, 3, 3)))
     branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0, par3=3.0)
     np.testing.assert_equal(arg1, 60 * np.ones((3, 3, 3)))
-    try:
+
+    with pytest.raises((TypeError, AssertionError)):
         branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0)
-    except ValueError:
-        pass
-    else:
-        assert False
 
 
 @pytest.mark.parametrize("backend", INTERNAL_CPU_BACKENDS)
@@ -371,3 +367,37 @@ def test_exec_info(backend):
         assert "run_cpp_start_time" in exec_info
         assert "run_cpp_end_time" in exec_info
         assert exec_info["run_cpp_end_time"] > exec_info["run_cpp_start_time"]
+
+
+class TestAxesMismatch:
+    @pytest.fixture
+    def sample_stencil(self):
+        @gtscript.stencil(backend="debug")
+        def _stencil(
+            field_out: gtscript.Field[gtscript.IJ, np.float64],
+        ):
+            with computation(FORWARD), interval(...):
+                field_out = 1.0
+
+        return _stencil
+
+    def test_ndarray(self, sample_stencil):
+        with pytest.raises(
+            ValueError, match="Storage for '.*' has 3 dimensions but the API signature expects 2 .*"
+        ):
+            sample_stencil(field_out=np.ndarray((3, 3, 3), np.float64))
+
+    def test_storage(self, sample_stencil):
+        with pytest.raises(
+            Exception,
+            match="Storage for '.*' has domain mask '.*' but the API signature expects '\[I, J\]'",
+        ):
+            sample_stencil(
+                field_out=gt_storage.empty(
+                    shape=(3, 3),
+                    mask=[True, False, True],
+                    dtype=np.float64,
+                    backend="debug",
+                    default_origin=(0, 0),
+                )
+            )
