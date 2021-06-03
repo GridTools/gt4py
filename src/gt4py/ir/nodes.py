@@ -50,10 +50,6 @@ NativeFunction enumeration (:class:`NativeFunction`)
     [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
     `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
-AccessIntent enumeration (:class:`AccessIntent`)
-    Access permissions
-    [`READ_ONLY`, `READ_WRITE`]
-
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
     [`START`, `END`]
@@ -143,7 +139,7 @@ Implementation IR
  ::
 
     Accessor    = ParameterAccessor(symbol: str)
-                | FieldAccessor(symbol: str, intent: AccessIntent, extent: Extent)
+                | FieldAccessor(symbol: str, intent: AccessKind, extent: Extent)
 
     ApplyBlock(interval: AxisInterval,
                local_symbols: Dict[str, VarDecl],
@@ -179,7 +175,7 @@ from typing import List, Sequence
 import numpy as np
 
 from gt4py import utils as gt_utils
-from gt4py.definitions import CartesianSpace, Extent, Index
+from gt4py.definitions import AccessKind, CartesianSpace, Extent, Index
 from gt4py.utils.attrib import Any as Any
 from gt4py.utils.attrib import Dict as DictOf
 from gt4py.utils.attrib import List as ListOf
@@ -272,15 +268,6 @@ class Builtin(enum.Enum):
             result = cls.FALSE
 
         return result
-
-    def __str__(self):
-        return self.name
-
-
-@enum.unique
-class AccessIntent(enum.Enum):
-    READ_ONLY = 0
-    READ_WRITE = 1
 
     def __str__(self):
         return self.name
@@ -755,7 +742,7 @@ class ParameterAccessor(Accessor):
 @attribclass
 class FieldAccessor(Accessor):
     symbol = attribute(of=str)
-    intent = attribute(of=AccessIntent)
+    intent = attribute(of=AccessKind)
     extent = attribute(of=Extent, default=Extent.zeros())
 
 
