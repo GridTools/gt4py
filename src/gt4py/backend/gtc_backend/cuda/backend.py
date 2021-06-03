@@ -84,11 +84,11 @@ class GTCCudaExtGenerator:
     def _optimize_oir(self, oir):
         oir = optimize_horizontal_executions(oir, GraphMerging)
         oir = AdjacentLoopMerging().visit(oir)
-        oir = MaskInlining().visit(oir)
         oir = LocalTemporariesToScalars().visit(oir)
         oir = WriteBeforeReadTemporariesToScalars().visit(oir)
         oir = OnTheFlyMerging().visit(oir)
         oir = MaskStmtMerging().visit(oir)
+        oir = MaskInlining().visit(oir)
         oir = IJCacheDetection().visit(oir)
         oir = KCacheDetection().visit(oir)
         oir = PruneKCacheFills().visit(oir)
