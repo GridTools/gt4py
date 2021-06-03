@@ -37,5 +37,5 @@ jobs:
       run: |
         pyversion_no_dot="${{ matrix.python-version }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
-        pip install tox clang-format
+        pip install -c constraints.txt tox clang-format
         tox -r -e py${pyversion_no_dot}-internal-cpu
