@@ -118,6 +118,15 @@ advance:
     python -m gt4py.gt_src_manager remove  # -m 1 and/or -m 2
     pip uninstall gt4py
 
+
+Reproducible installation
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+GT4Py provides a ``constraints.txt`` file that lists particular versions of dependencies.
+These dependencies are those that are used to run continuous integration tests, so they are guaranteed to work.
+In order to install gt4py using these versions, add ``-c constraints.txt`` to the ``pip`` call.
+
+
 Recommended installation for developers
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
