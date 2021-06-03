@@ -186,12 +186,8 @@ class AxisIntervalParser(gt_meta.ASTPass):
 
         if isinstance(node, ast.Slice):
             slice_node = node
-        elif isinstance(node, ast.Subscript):
-            slice_node = (
-                cls.slice_from_value(node)
-                if isinstance(node.slice, (ast.Index, ast.Constant))
-                else node.slice
-            )
+        elif isinstance(node.slice, ast.Slice):
+            slice_node = node.slice
         else:
             slice_node = cls.slice_from_value(node)
 
@@ -343,10 +339,12 @@ class AxisIntervalParser(gt_meta.ASTPass):
         if node.value.id != self.axis_name:
             raise self.interval_error
 
-        if not isinstance(node.slice, ast.Index):
-            raise self.interval_error
+        if isinstance(node.slice, ast.Index):
+            index = self.visit(node.slice.value)
+        else:
+            index = self.visit(node.slice)
 
-        return gtscript.AxisIndex(axis=self.axis_name, index=self.visit(node.slice.value), offset=0)
+        return gtscript.AxisIndex(axis=self.axis_name, index=index)
 
 
 parse_interval_node = AxisIntervalParser.apply
