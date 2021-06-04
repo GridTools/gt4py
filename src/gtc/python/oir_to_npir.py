@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import typing
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
@@ -25,7 +26,7 @@ class Padding:
 
     def add_offsets(self, i: int, j: int, k: int) -> "Padding":
         for axis_index, value in enumerate([i, j, k]):
-            self.add_offset(name, axis_index, value)
+            self.add_offset(axis_index, value)
         return self
 
 
@@ -38,15 +39,11 @@ class OirToNpir(NodeTranslator):
 
         symbol_table: Dict[str, Any] = field(default_factory=lambda: {})
 
-        domain_padding: Padding = field(
-            default_factory=lambda: Padding()
-        )
+        domain_padding: Padding = field(default_factory=lambda: Padding())
 
-        field_padding: Dict[str, Padding] = field(
-            default_factory=lambda: {}
-        )
+        field_padding: Dict[str, Padding] = field(default_factory=lambda: {})
 
-        temp_defs: OrderedDict[str, npir.VectorAssign] = field(
+        temp_defs: typing.OrderedDict[str, npir.VectorAssign] = field(
             default_factory=lambda: OrderedDict({})
         )
 
@@ -74,11 +71,10 @@ class OirToNpir(NodeTranslator):
 
         padding: Padding = field(default_factory=lambda: Padding())
 
-        def add_offsets(self, i: int, j: int) -> "OirToNpir.ComputationContext":
+        def add_offsets(self, i: int, j: int) -> "OirToNpir.HorizontalContext":
             for axis_index, value in enumerate([i, j, 0]):
                 self.padding.add_offset(axis_index, value)
             return self
-
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
         ctx = self.ComputationContext(symbol_table=node.symtable_)
@@ -92,7 +88,10 @@ class OirToNpir(NodeTranslator):
                 scalar_names.append(decl.name)
         return npir.Computation(
             field_params=field_names,
-            field_paddings={key: {"lower": val.lower, "upper": val.upper} for key, val in ctx.field_padding.items()},
+            field_paddings={
+                key: {"lower": val.lower, "upper": val.upper}
+                for key, val in ctx.field_padding.items()
+            },
             params=[decl.name for decl in node.params],
             vertical_passes=vertical_passes,
             domain_padding=npir.DomainPadding(
@@ -126,13 +125,18 @@ class OirToNpir(NodeTranslator):
         )
 
     def visit_HorizontalExecution(
-        self, node: oir.HorizontalExecution, *, ctx: Optional[ComputationContext] = None, h_ctx: Optional[HorizontalContext] = None, **kwargs: Any
+        self,
+        node: oir.HorizontalExecution,
+        *,
+        ctx: Optional[ComputationContext] = None,
+        h_ctx: Optional[HorizontalContext] = None,
+        **kwargs: Any,
     ) -> npir.HorizontalRegion:
         h_ctx = h_ctx or self.HorizontalContext()
         mask = self.visit(node.mask, ctx=ctx, h_ctx=h_ctx, **kwargs)
         return npir.HorizontalRegion(
             body=self.visit(node.body, ctx=ctx, h_ctx=h_ctx, mask=mask, **kwargs),
-            padding=npir.DomainPadding(lower=h_ctx.padding.lower, upper=h_ctx.padding.upper)
+            padding=npir.DomainPadding(lower=h_ctx.padding.lower, upper=h_ctx.padding.upper),
         )
 
     def visit_AssignStmt(
@@ -170,7 +174,13 @@ class OirToNpir(NodeTranslator):
         return cast
 
     def visit_FieldAccess(
-        self, node: oir.FieldAccess, *, ctx: ComputationContext, h_ctx: HorizontalContext, parallel_k: bool, **kwargs: Any
+        self,
+        node: oir.FieldAccess,
+        *,
+        ctx: ComputationContext,
+        h_ctx: HorizontalContext,
+        parallel_k: bool,
+        **kwargs: Any,
     ) -> npir.FieldSlice:
         if not isinstance(ctx.symbol_table.get(node.name, None), oir.Temporary):
             k_offset = node.offset.k
