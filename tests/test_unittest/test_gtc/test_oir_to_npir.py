@@ -5,6 +5,8 @@ from gtc import common, oir
 from gtc.python import npir
 from gtc.python.oir_to_npir import OirToNpir
 
+from .oir_utils import VerticalLoopFactory, VerticalLoopSectionFactory
+
 
 class VerticalLoopBuilder:
     def __init__(self):
@@ -64,7 +66,7 @@ def test_stencil_to_computation():
                 dtype=common.DataType.INT32,
             ),
         ],
-        vertical_loops=[VerticalLoopBuilder().build()],
+        vertical_loops=[VerticalLoopFactory()],
     )
     computation = OirToNpir().visit(stencil)
 
@@ -73,9 +75,16 @@ def test_stencil_to_computation():
     assert len(computation.vertical_passes) == 1
 
 
-def test_vertical_loop_to_vertical_pass():
-    vertical_loop = VerticalLoopBuilder().build()
-    vertical_pass = OirToNpir().visit(vertical_loop)
+def test_vertical_loop_to_vertical_passes():
+    vertical_loop = VerticalLoopFactory(sections__0__horizontal_executions=[])
+    vertical_passes = OirToNpir().visit(vertical_loop)
+
+    assert vertical_passes[0].body == []
+
+
+def test_vertical_loop_section_to_vertical_pass():
+    vertical_loop_section = VerticalLoopSectionFactory(horizontal_executions=[])
+    vertical_pass = OirToNpir().visit(vertical_loop_section, loop_order=common.LoopOrder.PARALLEL)
 
     assert vertical_pass.body == []
 

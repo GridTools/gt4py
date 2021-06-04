@@ -100,14 +100,23 @@ class OirToNpir(NodeTranslator):
             ),
         )
 
-    def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, ctx: Optional[ComputationContext] = None, **kwargs: Any
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs) -> List[npir.VerticalPass]:
+        return self.visit(node.sections, v_caches=node.caches, loop_order=node.loop_order, **kwargs)
+
+    def visit_VerticalLoopSection(
+        self,
+        node: oir.VerticalLoop,
+        *,
+        loop_order: common.LoopOrder,
+        ctx: Optional[ComputationContext] = None,
+        v_caches: List[oir.CacheDesc] = None,
+        **kwargs: Any,
     ) -> npir.VerticalPass:
         ctx = ctx or self.ComputationContext()
         defined_temps = set(ctx.temp_defs.keys())
         kwargs.update(
             {
-                "parallel_k": True if node.loop_order == common.LoopOrder.PARALLEL else False,
+                "parallel_k": True if loop_order == common.LoopOrder.PARALLEL else False,
                 "lower_k": node.interval.start,
                 "upper_k": node.interval.end,
             }
@@ -121,7 +130,7 @@ class OirToNpir(NodeTranslator):
             temp_defs=undef_temps,
             lower=self.visit(node.interval.start, ctx=ctx, **kwargs),
             upper=self.visit(node.interval.end, ctx=ctx, **kwargs),
-            direction=self.visit(node.loop_order, ctx=ctx, **kwargs),
+            direction=self.visit(loop_order, ctx=ctx, **kwargs),
         )
 
     def visit_HorizontalExecution(
