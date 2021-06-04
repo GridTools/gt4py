@@ -18,7 +18,7 @@ import pytest
 from pydantic.error_wrappers import ValidationError
 
 from eve import SourceLocation
-from gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
+from gtc.common import ArithmeticOperator, ComparisonOperator, DataType, LevelMarker, LoopOrder
 from gtc.gtir import (
     AxisBound,
     Decl,
@@ -204,4 +204,20 @@ def test_while_without_boolean_condition():
                 right__name="bar",
             ),
             dtype=DataType.FLOAT32,
+        )
+
+
+def test_while_with_accumulated_extents():
+    with pytest.raises(ValueError, match=r"Field written with read offsets in while loop"):
+        WhileFactory(
+            cond=BinaryOpFactory(
+                left__name="a",
+                right__name="b",
+                op=ComparisonOperator.LT,
+                dtype=DataType.BOOL,
+            ),
+            body=[
+                ParAssignStmtFactory(left__name="a", right__name="b", right__offset__i=1),
+                ParAssignStmtFactory(left__name="b", right__name="a"),
+            ],
         )

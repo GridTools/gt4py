@@ -152,7 +152,22 @@ class While(common.While[Stmt, Expr], Stmt):
     No special rules apply.
     """
 
-    pass
+    @validator("body")
+    def verify_no_accumulated_extents(cls, body: List[Stmt]) -> List[Stmt]:
+        offset_reads = set()
+        field_writes = set()
+        for stmt in body:
+            field_writes |= stmt.iter_tree().if_isinstance(FieldAccess).getattr("name").to_set()
+            offset_reads |= (
+                stmt.iter_tree()
+                .if_isinstance(FieldAccess)
+                .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
+                .getattr("name")
+                .to_set()
+            )
+        if field_writes.intersection(offset_reads):
+            raise ValueError("Field written with read offsets in while loop")
+        return body
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):
