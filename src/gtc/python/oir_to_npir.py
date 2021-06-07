@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import itertools
 import typing
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -78,7 +79,11 @@ class OirToNpir(NodeTranslator):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
         ctx = self.ComputationContext(symbol_table=node.symtable_)
-        vertical_passes = [self.visit(vloop, ctx=ctx, **kwargs) for vloop in node.vertical_loops]
+        vertical_passes = list(
+            itertools.chain(
+                *[self.visit(vloop, ctx=ctx, **kwargs) for vloop in node.vertical_loops]
+            )
+        )
         field_names: List[str] = []
         scalar_names: List[str] = []
         for decl in node.params:
@@ -105,7 +110,7 @@ class OirToNpir(NodeTranslator):
 
     def visit_VerticalLoopSection(
         self,
-        node: oir.VerticalLoop,
+        node: oir.VerticalLoopSection,
         *,
         loop_order: common.LoopOrder,
         ctx: Optional[ComputationContext] = None,
@@ -142,10 +147,22 @@ class OirToNpir(NodeTranslator):
         **kwargs: Any,
     ) -> npir.HorizontalRegion:
         h_ctx = h_ctx or self.HorizontalContext()
-        mask = self.visit(node.mask, ctx=ctx, h_ctx=h_ctx, **kwargs)
         return npir.HorizontalRegion(
-            body=self.visit(node.body, ctx=ctx, h_ctx=h_ctx, mask=mask, **kwargs),
+            body=self.visit(node.body, ctx=ctx, h_ctx=h_ctx, **kwargs),
             padding=npir.DomainPadding(lower=h_ctx.padding.lower, upper=h_ctx.padding.upper),
+        )
+
+    def visit_MaskStmt(
+        self,
+        node: oir.MaskStmt,
+        *,
+        ctx: Optional[ComputationContext] = None,
+        h_ctx: Optional[HorizontalContext] = None,
+        **kwargs,
+    ) -> npir.MaskBlock:
+        mask = self.visit(node.mask, ctx=ctx, h_ctx=h_ctx, **kwargs)
+        return npir.MaskBlock(
+            mask=mask, body=self.visit(node.body, ctx=ctx, h_ctx=h_ctx, mask=mask, **kwargs)
         )
 
     def visit_AssignStmt(

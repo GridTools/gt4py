@@ -5,7 +5,18 @@ from gtc import common, oir
 from gtc.python import npir
 from gtc.python.oir_to_npir import OirToNpir
 
-from .oir_utils import VerticalLoopFactory, VerticalLoopSectionFactory
+from .oir_utils import (
+    AssignStmtFactory,
+    FieldAccessFactory,
+    FieldDeclFactory,
+    HorizontalExecutionFactory,
+    MaskStmtFactory,
+    ScalarAccessFactory,
+    StencilFactory,
+    TemporaryFactory,
+    VerticalLoopFactory,
+    VerticalLoopSectionFactory,
+)
 
 
 class VerticalLoopBuilder:
@@ -54,10 +65,10 @@ def parallel_k(request):
 
 
 def test_stencil_to_computation():
-    stencil = oir.Stencil(
+    stencil = StencilFactory(
         name="stencil",
         params=[
-            oir.FieldDecl(
+            FieldDeclFactory(
                 name="a",
                 dtype=common.DataType.FLOAT64,
             ),
@@ -66,7 +77,11 @@ def test_stencil_to_computation():
                 dtype=common.DataType.INT32,
             ),
         ],
-        vertical_loops=[VerticalLoopFactory()],
+        vertical_loops__0__sections__0__horizontal_executions__0__body=[
+            AssignStmtFactory(
+                left=FieldAccessFactory(name="a"), right=ScalarAccessFactory(name="b")
+            )
+        ],
     )
     computation = OirToNpir().visit(stencil)
 
@@ -90,11 +105,34 @@ def test_vertical_loop_section_to_vertical_pass():
 
 
 def test_horizontal_execution_to_vector_assigns():
-    horizontal_execution = HorizontalExecutionBuilder().build()
+    horizontal_execution = HorizontalExecutionFactory(body=[])
     horizontal_region = OirToNpir().visit(horizontal_execution)
     assert horizontal_region.body == []
     assert horizontal_region.padding.lower == (0, 0, 0)
     assert horizontal_region.padding.upper == (0, 0, 0)
+
+
+def test_mask_stmt_to_mask_block(parallel_k):
+    mask_stmt = MaskStmtFactory(body=[])
+    mask_block = OirToNpir().visit(
+        mask_stmt,
+        ctx=OirToNpir.ComputationContext(),
+        h_ctx=OirToNpir.HorizontalContext(),
+        parallel_k=parallel_k,
+    )
+    assert isinstance(mask_block.mask, npir.FieldSlice)
+    assert mask_block.body == []
+
+
+def test_mask_propagation(parallel_k):
+    mask_stmt = MaskStmtFactory()
+    mask_block = OirToNpir().visit(
+        mask_stmt,
+        ctx=OirToNpir.ComputationContext(),
+        h_ctx=OirToNpir.HorizontalContext(),
+        parallel_k=parallel_k,
+    )
+    assert mask_block.body[0].mask == mask_block.mask
 
 
 def test_assign_stmt_to_vector_assign(parallel_k):
@@ -127,9 +165,7 @@ def test_temp_assign(parallel_k):
             name="b", offset=common.CartesianOffset(i=-1, j=22, k=0), dtype=common.DataType.FLOAT64
         ),
     )
-    ctx = OirToNpir.ComputationContext(
-        symbol_table={"a": oir.Temporary(name="a", dtype=common.DataType.FLOAT64)}
-    )
+    ctx = OirToNpir.ComputationContext(symbol_table={"a": TemporaryFactory(name="a")})
     _ = OirToNpir().visit(
         assign_stmt, ctx=ctx, h_ctx=OirToNpir.HorizontalContext(), parallel_k=parallel_k, mask=None
     )

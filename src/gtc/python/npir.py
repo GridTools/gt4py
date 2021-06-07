@@ -124,6 +124,11 @@ class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpr
     mask: Optional[VectorExpression]
 
 
+class MaskBlock(common.Stmt):
+    mask: VectorExpression
+    body: List[VectorAssign]
+
+
 class DomainPadding(eve.Node):
     lower: Tuple[int, int, int]
     upper: Tuple[int, int, int]
