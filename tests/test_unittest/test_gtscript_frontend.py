@@ -58,7 +58,7 @@ def _get_method_name(back: int = 0):
     return stack[3]
 
 
-def parse_defintion(
+def parse_definition(
     definition_func: Callable[..., None],
     *,
     name: Optional[str] = None,
@@ -122,7 +122,7 @@ class TestInlinedExternals:
                     else 0
                 )
 
-        parse_defintion(definition_func)
+        parse_definition(definition_func)
 
     def test_missing(self, id_version):
         def definition_func(inout_field: gtscript.Field[float]):
@@ -132,7 +132,7 @@ class TestInlinedExternals:
                 inout_field = inout_field[0, 0, 0] + MISSING_CONSTANT
 
         with pytest.raises(gt_frontend.GTScriptSymbolError, match=r".*MISSING_CONSTANT.*"):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
         def definition_func(inout_field: gtscript.Field[float]):
             from gt4py.__gtscript__ import PARALLEL, computation, interval
@@ -143,7 +143,7 @@ class TestInlinedExternals:
         with pytest.raises(
             gt_frontend.GTScriptDefinitionError, match=r".*GLOBAL_NESTED_CONSTANTS.missing.*"
         ):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
     def test_recursive_function_imports(self, id_version):
         @gtscript.function
@@ -170,7 +170,7 @@ class TestInlinedExternals:
             with computation(PARALLEL), interval(...):
                 inout_field = func() + some_call()
 
-        def_ir = parse_defintion(
+        def_ir = parse_definition(
             definition_func,
             externals={
                 "some_call": func,
@@ -203,7 +203,7 @@ class TestInlinedExternals:
             with computation(PARALLEL), interval(...):
                 inout_field = some_function()
 
-        def_ir = parse_defintion(definition_func, externals={"func": some_function})
+        def_ir = parse_definition(definition_func, externals={"func": some_function})
 
         stmt = def_ir.computations[0].body.stmts[0]
         assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 0
@@ -219,7 +219,7 @@ class TestInlinedExternals:
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
 
         with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*WRONG_VALUE_CONSTANT.*"):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
 
 class TestFunction:
@@ -234,7 +234,7 @@ class TestFunction:
                 inout_field = func()
 
         with pytest.raises(TypeError, match=r"func is not a gtscript function"):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
 
 class TestImportedExternals:
@@ -269,7 +269,7 @@ class TestImportedExternals:
                     else 0
                 )
 
-        parse_defintion(definition_func, externals=externals)
+        parse_definition(definition_func, externals=externals)
 
     def test_missing(self):
         externals = dict(CONSTANT=-2.0, NESTED_CONSTANTS=types.SimpleNamespace(A=-100, B=-200))
@@ -282,7 +282,7 @@ class TestImportedExternals:
                 inout_field = inout_field[0, 0, 0] + MISSING_CONSTANT
 
         with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*MISSING_CONSTANT.*"):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
         def definition_func(inout_field: gtscript.Field[float]):
             from gt4py.__externals__ import NESTED_CONSTANTS
@@ -294,7 +294,7 @@ class TestImportedExternals:
         with pytest.raises(
             gt_frontend.GTScriptDefinitionError, match=r".*NESTED_CONSTANTS.missing.*"
         ):
-            parse_defintion(definition_func, externals=externals)
+            parse_definition(definition_func, externals=externals)
 
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, id_version, value_type):
@@ -307,7 +307,7 @@ class TestImportedExternals:
         externals = dict(WRONG_VALUE_CONSTANT=value_type())
 
         with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*WRONG_VALUE_CONSTANT.*"):
-            parse_defintion(definition_func, externals=externals)
+            parse_definition(definition_func, externals=externals)
 
 
 class TestIntervalSyntax:
@@ -316,7 +316,7 @@ class TestIntervalSyntax:
             with computation(PARALLEL), interval(0, 1):
                 field = 0
 
-        def_ir = parse_defintion(definition_func)
+        def_ir = parse_definition(definition_func)
         loc = def_ir.computations[0].interval.loc
         assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
             level=gt_ir.LevelMarker.START, offset=0, loc=loc
@@ -330,7 +330,7 @@ class TestIntervalSyntax:
             with computation(PARALLEL), interval(1, None):
                 field = 0
 
-        def_ir = parse_defintion(definition_func)
+        def_ir = parse_definition(definition_func)
         loc = def_ir.computations[0].interval.loc
         assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
             level=gt_ir.LevelMarker.START, offset=1, loc=loc
@@ -350,7 +350,7 @@ class TestIntervalSyntax:
             # An implementation quirk allows us to use gtscript.K[3] here,
             # although it is not great form to do so, since two-argument syntax
             # should not use AxisIndex objects.
-            def_ir = parse_defintion(definition_func, externals={"kstart": kstart})
+            def_ir = parse_definition(definition_func, externals={"kstart": kstart})
             loc = def_ir.computations[0].interval.loc
             assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
                 level=gt_ir.LevelMarker.START, offset=3, loc=loc
@@ -364,7 +364,7 @@ class TestIntervalSyntax:
             with computation(PARALLEL), interval(K[1:-1]):
                 field = 0
 
-        def_ir = parse_defintion(definition_func)
+        def_ir = parse_definition(definition_func)
         loc = def_ir.computations[0].interval.loc
         assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
             level=gt_ir.LevelMarker.START, offset=1, loc=loc
@@ -381,7 +381,7 @@ class TestIntervalSyntax:
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
         ):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
     def test_error_do_not_mix(self):
         def definition_func(field: gtscript.Field[float]):
@@ -389,7 +389,7 @@ class TestIntervalSyntax:
                 field = 0
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Two-argument syntax"):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
     def test_reversed_interval(self):
         def definition_func(field: gtscript.Field[float]):
@@ -399,7 +399,7 @@ class TestIntervalSyntax:
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
         ):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
 
 class TestExternalsWithSubroutines:
@@ -457,7 +457,7 @@ class TestExternalsWithSubroutines:
             "stage_laplacian_x": _stage_laplacian_x,
             "stage_laplacian_y": _stage_laplacian_y,
         }
-        parse_defintion(definition_func, externals=externals)
+        parse_definition(definition_func, externals=externals)
 
     def test_no_nested_function_call(self, id_version):
         @gtscript.function
@@ -471,7 +471,7 @@ class TestExternalsWithSubroutines:
                 phi = lap(lap(phi, dx), dx)
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"):
-            parse_defintion(
+            parse_definition(
                 definition_func,
                 externals={
                     "lap": _lap,
@@ -492,7 +492,7 @@ class TestFunctionReturn:
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError, match="should have a single return statement"
         ):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
     def test_number_return_args(self, id_version):
         @gtscript.function
@@ -507,7 +507,7 @@ class TestFunctionReturn:
             gt_frontend.GTScriptSyntaxError,
             match="Number of returns values does not match arguments on left side",
         ):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
     def test_multiple_return(self, id_version):
         @gtscript.function
@@ -522,7 +522,7 @@ class TestFunctionReturn:
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError, match="should have a single return statement"
         ):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
     def test_conditional_return(self, id_version):
         @gtscript.function
@@ -537,7 +537,7 @@ class TestFunctionReturn:
             with computation(PARALLEL), interval(...):
                 phi = test_conditional_return(phi)
 
-        parse_defintion(definition_func)
+        parse_definition(definition_func)
 
 
 class TestCompileTimeAssertions:
@@ -549,10 +549,10 @@ class TestCompileTimeAssertions:
                 compile_assert(EXTERNAL < 1)
                 inout_field = inout_field[0, 0, 0] + EXTERNAL
 
-        parse_defintion(definition, externals={"EXTERNAL": 0})
+        parse_definition(definition, externals={"EXTERNAL": 0})
 
         with pytest.raises(gt_frontend.GTScriptAssertionError, match="Assertion failed"):
-            parse_defintion(definition, externals={"EXTERNAL": 1})
+            parse_definition(definition, externals={"EXTERNAL": 1})
 
     def test_nested_attribute(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
@@ -560,7 +560,7 @@ class TestCompileTimeAssertions:
                 compile_assert(GLOBAL_VERY_NESTED_CONSTANTS.nested.A > 1)
                 inout_field = inout_field[0, 0, 0] + GLOBAL_VERY_NESTED_CONSTANTS.nested.A
 
-        parse_defintion(definition)
+        parse_definition(definition)
 
     def test_inside_func(self, id_version):
         @gtscript.function
@@ -572,7 +572,7 @@ class TestCompileTimeAssertions:
             with computation(PARALLEL), interval(...):
                 inout_field = assert_in_func(inout_field)
 
-        parse_defintion(definition)
+        parse_definition(definition)
 
     def test_runtime_error(self, id_version):
         def definition(inout_field: gtscript.Field[float]):
@@ -583,7 +583,7 @@ class TestCompileTimeAssertions:
             gt_frontend.GTScriptSyntaxError,
             match="Evaluation of compile_assert condition failed",
         ):
-            parse_defintion(definition)
+            parse_definition(definition)
 
 
 class TestReducedDimensions:
@@ -597,7 +597,7 @@ class TestReducedDimensions:
                 field_2d = field_1d[1]
                 field_3d = field_2d + field_1d
 
-        def_ir = parse_defintion(definition_func)
+        def_ir = parse_definition(definition_func)
 
         assert len(def_ir.computations) == 1
         first_stmt = def_ir.computations[0].body.stmts[0]
@@ -628,7 +628,7 @@ class TestReducedDimensions:
             gt_frontend.GTScriptSyntaxError,
             match="Incorrect offset specification detected. Found .* but the field has dimensions .*",
         ):
-            parse_defintion(definition)
+            parse_definition(definition)
 
     def test_error_write_1d(self, id_version):
         def definition(
@@ -642,7 +642,7 @@ class TestReducedDimensions:
             gt_frontend.GTScriptSyntaxError,
             match="Cannot assign to field .* as all parallel axes .* are not present",
         ):
-            parse_defintion(definition)
+            parse_definition(definition)
 
 
 class TestDataDimensions:
@@ -657,7 +657,7 @@ class TestDataDimensions:
                 field_out[0, 0, 0][1] = field_in
                 field_out[0, 0, 0][2] = field_in[0, 0, 0] + another_field[0, 0, 0][2]
 
-        parse_defintion(definition)
+        parse_definition(definition)
 
 
 class TestImports:
@@ -671,7 +671,7 @@ class TestImports:
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + EXTERNAL
 
-        parse_defintion(definition_func, externals={"EXTERNAL": 1.0})
+        parse_definition(definition_func, externals={"EXTERNAL": 1.0})
 
     @pytest.mark.parametrize(
         "id_case,import_line",
@@ -705,7 +705,7 @@ class TestImports:
         definition_func.__exec_source__ = definition_source
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
-            parse_defintion(definition_func)
+            parse_definition(definition_func)
 
 
 class TestDTypes:
@@ -722,7 +722,7 @@ class TestDTypes:
             with computation(PARALLEL), interval(...):
                 out_field = in_field + param
 
-        parse_defintion(definition_func)
+        parse_definition(definition_func)
 
         def definition_func(
             in_field: gtscript.Field["dtype"], out_field: gtscript.Field["dtype"], param: "dtype"
@@ -730,7 +730,7 @@ class TestDTypes:
             with computation(PARALLEL), interval(...):
                 out_field = in_field + param
 
-        parse_defintion(definition_func, dtypes={"dtype": test_dtype})
+        parse_definition(definition_func, dtypes={"dtype": test_dtype})
 
     @pytest.mark.parametrize(
         "id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes]))
@@ -757,7 +757,7 @@ class TestDTypes:
                 out_field = in_field + param
 
         with pytest.raises(ValueError, match=r".*data type descriptor.*"):
-            parse_defintion(
+            parse_definition(
                 definition_func,
                 dtypes={"dtype": test_dtype},
             )
@@ -769,14 +769,14 @@ class TestAssignmentSyntax:
             with computation(PARALLEL), interval(...):
                 out_field[...] = in_field
 
-        parse_defintion(func)
+        parse_definition(func)
 
     def test_offset(self):
         def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 out_field[0, 0, 0] = in_field
 
-        parse_defintion(func)
+        parse_definition(func)
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
@@ -784,7 +784,7 @@ class TestAssignmentSyntax:
                 with computation(PARALLEL), interval(...):
                     out_field[0, 0, 1] = in_field
 
-            parse_defintion(func)
+            parse_definition(func)
 
         def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
             from gt4py.__externals__ import offset
@@ -792,7 +792,7 @@ class TestAssignmentSyntax:
             with computation(PARALLEL), interval(...):
                 out_field[0, 0, offset] = in_field
 
-        parse_defintion(func, externals={"offset": 0})
+        parse_definition(func, externals={"offset": 0})
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
@@ -802,7 +802,7 @@ class TestAssignmentSyntax:
                 with computation(PARALLEL), interval(...):
                     out_field[0, 0, offset] = in_field
 
-            parse_defintion(func, externals={"offset": 1})
+            parse_definition(func, externals={"offset": 1})
 
     def test_slice(self):
 
@@ -812,7 +812,7 @@ class TestAssignmentSyntax:
                 with computation(PARALLEL), interval(...):
                     out_field[:, :, :] = in_field
 
-            parse_defintion(func)
+            parse_definition(func)
 
     def test_string(self):
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
@@ -821,7 +821,7 @@ class TestAssignmentSyntax:
                 with computation(PARALLEL), interval(...):
                     out_field["a_key"] = in_field
 
-            parse_defintion(func)
+            parse_definition(func)
 
     def test_temporary(self):
         with pytest.raises(
@@ -834,7 +834,7 @@ class TestAssignmentSyntax:
                     tmp[...] = in_field
                     out_field = tmp
 
-            parse_defintion(func)
+            parse_definition(func)
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
@@ -846,7 +846,7 @@ class TestAssignmentSyntax:
                     tmp[0, 0, 0] = 2 * in_field
                     out_field = tmp
 
-            parse_defintion(func)
+            parse_definition(func)
 
     def test_augmented(self):
         def func(in_field: gtscript.Field[np.float_]):
@@ -856,7 +856,7 @@ class TestAssignmentSyntax:
                 in_field /= 0.5
                 in_field *= 4.0
 
-        parse_defintion(func)
+        parse_definition(func)
 
 
 class TestNestedWithSyntax:
@@ -866,7 +866,7 @@ class TestNestedWithSyntax:
                 with interval(...):
                     in_field = out_field
 
-        parse_defintion(definition)
+        parse_definition(definition)
 
     def test_nested_with_ordering(self):
         def definition_fw(
@@ -896,7 +896,7 @@ class TestNestedWithSyntax:
                 gt_frontend.GTScriptSyntaxError,
                 match=r"(.*?)Intervals must be specified in order of execution(.*)",
             ):
-                parse_defintion(definition)
+                parse_definition(definition)
 
 
 class TestNativeFunctions:
@@ -905,35 +905,35 @@ class TestNativeFunctions:
             with computation(PARALLEL), interval(...):
                 in_field += sin(in_field)
 
-        parse_defintion(func)
+        parse_definition(func)
 
     def test_offset_arg(self):
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field += sin(in_field[1, 0, 0])
 
-        parse_defintion(func)
+        parse_definition(func)
 
     def test_nested_calls(self):
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field += sin(abs(in_field))
 
-        parse_defintion(func)
+        parse_definition(func)
 
     def test_nested_external_call(self):
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field += sin(add_external_const(in_field))
 
-        parse_defintion(func)
+        parse_definition(func)
 
     def test_multi_nested_calls(self):
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field += min(abs(sin(add_external_const(in_field))), -0.5)
 
-        parse_defintion(func)
+        parse_definition(func)
 
     def test_native_in_function(self):
         @gtscript.function
@@ -944,28 +944,28 @@ class TestNativeFunctions:
             with computation(PARALLEL), interval(...):
                 in_field += sinus(in_field)
 
-        parse_defintion(func)
+        parse_definition(func)
 
     def test_native_function_unary(self):
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field = not isfinite(in_field)
 
-        parse_defintion(func)
+        parse_definition(func)
 
     def test_native_function_binary(self):
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field = asin(in_field) + 1
 
-        parse_defintion(func)
+        parse_definition(func)
 
     def test_native_function_ternary(self):
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 in_field = asin(in_field) + 1 if 1 < in_field else sin(in_field)
 
-        parse_defintion(func)
+        parse_definition(func)
 
 
 class TestAnnotations:
@@ -1038,7 +1038,7 @@ class TestAnnotations:
         definition = self.sumdiff_defs
         dtypes = {"dtype_in": dtype_in, "dtype_out": dtype_out, "dtype_scalar": dtype_scalar}
 
-        parse_defintion(definition, dtypes=dtypes)
+        parse_definition(definition, dtypes=dtypes)
 
         annotations = getattr(definition, "__annotations__", {})
         assert "in_a" in annotations
