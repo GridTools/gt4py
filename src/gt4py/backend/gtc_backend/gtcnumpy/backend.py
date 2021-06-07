@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-import numbers
 import pathlib
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Type, Union, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
 from eve.codegen import format_source
 from gt4py.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
@@ -11,44 +10,16 @@ from gt4py.backend.debug_backend import (
     debug_layout,
 )
 from gt4py.backend.gtc_backend.mixin import GTCBackendMixin
-from gt4py.utils import text
 from gtc.python import npir
 from gtc.python.npir_gen import NpirGen
 from gtc.python.oir_to_npir import OirToNpir
 
 
 if TYPE_CHECKING:
-    from gt4py.stencil_builder import StencilBuilder
     from gt4py.stencil_object import StencilObject
 
 
 class GTCModuleGenerator(BaseModuleGenerator):
-    # type ignore reason: signature differs from super().__call__ on purpose.
-    def __call__(self, args_data, builder: Optional["StencilBuilder"] = None, **kwargs: Any) -> str:  # type: ignore # noqa
-        self.args_data = args_data
-        return text.format_source(
-            self.template.render(
-                imports=self.generate_imports(),
-                module_members=self.generate_module_members(),
-                class_name=self.generate_class_name(),
-                docstring=self.generate_docstring(),
-                gt_backend=self.generate_gt_backend(),
-                gt_source=self.generate_gt_source(),
-                gt_domain_info=self.generate_gt_domain_info(),
-                gt_parameter_info=self.generate_gt_parameter_info(),
-                gt_constants=self.generate_gt_constants(),
-                gt_options=self.generate_gt_options(),
-                gt_field_info=self.generate_gt_field_info(),
-                stencil_signature=self.generate_signature(),
-                field_names=self.generate_field_names(),
-                param_names=self.generate_param_names(),
-                pre_run=self.generate_pre_run(),
-                post_run=self.generate_post_run(),
-                implementation=self.generate_implementation(),
-            ),
-            line_length=self.SOURCE_LINE_LENGTH,
-        )
-
     def generate_imports(self) -> str:
         comp_pkg = (
             self.builder.caching.module_prefix + "computation" + self.builder.caching.module_postfix
@@ -67,76 +38,6 @@ class GTCModuleGenerator(BaseModuleGenerator):
                 "del path_backup",
             ]
         )
-
-    def generate_module_members(self) -> str:
-        module_members = super().generate_module_members()
-        if not self.backend.npir.field_params:
-            module_members += "\n_NO_FIELDS = None\n"
-        return module_members
-
-    def generate_class_name(self) -> str:
-        return self.builder.class_name
-
-    def generate_docstring(self) -> str:
-        return self.builder.definition_ir.docstring
-
-    def generate_gt_backend(self) -> str:
-        return self.backend_name
-
-    def generate_gt_source(self) -> Dict[str, str]:
-        if self.builder.definition_ir.sources is None:
-            return {}
-        return {
-            key: text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
-            for key, value in self.builder.definition_ir.sources
-        }
-
-    def generate_gt_domain_info(self) -> str:
-        from gt4py.definitions import DomainInfo
-
-        parallel_axes = self.builder.definition_ir.domain.parallel_axes or []
-        sequential_axis = self.builder.definition_ir.domain.sequential_axis.name
-        domain_info = repr(
-            DomainInfo(
-                parallel_axes=tuple(ax.name for ax in parallel_axes),
-                sequential_axis=sequential_axis,
-                ndims=len(parallel_axes) + (1 if sequential_axis else 0),
-            )
-        )
-        return domain_info
-
-    def generate_gt_field_info(self) -> str:
-        return self.args_data["field_info"]
-
-    def generate_gt_parameter_info(self) -> str:
-        return repr(self.args_data["parameter_info"])
-
-    def generate_gt_constants(self) -> Dict[str, str]:
-        if not self.builder.definition_ir.externals:
-            return {}
-        return {
-            name: repr(value)
-            for name, value in self.builder.definition_ir.externals.items()
-            if isinstance(value, numbers.Number)
-        }
-
-    def generate_gt_options(self) -> Dict[str, Any]:
-        return {
-            key: value
-            for key, value in self.builder.options.as_dict().items()
-            if key not in ["build_info"]
-        }
-
-    def generate_field_names(self) -> List[str]:
-        field_names = self.backend.npir.field_params.copy()
-        if not field_names:
-            field_names.append("_NO_FIELDS")
-        return field_names
-
-    def generate_param_names(self) -> List[str]:
-        return [
-            name for name in self.backend.npir.params if name not in self.generate_field_names()
-        ]
 
     def generate_implementation(self) -> str:
         params = [f"{p.name}={p.name}" for p in self.backend.gtir.params]
@@ -174,6 +75,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
     }
     languages = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = GTCModuleGenerator
+    USE_LEGACY_TOOLCHAIN = False
     GTIR_KEY = "gtc:gtir"
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
@@ -198,11 +100,6 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
             src_dir.mkdir(parents=True, exist_ok=True)
             recursive_write(src_dir, self.generate_computation())
         return self.make_module()
-
-    # type ignore reason: signature differs from super on purpose
-    def make_module_source(self) -> str:  # type: ignore
-        args_data = self.make_args_data_from_iir(self.builder.implementation_ir)
-        return self.MODULE_GENERATOR_CLASS(self.builder)(args_data)
 
     def _make_npir(self) -> npir.Computation:
         return OirToNpir().visit(self.oir)
