@@ -229,6 +229,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         self.apply_block_symbols = None
         self.declared_symbols = None
         self.requires_positional = False
+        self.requires_K_size = False
 
     def __call__(self, impl_node: gt_ir.StencilImplementation) -> Dict[str, Dict[str, str]]:
         assert isinstance(impl_node, gt_ir.StencilImplementation)
@@ -407,8 +408,19 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             stop = self._visit_ForLoopBound(node.stop, k_ax)
         else:
             stop = self.visit(node.stop)
-
-        body_sources.append(f"for ({node.target}={start}; {node.target}<{stop}; {node.target}++){{")
+        if isinstance(node.step, int):
+            if node.step > 0:
+                body_sources.append(
+                    f"for ({node.target}={start}; {node.target}<{stop}; {node.target}+={node.step}){{"
+                )
+            elif node.step < 0:
+                body_sources.append(
+                    f"for ({node.target}={start}; {node.target}>{stop}; {node.target}-={abs(node.step)}){{"
+                )
+            else:
+                body_sources.append(
+                    f"for ({node.target}={start}; {node.target}<{stop}; {node.target}++){{"
+                )
         for stmt in node.body.stmts:
             body_sources.append(self.visit(stmt))
         body_sources.append("}")
@@ -476,12 +488,8 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 isinstance(bound, gt_ir.AxisBound) and bound.level == gt_ir.LevelMarker.END
                 for bound in (for_node.start, for_node.stop)
             ):
-                args.extend(
-                    [
-                        {"name": f"domain_size_{name}", "access_type": "in", "extent": None}
-                        for name in self.domain.axes_names
-                    ]
-                )
+                args.append({"name": "domain_size_K", "access_type": "in", "extent": None})
+                self.requires_K_size = True
 
         # Create regions and computations
         regions = []
@@ -572,6 +580,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             stencil_unique_name=self.class_name,
             tmp_fields=tmp_fields,
             positional_computation=self.requires_positional,
+            requires_K_size=self.requires_K_size,
         )
 
         sources: Dict[str, Dict[str, str]] = {"computation": {}, "bindings": {}}

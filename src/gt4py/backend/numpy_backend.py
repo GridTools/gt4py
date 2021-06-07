@@ -331,8 +331,11 @@ class NumPySourceGenerator(PythonSourceGenerator):
             stop = self._visit_ForLoopBound(node.stop, k_index)
         else:
             stop = self.visit(node.stop)
-
-        sources.append(f"for {node.target} in range({start},{stop}):")
+        if isinstance(node.step, int) and node.step > 0:
+            step = node.step
+            sources.append(f"for {node.target} in range({start},{stop},{step}):")
+        else:
+            sources.append(f"for {node.target} in range({start},{stop}):")
         for stmt in node.body.stmts:
             sources.append(self.indent_size * " " + self.visit(stmt))
         return sources

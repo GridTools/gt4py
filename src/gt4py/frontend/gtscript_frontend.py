@@ -710,7 +710,7 @@ class IRMaker(ast.NodeVisitor):
         self.extra_temp_decls = extra_temp_decls or {}
         self.parsing_context = None
         self.iteration_order = None
-        self.if_decls_stack = []
+        self.decls_stack = []
         gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
             "abs": gt_ir.NativeFunction.ABS,
             "min": gt_ir.NativeFunction.MIN,
@@ -955,10 +955,14 @@ class IRMaker(ast.NodeVisitor):
 
     def _parse_forloop_args_call(self, node: ast.Call) -> list:
         assert isinstance(node, ast.Call)
-        assert isinstance(node.func, ast.Name) and node.func.id == "range" and len(node.args) == 2
+        assert (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "range"
+            and (len(node.args) == 2 or len(node.args) == 3)
+        )
 
         gt_ir_args = []
-        for arg in node.args:
+        for arg in node.args[0:2]:
             if isinstance(arg, ast.Constant):
                 if arg.value == 0:
                     gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0))
@@ -984,6 +988,19 @@ class IRMaker(ast.NodeVisitor):
             else:
                 gt_ir_args.append(self.visit(arg))
 
+        if len(node.args) == 3:
+            arg = node.args[2]
+            if isinstance(arg, ast.UnaryOp):
+                visit_step = self.visit(arg)
+                assert visit_step.op.name == "NEG"
+                step = -visit_step.arg.value
+            else:
+                assert isinstance(arg, ast.Constant)
+                step = arg.value
+        else:
+            step = 0
+
+        gt_ir_args.append(step)
         return gt_ir_args
 
     def _parse_forloop_args_slice(self, node: ast.Slice) -> list:
@@ -1006,10 +1023,11 @@ class IRMaker(ast.NodeVisitor):
                 gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=offset))
             else:
                 gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=offset))
-
+        gt_ir_args.append(offset)
         return gt_ir_args
 
     def visit_For(self, node: ast.For) -> list:
+        self.decls_stack.append([])
         if isinstance(node.iter, ast.Call):
             gt_ir_args = self._parse_forloop_args_call(node.iter)
         else:
@@ -1025,20 +1043,33 @@ class IRMaker(ast.NodeVisitor):
             is_api=False,
         )
         self.fields[target_name] = target_decl
+        # stmts = []
+        # for stmt in node.body:
+        #     ret = self.visit(stmt)
+        #     if isinstance(ret, (list, tuple)):
+        #         stmts.extend(ret)
+        #     else:
+        #         stmts.append(ret)
+        self.decls_stack[-1].append(target_decl)
         stmts = []
         for stmt in node.body:
-            ret = self.visit(stmt)
-            if isinstance(ret, (list, tuple)):
-                stmts.extend(ret)
-            else:
-                stmts.append(ret)
+            stmts.extend(gt_utils.listify(self.visit(stmt)))
+        assert all(isinstance(item, gt_ir.Statement) for item in stmts)
+
+        result = []
+        if len(self.decls_stack) == 1:
+            result.extend(self.decls_stack.pop())
+        elif len(self.decls_stack) > 1:
+            self.decls_stack[-2].extend(self.decls_stack[-1])
+            self.decls_stack.pop()
 
         return [
-            target_decl,
+            *result,
             gt_ir.For(
                 target=target_name,
                 start=gt_ir_args[0],
                 stop=gt_ir_args[1],
+                step=gt_ir_args[2],
                 body=gt_ir.BlockStmt(stmts=stmts),
             ),
         ]
@@ -1202,7 +1233,7 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_If(self, node: ast.If) -> list:
-        self.if_decls_stack.append([])
+        self.decls_stack.append([])
 
         main_stmts = []
         for stmt in node.body:
@@ -1216,11 +1247,11 @@ class IRMaker(ast.NodeVisitor):
             assert all(isinstance(item, gt_ir.Statement) for item in else_stmts)
 
         result = []
-        if len(self.if_decls_stack) == 1:
-            result.extend(self.if_decls_stack.pop())
-        elif len(self.if_decls_stack) > 1:
-            self.if_decls_stack[-2].extend(self.if_decls_stack[-1])
-            self.if_decls_stack.pop()
+        if len(self.decls_stack) == 1:
+            result.extend(self.decls_stack.pop())
+        elif len(self.decls_stack) > 1:
+            self.decls_stack[-2].extend(self.decls_stack[-1])
+            self.decls_stack.pop()
 
         result.append(
             gt_ir.If(
@@ -1326,8 +1357,8 @@ class IRMaker(ast.NodeVisitor):
                     # layout_id=t.id,
                     is_api=False,
                 )
-                if len(self.if_decls_stack):
-                    self.if_decls_stack[-1].append(field_decl)
+                if len(self.decls_stack):
+                    self.decls_stack[-1].append(field_decl)
                 else:
                     result.append(field_decl)
                 self.fields[field_decl.name] = field_decl
@@ -1456,6 +1487,7 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
     def visit_For(self, node: ast.For):
         assert isinstance(node.target, ast.Name)
         self.local_symbols.add(node.target.id)
+        self.generic_visit(node)
 
 
 class GTScriptParser(ast.NodeVisitor):

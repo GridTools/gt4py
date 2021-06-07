@@ -725,6 +725,7 @@ class For(Statement):
     target = attribute(of=str)  # attribute(of=VarDecl)
     start = attribute(of=UnionOf[AxisBound, Expr])
     stop = attribute(of=UnionOf[AxisBound, Expr])
+    step = attribute(of=int)
     body = attribute(of=BlockStmt)
     loc = attribute(of=Location, optional=True)
 
