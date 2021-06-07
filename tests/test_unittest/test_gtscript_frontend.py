@@ -46,16 +46,17 @@ from ..definitions import id_version
 # ---- Utilities -----
 
 
-def _get_module_name(back: int = 0):
-    stack = inspect.stack()[1 + back]
-    return "{context}_{method}_{id_version}".format(
-        context=stack[0].f_locals["self"].__class__.__name__, method=stack[3], id_version=id_version
+def _get_module_name(steps_back: int = 0):
+    frame, filename, lineno, function, code_context, index = inspect.stack()[1 + steps_back]
+    return "{context}_{method}".format(
+        context=inspect.getargvalues(frame).locals["self"].__class__.__name__,
+        method=function,
     )
 
 
-def _get_method_name(back: int = 0):
-    stack = inspect.stack()[1 + back]
-    return stack[3]
+def _get_method_name(steps_back: int = 0):
+    frame, filename, lineno, function, code_context, index = inspect.stack()[1 + steps_back]
+    return function
 
 
 def parse_definition(
@@ -66,13 +67,17 @@ def parse_definition(
     externals: Optional[Dict[str, Any]] = None,
     dtypes: Dict[Type, Type] = None,
     rebuild=False,
+    id_version=None,
     **kwargs,
 ):
     if module is None:
-        module = _get_module_name(1)
+        module = _get_module_name(steps_back=1)
 
     if name is None:
-        name = _get_method_name(1)
+        name = _get_method_name(steps_back=1)
+
+    if id_version is not None:
+        module += "_" + str(id_version)
 
     original_annotations = gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
 
