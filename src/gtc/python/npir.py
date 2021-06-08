@@ -140,7 +140,7 @@ class HorizontalExtent(eve.Node):
 
 
 class HorizontalRegion(common.LocNode):
-    body: List[VectorAssign]
+    body: List[Union[VectorAssign, MaskBlock]]
     padding: DomainPadding
 
 
