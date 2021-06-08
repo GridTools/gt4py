@@ -227,6 +227,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """
     )
 
+    _device_sync: bool = True
+
     @staticmethod
     def k_cache_var(name: str, offset: int) -> str:
         return name + (f"p{offset}" if offset >= 0 else f"m{-offset}")
@@ -500,7 +502,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             0);
                     % endfor
 
+                    % if _this_generator._device_sync:
                     GT_CUDA_CHECK(cudaDeviceSynchronize());
+                    % endif
                 };
             }
         }
@@ -513,6 +517,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     def apply(cls, root: LeafNode, **kwargs: Any) -> str:
         if not isinstance(root, cuir.Program):
             raise ValueError("apply() requires gtcpp.Progam root node")
+        cls._device_sync = kwargs.get("device_sync", True)
         generated_code = super().apply(root, **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
