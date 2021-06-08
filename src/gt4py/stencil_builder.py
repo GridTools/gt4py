@@ -62,10 +62,9 @@ class StencilBuilder:
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
         strategy_name = "jit"
         strategy_opts = {}
-        if options:
-            strategy_name = options.backend_opts.pop("strategy", strategy_name)
-            if "uid" in options.backend_opts:
-                strategy_opts["uid"] = options.backend_opts.pop("uid")
+        if options and "uid" in options.backend_opts:
+            strategy_name = "distributed"
+            strategy_opts["uid"] = options.backend_opts.pop("uid")
         self.caching = gt4py.caching.strategy_factory(strategy_name, self, **strategy_opts)
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}

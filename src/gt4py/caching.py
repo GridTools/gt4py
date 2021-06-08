@@ -348,20 +348,34 @@ class DistributedCachingStrategy(JITCachingStrategy):
             cache_info_dir = self.cache_info_path.parents[0]
             self._lock_file = pathlib.Path(cache_info_dir, f"{self.cache_info_path.stem}.lock")
             locked = self._lock_file.exists()
+            if locked:
+                with open("./caching.log", "a") as log:
+                    log.write(f"R{self._uid}: Waiting for lock file '{self._lock_file}' to go\n")
+
             time_elapsed = 0.0
             while self._lock_file.exists() and time_elapsed < self._timeout:
                 time.sleep(self._sleep_time)
                 time_elapsed += self._sleep_time
+            if time_elapsed >= self._timeout:
+                raise RuntimeError(f"Timeout while waiting for stencil '{self.cache_info_path.stem}' to compile on ID {self._uid}")
+
             # Lock the file...
             if not locked:
+                with open("./caching.log", "a") as log:
+                    log.write(f"R{self._uid}: Creating lock file '{self._lock_file}'\n")
                 self._lock_file.parents[0].mkdir(parents=True, exist_ok=True)
                 with open(self._lock_file, "w") as lock:
                     lock.write(f"{self._uid}")
+            else:
+                with open("./caching.log", "a") as log:
+                    log.write(f"R{self._uid}: Lock file '{self._lock_file}' is gone\n")
         return result
 
     def update_cache_info(self) -> None:
         super().update_cache_info()
         if self._lock_file and self._lock_file.exists():
+            with open("./caching.log", "a") as log:
+                log.write(f"R{self._uid}: Removing lock file '{self._lock_file}'\n")
             self._lock_file.unlink()
             self._lock_file = None
 
