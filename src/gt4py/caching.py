@@ -20,6 +20,7 @@ import inspect
 import pathlib
 import pickle
 import sys
+import time
 import types
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -220,7 +221,7 @@ class JITCachingStrategy(CachingStrategy):
         self, *, validate_hash: bool, catch_exceptions: bool = True
     ) -> bool:
         result = True
-        if not self.cache_info_path and catch_exceptions:
+        if not self.cache_info_path.exists() and catch_exceptions:
             return False
         try:
             cache_info = self.generate_cache_info()
@@ -332,10 +333,37 @@ class DistributedCachingStrategy(JITCachingStrategy):
     def __init__(self, builder: "StencilBuilder", uid: int = 0):
         super().__init__(builder)
         self._uid = uid
+        self._lock_file = None
+        self._sleep_time = 0.1
+        self._timeout = 60.0
 
-    @property
-    def unique_id(self) -> int:
-        return self._uid
+    def is_cache_info_available_and_consistent(
+        self, *, validate_hash: bool, catch_exceptions: bool = True
+    ) -> bool:
+        result = super().is_cache_info_available_and_consistent(
+            validate_hash=validate_hash, catch_exceptions=catch_exceptions
+        )
+        if not result:
+            # Check for lock file
+            cache_info_dir = self.cache_info_path.parents[0]
+            self._lock_file = pathlib.Path(cache_info_dir, f"{self.cache_info_path.stem}.lock")
+            locked = self._lock_file.exists()
+            time_elapsed = 0.0
+            while self._lock_file.exists() and time_elapsed < self._timeout:
+                time.sleep(self._sleep_time)
+                time_elapsed += self._sleep_time
+            # Lock the file...
+            if not locked:
+                self._lock_file.parents[0].mkdir(parents=True, exist_ok=True)
+                with open(self._lock_file, "w") as lock:
+                    lock.write(f"{self._uid}")
+        return result
+
+    def update_cache_info(self) -> None:
+        super().update_cache_info()
+        if self._lock_file and self._lock_file.exists():
+            self._lock_file.unlink()
+            self._lock_file = None
 
 
 class NoCachingStrategy(CachingStrategy):
