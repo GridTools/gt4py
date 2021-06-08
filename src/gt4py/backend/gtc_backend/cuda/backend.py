@@ -73,7 +73,7 @@ class GTCCudaExtGenerator:
         cuir = kernel_fusion.FuseKernels().visit(cuir)
         cuir = extent_analysis.ComputeExtents().visit(cuir)
         cuir = extent_analysis.CacheExtents().visit(cuir)
-        implementation = cuir_codegen.CUIRCodegen.apply(cuir)
+        implementation = cuir_codegen.CUIRCodegen.apply(cuir, **self.options.backend_opts)
         bindings = GTCCudaBindingsCodegen.apply(cuir, module_name=self.module_name)
         return {
             "computation": {"computation.hpp": implementation},
