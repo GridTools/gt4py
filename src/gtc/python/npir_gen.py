@@ -27,6 +27,14 @@ class NpirGen(TemplatedGenerator):
     def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
         return f"np.{node.name.lower()}"
 
+    def visit_BuiltInLiteral(self, node: common.BuiltInLiteral, **kwargs) -> str:
+        if node is common.BuiltInLiteral.TRUE:
+            return "True"
+        elif node is common.BuiltInLiteral.FALSE:
+            return "False"
+        else:
+            return self.generic_visit(node, **kwargs)
+
     Literal = FormatTemplate("{dtype}({value})")
 
     BroadCast = FormatTemplate("{expr}")
@@ -267,6 +275,8 @@ class NpirGen(TemplatedGenerator):
             return "minimum"
         elif node == common.NativeFunction.MAX:
             return "maximum"
+        elif node == common.NativeFunction.POW:
+            return "power"
         return self.generic_visit(node, **kwargs)
 
     NativeFuncCall = FormatTemplate("np.{func}({', '.join(arg for arg in args)})")

@@ -268,7 +268,7 @@ class OirToNpir(NodeTranslator):
     def visit_Literal(
         self, node: oir.Literal, *, broadcast: bool = False, **kwargs: Any
     ) -> Union[npir.Literal, npir.BroadCast]:
-        literal = npir.Literal(value=node.value, dtype=node.dtype)
+        literal = npir.Literal(value=self.visit(node.value, **kwargs), dtype=node.dtype)
         if broadcast:
             return npir.BroadCast(expr=literal, dtype=node.dtype)
         return literal
