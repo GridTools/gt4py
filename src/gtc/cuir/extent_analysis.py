@@ -25,8 +25,7 @@ from . import cuir
 
 class ComputeExtents(NodeTranslator):
     def visit_Program(self, node: cuir.Program) -> cuir.Program:
-        extents_map: Dict[str, cuir.IJExtent] = dict()
-        kernels = [self.visit(kernel, extents_map=extents_map) for kernel in reversed(node.kernels)]
+        kernels = [self.visit(kernel, extents_map=dict()) for kernel in reversed(node.kernels)]
         return cuir.Program(
             name=node.name,
             params=node.params,
