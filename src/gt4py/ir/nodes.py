@@ -714,7 +714,7 @@ class AxisInterval(Node):
 
         def get_offset(bound: AxisBound) -> int:
             return (
-                0 + bound.offset if bound.level == LevelMarker.START else DOMAIN_SIZE + bound.offset
+                0 + bound.offset if bound.level == LevelMarker.START else sys.maxsize + bound.offset
             )
 
         self_start = get_offset(self.start)
