@@ -170,6 +170,7 @@ import collections
 import copy
 import enum
 import operator
+import sys
 from typing import List, Sequence
 
 import numpy as np
@@ -694,6 +695,25 @@ class AxisInterval(Node):
             )
 
         return interval
+
+    def disjoint_from(self, other: "AxisInterval") -> bool:
+        # This made-up constant must be larger than any LevelMarker.offset used
+        DOMAIN_SIZE: int = 1000
+
+        def get_offset(bound: AxisBound) -> int:
+            return (
+                0 + bound.offset if bound.level == LevelMarker.START else sys.maxsize + bound.offset
+            )
+
+        self_start = get_offset(self.start)
+        self_end = get_offset(self.end)
+
+        other_start = get_offset(other.start)
+        other_end = get_offset(other.end)
+
+        return not (self_start <= other_start < self_end) and not (
+            other_start <= self_start < other_end
+        )
 
 
 @attribclass
