@@ -21,6 +21,7 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
+import sys
 from typing import Any, Dict, List, Tuple, Union
 
 from pydantic import root_validator, validator
@@ -165,42 +166,33 @@ def horizontal_intervals_are_disjoint(
     self_interval: common.HorizontalInterval,
     other_interval: common.HorizontalInterval,
 ) -> bool:
-    DOMAIN_SIZE = 1000
-    OFFSET_SIZE = 1000
+    DOMAIN_SIZE = int(sys.maxsize / 2)
+    OFFSET_SIZE = int(sys.maxsize / 2)
+
+    def get_offset(bound: AxisBound) -> int:
+        return (
+            0 + bound.offset
+            if bound.level == common.LevelMarker.START
+            else DOMAIN_SIZE + bound.offset
+        )
 
     if isinstance(self_interval.start, AxisBound):
-        s_start = (
-            0 + self_interval.start.offset
-            if self_interval.start.level == common.LevelMarker.START
-            else DOMAIN_SIZE + self_interval.start.offset
-        )
+        s_start = get_offset(self_interval.start)
     else:
         s_start = -OFFSET_SIZE
 
     if isinstance(self_interval.end, AxisBound):
-        s_end = (
-            0 + self_interval.end.offset
-            if self_interval.end.level == common.LevelMarker.START
-            else DOMAIN_SIZE + self_interval.end.offset
-        )
+        s_end = get_offset(self_interval.end)
     else:
         s_end = DOMAIN_SIZE + OFFSET_SIZE
 
     if isinstance(other_interval.start, AxisBound):
-        o_start = (
-            0 + other_interval.start.offset
-            if other_interval.start.level == common.LevelMarker.START
-            else DOMAIN_SIZE + other_interval.start.offset
-        )
+        o_start = get_offset(other_interval.start)
     else:
         o_start = -OFFSET_SIZE
 
     if isinstance(other_interval.end, AxisBound):
-        o_end = (
-            0 + other_interval.end.offset
-            if other_interval.end.level == common.LevelMarker.START
-            else DOMAIN_SIZE + other_interval.end.offset
-        )
+        o_end = get_offset(other_interval.end)
     else:
         o_end = -OFFSET_SIZE
 
