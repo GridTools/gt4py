@@ -723,6 +723,70 @@ class AxisBound(Node):
         return not self < other
 
 
+class HorizontalInterval(Node):
+    start: Union[LevelMarker, AxisBound]
+    end: Union[LevelMarker, AxisBound]
+
+    @root_validator
+    def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
+        DOMAIN_SIZE = 1000
+        OFFSET_SIZE = 1000
+
+        if isinstance(values["start"], LevelMarker):
+            if values["start"] == LevelMarker.END:
+                raise ValueError("Level at start must be START")
+
+            start = -OFFSET_SIZE
+        else:
+            start = (
+                values["start"].offset
+                if values["start"].level == LevelMarker.START
+                else DOMAIN_SIZE + values["start"].offset
+            )
+
+        if isinstance(values["end"], LevelMarker):
+            if values["end"] == LevelMarker.START:
+                raise ValueError("Level at end must be END")
+
+            end = DOMAIN_SIZE + OFFSET_SIZE
+        else:
+            end = (
+                values["end"].offset
+                if values["end"].level == LevelMarker.START
+                else DOMAIN_SIZE + values["end"].offset
+            )
+
+        if end <= start:
+            raise ValueError("Start must come strictly before end in an interval")
+
+        return values
+
+    @property
+    def is_single_index(self) -> bool:
+        if not isinstance(self.start, AxisBound) or not isinstance(self.end, AxisBound):
+            return False
+
+        if not self.start.level == self.end.level:
+            return False
+
+        return abs(self.end.offset - self.start.offset) == 1
+
+
+class HorizontalMask(GenericNode, Generic[ExprT]):
+    i: HorizontalInterval
+    j: HorizontalInterval
+    kind = ExprKind.FIELD
+    dtype = DataType.BOOL
+
+    @property
+    def is_single_index(self) -> bool:
+        return self.i.is_single_index and self.j.is_single_index
+
+    @property
+    def intervals(self) -> Tuple[HorizontalInterval, HorizontalInterval]:
+        return (self.i, self.j)
+
+
 def data_type_to_typestr(dtype: DataType) -> str:
 
     table = {

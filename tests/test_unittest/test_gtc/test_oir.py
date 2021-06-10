@@ -13,10 +13,13 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+import itertools
+
 import pytest
 from pydantic.error_wrappers import ValidationError
 
-from gtc.common import DataType, LoopOrder
+from gtc.common import DataType, HorizontalInterval, LevelMarker, LoopOrder
 from gtc.oir import AxisBound, Interval
 
 from .oir_utils import (
@@ -24,6 +27,9 @@ from .oir_utils import (
     FieldAccessFactory,
     FieldDeclFactory,
     HorizontalExecutionFactory,
+    HorizontalMaskFactory,
+    HorizontalSpecializationFactory,
+    HorizontalSwitchFactory,
     MaskStmtFactory,
     StencilFactory,
     VerticalLoopFactory,
@@ -288,3 +294,38 @@ def test_assign_to_ik_fwd():
                 ],
             ),
         )
+
+
+def test_overlapping_horizontal_switch():
+    with pytest.raises(ValidationError, match="must be disjoint specializations"):
+        AssignStmtFactory(
+            right=HorizontalSwitchFactory(
+                values=[HorizontalSpecializationFactory(), HorizontalSpecializationFactory()]
+            )
+        )
+
+
+@pytest.fixture
+def corner_specializations():
+    specializations = []
+    for i_level, j_level in itertools.product(LevelMarker, LevelMarker):
+        i_interval = HorizontalInterval(
+            start=AxisBound(level=i_level, offset=0), end=AxisBound(level=i_level, offset=1)
+        )
+        j_interval = HorizontalInterval(
+            start=AxisBound(level=j_level, offset=0), end=AxisBound(level=j_level, offset=1)
+        )
+        specializations.append(
+            HorizontalSpecializationFactory(
+                mask=HorizontalMaskFactory(i=i_interval, j=j_interval),
+                expr__name="field",
+                expr__offset__i=1,
+            )
+        )
+    return specializations
+
+
+def test_horizontal_switch_corner_specializations(corner_specializations):
+    AssignStmtFactory(
+        left__name="field", right=HorizontalSwitchFactory(values=corner_specializations)
+    )

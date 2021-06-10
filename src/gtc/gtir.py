@@ -105,6 +105,16 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
     _dtype_validation = common.assign_stmt_dtype_validation(strict=False)
 
 
+class SerialAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
+    @validator("left")
+    def no_horizontal_offset_in_assignment(cls, v: Expr) -> Expr:
+        if v.offset.i != 0 or v.offset.j != 0:
+            raise ValueError("Lhs of assignment must not have a horizontal offset.")
+        return v
+
+    _dtype_validation = common.assign_stmt_dtype_validation(strict=False)
+
+
 class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
     """
     If statement with a field expression as condition.
@@ -143,6 +153,15 @@ class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
         if cond.kind != common.ExprKind.SCALAR:
             raise ValueError("Condition is not scalar")
         return cond
+
+
+class HorizontalMask(common.HorizontalMask[Expr], Expr):
+    pass
+
+
+class HorizontalRegion(Stmt):
+    mask: HorizontalMask
+    block: BlockStmt
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):

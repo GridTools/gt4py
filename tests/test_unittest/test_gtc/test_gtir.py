@@ -37,6 +37,7 @@ from .gtir_utils import (
     FieldDeclFactory,
     FieldIfStmtFactory,
     ParAssignStmtFactory,
+    SerialAssignStmtFactory,
     StencilFactory,
     VerticalLoopFactory,
 )
@@ -193,3 +194,7 @@ def test_temporary_write_and_read_with_offset_is_allowed():
 def test_illegal_self_assignment_with_offset():
     with pytest.raises(ValidationError, match=r"Self-assignment"):
         ParAssignStmtFactory(left__name="foo", right__name="foo", right__offset__i=1)
+
+
+def test_allowed_self_assignment_in_serial_assign():
+    SerialAssignStmtFactory(left__name="foo", right__name="foo", right__offset__i=1)

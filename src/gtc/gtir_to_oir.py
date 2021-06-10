@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import Any, List
+from typing import Any, List, Union
 
 from eve import NodeTranslator
 from gtc import gtir, oir
@@ -67,8 +67,11 @@ class GTIRToOIR(NodeTranslator):
             self.horizontal_executions.append(horizontal_execution)
             return self
 
-    def visit_ParAssignStmt(
-        self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
+    def _add_assign_stmt(
+        self,
+        node: Union[gtir.ParAssignStmt, gtir.SerialAssignStmt],
+        ctx: Context,
+        mask: oir.Expr = None,
     ) -> None:
         body = [oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))]
         if mask is not None:
@@ -79,6 +82,16 @@ class GTIRToOIR(NodeTranslator):
                 declarations=[],
             ),
         )
+
+    def visit_ParAssignStmt(
+        self, node: gtir.ParAssignStmt, *, ctx: Context, mask: oir.Expr = None, **kwargs: Any
+    ) -> None:
+        self._add_assign_stmt(node, ctx, mask)
+
+    def visit_SerialAssignStmt(
+        self, node: gtir.SerialAssignStmt, *, ctx: Context, mask: oir.Expr = None, **kwargs: Any
+    ) -> None:
+        self._add_assign_stmt(node, ctx, mask)
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> oir.FieldAccess:
         return oir.FieldAccess(
@@ -130,7 +143,7 @@ class GTIRToOIR(NodeTranslator):
         combined_mask = current_mask
         if mask:
             combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
-        self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx)
+        self.visit(node.true_branch.body, ctx=ctx, mask=combined_mask)
 
         if node.false_branch:
             combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
@@ -138,8 +151,8 @@ class GTIRToOIR(NodeTranslator):
                 combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
             self.visit(
                 node.false_branch.body,
-                mask=combined_mask,
                 ctx=ctx,
+                mask=combined_mask,
             )
 
     # For now we represent ScalarIf (and FieldIf) both as masks on the HorizontalExecution.
@@ -152,16 +165,30 @@ class GTIRToOIR(NodeTranslator):
         if mask:
             combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=current_mask)
 
-        self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx)
+        self.visit(node.true_branch.body, ctx=ctx, mask=combined_mask)
         if node.false_branch:
             combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
             if mask:
                 combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
             self.visit(
                 node.false_branch.body,
-                mask=combined_mask,
                 ctx=ctx,
+                mask=combined_mask,
             )
+
+    def visit_HorizontalMask(self, node: gtir.HorizontalMask) -> oir.HorizontalMask:
+        return oir.HorizontalMask(i=node.i, j=node.j)
+
+    def visit_HorizontalRegion(
+        self, node: gtir.HorizontalRegion, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
+    ) -> None:
+        current_mask = self.visit(node.mask)
+        combined_mask = (
+            oir.BinaryOf(op=LogicalOperator.AND, left=mask, right=current_mask)
+            if mask
+            else current_mask
+        )
+        self.visit(node.block.body, mask=combined_mask, ctx=ctx)
 
     def visit_Interval(self, node: gtir.Interval, **kwargs: Any) -> oir.Interval:
         return oir.Interval(

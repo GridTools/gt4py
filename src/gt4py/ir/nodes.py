@@ -90,7 +90,7 @@ storing a reference to the piece of source code which originated the node.
 
     NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
-    Cast(dtype: DataType, expr: Expr)
+    Cast(expr: Expr, data_type: DataType)
 
     Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch
 
@@ -108,6 +108,7 @@ storing a reference to the piece of source code which originated the node.
     Statement   = Decl
                 | Assign(target: Ref, value: Expr)
                 | If(condition: expr, main_body: BlockStmt, else_body: BlockStmt)
+                | HorizontalIf(intervals: Dict[str, Interval], body: BlockStmt)
                 | BlockStmt
 
     AxisBound(level: LevelMarker | VarRef, offset: int)
@@ -714,6 +715,20 @@ class AxisInterval(Node):
         return not (self_start <= other_start < self_end) and not (
             other_start <= self_start < other_end
         )
+
+    @property
+    def is_single_index(self) -> bool:
+        if not isinstance(self.start, AxisBound) or not isinstance(self.end, AxisBound):
+            return False
+
+        return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
+
+
+# TODO Find a better place for this in the file.
+@attribclass
+class HorizontalIf(Statement):
+    intervals = attribute(of=DictOf[str, AxisInterval])
+    body = attribute(of=BlockStmt)
 
 
 @attribclass

@@ -54,6 +54,14 @@ class ParAssignStmtFactory(factory.Factory):
     right = factory.SubFactory(FieldAccessFactory)
 
 
+class SerialAssignStmtFactory(factory.Factory):
+    class Meta:
+        model = gtir.SerialAssignStmt
+
+    left = factory.SubFactory(FieldAccessFactory)
+    right = factory.SubFactory(FieldAccessFactory)
+
+
 class BinaryOpFactory(factory.Factory):
     class Meta:
         model = gtir.BinaryOp

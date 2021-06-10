@@ -21,18 +21,19 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from pydantic import root_validator, validator
 
 from eve import Str, SymbolName, SymbolRef, SymbolTableTrait, field, utils
+from eve.typingx import RootValidatorValuesType
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
 
 @utils.noninstantiable
 class Expr(common.Expr):
-    dtype: Optional[common.DataType]
+    pass
 
 
 @utils.noninstantiable
@@ -158,6 +159,105 @@ class Interval(LocNode):
 class HorizontalExecution(LocNode):
     body: List[Stmt]
     declarations: List[LocalScalar]
+
+
+def horizontal_intervals_are_disjoint(
+    self_interval: common.HorizontalInterval,
+    other_interval: common.HorizontalInterval,
+) -> bool:
+    DOMAIN_SIZE = 1000
+    OFFSET_SIZE = 1000
+
+    if isinstance(self_interval.start, AxisBound):
+        s_start = (
+            0 + self_interval.start.offset
+            if self_interval.start.level == common.LevelMarker.START
+            else DOMAIN_SIZE + self_interval.start.offset
+        )
+    else:
+        s_start = -OFFSET_SIZE
+
+    if isinstance(self_interval.end, AxisBound):
+        s_end = (
+            0 + self_interval.end.offset
+            if self_interval.end.level == common.LevelMarker.START
+            else DOMAIN_SIZE + self_interval.end.offset
+        )
+    else:
+        s_end = DOMAIN_SIZE + OFFSET_SIZE
+
+    if isinstance(other_interval.start, AxisBound):
+        o_start = (
+            0 + other_interval.start.offset
+            if other_interval.start.level == common.LevelMarker.START
+            else DOMAIN_SIZE + other_interval.start.offset
+        )
+    else:
+        o_start = -OFFSET_SIZE
+
+    if isinstance(other_interval.end, AxisBound):
+        o_end = (
+            0 + other_interval.end.offset
+            if other_interval.end.level == common.LevelMarker.START
+            else DOMAIN_SIZE + other_interval.end.offset
+        )
+    else:
+        o_end = -OFFSET_SIZE
+
+    return not (s_start <= o_start < s_end) and not (o_start <= s_start < o_end)
+
+
+class HorizontalMask(common.HorizontalMask[Expr], Expr):
+    pass
+
+
+class HorizontalSpecialization(Expr):
+    mask: HorizontalMask
+    expr: Expr
+
+    @root_validator(skip_on_failure=True)
+    def dtype_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
+        values["dtype"] = values["expr"].dtype
+        return values
+
+    @root_validator(pre=True)
+    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
+        values["kind"] = values["expr"].kind
+        return values
+
+
+def horizontal_specializations_are_disjoint(
+    self: HorizontalSpecialization, other: HorizontalSpecialization
+) -> bool:
+    return any(
+        horizontal_intervals_are_disjoint(interval1, interval2)
+        for interval1, interval2 in zip(self.mask.intervals, other.mask.intervals)
+    )
+
+
+class HorizontalSwitch(Expr):
+    values: List[HorizontalSpecialization]
+    default: Expr
+
+    @root_validator(skip_on_failure=True)
+    def dtype_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
+        values["dtype"] = common.verify_and_get_common_dtype(cls, values["values"], strict=True)
+        return values
+
+    @root_validator(pre=True)
+    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
+        values["kind"] = common.compute_kind(values["values"])
+        return values
+
+    @validator("values")
+    def check_disjointness(
+        cls, values: List[HorizontalSpecialization]
+    ) -> List[HorizontalSpecialization]:
+        for i, value in enumerate(values[:-1]):
+            for other in values[i + 1 :]:
+                if not horizontal_specializations_are_disjoint(value, other):
+                    raise ValueError("Horizontal switch values must be disjoint specializations.")
+        return values
 
 
 class CacheDesc(LocNode):
