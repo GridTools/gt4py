@@ -20,12 +20,12 @@ import inspect
 import pathlib
 import pickle
 import sys
-import time
 import types
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import gt4py
 from gt4py.definitions import StencilID
+from gt4py.future_stencil import FutureStencil
 
 
 if TYPE_CHECKING:
@@ -156,6 +156,11 @@ class CachingStrategy(abc.ABC):
         """Calculate the name for the stencil class, default is to read from build options."""
         return self.builder.options.name
 
+    @abc.abstractmethod
+    def is_generator(self) -> bool:
+        """Check if this cache is responsible for generating the stencil."""
+        raise NotImplementedError
+
 
 class JITCachingStrategy(CachingStrategy):
     """
@@ -221,7 +226,7 @@ class JITCachingStrategy(CachingStrategy):
         self, *, validate_hash: bool, catch_exceptions: bool = True
     ) -> bool:
         result = True
-        if not self.cache_info_path.exists() and catch_exceptions:
+        if not self.cache_info_path and catch_exceptions:
             return False
         try:
             cache_info = self.generate_cache_info()
@@ -312,6 +317,9 @@ class JITCachingStrategy(CachingStrategy):
         name = self.builder.options.name
         return f"{name}__{self.module_postfix}"
 
+    def is_generator(self) -> bool:
+        return True
+
 
 class DistributedCachingStrategy(JITCachingStrategy):
     """
@@ -330,12 +338,9 @@ class DistributedCachingStrategy(JITCachingStrategy):
 
     name = "distributed"
 
-    def __init__(self, builder: "StencilBuilder", uid: int = 0):
+    def __init__(self, builder: "StencilBuilder", uid: Tuple[int, int] = (0, 1)):
         super().__init__(builder)
         self._uid = uid
-        self._lock_file = None
-        self._sleep_time = 0.1
-        self._timeout = 60.0
 
     def is_cache_info_available_and_consistent(
         self, *, validate_hash: bool, catch_exceptions: bool = True
@@ -343,41 +348,13 @@ class DistributedCachingStrategy(JITCachingStrategy):
         result = super().is_cache_info_available_and_consistent(
             validate_hash=validate_hash, catch_exceptions=catch_exceptions
         )
-        if not result:
-            # Check for lock file
-            cache_info_dir = self.cache_info_path.parents[0]
-            self._lock_file = pathlib.Path(cache_info_dir, f"{self.cache_info_path.stem}.lock")
-            locked = self._lock_file.exists()
-            if locked:
-                with open("./caching.log", "a") as log:
-                    log.write(f"R{self._uid}: Waiting for lock file '{self._lock_file}' to go\n")
-
-            time_elapsed = 0.0
-            while self._lock_file.exists() and time_elapsed < self._timeout:
-                time.sleep(self._sleep_time)
-                time_elapsed += self._sleep_time
-            if time_elapsed >= self._timeout:
-                raise RuntimeError(f"Timeout while waiting for stencil '{self.cache_info_path.stem}' to compile on ID {self._uid}")
-
-            # Lock the file...
-            if not locked:
-                with open("./caching.log", "a") as log:
-                    log.write(f"R{self._uid}: Creating lock file '{self._lock_file}'\n")
-                self._lock_file.parents[0].mkdir(parents=True, exist_ok=True)
-                with open(self._lock_file, "w") as lock:
-                    lock.write(f"{self._uid}")
-            else:
-                with open("./caching.log", "a") as log:
-                    log.write(f"R{self._uid}: Lock file '{self._lock_file}' is gone\n")
+        FutureStencil._builder = self.builder
         return result
 
-    def update_cache_info(self) -> None:
-        super().update_cache_info()
-        if self._lock_file and self._lock_file.exists():
-            with open("./caching.log", "a") as log:
-                log.write(f"R{self._uid}: Removing lock file '{self._lock_file}'\n")
-            self._lock_file.unlink()
-            self._lock_file = None
+    def is_generator(self) -> bool:
+        node_id, n_nodes = self._uid
+        generator_id = int(self.builder.stencil_id.version, 16) % n_nodes
+        return generator_id == node_id
 
 
 class NoCachingStrategy(CachingStrategy):
@@ -445,6 +422,9 @@ class NoCachingStrategy(CachingStrategy):
         return StencilID(  # type: ignore
             qualified_name=self.builder.options.qualified_name, version=""
         )
+
+    def is_generator(self) -> bool:
+        return True
 
 
 def strategy_factory(
