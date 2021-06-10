@@ -34,6 +34,18 @@ class ComputeExtents(NodeTranslator):
             kernels=list(reversed(kernels)),
         )
 
+    def visit_Kernel(self, node: cuir.Kernel, extents_map: Dict[str, cuir.IJExtent]) -> cuir.Kernel:
+        return cuir.Kernel(
+            vertical_loops=list(
+                reversed(
+                    [
+                        self.visit(vertical_loop, extents_map=extents_map)
+                        for vertical_loop in reversed(node.vertical_loops)
+                    ]
+                )
+            )
+        )
+
     def visit_VerticalLoop(
         self, node: cuir.VerticalLoop, extents_map: Dict[str, cuir.IJExtent]
     ) -> cuir.VerticalLoop:

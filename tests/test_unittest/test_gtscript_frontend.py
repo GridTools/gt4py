@@ -431,6 +431,55 @@ class TestIntervalSyntax:
         ):
             compile_definition(definition_func, "test_externals", module, externals=externals)
 
+    def test_overlapping_intervals_none(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(FORWARD):
+                with interval(0, None):
+                    field = 0
+                with interval(-1, None):
+                    field = 1
+
+        module = f"TestIntervalSyntax_test_overlapping_intervals_none_{id_version}"
+        externals = {}
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Overlapping intervals"):
+            compile_definition(
+                definition_func, "test_overlapping_intervals_none", module, externals=externals
+            )
+
+    def test_overlapping_intervals(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(FORWARD):
+                with interval(0, 3):
+                    field = 0
+                with interval(2, None):
+                    field = 1
+
+        module = f"TestIntervalSyntax_test_overlapping_intervals_{id_version}"
+        externals = {}
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Overlapping intervals"):
+            compile_definition(
+                definition_func, "test_overlapping_intervals", module, externals=externals
+            )
+
+    def test_nonoverlapping_intervals(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(FORWARD):
+                with interval(0, 2):
+                    field = 0
+                with interval(3, -1):
+                    field = 1
+                with interval(-1, None):
+                    field = 2
+
+        module = f"TestIntervalSyntax_test_nonoverlapping_intervals_{id_version}"
+        externals = {}
+
+        compile_definition(
+            definition_func, "test_nonoverlapping_intervals", module, externals=externals
+        )
+
 
 class TestExternalsWithSubroutines:
     def test_all_legal_combinations(self, id_version):
