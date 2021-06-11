@@ -4,10 +4,11 @@ from typing import Iterator, Optional, Set
 
 import pytest
 
+from gt4py.definitions import Extent
 from gtc import common
 from gtc.python import npir, npir_gen
 
-from .npir_utils import FieldSliceBuilder, FieldSliceFactory
+from .npir_utils import FieldSliceFactory, NativeFuncCallFactory
 
 
 UNDEFINED_DTYPES = {common.DataType.INVALID, common.DataType.AUTO, common.DataType.DEFAULT}
@@ -92,7 +93,7 @@ def test_sequential_offset_zero() -> None:
 
 def test_field_slice_sequential_k() -> None:
     result = npir_gen.NpirGen().visit(
-        FieldSliceBuilder("a_field", parallel_k=False).offsets(-1, 0, 4).build()
+        FieldSliceFactory(name="a_field", parallel_k=False, offsets=(-1, 0, 4))
     )
     assert result == "a_field_[(i - 1):(I - 1), j:J, k_ + 4]"
 
@@ -106,22 +107,22 @@ def test_field_slice_parallel_k() -> None:
 
 def test_native_function() -> None:
     result = npir_gen.NpirGen().visit(
-        npir.NativeFuncCall(
+        NativeFuncCallFactory(
             func=common.NativeFunction.MIN,
             args=[
-                FieldSliceBuilder("a", parallel_k=True).offsets(0, 0, 0).build(),
-                FieldSliceBuilder("b", parallel_k=True).offsets(0, 0, 0).build(),
+                FieldSliceFactory(name="a"),
+                FieldSliceFactory(name="b"),
             ],
         )
     )
-    assert result == "np.minimum(a_[i:I, j:J, k:K], b_[i:I, j:J, k:K])"
+    assert result == "np.minimum(a_[i:I, j:J, k_], b_[i:I, j:J, k_])"
 
 
 def test_vector_assign() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VectorAssign(
-            left=FieldSliceBuilder("a").build(),
-            right=FieldSliceBuilder("b").build(),
+            left=FieldSliceFactory(name="a"),
+            right=FieldSliceFactory(name="b"),
         )
     )
     assert result == "a_[i:I, j:J, k_] = b_[i:I, j:J, k_]"
@@ -134,14 +135,25 @@ def test_temp_definition() -> None:
             right=npir.EmptyTemp(dtype=common.DataType.INT64),
         )
     )
-    assert result == "a_ = np.zeros(_tmp_shape, dtype=np.int64)"
+    assert result == "a_ = np.zeros(_domain_, dtype=np.int64)"
+
+
+def test_temp_with_extent_definition() -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.VectorAssign(
+            left=npir.VectorTemp(name="a"),
+            right=npir.EmptyTemp(dtype=common.DataType.INT64),
+        ),
+        field_extents={"a": Extent((0, 1), (2, 3))},
+    )
+    assert result == "a_ = np.zeros((_dI_ + 1, _dJ_ + 5, _dK_), dtype=np.int64)"
 
 
 def test_vector_arithmetic() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VectorArithmetic(
-            left=FieldSliceBuilder("a").build(),
-            right=FieldSliceBuilder("b").build(),
+            left=FieldSliceFactory(name="a"),
+            right=FieldSliceFactory(name="b"),
             op=common.ArithmeticOperator.ADD,
         )
     )
@@ -151,7 +163,7 @@ def test_vector_arithmetic() -> None:
 def test_vector_unary_op() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VectorUnaryOp(
-            expr=FieldSliceBuilder("a").build(),
+            expr=FieldSliceFactory(name="a"),
             op=common.UnaryOperator.NEG,
         )
     )
@@ -161,7 +173,7 @@ def test_vector_unary_op() -> None:
 def test_vector_unary_not() -> None:
     result = npir_gen.NpirGen().visit(
         npir.VectorUnaryOp(
-            expr=FieldSliceBuilder("a").build(),
+            expr=FieldSliceFactory(name="a"),
             op=common.UnaryOperator.NOT,
         )
     )
@@ -195,7 +207,7 @@ def test_vertical_pass_seq() -> None:
     )
     print(result)
     match = re.match(
-        (r"(#.*?\n)?" r"k, K = DOMAIN_k \+ 1, DOMAIN_K - 2\n" r"for k_ in range\(k, K\):\n"),
+        (r"(#.*?\n)?" r"k, K = _dk_ \+ 1, _dK_ - 2\n" r"for k_ in range\(k, K\):\n"),
         result,
         re.MULTILINE,
     )
@@ -214,7 +226,7 @@ def test_vertical_pass_par() -> None:
     )
     print(result)
     match = re.match(
-        (r"(#.*?\n)?" r"k, K = DOMAIN_k, DOMAIN_K\n"),
+        (r"(#.*?\n)?" r"k, K = _dk_, _dK_\n"),
         result,
         re.MULTILINE,
     )
@@ -233,7 +245,7 @@ def test_verticall_pass_start_start_forward() -> None:
     )
     print(result)
     match = re.match(
-        r"(#.*?\n)?k, K = DOMAIN_k, DOMAIN_k \+ 5\nfor k_ in range\(k, K\):\n",
+        r"(#.*?\n)?k, K = _dk_, _dk_ \+ 5\nfor k_ in range\(k, K\):\n",
         result,
         re.MULTILINE,
     )
@@ -252,7 +264,7 @@ def test_verticall_pass_end_end_backward() -> None:
     )
     print(result)
     match = re.match(
-        r"(#.*?\n)?k, K = DOMAIN_K \- 4, DOMAIN_K \- 1\nfor k_ in range\(K-1, k-1, -1\):\n",
+        r"(#.*?\n)?k, K = _dK_ \- 4, _dK_ \- 1\nfor k_ in range\(K-1, k-1, -1\):\n",
         result,
         re.MULTILINE,
     )
@@ -276,7 +288,7 @@ def test_vertical_pass_temp_def() -> None:
     )
     print(result)
     match = re.match(
-        r"(#.*?\n)?a_ = np.zeros\(_tmp_shape, dtype=np.int64\)\nk, K = DOMAIN_K \- 4, DOMAIN_K \- 1\nfor k_ in range\(K-1, k-1, -1\):\n",
+        r"(#.*?\n)?a_ = np.zeros\(_domain_, dtype=np.int64\)\nk, K = _dK_ \- 4, _dK_ \- 1\nfor k_ in range\(K-1, k-1, -1\):\n",
         result,
         re.MULTILINE,
     )
@@ -294,12 +306,8 @@ def test_domain_padding() -> None:
     match = re.match(
         (
             r"(#.*?\n)?"
-            r"i, j, k = \d*?, \d*?, \d*?\n"
-            r"_ui, _uj, _uk = \d*?, \d*?, \d*?\n"
-            r"_di, _dj, _dk = _domain_\n"
-            r"I, J, K = .*?\n"
-            r"DOMAIN_k = k\n"
-            r"DOMAIN_K = K\n"
+            r"_di_, _dj_, _dk_ = \d*?, \d*?, \d*?\n"
+            r"_dI_, _dJ_, _dK_ = _domain_\n"
             r"(#.*?\n)?"
         ),
         result,
@@ -362,15 +370,15 @@ def test_full_computation_valid(tmp_path) -> None:
                             ),
                             body=[
                                 npir.VectorAssign(
-                                    left=FieldSliceBuilder("f1", parallel_k=True).build(),
+                                    left=FieldSliceFactory(name="f1", parallel_k=True),
                                     right=npir.VectorArithmetic(
                                         op=common.ArithmeticOperator.MUL,
-                                        left=FieldSliceBuilder("f2", parallel_k=True)
-                                        .offsets(-2, -2, 0)
-                                        .build(),
-                                        right=FieldSliceBuilder("f3", parallel_k=True)
-                                        .offsets(0, 3, 1)
-                                        .build(),
+                                        left=FieldSliceFactory(
+                                            name="f2", parallel_k=True, offsets=(-2, -2, 0)
+                                        ),
+                                        right=FieldSliceFactory(
+                                            name="f3", parallel_k=True, offsets=(0, 3, 1)
+                                        ),
                                     ),
                                 ),
                             ],
@@ -387,13 +395,13 @@ def test_full_computation_valid(tmp_path) -> None:
                             padding=npir.DomainPadding(lower=(0, 0, 0), upper=(0, 0, 0)),
                             body=[
                                 npir.VectorAssign(
-                                    left=FieldSliceBuilder("f2", parallel_k=False).build(),
+                                    left=FieldSliceFactory(name="f2", parallel_k=False),
                                     right=npir.VectorArithmetic(
                                         op=common.ArithmeticOperator.ADD,
-                                        left=FieldSliceBuilder("f2", parallel_k=False).build(),
-                                        right=FieldSliceBuilder("f2", parallel_k=False)
-                                        .offsets(0, 0, 1)
-                                        .build(),
+                                        left=FieldSliceFactory(name="f2", parallel_k=False),
+                                        right=FieldSliceFactory(
+                                            name="f2", parallel_k=False, offsets=(0, 0, 1)
+                                        ),
                                     ),
                                 ),
                             ],

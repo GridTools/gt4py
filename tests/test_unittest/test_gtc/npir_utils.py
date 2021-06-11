@@ -3,6 +3,7 @@ from typing import Tuple
 
 import factory
 
+from gtc import common
 from gtc.python import npir
 
 
@@ -39,3 +40,11 @@ class FieldSliceFactory(factory.Factory):
     k_offset = factory.LazyAttribute(
         lambda obj: npir.AxisOffset.k(obj.offsets[2], parallel=obj.parallel_k)
     )
+
+
+class NativeFuncCallFactory(factory.Factory):
+    class Meta:
+        model = npir.NativeFuncCall
+
+    func = common.NativeFunction.MIN
+    args = factory.List([factory.SubFactory(FieldSliceFactory)])

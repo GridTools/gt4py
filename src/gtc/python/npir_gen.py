@@ -67,7 +67,17 @@ class NpirGen(TemplatedGenerator):
 
     FieldSlice = FormatTemplate("{name}_[{i_offset}, {j_offset}, {k_offset}]{mask_acc}")
 
-    EmptyTemp = FormatTemplate("np.zeros(_tmp_shape, dtype={dtype})")
+    def visit_EmptyTemp(
+        self, node: npir.EmptyTemp, *, temp_name: str, **kwargs
+    ) -> Union[str, Collection[str]]:
+        shape = "_domain_"
+        if extents := kwargs.get("field_extents", {}).get(temp_name):
+            i_total = sum(extents[0])
+            j_total = sum(extents[1])
+            shape = f"(_dI_ + {i_total}, _dJ_ + {j_total}, _dK_)"
+        return self.generic_visit(node, shape=shape, **kwargs)
+
+    EmptyTemp = FormatTemplate("np.zeros({shape}, dtype={dtype})")
 
     NamedScalar = FormatTemplate("{name}")
 
@@ -79,6 +89,8 @@ class NpirGen(TemplatedGenerator):
         mask_acc = ""
         if node.mask:
             mask_acc = f"[{self.visit(node.mask)}]"
+        if isinstance(node.right, npir.EmptyTemp):
+            kwargs["temp_name"] = node.left.name
         return self.generic_visit(node, mask_acc=mask_acc, **kwargs)
 
     VectorAssign = FormatTemplate("{left} = {right}")
@@ -115,7 +127,7 @@ class NpirGen(TemplatedGenerator):
         delta = str(abs(node.offset))
         return self.generic_visit(node, op=operator, delta=delta, **kwargs)
 
-    AxisBound = FormatTemplate("DOMAIN_{level}{op}{delta}")
+    AxisBound = FormatTemplate("_d{level}_{op}{delta}")
 
     def visit_VerticalPass(
         self, node: npir.VerticalPass, **kwargs: Any
@@ -166,14 +178,20 @@ class NpirGen(TemplatedGenerator):
                 lower[1] = min(field_paddings[field]["lower"][1], lower[1])
                 upper[0] = min(field_paddings[field]["upper"][0], upper[0])
                 upper[1] = min(field_paddings[field]["upper"][1], upper[1])
+
+        if extents := kwargs.get("field_extents"):
+            lower[0] = min(extents[field][0][0] for field in fields)
+            lower[1] = min(extents[field][1][0] for field in fields)
+            upper[0] = min(extents[field][0][1] for field in fields)
+            upper[1] = min(extents[field][1][1] for field in fields)
         return self.generic_visit(node, h_lower=lower, h_upper=upper, **kwargs)
 
     HorizontalRegion = JinjaTemplate(
         textwrap.dedent(
             """
             ## --- begin horizontal region --
-            i, I = DOMAIN_i - {{ h_lower[0] }}, DOMAIN_I + {{ h_upper[0] }}
-            j, J = DOMAIN_j - {{ h_lower[1] }}, DOMAIN_J + {{ h_upper[1] }}
+            i, I = _di_ - {{ h_lower[0] }}, _dI_ + {{ h_upper[0] }}
+            j, J = _dj_ - {{ h_lower[1] }}, _dJ_ + {{ h_upper[1] }}
             {% for assign in body %}{{ assign }}
             {% endfor %}## --- end horizontal region --
 
@@ -185,11 +203,8 @@ class NpirGen(TemplatedGenerator):
         textwrap.dedent(
             """\
             ## -- begin domain padding --
-            DOMAIN_i, DOMAIN_j, DOMAIN_k = {lower[0]}, {lower[1]}, {lower[2]}
-            _ui, _uj, _uk = {upper[0]}, {upper[1]}, {upper[2]}
-            _di, _dj, _dk = _domain_
-            DOMAIN_I, DOMAIN_J, DOMAIN_K = _di + DOMAIN_i, _dj + DOMAIN_j, _dk + DOMAIN_k
-            _tmp_shape = (_di + DOMAIN_i + _ui, _dj + DOMAIN_j + _uj, _dk + DOMAIN_k + _uk)
+            _di_, _dj_, _dk_ = 0, 0, 0
+            _dI_, _dJ_, _dK_ = _domain_
             ## -- end domain padding --
             """
         )
@@ -232,11 +247,11 @@ class NpirGen(TemplatedGenerator):
                 {% for name in field_params %}__pi, __pj, __pk, = {{ field_paddings[name]['lower'] }}
                 __pI, __pJ, __pK, = {{ field_paddings[name]['upper'] }}
                 {{ name }}_ = {{ name }}[
-                    (_origin_["{{ name }}"][0] - __pi):(_origin_["{{ name }}"][0] + _di + __pI),
-                    (_origin_["{{ name }}"][1] - __pj):(_origin_["{{ name }}"][1] + _dj + __pJ),
-                    (_origin_["{{ name }}"][2] - __pk):(_origin_["{{ name }}"][2] + _dk + __pK)
+                    (_origin_["{{ name }}"][0] - __pi):(_origin_["{{ name }}"][0] + _dI_ + __pI),
+                    (_origin_["{{ name }}"][1] - __pj):(_origin_["{{ name }}"][1] + _dJ_ + __pJ),
+                    (_origin_["{{ name }}"][2] - __pk):(_origin_["{{ name }}"][2] + _dK_ + __pK)
                 ]
-                {% if not field_paddings[name]['lower'] == lower %}{{ name }}_ = ShimmedView({{ name }}_, (__pi - DOMAIN_i, __pj - DOMAIN_j, __pk - DOMAIN_k))
+                {% if not field_paddings[name]['lower'] == lower %}{{ name }}_ = ShimmedView({{ name }}_, (__pi - _di_, __pj - _dj_, __pk - _dk_))
                 {% endif %}
                 {% endfor %}# -- end data views --
                 """
