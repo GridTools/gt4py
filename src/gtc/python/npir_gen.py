@@ -166,7 +166,6 @@ class NpirGen(TemplatedGenerator):
         domain_padding = kwargs.get(
             "c_domain_padding", npir.DomainPadding(lower=(0, 0, 0), upper=(0, 0, 0))
         )
-        fields = set(node.iter_tree().if_isinstance(npir.FieldSlice).getattr("name"))
         lower = [
             domain_padding.lower[0] - node.padding.lower[0],
             domain_padding.lower[1] - node.padding.lower[1],
@@ -177,10 +176,10 @@ class NpirGen(TemplatedGenerator):
         ]
 
         if extents := kwargs.get("field_extents"):
-            lower[0] = min(extents[field].to_boundary()[0][0] for field in fields)
-            lower[1] = min(extents[field].to_boundary()[1][0] for field in fields)
-            upper[0] = min(extents[field].to_boundary()[0][1] for field in fields)
-            upper[1] = min(extents[field].to_boundary()[1][1] for field in fields)
+            lower[0] = min(extents[field].to_boundary()[0][0] for field in extents)
+            lower[1] = min(extents[field].to_boundary()[1][0] for field in extents)
+            upper[0] = min(extents[field].to_boundary()[0][1] for field in extents)
+            upper[1] = min(extents[field].to_boundary()[1][1] for field in extents)
         return self.generic_visit(node, h_lower=lower, h_upper=upper, **kwargs)
 
     HorizontalRegion = JinjaTemplate(
