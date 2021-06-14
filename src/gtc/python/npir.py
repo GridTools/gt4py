@@ -154,7 +154,7 @@ class VerticalPass(common.LocNode):
 
 class Computation(common.LocNode):
     field_params: List[str]
-    field_paddings: Dict[str, Dict[str, Tuple[int, int, int]]]
+    field_paddings: Optional[Dict[str, Dict[str, Tuple[int, int, int]]]] = None
     params: List[str]
     vertical_passes: List[VerticalPass]
     domain_padding: DomainPadding

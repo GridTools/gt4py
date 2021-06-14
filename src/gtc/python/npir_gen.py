@@ -4,6 +4,7 @@ from typing import Any, Collection, Tuple, Union
 
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
 from gtc import common
+from gtc.passes.gtir_legacy_extents import FIELD_EXT_T
 from gtc.python import npir
 
 
@@ -71,13 +72,16 @@ class NpirGen(TemplatedGenerator):
         self, node: npir.EmptyTemp, *, temp_name: str, **kwargs
     ) -> Union[str, Collection[str]]:
         shape = "_domain_"
+        origin = [0, 0, 0]
         if extents := kwargs.get("field_extents", {}).get(temp_name):
-            i_total = sum(extents[0])
-            j_total = sum(extents[1])
+            boundary = extents.to_boundary()
+            i_total = sum(boundary[0])
+            j_total = sum(boundary[1])
             shape = f"(_dI_ + {i_total}, _dJ_ + {j_total}, _dK_)"
-        return self.generic_visit(node, shape=shape, **kwargs)
+            origin[:2] = boundary[0][0], boundary[1][0]
+        return self.generic_visit(node, shape=shape, origin=origin, **kwargs)
 
-    EmptyTemp = FormatTemplate("np.zeros({shape}, dtype={dtype})")
+    EmptyTemp = FormatTemplate("ShimmedView(np.zeros({shape}, dtype={dtype}), {origin})")
 
     NamedScalar = FormatTemplate("{name}")
 
@@ -159,7 +163,6 @@ class NpirGen(TemplatedGenerator):
     def visit_HorizontalRegion(
         self, node: npir.HorizontalRegion, **kwargs
     ) -> Union[str, Collection[str]]:
-        field_paddings = kwargs.get("c_field_paddings", {})
         domain_padding = kwargs.get(
             "c_domain_padding", npir.DomainPadding(lower=(0, 0, 0), upper=(0, 0, 0))
         )
@@ -172,18 +175,12 @@ class NpirGen(TemplatedGenerator):
             domain_padding.upper[0] - node.padding.upper[0],
             domain_padding.upper[1] - node.padding.upper[1],
         ]
-        for field in fields:
-            if field in field_paddings:
-                lower[0] = min(field_paddings[field]["lower"][0], lower[0])
-                lower[1] = min(field_paddings[field]["lower"][1], lower[1])
-                upper[0] = min(field_paddings[field]["upper"][0], upper[0])
-                upper[1] = min(field_paddings[field]["upper"][1], upper[1])
 
         if extents := kwargs.get("field_extents"):
-            lower[0] = min(extents[field][0][0] for field in fields)
-            lower[1] = min(extents[field][1][0] for field in fields)
-            upper[0] = min(extents[field][0][1] for field in fields)
-            upper[1] = min(extents[field][1][1] for field in fields)
+            lower[0] = min(extents[field].to_boundary()[0][0] for field in fields)
+            lower[1] = min(extents[field].to_boundary()[1][0] for field in fields)
+            upper[0] = min(extents[field].to_boundary()[0][1] for field in fields)
+            upper[1] = min(extents[field].to_boundary()[1][1] for field in fields)
         return self.generic_visit(node, h_lower=lower, h_upper=upper, **kwargs)
 
     HorizontalRegion = JinjaTemplate(
@@ -211,9 +208,10 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_Computation(
-        self, node: npir.Computation, **kwargs: Any
+        self, node: npir.Computation, *, field_extents: FIELD_EXT_T, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         signature = ["*", *node.params, "_domain_", "_origin_"]
+        kwargs["field_extents"] = field_extents
         data_views = JinjaTemplate(
             textwrap.dedent(
                 """\
@@ -244,24 +242,14 @@ class NpirGen(TemplatedGenerator):
                     def __setitem__(self, key, value):
                         return self.field.__setitem__(self.shim_key(key), value)
 
-                {% for name in field_params %}__pi, __pj, __pk, = {{ field_paddings[name]['lower'] }}
-                __pI, __pJ, __pK, = {{ field_paddings[name]['upper'] }}
-                {{ name }}_ = {{ name }}[
-                    (_origin_["{{ name }}"][0] - __pi):(_origin_["{{ name }}"][0] + _dI_ + __pI),
-                    (_origin_["{{ name }}"][1] - __pj):(_origin_["{{ name }}"][1] + _dJ_ + __pJ),
-                    (_origin_["{{ name }}"][2] - __pk):(_origin_["{{ name }}"][2] + _dK_ + __pK)
-                ]
-                {% if not field_paddings[name]['lower'] == lower %}{{ name }}_ = ShimmedView({{ name }}_, (__pi - _di_, __pj - _dj_, __pk - _dk_))
-                {% endif %}
+                {% for name in field_params %}{{ name }}_ = ShimmedView({{ name }}, _origin_["{{ name }}"])
                 {% endfor %}# -- end data views --
                 """
             )
         ).render(
             field_params=node.field_params,
-            field_paddings=node.field_paddings,
             lower=node.domain_padding.lower,
         )
-        kwargs["c_field_paddings"] = node.field_paddings
         kwargs["c_domain_padding"] = node.domain_padding
         return self.generic_visit(
             node, signature=", ".join(signature), data_views=data_views, **kwargs

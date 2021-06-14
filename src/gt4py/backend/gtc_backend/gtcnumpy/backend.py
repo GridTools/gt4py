@@ -10,6 +10,7 @@ from gt4py.backend.debug_backend import (
     debug_layout,
 )
 from gt4py.backend.gtc_backend.mixin import GTCBackendMixin
+from gtc.passes.gtir_legacy_extents import compute_legacy_extents
 from gtc.python import npir
 from gtc.python.npir_gen import NpirGen
 from gtc.python.oir_to_npir import OirToNpir
@@ -86,7 +87,9 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
             + ".py"
         )
         return {
-            computation_name: format_source("python", NpirGen.apply(self.npir)),
+            computation_name: format_source(
+                "python", NpirGen.apply(self.npir, field_extents=compute_legacy_extents(self.gtir))
+            ),
         }
 
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:

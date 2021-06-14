@@ -135,7 +135,7 @@ def test_temp_definition() -> None:
             right=npir.EmptyTemp(dtype=common.DataType.INT64),
         )
     )
-    assert result == "a_ = np.zeros(_domain_, dtype=np.int64)"
+    assert result == "a_ = ShimmedView(np.zeros(_domain_, dtype=np.int64), [0, 0, 0])"
 
 
 def test_temp_with_extent_definition() -> None:
@@ -146,7 +146,10 @@ def test_temp_with_extent_definition() -> None:
         ),
         field_extents={"a": Extent((0, 1), (2, 3))},
     )
-    assert result == "a_ = np.zeros((_dI_ + 1, _dJ_ + 5, _dK_), dtype=np.int64)"
+    assert (
+        result
+        == "a_ = ShimmedView(np.zeros((_dI_ + 1, _dJ_ + 5, _dK_), dtype=np.int64), [1, 5, 0])"
+    )
 
 
 def test_vector_arithmetic() -> None:
@@ -288,7 +291,7 @@ def test_vertical_pass_temp_def() -> None:
     )
     print(result)
     match = re.match(
-        r"(#.*?\n)?a_ = np.zeros\(_domain_, dtype=np.int64\)\nk, K = _dK_ \- 4, _dK_ \- 1\nfor k_ in range\(K-1, k-1, -1\):\n",
+        r"(#.*?\n)?a_ = ShimmedView\(np.zeros\(_domain_, dtype=np.int64\), \[0, 0, 0\]\)\nk, K = _dK_ \- 4, _dK_ \- 1\nfor k_ in range\(K-1, k-1, -1\):\n",
         result,
         re.MULTILINE,
     )
@@ -326,7 +329,8 @@ def test_computation() -> None:
             params=[],
             field_params=[],
             vertical_passes=[],
-        )
+        ),
+        field_extents={},
     )
     print(result)
     match = re.match(
@@ -409,7 +413,12 @@ def test_full_computation_valid(tmp_path) -> None:
                     ],
                 ),
             ],
-        )
+        ),
+        field_extents={
+            "f1": Extent([(0, 0), (0, 0)]),
+            "f2": Extent([(2, 0), (2, 0)]),
+            "f3": Extent([(0, 0), (0, 3)]),
+        },
     )
     print(result)
     mod_path = tmp_path / "npir_gen_1.py"
