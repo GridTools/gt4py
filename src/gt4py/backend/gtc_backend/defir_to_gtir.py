@@ -205,30 +205,25 @@ class DefIRToGTIR(IRNodeVisitor):
         return [self.visit(s, **kwargs) for s in node.stmts]
 
     def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.HorizontalRegion:
-        LARGE_NUM = 10000
+        def make_bound_or_level(bound: AxisBound, level):
+            LARGE_NUM = 10000
+            if level == LevelMarker.START and bound.offset < -LARGE_NUM:
+                return common.levelMarker.START
+            elif level == LevelMarker.END and bound.offset > LARGE_NUM:
+                return common.LevelMarker.END
+            else:
+                return common.AxisBound(
+                    level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[bound.level],
+                    offset=bound.offset,
+                )
+
         axes = {}
         for axis in Domain.LatLonGrid().parallel_axes:
             interval = node.intervals[axis.name]
-
-            bound = interval.start
-            if bound.offset < -LARGE_NUM:
-                start_bound = common.LevelMarker.START
-            else:
-                start_bound = common.AxisBound(
-                    level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[bound.level],
-                    offset=bound.offset,
-                )
-
-            bound = interval.end
-            if bound.offset > LARGE_NUM:
-                end_bound = common.LevelMarker.END
-            else:
-                end_bound = common.AxisBound(
-                    level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[bound.level],
-                    offset=bound.offset,
-                )
-
-            axes[axis.name.lower()] = common.HorizontalInterval(start=start_bound, end=end_bound)
+            axes[axis.name.lower()] = common.HorizontalInterval(
+                start=make_bound_or_level(interval.start, LevelMarker.START),
+                end=make_bound_or_level(interval.end, LevelMarker.END),
+            )
 
         mask = gtir.HorizontalMask(**axes)
         return gtir.HorizontalRegion(
