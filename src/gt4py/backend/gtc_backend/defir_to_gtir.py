@@ -31,6 +31,7 @@ from gt4py.ir.nodes import (
     ComputationBlock,
     FieldDecl,
     FieldRef,
+    For,
     If,
     IterationOrder,
     LevelMarker,
@@ -251,6 +252,15 @@ class DefIRToGTIR(IRNodeVisitor):
                 if node.else_body
                 else None,
             )
+
+    def visit_For(self, node: For) -> gtir.For:
+        return gtir.For(
+            target=node.target,
+            start=self.visit(node.start),
+            end=self.visit(node.stop),
+            step=node.step,
+            body=gtir.BlockStmt(body=self.visit(node.body)),
+        )
 
     def visit_VarRef(self, node: VarRef, **kwargs):
         # TODO(havogt) seems wrong, but check the DefinitionIR for

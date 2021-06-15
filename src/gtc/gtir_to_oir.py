@@ -199,3 +199,15 @@ class GTIRToOIR(NodeTranslator):
             vertical_loops=self.visit(node.vertical_loops, ctx=ctx),
             declarations=ctx.decls,
         )
+
+    def visit_BlockStmt(self, node: gtir.BlockStmt, **kwargs: Any) -> oir.BlockStmt:
+        return oir.BlockStmt(body=[self.visit(stmt, **kwargs) for stmt in node.body])
+
+    def visit_For(self, node: gtir.For, **kwargs: Any) -> oir.For:
+        return oir.For(
+            target=node.target,
+            start=self.visit(node.start, **kwargs),
+            end=self.visit(node.end, **kwargs),
+            step=node.step,
+            body=self.visit(node.body, **kwargs),
+        )

@@ -29,6 +29,7 @@ from eve import (
     NodeVisitor,
     SourceLocation,
     Str,
+    Int,
     StrEnum,
     SymbolTableTrait,
 )
@@ -763,3 +764,11 @@ def typestr_to_data_type(typestr: str) -> DataType:
     }
     key = (typestr[1], int(typestr[2:]))
     return table.get(key, DataType.INVALID)  # type: ignore
+
+
+class For(GenericNode, Generic[StmtT, ExprT]):
+    target: Str
+    start: Union[ExprT, AxisBound]
+    end: Union[ExprT, AxisBound]
+    step: Int
+    body: StmtT
