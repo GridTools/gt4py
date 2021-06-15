@@ -732,29 +732,26 @@ class HorizontalInterval(Node):
         DOMAIN_SIZE = 1000
         OFFSET_SIZE = 1000
 
-        if isinstance(values["start"], LevelMarker):
-            if values["start"] == LevelMarker.END:
-                raise ValueError("Level at start must be START")
+        def get_offset(bound: Union[LevelMarker, AxisBound], level) -> int:
+            if level == LevelMarker.START:
+                base_offset = 0
+                factor = -1
+            else:
+                base_offset = DOMAIN_SIZE
+                factor = 1
 
-            start = -OFFSET_SIZE
-        else:
-            start = (
-                values["start"].offset
-                if values["start"].level == LevelMarker.START
-                else DOMAIN_SIZE + values["start"].offset
-            )
+            if isinstance(bound, LevelMarker):
+                if bound != level:
+                    raise ValueError(f"Level at be {str(level)}")
 
-        if isinstance(values["end"], LevelMarker):
-            if values["end"] == LevelMarker.START:
-                raise ValueError("Level at end must be END")
+                offset = base_offset + factor * OFFSET_SIZE
+            else:
+                offset = base_offset + bound.offset
 
-            end = DOMAIN_SIZE + OFFSET_SIZE
-        else:
-            end = (
-                values["end"].offset
-                if values["end"].level == LevelMarker.START
-                else DOMAIN_SIZE + values["end"].offset
-            )
+            return offset
+
+        start = get_offset(values["start"], LevelMarker.START)
+        end = get_offset(values["end"], LevelMarker.END)
 
         if end <= start:
             raise ValueError("Start must come strictly before end in an interval")
