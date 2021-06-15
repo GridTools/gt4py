@@ -48,6 +48,8 @@ class OirToNpir(NodeTranslator):
             default_factory=lambda: OrderedDict({})
         )
 
+        mask_temp_counter: int = field(default_factory=lambda: 0)
+
         def add_offset(self, name: str, axis: int, value: int) -> "OirToNpir.ComputationContext":
             fpad = self.field_padding.setdefault(name, Padding())
             self.domain_padding.add_offset(axis, value)
@@ -156,13 +158,29 @@ class OirToNpir(NodeTranslator):
         self,
         node: oir.MaskStmt,
         *,
-        ctx: Optional[ComputationContext] = None,
+        ctx: ComputationContext,
         h_ctx: Optional[HorizontalContext] = None,
+        parallel_k: bool,
         **kwargs,
     ) -> npir.MaskBlock:
-        mask = self.visit(node.mask, ctx=ctx, h_ctx=h_ctx, **kwargs)
+        mask_expr = self.visit(
+            node.mask, ctx=ctx, h_ctx=h_ctx, parallel_k=parallel_k, broadcast=True, **kwargs
+        )
+        mask_name = f"_mask_{ctx.mask_temp_counter}"
+        mask = npir.FieldSlice(
+            name=mask_name,
+            i_offset=npir.AxisOffset.i(0),
+            j_offset=npir.AxisOffset.j(0),
+            k_offset=npir.AxisOffset.k(0, parallel=parallel_k),
+        )
+        ctx.mask_temp_counter += 1
+
         return npir.MaskBlock(
-            mask=mask, body=self.visit(node.body, ctx=ctx, h_ctx=h_ctx, mask=mask, **kwargs)
+            mask=mask_expr,
+            mask_name=mask_name,
+            body=self.visit(
+                node.body, ctx=ctx, h_ctx=h_ctx, parallel_k=parallel_k, mask=mask, **kwargs
+            ),
         )
 
     def visit_AssignStmt(
@@ -176,7 +194,6 @@ class OirToNpir(NodeTranslator):
         ctx = ctx or self.ComputationContext()
         if isinstance(ctx.symbol_table.get(node.left.name, None), oir.Temporary):
             ctx.ensure_temp_defined(node.left)
-
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, is_lvalue=True, **kwargs),
             right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),

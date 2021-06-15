@@ -126,6 +126,7 @@ class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpr
 
 class MaskBlock(common.Stmt):
     mask: VectorExpression
+    mask_name: str
     body: List[VectorAssign]
 
 

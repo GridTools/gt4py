@@ -40,7 +40,7 @@ class NpirGen(TemplatedGenerator):
 
     BroadCast = FormatTemplate("{expr}")
 
-    Cast = FormatTemplate("{dtype}({expr})")
+    Cast = FormatTemplate("np.array({expr}, dtype={dtype})")
 
     def visit_NumericalOffset(
         self, node: npir.NumericalOffset, **kwargs: Any
@@ -86,6 +86,16 @@ class NpirGen(TemplatedGenerator):
     NamedScalar = FormatTemplate("{name}")
 
     VectorTemp = FormatTemplate("{name}_")
+
+    MaskBlock = JinjaTemplate(
+        textwrap.dedent(
+            """\
+                {{ mask_name }}_ = np.full((I - i, J - j, K - k), {{ mask }})
+                {% for stmt in body %}{{ stmt }}
+                {% endfor %}
+            """
+        )
+    )
 
     def visit_VectorAssign(
         self, node: npir.VectorAssign, **kwargs: Any
@@ -176,10 +186,13 @@ class NpirGen(TemplatedGenerator):
         ]
 
         if extents := kwargs.get("field_extents"):
-            lower[0] = min(extents[field].to_boundary()[0][0] for field in extents)
-            lower[1] = min(extents[field].to_boundary()[1][0] for field in extents)
-            upper[0] = min(extents[field].to_boundary()[0][1] for field in extents)
-            upper[1] = min(extents[field].to_boundary()[1][1] for field in extents)
+            fields = set(node.iter_tree().if_isinstance(npir.FieldSlice).getattr("name")) & set(
+                extents
+            )
+            lower[0] = min(extents[field].to_boundary()[0][0] for field in fields)
+            lower[1] = min(extents[field].to_boundary()[1][0] for field in fields)
+            upper[0] = min(extents[field].to_boundary()[0][1] for field in fields)
+            upper[1] = min(extents[field].to_boundary()[1][1] for field in fields)
         return self.generic_visit(node, h_lower=lower, h_upper=upper, **kwargs)
 
     HorizontalRegion = JinjaTemplate(
