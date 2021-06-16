@@ -445,7 +445,9 @@ class TestIntervalSyntax:
                     field = 1
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Overlapping intervals"):
-            parse_definition(definition_func)
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
 
     def test_overlapping_intervals(self):
         def definition_func(field: gtscript.Field[float]):
@@ -456,7 +458,9 @@ class TestIntervalSyntax:
                     field = 1
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Overlapping intervals"):
-            parse_definition(definition_func)
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
 
     def test_nonoverlapping_intervals(self):
         def definition_func(field: gtscript.Field[float]):
@@ -468,7 +472,9 @@ class TestIntervalSyntax:
                 with interval(-1, None):
                     field = 2
 
-        parse_definition(definition_func)
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
 
 
 class TestExternalsWithSubroutines:
