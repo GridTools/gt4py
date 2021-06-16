@@ -110,12 +110,6 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 
     def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
         assert "gt_backend_t" in kwargs
-        backend_cls = globals()[
-            "GTCGT"
-            + re.sub(r"(^|_)[a-z]", lambda m: m[0][-1].upper(), kwargs["gt_backend_t"])
-            + "Backend"
-        ]
-        make_layout_map = backend_cls.storage_info["layout_map"]
         if "external_arg" in kwargs:
             domain_ndim = node.dimensions.count(True)
             data_ndim = len(node.data_dims)
@@ -126,6 +120,12 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                     sid_ndim=sid_ndim,
                 )
             else:
+                backend_cls = globals()[
+                    "GTCGT"
+                    + re.sub(r"(^|_)[a-z]", lambda m: m[0][-1].upper(), kwargs["gt_backend_t"])
+                    + "Backend"
+                ]
+                make_layout_map = backend_cls.storage_info["layout_map"]
                 layout_map = [
                     x
                     for x in make_layout_map(node.dimensions + (True,) * data_ndim)
