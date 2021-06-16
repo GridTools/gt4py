@@ -28,12 +28,10 @@ import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
 from gt4py.gtscript import (
-    __INLINED,
     PARALLEL,
     I,
     J,
     K,
-    __externals__,
     abs,
     asin,
     compile_assert,
@@ -443,7 +441,7 @@ class TestIntervalSyntax:
 
     def test_overlapping_intervals_none(self):
         def definition_func(field: gtscript.Field[float]):
-            with computation(FORWARD):
+            with computation(PARALLEL):
                 with interval(0, None):
                     field = 0
                 with interval(-1, None):
@@ -456,7 +454,7 @@ class TestIntervalSyntax:
 
     def test_overlapping_intervals(self):
         def definition_func(field: gtscript.Field[float]):
-            with computation(FORWARD):
+            with computation(PARALLEL):
                 with interval(0, 3):
                     field = 0
                 with interval(2, None):
@@ -469,7 +467,7 @@ class TestIntervalSyntax:
 
     def test_nonoverlapping_intervals(self):
         def definition_func(field: gtscript.Field[float]):
-            with computation(FORWARD):
+            with computation(PARALLEL):
                 with interval(0, 2):
                     field = 0
                 with interval(3, -1):
@@ -509,7 +507,7 @@ class TestRegions:
 
     def test_from_external(self):
         def stencil(in_f: gtscript.Field[np.float_]):
-            from __externals__ import i1
+            from gt4py.__externals__ import i1
 
             with computation(PARALLEL), interval(...), horizontal(region[i1, :]):
                 in_f = 1.0
@@ -545,7 +543,7 @@ class TestRegions:
     def test_inside_function(self):
         @gtscript.function
         def region_func():
-            from __externals__ import ie
+            from gt4py.__externals__ import ie
 
             field = 0.0
             with horizontal(region[ie, :]):
@@ -568,7 +566,7 @@ class TestRegions:
 
     def test_error_undefined(self):
         def stencil(in_f: gtscript.Field[np.float_]):
-            from __externals__ import i0  # forget to add 'ia'
+            from gt4py.__externals__ import i0  # forget to add 'ia'
 
             with computation(PARALLEL), interval(...):
                 in_f = in_f + 1.0
