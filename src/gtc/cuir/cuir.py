@@ -18,27 +18,19 @@ from typing import Any, List, Optional, Tuple, Union
 
 from pydantic import validator
 
-from eve import Str, SymbolName, SymbolTableTrait, field
+from eve import Str, SymbolName, SymbolTableTrait, field, utils
 from gtc import common
 from gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
 
 
+@utils.noninstantiable
 class Expr(common.Expr):
     dtype: common.DataType
 
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Expr:
-            raise TypeError("Trying to instantiate `Expr` abstract class.")
-        super().__init__(*args, **kwargs)
 
-
+@utils.noninstantiable
 class Stmt(common.Stmt):
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Stmt:
-            raise TypeError("Trying to instantiate `Stmt` abstract class.")
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class Literal(common.Literal, Expr):  # type: ignore

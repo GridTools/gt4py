@@ -430,7 +430,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             arg = {"name": accessor.symbol, "access_type": "in", "extent": None}
             if isinstance(accessor, gt_ir.FieldAccessor):
                 arg["access_type"] = (
-                    "in" if accessor.intent == gt_ir.AccessIntent.READ_ONLY else "inout"
+                    "in" if accessor.intent == gt_definitions.AccessKind.READ else "inout"
                 )
                 arg["extent"] = gt_utils.flatten(accessor.extent)
             args.append(arg)
@@ -709,7 +709,7 @@ class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
         output_field_names = [
             name
             for name, info in self.args_data.field_info.items()
-            if info is not None and info.access == gt_definitions.AccessKind.READ_WRITE
+            if info is not None and bool(info.access & gt_definitions.AccessKind.WRITE)
         ]
 
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])
