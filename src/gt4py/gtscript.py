@@ -24,6 +24,7 @@ import collections
 import inspect
 import numbers
 import types
+from typing import Callable, Dict, Type
 
 import numpy as np
 
@@ -103,7 +104,7 @@ _VALID_DATA_TYPES = (
 )
 
 
-def _set_arg_dtypes(definition, dtypes):
+def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
     assert isinstance(definition, types.FunctionType)
     annotations = getattr(definition, "__annotations__", {})
     original_annotations = {**annotations}
@@ -121,7 +122,7 @@ def _set_arg_dtypes(definition, dtypes):
             else:
                 raise ValueError(f"Missing '{value}' dtype definition for arg '{arg}'")
 
-    return definition, original_annotations
+    return original_annotations
 
 
 def function(func):
@@ -252,7 +253,7 @@ def stencil(
             elif callable(definition_func):  # General callable
                 definition_func = definition_func.__call__
 
-        _, original_annotations = _set_arg_dtypes(definition_func, dtypes or {})
+        original_annotations = _set_arg_dtypes(definition_func, dtypes or {})
         out = gt_loader.gtscript_loader(
             definition_func,
             backend=backend,
