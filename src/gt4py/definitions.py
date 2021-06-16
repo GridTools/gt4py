@@ -651,9 +651,11 @@ class CenteredExtent(Extent):
 
 
 @enum.unique
-class AccessKind(enum.Enum):
-    READ_ONLY = 0
-    READ_WRITE = 1
+class AccessKind(enum.IntFlag):
+    NONE = 0
+    READ = 1
+    WRITE = 2
+    READ_WRITE = READ | WRITE
 
     def __str__(self):
         return self.name
