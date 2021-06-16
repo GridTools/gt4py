@@ -34,26 +34,26 @@ The example below shows an inner loop over vertical levels in cloud microphysics
 .. code-block:: fortran
 
     do k = kbot - 1, k0, - 1
-        do m = k + 1, kbot
-            if (zt (k + 1) >= ze (m)) exit
-                ! ...
-                tz (m) = tz (m) - sink * icpk (m)
-                qi (k) = qi (k) - sink * dp (m) / dp (k)
-            endif
-        enddo
+      do m = k + 1, kbot
+        if (zt (k + 1) >= ze (m)) exit
+          ! ...
+          tz (m) = tz (m) - sink * icpk (m)
+          qi (k) = qi (k) - sink * dp (m) / dp (k)
+        endif
+      enddo
     enddo
 
 The example below in radiation shows a pattern of looping over higher dimesnional axes with the need to reference based on current higher dimension index:
 .. code-block:: fortran
 
     do k = 1, nlay
-        ! ...
-        do ib = 1, nbdsw
-            jb = nblow + ib - 1
-            taucw(k,ib) = tauliq(jb)+tauice(jb)+tauran+tausnw
-            ssacw(k,ib) = ssaliq(jb)+ssaice(jb)+ssaran(jb)+ssasnw(jb)
-            asycw(k,ib) = asyliq(jb)+asyice(jb)+asyran(jb)+asysnw(jb)
-        enddo
+      ! ...
+      do ib = 1, nbdsw
+        jb = nblow + ib - 1
+        taucw(k,ib) = tauliq(jb)+tauice(jb)+tauran+tausnw
+        ssacw(k,ib) = ssaliq(jb)+ssaice(jb)+ssaran(jb)+ssasnw(jb)
+        asycw(k,ib) = asyliq(jb)+asyice(jb)+asyran(jb)+asysnw(jb)
+      enddo
     enddo
 
 
@@ -150,11 +150,11 @@ The following implementation of ``For`` would be added to ``common.py``:
 .. code-block:: python
 
     class For(GenericNode, Generic[StmtT, ExprT]):
-        target: Str
-        start: Union[ExprT, AxisBound]
-        end: Union[ExprT, AxisBound]
-        step: Int
-        body: StmtT
+      target: Str
+      start: Union[ExprT, AxisBound]
+      end: Union[ExprT, AxisBound]
+      step: Int
+      body: StmtT
 
 From this implementation, each level of the IRs can simply inherit the implementation, but use their own ``Stmt`` and ``Expr`` types.
 
