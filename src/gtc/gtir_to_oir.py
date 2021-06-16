@@ -188,7 +188,7 @@ class GTIRToOIR(NodeTranslator):
             if mask
             else current_mask
         )
-        self.visit(node.block.body, mask=combined_mask, ctx=ctx)
+        return self.visit(node.block.body, mask=combined_mask, ctx=ctx)
 
     def visit_Interval(self, node: gtir.Interval, **kwargs: Any) -> oir.Interval:
         return oir.Interval(
