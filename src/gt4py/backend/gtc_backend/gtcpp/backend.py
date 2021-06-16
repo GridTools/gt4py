@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import re
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 import gtc.utils as gtc_utils
@@ -109,6 +110,12 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 
     def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
         assert "gt_backend_t" in kwargs
+        backend_cls = globals()[
+            "GTCGT"
+            + re.sub(r"(^|_)[a-z]", lambda m: m[0][-1].upper(), kwargs["gt_backend_t"])
+            + "Backend"
+        ]
+        make_layout_map = backend_cls.storage_info["layout_map"]
         if "external_arg" in kwargs:
             domain_ndim = node.dimensions.count(True)
             data_ndim = len(node.data_dims)
@@ -119,13 +126,20 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                     sid_ndim=sid_ndim,
                 )
             else:
+                layout_map = [
+                    x
+                    for x in make_layout_map(node.dimensions + (True,) * data_ndim)
+                    if x is not None
+                ]
                 sid_def = """gt::as_{sid_type}<{dtype}, {sid_ndim},
-                    gt::integral_constant<int, {unique_index}>>({name})""".format(
+                    gt::integral_constant<int, {unique_index}>,
+                    {unit_stride_dim}>({name})""".format(
                     sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
                     name=node.name,
                     dtype=self.visit(node.dtype),
                     unique_index=self.unique_index(),
                     sid_ndim=sid_ndim,
+                    unit_stride_dim=layout_map.index(max(layout_map)),
                 )
                 if domain_ndim != 3:
                     gt_dims = [
