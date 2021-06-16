@@ -704,13 +704,6 @@ class AxisInterval(Node):
 
         return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
 
-
-# TODO Find a better place for this in the file.
-@attribclass
-class HorizontalIf(Statement):
-    intervals = attribute(of=DictOf[str, AxisInterval])
-    body = attribute(of=BlockStmt)
-
     def disjoint_from(self, other: "AxisInterval") -> bool:
         # This made-up constant must be larger than any LevelMarker.offset used
         DOMAIN_SIZE: int = 1000
@@ -729,6 +722,13 @@ class HorizontalIf(Statement):
         return not (self_start <= other_start < self_end) and not (
             other_start <= self_start < other_end
         )
+
+
+# TODO Find a better place for this in the file.
+@attribclass
+class HorizontalIf(Statement):
+    intervals = attribute(of=DictOf[str, AxisInterval])
+    body = attribute(of=BlockStmt)
 
 
 @attribclass
