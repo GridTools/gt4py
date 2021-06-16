@@ -73,11 +73,17 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
-    AccessorRef = as_fmt("eval({name}({', '.join([offset, *data_index])}))")
+    def visit_AccessorRef(self, accessor_ref: gtcpp.AccessorRef, **kwargs):
+        offset = accessor_ref.offset
+        if offset.i == offset.j == offset.k == 0 and not accessor_ref.data_index:
+            return f"eval({accessor_ref.name}())"
+        return (
+            f"eval({accessor_ref.name}({offset.i}, {offset.j}, {offset.k}"
+            + "".join(", {d}" for d in accessor_ref.data_index)
+            + "))"
+        )
 
     LocalAccess = as_fmt("{name}")
-
-    CartesianOffset = as_fmt("{i}, {j}, {k}")
 
     BinaryOp = as_fmt("({left} {op} {right})")
 
