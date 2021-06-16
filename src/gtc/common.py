@@ -729,24 +729,27 @@ class HorizontalInterval(Node):
 
     @root_validator
     def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        DOMAIN_SIZE = 1000
-        OFFSET_SIZE = 1000
-
         def get_offset(bound: Union[LevelMarker, AxisBound], level) -> int:
-            if level == LevelMarker.START:
-                base_offset = 0
-                factor = -1
-            else:
-                base_offset = DOMAIN_SIZE
-                factor = 1
+            DOMAIN_SIZE = 1000
+            OFFSET_SIZE = 1000
 
             if isinstance(bound, LevelMarker):
+                if level == LevelMarker.START:
+                    base_offset = 0
+                    factor = -1
+                else:
+                    base_offset = DOMAIN_SIZE
+                    factor = 1
+
                 if bound != level:
-                    raise ValueError(f"Level at be {str(level)}")
+                    raise ValueError(f"If LevelMarker, it must be {str(level)}")
 
                 offset = base_offset + factor * OFFSET_SIZE
-            else:
+            elif isinstance(bound, AxisBound):
+                base_offset = 0 if bound.level == LevelMarker.START else DOMAIN_SIZE
                 offset = base_offset + bound.offset
+            else:
+                raise TypeError("`bound` must be either LevelMarker or AxisBound")
 
             return offset
 
