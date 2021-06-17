@@ -75,7 +75,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     AccessorRef = as_fmt("eval({name}({', '.join([offset, *data_index])}))")
 
-    ScalarAccess = as_fmt("{name}")
+    LocalAccess = as_fmt("{name}")
 
     CartesianOffset = as_fmt("{i}, {j}, {k}")
 
@@ -154,8 +154,6 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     UnaryOp = as_fmt("({_this_generator.UNARY_OPERATOR_TO_CODE[_this_node.op]}{expr})")
 
     Arg = as_fmt("{name}")
-
-    Param = as_fmt("{name}")
 
     ApiParamDecl = as_fmt("{name}")
 
