@@ -160,21 +160,18 @@ class DaCeComputationCodegen:
                 symbols[f"__{name}_J_stride"] = str(array.shape[2])
                 symbols[f"__{name}_I_stride"] = str(array.shape[1] * array.shape[2])
             else:
-                data_ndim = len(array.shape) - sum(array_dimensions(array))
+                dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
+                data_ndim = len(array.shape) - len(dims)
 
                 # api field strides
                 fmt = "gt::sid::get_stride<{dim}>(gt::sid::sid_get_strides(__{name}_sid))"
+
                 symbols.update(
                     {
                         f"__{name}_{dim}_stride": fmt.format(
-                            dim=f"gt::stencil::dim::{dim.lower()}", name=name
+                            dim=f"gt::integral_constant<int, {idx}>", name=name
                         )
-                        for dim in "IJK"
-                        if any(
-                            dace.symbolic.pystr_to_symbolic(f"__{dim}") in s.free_symbols
-                            for s in array.shape
-                            if hasattr(s, "free_symbols")
-                        )
+                        for idx, dim in enumerate(dims)
                     }
                 )
                 symbols.update(
@@ -297,7 +294,7 @@ class DaCeBindingsCodegen:
             domain_ndim = sum(dimensions)
             data_ndim = len(array.shape) - domain_ndim
             sid_def = """gt::as_{sid_type}<{dtype}, {num_dims},
-                std::integral_constant<int, {unique_index}>>({name})""".format(
+                gt::integral_constant<int, {unique_index}>>({name})""".format(
                 sid_type="cuda_sid"
                 if array.storage in [dace.StorageType.GPU_Global, dace.StorageType.GPU_Shared]
                 else "sid",
@@ -306,6 +303,10 @@ class DaCeBindingsCodegen:
                 unique_index=self.unique_index(),
                 num_dims=len(array.shape),
             )
+            sid_def = "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
+                sid_def=sid_def, name=name
+            )
+
             if domain_ndim != 3:
                 gt_dims = [
                     f"gt::stencil::dim::{dim}"
@@ -324,11 +325,7 @@ class DaCeBindingsCodegen:
                     gt_dims=", ".join(gt_dims), sid_def=sid_def
                 )
 
-            res.append(
-                "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-                    sid_def=sid_def, name=name
-                )
-            )
+            res.append(sid_def)
         # pass scalar parameters as variables
         for name in (n for n in sdfg.symbols.keys() if not n.startswith("__")):
             res.append(name)
