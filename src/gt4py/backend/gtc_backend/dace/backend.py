@@ -177,7 +177,7 @@ class DaCeComputationCodegen:
                 symbols.update(
                     {
                         f"__{name}_d{dim}_stride": fmt.format(
-                            dim=f"gt::integral_constant<int, {3 + dim}>", name=name
+                            dim=f"gt::integral_constant<int, {len(dims) + dim}>", name=name
                         )
                         for dim in range(data_ndim)
                     }
