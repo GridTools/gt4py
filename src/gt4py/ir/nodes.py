@@ -172,7 +172,7 @@ import copy
 import enum
 import operator
 import sys
-from typing import List, Sequence
+from typing import Generator, Sequence, Type
 
 import numpy as np
 
@@ -1008,25 +1008,24 @@ class IRNodeDumper(IRNodeMapper):
 dump_ir = IRNodeDumper.apply
 
 
-def filter_nodes_dfs(root_node, node_type):
+def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None, None]:
     """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
-    stack = [root_node]
-    while stack:
-        curr = stack.pop()
-        assert isinstance(curr, Node)
 
-        for node_class in curr.__class__.__mro__:
-            if node_class is node_type:
-                yield curr
-
-        for key, value in iter_attributes(curr):
-            if isinstance(curr, collections.abc.Iterable):
-                if isinstance(curr, collections.abc.Mapping):
-                    children = curr.values()
+    def recurse(node: Node) -> Generator[Node, None, None]:
+        for key, value in iter_attributes(node):
+            if isinstance(node, collections.abc.Iterable):
+                if isinstance(node, collections.abc.Mapping):
+                    children = node.values()
                 else:
-                    children = curr
+                    children = node
             else:
                 children = gt_utils.listify(value)
 
-            for value in filter(lambda x: isinstance(x, Node), children):
-                stack.append(value)
+            for value in children:
+                if isinstance(value, Node):
+                    yield from recurse(value)
+
+            if isinstance(node, node_type):
+                yield node
+
+    yield from recurse(root_node)

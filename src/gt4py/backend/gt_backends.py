@@ -429,7 +429,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         self.stage_symbols = {}
         args = []
         fields_with_variable_offset = set()
-        for field_ref in gt_ir.filter_nodes_dfs(node, gt_ir.FieldRef):
+        for field_ref in gt_ir.iter_nodes_of_type(node, gt_ir.FieldRef):
             if isinstance(field_ref.offset.get(self.domain.sequential_axis.name, None), gt_ir.Expr):
                 fields_with_variable_offset.add(field_ref.name)
         for accessor in node.accessors:
@@ -442,6 +442,8 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 if accessor.symbol not in fields_with_variable_offset:
                     arg["extent"] = gt_utils.flatten(accessor.extent)
                 else:
+                    # If the field has a variable offset, then we assert the maximum vertical extents.
+                    # 1000 is just a guess, but should be larger than any reasonable number of vertical levels.
                     arg["extent"] = gt_utils.flatten(accessor.extent[:-1]) + [-1000, 1000]
             args.append(arg)
 
