@@ -22,6 +22,7 @@ import itertools
 import numbers
 import textwrap
 import types
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -201,10 +202,10 @@ class AxisIntervalParser(gt_meta.ASTPass):
         ):
             raise parser.interval_error
 
-        lower = parser.visit(slice_node.lower)
-
         if slice_node.upper is None:
             slice_node.upper = ast.Constant(value=None)
+
+        lower = parser.visit(slice_node.lower)
         upper = parser.visit(slice_node.upper)
 
         start = parser._make_axis_bound(lower, gt_ir.LevelMarker.START)
@@ -345,9 +346,6 @@ class AxisIntervalParser(gt_meta.ASTPass):
             index = self.visit(node.slice)
 
         return gtscript.AxisIndex(axis=self.axis_name, index=index)
-
-
-parse_interval_node = AxisIntervalParser.apply
 
 
 class ValueInliner(ast.NodeTransformer):
@@ -823,16 +821,16 @@ class IRMaker(ast.NodeVisitor):
 
     def _parse_region_intervals(
         self, node: Union[ast.ExtSlice, ast.Index, ast.Tuple], loc: gt_ir.Location = None
-    ) -> List[gt_ir.AxisInterval]:
+    ) -> Dict[str, gt_ir.AxisInterval]:
         if isinstance(node, ast.Index):
             # Python 3.8 wraps a Tuple in an Index for region[0, 1]
             tuple_node = node.value
-            axes_nodes = tuple_node.elts
+            list_of_exprs = tuple_node.elts
         elif isinstance(node, ast.ExtSlice) or isinstance(node, ast.Tuple):
             # Python 3.8 returns an ExtSlice for region[0, :]
             # Python 3.9 directly returns a Tuple for region[0, 1]
             node_list = node.dims if isinstance(node, ast.ExtSlice) else node.elts
-            axes_nodes = [
+            list_of_exprs = [
                 axis_node.value if isinstance(axis_node, ast.Index) else axis_node
                 for axis_node in node_list
             ]
@@ -841,33 +839,25 @@ class IRMaker(ast.NodeVisitor):
                 f"Invalid 'region' index at line {loc.line} (column {loc.column})", loc=loc
             )
         axes_names = [axis.name for axis in self.domain.parallel_axes]
-        return [
-            parse_interval_node(axis_node, name) for axis_node, name in zip(axes_nodes, axes_names)
-        ]
+        return {
+            name: AxisIntervalParser.apply(axis_node, name)
+            for axis_node, name in zip(list_of_exprs, axes_names)
+        }
 
     def _visit_with_horizontal(
         self, node: ast.withitem, loc: gt_ir.Location
-    ) -> Dict[str, gt_ir.AxisInterval]:
+    ) -> List[Dict[str, gt_ir.AxisInterval]]:
         syntax_error = GTScriptSyntaxError(
             f"Invalid 'with' statement at line {loc.line} (column {loc.column})", loc=loc
         )
 
         call_args = node.context_expr.args
-        if any(not isinstance(arg, ast.Subscript) for arg in call_args):
+        if any(not isinstance(arg, ast.Subscript) for arg in call_args) or any(
+            arg.value.id != "region" for arg in call_args
+        ):
             raise syntax_error
-        if any(arg.value.id != "region" for arg in call_args):
-            raise syntax_error
 
-        parallel_axes_names = tuple(axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes)
-
-        blocks = []
-        for arg in call_args:
-            intervals = self._parse_region_intervals(arg.slice, loc)
-            blocks.append(
-                {axis: interval for axis, interval in zip(parallel_axes_names, intervals)}
-            )
-
-        return blocks
+        return [self._parse_region_intervals(arg.slice, loc) for arg in call_args]
 
     def _are_intervals_nonoverlapping(self, compute_blocks: List[gt_ir.ComputationBlock]):
         for i, block in enumerate(compute_blocks[1:]):
@@ -925,7 +915,7 @@ class IRMaker(ast.NodeVisitor):
             interval_node = args[0]
 
         seq_name = gt_ir.Domain.LatLonGrid().sequential_axis.name
-        interval = parse_interval_node(interval_node, seq_name, loc=loc)
+        interval = AxisIntervalParser.apply(interval_node, seq_name, loc=loc)
 
         if (
             interval.start.level == gt_ir.LevelMarker.END
