@@ -3,12 +3,15 @@ import time
 from typing import Any, Dict, Optional
 
 from gt4py.definitions import FieldInfo
+# TODO(eddied) Handle circular reference...
 # from gt4py.stencil_builder import StencilBuilder
 from gt4py.stencil_object import StencilObject
 
 
 class FutureStencil:
-    """A stencil object that is compiled by another node in a distributed context."""
+    """
+    A stencil object that is compiled by another node in a distributed context.
+    """
 
     _builder: Optional["StencilBuilder"] = None
 
@@ -29,13 +32,12 @@ class FutureStencil:
 
     def wait_for_cache_info(self):
         cache_info_path = self._builder.caching.cache_info_path
-        node_id = self._builder.caching._uid[0]
-
         time_elapsed = 0.0
         while not cache_info_path.exists() and time_elapsed < self._timeout:
             time.sleep(self._sleep_time)
             time_elapsed += self._sleep_time
         if time_elapsed >= self._timeout:
+            node_id = self._builder.caching._distrib_ctx[0]
             raise RuntimeError(
                 f"Timeout while waiting for stencil '{cache_info_path.stem}' to compile on R{node_id}"
             )

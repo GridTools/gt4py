@@ -21,7 +21,7 @@ import pathlib
 import pickle
 import sys
 import types
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import gt4py
 from gt4py.definitions import StencilID
@@ -338,9 +338,9 @@ class DistributedCachingStrategy(JITCachingStrategy):
 
     name = "distributed"
 
-    def __init__(self, builder: "StencilBuilder", uid: Tuple[int, int] = (0, 1)):
+    def __init__(self, builder: "StencilBuilder", distrib_ctx: List[Union[int, List[int]]]):
         super().__init__(builder)
-        self._uid = uid
+        self._distrib_ctx = distrib_ctx
 
     def is_cache_info_available_and_consistent(
         self, *, validate_hash: bool, catch_exceptions: bool = True
@@ -351,10 +351,17 @@ class DistributedCachingStrategy(JITCachingStrategy):
         FutureStencil._builder = self.builder
         return result
 
-    def is_generator(self) -> bool:
-        node_id, n_nodes = self._uid
+    def get_generator_id(self):
+        n_nodes, node_groups = self._distrib_ctx[1:]
+        if node_groups:
+            n_nodes = len(node_groups)
         generator_id = int(self.builder.stencil_id.version, 16) % n_nodes
-        return generator_id == node_id
+        if node_groups:
+            generator_id = node_groups[generator_id]
+        return generator_id
+
+    def is_generator(self) -> bool:
+        return self.get_generator_id() == self._distrib_ctx[0]
 
 
 class NoCachingStrategy(CachingStrategy):
