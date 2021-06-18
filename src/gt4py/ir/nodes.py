@@ -109,6 +109,7 @@ storing a reference to the piece of source code which originated the node.
     Statement   = Decl
                 | Assign(target: Ref, value: Expr)
                 | If(condition: expr, main_body: BlockStmt, else_body: BlockStmt)
+                | While(condition: expr, body: BlockStmt)
                 | BlockStmt
 
     AxisBound(level: LevelMarker | VarRef, offset: int)
@@ -631,6 +632,13 @@ class If(Statement):
     condition = attribute(of=Expr)
     main_body = attribute(of=BlockStmt)
     else_body = attribute(of=BlockStmt, optional=True)
+    loc = attribute(of=Location, optional=True)
+
+
+@attribclass
+class While(Statement):
+    condition = attribute(of=Expr)
+    body = attribute(of=BlockStmt)
     loc = attribute(of=Location, optional=True)
 
 
