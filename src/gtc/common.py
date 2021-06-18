@@ -749,16 +749,16 @@ class IJExtent(LocNode):
 
 
 class HorizontalInterval(Node):
-    start: Union[LevelMarker, AxisBound]
-    end: Union[LevelMarker, AxisBound]
+    start: Optional[AxisBound]
+    end: Optional[AxisBound]
 
     @root_validator
     def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        def get_offset(bound: Union[LevelMarker, AxisBound], level) -> int:
+        def get_offset(bound: Optional[AxisBound], level) -> int:
             DOMAIN_SIZE = 1000
             OFFSET_SIZE = 1000
 
-            if isinstance(bound, LevelMarker):
+            if not bound:
                 if level == LevelMarker.START:
                     base_offset = 0
                     factor = -1
@@ -770,11 +770,9 @@ class HorizontalInterval(Node):
                     raise ValueError(f"If LevelMarker, it must be {str(level)}")
 
                 offset = base_offset + factor * OFFSET_SIZE
-            elif isinstance(bound, AxisBound):
+            else:
                 base_offset = 0 if bound.level == LevelMarker.START else DOMAIN_SIZE
                 offset = base_offset + bound.offset
-            else:
-                raise TypeError("`bound` must be either LevelMarker or AxisBound")
 
             return offset
 
@@ -788,10 +786,7 @@ class HorizontalInterval(Node):
 
     @property
     def is_single_index(self) -> bool:
-        if not isinstance(self.start, AxisBound) or not isinstance(self.end, AxisBound):
-            return False
-
-        if not self.start.level == self.end.level:
+        if self.start is None or self.end is None or self.start.level != self.end.level:
             return False
 
         return abs(self.end.offset - self.start.offset) == 1

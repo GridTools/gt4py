@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict, List, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 import eve
 from gt4py.ir import IRNodeVisitor
@@ -205,12 +205,12 @@ class DefIRToGTIR(IRNodeVisitor):
         return [self.visit(s, **kwargs) for s in node.stmts]
 
     def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.HorizontalRegion:
-        def make_bound_or_level(bound: AxisBound, level):
+        def make_bound_or_level(bound: AxisBound, level) -> Optional[common.AxisBound]:
             LARGE_NUM = 10000
-            if level == LevelMarker.START and bound.offset < -LARGE_NUM:
-                return common.levelMarker.START
-            elif level == LevelMarker.END and bound.offset > LARGE_NUM:
-                return common.LevelMarker.END
+            if (level == LevelMarker.START and bound.offset < -LARGE_NUM) or (
+                level == LevelMarker.END and bound.offset > LARGE_NUM
+            ):
+                return None
             else:
                 return common.AxisBound(
                     level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[bound.level],
