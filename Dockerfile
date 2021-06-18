@@ -4,31 +4,31 @@ ENV LC_ALL C.UTF-8
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
-        strace \
-        build-essential \
-        cuda-toolkit-10.1 \
-        tar \
-        wget \
-        curl \
-        ca-certificates \
-        zlib1g-dev \
-        libssl-dev \
-        libbz2-dev \
-        libsqlite3-dev \
-        llvm \
-        libncurses5-dev \
-        libncursesw5-dev \
-        xz-utils \
-        tk-dev \
-        libffi-dev \
-        liblzma-dev \
-        python-openssl \
-        libreadline-dev \
-        git \
-        htop && \
+    strace \
+    build-essential \
+    cuda-toolkit-10.1 \
+    tar \
+    wget \
+    curl \
+    ca-certificates \
+    zlib1g-dev \
+    libssl-dev \
+    libbz2-dev \
+    libsqlite3-dev \
+    llvm \
+    libncurses5-dev \
+    libncursesw5-dev \
+    xz-utils \
+    tk-dev \
+    libffi-dev \
+    liblzma-dev \
+    python-openssl \
+    libreadline-dev \
+    git \
+    htop && \
     rm -rf /var/lib/apt/lists/*
 
-RUN wget --quiet https://dl.bintray.com/boostorg/release/1.72.0/source/boost_1_72_0.tar.gz && \
+RUN wget --quiet https://boostorg.jfrog.io/artifactory/main/release/1.72.0/source/boost_1_72_0.tar.gz && \
     echo c66e88d5786f2ca4dbebb14e06b566fb642a1a6947ad8cc9091f9f445134143f boost_1_72_0.tar.gz > boost_hash.txt && \
     sha256sum -c boost_hash.txt && \
     tar xzf boost_1_72_0.tar.gz && \

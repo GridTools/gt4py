@@ -1,10 +1,26 @@
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import abc
 import numbers
 import os
 import textwrap
 from dataclasses import dataclass, field
 from inspect import getdoc
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
 
 import jinja2
 import numpy
@@ -41,20 +57,26 @@ def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> M
     data = ModuleData()
 
     # Collect access type per field
+    in_fields = set()
     out_fields = set()
     for ms in implementation_ir.multi_stages:
         for sg in ms.groups:
             for st in sg.stages:
                 for acc in st.accessors:
-                    if (
-                        isinstance(acc, gt_ir.FieldAccessor)
-                        and acc.intent == gt_ir.AccessIntent.READ_WRITE
-                    ):
+                    if isinstance(acc, gt_ir.FieldAccessor) and bool(acc.intent & AccessKind.WRITE):
                         out_fields.add(acc.symbol)
+                    elif isinstance(acc, gt_ir.FieldAccessor) and bool(
+                        acc.intent & AccessKind.READ
+                    ):
+                        in_fields.add(acc.symbol)
 
     for arg in implementation_ir.api_signature:
         if arg.name in implementation_ir.fields:
-            access = AccessKind.READ_WRITE if arg.name in out_fields else AccessKind.READ_ONLY
+            access = AccessKind.NONE
+            if arg.name in in_fields:
+                access |= AccessKind.READ
+            if arg.name in out_fields:
+                access |= AccessKind.WRITE
             if arg.name not in implementation_ir.unreferenced:
                 field_decl = implementation_ir.fields[arg.name]
                 data.field_info[arg.name] = FieldInfo(
@@ -105,22 +127,33 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         .getattr("left")
         .if_isinstance(gtir.FieldAccess)
         .getattr("name")
-        .to_list()
+        .to_set()
     )
 
-    referenced_field_params = {
+    read_fields: Set[str] = set()
+    for expr in node.iter_tree().if_isinstance(gtir.ParAssignStmt).getattr("right"):
+        read_fields |= expr.iter_tree().if_isinstance(gtir.FieldAccess).getattr("name").to_set()
+
+    referenced_field_params = [
         param.name for param in node.params if isinstance(param, gtir.FieldDecl)
-    }
+    ]
     for name in sorted(referenced_field_params):
+        access = AccessKind.NONE
+        if name in read_fields:
+            access |= AccessKind.READ
+        if name in write_fields:
+            access |= AccessKind.WRITE
         data.field_info[name] = FieldInfo(
-            access=AccessKind.READ_WRITE if name in write_fields else AccessKind.READ_ONLY,
+            access=access,
             boundary=field_extents[name].to_boundary(),
             axes=tuple(dimension_flags_to_names(node.symtable_[name].dimensions).upper()),
             data_dims=tuple(node.symtable_[name].data_dims),
             dtype=numpy.dtype(node.symtable_[name].dtype.name.lower()),
         )
 
-    referenced_scalar_params = set(node.param_names).difference(referenced_field_params)
+    referenced_scalar_params = [
+        param.name for param in node.params if param.name not in referenced_field_params
+    ]
     for name in sorted(referenced_scalar_params):
         data.parameter_info[name] = ParameterInfo(
             dtype=numpy.dtype(node.symtable_[name].dtype.name.lower())

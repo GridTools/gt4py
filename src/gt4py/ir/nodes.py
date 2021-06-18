@@ -50,10 +50,6 @@ NativeFunction enumeration (:class:`NativeFunction`)
     [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
     `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
-AccessIntent enumeration (:class:`AccessIntent`)
-    Access permissions
-    [`READ_ONLY`, `READ_WRITE`]
-
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
     [`START`, `END`]
@@ -145,7 +141,7 @@ Implementation IR
  ::
 
     Accessor    = ParameterAccessor(symbol: str)
-                | FieldAccessor(symbol: str, intent: AccessIntent, extent: Extent)
+                | FieldAccessor(symbol: str, intent: AccessKind, extent: Extent)
 
     ApplyBlock(interval: AxisInterval,
                local_symbols: Dict[str, VarDecl],
@@ -176,12 +172,13 @@ import collections
 import copy
 import enum
 import operator
-from typing import List, Sequence
+import sys
+from typing import Generator, Sequence, Type
 
 import numpy as np
 
 from gt4py import utils as gt_utils
-from gt4py.definitions import CartesianSpace, Extent, Index
+from gt4py.definitions import AccessKind, CartesianSpace, Extent, Index
 from gt4py.utils.attrib import Any as Any
 from gt4py.utils.attrib import Dict as DictOf
 from gt4py.utils.attrib import List as ListOf
@@ -274,15 +271,6 @@ class Builtin(enum.Enum):
             result = cls.FALSE
 
         return result
-
-    def __str__(self):
-        return self.name
-
-
-@enum.unique
-class AccessIntent(enum.Enum):
-    READ_ONLY = 0
-    READ_WRITE = 1
 
     def __str__(self):
         return self.name
@@ -717,6 +705,25 @@ class AxisInterval(Node):
 
         return interval
 
+    def disjoint_from(self, other: "AxisInterval") -> bool:
+        # This made-up constant must be larger than any LevelMarker.offset used
+        DOMAIN_SIZE: int = 1000
+
+        def get_offset(bound: AxisBound) -> int:
+            return (
+                0 + bound.offset if bound.level == LevelMarker.START else sys.maxsize + bound.offset
+            )
+
+        self_start = get_offset(self.start)
+        self_end = get_offset(self.end)
+
+        other_start = get_offset(other.start)
+        other_end = get_offset(other.end)
+
+        return not (self_start <= other_start < self_end) and not (
+            other_start <= self_start < other_end
+        )
+
 
 @attribclass
 class ComputationBlock(Node):
@@ -764,7 +771,7 @@ class ParameterAccessor(Accessor):
 @attribclass
 class FieldAccessor(Accessor):
     symbol = attribute(of=str)
-    intent = attribute(of=AccessIntent)
+    intent = attribute(of=AccessKind)
     extent = attribute(of=Extent, default=Extent.zeros())
 
 
@@ -1009,25 +1016,24 @@ class IRNodeDumper(IRNodeMapper):
 dump_ir = IRNodeDumper.apply
 
 
-def filter_nodes_dfs(root_node, node_type):
+def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None, None]:
     """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
-    stack = [root_node]
-    while stack:
-        curr = stack.pop()
-        assert isinstance(curr, Node)
 
-        for node_class in curr.__class__.__mro__:
-            if node_class is node_type:
-                yield curr
-
-        for key, value in iter_attributes(curr):
-            if isinstance(curr, collections.abc.Iterable):
-                if isinstance(curr, collections.abc.Mapping):
-                    children = curr.values()
+    def recurse(node: Node) -> Generator[Node, None, None]:
+        for key, value in iter_attributes(node):
+            if isinstance(node, collections.abc.Iterable):
+                if isinstance(node, collections.abc.Mapping):
+                    children = node.values()
                 else:
-                    children = curr
+                    children = node
             else:
                 children = gt_utils.listify(value)
 
-            for value in filter(lambda x: isinstance(x, Node), children):
-                stack.append(value)
+            for value in children:
+                if isinstance(value, Node):
+                    yield from recurse(value)
+
+            if isinstance(node, node_type):
+                yield node
+
+    yield from recurse(root_node)

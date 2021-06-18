@@ -203,7 +203,19 @@ def test_lower_dimensional_inputs(backend):
 
 
 @pytest.mark.parametrize(
-    "backend", make_backend_params("debug", "numpy", "gtc:gt:cpu_ifirst", "gtc:gt:cpu_kfirst")
+    "backend",
+    [
+        "debug",
+        "numpy",
+        pytest.param("gtx86", marks=[pytest.mark.xfail]),
+        pytest.param("gtmc", marks=[pytest.mark.xfail]),
+        pytest.param("gtcuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
+        "gtc:gt:cpu_ifirst",
+        "gtc:gt:cpu_kfirst",
+        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
+        pytest.param("gtc:cuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
+        "gtc:dace",
+    ],
 )
 def test_higher_dimensional_fields(backend):
     FLOAT64_VEC2 = (np.float64, (2,))
@@ -262,6 +274,28 @@ def test_input_order(backend):
     ):
         with computation(PARALLEL), interval(...):
             out_field = in_field * parameter
+
+
+@pytest.mark.parametrize("backend", OLD_BACKENDS)
+def test_variable_offsets(backend):
+    @gtscript.stencil(backend=backend)
+    def stencil_ij(
+        in_field: gtscript.Field[np.float_],
+        out_field: gtscript.Field[np.float_],
+        index_field: gtscript.Field[gtscript.IJ, int],
+    ):
+        with computation(FORWARD), interval(...):
+            out_field = in_field[0, 0, 1] + in_field[0, 0, index_field + 1]
+            index_field = index_field + 1
+
+    @gtscript.stencil(backend=backend)
+    def stencil_ijk(
+        in_field: gtscript.Field[np.float_],
+        out_field: gtscript.Field[np.float_],
+        index_field: gtscript.Field[int],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field = in_field[0, 0, 1] + in_field[0, 0, index_field + 1]
 
 
 @pytest.mark.parametrize("backend", OLD_BACKENDS)

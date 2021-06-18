@@ -25,27 +25,19 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import root_validator, validator
 
-from eve import Str, SymbolName, SymbolRef, SymbolTableTrait, field
+from eve import Str, SymbolName, SymbolRef, SymbolTableTrait, field, utils
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
 
+@utils.noninstantiable
 class Expr(common.Expr):
     dtype: Optional[common.DataType]
 
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Expr:
-            raise TypeError("Trying to instantiate `Expr` abstract class.")
-        super().__init__(*args, **kwargs)
 
-
+@utils.noninstantiable
 class Stmt(common.Stmt):
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Stmt:
-            raise TypeError("Trying to instantiate `Stmt` abstract class.")
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class Literal(common.Literal, Expr):  # type: ignore
@@ -130,11 +122,6 @@ class Temporary(FieldDecl):
     pass
 
 
-class HorizontalExecution(LocNode):
-    body: List[Stmt]
-    declarations: List[LocalScalar]
-
-
 class Interval(LocNode):
     start: AxisBound
     end: AxisBound
@@ -149,6 +136,28 @@ class Interval(LocNode):
                 "Start offset must be smaller than end offset if start and end levels are equal"
             )
         return values
+
+    def covers(self, other: "Interval") -> bool:
+        outer_starts_lower = self.start < other.start or self.start == other.start
+        outer_ends_higher = self.end > other.end or self.end == other.end
+        return outer_starts_lower and outer_ends_higher
+
+    def intersects(self, other: "Interval") -> bool:
+        return not (other.start >= self.end or self.start >= other.end)
+
+    def shifted(self, offset: int) -> "Interval":
+        start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
+        end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
+        return Interval(start=start, end=end)
+
+    @classmethod
+    def full(cls):
+        return cls(start=AxisBound.start(), end=AxisBound.end())
+
+
+class HorizontalExecution(LocNode):
+    body: List[Stmt]
+    declarations: List[LocalScalar]
 
 
 class CacheDesc(LocNode):

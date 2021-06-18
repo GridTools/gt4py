@@ -22,7 +22,7 @@ import itertools
 import numbers
 import textwrap
 import types
-from typing import List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -124,34 +124,44 @@ class AssertionChecker(ast.NodeTransformer):
     """Check assertions and remove from the AST for further parsing."""
 
     @classmethod
-    def apply(cls, func_node: ast.FunctionDef, context: dict, source: str):
+    def apply(cls, func_node: ast.FunctionDef, context: Dict[str, Any], source: str):
         checker = cls(context, source)
-        checker(func_node)
+        checker.visit(func_node)
 
-    def __init__(self, context, source):
+    def __init__(self, context: Dict[str, Any], source: str):
         self.context = context
         self.source = source
 
-    def __call__(self, func_node: ast.FunctionDef):
-        self.visit(func_node)
-
-    def visit_Assert(self, assert_node: ast.Assert) -> None:
-        if assert_node.test.func.id != "__INLINED":
-            raise GTScriptSyntaxError("Run-time assertions are not supported.")
-        eval_node = assert_node.test.args[0]
-
-        condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
+    def _process_assertion(self, expr_node: ast.Expr) -> None:
+        condition_value = gt_utils.meta.ast_eval(expr_node, self.context, default=NOTHING)
         if condition_value is not NOTHING:
             if not condition_value:
                 source_lines = textwrap.dedent(self.source).split("\n")
-                loc = gt_ir.Location.from_ast_node(assert_node)
+                loc = gt_ir.Location.from_ast_node(expr_node)
                 raise GTScriptAssertionError(source_lines[loc.line - 1], loc=loc)
         else:
             raise GTScriptSyntaxError(
-                "Evaluation of compile-time assertion condition failed at the preprocessing step."
+                "Evaluation of compile_assert condition failed at the preprocessing step."
             )
-
         return None
+
+    def _process_call(self, node: ast.Call) -> Optional[ast.Call]:
+        name = gt_meta.get_qualified_name_from_node(node.func)
+        if name != "compile_assert":
+            return node
+        else:
+            if len(node.args) != 1:
+                raise GTScriptSyntaxError(
+                    "Invalid assertion. Correct syntax: compile_assert(condition)"
+                )
+            return self._process_assertion(node.args[0])
+
+    def visit_Expr(self, node: ast.Expr) -> Optional[ast.AST]:
+        if isinstance(node.value, ast.Call):
+            ret = self._process_call(node.value)
+            return ast.Expr(value=ret) if ret else None
+        else:
+            return node
 
 
 class AxisIntervalParser(ast.NodeVisitor):
@@ -233,7 +243,7 @@ class AxisIntervalParser(ast.NodeVisitor):
         symbol = node.id
         if symbol in self.context:
             value = self.context[symbol]
-            if isinstance(value, gtscript._AxisOffset):
+            if isinstance(value, gtscript.AxisIndex):
                 if value.axis != self.axis_name:
                     raise self.interval_error
                 offset = value.offset
@@ -247,7 +257,7 @@ class AxisIntervalParser(ast.NodeVisitor):
 
     def visit_Constant(self, node: ast.Constant) -> gt_ir.AxisBound:
         if node.value is not None:
-            if isinstance(node.value, gtscript._AxisOffset):
+            if isinstance(node.value, gtscript.AxisIndex):
                 if node.value.axis != self.axis_name:
                     raise self.interval_error
                 offset = node.value.offset
@@ -326,7 +336,7 @@ class ValueInliner(ast.NodeTransformer):
         qualified_name = gt_meta.get_qualified_name_from_node(name_or_attr_node)
         if qualified_name in self.context:
             value = self.context[qualified_name]
-            if value is None or isinstance(value, (bool, numbers.Number, gtscript._AxisOffset)):
+            if value is None or isinstance(value, (bool, numbers.Number, gtscript.AxisIndex)):
                 new_node = ast.Constant(value=value)
             elif hasattr(value, "_gtscript_"):
                 pass
@@ -451,8 +461,8 @@ class CallInliner(ast.NodeTransformer):
     def visit_Call(self, node: ast.Call, *, target_node=None):
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
-        if call_name in gtscript.MATH_BUILTINS:
-            # A math function -- visit arguments and return as-is.
+        if call_name in gtscript.IGNORE_WHEN_INLINING:
+            # Not a function to inline. Visit arguments and return as-is.
             node.args = [self.visit(arg) for arg in node.args]
             return node
         elif any(
@@ -579,9 +589,9 @@ class CallInliner(ast.NodeTransformer):
         return result_node
 
     def visit_Expr(self, node: ast.Expr):
-        """ignore pure string statements in callee"""
-        if not isinstance(node.value, ast.Str):
-            return super().visit(node)
+        """Ignore pure string statements in callee."""
+        if not isinstance(node.value, (ast.Constant, ast.Str)):
+            return super().visit(node.value)
 
 
 class CompiledIfInliner(ast.NodeTransformer):
@@ -779,6 +789,13 @@ class IRMaker(ast.NodeVisitor):
         # if sorting didn't change anything it was already sorted
         return compute_blocks == compute_blocks_sorted
 
+    def _are_intervals_nonoverlapping(self, compute_blocks: List[gt_ir.ComputationBlock]):
+        for i, block in enumerate(compute_blocks[1:]):
+            other = compute_blocks[i]
+            if not block.interval.disjoint_from(other.interval):
+                return False
+        return True
+
     def _visit_iteration_order_node(self, node: ast.withitem, loc: gt_ir.Location):
         syntax_error = GTScriptSyntaxError(
             f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
@@ -820,7 +837,7 @@ class IRMaker(ast.NodeVisitor):
         if len(args) == 2:
             if any(isinstance(arg, ast.Subscript) for arg in args):
                 raise GTScriptSyntaxError(
-                    "Two-argument syntax should not use AxisOffsets or AxisIntervals"
+                    "Two-argument syntax should not use AxisIndexs or AxisIntervals"
                 )
             interval_node = ast.Slice(lower=args[0], upper=args[1])
             ast.copy_location(interval_node, node)
@@ -1307,6 +1324,11 @@ class IRMaker(ast.NodeVisitor):
                     f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
                 )
 
+            if not self._are_intervals_nonoverlapping(compute_blocks):
+                raise GTScriptSyntaxError(
+                    f"Overlapping intervals detected at line {loc.line} (column {loc.column})"
+                )
+
             return compute_blocks
         elif self.parsing_context == ParsingContext.CONTROL_FLOW and not any(
             isinstance(child_node, ast.With) for child_node in node.body
@@ -1365,7 +1387,7 @@ class GTScriptParser(ast.NodeVisitor):
         *gtscript._VALID_DATA_TYPES,
         types.FunctionType,
         type(None),
-        gtscript._AxisOffset,
+        gtscript.AxisIndex,
     )
 
     def __init__(self, definition, *, options, externals=None):
