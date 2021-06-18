@@ -164,20 +164,20 @@ class DaCeComputationCodegen:
                 data_ndim = len(array.shape) - len(dims)
 
                 # api field strides
-                fmt = "gt::sid::get_stride<{dim}>(gt::sid::sid_get_strides(__{name}_sid))"
+                fmt = "gt::sid::get_stride<{dim}>(gt::sid::get_strides(__{name}_sid))"
 
                 symbols.update(
                     {
                         f"__{name}_{dim}_stride": fmt.format(
-                            dim=f"gt::integral_constant<int, {idx}>", name=name
+                            dim=f"gt::stencil::dim::{dim.lower()}", name=name
                         )
-                        for idx, dim in enumerate(dims)
+                        for dim in dims
                     }
                 )
                 symbols.update(
                     {
                         f"__{name}_d{dim}_stride": fmt.format(
-                            dim=f"gt::integral_constant<int, {len(dims) + dim}>", name=name
+                            dim=f"gt::integral_constant<int, {3 + dim}>", name=name
                         )
                         for dim in range(data_ndim)
                     }
