@@ -146,7 +146,7 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, **kwargs: Any
-    ) -> Union[gtcpp.AccessorRef, gtcpp.ScalarAccess]:
+    ) -> Union[gtcpp.AccessorRef, gtcpp.LocalAccess]:
         assert "stencil_symtable" in kwargs
         if node.name in kwargs["stencil_symtable"]:
             symbol = kwargs["stencil_symtable"][node.name]
@@ -155,7 +155,7 @@ class OIRToGTCpp(eve.NodeTranslator):
                     name=symbol.name, offset=CartesianOffset.zero(), dtype=symbol.dtype
                 )
             assert isinstance(symbol, oir.LocalScalar)
-        return gtcpp.ScalarAccess(name=node.name, dtype=node.dtype)
+        return gtcpp.LocalAccess(name=node.name, dtype=node.dtype)
 
     def visit_AxisBound(
         self, node: oir.AxisBound, *, is_start: bool, **kwargs: Any

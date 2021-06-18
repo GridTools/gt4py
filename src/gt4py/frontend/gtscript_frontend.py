@@ -243,7 +243,7 @@ class AxisIntervalParser(ast.NodeVisitor):
         symbol = node.id
         if symbol in self.context:
             value = self.context[symbol]
-            if isinstance(value, gtscript._AxisOffset):
+            if isinstance(value, gtscript.AxisIndex):
                 if value.axis != self.axis_name:
                     raise self.interval_error
                 offset = value.offset
@@ -257,7 +257,7 @@ class AxisIntervalParser(ast.NodeVisitor):
 
     def visit_Constant(self, node: ast.Constant) -> gt_ir.AxisBound:
         if node.value is not None:
-            if isinstance(node.value, gtscript._AxisOffset):
+            if isinstance(node.value, gtscript.AxisIndex):
                 if node.value.axis != self.axis_name:
                     raise self.interval_error
                 offset = node.value.offset
@@ -336,7 +336,7 @@ class ValueInliner(ast.NodeTransformer):
         qualified_name = gt_meta.get_qualified_name_from_node(name_or_attr_node)
         if qualified_name in self.context:
             value = self.context[qualified_name]
-            if value is None or isinstance(value, (bool, numbers.Number, gtscript._AxisOffset)):
+            if value is None or isinstance(value, (bool, numbers.Number, gtscript.AxisIndex)):
                 new_node = ast.Constant(value=value)
             elif hasattr(value, "_gtscript_"):
                 pass
@@ -789,6 +789,13 @@ class IRMaker(ast.NodeVisitor):
         # if sorting didn't change anything it was already sorted
         return compute_blocks == compute_blocks_sorted
 
+    def _are_intervals_nonoverlapping(self, compute_blocks: List[gt_ir.ComputationBlock]):
+        for i, block in enumerate(compute_blocks[1:]):
+            other = compute_blocks[i]
+            if not block.interval.disjoint_from(other.interval):
+                return False
+        return True
+
     def _visit_iteration_order_node(self, node: ast.withitem, loc: gt_ir.Location):
         syntax_error = GTScriptSyntaxError(
             f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
@@ -830,7 +837,7 @@ class IRMaker(ast.NodeVisitor):
         if len(args) == 2:
             if any(isinstance(arg, ast.Subscript) for arg in args):
                 raise GTScriptSyntaxError(
-                    "Two-argument syntax should not use AxisOffsets or AxisIntervals"
+                    "Two-argument syntax should not use AxisIndexs or AxisIntervals"
                 )
             interval_node = ast.Slice(lower=args[0], upper=args[1])
             ast.copy_location(interval_node, node)
@@ -957,22 +964,24 @@ class IRMaker(ast.NodeVisitor):
         # Python 3.9 skips wrapping the ast.Tuple in an ast.Index
         tuple_or_constant = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
 
-        # Python 3.8 still uses slice=ExtSlice
-        if isinstance(tuple_or_constant, ast.ExtSlice):
-            raise invalid_target
-
-        constant_nodes = gt_utils.listify(
-            tuple_or_constant.elts
-            if isinstance(tuple_or_constant, ast.Tuple)
-            else tuple_or_constant
+        tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
+        index_nodes = gt_utils.listify(
+            tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
         )
 
-        if any(isinstance(cn, ast.Slice) for cn in constant_nodes):
+        if any(isinstance(cn, ast.Slice) for cn in index_nodes):
             raise invalid_target
-        if any(isinstance(cn, ast.Ellipsis) for cn in constant_nodes):
+        if any(isinstance(cn, ast.Ellipsis) for cn in index_nodes):
             return None
         else:
-            return [ast.literal_eval(cn) for cn in constant_nodes]
+            index = []
+            for index_node in index_nodes:
+                try:
+                    offset = ast.literal_eval(index_node)
+                    index.append(offset)
+                except:
+                    index.append(self.visit(index_node))
+            return index
 
     def visit_Subscript(self, node: ast.Subscript):
         assert isinstance(node.ctx, (ast.Load, ast.Store))
@@ -1140,6 +1149,17 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
+    def visit_While(self, node: ast.While) -> gt_ir.While:
+        if node.orelse:
+            raise GTScriptSyntaxError("orelse is not supported on while loops")
+        stmts = []
+        for stmt in node.body:
+            stmts.extend(self.visit(stmt))
+        return gt_ir.While(
+            condition=self.visit(node.test),
+            body=gt_ir.BlockStmt(stmts=stmts),
+        )
+
     def visit_Call(self, node: ast.Call):
         native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 
@@ -1304,6 +1324,11 @@ class IRMaker(ast.NodeVisitor):
                     f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
                 )
 
+            if not self._are_intervals_nonoverlapping(compute_blocks):
+                raise GTScriptSyntaxError(
+                    f"Overlapping intervals detected at line {loc.line} (column {loc.column})"
+                )
+
             return compute_blocks
         elif self.parsing_context == ParsingContext.CONTROL_FLOW and not any(
             isinstance(child_node, ast.With) for child_node in node.body
@@ -1362,7 +1387,7 @@ class GTScriptParser(ast.NodeVisitor):
         *gtscript._VALID_DATA_TYPES,
         types.FunctionType,
         type(None),
-        gtscript._AxisOffset,
+        gtscript.AxisIndex,
     )
 
     def __init__(self, definition, *, options, externals=None):
