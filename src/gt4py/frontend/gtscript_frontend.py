@@ -964,22 +964,24 @@ class IRMaker(ast.NodeVisitor):
         # Python 3.9 skips wrapping the ast.Tuple in an ast.Index
         tuple_or_constant = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
 
-        # Python 3.8 still uses slice=ExtSlice
-        if isinstance(tuple_or_constant, ast.ExtSlice):
-            raise invalid_target
-
-        constant_nodes = gt_utils.listify(
-            tuple_or_constant.elts
-            if isinstance(tuple_or_constant, ast.Tuple)
-            else tuple_or_constant
+        tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
+        index_nodes = gt_utils.listify(
+            tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
         )
 
-        if any(isinstance(cn, ast.Slice) for cn in constant_nodes):
+        if any(isinstance(cn, ast.Slice) for cn in index_nodes):
             raise invalid_target
-        if any(isinstance(cn, ast.Ellipsis) for cn in constant_nodes):
+        if any(isinstance(cn, ast.Ellipsis) for cn in index_nodes):
             return None
         else:
-            return [ast.literal_eval(cn) for cn in constant_nodes]
+            index = []
+            for index_node in index_nodes:
+                try:
+                    offset = ast.literal_eval(index_node)
+                    index.append(offset)
+                except:
+                    index.append(self.visit(index_node))
+            return index
 
     def visit_Subscript(self, node: ast.Subscript):
         assert isinstance(node.ctx, (ast.Load, ast.Store))
