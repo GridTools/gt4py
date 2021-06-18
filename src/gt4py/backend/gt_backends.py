@@ -438,7 +438,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         self.stage_symbols = {}
         args = []
         fields_with_variable_offset = set()
-        for field_ref in gt_ir.filter_nodes_dfs(node, gt_ir.FieldRef):
+        for field_ref in gt_ir.iter_nodes_of_type(node, gt_ir.FieldRef):
             if isinstance(field_ref.offset.get(self.domain.sequential_axis.name, None), gt_ir.Expr):
                 fields_with_variable_offset.add(field_ref.name)
         for accessor in node.accessors:
@@ -446,11 +446,13 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             arg = {"name": accessor.symbol, "access_type": "in", "extent": None}
             if isinstance(accessor, gt_ir.FieldAccessor):
                 arg["access_type"] = (
-                    "in" if accessor.intent == gt_ir.AccessIntent.READ_ONLY else "inout"
+                    "in" if accessor.intent == gt_definitions.AccessKind.READ else "inout"
                 )
                 if accessor.symbol not in fields_with_variable_offset:
                     arg["extent"] = gt_utils.flatten(accessor.extent)
                 else:
+                    # If the field has a variable offset, then we assert the maximum vertical extents.
+                    # 1000 is just a guess, but should be larger than any reasonable number of vertical levels.
                     arg["extent"] = gt_utils.flatten(accessor.extent[:-1]) + [-1000, 1000]
             args.append(arg)
 
@@ -728,7 +730,7 @@ class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
         output_field_names = [
             name
             for name, info in self.args_data.field_info.items()
-            if info is not None and info.access == gt_definitions.AccessKind.READ_WRITE
+            if info is not None and bool(info.access & gt_definitions.AccessKind.WRITE)
         ]
 
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])
