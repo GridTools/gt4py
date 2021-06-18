@@ -186,6 +186,20 @@ class PruneKCacheFills(NodeTranslator):
             return {field for field in filling_fields if not requires_fill(field)}
 
         pruneable = set.intersection(*(pruneable_fields(section) for section in node.sections))
+
+        # Consider accesses outside of loop interval
+        # Note: those accesses would not require a fill in the whole loop interval in in theory
+        # but restriction to the GridTools k-cache types makes this necessary
+        first_section_offsets = AccessCollector.apply(node.sections[0]).offsets()
+        last_section_offsets = AccessCollector.apply(node.sections[-1]).offsets()
+        for field in list(pruneable):
+            first_k_offsets = (o[2] for o in first_section_offsets.get(field, {(0, 0, 0)}))
+            last_k_offsets = (o[2] for o in last_section_offsets.get(field, {(0, 0, 0)}))
+            if node.loop_order == common.LoopOrder.BACKWARD:
+                first_k_offsets, last_k_offsets = last_k_offsets, first_k_offsets
+            if min(first_k_offsets) < 0 or max(last_k_offsets) > 0:
+                pruneable.remove(field)
+
         return self.generic_visit(node, pruneable=pruneable, **kwargs)
 
 
