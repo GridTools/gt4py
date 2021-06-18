@@ -1151,7 +1151,7 @@ class IRMaker(ast.NodeVisitor):
 
     def visit_While(self, node: ast.While) -> gt_ir.While:
         if node.orelse:
-            raise GTScriptSyntaxError("orelse is not support on while loops")
+            raise GTScriptSyntaxError("orelse is not supported on while loops")
         stmts = []
         for stmt in node.body:
             stmts.extend(self.visit(stmt))
