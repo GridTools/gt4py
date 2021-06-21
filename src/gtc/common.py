@@ -15,7 +15,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union, cast
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import numpy as np
 import pydantic
@@ -741,11 +754,17 @@ class IJExtent(LocNode):
             j=(min(e.j[0] for e in extents), max(e.j[1] for e in extents)),
         )
 
-    def __add__(self, other: "IJExtent") -> "IJExtent":
+    def _apply(self, other: "IJExtent", op: Callable[[int, int], int]) -> "IJExtent":
         return IJExtent(
-            i=(self.i[0] + other.i[0], self.i[1] + other.i[1]),
-            j=(self.j[0] + other.j[0], self.j[1] + other.j[1]),
+            i=(op(self.i[0], other.i[0]), op(self.i[1], other.i[1])),
+            j=(op(self.j[0], other.j[0]), op(self.j[1], other.j[1])),
         )
+
+    def __add__(self, other: "IJExtent") -> "IJExtent":
+        return self._apply(other, op=lambda x, y: x + y)
+
+    def __sub__(self, other: "IJExtent") -> "IJExtent":
+        return self._apply(other, op=lambda x, y: x - y)
 
 
 class HorizontalInterval(Node):
