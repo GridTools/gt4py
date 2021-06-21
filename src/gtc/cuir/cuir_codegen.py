@@ -69,6 +69,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     CartesianOffset = as_fmt("{i}_c, {j}_c, {k}_c")
 
+    VariableOffset = as_fmt("{i}_c, {j}_c, {k}")
+
     BinaryOp = as_fmt("({left} {op} {right})")
 
     UNARY_OPERATOR_TO_CODE = {
