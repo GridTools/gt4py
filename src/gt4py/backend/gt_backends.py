@@ -276,7 +276,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
         offset = [node.offset.get(name, 0) for name in self.domain.axes_names]
         if not all(i == 0 for i in offset):
-            idx = ", ".join(str(i) for i in offset)
+            source_offsets = [
+                f"int({self.visit(i)})" if isinstance(i, gt_ir.Expr) else str(i) for i in offset
+            ]
+            idx = ", ".join(source_offsets)
         else:
             idx = ""
         source = "eval({name}({idx}))".format(name=node.name, idx=idx)
@@ -379,6 +382,15 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         body_sources.append("}")
         return body_sources
 
+    def visit_While(self, node: gt_ir.While) -> gt_text.TextBlock:
+        body_sources = gt_text.TextBlock()
+        body_sources.append("while ({condition}) {{".format(condition=self.visit(node.condition)))
+        for stmt in node.body.stmts:
+            body_sources.extend(self.visit(stmt))
+
+        body_sources.append("}")
+        return body_sources
+
     def visit_AxisBound(self, node: gt_ir.AxisBound) -> Tuple[int, int]:
         if node.level == gt_ir.LevelMarker.START:
             level = 0
@@ -425,6 +437,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         # Initialize symbols for the generation of references in this stage
         self.stage_symbols = {}
         args = []
+        fields_with_variable_offset = set()
+        for field_ref in gt_ir.iter_nodes_of_type(node, gt_ir.FieldRef):
+            if isinstance(field_ref.offset.get(self.domain.sequential_axis.name, None), gt_ir.Expr):
+                fields_with_variable_offset.add(field_ref.name)
         for accessor in node.accessors:
             self.stage_symbols[accessor.symbol] = accessor
             arg = {"name": accessor.symbol, "access_type": "in", "extent": None}
@@ -432,7 +448,12 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                 arg["access_type"] = (
                     "in" if accessor.intent == gt_definitions.AccessKind.READ else "inout"
                 )
-                arg["extent"] = gt_utils.flatten(accessor.extent)
+                if accessor.symbol not in fields_with_variable_offset:
+                    arg["extent"] = gt_utils.flatten(accessor.extent)
+                else:
+                    # If the field has a variable offset, then we assert the maximum vertical extents.
+                    # 1000 is just a guess, but should be larger than any reasonable number of vertical levels.
+                    arg["extent"] = gt_utils.flatten(accessor.extent[:-1]) + [-1000, 1000]
             args.append(arg)
 
         # Create regions and computations
