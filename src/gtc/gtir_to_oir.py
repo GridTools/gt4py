@@ -88,11 +88,6 @@ class GTIRToOIR(NodeTranslator):
     ) -> None:
         self._add_assign_stmt(node, ctx, mask)
 
-    def visit_SerialAssignStmt(
-        self, node: gtir.SerialAssignStmt, *, ctx: Context, mask: oir.Expr = None, **kwargs: Any
-    ) -> None:
-        self._add_assign_stmt(node, ctx, mask)
-
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> oir.FieldAccess:
         return oir.FieldAccess(
             name=node.name, offset=node.offset, data_index=node.data_index, dtype=node.dtype

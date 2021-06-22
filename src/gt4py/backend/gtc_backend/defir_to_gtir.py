@@ -228,20 +228,14 @@ class DefIRToGTIR(IRNodeVisitor):
         mask = gtir.HorizontalMask(**axes)
         return gtir.HorizontalRegion(
             mask=mask,
-            block=gtir.BlockStmt(
-                body=self.visit(node.body, serial_assignment=mask.is_single_index)
-            ),
+            block=gtir.BlockStmt(body=self.visit(node.body)),
         )
 
     def visit_Assign(
         self, node: Assign, **kwargs: Any
     ) -> Union[gtir.ParAssignStmt, gtir.SerialAssignStmt]:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
-        if not kwargs.get("serial_assignment", False):
-            Assign = gtir.ParAssignStmt
-        else:
-            Assign = gtir.SerialAssignStmt
-        return Assign(left=self.visit(node.target), right=self.visit(node.value))
+        return gtir.ParAssignStmt(left=self.visit(node.target), right=self.visit(node.value))
 
     def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
         return gtir.Literal(value=str(node.value), dtype=common.DataType(node.data_type.value))
