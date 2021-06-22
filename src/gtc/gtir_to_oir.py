@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import Any, List
+from typing import Any, List, Union
 
 from eve import NodeTranslator
 from gtc import gtir, oir
@@ -69,16 +69,20 @@ class GTIRToOIR(NodeTranslator):
 
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
-    ) -> None:
-        body = [oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))]
-        if mask is not None:
-            body = [oir.MaskStmt(body=body, mask=mask)]
-        ctx.add_horizontal_execution(
-            oir.HorizontalExecution(
-                body=body,
-                declarations=[],
-            ),
-        )
+    ) -> Union[None, oir.AssignStmt]:
+        stmt = oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
+        if not kwargs.get("retstmt", False):
+            if mask is not None:
+                body = [oir.MaskStmt(body=[stmt], mask=mask)]
+            ctx.add_horizontal_execution(
+                oir.HorizontalExecution(
+                    body=body,
+                    declarations=[],
+                ),
+            )
+            return None
+        else:
+            return stmt
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> oir.FieldAccess:
         return oir.FieldAccess(
@@ -200,14 +204,23 @@ class GTIRToOIR(NodeTranslator):
             declarations=ctx.decls,
         )
 
-    def visit_BlockStmt(self, node: gtir.BlockStmt, **kwargs: Any) -> oir.BlockStmt:
-        return oir.BlockStmt(body=[self.visit(stmt, **kwargs) for stmt in node.body])
+    def visit_BlockStmt(self, node: gtir.BlockStmt, ctx: Context, **kwargs: Any) -> oir.BlockStmt:
+        return oir.BlockStmt(
+            body=[self.visit(stmt, ctx=ctx, retstmt=True, **kwargs) for stmt in node.body]
+        )
 
-    def visit_For(self, node: gtir.For, **kwargs: Any) -> oir.For:
-        return oir.For(
-            target=node.target,
-            start=self.visit(node.start, **kwargs),
-            end=self.visit(node.end, **kwargs),
-            step=node.step,
-            body=self.visit(node.body, **kwargs),
+    def visit_For(self, node: gtir.For, ctx: Context, **kwargs: Any) -> None:
+        ctx.add_horizontal_execution(
+            oir.HorizontalExecution(
+                body=[
+                    oir.For(
+                        target=node.target,
+                        start=self.visit(node.start, **kwargs),
+                        end=self.visit(node.end, **kwargs),
+                        step=node.step,
+                        body=self.visit(node.body, ctx=ctx, **kwargs),
+                    )
+                ],
+                declarations=[],
+            )
         )
