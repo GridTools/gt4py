@@ -264,11 +264,12 @@ class DaCeBindingsCodegen:
                     if hasattr(s, "free_symbols")
                 )
             ]
+            data_ndims = len(array.shape) - sum(array_dimensions(array))
             sid_def = pybuffer_to_sid(
                 name=name,
                 dtype=array.dtype.ctype,
                 domain_dim_strings=domain_dim_strings,
-                data_ndims=len(array.shape) - len(domain_dim_strings),
+                data_ndims=data_ndims,
                 stride_kind_index=self.unique_index(),
                 is_cuda=True
                 if array.storage in [dace.StorageType.GPU_Global, dace.StorageType.GPU_Shared]
