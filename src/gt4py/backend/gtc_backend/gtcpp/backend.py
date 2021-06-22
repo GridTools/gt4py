@@ -127,6 +127,10 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                     unique_index=self.unique_index(),
                     sid_ndim=sid_ndim,
                 )
+                sid_def = "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
+                    sid_def=sid_def,
+                    name=node.name,
+                )
                 if domain_ndim != 3:
                     gt_dims = [
                         f"gt::stencil::dim::{dim}"
@@ -140,10 +144,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                         gt_dims=", ".join(gt_dims), sid_def=sid_def
                     )
 
-                return "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-                    sid_def=sid_def,
-                    name=node.name,
-                )
+                return sid_def
 
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
         if "external_arg" in kwargs:
