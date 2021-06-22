@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass, field
 from typing import Any, List
 
 from eve import NodeTranslator
@@ -44,7 +43,6 @@ def _create_mask(ctx: "GTIRToOIR.Context", name: str, cond: oir.Expr) -> oir.Tem
 
 
 class GTIRToOIR(NodeTranslator):
-    @dataclass
     class Context:
         """
         Context for Stmts.
@@ -54,8 +52,16 @@ class GTIRToOIR(NodeTranslator):
         they attach their result to the Context object.
         """
 
-        decls: List = field(default_factory=list)
-        horizontal_executions: List = field(default_factory=list)
+        def __init__(self):
+            self.decls: List[oir.Decl] = []
+            self.horizontal_executions: List[List[oir.HorizontalExecution]] = [[]]
+
+        def new_scope(self) -> "GTIRToOIR.Context":
+            self.horizontal_executions.append([])
+            return self
+
+        def get_horizontal_executions(self) -> List[oir.HorizontalExecution]:
+            return self.horizontal_executions.pop()
 
         def add_decl(self, decl: oir.Decl) -> "GTIRToOIR.Context":
             self.decls.append(decl)
@@ -64,7 +70,7 @@ class GTIRToOIR(NodeTranslator):
         def add_horizontal_execution(
             self, horizontal_execution: oir.HorizontalExecution
         ) -> "GTIRToOIR.Context":
-            self.horizontal_executions.append(horizontal_execution)
+            self.horizontal_executions[-1].append(horizontal_execution)
             return self
 
     def visit_ParAssignStmt(
@@ -172,7 +178,6 @@ class GTIRToOIR(NodeTranslator):
     def visit_VerticalLoop(
         self, node: gtir.VerticalLoop, *, ctx: Context, **kwargs: Any
     ) -> oir.VerticalLoop:
-        ctx.horizontal_executions.clear()
         self.visit(node.body, ctx=ctx)
 
         for temp in node.temporaries:
@@ -185,7 +190,7 @@ class GTIRToOIR(NodeTranslator):
             sections=[
                 oir.VerticalLoopSection(
                     interval=self.visit(node.interval, **kwargs),
-                    horizontal_executions=ctx.horizontal_executions,
+                    horizontal_executions=ctx.get_horizontal_executions(),
                 )
             ],
             caches=[],
@@ -193,10 +198,11 @@ class GTIRToOIR(NodeTranslator):
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> oir.Stencil:
         ctx = self.Context()
+        vertical_loops = self.visit(node.vertical_loops, ctx=ctx)
         return oir.Stencil(
             name=node.name,
             params=self.visit(node.params),
-            vertical_loops=self.visit(node.vertical_loops, ctx=ctx),
+            vertical_loops=vertical_loops,
             declarations=ctx.decls,
         )
 
