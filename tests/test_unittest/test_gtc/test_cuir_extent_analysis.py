@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.cuir import extent_analysis
+from gtc.cuir import cuir, extent_analysis
 
 from .cuir_utils import (
     AssignStmtFactory,
@@ -48,6 +48,40 @@ def test_compute_extents():
     hexecs = transformed.kernels[0].vertical_loops[0].sections[0].horizontal_executions
     assert hexecs[0].extent.i == (0, 1)
     assert hexecs[0].extent.j == (-3, 0)
+    assert hexecs[1].extent.i == (0, 0)
+    assert hexecs[1].extent.j == (0, 0)
+
+
+def test_compute_extents_with_multiple_loops():
+    testee = ProgramFactory(
+        kernels__0__vertical_loops=[
+            VerticalLoopFactory(
+                sections__0__horizontal_executions=[
+                    HorizontalExecutionFactory(
+                        body=[AssignStmtFactory(right__name="tmp", right__offset__i=1)],
+                        extent=None,
+                    ),
+                ],
+            ),
+            VerticalLoopFactory(
+                sections__0__horizontal_executions=[
+                    HorizontalExecutionFactory(
+                        body=[
+                            AssignStmtFactory(
+                                left__name="tmp",
+                            )
+                        ],
+                        extent=None,
+                    ),
+                ]
+            ),
+        ],
+        params=[TemporaryFactory(name="tmp")],
+    )
+    transformed = extent_analysis.ComputeExtents().visit(testee)
+    hexecs = transformed.iter_tree().if_isinstance(cuir.HorizontalExecution).to_list()
+    assert hexecs[0].extent.i == (0, 0)
+    assert hexecs[0].extent.j == (0, 0)
     assert hexecs[1].extent.i == (0, 0)
     assert hexecs[1].extent.j == (0, 0)
 
