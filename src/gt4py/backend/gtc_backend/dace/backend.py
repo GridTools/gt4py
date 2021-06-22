@@ -25,6 +25,7 @@ from gt4py import gt_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
 from gt4py.backend.gt_backends import make_x86_layout_map, x86_is_compatible_layout
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
+from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gt4py.backend.module_generator import compute_legacy_extents
 from gt4py.ir import StencilDefinition
 from gtc import gtir, gtir_to_oir
@@ -228,43 +229,7 @@ class DaCeBindingsCodegen:
         self._unique_index += 1
         return self._unique_index
 
-    mako_template = as_mako(
-        """#include <chrono>
-           #include <pybind11/pybind11.h>
-           #include <pybind11/stl.h>
-           #include <gridtools/storage/adapter/python_sid_adapter.hpp>
-           #include <gridtools/stencil/cartesian.hpp>
-           #include <gridtools/stencil/global_parameter.hpp>
-           #include <gridtools/sid/sid_shift_origin.hpp>
-           #include <gridtools/sid/rename_dimensions.hpp>
-           #include "computation.hpp"
-           namespace gt = gridtools;
-           namespace py = ::pybind11;
-           PYBIND11_MODULE(${module_name}, m) {
-               m.def("run_computation", [](
-               ${','.join(["std::array<gt::uint_t, 3> domain", *entry_params, 'py::object exec_info'])}
-               ){
-                   if (!exec_info.is(py::none()))
-                   {
-                       auto exec_info_dict = exec_info.cast<py::dict>();
-                       exec_info_dict["run_cpp_start_time"] = static_cast<double>(
-                           std::chrono::duration_cast<std::chrono::nanoseconds>(
-                               std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
-                   }
-
-                   ${name}(domain)(${','.join(sid_params)});
-
-                   if (!exec_info.is(py::none()))
-                   {
-                       auto exec_info_dict = exec_info.cast<py::dict>();
-                       exec_info_dict["run_cpp_end_time"] = static_cast<double>(
-                           std::chrono::duration_cast<std::chrono::nanoseconds>(
-                               std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
-                   }
-
-               }, "Runs the given computation");}
-        """
-    )
+    mako_template = bindings_main_template()
 
     def generate_entry_params(self, gtir: gtir.Stencil, sdfg: dace.SDFG):
         res = {}
@@ -290,40 +255,25 @@ class DaCeBindingsCodegen:
         for name, array in sdfg.arrays.items():
             if array.transient:
                 continue
-            dimensions = array_dimensions(array)
-            domain_ndim = sum(dimensions)
-            data_ndim = len(array.shape) - domain_ndim
-            sid_def = """gt::as_{sid_type}<{dtype}, {num_dims},
-                gt::integral_constant<int, {unique_index}>>({name})""".format(
-                sid_type="cuda_sid"
-                if array.storage in [dace.StorageType.GPU_Global, dace.StorageType.GPU_Shared]
-                else "sid",
-                name=name,
-                dtype=array.dtype.ctype,
-                unique_index=self.unique_index(),
-                num_dims=len(array.shape),
-            )
-            sid_def = "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-                sid_def=sid_def, name=name
-            )
-
-            if domain_ndim != 3:
-                gt_dims = [
-                    f"gt::stencil::dim::{dim}"
-                    for dim in "ijk"
-                    if any(
-                        dace.symbolic.pystr_to_symbolic(f"__{dim.upper()}") in s.free_symbols
-                        for s in array.shape
-                        if hasattr(s, "free_symbols")
-                    )
-                ]
-                if data_ndim:
-                    gt_dims += [
-                        f"gt::integral_constant<int, {3 + dim}>" for dim in range(data_ndim)
-                    ]
-                sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
-                    gt_dims=", ".join(gt_dims), sid_def=sid_def
+            domain_dim_strings = [
+                dim
+                for dim in "ijk"
+                if any(
+                    dace.symbolic.pystr_to_symbolic(f"__{dim.upper()}") in s.free_symbols
+                    for s in array.shape
+                    if hasattr(s, "free_symbols")
                 )
+            ]
+            sid_def = pybuffer_to_sid(
+                name=name,
+                dtype=self.visit(array.dtype.ctype),
+                domain_dim_strings=domain_dim_strings,
+                data_ndims=len(array.shape) - len(domain_dim_strings),
+                stride_kind_index=self.unique_index(),
+                is_cuda=True
+                if array.storage in [dace.StorageType.GPU_Global, dace.StorageType.GPU_Shared]
+                else False,
+            )
 
             res.append(sid_def)
         # pass scalar parameters as variables
