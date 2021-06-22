@@ -87,11 +87,23 @@ class NpirGen(TemplatedGenerator):
 
     VectorTemp = FormatTemplate("{name}_")
 
+    def visit_MaskBlock(self, node: npir.MaskBlock, **kwargs) -> Union[str, Collection[str]]:
+        if isinstance(node.mask, npir.FieldSlice):
+            mask_def = ""
+        elif isinstance(node.mask, npir.BroadCast):
+            mask_name = node.mask_name
+            mask = self.generic_visit(node.mask)
+            mask_def = f"{mask_name}_ = np.full((I - i, J - j, K - k), {mask})\n"
+        else:
+            mask_name = node.mask_name
+            mask = self.generic_visit(node.mask)
+            mask_def = f"{mask_name}_ = {mask}\n"
+        return self.generic_visit(node, mask_def=mask_def, **kwargs)
+
     MaskBlock = JinjaTemplate(
         textwrap.dedent(
             """\
-                {{ mask_name }}_ = np.full((I - i, J - j, K - k), {{ mask }})
-                {% for stmt in body %}{{ stmt }}
+                {{ mask_def }}{% for stmt in body %}{{ stmt }}
                 {% endfor %}
             """
         )

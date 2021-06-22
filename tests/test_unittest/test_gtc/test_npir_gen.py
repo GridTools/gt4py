@@ -61,10 +61,11 @@ def test_cast(defined_dtype: common.DataType, other_dtype: common.DataType) -> N
         npir.Cast(dtype=other_dtype, expr=npir.Literal(dtype=defined_dtype, value="42"))
     )
     print(result)
-    match = re.match(r"np.(\w*?)\(np.(\w*)\(42\)", result)
+    match = re.match(r"^np.(\w*?)\(np.(\w*)\(42\), dtype=np.(\w*)\)", result)
     assert match
-    assert match.groups()[0] == other_dtype.name.lower()
+    assert match.groups()[0] == "array"
     assert match.groups()[1] == defined_dtype.name.lower()
+    assert match.groups()[2] == other_dtype.name.lower()
 
 
 def test_parallel_offset() -> None:
@@ -144,11 +145,11 @@ def test_temp_with_extent_definition() -> None:
             left=npir.VectorTemp(name="a"),
             right=npir.EmptyTemp(dtype=common.DataType.INT64),
         ),
-        field_extents={"a": Extent((0, 1), (2, 3))},
+        field_extents={"a": Extent((0, 1), (-2, 3))},
     )
     assert (
         result
-        == "a_ = ShimmedView(np.zeros((_dI_ + 1, _dJ_ + 5, _dK_), dtype=np.int64), [1, 5, 0])"
+        == "a_ = ShimmedView(np.zeros((_dI_ + 1, _dJ_ + 5, _dK_), dtype=np.int64), [0, 2, 0])"
     )
 
 
@@ -416,7 +417,7 @@ def test_full_computation_valid(tmp_path) -> None:
         ),
         field_extents={
             "f1": Extent([(0, 0), (0, 0)]),
-            "f2": Extent([(2, 0), (2, 0)]),
+            "f2": Extent([(-2, 0), (-2, 0)]),
             "f3": Extent([(0, 0), (0, 3)]),
         },
     )

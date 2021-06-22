@@ -48,7 +48,7 @@ class OirToNpir(NodeTranslator):
             default_factory=lambda: OrderedDict({})
         )
 
-        mask_temp_counter: int = field(default_factory=lambda: 0)
+        mask_temp_counter: int = 0
 
         def add_offset(self, name: str, axis: int, value: int) -> "OirToNpir.ComputationContext":
             fpad = self.field_padding.setdefault(name, Padding())
@@ -61,7 +61,7 @@ class OirToNpir(NodeTranslator):
                 self.add_offset(name, axis_index, value)
             return self
 
-        def ensure_temp_defined(self, temp: oir.FieldAccess) -> None:
+        def ensure_temp_defined(self, temp: Union[oir.FieldAccess, npir.FieldSlice]) -> None:
             if temp.name not in self.temp_defs:
                 self.temp_defs[str(temp.name)] = npir.VectorAssign(
                     left=npir.VectorTemp(name=str(temp.name), dtype=temp.dtype),
@@ -166,14 +166,15 @@ class OirToNpir(NodeTranslator):
         mask_expr = self.visit(
             node.mask, ctx=ctx, h_ctx=h_ctx, parallel_k=parallel_k, broadcast=True, **kwargs
         )
-        mask_name = f"_mask_{ctx.mask_temp_counter}"
-        mask = npir.FieldSlice(
-            name=mask_name,
-            i_offset=npir.AxisOffset.i(0),
-            j_offset=npir.AxisOffset.j(0),
-            k_offset=npir.AxisOffset.k(0, parallel=parallel_k),
-        )
-        ctx.mask_temp_counter += 1
+        if isinstance(mask_expr, npir.FieldSlice):
+            mask_name = mask_expr.name
+            mask = mask_expr
+        else:
+            mask_name = f"_mask_{ctx.mask_temp_counter}"
+            mask = npir.VectorTemp(
+                name=mask_name,
+            )
+            ctx.mask_temp_counter += 1
 
         return npir.MaskBlock(
             mask=mask_expr,
