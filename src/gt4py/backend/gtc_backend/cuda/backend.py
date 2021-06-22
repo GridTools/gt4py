@@ -27,8 +27,8 @@ from gt4py.backend.gt_backends import (
     cuda_is_compatible_type,
     make_cuda_layout_map,
 )
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
+from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion, oir_to_cuir

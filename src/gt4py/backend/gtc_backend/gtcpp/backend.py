@@ -32,8 +32,8 @@ from gt4py.backend.gt_backends import (
     mc_is_compatible_layout,
     x86_is_compatible_layout,
 )
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
+from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp

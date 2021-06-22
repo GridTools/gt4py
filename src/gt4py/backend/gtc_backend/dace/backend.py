@@ -24,8 +24,8 @@ from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
 from gt4py.backend.gt_backends import make_x86_layout_map, x86_is_compatible_layout
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
+from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.backend.module_generator import compute_legacy_extents
 from gt4py.ir import StencilDefinition
 from gtc import gtir, gtir_to_oir
@@ -266,7 +266,7 @@ class DaCeBindingsCodegen:
             ]
             sid_def = pybuffer_to_sid(
                 name=name,
-                dtype=self.visit(array.dtype.ctype),
+                dtype=array.dtype.ctype,
                 domain_dim_strings=domain_dim_strings,
                 data_ndims=len(array.shape) - len(domain_dim_strings),
                 stride_kind_index=self.unique_index(),
