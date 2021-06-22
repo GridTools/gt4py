@@ -80,13 +80,14 @@ storing a reference to the piece of source code which originated the node.
     Axis(name: str)
 
     Domain(parallel_axes: List[Axis], [sequential_axis: Axis])
-        # LatLonGrids -> parallel_axes: ["I", "J], sequential_axis: "K"
+        # LatLonGrids -> parallel_axes: ["I", "J"], sequential_axis: "K"
 
     Literal     = ScalarLiteral(value: Any (should match DataType), data_type: DataType)
                 | BuiltinLiteral(value: Builtin)
 
     Ref         = VarRef(name: str, [index: int])
-                | FieldRef(name: str, offset: Dict[str, int])
+                | FieldRef(name: str, offset: Dict[str, int | Expr])
+                # Horizontal indices must be ints
 
     NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
@@ -108,6 +109,7 @@ storing a reference to the piece of source code which originated the node.
     Statement   = Decl
                 | Assign(target: Ref, value: Expr)
                 | If(condition: expr, main_body: BlockStmt, else_body: BlockStmt)
+                | While(condition: expr, body: BlockStmt)
                 | BlockStmt
 
     AxisBound(level: LevelMarker | VarRef, offset: int)
@@ -171,7 +173,7 @@ import copy
 import enum
 import operator
 import sys
-from typing import List, Sequence
+from typing import Generator, Sequence, Type
 
 import numpy as np
 
@@ -372,7 +374,7 @@ class VarRef(Ref):
 @attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, int])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
     data_index = attribute(of=ListOf[int], factory=list)
     loc = attribute(of=Location, optional=True)
 
@@ -630,6 +632,13 @@ class If(Statement):
     condition = attribute(of=Expr)
     main_body = attribute(of=BlockStmt)
     else_body = attribute(of=BlockStmt, optional=True)
+    loc = attribute(of=Location, optional=True)
+
+
+@attribclass
+class While(Statement):
+    condition = attribute(of=Expr)
+    body = attribute(of=BlockStmt)
     loc = attribute(of=Location, optional=True)
 
 
@@ -1005,3 +1014,26 @@ class IRNodeDumper(IRNodeMapper):
 
 
 dump_ir = IRNodeDumper.apply
+
+
+def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None, None]:
+    """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
+
+    def recurse(node: Node) -> Generator[Node, None, None]:
+        for key, value in iter_attributes(node):
+            if isinstance(node, collections.abc.Iterable):
+                if isinstance(node, collections.abc.Mapping):
+                    children = node.values()
+                else:
+                    children = node
+            else:
+                children = gt_utils.listify(value)
+
+            for value in children:
+                if isinstance(value, Node):
+                    yield from recurse(value)
+
+            if isinstance(node, node_type):
+                yield node
+
+    yield from recurse(root_node)
