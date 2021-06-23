@@ -73,10 +73,11 @@ class GTIRToOIR(NodeTranslator):
         stmt = oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
         if not kwargs.get("retstmt", False):
             if mask is not None:
-                body = [oir.MaskStmt(body=[stmt], mask=mask)]
+                # Wrap inside MaskStmt
+                stmt = oir.MaskStmt(body=[stmt], mask=mask)
             ctx.add_horizontal_execution(
                 oir.HorizontalExecution(
-                    body=body,
+                    body=[stmt],
                     declarations=[],
                 ),
             )
