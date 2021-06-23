@@ -226,11 +226,12 @@ class NumPySourceGenerator(PythonSourceGenerator):
         assert node.name in self.block_info.accessors
 
         is_parallel = self.block_info.iteration_order == gt_ir.IterationOrder.PARALLEL
-        parallel_axes_dims = [
-            self.impl_node.domain.index(axis)
+        parallel_axes_names = [
+            axis
             for axis in self.impl_node.fields[node.name].axes
             if axis != self.domain.sequential_axis.name
         ]
+        parallel_axes_dims = [self.impl_node.domain.index(axis) for axis in parallel_axes_names]
 
         lower_indices = self.block_info.extent.lower_indices
         upper_indices = self.block_info.extent.upper_indices
