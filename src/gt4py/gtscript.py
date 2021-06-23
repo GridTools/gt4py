@@ -365,6 +365,9 @@ class AxisIndex:
     def __repr__(self):
         return f"AxisIndex(axis={self.axis}, index={self.index}, offset={self.offset})"
 
+    def __eq__(self, other):
+        return repr(self) == repr(other)
+
     def __str__(self):
         return f"{self.axis}[{self.index}] + {self.offset}"
 
