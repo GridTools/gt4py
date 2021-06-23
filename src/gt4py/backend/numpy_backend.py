@@ -179,6 +179,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
             )
             source_lines.extend(body_sources)
             source_lines.extend("\n")
+
         return source_lines
 
     def make_temporary_field(
@@ -439,6 +440,40 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         self.conditions_depth -= 1
         # return "\n".join(sources)
+        return sources
+
+    def visit_While(self, node: gt_ir.While) -> List[str]:
+        sources = []
+        condition = self.visit(node.condition)
+        if self.conditions_depth > 0:
+            condition_statement = f"__while_condition = np.logical_and({condition}, __condition_{self.conditions_depth})"
+        else:
+            condition_statement = f"__while_condition = {condition}"
+        sources.append(condition_statement)
+        sources.append(f"while {self.numpy_prefix}.any(__while_condition):")
+        for stmt in node.body.stmts:
+            target = self.visit(stmt.target)
+            value = self.visit(stmt.value)
+            target_expr = stmt.target.expr if isinstance(stmt.target, ShapedExpr) else stmt.target
+
+            is_possible_else = not isinstance(target_expr, gt_ir.VarRef) or (
+                target_expr.name in self.var_refs_defined
+            )
+
+            sources.append(
+                "{spaces}{target} = {np}.where(__while_condition, {then_expr}, {else_expr})".format(
+                    spaces=" " * self.indent_size,
+                    np=self.numpy_prefix,
+                    target=target,
+                    then_expr=value,
+                    else_expr=target if is_possible_else else "np.nan",
+                )
+            )
+
+            if isinstance(target_expr, gt_ir.VarRef):
+                self.var_refs_defined.add(target_expr.name)
+
+        sources.append(" " * self.indent_size + condition_statement)
         return sources
 
 
