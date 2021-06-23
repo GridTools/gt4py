@@ -23,4 +23,5 @@ jobs:
         pre-commit install-hooks
     - name: Run checks
       run: |
+        python -m pip list
         pre-commit run --all-files
