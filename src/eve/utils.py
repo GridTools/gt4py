@@ -289,6 +289,19 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     return _decorator
 
 
+def noninstantiable(cls: Type) -> Type:
+    original_init = cls.__init__
+
+    def _noninstantiable_init(self, *args, **kwargs) -> None:
+        if self.__class__ is cls:
+            raise TypeError(f"Trying to instantiate `{cls.__name__}` non-instantiable class.")
+        else:
+            original_init(self, *args, **kwargs)
+
+    cls.__init__ = _noninstantiable_init
+    return cls
+
+
 def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
     """Stable hash function.
 
@@ -533,6 +546,7 @@ class XIterator(collections.abc.Iterator, Iterable[T]):
         # Forward special methods to wrapped iterator
         if name.startswith("__") and name.endswith("__"):
             return getattr(self.iterator, name)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name: str, value: Any) -> None:
         raise TypeError(f"{type(self).__name__} is immutable.")

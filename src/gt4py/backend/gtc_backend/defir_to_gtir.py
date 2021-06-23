@@ -130,7 +130,7 @@ class DefIRToGTIR(IRNodeVisitor):
         field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
         self._scalar_params = scalar_params
-        vertical_loops = [self.visit(c) for c in node.computations]
+        vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
         return gtir.Stencil(
             name=node.name.split(".")[
                 -1
@@ -193,9 +193,10 @@ class DefIRToGTIR(IRNodeVisitor):
         return gtir.UnaryOp(op=self.GT4PY_UNARYOP_TO_GTIR[node.op], expr=self.visit(node.arg))
 
     def visit_BinOpExpr(self, node: BinOpExpr) -> Union[gtir.BinaryOp, gtir.NativeFuncCall]:
-        if node.op == BinaryOperator.POW:
+        if node.op in (BinaryOperator.POW, BinaryOperator.MOD):
             return gtir.NativeFuncCall(
-                func=common.NativeFunction.POW, args=[self.visit(node.lhs), self.visit(node.rhs)]
+                func=common.NativeFunction[node.op.name],
+                args=[self.visit(node.lhs), self.visit(node.rhs)],
             )
         return gtir.BinaryOp(
             left=self.visit(node.lhs),
@@ -228,7 +229,9 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_FieldRef(self, node: FieldRef):
-        return gtir.FieldAccess(name=node.name, offset=transform_offset(node.offset))
+        return gtir.FieldAccess(
+            name=node.name, offset=transform_offset(node.offset), data_index=node.data_index
+        )
 
     def visit_If(self, node: If):
         cond = self.visit(node.condition)
@@ -273,7 +276,10 @@ class DefIRToGTIR(IRNodeVisitor):
         dimensions = [dim in node.axes for dim in dimension_names]
         # datatype conversion works via same ID
         return gtir.FieldDecl(
-            name=node.name, dtype=common.DataType(int(node.data_type.value)), dimensions=dimensions
+            name=node.name,
+            dtype=common.DataType(int(node.data_type.value)),
+            dimensions=dimensions,
+            data_dims=node.data_dims,
         )
 
     def visit_VarDecl(self, node: VarDecl):

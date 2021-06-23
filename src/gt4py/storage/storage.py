@@ -124,15 +124,16 @@ class Storage(np.ndarray):
             at call time.
             when calling a stencil and no origin is specified, the default_origin is used.
 
-        mask: list of booleans
-            False entries indicate that the corresponding dimension is masked, i.e. the storage
+        mask: list of bools or list of spatial axes
+            in a list of bools, ``False`` entries indicate that the corresponding dimension is masked, i.e. the storage
             has reduced dimension and reading and writing from offsets along this axis acces the same element.
+            In a list of spatial axes (IJK), a boolean mask will be generated with ``True`` entries for all
+            dimensions except for the missing spatial axes names.
         """
 
-        if mask is None:
-            mask = [True] * len(shape)
-        default_origin = tuple(storage_utils.normalize_default_origin(default_origin, mask))
-        shape = tuple(storage_utils.normalize_shape(shape, mask))
+        default_origin, shape, dtype, mask = storage_utils.normalize_storage_spec(
+            default_origin, shape, dtype, mask
+        )
 
         if not backend in gt_backend.REGISTRY:
             ValueError("Backend must be in {}.".format(gt_backend.REGISTRY))
@@ -217,19 +218,18 @@ class Storage(np.ndarray):
             return False
         # check strides
         stride = 0
-        if len(self.strides) < len(self.layout_map):
+        layout_map = [m for m in self.layout_map if m is not None]
+        if len(self.strides) < len(layout_map):
             return False
-        for dim in reversed(np.argsort(self.layout_map)):
+        for dim in reversed(np.argsort(layout_map)):
             if self.strides[dim] < stride:
                 return False
             stride = self.strides[dim]
-
         # check alignment
         if (
             self.ctypes.data + np.sum([o * s for o, s in zip(self.default_origin, self.strides)])
         ) % gt_backend.from_name(self.backend).storage_info["alignment"]:
             return False
-
         return True
 
     def _finalize_view(self, obj):
@@ -249,6 +249,8 @@ class Storage(np.ndarray):
 
 
 class GPUStorage(Storage):
+    _modified_storages: dict = {}
+
     @classmethod
     def _construct(cls, backend, dtype, default_origin, shape, alignment, layout_map):
 
@@ -260,6 +262,10 @@ class GPUStorage(Storage):
         obj._raw_buffer = raw_buffer
         obj.default_origin = default_origin
         return obj
+
+    @classmethod
+    def get_modified_storages(cls):
+        return cls._modified_storages
 
     @property
     def __cuda_array_interface__(self):
@@ -287,18 +293,22 @@ class GPUStorage(Storage):
     def gpu_view(self):
         return storage_utils.gpu_view(self)
 
+    def __getitem__(self, item):
+        self.device_to_host()
+        return super().__getitem__(item)
+
     def __setitem__(self, key, value):
         if hasattr(value, "__cuda_array_interface__"):
             gpu_view = storage_utils.gpu_view(self)
             gpu_view[key] = cp.asarray(value.data)
-            cp.cuda.Device(0).synchronize()
+            self.device_to_host(True)
             return value
         else:
             return super().__setitem__(key, value)
 
     @property
     def _is_clean(self):
-        return True
+        return not self._is_device_modified()
 
     @property
     def _is_host_modified(self):
@@ -306,16 +316,25 @@ class GPUStorage(Storage):
 
     @property
     def _is_device_modified(self):
-        return False
+        return id(self) in self.__class__._modified_storages
 
     def _set_clean(self):
-        pass
+        if not self._is_clean():
+            self.__class__._modified_storages.pop(id(self))
 
     def _set_host_modified(self):
         pass
 
     def _set_device_modified(self):
-        pass
+        self.__class__._modified_storages[id(self)] = self
+
+    def synchronize(self):
+        self.device_to_host()
+
+    def device_to_host(self, force=False):
+        if force or self._is_device_modified:
+            cp.cuda.Device(0).synchronize()
+            self.__class__._modified_storages.clear()
 
 
 class CPUStorage(Storage):

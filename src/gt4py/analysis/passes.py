@@ -17,7 +17,7 @@
 """Definitions and utilities used by all the analysis pipeline components.
 """
 
-import functools
+import copy
 import itertools
 import warnings
 from typing import (
@@ -264,9 +264,19 @@ class InitInfoPass(TransformPass):
             return result
 
         def visit_FieldRef(self, node: gt_ir.FieldRef):
-            extent = Extent.from_offset([node.offset.get(ax, 0) for ax in self.data.axes_names])
-            result = [(node.name, extent)]
-            return result
+            offsets = []
+            refs = []
+            for ax in self.data.axes_names:
+                axis_offset = node.offset.get(ax, 0)
+                if isinstance(axis_offset, gt_ir.Expr):
+                    refs.extend(self.visit(axis_offset))
+                    offsets.append(0)
+                else:
+                    offsets.append(axis_offset)
+
+            extent = Extent.from_offset(offsets)
+            refs.append((node.name, extent))
+            return refs
 
         def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr):
             result = self.visit(node.arg)
@@ -324,6 +334,16 @@ class InitInfoPass(TransformPass):
             result = StatementInfo(
                 self.data.id_generator.new, node, body_info.inputs, body_info.outputs
             )
+
+        def visit_While(self, node: gt_ir.While) -> StatementInfo:
+            body_stmt_info = self.visit(node.body)
+            condition_input_extents = self.visit(node.condition)
+
+            inputs = self._merge_extents(
+                list(body_stmt_info.inputs.items()) + condition_input_extents
+            )
+
+            result = StatementInfo(self.data.id_generator.new, node, inputs, body_stmt_info.outputs)
 
             return result
 
@@ -594,6 +614,10 @@ class MultiStageMergingWrapper:
         return not all(extent.is_zero for extent in specific_extents)
 
     @property
+    def api_fields_names(self) -> List[str]:
+        return [decl.name for decl in self.parent.definition_ir.api_fields]
+
+    @property
     def parallel_axes_indices(self) -> List[int]:
         axes = self.domain.axes if self.k_offset_extends_domain else self.domain.parallel_axes
         return [self.domain.index(axis) for axis in axes]
@@ -601,10 +625,6 @@ class MultiStageMergingWrapper:
     @property
     def sequential_axis_index(self) -> int:
         return self.domain.index(self.domain.sequential_axis)
-
-    @property
-    def api_fields_names(self) -> List[str]:
-        return [decl.name for decl in self.parent.definition_ir.api_fields]
 
     @property
     def k_offset_extends_domain(self) -> bool:
@@ -634,12 +654,16 @@ class MultiStageMergingWrapper:
         return self._multi_stage.outputs
 
     @property
+    def wrapped(self) -> DomainBlockInfo:
+        return self._multi_stage
+
+    @property
     def parent(self) -> TransformData:
         return self._parent
 
     @property
-    def wrapped(self) -> DomainBlockInfo:
-        return self._multi_stage
+    def domain(self) -> gt_ir.Domain:
+        return self.parent.definition_ir.domain
 
     @property
     def domain(self) -> gt_ir.Domain:
@@ -680,8 +704,6 @@ class StageMergingWrapper:
         # Check for read with offset and write on parallel axes between stages
         if self.has_disallowed_read_with_offset_and_write(candidate):
             return False
-
-        self.has_incompatible_intervals_with(candidate)
 
         return True
 
@@ -814,10 +836,6 @@ class StageMergingWrapper:
         )
 
     @property
-    def parent_block(self) -> DomainBlockInfo:
-        return self._parent_block
-
-    @property
     def compute_extent(self) -> Extent:
         return self._stage.compute_extent
 
@@ -846,12 +864,20 @@ class StageMergingWrapper:
         return self._parent.min_k_interval_sizes
 
     @property
+    def wrapped(self) -> IJBlockInfo:
+        return self._stage
+
+    @property
+    def parent_block(self) -> DomainBlockInfo:
+        return self._parent_block
+
+    @property
     def parent(self) -> TransformData:
         return self._parent
 
     @property
-    def wrapped(self) -> IJBlockInfo:
-        return self._stage
+    def domain(self) -> gt_ir.Domain:
+        return self.parent.definition_ir.domain
 
     @property
     def domain(self) -> gt_ir.Domain:
@@ -1171,6 +1197,10 @@ class ComputeUsedSymbolsPass(TransformPass):
             self.data.symbols[node.name].in_use = True
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
+            domain = self.data.definition_ir.domain
+            sequential_offset = node.offset.get(domain.sequential_axis.name, None)
+            if isinstance(sequential_offset, gt_ir.Expr):
+                self.visit(sequential_offset)
             self.data.symbols[node.name].in_use = True
 
     @classmethod
@@ -1269,16 +1299,17 @@ class BuildIIRPass(TransformPass):
         accessors = []
         remaining_outputs = set(ij_block.outputs)
         for name, extent in ij_block.inputs.items():
+            intent = gt_definitions.AccessKind.READ
             if name in remaining_outputs:
-                read_write = True
+                intent |= gt_definitions.AccessKind.WRITE
                 remaining_outputs.remove(name)
                 extent |= Extent.zeros()
-            else:
-                read_write = False
-            accessors.append(self._make_accessor(name, extent, read_write))
+            accessors.append(self._make_accessor(name, extent, intent))
         zero_extent = Extent.zeros(self.data.ndims)
         for name in remaining_outputs:
-            accessors.append(self._make_accessor(name, zero_extent, True))
+            accessors.append(
+                self._make_accessor(name, zero_extent, gt_definitions.AccessKind.WRITE)
+            )
 
         stage = gt_ir.Stage(
             name="stage__{}".format(ij_block.id),
@@ -1302,15 +1333,14 @@ class BuildIIRPass(TransformPass):
 
         return result
 
-    def _make_accessor(self, name, extent, read_write: bool) -> gt_ir.Accessor:
+    def _make_accessor(self, name, extent, intent: gt_definitions.AccessKind) -> gt_ir.Accessor:
         assert name in self.data.symbols
-        intent = gt_ir.AccessIntent.READ_WRITE if read_write else gt_ir.AccessIntent.READ_ONLY
         if self.data.symbols[name].is_field:
             assert extent is not None
             result = gt_ir.FieldAccessor(symbol=name, intent=intent, extent=extent)
         else:
             # assert extent is None and not read_write
-            assert not read_write
+            assert intent != gt_definitions.AccessKind.READ_WRITE
             result = gt_ir.ParameterAccessor(symbol=name)
 
         return result
@@ -1444,6 +1474,9 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
         def visit_FieldRef(
             self, path: tuple, node_name: str, node: gt_ir.FieldRef
         ) -> Tuple[bool, Union[gt_ir.FieldRef, gt_ir.VarRef]]:
+            for axis in node.offset:
+                if isinstance(node.offset[axis], gt_ir.Expr):
+                    node.offset[axis] = self.visit(node.offset[axis])
             if node.name in self.demotables:
                 if node.name not in self.local_symbols:
                     field_decl = self.fields[node.name]
@@ -1463,6 +1496,91 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
     def apply(cls, transform_data: TransformData) -> None:
         demotables = cls.CollectDemotableSymbols.apply(transform_data.implementation_ir)
         cls.DemoteSymbols.apply(transform_data.implementation_ir, demotables)
+
+
+class ConstantFoldingPass(TransformPass):
+    """Demote temporary fields to constants if only assigned to a single scalar value."""
+
+    class CollectConstants(gt_ir.IRNodeVisitor):
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation) -> Set[str]:
+            collector = cls()
+            return collector(node)
+
+        def __call__(self, node: gt_ir.StencilImplementation) -> Set[str]:
+            assert isinstance(node, gt_ir.StencilImplementation)
+            self.constants = {field: 0 for field in node.temporary_fields}
+            self.visit(node)
+            return set(self.constants.keys())
+
+        def visit_If(self, node: gt_ir.If, **kwargs: Any) -> None:
+            for stmt in node.main_body.stmts:
+                self.visit(stmt, in_condition=True)
+            if node.else_body:
+                for stmt in node.else_body.stmts:
+                    self.visit(stmt, in_condition=True)
+
+        def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
+            target_name = node.target.name
+            if target_name in self.constants:
+                self.constants[target_name] += 1
+                if (
+                    not isinstance(node.value, gt_ir.ScalarLiteral)
+                    or self.constants[target_name] > 1
+                    or kwargs.get("in_condition", False)
+                ):
+                    self.constants.pop(target_name)
+
+    class ConstantFolder(gt_ir.IRNodeMapper):
+        @classmethod
+        def apply(cls, node: gt_ir.StencilImplementation, constants: Set[str]) -> None:
+            instance = cls(constants)
+            return instance(node)
+
+        def __init__(self, constants: Set[str]):
+            self.literals: Dict[str, gt_ir.ScalarLiteral] = {name: None for name in constants}
+
+        def __call__(self, node: gt_ir.StencilImplementation) -> gt_ir.StencilImplementation:
+            return self.visit(node)
+
+        def visit_StencilImplementation(
+            self, path: tuple, node_name: str, node: gt_ir.StencilImplementation
+        ) -> gt_ir.StencilImplementation:
+            res = self.generic_visit(path, node_name, node)
+            for name in self.literals:
+                node.fields.pop(name)
+                node.fields_extents.pop(name)
+            return res
+
+        def visit_FieldAccessor(
+            self, path: tuple, node_name: str, node: gt_ir.FieldAccessor
+        ) -> Tuple[bool, Optional[gt_ir.FieldAccessor]]:
+            if node.symbol in self.literals:
+                return False, None
+            else:
+                return True, node
+
+        def visit_Assign(self, path: tuple, node_name: str, node: gt_ir.Assign):
+            node.value = self.visit(node.value)
+            target_name = node.target.name
+            if target_name in self.literals:
+                self.literals[target_name] = copy.deepcopy(node.value)
+                return False, None
+            return True, node
+
+        def visit_FieldRef(
+            self, path: tuple, node_name: str, node: gt_ir.FieldRef
+        ) -> Tuple[bool, gt_ir.FieldRef]:
+            if node.name in self.literals:
+                return True, self.literals[node.name]
+            return True, node
+
+    @classmethod
+    def apply(cls, transform_data: TransformData) -> None:
+        constants = cls.CollectConstants.apply(transform_data.implementation_ir)
+        if constants:
+            cls.ConstantFolder.apply(transform_data.implementation_ir, constants)
+        return transform_data
 
 
 class HousekeepingPass(TransformPass):
@@ -1505,14 +1623,27 @@ class HousekeepingPass(TransformPass):
             assert isinstance(node, gt_ir.StencilImplementation)
             self.visit(node)
 
+        def visit_ApplyBlock(
+            self, path: tuple, node_name: str, node: gt_ir.ApplyBlock
+        ) -> Tuple[bool, Optional[gt_ir.ApplyBlock]]:
+            self.generic_visit(path, node_name, node.body)
+            if node.body.stmts:
+                return True, node
+            else:
+                return False, None
+
         def visit_Stage(
             self, path: tuple, node_name: str, node: gt_ir.Stage
         ) -> Tuple[bool, Optional[gt_ir.Stage]]:
             self.generic_visit(path, node_name, node)
 
-            if any(
-                isinstance(a, gt_ir.FieldAccessor) and (a.intent is gt_ir.AccessIntent.READ_WRITE)
-                for a in node.accessors
+            if (
+                any(
+                    isinstance(a, gt_ir.FieldAccessor)
+                    and bool(a.intent & gt_definitions.AccessKind.WRITE)
+                    for a in node.accessors
+                )
+                and node.apply_blocks
             ):
                 return True, node
             else:

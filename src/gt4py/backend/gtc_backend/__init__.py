@@ -14,7 +14,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from .cuda.backend import GTCCudaBackend
+from .dace.backend import GTCDaceBackend
 from .gtcpp.backend import GTCGTCpuIfirstBackend, GTCGTCpuKfirstBackend, GTCGTGpuBackend
 
 
-__all__ = ["GTCGTCpuIfirstBackend", "GTCGTCpuKfirstBackend", "GTCGTGpuBackend"]
+__all__ = [
+    "GTCCudaBackend",
+    "GTCDaceBackend",
+    "GTCGTCpuIfirstBackend",
+    "GTCGTCpuKfirstBackend",
+    "GTCGTGpuBackend",
+]

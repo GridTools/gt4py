@@ -39,9 +39,8 @@ def register(func=None, *, externals=None, name=None):
     return _register_decorator(func) if func else _register_decorator
 
 
-Field0D = gtscript.Field[np.float_, ()]
 Field3D = gtscript.Field[np.float_]
-Field3DBool = gtscript.Field[np.bool]
+Field3DBool = gtscript.Field[np.bool_]
 
 
 @register
@@ -52,13 +51,69 @@ def copy_stencil(field_a: Field3D, field_b: Field3D):
 
 @gtscript.function
 def afunc(b):
-    return sqrt(b[0, 1, 0])
+    return sqrt(abs(b[0, 1, 0]))
+
+
+@register
+def arithmetic_ops(field_a: Field3D, field_b: Field3D):
+    with computation(PARALLEL), interval(...):
+        field_a = (((((field_b + 42.0) - 42.0) * +42.0) / -42.0) % 42.0) ** 2
+
+
+@register
+def data_types(
+    bool_field: gtscript.Field[bool],
+    npbool_field: gtscript.Field[np.bool_],
+    int_field: gtscript.Field[int],
+    int8_field: gtscript.Field[np.int8],
+    int16_field: gtscript.Field[np.int16],
+    int32_field: gtscript.Field[np.int32],
+    int64_field: gtscript.Field[np.int64],
+    float_field: gtscript.Field[float],
+    float32_field: gtscript.Field[np.float32],
+    float64_field: gtscript.Field[np.float64],
+):
+    with computation(PARALLEL), interval(...):
+        bool_field = True
+        npbool_field = False
+        int_field = 2147483647
+        int8_field = 127
+        int16_field = 32767
+        int32_field = 2147483647
+        int64_field = 9223372036854775807
+        float_field = 37.5
+        float32_field = 37.5
+        float64_field = 37.5
 
 
 @register
 def native_functions(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
-        field_a = max(min(afunc(field_b), field_b), 1)
+        abs_res = abs(field_a)
+        max_res = max(abs_res, field_b)
+        min_res = min(max_res, 42)
+        mod_res = mod(min_res, 37.5)
+        sin_res = sin(mod_res)
+        asin_res = asin(sin_res)
+        cos_res = cos(asin_res)
+        acos_res = acos(cos_res)
+        tan_res = tan(acos_res)
+        atan_res = atan(tan_res)
+        sqrt_res = afunc(atan_res)
+        exp_res = exp(sqrt_res)
+        log_res = log(exp_res)
+        floor_res = floor(log_res)
+        ceil_res = ceil(floor_res)
+        trunc_res = trunc(ceil_res)
+        field_a = (
+            trunc_res
+            if isfinite(trunc_res)
+            else field_a
+            if isinf(trunc_res)
+            else field_b
+            if isnan(trunc_res)
+            else 0.0
+        )
 
 
 @register
@@ -215,14 +270,20 @@ def large_k_interval(in_field: Field3D, out_field: Field3D):
 
 
 @register
-def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
+def single_level_with_offset(in_field: Field3D, out_field: Field3D):
+    with computation(PARALLEL), interval(1, 2):
+        out_field = in_field
+
+
+@register
+def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool_]):
     with computation(PARALLEL), interval(...):
         mask = in_field >= 0
 
 
 @register
 def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3DBool):
-    with computation(PARALLEL), interval(...):
+    with computation(PARALLEL), interval(1, -1):
         diff_23 = 0.0
         if extm and extm[0, 0, -1]:
             a4_2 = a4_1
