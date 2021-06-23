@@ -353,11 +353,8 @@ class InitInfoPass(TransformPass):
             outputs = set()
             for stmt in node.stmts:
                 stmt_info = self.visit(stmt)
-                if stmt_info:
-                    inputs = self._merge_extents(
-                        list(inputs.items()) + list(stmt_info.inputs.items())
-                    )
-                    outputs |= stmt_info.outputs
+                inputs = self._merge_extents(list(inputs.items()) + list(stmt_info.inputs.items()))
+                outputs |= stmt_info.outputs
 
             result = StatementInfo(self.data.id_generator.new, node, inputs, outputs)
 
@@ -666,10 +663,6 @@ class MultiStageMergingWrapper:
     def domain(self) -> gt_ir.Domain:
         return self.parent.definition_ir.domain
 
-    @property
-    def domain(self) -> gt_ir.Domain:
-        return self.parent.definition_ir.domain
-
 
 class StageMergingWrapper:
     """Wrapper for :class:`IJBlockInfo` containing the logic required to merge or not merge."""
@@ -880,10 +873,6 @@ class StageMergingWrapper:
     def domain(self) -> gt_ir.Domain:
         return self.parent.definition_ir.domain
 
-    @property
-    def domain(self) -> gt_ir.Domain:
-        return self.parent.definition_ir.domain
-
 
 def greedy_merging(items: Sequence[MergeableType]) -> List[MergeableType]:
     if len(items) < 2:
@@ -1005,9 +994,6 @@ class RemoveUnreachedStatementsPass(TransformPass):
 
 class ComputeExtentsPass(TransformPass):
     """Loop over blocks backwards and accumulate extents.
-
-    This includes computing extents for the HorizontalIf blocks, and marking these
-    for deletion if they are unused.
 
     Note
     ----
