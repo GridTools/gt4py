@@ -190,6 +190,16 @@ class PruneKCacheFills(NodeTranslator):
         # Consider accesses outside of loop interval
         # Note: those accesses would not require a fill in the whole loop interval in in theory
         # but restriction to the GridTools k-cache types makes this necessary
+        # E.g. consider the following loop with k = 1, 2:
+        # k | no fill required | initial fill required |
+        # - | ---------------- | --------------------- |
+        # 1 | a[k] = init      | a[k] = a[k - 1]       |
+        # 2 | a[k] = a[k - 1]  | a[k] = a[k - 1]       |
+        # In the first case, no fill is required. In the second case, a[0] has to be filled on
+        # level k = 1. On level k = 2, no fill would be necessary, but GridTools C++ does not
+        # support a k-cache type that only fills on the initial level, so fills are inserted on all
+        # levels here.
+
         first_section_offsets = AccessCollector.apply(node.sections[0]).offsets()
         last_section_offsets = AccessCollector.apply(node.sections[-1]).offsets()
         for field in list(pruneable):
