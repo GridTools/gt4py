@@ -334,6 +334,7 @@ class InitInfoPass(TransformPass):
             result = StatementInfo(
                 self.data.id_generator.new, node, body_info.inputs, body_info.outputs
             )
+            return result
 
         def visit_While(self, node: gt_ir.While) -> StatementInfo:
             body_stmt_info = self.visit(node.body)

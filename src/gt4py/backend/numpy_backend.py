@@ -474,6 +474,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
             else:
                 sources.append(stmt_source)
 
+        return sources
+
     def visit_While(self, node: gt_ir.While) -> List[str]:
         sources = []
         condition = self.visit(node.condition)
