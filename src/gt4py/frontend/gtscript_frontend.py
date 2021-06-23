@@ -955,56 +955,38 @@ class IRMaker(ast.NodeVisitor):
 
     def _parse_forloop_args_call(self, node: ast.Call) -> list:
         assert isinstance(node, ast.Call)
-        assert (
-            isinstance(node.func, ast.Name)
-            and node.func.id == "range"
-            and (len(node.args) == 2 or len(node.args) == 3)
-        )
+        assert isinstance(node.func, ast.Name) and node.func.id == "range"
 
-        gt_ir_args = []
-        for arg in node.args[0:2]:
-            if isinstance(arg, ast.Constant):
-                if arg.value == 0:
-                    gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0))
-                elif arg.value > 0:
-                    gt_ir_args.append(
-                        gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=arg.value)
-                    )
-            elif isinstance(arg, ast.Subscript):
-                assert isinstance(arg.value, ast.Name) and arg.value.id == "K"
-                try:
-                    offset = gt_utils.meta.ast_eval(arg.slice.value, {})
+        def make_int32_scalar_literal(value: int) -> gt_ir.ScalarLiteral:
+            return gt_ir.ScalarLiteral(value=value, data_type=gt_ir.DataType.INT32, loc=None)
 
-                    if offset >= 0:
-                        gt_ir_args.append(
-                            gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=offset)
-                        )
-                    else:
-                        gt_ir_args.append(
-                            gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=offset)
-                        )
-                except:
-                    raise GTScriptSyntaxError("Unknown index")
-            else:
-                gt_ir_args.append(self.visit(arg))
-
-        if len(node.args) == 3:
-            arg = node.args[2]
-            if isinstance(arg, ast.UnaryOp):
-                visit_step = self.visit(arg)
-                assert visit_step.op.name == "NEG"
-                step = -visit_step.arg.value
-            else:
-                assert isinstance(arg, ast.Constant)
-                step = arg.value
+        if len(node.args) == 1:
+            start_expr = make_int32_scalar_literal(0)
+            stop_expr = make_int32_scalar_literal(ast.literal_eval(node.args[0]))
+            step = 1
+        elif len(node.args) == 2:
+            start_expr = make_int32_scalar_literal(ast.literal_eval(node.args[0]))
+            stop_expr = make_int32_scalar_literal(ast.literal_eval(node.args[1]))
+            step = 1
+        elif len(node.args) == 3:
+            start_expr = make_int32_scalar_literal(ast.literal_eval(node.args[0]))
+            stop_expr = make_int32_scalar_literal(ast.literal_eval(node.args[1]))
+            step = ast.literal_eval(node.args[2])
         else:
-            step = 0
+            raise GTScriptSyntaxError(
+                "Range can only accept 1-3 values. See https://docs.python.org/3/library/stdtypes.html?highlight=range#range"
+            )
 
-        gt_ir_args.append(step)
-        return gt_ir_args
+        return start_expr, stop_expr, step
 
     def _parse_forloop_args_slice(self, node: ast.Slice) -> list:
         gt_ir_args = []
+
+        def make_axis_bound(offset: int) -> gt_ir.AxisBound:
+            return gt_ir.AxisBound(
+                level=gt_ir.LevelMarker.START if offset >= 0 else gt_ir.LevelMarker.END,
+                offset=offset,
+            )
 
         if node.lower is not None:
             lower_offset = gt_utils.meta.ast_eval(node.lower, {})
@@ -1015,23 +997,18 @@ class IRMaker(ast.NodeVisitor):
         else:
             upper_offset = -1  # TODO: take care of the +1
 
-        if node.step is not None:
-            raise GTScriptSyntaxError("Slice step is unsupported")
+        start_expr = make_axis_bound(lower_offset)
+        stop_expr = make_axis_bound(upper_offset)
+        step = ast.literal_eval(node.step)
 
-        for offset in (lower_offset, upper_offset):
-            if offset >= 0:
-                gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=offset))
-            else:
-                gt_ir_args.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=offset))
-        gt_ir_args.append(offset)
-        return gt_ir_args
+        return start_expr, stop_expr, step
 
     def visit_For(self, node: ast.For) -> list:
         self.decls_stack.append([])
         if isinstance(node.iter, ast.Call):
-            gt_ir_args = self._parse_forloop_args_call(node.iter)
+            start_expr, stop_expr, step = self._parse_forloop_args_call(node.iter)
         else:
-            gt_ir_args = self._parse_forloop_args_slice(node.iter.slice)
+            start_expr, stop_expr, step = self._parse_forloop_args_slice(node.iter.slice)
 
         assert isinstance(node.target, ast.Name)
         target_name = node.target.id
@@ -1043,17 +1020,8 @@ class IRMaker(ast.NodeVisitor):
             is_api=False,
         )
         self.fields[target_name] = target_decl
-        # stmts = []
-        # for stmt in node.body:
-        #     ret = self.visit(stmt)
-        #     if isinstance(ret, (list, tuple)):
-        #         stmts.extend(ret)
-        #     else:
-        #         stmts.append(ret)
         self.decls_stack[-1].append(target_decl)
-        stmts = []
-        for stmt in node.body:
-            stmts.extend(gt_utils.listify(self.visit(stmt)))
+        stmts = list(itertools.chain(*(gt_utils.listify(self.visit(stmt)) for stmt in node.body)))
         assert all(isinstance(item, gt_ir.Statement) for item in stmts)
 
         result = []
@@ -1067,9 +1035,9 @@ class IRMaker(ast.NodeVisitor):
             *result,
             gt_ir.For(
                 target=target_name,
-                start=gt_ir_args[0],
-                stop=gt_ir_args[1],
-                step=gt_ir_args[2],
+                start=start_expr,
+                stop=stop_expr,
+                step=step,
                 body=gt_ir.BlockStmt(stmts=stmts),
             ),
         ]
