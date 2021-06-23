@@ -1357,11 +1357,6 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
     This may occur because these can be local variables in the scope, and
     therefore do not need to be fields.
-
-    A field can be demoted when it is a temporary field that:
-    1. is never used with an offset,
-    2. is never read before assigned to in any stage, and
-    3. is never used in a horizontal region
     """
 
     class CollectDemotableSymbols(gt_ir.IRNodeVisitor):
@@ -1377,40 +1372,30 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
             }
             """Dictionary mapping temporaries to their most recently referenced stage."""
             self.visit(node)
-
             return set(self.demotables.keys())
 
         def visit_Stage(self, node: gt_ir.Stage, **kwargs: Any) -> None:
-            self.generic_visit(node, **kwargs, stage_name=node.name, is_write=False)
+            kwargs["stage_name"] = node.name
+            self.generic_visit(node, **kwargs)
 
         def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
-            kwargs["is_write"] = False
             self.visit(node.value, **kwargs)
-            kwargs["is_write"] = True
-            self.visit(node.target, **kwargs)
+            if node.target.name in self.demotables:
+                self.demotables[node.target.name] = kwargs["stage_name"]
 
-        def visit_HorizontalIf(self, node: gt_ir.HorizontalIf, **kwargs) -> None:
+        def visit_HorizontalIf(self, node: gt_ir.HorizontalIf, **kwargs: Any) -> None:
             self.visit(node.body, inside_horizontal_if=True, **kwargs)
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> None:
-            if node.name in self.demotables:
-                not_demotable = False
-                if not kwargs["is_write"]:
-                    # 1. is never used with an offset
-                    not_demotable = any(val != 0 for val in node.offset.values())
-
-                    # 2. is never read before assigned to in any stage
-                    not_demotable = (
-                        not_demotable or kwargs["stage_name"] != self.demotables[node.name]
-                    )
-                else:
-                    self.demotables[node.name] = kwargs["stage_name"]
-
-                if not_demotable:
-                    self.demotables.pop(node.name)
-                elif kwargs.get("inside_horizontal_if", False):
-                    # 3. is never used in a horizontal region
-                    self.demotables.pop(node.name)
+            field_name = node.name
+            if field_name in self.demotables:
+                assert self.demotables[field_name], f"Temporary {field_name} has no stage."
+                if (
+                    kwargs["stage_name"] != self.demotables[field_name]
+                    or any(val != 0 for val in node.offset.values())
+                    or kwargs.get("inside_horizontal_if", False)
+                ):
+                    self.demotables.pop(field_name)
 
     class DemoteSymbols(gt_ir.IRNodeMapper):
         @classmethod
