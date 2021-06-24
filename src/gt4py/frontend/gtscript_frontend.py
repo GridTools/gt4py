@@ -1012,29 +1012,20 @@ class IRMaker(ast.NodeVisitor):
 
         assert isinstance(node.target, ast.Name)
         target_name = node.target.id
-        target_decl = gt_ir.FieldDecl(
+        target_decl = gt_ir.VarDecl(
             name=target_name,
             data_type=gt_ir.DataType.INT32,
-            axes=gt_ir.Domain.LatLonGrid().axes_names,
-            # layout_id=t.id,
+            length=1,
             is_api=False,
         )
-        self.fields[target_name] = target_decl
-        self.decls_stack[-1].append(target_decl)
+
+        self.local_symbols[target_name] = target_decl
         stmts = list(itertools.chain(*(gt_utils.listify(self.visit(stmt)) for stmt in node.body)))
         assert all(isinstance(item, gt_ir.Statement) for item in stmts)
 
-        result = []
-        if len(self.decls_stack) == 1:
-            result.extend(self.decls_stack.pop())
-        elif len(self.decls_stack) > 1:
-            self.decls_stack[-2].extend(self.decls_stack[-1])
-            self.decls_stack.pop()
-
         return [
-            *result,
             gt_ir.For(
-                target=target_name,
+                target=target_decl,
                 start=start_expr,
                 stop=stop_expr,
                 step=step,

@@ -381,6 +381,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         body_sources.append("}")
         return body_sources
 
+    def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
+        self.requires_positional = True
+        return f"eval.{node.name.lower()}()"
+
     def _visit_ForLoopBound(self, node: gt_ir.AxisBound, axis):
         return "static_cast<gt::int_t>({endpt}{offset:+d})".format(
             endpt=f"eval(domain_size_{axis.name}())"
@@ -389,17 +393,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             offset=node.offset,
         )
 
-    def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
-        self.requires_positional = True
-        return f"eval.{node.name.lower()}()"
-
     def visit_For(self, node: gt_ir.For) -> str:
         body_sources = gt_text.TextBlock()
 
         k_ax = gt_ir.Domain.LatLonGrid().sequential_axis
-        k_index = gt_ir.Domain.LatLonGrid().index(k_ax)
-
-        sources = []
         if isinstance(node.start, gt_ir.AxisBound):
             start = self._visit_ForLoopBound(node.start, k_ax)
         else:
@@ -411,15 +408,15 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         if isinstance(node.step, int):
             if node.step > 0:
                 body_sources.append(
-                    f"for ({node.target}={start}; {node.target}<{stop}; {node.target}+={node.step}){{"
+                    f"for ({node.target.name}={start}; {node.target.name}<{stop}; {node.target.name}+={node.step}){{"
                 )
             elif node.step < 0:
                 body_sources.append(
-                    f"for ({node.target}={start}; {node.target}>{stop}; {node.target}-={abs(node.step)}){{"
+                    f"for ({node.target.name}={start}; {node.target.name}>{stop}; {node.target.name}-={abs(node.step)}){{"
                 )
             else:
                 body_sources.append(
-                    f"for ({node.target}={start}; {node.target}<{stop}; {node.target}++){{"
+                    f"for ({node.target.name}={start}; {node.target.name}<{stop}; {node.target.name}++){{"
                 )
         for stmt in node.body.stmts:
             body_sources.append(self.visit(stmt))

@@ -333,9 +333,9 @@ class NumPySourceGenerator(PythonSourceGenerator):
             stop = self.visit(node.stop)
         if isinstance(node.step, int) and node.step > 0:
             step = node.step
-            sources.append(f"for {node.target} in range({start},{stop},{step}):")
+            sources.append(f"for {node.target.name} in range({start},{stop},{step}):")
         else:
-            sources.append(f"for {node.target} in range({start},{stop}):")
+            sources.append(f"for {node.target.name} in range({start},{stop}):")
         for stmt in node.body.stmts:
             sources.append(self.indent_size * " " + self.visit(stmt))
         return sources

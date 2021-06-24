@@ -216,7 +216,9 @@ class InitInfoPass(TransformPass):
 
         def visit_Decl(self, node: gt_ir.FieldDecl):
             self._add_symbol(node)
-            return None
+
+        def visit_For(self, node: gt_ir.For):
+            self._add_symbol(node.target, is_counter=True)
 
         def visit_BlockStmt(self, node: gt_ir.BlockStmt):
             result = [self.visit(stmt) for stmt in node.stmts]
@@ -231,11 +233,11 @@ class InitInfoPass(TransformPass):
             for computation in node.computations:
                 self.visit(computation)
 
-        def _add_symbol(self, decl):
+        def _add_symbol(self, decl, *, is_counter=False):
             has_redundancy = (
                 isinstance(decl, gt_ir.FieldDecl) and self.redundant_temp_fields and not decl.is_api
             )
-            symbol_info = SymbolInfo(decl, has_redundancy=has_redundancy)
+            symbol_info = SymbolInfo(decl, has_redundancy=has_redundancy, is_counter=is_counter)
             self.data.symbols[decl.name] = symbol_info
 
     class BlockMaker(gt_ir.IRNodeVisitor):
@@ -321,7 +323,9 @@ class InitInfoPass(TransformPass):
 
         def visit_For(self, node: gt_ir.For):
             body_stmt_info = self.visit(node.body)
-            inputs = self._merge_extents(list(body_stmt_info.inputs.items()))
+            inputs = self._merge_extents(
+                list((k, v) for k, v in body_stmt_info.inputs.items() if k != node.target.name)
+            )
             result = StatementInfo(self.data.id_generator.new, node, inputs, body_stmt_info.outputs)
             return result
 
@@ -1091,6 +1095,10 @@ class ComputeUsedSymbolsPass(TransformPass):
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
             self.data.symbols[node.name].in_use = True
 
+        def visit_For(self, node: gt_ir.For, **kwargs):
+            self.data.symbols[node.target.name].in_use = True
+            self.visit(node.body)
+
     @classmethod
     def apply(cls, transform_data: TransformData) -> None:
         visitor = cls.ComputeUsedVisitor(transform_data)
@@ -1138,7 +1146,12 @@ class BuildIIRPass(TransformPass):
 
             decl = symbol.decl
             if isinstance(decl, gt_ir.VarDecl):
-                self.iir.parameters[name] = decl
+                if not symbol.is_counter:
+                    self.iir.parameters[name] = decl
+                else:
+                    # Counters are local symbols only and backends
+                    # handle declaration and initialization.
+                    pass
             else:
                 self.iir.fields[name] = decl
 
@@ -1175,6 +1188,10 @@ class BuildIIRPass(TransformPass):
                         local_symbols[decl.name] = decl
                 else:
                     stmts.append(stmt_info.stmt)
+                    if isinstance(stmt_info.stmt, gt_ir.For):
+                        # Add the target decl
+                        decl = stmt_info.stmt.target
+                        local_symbols[decl.name] = decl
 
             apply_block = gt_ir.ApplyBlock(
                 interval=self._make_axis_interval(int_block.interval),
@@ -1285,8 +1302,6 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
                 self.demotables[node.target.name] = kwargs["stage_name"]
 
         def visit_For(self, node: gt_ir.For, **kwargs: Any) -> None:
-            assert node.target in self.demotables
-            self.demotables[node.target] = kwargs["stage_name"]
             self.visit(node.body, **kwargs)
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> None:
