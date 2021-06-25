@@ -39,20 +39,14 @@ from gtc import common
 from gtc.common import AxisBound, LocNode
 
 
+@utils.noninstantiable
 class Expr(common.Expr):
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Expr:
-            raise TypeError("Trying to instantiate `Expr` abstract class.")
-        super().__init__(*args, **kwargs)
+    pass
 
 
+@utils.noninstantiable
 class Stmt(common.Stmt):
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Stmt:
-            raise TypeError("Trying to instantiate `Stmt` abstract class.")
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class BlockStmt(common.BlockStmt[Stmt], Stmt):

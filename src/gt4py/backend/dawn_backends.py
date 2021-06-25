@@ -73,7 +73,7 @@ class FieldInfoCollector(gt_ir.IRNodeVisitor):
             field_decl=sir_utils.make_field(
                 name=node.name, dimensions=field_dimensions, is_temporary=not node.is_api
             ),
-            access=None,
+            access=gt_definitions.AccessKind.NONE,
             extent=gt_definitions.Extent.zeros(),
             inputs=set(),
         )
@@ -81,9 +81,9 @@ class FieldInfoCollector(gt_ir.IRNodeVisitor):
     def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs: Any) -> None:
         field_name = node.name
         if len(kwargs["write_field"]) < 1:
-            self.field_info[field_name]["access"] = gt_definitions.AccessKind.READ_WRITE
-        elif self.field_info[field_name]["access"] is None:
-            self.field_info[field_name]["access"] = gt_definitions.AccessKind.READ_ONLY
+            self.field_info[field_name]["access"] |= gt_definitions.AccessKind.WRITE
+        else:
+            self.field_info[field_name]["access"] |= gt_definitions.AccessKind.READ
             if kwargs["write_field"] in self.field_info:
                 self.field_info[kwargs["write_field"]]["inputs"].add(field_name)
 
@@ -138,7 +138,7 @@ class SIRConverter(gt_ir.IRNodeVisitor):
         out_fields = [
             field
             for field in field_info.values()
-            if field["access"] == gt_definitions.AccessKind.READ_WRITE
+            if bool(field["access"] & gt_definitions.AccessKind.WRITE)
         ]
 
         compute_extent = gt_definitions.Extent.zeros()
@@ -410,7 +410,7 @@ cupy.cuda.Device(0).synchronize()
         output_field_names = [
             name
             for name, info in self.args_data.field_info.items()
-            if info and info.access == gt_definitions.AccessKind.READ_WRITE
+            if info and bool(info.access & gt_definitions.AccessKind.WRITE)
         ]
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])
 
@@ -620,7 +620,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
             if arg.name in fields:
                 access = sir_field_info[arg.name]["access"]
                 if access is None:
-                    access = gt_definitions.AccessKind.READ_ONLY
+                    access = gt_definitions.AccessKind.READ
                     data.unreferenced.append(arg.name)
                 extent = sir_field_info[arg.name]["extent"]
                 boundary = gt_definitions.Boundary([(-pair[0], pair[1]) for pair in extent])
