@@ -710,7 +710,7 @@ class IRMaker(ast.NodeVisitor):
         self.extra_temp_decls = extra_temp_decls or {}
         self.parsing_context = None
         self.iteration_order = None
-        self.decls_stack = []
+        self.if_decls_stack = []
         gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
             "abs": gt_ir.NativeFunction.ABS,
             "min": gt_ir.NativeFunction.MIN,
@@ -1011,7 +1011,7 @@ class IRMaker(ast.NodeVisitor):
         return start_expr, stop_expr, step
 
     def visit_For(self, node: ast.For) -> list:
-        self.decls_stack.append([])
+        self.if_decls_stack.append([])
         if isinstance(node.iter, ast.Call):
             start_expr, stop_expr, step = self._parse_forloop_args_call(node.iter)
         else:
@@ -1201,7 +1201,7 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_If(self, node: ast.If) -> list:
-        self.decls_stack.append([])
+        self.if_decls_stack.append([])
 
         main_stmts = []
         for stmt in node.body:
@@ -1215,11 +1215,11 @@ class IRMaker(ast.NodeVisitor):
             assert all(isinstance(item, gt_ir.Statement) for item in else_stmts)
 
         result = []
-        if len(self.decls_stack) == 1:
-            result.extend(self.decls_stack.pop())
-        elif len(self.decls_stack) > 1:
-            self.decls_stack[-2].extend(self.decls_stack[-1])
-            self.decls_stack.pop()
+        if len(self.if_decls_stack) == 1:
+            result.extend(self.if_decls_stack.pop())
+        elif len(self.if_decls_stack) > 1:
+            self.if_decls_stack[-2].extend(self.if_decls_stack[-1])
+            self.if_decls_stack.pop()
 
         result.append(
             gt_ir.If(
@@ -1336,8 +1336,8 @@ class IRMaker(ast.NodeVisitor):
                     # layout_id=t.id,
                     is_api=False,
                 )
-                if len(self.decls_stack):
-                    self.decls_stack[-1].append(field_decl)
+                if len(self.if_decls_stack):
+                    self.if_decls_stack[-1].append(field_decl)
                 else:
                     result.append(field_decl)
                 self.fields[field_decl.name] = field_decl
