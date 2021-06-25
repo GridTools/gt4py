@@ -178,6 +178,15 @@ class OIRToGTCpp(eve.NodeTranslator):
             true_branch=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),
         )
 
+    def visit_For(self, node: oir.For, **kwargs: Any) -> gtcpp.For:
+        return gtcpp.For(
+            target_name=node.target_name,
+            start=self.visit(node.start, **kwargs),
+            end=self.visit(node.end, **kwargs),
+            inc=node.inc,
+            body=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),
+        )
+
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,

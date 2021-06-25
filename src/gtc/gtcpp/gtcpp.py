@@ -141,6 +141,14 @@ class GTApplyMethod(LocNode):
     local_variables: List[LocalVarDecl]
 
 
+class For(Stmt):
+    target_name: Str
+    start: Expr
+    end: Expr
+    inc: int
+    body: BlockStmt
+
+
 @enum.unique
 class Intent(StrEnum):
     IN = "in"

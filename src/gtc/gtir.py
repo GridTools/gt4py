@@ -190,16 +190,12 @@ class ScalarDecl(Decl):
     pass
 
 
-class For(common.For[BlockStmt, Expr], Stmt):
-    pass
-
-
-# class For(Stmt):
-#     target: str
-#     start: Union[Expr, AxisBound]
-#     end: Union[Expr, AxisBound]
-#     step: int
-#     body: BlockStmt
+class For(Stmt):
+    target: ScalarDecl
+    start: Union[Expr, AxisBound]
+    end: Union[Expr, AxisBound]
+    inc: int
+    body: List[Stmt]
 
 
 class Interval(LocNode):

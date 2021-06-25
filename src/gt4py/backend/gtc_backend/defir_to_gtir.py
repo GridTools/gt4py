@@ -255,22 +255,18 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_For(self, node: For) -> gtir.For:
         return gtir.For(
-            target=node.target,
+            target=gtir.ScalarDecl(name=node.target.name, dtype=common.DataType.INT32),
             start=self.visit(node.start),
             end=self.visit(node.stop),
-            step=node.step,
-            body=gtir.BlockStmt(body=self.visit(node.body)),
+            inc=node.step,
+            body=[stmt for stmt in self.visit(node.body)],
         )
 
     def visit_VarRef(self, node: VarRef, **kwargs):
-        # TODO(havogt) seems wrong, but check the DefinitionIR for
-        # test_code_generation.py::test_generation_cpu[native_functions,
-        # there we have a FieldAccess on a VarDecl
-        # Probably the frontend needs to be fixed.
-        if node.name in self._scalar_params:
-            return gtir.ScalarAccess(name=node.name)
-        else:
-            return gtir.FieldAccess(name=node.name, offset=gtir.CartesianOffset.zero())
+        # TODO(havogt, jdahm) might break for
+        # test_code_generation.py::test_generation_cpu[native_functions.
+        # There we have a FieldAccess on a VarDecl. Probably the frontend needs to be fixed.
+        return gtir.ScalarAccess(name=node.name)
 
     def visit_AxisInterval(self, node: AxisInterval):
         return self.visit(node.start), self.visit(node.end)

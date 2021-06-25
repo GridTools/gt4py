@@ -226,9 +226,9 @@ class Stencil(LocNode, SymbolTableTrait):
     _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)
 
 
-class BlockStmt(common.BlockStmt[Stmt], Stmt):
-    pass
-
-
-class For(common.For[BlockStmt, Expr], Stmt):
-    pass
+class For(Stmt, SymbolTableTrait):
+    target_name: Str
+    start: Union[Expr, AxisBound]
+    end: Union[Expr, AxisBound]
+    inc: int
+    body: List[Stmt]

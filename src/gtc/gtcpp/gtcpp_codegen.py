@@ -87,6 +87,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     Cast = as_fmt("static_cast<{dtype}>({expr})")
 
+    For = as_fmt("for(i = {start}; i < {end}; i += {inc}) {body}")
+
     def visit_BuiltInLiteral(self, builtin: BuiltInLiteral, **kwargs: Any) -> str:
         if builtin == BuiltInLiteral.TRUE:
             return "true"
