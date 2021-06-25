@@ -15,25 +15,51 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from typing import Tuple
 from eve.codegen import MakoTemplate as as_mako
+import gtc.utils as gtc_utils
 
 
-def pybuffer_to_sid(*, name, dtype, domain_dim_strings, data_ndim, stride_kind_index, is_cuda):
-    domain_ndim = len(domain_dim_strings)
+def _get_unit_stride_dim(backend, domain_dim_flags, data_ndim):
+    make_layout_map = backend.storage_info["layout_map"]
+    layout_map = [
+        x for x in make_layout_map(domain_dim_flags + (True,) * data_ndim) if x is not None
+    ]
+    return layout_map.index(max(layout_map))
+
+
+def pybuffer_to_sid(
+    *,
+    name: str,
+    dtype: str,
+    domain_dim_flags: Tuple[bool, bool, bool],
+    data_ndim: int,
+    stride_kind_index: int,
+    backend,
+):
+    domain_ndim = domain_dim_flags.count(True)
     sid_ndim = domain_ndim + data_ndim
 
-    as_sid = "as_cuda_sid" if is_cuda else "as_sid"
+    as_sid = "as_cuda_sid" if backend.GT_BACKEND_T == "gpu" else "as_sid"
 
     sid_def = """gt::{as_sid}<{dtype}, {sid_ndim},
-        gt::integral_constant<int, {unique_index}>>({name})""".format(
-        name=name, dtype=dtype, unique_index=stride_kind_index, sid_ndim=sid_ndim, as_sid=as_sid
+        gt::integral_constant<int, {unique_index}>, {unit_stride_dim}>({name})""".format(
+        name=name,
+        dtype=dtype,
+        unique_index=stride_kind_index,
+        sid_ndim=sid_ndim,
+        as_sid=as_sid,
+        unit_stride_dim=_get_unit_stride_dim(backend, domain_dim_flags, data_ndim),
     )
     sid_def = "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
         sid_def=sid_def,
         name=name,
     )
     if domain_ndim != 3:
-        gt_dims = [f"gt::stencil::dim::{dim}" for dim in domain_dim_strings]
+        gt_dims = [
+            f"gt::stencil::dim::{dim}"
+            for dim in gtc_utils.dimension_flags_to_names(domain_dim_flags)
+        ]
         if data_ndim:
             gt_dims += [f"gt::integral_constant<int, {3 + dim}>" for dim in range(data_ndim)]
         sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(

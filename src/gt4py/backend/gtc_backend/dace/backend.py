@@ -55,11 +55,10 @@ if TYPE_CHECKING:
 
 
 class GTCDaCeExtGenerator:
-    def __init__(self, class_name, module_name, gt_backend_t, options):
+    def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
-        self.gt_backend_t = gt_backend_t
-        self.options = options
+        self.backend = backend
 
     def __call__(self, definition_ir: StencilDefinition) -> Dict[str, Dict[str, str]]:
         gtir = DefIRToGTIR.apply(definition_ir)
@@ -74,9 +73,11 @@ class GTCDaCeExtGenerator:
         # sdfg.apply_strict_transformations(validate=True) # noqa: E800 Found commented out code
 
         implementation = DaCeComputationCodegen.apply(gtir, sdfg)
-        bindings = DaCeBindingsCodegen.apply(gtir, sdfg, module_name=self.module_name)
+        bindings = DaCeBindingsCodegen.apply(
+            gtir, sdfg, module_name=self.module_name, backend=self.backend
+        )
 
-        bindings_ext = ".cu" if self.gt_backend_t == "gpu" else ".cpp"
+        bindings_ext = ".cu" if self.backend.GT_BACKEND_T == "gpu" else ".cpp"
         return {
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings" + bindings_ext: bindings},
@@ -222,7 +223,8 @@ class DaCeComputationCodegen:
 
 
 class DaCeBindingsCodegen:
-    def __init__(self):
+    def __init__(self, backend):
+        self.backend = backend
         self._unique_index: int = 0
 
     def unique_index(self) -> int:
@@ -255,25 +257,24 @@ class DaCeBindingsCodegen:
         for name, array in sdfg.arrays.items():
             if array.transient:
                 continue
-            domain_dim_strings = [
-                dim
-                for dim in "ijk"
+            domain_dim_flags = tuple(
+                True
                 if any(
                     dace.symbolic.pystr_to_symbolic(f"__{dim.upper()}") in s.free_symbols
                     for s in array.shape
                     if hasattr(s, "free_symbols")
                 )
-            ]
+                else False
+                for dim in "ijk"
+            )
             data_ndim = len(array.shape) - sum(array_dimensions(array))
             sid_def = pybuffer_to_sid(
                 name=name,
                 dtype=array.dtype.ctype,
-                domain_dim_strings=domain_dim_strings,
+                domain_dim_flags=domain_dim_flags,
                 data_ndim=data_ndim,
                 stride_kind_index=self.unique_index(),
-                is_cuda=True
-                if array.storage in [dace.StorageType.GPU_Global, dace.StorageType.GPU_Shared]
-                else False,
+                backend=self.backend,
             )
 
             res.append(sid_def)
@@ -292,8 +293,8 @@ class DaCeBindingsCodegen:
         )
 
     @classmethod
-    def apply(cls, gtir: gtir.Stencil, sdfg: dace.SDFG, module_name: str) -> str:
-        generated_code = cls().generate_sdfg_bindings(gtir, sdfg, module_name=module_name)
+    def apply(cls, gtir: gtir.Stencil, sdfg: dace.SDFG, module_name: str, *, backend) -> str:
+        generated_code = cls(backend).generate_sdfg_bindings(gtir, sdfg, module_name=module_name)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
 

@@ -57,10 +57,10 @@ if TYPE_CHECKING:
 
 
 class GTCCudaExtGenerator:
-    def __init__(self, class_name, module_name, gt_backend_t, options):
+    def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
-        self.options = options
+        self.backend = backend
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = DefIRToGTIR.apply(definition_ir)
@@ -74,7 +74,9 @@ class GTCCudaExtGenerator:
         cuir = extent_analysis.ComputeExtents().visit(cuir)
         cuir = extent_analysis.CacheExtents().visit(cuir)
         implementation = cuir_codegen.CUIRCodegen.apply(cuir)
-        bindings = GTCCudaBindingsCodegen.apply(cuir, module_name=self.module_name)
+        bindings = GTCCudaBindingsCodegen.apply(
+            cuir, module_name=self.module_name, backend=self.backend
+        )
         return {
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings.cu": bindings},
@@ -96,7 +98,8 @@ class GTCCudaExtGenerator:
 
 
 class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
-    def __init__(self):
+    def __init__(self, backend):
+        self.backend = backend
         self._unique_index: int = 0
 
     def unique_index(self) -> int:
@@ -120,10 +123,10 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
                 return pybuffer_to_sid(
                     name=node.name,
                     dtype=self.visit(node.dtype),
-                    domain_dim_strings=gtc_utils.dimension_flags_to_names(node.dimensions),
+                    domain_dim_flags=node.dimensions,
                     data_ndim=len(node.data_dims),
                     stride_kind_index=self.unique_index(),
-                    is_cuda=True,
+                    backend=self.backend,
                 )
 
     def visit_ScalarDecl(self, node: cuir.ScalarDecl, **kwargs):
@@ -147,8 +150,8 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
     Program = bindings_main_template()
 
     @classmethod
-    def apply(cls, root, *, module_name="stencil", **kwargs) -> str:
-        generated_code = cls().visit(root, module_name=module_name, **kwargs)
+    def apply(cls, root, *, module_name="stencil", backend, **kwargs) -> str:
+        generated_code = cls(backend).visit(root, module_name=module_name, **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
 
