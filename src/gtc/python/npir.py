@@ -83,11 +83,18 @@ class VectorLValue(common.LocNode):
     pass
 
 
+class FieldDecl(eve.Node):
+    name: eve.SymbolName
+    dtype: common.DataType
+    dimensions: Tuple[bool, bool, bool]
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+
+
 class FieldSlice(VectorExpression, VectorLValue):
     name: str
-    i_offset: AxisOffset
-    j_offset: AxisOffset
-    k_offset: AxisOffset
+    i_offset: Optional[AxisOffset] = None
+    j_offset: Optional[AxisOffset] = None
+    k_offset: Optional[AxisOffset] = None
 
 
 class NamedScalar(common.ScalarAccess, Expr):
@@ -130,11 +137,13 @@ class MaskBlock(common.Stmt):
     body: List[VectorAssign]
 
 
+# TODO (ricoh): probably not needed
 class DomainPadding(eve.Node):
     lower: Tuple[int, int, int]
     upper: Tuple[int, int, int]
 
 
+# TODO (ricoh): dead code, delete
 class HorizontalExtent(eve.Node):
     lower: Tuple[int, int]
     upper: Tuple[int, int]
@@ -153,12 +162,15 @@ class VerticalPass(common.LocNode):
     direction: common.LoopOrder
 
 
-class Computation(common.LocNode):
+class Computation(common.LocNode, eve.SymbolTableTrait):
+    field_decls: List[FieldDecl]
     field_params: List[str]
-    field_paddings: Optional[Dict[str, Dict[str, Tuple[int, int, int]]]] = None
+    field_paddings: Optional[
+        Dict[str, Dict[str, Tuple[int, int, int]]]
+    ] = None  # TODO (ricoh): probably delete
     params: List[str]
     vertical_passes: List[VerticalPass]
-    domain_padding: DomainPadding
+    domain_padding: DomainPadding  # TODO (ricoh): probably delete
 
 
 class NativeFuncCall(common.NativeFuncCall[Expr], VectorExpression):

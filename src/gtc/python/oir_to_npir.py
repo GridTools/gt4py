@@ -88,12 +88,15 @@ class OirToNpir(NodeTranslator):
         )
         field_names: List[str] = []
         scalar_names: List[str] = []
+        field_decls: List[npir.FieldDecl] = []
         for decl in node.params:
             if isinstance(decl, oir.FieldDecl):
-                field_names.append(decl.name)
+                field_names.append(str(decl.name))
+                field_decls.append(self.visit(decl))
             else:
                 scalar_names.append(decl.name)
         return npir.Computation(
+            field_decls=field_decls,
             field_params=field_names,
             field_paddings={
                 key: {"lower": val.lower, "upper": val.upper}
@@ -240,11 +243,20 @@ class OirToNpir(NodeTranslator):
                     k_offset = 0
             ctx.add_offsets(str(node.name), node.offset.i, node.offset.j, k_offset)
             h_ctx.add_offsets(node.offset.i, node.offset.j)
+        dims = decl.dimensions if (decl := ctx.symbol_table.get(node.name)) else (True, True, True)
         return npir.FieldSlice(
             name=str(node.name),
-            i_offset=npir.AxisOffset.i(node.offset.i),
-            j_offset=npir.AxisOffset.j(node.offset.j),
-            k_offset=npir.AxisOffset.k(node.offset.k, parallel=parallel_k),
+            i_offset=npir.AxisOffset.i(node.offset.i) if dims[0] else None,
+            j_offset=npir.AxisOffset.j(node.offset.j) if dims[1] else None,
+            k_offset=npir.AxisOffset.k(node.offset.k, parallel=parallel_k) if dims[2] else None,
+        )
+
+    def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs) -> npir.FieldDecl:
+        return npir.FieldDecl(
+            name=node.name,
+            dtype=self.visit(node.dtype),
+            dimensions=node.dimensions,
+            data_dims=node.data_dims,
         )
 
     def visit_BinaryOp(

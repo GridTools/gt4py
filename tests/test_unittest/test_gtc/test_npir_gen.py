@@ -8,7 +8,7 @@ from gt4py.definitions import Extent
 from gtc import common
 from gtc.python import npir, npir_gen
 
-from .npir_utils import FieldSliceFactory, NativeFuncCallFactory
+from .npir_utils import FieldDeclFactory, FieldSliceFactory, NativeFuncCallFactory
 
 
 UNDEFINED_DTYPES = {common.DataType.INVALID, common.DataType.AUTO, common.DataType.DEFAULT}
@@ -329,6 +329,7 @@ def test_computation() -> None:
             ),
             params=[],
             field_params=[],
+            field_decls=[],
             vertical_passes=[],
         ),
         field_extents={},
@@ -361,6 +362,11 @@ def test_full_computation_valid(tmp_path) -> None:
             },
             params=["f1", "f2", "f3", "s1"],
             field_params=["f1", "f2", "f3"],
+            field_decls=[
+                FieldDeclFactory(name="f1"),
+                FieldDeclFactory(name="f2"),
+                FieldDeclFactory(name="f3"),
+            ],
             vertical_passes=[
                 npir.VerticalPass(
                     temp_defs=[],

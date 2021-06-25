@@ -42,6 +42,15 @@ class FieldSliceFactory(factory.Factory):
     )
 
 
+class FieldDeclFactory(factory.Factory):
+    class Meta:
+        model = npir.FieldDecl
+
+    name = factory.Sequence(lambda n: "field_%d" % n)
+    dimensions = (True, True, True)
+    dtype = common.DataType.FLOAT32
+
+
 class NativeFuncCallFactory(factory.Factory):
     class Meta:
         model = npir.NativeFuncCall

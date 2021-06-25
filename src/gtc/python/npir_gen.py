@@ -62,11 +62,35 @@ class NpirGen(TemplatedGenerator):
 
     AxisOffset = FormatTemplate("{from_visitor}")
 
+    def visit_FieldDecl(self, node: npir.FieldDecl, **kwargs) -> Union[str, Collection[str]]:
+        if all(node.dimensions):
+            return ""
+        shape_idx = iter(range(3))
+        origin_idx = iter(range(3))
+        shape = ", ".join(
+            [f"{node.name}.shape[{next(shape_idx)}]" if dim else "1" for dim in node.dimensions]
+        )
+        origin = ", ".join(
+            [
+                f"_origin_['{node.name}'][{next(origin_idx)}]" if dim else "0"
+                for dim in node.dimensions
+            ]
+        )
+        return self.generic_visit(node, shape=shape, origin=origin, **kwargs)
+
+    FieldDecl = FormatTemplate(
+        "{name} = np.reshape({name}, ({shape}))\n_origin_['{name}'] = [{origin}]"
+    )
+
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
         kwargs.setdefault("mask_acc", "")
-        return self.generic_visit(node, **kwargs)
+        offsets = ", ".join(
+            self.visit(offset, **kwargs) if offset else ":"
+            for offset in [node.i_offset, node.j_offset, node.k_offset]
+        )
+        return self.generic_visit(node, offsets=offsets, **kwargs)
 
-    FieldSlice = FormatTemplate("{name}_[{i_offset}, {j_offset}, {k_offset}]{mask_acc}")
+    FieldSlice = FormatTemplate("{name}_[{offsets}]{mask_acc}")
 
     def visit_EmptyTemp(
         self, node: npir.EmptyTemp, *, temp_name: str, **kwargs
@@ -92,11 +116,11 @@ class NpirGen(TemplatedGenerator):
             mask_def = ""
         elif isinstance(node.mask, npir.BroadCast):
             mask_name = node.mask_name
-            mask = self.generic_visit(node.mask)
+            mask = self.visit(node.mask)
             mask_def = f"{mask_name}_ = np.full((I - i, J - j, K - k), {mask})\n"
         else:
             mask_name = node.mask_name
-            mask = self.generic_visit(node.mask)
+            mask = self.visit(node.mask)
             mask_def = f"{mask_name}_ = {mask}\n"
         return self.generic_visit(node, mask_def=mask_def, **kwargs)
 
@@ -114,7 +138,7 @@ class NpirGen(TemplatedGenerator):
     ) -> Union[str, Collection[str]]:
         mask_acc = ""
         if node.mask:
-            mask_acc = f"[{self.visit(node.mask)}]"
+            mask_acc = f"[{self.visit(node.mask, **kwargs)}]"
         if isinstance(node.right, npir.EmptyTemp):
             kwargs["temp_name"] = node.left.name
         return self.generic_visit(node, mask_acc=mask_acc, **kwargs)
@@ -236,6 +260,7 @@ class NpirGen(TemplatedGenerator):
     ) -> Union[str, Collection[str]]:
         signature = ["*", *node.params, "_domain_", "_origin_"]
         kwargs["field_extents"] = field_extents
+        kwargs["symtable"] = node.symtable_
         data_views = JinjaTemplate(
             textwrap.dedent(
                 """\
@@ -250,9 +275,11 @@ class NpirGen(TemplatedGenerator):
                         if not isinstance(key, tuple):
                             key = (key, )
                         for dim, idx in enumerate(key):
-                            if isinstance(idx, slice):
+                            if self.offsets[dim] == 0:
+                                new_args.append(idx)
+                            elif isinstance(idx, slice):
                                 start = 0 if idx.start is None else idx.start
-                                stop = 0 if idx.stop is None else idx.stop
+                                stop = -1 if idx.stop is None else idx.stop
                                 new_args.append(
                                     slice(start + self.offsets[dim], stop + self.offsets[dim], idx.step)
                                 )
@@ -287,6 +314,8 @@ class NpirGen(TemplatedGenerator):
 
             def run({{ signature }}):
                 {{ domain_padding | indent(4) }}
+                {% for decl in field_decls %}{{ decl | indent(4) }}
+                {% endfor %}
                 {{ data_views | indent(4) }}
                 {% for pass in vertical_passes %}
                 {{ pass | indent(4) }}
