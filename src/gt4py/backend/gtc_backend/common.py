@@ -16,8 +16,9 @@
 
 
 from typing import Tuple
-from eve.codegen import MakoTemplate as as_mako
+
 import gtc.utils as gtc_utils
+from eve.codegen import MakoTemplate as as_mako
 
 
 def _get_unit_stride_dim(backend, domain_dim_flags, data_ndim):

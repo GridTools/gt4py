@@ -16,7 +16,6 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
-import gtc.utils as gtc_utils
 from eve import codegen
 from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
