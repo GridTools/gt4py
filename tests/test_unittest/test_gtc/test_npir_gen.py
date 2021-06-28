@@ -326,11 +326,6 @@ def test_computation() -> None:
 def test_full_computation_valid(tmp_path) -> None:
     result = npir_gen.NpirGen.apply(
         npir.Computation(
-            field_paddings={
-                "f1": {"lower": (0, 0, 0), "upper": (0, 0, 0)},
-                "f2": {"lower": (2, 2, 0), "upper": (0, 0, 0)},
-                "f3": {"lower": (0, 0, 0), "upper": (0, 3, 1)},
-            },
             params=["f1", "f2", "f3", "s1"],
             field_params=["f1", "f2", "f3"],
             field_decls=[

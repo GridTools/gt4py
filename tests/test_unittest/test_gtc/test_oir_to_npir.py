@@ -115,7 +115,6 @@ def test_mask_stmt_to_mask_block(parallel_k):
     mask_block = OirToNpir().visit(
         mask_stmt,
         ctx=OirToNpir.ComputationContext(),
-        h_ctx=OirToNpir.HorizontalContext(),
         parallel_k=parallel_k,
     )
     assert isinstance(mask_block.mask, npir.FieldSlice)
@@ -127,7 +126,6 @@ def test_mask_propagation(parallel_k):
     mask_block = OirToNpir().visit(
         mask_stmt,
         ctx=OirToNpir.ComputationContext(),
-        h_ctx=OirToNpir.HorizontalContext(),
         parallel_k=parallel_k,
     )
     assert mask_block.body[0].mask == mask_block.mask
@@ -144,9 +142,7 @@ def test_assign_stmt_to_vector_assign(parallel_k):
     )
 
     ctx = OirToNpir.ComputationContext()
-    v_assign = OirToNpir().visit(
-        assign_stmt, ctx=ctx, h_ctx=OirToNpir.HorizontalContext(), parallel_k=parallel_k, mask=None
-    )
+    v_assign = OirToNpir().visit(assign_stmt, ctx=ctx, parallel_k=parallel_k, mask=None)
     assert isinstance(v_assign, npir.VectorAssign)
     assert v_assign.left.k_offset.parallel is parallel_k
     assert v_assign.right.k_offset.parallel is parallel_k
@@ -164,9 +160,7 @@ def test_temp_assign(parallel_k):
         ),
     )
     ctx = OirToNpir.ComputationContext(symbol_table={"a": TemporaryFactory(name="a")})
-    _ = OirToNpir().visit(
-        assign_stmt, ctx=ctx, h_ctx=OirToNpir.HorizontalContext(), parallel_k=parallel_k, mask=None
-    )
+    _ = OirToNpir().visit(assign_stmt, ctx=ctx, parallel_k=parallel_k, mask=None)
     assert len(ctx.temp_defs) == 1
     assert isinstance(ctx.temp_defs["a"].left, npir.VectorTemp)
     assert isinstance(ctx.temp_defs["a"].right, npir.EmptyTemp)
@@ -180,10 +174,7 @@ def test_field_access_to_field_slice(parallel_k):
     )
 
     ctx = OirToNpir.ComputationContext()
-    h_ctx = OirToNpir.HorizontalContext()
-    parallel_field_slice = OirToNpir().visit(
-        field_access, ctx=ctx, h_ctx=h_ctx, parallel_k=parallel_k
-    )
+    parallel_field_slice = OirToNpir().visit(field_access, ctx=ctx, parallel_k=parallel_k)
     assert parallel_field_slice.k_offset.parallel is parallel_k
     assert parallel_field_slice.i_offset.offset.value == -1
 
@@ -245,6 +236,5 @@ def test_native_func_call():
         oir_node,
         parallel_k=True,
         ctx=OirToNpir.ComputationContext(),
-        h_ctx=OirToNpir.HorizontalContext(),
     )
     assert isinstance(result, npir.VectorExpression)

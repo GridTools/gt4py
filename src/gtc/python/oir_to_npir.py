@@ -11,26 +11,6 @@ from .. import common, oir
 from . import npir
 
 
-@dataclass
-class Padding:
-    lower: List[int] = field(default_factory=lambda: [0, 0, 0])
-    upper: List[int] = field(default_factory=lambda: [0, 0, 0])
-
-    def add_offset(self, axis: int, value: int) -> "Padding":
-        if value > 0:
-            current_value = self.upper[axis]
-            self.upper[axis] = max(current_value, value)
-        elif value < 0:
-            current_value = self.lower[axis]
-            self.lower[axis] = max(current_value, abs(value))
-        return self
-
-    def add_offsets(self, i: int, j: int, k: int) -> "Padding":
-        for axis_index, value in enumerate([i, j, k]):
-            self.add_offset(axis_index, value)
-        return self
-
-
 class OirToNpir(NodeTranslator):
     """Lower from optimizable IR (OIR) to numpy IR (NPIR)."""
 
@@ -40,26 +20,11 @@ class OirToNpir(NodeTranslator):
 
         symbol_table: Dict[str, Any] = field(default_factory=lambda: {})
 
-        domain_padding: Padding = field(default_factory=lambda: Padding())
-
-        field_padding: Dict[str, Padding] = field(default_factory=lambda: {})
-
         temp_defs: typing.OrderedDict[str, npir.VectorAssign] = field(
             default_factory=lambda: OrderedDict({})
         )
 
         mask_temp_counter: int = 0
-
-        def add_offset(self, name: str, axis: int, value: int) -> "OirToNpir.ComputationContext":
-            fpad = self.field_padding.setdefault(name, Padding())
-            self.domain_padding.add_offset(axis, value)
-            fpad.add_offset(axis, value)
-            return self
-
-        def add_offsets(self, name: str, i: int, j: int, k: int) -> "OirToNpir.ComputationContext":
-            for axis_index, value in enumerate([i, j, k]):
-                self.add_offset(name, axis_index, value)
-            return self
 
         def ensure_temp_defined(self, temp: Union[oir.FieldAccess, npir.FieldSlice]) -> None:
             if temp.name not in self.temp_defs:
@@ -67,17 +32,6 @@ class OirToNpir(NodeTranslator):
                     left=npir.VectorTemp(name=str(temp.name), dtype=temp.dtype),
                     right=npir.EmptyTemp(dtype=temp.dtype),
                 )
-
-    @dataclass
-    class HorizontalContext:
-        """Context for a single HorizontalExecution."""
-
-        padding: Padding = field(default_factory=lambda: Padding())
-
-        def add_offsets(self, i: int, j: int) -> "OirToNpir.HorizontalContext":
-            for axis_index, value in enumerate([i, j, 0]):
-                self.padding.add_offset(axis_index, value)
-            return self
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
         ctx = self.ComputationContext(symbol_table=node.symtable_)
@@ -98,10 +52,6 @@ class OirToNpir(NodeTranslator):
         return npir.Computation(
             field_decls=field_decls,
             field_params=field_names,
-            field_paddings={
-                key: {"lower": val.lower, "upper": val.upper}
-                for key, val in ctx.field_padding.items()
-            },
             params=[decl.name for decl in node.params],
             vertical_passes=vertical_passes,
         )
@@ -144,12 +94,10 @@ class OirToNpir(NodeTranslator):
         node: oir.HorizontalExecution,
         *,
         ctx: Optional[ComputationContext] = None,
-        h_ctx: Optional[HorizontalContext] = None,
         **kwargs: Any,
     ) -> npir.HorizontalRegion:
-        h_ctx = h_ctx or self.HorizontalContext()
         return npir.HorizontalRegion(
-            body=self.visit(node.body, ctx=ctx, h_ctx=h_ctx, **kwargs),
+            body=self.visit(node.body, ctx=ctx, **kwargs),
         )
 
     def visit_MaskStmt(
@@ -157,13 +105,10 @@ class OirToNpir(NodeTranslator):
         node: oir.MaskStmt,
         *,
         ctx: ComputationContext,
-        h_ctx: Optional[HorizontalContext] = None,
         parallel_k: bool,
         **kwargs,
     ) -> npir.MaskBlock:
-        mask_expr = self.visit(
-            node.mask, ctx=ctx, h_ctx=h_ctx, parallel_k=parallel_k, broadcast=True, **kwargs
-        )
+        mask_expr = self.visit(node.mask, ctx=ctx, parallel_k=parallel_k, broadcast=True, **kwargs)
         if isinstance(mask_expr, npir.FieldSlice):
             mask_name = mask_expr.name
             mask = mask_expr
@@ -177,9 +122,7 @@ class OirToNpir(NodeTranslator):
         return npir.MaskBlock(
             mask=mask_expr,
             mask_name=mask_name,
-            body=self.visit(
-                node.body, ctx=ctx, h_ctx=h_ctx, parallel_k=parallel_k, mask=mask, **kwargs
-            ),
+            body=self.visit(node.body, ctx=ctx, parallel_k=parallel_k, mask=mask, **kwargs),
         )
 
     def visit_AssignStmt(
@@ -220,24 +163,9 @@ class OirToNpir(NodeTranslator):
         node: oir.FieldAccess,
         *,
         ctx: ComputationContext,
-        h_ctx: HorizontalContext,
         parallel_k: bool,
         **kwargs: Any,
     ) -> npir.FieldSlice:
-        if not isinstance(ctx.symbol_table.get(node.name, None), oir.Temporary):
-            k_offset = node.offset.k
-            if (lower_k := kwargs.get("lower_k")) and k_offset < 0:
-                if lower_k.level is common.LevelMarker.START:
-                    k_offset = min(k_offset + lower_k.offset, 0)
-                else:
-                    k_offset = 0
-            if (upper_k := kwargs.get("upper_k")) and k_offset > 0:
-                if upper_k.level is common.LevelMarker.END:
-                    k_offset = max(k_offset - upper_k.offset, 0)
-                else:
-                    k_offset = 0
-            ctx.add_offsets(str(node.name), node.offset.i, node.offset.j, k_offset)
-            h_ctx.add_offsets(node.offset.i, node.offset.j)
         dims = decl.dimensions if (decl := ctx.symbol_table.get(node.name)) else (True, True, True)
         return npir.FieldSlice(
             name=str(node.name),

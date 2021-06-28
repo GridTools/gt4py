@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, List, Optional, Tuple, Union, cast
 
 from pydantic import validator
 
@@ -152,9 +152,6 @@ class VerticalPass(common.LocNode):
 class Computation(common.LocNode, eve.SymbolTableTrait):
     field_decls: List[FieldDecl]
     field_params: List[str]
-    field_paddings: Optional[
-        Dict[str, Dict[str, Tuple[int, int, int]]]
-    ] = None  # TODO (ricoh): probably delete
     params: List[str]
     vertical_passes: List[VerticalPass]
 
