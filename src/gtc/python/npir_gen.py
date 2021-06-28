@@ -24,6 +24,39 @@ def op_delta_from_int(value: int) -> Tuple[str, str]:
     return operator, delta
 
 
+ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
+    """\
+    class ShimmedView:
+        def __init__(self, field, offsets):
+            self.field = field
+            self.offsets = offsets
+
+        def shim_key(self, key):
+            new_args = []
+            if not isinstance(key, tuple):
+                key = (key, )
+            for dim, idx in enumerate(key):
+                if self.offsets[dim] == 0:
+                    new_args.append(idx)
+                elif isinstance(idx, slice):
+                    start = 0 if idx.start is None else idx.start
+                    stop = -1 if idx.stop is None else idx.stop
+                    new_args.append(
+                        slice(start + self.offsets[dim], stop + self.offsets[dim], idx.step)
+                    )
+                else:
+                    new_args.append(idx + self.offsets[dim])
+            return tuple(new_args)
+
+        def __getitem__(self, key):
+            return self.field.__getitem__(self.shim_key(key))
+
+        def __setitem__(self, key, value):
+            return self.field.__setitem__(self.shim_key(key), value)
+    """
+)
+
+
 class NpirGen(TemplatedGenerator):
     def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
         return f"np.{node.name.lower()}"
@@ -239,48 +272,11 @@ class NpirGen(TemplatedGenerator):
     ) -> Union[str, Collection[str]]:
         signature = ["*", *node.params, "_domain_", "_origin_"]
         kwargs["field_extents"] = field_extents
-        kwargs["symtable"] = node.symtable_
-        data_views = JinjaTemplate(
-            textwrap.dedent(
-                """\
-                # -- begin data views --
-                class ShimmedView:
-                    def __init__(self, field, offsets):
-                        self.field = field
-                        self.offsets = offsets
-
-                    def shim_key(self, key):
-                        new_args = []
-                        if not isinstance(key, tuple):
-                            key = (key, )
-                        for dim, idx in enumerate(key):
-                            if self.offsets[dim] == 0:
-                                new_args.append(idx)
-                            elif isinstance(idx, slice):
-                                start = 0 if idx.start is None else idx.start
-                                stop = -1 if idx.stop is None else idx.stop
-                                new_args.append(
-                                    slice(start + self.offsets[dim], stop + self.offsets[dim], idx.step)
-                                )
-                            else:
-                                new_args.append(idx + self.offsets[dim])
-                        return tuple(new_args)
-
-                    def __getitem__(self, key):
-                        return self.field.__getitem__(self.shim_key(key))
-
-                    def __setitem__(self, key, value):
-                        return self.field.__setitem__(self.shim_key(key), value)
-
-                {% for name in field_params %}{{ name }}_ = ShimmedView({{ name }}, _origin_["{{ name }}"])
-                {% endfor %}# -- end data views --
-                """
-            )
-        ).render(
-            field_params=node.field_params,
-        )
         return self.generic_visit(
-            node, signature=", ".join(signature), data_views=data_views, **kwargs
+            node,
+            signature=", ".join(signature),
+            data_view_class=ORIGIN_CORRECTED_VIEW_CLASS,
+            **kwargs,
         )
 
     Computation = JinjaTemplate(
@@ -298,7 +294,11 @@ class NpirGen(TemplatedGenerator):
 
                 {% for decl in field_decls %}{{ decl | indent(4) }}
                 {% endfor %}
-                {{ data_views | indent(4) }}
+                # -- begin data views --
+                {{ data_view_class | indent(4) }}
+                {% for name in field_params %}{{ name }}_ = ShimmedView({{ name }}, _origin_["{{ name }}"])
+                {% endfor %}# -- end data views --
+
                 {% for pass in vertical_passes %}
                 {{ pass | indent(4) }}
                 {% endfor %}
