@@ -95,8 +95,8 @@ class OirToNpir(NodeTranslator):
         *,
         ctx: Optional[ComputationContext] = None,
         **kwargs: Any,
-    ) -> npir.HorizontalRegion:
-        return npir.HorizontalRegion(
+    ) -> npir.HorizontalBlock:
+        return npir.HorizontalBlock(
             body=self.visit(node.body, ctx=ctx, **kwargs),
         )
 

@@ -137,12 +137,12 @@ class MaskBlock(common.Stmt):
     body: List[VectorAssign]
 
 
-class HorizontalRegion(common.LocNode):
+class HorizontalBlock(common.LocNode):
     body: List[Union[VectorAssign, MaskBlock]]
 
 
 class VerticalPass(common.LocNode):
-    body: List[HorizontalRegion]
+    body: List[HorizontalBlock]
     temp_defs: List[VectorAssign]
     lower: common.AxisBound
     upper: common.AxisBound

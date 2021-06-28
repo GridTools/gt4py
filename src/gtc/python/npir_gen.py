@@ -230,17 +230,17 @@ class NpirGen(TemplatedGenerator):
     VerticalPass = JinjaTemplate(
         textwrap.dedent(
             """\
-            # -- begin vertical region --
+            # -- begin vertical block --
             {% for assign in temp_defs %}{{ assign }}
             {% endfor %}k, K = {{ lower }}, {{ upper }}{{ for_loop_line }}
-            {% for hregion in body %}{{ hregion | indent(body_indent, first=True) }}
-            {% endfor %}# -- end vertical region --
+            {% for hblock in body %}{{ hblock | indent(body_indent, first=True) }}
+            {% endfor %}# -- end vertical block --
             """
         )
     )
 
-    def visit_HorizontalRegion(
-        self, node: npir.HorizontalRegion, **kwargs
+    def visit_HorizontalBlock(
+        self, node: npir.HorizontalBlock, **kwargs
     ) -> Union[str, Collection[str]]:
         lower, upper = [0, 0], [0, 0]
 
@@ -254,14 +254,14 @@ class NpirGen(TemplatedGenerator):
             upper[1] = min(extents[field].to_boundary()[1][1] for field in fields)
         return self.generic_visit(node, h_lower=lower, h_upper=upper, **kwargs)
 
-    HorizontalRegion = JinjaTemplate(
+    HorizontalBlock = JinjaTemplate(
         textwrap.dedent(
             """
-            # --- begin horizontal region --
+            # --- begin horizontal block --
             i, I = _di_ - {{ h_lower[0] }}, _dI_ + {{ h_upper[0] }}
             j, J = _dj_ - {{ h_lower[1] }}, _dJ_ + {{ h_upper[1] }}
             {% for assign in body %}{{ assign }}
-            {% endfor %}# --- end horizontal region --
+            {% endfor %}# --- end horizontal block --
 
             """
         )

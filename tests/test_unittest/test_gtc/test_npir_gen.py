@@ -340,7 +340,7 @@ def test_full_computation_valid(tmp_path) -> None:
                     upper=common.AxisBound.end(),
                     direction=common.LoopOrder.PARALLEL,
                     body=[
-                        npir.HorizontalRegion(
+                        npir.HorizontalBlock(
                             body=[
                                 npir.VectorAssign(
                                     left=FieldSliceFactory(name="f1", parallel_k=True),
@@ -364,7 +364,7 @@ def test_full_computation_valid(tmp_path) -> None:
                     upper=common.AxisBound.from_end(offset=-3),
                     direction=common.LoopOrder.BACKWARD,
                     body=[
-                        npir.HorizontalRegion(
+                        npir.HorizontalBlock(
                             body=[
                                 npir.VectorAssign(
                                     left=FieldSliceFactory(name="f2", parallel_k=False),
