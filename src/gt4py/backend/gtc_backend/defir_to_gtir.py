@@ -58,14 +58,15 @@ class CheckHorizontalRegionAccesses(eve.NodeVisitor):
     """
 
     def visit_Stencil(self, node: gtir.Stencil) -> None:
-        self.param_names = [decl.name for decl in node.params]
-        self.visit(node.vertical_loops)
+        self.visit(node.vertical_loops, param_names=[decl.name for decl in node.params])
 
-    def visit_HorizontalRegion(self, node: gtir.HorizontalRegion) -> None:
+    def visit_HorizontalRegion(
+        self, node: gtir.HorizontalRegion, *, param_names: List[str]
+    ) -> None:
         fields_accessed = (
             node.block.iter_tree().if_isinstance(gtir.FieldAccess).getattr("name").to_set()
         )
-        if any(name not in self.param_names for name in fields_accessed):
+        if any(name not in param_names for name in fields_accessed):
             raise ValueError("Cannot reference non-API field in HorizontalRegion")
 
 
