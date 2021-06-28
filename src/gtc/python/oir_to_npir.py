@@ -104,10 +104,6 @@ class OirToNpir(NodeTranslator):
             },
             params=[decl.name for decl in node.params],
             vertical_passes=vertical_passes,
-            domain_padding=npir.DomainPadding(
-                lower=ctx.domain_padding.lower,
-                upper=ctx.domain_padding.upper,
-            ),
         )
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs) -> List[npir.VerticalPass]:
@@ -154,7 +150,6 @@ class OirToNpir(NodeTranslator):
         h_ctx = h_ctx or self.HorizontalContext()
         return npir.HorizontalRegion(
             body=self.visit(node.body, ctx=ctx, h_ctx=h_ctx, **kwargs),
-            padding=npir.DomainPadding(lower=h_ctx.padding.lower, upper=h_ctx.padding.upper),
         )
 
     def visit_MaskStmt(

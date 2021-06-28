@@ -197,11 +197,11 @@ class NpirGen(TemplatedGenerator):
     VerticalPass = JinjaTemplate(
         textwrap.dedent(
             """\
-            ## -- begin vertical region --
+            # -- begin vertical region --
             {% for assign in temp_defs %}{{ assign }}
             {% endfor %}k, K = {{ lower }}, {{ upper }}{{ for_loop_line }}
             {% for hregion in body %}{{ hregion | indent(body_indent, first=True) }}
-            {% endfor %}## -- end vertical region --
+            {% endfor %}# -- end vertical region --
             """
         )
     )
@@ -209,17 +209,7 @@ class NpirGen(TemplatedGenerator):
     def visit_HorizontalRegion(
         self, node: npir.HorizontalRegion, **kwargs
     ) -> Union[str, Collection[str]]:
-        domain_padding = kwargs.get(
-            "c_domain_padding", npir.DomainPadding(lower=(0, 0, 0), upper=(0, 0, 0))
-        )
-        lower = [
-            domain_padding.lower[0] - node.padding.lower[0],
-            domain_padding.lower[1] - node.padding.lower[1],
-        ]
-        upper = [
-            domain_padding.upper[0] - node.padding.upper[0],
-            domain_padding.upper[1] - node.padding.upper[1],
-        ]
+        lower, upper = [0, 0], [0, 0]
 
         if extents := kwargs.get("field_extents"):
             fields = set(node.iter_tree().if_isinstance(npir.FieldSlice).getattr("name")) & set(
@@ -234,23 +224,12 @@ class NpirGen(TemplatedGenerator):
     HorizontalRegion = JinjaTemplate(
         textwrap.dedent(
             """
-            ## --- begin horizontal region --
+            # --- begin horizontal region --
             i, I = _di_ - {{ h_lower[0] }}, _dI_ + {{ h_upper[0] }}
             j, J = _dj_ - {{ h_lower[1] }}, _dJ_ + {{ h_upper[1] }}
             {% for assign in body %}{{ assign }}
-            {% endfor %}## --- end horizontal region --
+            {% endfor %}# --- end horizontal region --
 
-            """
-        )
-    )
-
-    DomainPadding = FormatTemplate(
-        textwrap.dedent(
-            """\
-            ## -- begin domain padding --
-            _di_, _dj_, _dk_ = 0, 0, 0
-            _dI_, _dJ_, _dK_ = _domain_
-            ## -- end domain padding --
             """
         )
     )
@@ -299,9 +278,7 @@ class NpirGen(TemplatedGenerator):
             )
         ).render(
             field_params=node.field_params,
-            lower=node.domain_padding.lower,
         )
-        kwargs["c_domain_padding"] = node.domain_padding
         return self.generic_visit(
             node, signature=", ".join(signature), data_views=data_views, **kwargs
         )
@@ -313,7 +290,12 @@ class NpirGen(TemplatedGenerator):
 
 
             def run({{ signature }}):
-                {{ domain_padding | indent(4) }}
+
+                # -- begin domain boundary shortcuts --
+                _di_, _dj_, _dk_ = 0, 0, 0
+                _dI_, _dJ_, _dK_ = _domain_
+                # -- end domain padding --
+
                 {% for decl in field_decls %}{{ decl | indent(4) }}
                 {% endfor %}
                 {{ data_views | indent(4) }}

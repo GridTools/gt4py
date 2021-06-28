@@ -108,8 +108,6 @@ def test_horizontal_execution_to_vector_assigns():
     horizontal_execution = HorizontalExecutionFactory(body=[])
     horizontal_region = OirToNpir().visit(horizontal_execution)
     assert horizontal_region.body == []
-    assert horizontal_region.padding.lower == (0, 0, 0)
-    assert horizontal_region.padding.upper == (0, 0, 0)
 
 
 def test_mask_stmt_to_mask_block(parallel_k):
@@ -188,30 +186,6 @@ def test_field_access_to_field_slice(parallel_k):
     )
     assert parallel_field_slice.k_offset.parallel is parallel_k
     assert parallel_field_slice.i_offset.offset.value == -1
-    assert ctx.domain_padding.lower[0] == 1
-    assert ctx.domain_padding.upper[1] == 2
-    assert h_ctx.padding.lower[0] == 1
-    assert h_ctx.padding.upper[1] == 2
-
-    # ctx.domain_padding should be correctly extended when visiting another field access
-    OirToNpir().visit(
-        oir.FieldAccess(
-            name="b",
-            offset=common.CartesianOffset(i=-2, j=-1, k=4),
-            dtype=common.DataType.FLOAT64,
-        ),
-        ctx=ctx,
-        h_ctx=h_ctx,
-        parallel_k=parallel_k,
-    )
-    assert ctx.domain_padding.lower[0] == 2
-    assert ctx.domain_padding.lower[1] == 1
-    assert h_ctx.padding.lower[0] == 2
-    assert h_ctx.padding.lower[1] == 1
-    assert ctx.domain_padding.upper[1] == 2
-    assert ctx.domain_padding.upper[2] == 4
-    assert h_ctx.padding.upper[1] == 2
-    assert h_ctx.padding.upper[2] == 0  # horizontal context does not contain vertical padding
 
 
 def test_binary_op_to_vector_arithmetic():

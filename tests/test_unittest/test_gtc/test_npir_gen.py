@@ -299,34 +299,9 @@ def test_vertical_pass_temp_def() -> None:
     assert match
 
 
-def test_domain_padding() -> None:
-    result = npir_gen.NpirGen().visit(
-        npir.DomainPadding(
-            lower=(1, 2, 0),
-            upper=(0, 6, 2),
-        )
-    )
-    print(result)
-    match = re.match(
-        (
-            r"(#.*?\n)?"
-            r"_di_, _dj_, _dk_ = \d*?, \d*?, \d*?\n"
-            r"_dI_, _dJ_, _dK_ = _domain_\n"
-            r"(#.*?\n)?"
-        ),
-        result,
-        re.MULTILINE,
-    )
-    assert match
-
-
 def test_computation() -> None:
     result = npir_gen.NpirGen().visit(
         npir.Computation(
-            domain_padding=npir.DomainPadding(
-                lower=(0, 0, 0),
-                upper=(0, 0, 0),
-            ),
             params=[],
             field_params=[],
             field_decls=[],
@@ -351,10 +326,6 @@ def test_computation() -> None:
 def test_full_computation_valid(tmp_path) -> None:
     result = npir_gen.NpirGen.apply(
         npir.Computation(
-            domain_padding=npir.DomainPadding(
-                lower=(2, 2, 0),
-                upper=(0, 3, 1),
-            ),
             field_paddings={
                 "f1": {"lower": (0, 0, 0), "upper": (0, 0, 0)},
                 "f2": {"lower": (2, 2, 0), "upper": (0, 0, 0)},
@@ -375,10 +346,6 @@ def test_full_computation_valid(tmp_path) -> None:
                     direction=common.LoopOrder.PARALLEL,
                     body=[
                         npir.HorizontalRegion(
-                            padding=npir.DomainPadding(
-                                lower=(2, 2, 0),
-                                upper=(0, 3, 0),
-                            ),
                             body=[
                                 npir.VectorAssign(
                                     left=FieldSliceFactory(name="f1", parallel_k=True),
@@ -403,7 +370,6 @@ def test_full_computation_valid(tmp_path) -> None:
                     direction=common.LoopOrder.BACKWARD,
                     body=[
                         npir.HorizontalRegion(
-                            padding=npir.DomainPadding(lower=(0, 0, 0), upper=(0, 0, 0)),
                             body=[
                                 npir.VectorAssign(
                                     left=FieldSliceFactory(name="f2", parallel_k=False),

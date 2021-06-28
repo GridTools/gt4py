@@ -137,21 +137,8 @@ class MaskBlock(common.Stmt):
     body: List[VectorAssign]
 
 
-# TODO (ricoh): probably not needed
-class DomainPadding(eve.Node):
-    lower: Tuple[int, int, int]
-    upper: Tuple[int, int, int]
-
-
-# TODO (ricoh): dead code, delete
-class HorizontalExtent(eve.Node):
-    lower: Tuple[int, int]
-    upper: Tuple[int, int]
-
-
 class HorizontalRegion(common.LocNode):
     body: List[Union[VectorAssign, MaskBlock]]
-    padding: Optional[DomainPadding] = None
 
 
 class VerticalPass(common.LocNode):
@@ -170,7 +157,6 @@ class Computation(common.LocNode, eve.SymbolTableTrait):
     ] = None  # TODO (ricoh): probably delete
     params: List[str]
     vertical_passes: List[VerticalPass]
-    domain_padding: DomainPadding  # TODO (ricoh): probably delete
 
 
 class NativeFuncCall(common.NativeFuncCall[Expr], VectorExpression):
