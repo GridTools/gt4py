@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Set, Union, cast
 
 import eve
 from gt4py.ir import IRNodeVisitor
@@ -52,22 +52,30 @@ from gtc.common import ExprKind
 
 
 class CheckHorizontalRegionAccesses(eve.NodeVisitor):
-    """Ensure that FieldAccess nodes in HorizontalRegions reference only API parameters.
+    """Ensure that FieldAccess nodes in HorizontalRegions access up-to-date memory."""
 
-    TODO(johannd): Move this to a frontend check if still needed later.
-    """
+    def visit_VerticalLoop(self, node: gtir.VerticalLoop) -> None:
+        self.visit(node.body, fields_set=set())
 
-    def visit_Stencil(self, node: gtir.Stencil) -> None:
-        self.visit(node.vertical_loops, param_names=[decl.name for decl in node.params])
+    def visit_HorizontalRegion(self, node: gtir.HorizontalRegion, *, fields_set: Set[str]) -> None:
+        self.visit(node.body, fields_set=fields_set, inside_region=True)
 
-    def visit_HorizontalRegion(
-        self, node: gtir.HorizontalRegion, *, param_names: List[str]
+    def visit_ParAssignStmt(
+        self, node: gtir.FieldAccess, *, fields_set: Set[str], **kwargs
     ) -> None:
-        fields_accessed = (
-            node.block.iter_tree().if_isinstance(gtir.FieldAccess).getattr("name").to_set()
-        )
-        if any(name not in param_names for name in fields_accessed):
-            raise ValueError("Cannot reference non-API field in HorizontalRegion")
+        self.visit(node.right, fields_set=fields_set, **kwargs)
+        fields_set.add(node.left.name)
+
+    def visit_FieldAccess(
+        self,
+        node: gtir.FieldAccess,
+        *,
+        fields_set: Set[str],
+        inside_region: bool = False,
+    ) -> None:
+        if inside_region and not node.offset.is_zero() and node.name in fields_set:
+            # This access will potentially read memory that has not been updated yet
+            raise ValueError(f"Race condition detected on read of {node.name}")
 
 
 def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:

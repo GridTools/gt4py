@@ -308,6 +308,9 @@ class CartesianOffset(Node):
     def to_dict(self) -> Dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.k}
 
+    def is_zero(self) -> bool:
+        return all(x == 0 for x in self.to_dict().values())
+
 
 class ScalarAccess(LocNode):
     name: SymbolRef
