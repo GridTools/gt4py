@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import Any, List, Union
+from typing import Any, List
 
 from eve import NodeTranslator
 from gtc import gtir, oir
@@ -69,7 +69,7 @@ class GTIRToOIR(NodeTranslator):
 
     def _add_assign_stmt(
         self,
-        node: Union[gtir.ParAssignStmt, gtir.SerialAssignStmt],
+        node: gtir.ParAssignStmt,
         ctx: Context,
         mask: oir.Expr = None,
     ) -> None:
