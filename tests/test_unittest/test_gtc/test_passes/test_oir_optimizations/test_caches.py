@@ -139,12 +139,39 @@ def test_k_cache_detection_single_access_point():
 def test_prune_k_cache_fills_forward():
     testee = VerticalLoopFactory(
         loop_order=LoopOrder.FORWARD,
-        sections__0__horizontal_executions__0__body=[
-            AssignStmtFactory(left__name="foo", right__name="foo", right__offset__k=1),
-            AssignStmtFactory(left__name="bar", right__name="bar"),
-            AssignStmtFactory(left__name="baz", right__name="baz", right__offset__k=-1),
-            AssignStmtFactory(left__name="barbaz", right__name="bar"),
-            AssignStmtFactory(left__name="barbaz", right__name="barbaz", right__offset__k=-1),
+        sections=[
+            VerticalLoopSectionFactory(
+                horizontal_executions__0__body=[
+                    AssignStmtFactory(left__name="foo"),
+                    AssignStmtFactory(left__name="bar"),
+                    AssignStmtFactory(left__name="barbaz"),
+                    AssignStmtFactory(left__name="barbaz"),
+                ],
+                interval__end=AxisBound.from_start(1),
+            ),
+            VerticalLoopSectionFactory(
+                horizontal_executions__0__body=[
+                    AssignStmtFactory(left__name="foo", right__name="foo", right__offset__k=1),
+                    AssignStmtFactory(left__name="bar", right__name="bar"),
+                    AssignStmtFactory(left__name="baz", right__name="baz", right__offset__k=-1),
+                    AssignStmtFactory(left__name="barbaz", right__name="bar"),
+                    AssignStmtFactory(
+                        left__name="barbaz", right__name="barbaz", right__offset__k=-1
+                    ),
+                ],
+                interval__start=AxisBound.from_start(1),
+                interval__end=AxisBound.from_end(-1),
+            ),
+            VerticalLoopSectionFactory(
+                horizontal_executions__0__body=[
+                    AssignStmtFactory(left__name="foo"),
+                    AssignStmtFactory(left__name="bar"),
+                    AssignStmtFactory(left__name="baz"),
+                    AssignStmtFactory(left__name="barbaz"),
+                    AssignStmtFactory(left__name="barbaz"),
+                ],
+                interval__start=AxisBound.from_end(-1),
+            ),
         ],
         caches=[
             KCacheFactory(name="foo", fill=True),
@@ -161,15 +188,61 @@ def test_prune_k_cache_fills_forward():
     assert not cache_dict["barbaz"].fill
 
 
+def test_prune_k_cache_fills_forward_with_reads_outside_interval():
+    testee = VerticalLoopFactory(
+        loop_order=LoopOrder.FORWARD,
+        sections__0=VerticalLoopSectionFactory(
+            horizontal_executions__0__body=[
+                AssignStmtFactory(left__name="foo", right__name="foo", right__offset__k=-1),
+            ],
+            interval__start=AxisBound.from_start(1),
+        ),
+        caches=[
+            KCacheFactory(name="foo", fill=True),
+        ],
+    )
+    transformed = PruneKCacheFills().visit(testee)
+    cache_dict = {c.name: c for c in transformed.caches}
+    assert cache_dict["foo"].fill
+
+
 def test_prune_k_cache_fills_backward():
     testee = VerticalLoopFactory(
         loop_order=LoopOrder.BACKWARD,
-        sections__0__horizontal_executions__0__body=[
-            AssignStmtFactory(left__name="foo", right__name="foo", right__offset__k=-1),
-            AssignStmtFactory(left__name="bar", right__name="bar", right__offset__k=0),
-            AssignStmtFactory(left__name="baz", right__name="baz", right__offset__k=1),
-            AssignStmtFactory(left__name="barbaz", right__name="bar"),
-            AssignStmtFactory(left__name="barbaz", right__name="barbaz", right__offset__k=1),
+        sections=[
+            VerticalLoopSectionFactory(
+                horizontal_executions__0__body=[
+                    AssignStmtFactory(left__name="foo"),
+                    AssignStmtFactory(left__name="bar"),
+                    AssignStmtFactory(left__name="baz"),
+                    AssignStmtFactory(left__name="barbaz"),
+                    AssignStmtFactory(left__name="barbaz"),
+                ],
+                interval__start=AxisBound.from_end(-1),
+            ),
+            VerticalLoopSectionFactory(
+                horizontal_executions__0__body=[
+                    AssignStmtFactory(left__name="foo", right__name="foo", right__offset__k=-1),
+                    AssignStmtFactory(left__name="bar", right__name="bar"),
+                    AssignStmtFactory(left__name="baz", right__name="baz", right__offset__k=1),
+                    AssignStmtFactory(left__name="barbaz", right__name="bar"),
+                    AssignStmtFactory(
+                        left__name="barbaz", right__name="barbaz", right__offset__k=1
+                    ),
+                ],
+                interval__start=AxisBound.from_start(1),
+                interval__end=AxisBound.from_end(-1),
+            ),
+            VerticalLoopSectionFactory(
+                horizontal_executions__0__body=[
+                    AssignStmtFactory(left__name="foo"),
+                    AssignStmtFactory(left__name="bar"),
+                    AssignStmtFactory(left__name="baz"),
+                    AssignStmtFactory(left__name="barbaz"),
+                    AssignStmtFactory(left__name="barbaz"),
+                ],
+                interval__end=AxisBound.from_start(1),
+            ),
         ],
         caches=[
             KCacheFactory(name="foo", fill=True),
