@@ -71,8 +71,5 @@ Further points to be considered are:
   cleaning up the remaining issues.  The remaining issues must be small
   compared to the size of the PR.
 
-- Any comments about future work required (``#todo`` and other fixme-style
-  comments) should be either addressed before merging or deleted after an issue
-  is opened describing the future changes.
 
 .. _pre-commit-config: https://github.com/GridTools/gt4py/blob/master/.pre-commit-config.yaml
