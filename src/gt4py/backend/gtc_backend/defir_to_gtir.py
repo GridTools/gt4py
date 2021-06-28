@@ -231,9 +231,7 @@ class DefIRToGTIR(IRNodeVisitor):
             block=gtir.BlockStmt(body=self.visit(node.body)),
         )
 
-    def visit_Assign(
-        self, node: Assign, **kwargs: Any
-    ) -> Union[gtir.ParAssignStmt, gtir.SerialAssignStmt]:
+    def visit_Assign(self, node: Assign, **kwargs: Any) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
         return gtir.ParAssignStmt(left=self.visit(node.target), right=self.visit(node.value))
 
