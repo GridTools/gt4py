@@ -94,7 +94,12 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     Cast = as_fmt("static_cast<{dtype}>({expr})")
 
-    For = as_fmt("for(i = {start}; i < {end}; i += {inc}) {body}")
+    def visit_For(self, node: gtcpp.For, **kwargs):
+        op = "<" if node.inc > 0 else ">"
+        start = self.visit(node.start, **kwargs)
+        end = self.visit(node.end, **kwargs)
+        body = self.visit(node.body, **kwargs)
+        return f"for({node.target_name} = {start}; {node.target_name} {op} {end}; {node.target_name} += {node.inc}) {body}"
 
     def visit_BuiltInLiteral(self, builtin: BuiltInLiteral, **kwargs: Any) -> str:
         if builtin == BuiltInLiteral.TRUE:
