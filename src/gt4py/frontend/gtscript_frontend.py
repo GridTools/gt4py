@@ -1030,7 +1030,15 @@ class IRMaker(ast.NodeVisitor):
         stmts = list(itertools.chain(*(gt_utils.listify(self.visit(stmt)) for stmt in node.body)))
         assert all(isinstance(item, gt_ir.Statement) for item in stmts)
 
+        result = []
+        if len(self.decls_stack) == 1:
+            result.extend(self.decls_stack.pop())
+        elif len(self.decls_stack) > 1:
+            self.decls_stack[-2].extend(self.decls_stack[-1])
+            self.decls_stack.pop()
+
         return [
+            *result,
             gt_ir.For(
                 target=target_decl,
                 start=start_expr,
