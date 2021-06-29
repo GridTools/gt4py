@@ -948,3 +948,29 @@ def test_auto_sync_storage():
 
     q0.device_to_host()
     assert not gt_store.storage.GPUStorage.get_modified_storages()
+
+
+@pytest.mark.requires_gpu
+def test_slice_gpu():
+    stor = gt_store.ones(
+        backend="gtcuda",
+        managed_memory=False,
+        shape=(10, 10, 10),
+        default_origin=(0, 0, 0),
+        dtype=np.float64,
+    )
+    stor.synchronize()
+    view = stor[1:-1, 1:-1, 1:-1]
+
+    gpu_stor = stor._device_field
+    gpu_view = view._device_field
+
+    view_start = gpu_view.data.ptr
+    storage_start = gpu_stor.data.ptr
+
+    view_end = gpu_view[-1:, -1:, -1:].data.ptr
+    storage_end = gpu_stor[-1:, -1:, -1:].data.ptr
+
+    assert view_start > storage_start
+    assert view_end < storage_end
+    # np.testing.assert_equal(cpu_view, gpu_view.as_numpy())
