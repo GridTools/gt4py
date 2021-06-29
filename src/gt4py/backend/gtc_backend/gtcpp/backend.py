@@ -16,9 +16,7 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
-import gtc.utils as gtc_utils
 from eve import codegen
-from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
@@ -33,6 +31,7 @@ from gt4py.backend.gt_backends import (
     mc_is_compatible_layout,
     x86_is_compatible_layout,
 )
+from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
@@ -119,40 +118,14 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                     sid_ndim=sid_ndim,
                 )
             else:
-                make_layout_map = backend.storage_info["layout_map"]
-                layout_map = [
-                    x
-                    for x in make_layout_map(node.dimensions + (True,) * data_ndim)
-                    if x is not None
-                ]
-                sid_def = """gt::as_{sid_type}<{dtype}, {sid_ndim},
-                    gt::integral_constant<int, {unique_index}>,
-                    {unit_stride_dim}>({name})""".format(
-                    sid_type="cuda_sid" if backend.GT_BACKEND_T == "gpu" else "sid",
+                return pybuffer_to_sid(
                     name=node.name,
-                    dtype=self.visit(node.dtype),
-                    unique_index=self.unique_index(),
-                    sid_ndim=sid_ndim,
-                    unit_stride_dim=layout_map.index(max(layout_map)),
+                    ctype=self.visit(node.dtype),
+                    domain_dim_flags=node.dimensions,
+                    data_ndim=len(node.data_dims),
+                    stride_kind_index=self.unique_index(),
+                    backend=backend,
                 )
-                sid_def = "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-                    sid_def=sid_def,
-                    name=node.name,
-                )
-                if domain_ndim != 3:
-                    gt_dims = [
-                        f"gt::stencil::dim::{dim}"
-                        for dim in gtc_utils.dimension_flags_to_names(node.dimensions)
-                    ]
-                    if data_ndim:
-                        gt_dims += [
-                            f"gt::integral_constant<int, {3 + dim}>" for dim in range(data_ndim)
-                        ]
-                    sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
-                        gt_dims=", ".join(gt_dims), sid_def=sid_def
-                    )
-
-                return sid_def
 
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
         if "external_arg" in kwargs:
@@ -172,43 +145,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             **kwargs,
         )
 
-    Program = as_mako(
-        """
-        #include <chrono>
-        #include <pybind11/pybind11.h>
-        #include <pybind11/stl.h>
-        #include <gridtools/storage/adapter/python_sid_adapter.hpp>
-        #include <gridtools/stencil/global_parameter.hpp>
-        #include <gridtools/sid/sid_shift_origin.hpp>
-        #include <gridtools/sid/rename_dimensions.hpp>
-        #include "computation.hpp"
-        namespace gt = gridtools;
-        namespace py = ::pybind11;
-        PYBIND11_MODULE(${module_name}, m) {
-            m.def("run_computation", [](
-            ${','.join(["std::array<gt::uint_t, 3> domain", *entry_params, 'py::object exec_info'])}
-            ){
-                if (!exec_info.is(py::none()))
-                {
-                    auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_start_time"] = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
-                }
-
-                ${name}(domain)(${','.join(sid_params)});
-
-                if (!exec_info.is(py::none()))
-                {
-                    auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_end_time"] = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
-                }
-
-            }, "Runs the given computation");}
-        """
-    )
+    Program = bindings_main_template()
 
     @classmethod
     def apply(cls, root, *, module_name="stencil", **kwargs) -> str:
