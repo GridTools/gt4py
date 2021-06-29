@@ -121,7 +121,7 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
             else:
                 return pybuffer_to_sid(
                     name=node.name,
-                    dtype=self.visit(node.dtype),
+                    ctype=self.visit(node.dtype),
                     domain_dim_flags=node.dimensions,
                     data_ndim=len(node.data_dims),
                     stride_kind_index=self.unique_index(),

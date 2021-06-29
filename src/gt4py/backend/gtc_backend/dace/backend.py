@@ -270,7 +270,7 @@ class DaCeBindingsCodegen:
             data_ndim = len(array.shape) - sum(array_dimensions(array))
             sid_def = pybuffer_to_sid(
                 name=name,
-                dtype=array.dtype.ctype,
+                ctype=array.dtype.ctype,
                 domain_dim_flags=domain_dim_flags,
                 data_ndim=data_ndim,
                 stride_kind_index=self.unique_index(),
