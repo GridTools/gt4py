@@ -32,7 +32,7 @@ def _get_unit_stride_dim(backend, domain_dim_flags, data_ndim):
 def pybuffer_to_sid(
     *,
     name: str,
-    dtype: str,
+    ctype: str,
     domain_dim_flags: Tuple[bool, bool, bool],
     data_ndim: int,
     stride_kind_index: int,
@@ -43,10 +43,10 @@ def pybuffer_to_sid(
 
     as_sid = "as_cuda_sid" if backend.GT_BACKEND_T == "gpu" else "as_sid"
 
-    sid_def = """gt::{as_sid}<{dtype}, {sid_ndim},
+    sid_def = """gt::{as_sid}<{ctype}, {sid_ndim},
         gt::integral_constant<int, {unique_index}>, {unit_stride_dim}>({name})""".format(
         name=name,
-        dtype=dtype,
+        ctype=ctype,
         unique_index=stride_kind_index,
         sid_ndim=sid_ndim,
         as_sid=as_sid,
