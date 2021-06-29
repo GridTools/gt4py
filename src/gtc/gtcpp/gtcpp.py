@@ -129,6 +129,10 @@ class GTApplyMethod(LocNode):
     local_variables: List[LocalVarDecl]
 
 
+class AxisIndex(common.AxisIndex, Expr):
+    pass
+
+
 class For(Stmt):
     target_name: Str
     start: Expr

@@ -960,6 +960,11 @@ class IRMaker(ast.NodeVisitor):
         index = self.visit(node.value)
         return index
 
+    def _parse_vertical_index(self, node: ast.Call) -> gt_ir.AxisIndex:
+        if node.args[0].id != "K":
+            raise GTScriptSyntaxError("Only K is supported")
+        return gt_ir.AxisIndex(name="K")
+
     def _parse_forloop_args_call(self, node: ast.Call) -> list:
         assert isinstance(node, ast.Call)
         assert isinstance(node.func, ast.Name) and node.func.id == "range"
@@ -967,17 +972,23 @@ class IRMaker(ast.NodeVisitor):
         def make_int32_scalar_literal(value: int) -> gt_ir.ScalarLiteral:
             return gt_ir.ScalarLiteral(value=value, data_type=gt_ir.DataType.INT32, loc=None)
 
+        def parse_expression(arg: ast.AST) -> Union[gt_ir.AxisIndex, gt_ir.ScalarLiteral]:
+            if isinstance(arg, ast.Call):
+                return self._parse_vertical_index(arg)
+            else:
+                return make_int32_scalar_literal(ast.literal_eval(arg))
+
         if len(node.args) == 1:
             start_expr = make_int32_scalar_literal(0)
-            stop_expr = make_int32_scalar_literal(ast.literal_eval(node.args[0]))
+            stop_expr = parse_expression(node.args[0])
             step = 1
         elif len(node.args) == 2:
-            start_expr = make_int32_scalar_literal(ast.literal_eval(node.args[0]))
-            stop_expr = make_int32_scalar_literal(ast.literal_eval(node.args[1]))
+            start_expr = parse_expression(node.args[0])
+            stop_expr = parse_expression(node.args[1])
             step = 1
         elif len(node.args) == 3:
-            start_expr = make_int32_scalar_literal(ast.literal_eval(node.args[0]))
-            stop_expr = make_int32_scalar_literal(ast.literal_eval(node.args[1]))
+            start_expr = parse_expression(node.args[0])
+            stop_expr = parse_expression(node.args[1])
             step = ast.literal_eval(node.args[2])
         else:
             raise GTScriptSyntaxError(

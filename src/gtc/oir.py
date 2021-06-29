@@ -218,6 +218,10 @@ class Stencil(LocNode, SymbolTableTrait):
     _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)
 
 
+class AxisIndex(common.AxisIndex, Expr):
+    pass
+
+
 class For(Stmt, SymbolTableTrait):
     target_name: Str
     start: Union[Expr, AxisBound]

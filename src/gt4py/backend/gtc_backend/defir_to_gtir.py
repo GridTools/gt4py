@@ -21,6 +21,7 @@ from gt4py.ir.nodes import (
     ArgumentInfo,
     Assign,
     AxisBound,
+    AxisIndex,
     AxisInterval,
     BinaryOperator,
     BinOpExpr,
@@ -252,6 +253,9 @@ class DefIRToGTIR(IRNodeVisitor):
                 if node.else_body
                 else None,
             )
+
+    def visit_AxisIndex(self, node: AxisIndex) -> gtir.AxisIndex:
+        return gtir.AxisIndex(name=node.name)
 
     def visit_For(self, node: For) -> gtir.For:
         return gtir.For(

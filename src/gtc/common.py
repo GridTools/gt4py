@@ -338,6 +338,12 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT]):
         return verify_condition_is_boolean(cls, cond)
 
 
+class AxisIndex(Node):
+    name: Str
+    dtype = DataType.INT32
+    kind = ExprKind.SCALAR
+
+
 class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
     left: TargetT
     right: ExprT

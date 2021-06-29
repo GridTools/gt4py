@@ -212,6 +212,9 @@ class GTIRToOIR(NodeTranslator):
             declarations=ctx.decls,
         )
 
+    def visit_AxisIndex(self, node: gtir.AxisIndex) -> oir.AxisIndex:
+        return oir.AxisIndex(name=node.name)
+
     def visit_For(self, node: gtir.For, ctx: Context, **kwargs: Any) -> None:
         ctx.add_horizontal_execution(
             oir.HorizontalExecution(
