@@ -22,7 +22,7 @@ import gt4py.gtscript as gtscript
 import gt4py.storage as gt_storage
 from gt4py.gtscript import Field
 
-from ..definitions import INTERNAL_CPU_BACKENDS
+from ..definitions import INTERNAL_BACKENDS, INTERNAL_CPU_BACKENDS
 
 
 def base_stencil(
@@ -89,6 +89,41 @@ def test_origin_selection():
     assert np.sum(np.asarray(A)) == 30
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
+
+
+@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+def test_origin_k_fields(backend):
+    @gtscript.stencil(backend=backend, rebuild=True)
+    def k_to_ijk(outp: Field[np.float64], inp: Field[gtscript.K, np.float64]):
+        with computation(PARALLEL), interval(...):
+            outp = inp
+
+    origin = {"outp": (0, 0, 1), "inp": (2,)}
+    domain = (2, 2, 8)
+
+    data = np.arange(10, dtype=np.float64)
+    inp = gt_storage.from_array(
+        data=data,
+        shape=(10,),
+        default_origin=(0,),
+        dtype=np.float64,
+        mask=[False, False, True],
+        backend=backend,
+    )
+    outp = gt_storage.zeros(
+        shape=(2, 2, 10), default_origin=(0, 0, 0), dtype=np.float64, backend=backend
+    )
+
+    k_to_ijk(outp, inp, origin=origin, domain=domain)
+
+    inp.device_to_host()
+    outp.device_to_host()
+    np.testing.assert_allclose(data, np.asarray(inp))
+    np.testing.assert_allclose(
+        np.broadcast_to(data[2:], shape=(2, 2, 8)), np.asarray(outp)[:, :, 1:-1]
+    )
+    np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, 0])
+    np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, -1])
 
 
 def test_domain_selection():

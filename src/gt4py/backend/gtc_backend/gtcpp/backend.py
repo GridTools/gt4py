@@ -61,22 +61,23 @@ if TYPE_CHECKING:
 
 
 class GTCGTExtGenerator:
-    def __init__(self, class_name, module_name, gt_backend_t, options):
+    def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
-        self.gt_backend_t = gt_backend_t
-        self.options = options
+        self.backend = backend
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
         oir = gtir_to_oir.GTIRToOIR().visit(gtir)
         oir = self._optimize_oir(oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
-        implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
-        bindings = GTCppBindingsCodegen.apply(
-            gtcpp, module_name=self.module_name, gt_backend_t=self.gt_backend_t
+        implementation = gtcpp_codegen.GTCppCodegen.apply(
+            gtcpp, gt_backend_t=self.backend.GT_BACKEND_T
         )
-        bindings_ext = ".cu" if self.gt_backend_t == "gpu" else ".cpp"
+        bindings = GTCppBindingsCodegen.apply(
+            gtcpp, module_name=self.module_name, backend=self.backend
+        )
+        bindings_ext = ".cu" if self.backend.GT_BACKEND_T == "gpu" else ".cpp"
         return {
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings" + bindings_ext: bindings},
@@ -110,7 +111,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return gtcpp_codegen.GTCppCodegen().visit_DataType(dtype)
 
     def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
-        assert "gt_backend_t" in kwargs
+        backend = kwargs["backend"]
         if "external_arg" in kwargs:
             domain_ndim = node.dimensions.count(True)
             data_ndim = len(node.data_dims)
@@ -121,13 +122,25 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                     sid_ndim=sid_ndim,
                 )
             else:
+                make_layout_map = backend.storage_info["layout_map"]
+                layout_map = [
+                    x
+                    for x in make_layout_map(node.dimensions + (True,) * data_ndim)
+                    if x is not None
+                ]
                 sid_def = """gt::as_{sid_type}<{dtype}, {sid_ndim},
-                    gt::integral_constant<int, {unique_index}>>({name})""".format(
-                    sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
+                    gt::integral_constant<int, {unique_index}>,
+                    {unit_stride_dim}>({name})""".format(
+                    sid_type="cuda_sid" if backend.GT_BACKEND_T == "gpu" else "sid",
                     name=node.name,
                     dtype=self.visit(node.dtype),
                     unique_index=self.unique_index(),
                     sid_ndim=sid_ndim,
+                    unit_stride_dim=layout_map.index(max(layout_map)),
+                )
+                sid_def = "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
+                    sid_def=sid_def,
+                    name=node.name,
                 )
                 if domain_ndim != 3:
                     gt_dims = [
@@ -142,10 +155,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
                         gt_dims=", ".join(gt_dims), sid_def=sid_def
                     )
 
-                return "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-                    sid_def=sid_def,
-                    name=node.name,
-                )
+                return sid_def
 
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
         if "external_arg" in kwargs:
