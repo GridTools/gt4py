@@ -136,7 +136,7 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, **kwargs: Any
-    ) -> Union[gtcpp.AccessorRef, gtcpp.ScalarAccess]:
+    ) -> Union[gtcpp.AccessorRef, gtcpp.LocalAccess]:
         assert "stencil_symtable" in kwargs
         if node.name in kwargs["stencil_symtable"]:
             symbol = kwargs["stencil_symtable"][node.name]
@@ -145,7 +145,7 @@ class OIRToGTCpp(eve.NodeTranslator):
                     name=symbol.name, offset=CartesianOffset.zero(), dtype=symbol.dtype
                 )
             assert isinstance(symbol, oir.LocalScalar)
-        return gtcpp.ScalarAccess(name=node.name, dtype=node.dtype)
+        return gtcpp.LocalAccess(name=node.name, dtype=node.dtype)
 
     def visit_AxisBound(
         self, node: oir.AxisBound, *, is_start: bool, **kwargs: Any
@@ -176,6 +176,15 @@ class OIRToGTCpp(eve.NodeTranslator):
         return gtcpp.IfStmt(
             cond=self.visit(node.mask, **kwargs),
             true_branch=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),
+        )
+
+    def visit_For(self, node: oir.For, **kwargs: Any) -> gtcpp.For:
+        return gtcpp.For(
+            target_name=node.target_name,
+            start=self.visit(node.start, **kwargs),
+            end=self.visit(node.end, **kwargs),
+            inc=node.inc,
+            body=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),
         )
 
     def visit_HorizontalExecution(

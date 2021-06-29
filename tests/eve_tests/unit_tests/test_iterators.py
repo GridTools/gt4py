@@ -30,6 +30,7 @@ class Tree(eve.Node):
 
 def _make_tree(values_list):
     children = [_make_tree(item) if isinstance(item, list) else item for item in values_list]
+    Tree.update_forward_refs()
     return Tree(children=children)
 
 

@@ -633,7 +633,6 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
         "gtc:gt:cpu_ifirst",
         "gtc:gt:cpu_kfirst",
         "gtc:gt:gpu",
-        pytest.param("gtc:cuda", marks=[pytest.mark.xfail]),
         "gtc:dace",
     ]
     symbols = {

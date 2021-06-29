@@ -44,6 +44,7 @@ from gtc.passes.oir_optimizations.caches import (
     PruneKCacheFlushes,
 )
 from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
+from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
@@ -56,10 +57,9 @@ if TYPE_CHECKING:
 
 
 class GTCCudaExtGenerator:
-    def __init__(self, class_name, module_name, gt_backend_t, options):
+    def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
-        self.options = options
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = DefIRToGTIR.apply(definition_ir)
@@ -85,6 +85,7 @@ class GTCCudaExtGenerator:
         oir = LocalTemporariesToScalars().visit(oir)
         oir = WriteBeforeReadTemporariesToScalars().visit(oir)
         oir = OnTheFlyMerging().visit(oir)
+        oir = MaskStmtMerging().visit(oir)
         oir = IJCacheDetection().visit(oir)
         oir = KCacheDetection().visit(oir)
         oir = PruneKCacheFills().visit(oir)
@@ -106,32 +107,47 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
 
     def visit_FieldDecl(self, node: cuir.FieldDecl, **kwargs):
         if "external_arg" in kwargs:
+            domain_ndim = node.dimensions.count(True)
+            data_ndim = len(node.data_dims)
+            sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,{ndim}> {name}_origin".format(
+                return "py::buffer {name}, std::array<gt::uint_t,{sid_ndim}> {name}_origin".format(
                     name=node.name,
-                    ndim=node.dimensions.count(True),
+                    sid_ndim=sid_ndim,
                 )
             else:
-                num_dims = node.dimensions.count(True)
-                sid_def = """gt::as_cuda_sid<{dtype}, {num_dims},
-                    std::integral_constant<int, {unique_index}>>({name})""".format(
+                layout_map = [
+                    x
+                    for x in make_cuda_layout_map(node.dimensions + (True,) * data_ndim)
+                    if x is not None
+                ]
+                sid_def = """gt::as_cuda_sid<{dtype}, {sid_ndim},
+                    gt::integral_constant<int, {unique_index}>,
+                    {unit_stride_dim}>({name})""".format(
                     name=node.name,
                     dtype=self.visit(node.dtype),
                     unique_index=self.unique_index(),
-                    num_dims=num_dims,
+                    sid_ndim=sid_ndim,
+                    unit_stride_dim=layout_map.index(max(layout_map)),
                 )
-                if num_dims != 3:
+                sid_def = "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
+                    sid_def=sid_def,
+                    name=node.name,
+                )
+                if domain_ndim != 3:
                     gt_dims = [
                         f"gt::stencil::dim::{dim}"
                         for dim in gtc_utils.dimension_flags_to_names(node.dimensions)
                     ]
+                    if data_ndim:
+                        gt_dims += [
+                            f"gt::integral_constant<int, {3 + dim}>" for dim in range(data_ndim)
+                        ]
                     sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
                         gt_dims=", ".join(gt_dims), sid_def=sid_def
                     )
-                return "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-                    sid_def=sid_def,
-                    name=node.name,
-                )
+
+                return sid_def
 
     def visit_ScalarDecl(self, node: cuir.ScalarDecl, **kwargs):
         if "external_arg" in kwargs:

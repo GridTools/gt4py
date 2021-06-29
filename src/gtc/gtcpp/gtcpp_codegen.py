@@ -73,11 +73,18 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
-    AccessorRef = as_fmt("eval({name}({', '.join([offset, *data_index])}))")
+    def visit_AccessorRef(self, accessor_ref: gtcpp.AccessorRef, **kwargs):
+        offset = accessor_ref.offset
+        if offset.i == offset.j == offset.k == 0 and not accessor_ref.data_index:
+            # Skip offsets in the accessor if possible, improves generated code readability and reduces code size for point-wise computations significantly
+            return f"eval({accessor_ref.name}())"
+        return (
+            f"eval({accessor_ref.name}({offset.i}, {offset.j}, {offset.k}"
+            + "".join(f", {d}" for d in accessor_ref.data_index)
+            + "))"
+        )
 
-    ScalarAccess = as_fmt("{name}")
-
-    CartesianOffset = as_fmt("{i}, {j}, {k}")
+    LocalAccess = as_fmt("{name}")
 
     BinaryOp = as_fmt("({left} {op} {right})")
 
@@ -86,6 +93,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     TernaryOp = as_fmt("({cond} ? {true_expr} : {false_expr})")
 
     Cast = as_fmt("static_cast<{dtype}>({expr})")
+
+    For = as_fmt("for(i = {start}; i < {end}; i += {inc}) {body}")
 
     def visit_BuiltInLiteral(self, builtin: BuiltInLiteral, **kwargs: Any) -> str:
         if builtin == BuiltInLiteral.TRUE:
@@ -154,8 +163,6 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     UnaryOp = as_fmt("({_this_generator.UNARY_OPERATOR_TO_CODE[_this_node.op]}{expr})")
 
     Arg = as_fmt("{name}")
-
-    Param = as_fmt("{name}")
 
     ApiParamDecl = as_fmt("{name}")
 

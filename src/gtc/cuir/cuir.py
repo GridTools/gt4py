@@ -18,27 +18,19 @@ from typing import Any, List, Optional, Tuple, Union
 
 from pydantic import validator
 
-from eve import Str, SymbolName, SymbolTableTrait
+from eve import Str, SymbolName, SymbolTableTrait, field, utils
 from gtc import common
 from gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
 
 
+@utils.noninstantiable
 class Expr(common.Expr):
     dtype: common.DataType
 
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Expr:
-            raise TypeError("Trying to instantiate `Expr` abstract class.")
-        super().__init__(*args, **kwargs)
 
-
+@utils.noninstantiable
 class Stmt(common.Stmt):
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Stmt:
-            raise TypeError("Trying to instantiate `Stmt` abstract class.")
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class Literal(common.Literal, Expr):  # type: ignore
@@ -62,6 +54,12 @@ class IJCacheAccess(common.FieldAccess, Expr):
             raise ValueError("No k-offset allowed")
         return v
 
+    @validator("data_index")
+    def no_additional_dimensions(cls, v: List[int]) -> List[int]:
+        if v:
+            raise ValueError("IJ-cached higher-dimensional fields are not supported")
+        return v
+
 
 class KCacheAccess(common.FieldAccess, Expr):
     k_cache_is_different_from_field_access = True
@@ -70,6 +68,12 @@ class KCacheAccess(common.FieldAccess, Expr):
     def zero_ij_offset(cls, v: CartesianOffset) -> CartesianOffset:
         if not v.i == v.j == 0:
             raise ValueError("No ij-offset allowed")
+        return v
+
+    @validator("data_index")
+    def no_additional_dimensions(cls, v: List[int]) -> List[int]:
+        if v:
+            raise ValueError("K-cached higher-dimensional fields are not supported")
         return v
 
 
@@ -116,6 +120,7 @@ class Decl(LocNode):
 
 class FieldDecl(Decl):
     dimensions: Tuple[bool, bool, bool]
+    data_dims: Tuple[int, ...] = field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):

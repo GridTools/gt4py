@@ -214,11 +214,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         gt_ir.Builtin.TRUE: "true",
     }
 
-    def __init__(self, class_name, module_name, gt_backend_t, options):
+    def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
-        self.gt_backend_t = gt_backend_t
-        self.options = options
+        self.backend = backend
 
         self.templates = {}
         for key, file_name in self.TEMPLATE_FILES.items():
@@ -278,7 +277,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
         offset = [node.offset.get(name, 0) for name in self.domain.axes_names]
         if not all(i == 0 for i in offset):
-            idx = ", ".join(str(i) for i in offset)
+            source_offsets = [
+                f"int({self.visit(i)})" if isinstance(i, gt_ir.Expr) else str(i) for i in offset
+            ]
+            idx = ", ".join(source_offsets)
         else:
             idx = ""
         source = "eval({name}({idx}))".format(name=node.name, idx=idx)
@@ -337,7 +339,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
     def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall) -> str:
         call = self.NATIVE_FUNC_TO_CPP[node.func]
-        if self.gt_backend_t != "cuda":
+        if self.backend.GT_BACKEND_T != "cuda":
             call = "std::" + call
         args = ",".join(self.visit(arg) for arg in node.args)
         return f"{call}({args})"
@@ -381,6 +383,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         body_sources.append("}")
         return body_sources
 
+    def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
+        self.requires_positional = True
+        return f"eval.{node.name.lower()}()"
+
     def _visit_ForLoopBound(self, node: gt_ir.AxisBound, axis):
         return "static_cast<gt::int_t>({endpt}{offset:+d})".format(
             endpt=f"eval(domain_size_{axis.name}())"
@@ -389,17 +395,10 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             offset=node.offset,
         )
 
-    def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
-        self.requires_positional = True
-        return f"eval.{node.name.lower()}()"
-
     def visit_For(self, node: gt_ir.For) -> str:
         body_sources = gt_text.TextBlock()
 
         k_ax = gt_ir.Domain.LatLonGrid().sequential_axis
-        k_index = gt_ir.Domain.LatLonGrid().index(k_ax)
-
-        sources = []
         if isinstance(node.start, gt_ir.AxisBound):
             start = self._visit_ForLoopBound(node.start, k_ax)
         else:
@@ -411,21 +410,30 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         if isinstance(node.step, int):
             if node.step > 0:
                 body_sources.append(
-                    f"for ({node.target}={start}; {node.target}<{stop}; {node.target}+={node.step}){{"
+                    f"for ({node.target.name}={start}; {node.target.name}<{stop}; {node.target.name}+={node.step}){{"
                 )
             elif node.step < 0:
                 body_sources.append(
-                    f"for ({node.target}={start}; {node.target}>{stop}; {node.target}-={abs(node.step)}){{"
+                    f"for ({node.target.name}={start}; {node.target.name}>{stop}; {node.target.name}-={abs(node.step)}){{"
                 )
             else:
                 body_sources.append(
-                    f"for ({node.target}={start}; {node.target}<{stop}; {node.target}++){{"
+                    f"for ({node.target.name}={start}; {node.target.name}<{stop}; {node.target.name}++){{"
                 )
         for stmt in node.body.stmts:
             body_sources.append(self.visit(stmt))
         body_sources.append("}")
 
         return body_sources.text
+
+    def visit_While(self, node: gt_ir.While) -> gt_text.TextBlock:
+        body_sources = gt_text.TextBlock()
+        body_sources.append("while ({condition}) {{".format(condition=self.visit(node.condition)))
+        for stmt in node.body.stmts:
+            body_sources.extend(self.visit(stmt))
+
+        body_sources.append("}")
+        return body_sources
 
     def visit_AxisBound(self, node: gt_ir.AxisBound) -> Tuple[int, int]:
         if node.level == gt_ir.LevelMarker.START:
@@ -473,17 +481,26 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         # Initialize symbols for the generation of references in this stage
         self.stage_symbols = {}
         args = []
+        fields_with_variable_offset = set()
+        for field_ref in gt_ir.iter_nodes_of_type(node, gt_ir.FieldRef):
+            if isinstance(field_ref.offset.get(self.domain.sequential_axis.name, None), gt_ir.Expr):
+                fields_with_variable_offset.add(field_ref.name)
         for accessor in node.accessors:
             self.stage_symbols[accessor.symbol] = accessor
             arg = {"name": accessor.symbol, "access_type": "in", "extent": None}
             if isinstance(accessor, gt_ir.FieldAccessor):
                 arg["access_type"] = (
-                    "in" if accessor.intent == gt_ir.AccessIntent.READ_ONLY else "inout"
+                    "in" if accessor.intent == gt_definitions.AccessKind.READ else "inout"
                 )
-                arg["extent"] = gt_utils.flatten(accessor.extent)
+                if accessor.symbol not in fields_with_variable_offset:
+                    arg["extent"] = gt_utils.flatten(accessor.extent)
+                else:
+                    # If the field has a variable offset, then we assert the maximum vertical extents.
+                    # 1000 is just a guess, but should be larger than any reasonable number of vertical levels.
+                    arg["extent"] = gt_utils.flatten(accessor.extent[:-1]) + [-1000, 1000]
             args.append(arg)
 
-        for for_node in gt_ir.filter_nodes_dfs(node, gt_ir.For):
+        for for_node in gt_ir.iter_nodes_of_type(node, gt_ir.For):
             if any(
                 isinstance(bound, gt_ir.AxisBound) and bound.level == gt_ir.LevelMarker.END
                 for bound in (for_node.start, for_node.stop)
@@ -570,7 +587,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             api_names=api_names,
             arg_fields=arg_fields,
             constants=constants,
-            gt_backend=self.gt_backend_t,
+            gt_backend=self.backend.GT_BACKEND_T,
             halo_sizes=halo_sizes,
             k_axis=k_axis,
             module_name=self.module_name,
@@ -701,9 +718,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             if self.builder.stencil_id
             else f"{self.builder.options.name}_pyext"
         )
-        gt_pyext_generator = self.PYEXT_GENERATOR_CLASS(
-            class_name, module_name, self.GT_BACKEND_T, self.builder.options
-        )
+        gt_pyext_generator = self.PYEXT_GENERATOR_CLASS(class_name, module_name, self)
         gt_pyext_sources = gt_pyext_generator(ir)
         final_ext = ".cu" if self.languages and self.languages["computation"] == "cuda" else ".cpp"
         comp_src = gt_pyext_sources["computation"]
@@ -767,7 +782,7 @@ class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
         output_field_names = [
             name
             for name, info in self.args_data.field_info.items()
-            if info is not None and info.access == gt_definitions.AccessKind.READ_WRITE
+            if info is not None and bool(info.access & gt_definitions.AccessKind.WRITE)
         ]
 
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])

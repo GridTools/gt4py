@@ -43,11 +43,14 @@ class SymbolInfo:
         True if the symbol is a data field allocated with redundancy.
     in_use : `bool`
         True if the symbol is used.
+    is_counter: `bool`
+        True if the variable is used as a counter in a loop (VarRef only).
     """
 
     decl = attribute(of=gt_ir.Decl)
     has_redundancy = attribute(of=bool, default=False)
     in_use = attribute(of=bool, default=False)
+    is_counter = attribute(of=bool, default=False)
 
     @property
     def is_field(self):

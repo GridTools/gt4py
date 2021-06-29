@@ -29,11 +29,11 @@ from eve import (
     NodeVisitor,
     SourceLocation,
     Str,
-    Int,
     StrEnum,
     SymbolTableTrait,
 )
 from eve import exceptions as eve_exceptions
+from eve import utils
 from eve.type_definitions import SymbolRef
 from eve.typingx import RootValidatorType, RootValidatorValuesType
 from gtc.utils import dimension_flags_to_names, flatten_list
@@ -214,6 +214,7 @@ class LocNode(Node):
     loc: Optional[SourceLocation]
 
 
+@utils.noninstantiable
 class Expr(LocNode):
     """
     Expression base class.
@@ -226,19 +227,10 @@ class Expr(LocNode):
     dtype: Optional[DataType]
     kind: ExprKind
 
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Expr:
-            raise TypeError("Trying to instantiate `Expr` abstract class.")
-        super().__init__(*args, **kwargs)
 
-
+@utils.noninstantiable
 class Stmt(LocNode):
-    # TODO Eve could provide support for making a node abstract
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if type(self) is Stmt:
-            raise TypeError("Trying to instantiate `Stmt` abstract class.")
-        super().__init__(*args, **kwargs)
+    pass
 
 
 def verify_condition_is_boolean(parent_node_cls: Node, cond: Expr) -> Expr:
@@ -764,11 +756,3 @@ def typestr_to_data_type(typestr: str) -> DataType:
     }
     key = (typestr[1], int(typestr[2:]))
     return table.get(key, DataType.INVALID)  # type: ignore
-
-
-class For(GenericNode, Generic[StmtT, ExprT]):
-    target: Str
-    start: Union[ExprT, AxisBound]
-    end: Union[ExprT, AxisBound]
-    step: Int
-    body: StmtT

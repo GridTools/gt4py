@@ -212,23 +212,18 @@ class GTIRToOIR(NodeTranslator):
             declarations=ctx.decls,
         )
 
-    def visit_BlockStmt(self, node: gtir.BlockStmt, ctx: Context, **kwargs: Any) -> oir.BlockStmt:
-        return oir.BlockStmt(
-            body=[self.visit(stmt, ctx=ctx, retstmt=True, **kwargs) for stmt in node.body]
-        )
-
     def visit_For(self, node: gtir.For, ctx: Context, **kwargs: Any) -> None:
         ctx.add_horizontal_execution(
             oir.HorizontalExecution(
                 body=[
                     oir.For(
-                        target=node.target,
+                        target_name=node.target.name,
                         start=self.visit(node.start, **kwargs),
                         end=self.visit(node.end, **kwargs),
-                        step=node.step,
-                        body=self.visit(node.body, ctx=ctx, **kwargs),
+                        inc=node.inc,
+                        body=self.visit(node.body, ctx=ctx, retstmt=True, **kwargs),
                     )
                 ],
-                declarations=[],
+                declarations=[oir.LocalScalar(name=node.target.name, dtype=node.target.dtype)],
             )
         )
