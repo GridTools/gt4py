@@ -941,9 +941,7 @@ def test_auto_sync_storage():
         managed_memory=True,
     )
     q0_view = q0[3:, 3:, 3:]
-    print(id(q0))
-    print(id(q1))
-    print(id(q0_view))
+
     assert not gt_store.storage.GPUStorage.get_modified_storages()
 
     # call stencil and mark original storage clean
