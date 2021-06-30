@@ -261,7 +261,6 @@ class GPUStorage(Storage):
         )
         obj = field.view(_ViewableNdarray)
         obj = obj.view(GPUStorage)
-        print("construct", raw_buffer[-1:].data.ptr)
         obj._raw_buffer = raw_buffer
         obj.default_origin = default_origin
         return obj
