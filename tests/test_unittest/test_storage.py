@@ -973,4 +973,3 @@ def test_slice_gpu():
 
     assert view_start > storage_start
     assert view_end < storage_end
-    # np.testing.assert_equal(cpu_view, gpu_view.as_numpy())
