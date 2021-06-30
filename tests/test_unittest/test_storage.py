@@ -796,18 +796,18 @@ class TestNumpyPatch:
             np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtmc"
         )
 
-        class npsub(np.ndarray):
+        class NDArraySub(np.ndarray):
             pass
 
         numpy_array = np.ones((3, 3, 3))
-        matrix = np.ones((3, 3)).view(npsub)
+        matrix = np.ones((3, 3)).view(NDArraySub)
 
         assert isinstance(np.asarray(storage), np.ndarray)
         assert isinstance(np.asarray(numpy_array), np.ndarray)
         assert isinstance(np.asarray(matrix), np.ndarray)
         assert isinstance(np.asanyarray(storage), type(storage))
         assert isinstance(np.asanyarray(numpy_array), np.ndarray)
-        assert isinstance(np.asanyarray(matrix), npsub)
+        assert isinstance(np.asanyarray(matrix), NDArraySub)
         assert isinstance(np.array(storage), np.ndarray)
         assert isinstance(np.array(matrix), np.ndarray)
         assert isinstance(np.array(numpy_array), np.ndarray)
@@ -841,18 +841,18 @@ class TestNumpyPatch:
             np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtmc"
         )
 
-        class npsub(np.ndarray):
+        class NDArraySub(np.ndarray):
             pass
 
         numpy_array = np.ones((3, 3, 3))
-        matrix = np.ones((3, 3)).view(npsub)
+        matrix = np.ones((3, 3)).view(NDArraySub)
 
         assert isinstance(np.array(storage, copy=False), np.ndarray)
         assert isinstance(np.array(numpy_array, copy=False), np.ndarray)
         assert isinstance(np.array(matrix, copy=False), np.ndarray)
         assert isinstance(np.asanyarray(storage), type(storage))
         assert isinstance(np.asanyarray(numpy_array), np.ndarray)
-        assert isinstance(np.asanyarray(matrix), npsub)
+        assert isinstance(np.asanyarray(matrix), NDArraySub)
         assert isinstance(np.array(storage), np.ndarray)
         assert isinstance(np.array(matrix), np.ndarray)
         assert isinstance(np.array(numpy_array), np.ndarray)
