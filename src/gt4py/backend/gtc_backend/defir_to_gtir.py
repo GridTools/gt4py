@@ -58,7 +58,7 @@ class CheckHorizontalRegionAccesses(eve.NodeVisitor):
         self.visit(node.body, fields_set=set())
 
     def visit_HorizontalRegion(self, node: gtir.HorizontalRegion, *, fields_set: Set[str]) -> None:
-        self.visit(node.body, fields_set=fields_set, inside_region=True)
+        self.visit(node.block, fields_set=fields_set, inside_region=True)
 
     def visit_ParAssignStmt(
         self, node: gtir.FieldAccess, *, fields_set: Set[str], **kwargs
