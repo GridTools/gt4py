@@ -303,7 +303,9 @@ class GPUStorage(Storage):
     def __setitem__(self, key, value):
         if hasattr(value, "__cuda_array_interface__"):
             gpu_view = storage_utils.gpu_view(self)
-            self.device_to_host(True)
+            self.device_to_host()
+            if isinstance(value, GPUStorage):
+                value.device_to_host()
             gpu_view[key] = cp.asarray(value)
             return value
         else:
