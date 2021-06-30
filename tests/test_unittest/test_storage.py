@@ -940,11 +940,33 @@ def test_auto_sync_storage():
         shape=shape,
         managed_memory=True,
     )
-
+    q0_view = q0[3:, 3:, 3:]
+    print(id(q0))
+    print(id(q1))
+    print(id(q0_view))
     assert not gt_store.storage.GPUStorage.get_modified_storages()
 
+    # call stencil and mark original storage clean
     swap_stencil(q0, q1)
     assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 2
+    assert q0._is_device_modified
+    assert q0_view._is_device_modified
+    q0_view._set_clean()
+    assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 1
+    assert not q0._is_device_modified
+    assert not q0_view._is_device_modified
 
+    # call stencil and mark original storage clean
+    swap_stencil(q0, q1)
+    assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 2
+    assert q0._is_device_modified
+    assert q0_view._is_device_modified
+    q0_view._set_clean()
+    assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 1
+    assert not q0._is_device_modified
+    assert not q0_view._is_device_modified
+
+    # call stencil and mark original storage clean
+    swap_stencil(q0, q1)
     q0.device_to_host()
     assert not gt_store.storage.GPUStorage.get_modified_storages()
