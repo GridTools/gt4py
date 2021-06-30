@@ -94,6 +94,10 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     Cast = as_fmt("static_cast<{dtype}>({expr})")
 
+    Positional = as_fmt("positional<dim::{dim}>()")
+
+    Binding = as_fmt("auto {name} = {expr};")
+
     def visit_For(self, node: gtcpp.For, **kwargs):
         op = "<" if node.inc > 0 else ">"
         start = self.visit(node.start, **kwargs)
@@ -203,7 +207,10 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         self, node: gtcpp.GTComputationCall, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         computation_name = type(node).__name__ + str(id(node))
-        return self.generic_visit(node, computation_name=computation_name, **kwargs)
+        extra_decls_name = [d.name for d in node.extra_decls]
+        return self.generic_visit(
+            node, computation_name=computation_name, extra_decls_name=extra_decls_name, **kwargs
+        )
 
     GTComputationCall = as_mako(
         """
@@ -212,7 +219,9 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             auto grid = make_grid(domain[0], domain[1], axis<1,
                 axis_config::offset_limit<${offset_limit}>>{domain[2]});
 
-            auto ${ computation_name } = [](${ ','.join('auto ' + a for a in arguments) }) {
+            ${ '\\n'.join(extra_decls) }
+
+            auto ${ computation_name } = [${ ','.join(extra_decls_name) }](${ ','.join('auto ' + a for a in arguments) }) {
 
                 ${ '\\n'.join(temporaries) }
                 return multi_pass(${ ','.join(multi_stages) });
@@ -228,7 +237,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         """
         #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
-
+        #include <gridtools/stencil/positional.hpp>
+        
         namespace ${ name }_impl_{
             using Domain = std::array<gridtools::uint_t, 3>;
             using namespace gridtools::stencil;

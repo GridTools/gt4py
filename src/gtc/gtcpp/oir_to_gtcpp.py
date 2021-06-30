@@ -178,10 +178,24 @@ class OIRToGTCpp(eve.NodeTranslator):
             true_branch=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),
         )
 
-    def visit_AxisIndex(self, node: oir.AxisIndex, **kwargs: Any) -> gtcpp.AxisIndex:
-        return gtcpp.AxisIndex(name=node.name)
+    # def visit_AxisIndex(self, node: oir.AxisIndex, **kwargs: Any) -> gtcpp.AxisIndex:
+    #     return gtcpp.AxisIndex(name=node.name)
+
+    def visit_AxisIndex(self, node: oir.AxisIndex, **kwargs: Any) -> gtcpp.AccessorRef:
+        self.axes_indices[node.name] = f"{node.name.lower()}_pos"
+        return gtcpp.AccessorRef(
+            name=self.axes_indices[node.name],
+            offset=common.CartesianOffset.zero(),
+            dtype=common.DataType.INT32,
+        )
 
     def visit_For(self, node: oir.For, **kwargs: Any) -> gtcpp.For:
+        # for name in node.start.iter_tree().if_isinstance(oir.AxisIndex).getattr("name").to_set():
+        #     self.axes_indices[name] = f"{name.lower()}_pos"
+
+        # for name in node.end.iter_tree().if_isinstance(oir.AxisIndex).getattr("name").to_set():
+        #     self.axes_indices[name] = f"{name.lower()}_pos"
+
         return gtcpp.For(
             target_name=node.target_name,
             start=self.visit(node.start, **kwargs),
@@ -200,6 +214,9 @@ class OIRToGTCpp(eve.NodeTranslator):
         **kwargs: Any,
     ) -> gtcpp.GTStage:
         assert "stencil_symtable" in kwargs
+
+        self.axes_indices = {}
+
         apply_method = gtcpp.GTApplyMethod(
             interval=self.visit(interval, **kwargs),
             body=self.visit(node.body, **kwargs),
@@ -212,7 +229,8 @@ class OIRToGTCpp(eve.NodeTranslator):
             {
                 param_arg
                 for param_arg in stage_args
-                if param_arg.name not in [tmp.name for tmp in comp_ctx.temporaries]
+                if param_arg.name
+                not in [tmp.name for tmp in comp_ctx.temporaries] + list(self.axes_indices.values())
             }
         )
 
@@ -284,8 +302,15 @@ class OIRToGTCpp(eve.NodeTranslator):
             **kwargs,
         )
 
+        bindings = [
+            gtcpp.Binding(name=variable, expr=gtcpp.Positional(dim=axis.lower()))
+            for axis, variable in self.axes_indices.items()
+        ]
+
+        # TODO(johannd): Build up bindings inside comp_ctx instead of visitor state.
         gt_computation = gtcpp.GTComputationCall(
             arguments=comp_ctx.arguments,
+            extra_decls=bindings,
             temporaries=comp_ctx.temporaries,
             multi_stages=multi_stages,
         )
