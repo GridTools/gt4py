@@ -38,3 +38,30 @@ class NativeFuncCallFactory(factory.Factory):
 
     func = common.NativeFunction.MIN
     args = factory.List([factory.SubFactory(FieldSliceFactory)])
+
+
+class VectorAssignFactory(factory.Factory):
+    class Meta:
+        model = npir.VectorAssign
+
+    class Params:
+        temp_name = factory.Sequence(lambda n: "field_%d" % n)
+        temp_dtype = common.DataType.INT64
+        temp_init = factory.Trait(
+            left=factory.LazyAttribute(lambda obj: npir.VectorTemp(name=obj.temp_name)),
+            right=factory.LazyAttribute(lambda obj: npir.EmptyTemp(dtype=obj.temp_dtype)),
+        )
+
+    left = factory.SubFactory(FieldSliceFactory)
+    right = factory.SubFactory(FieldSliceFactory)
+
+
+class VerticalPassFactory(factory.Factory):
+    class Meta:
+        model = npir.VerticalPass
+
+    temp_defs = factory.List([factory.SubFactory(VectorAssignFactory, temp_init=True)])
+    body = factory.List([factory.SubFactory(VectorAssignFactory)])
+    lower = common.AxisBound.start()
+    upper = common.AxisBound.end()
+    direction = common.LoopOrder.PARALLEL

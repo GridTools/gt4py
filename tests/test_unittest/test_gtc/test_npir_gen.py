@@ -8,7 +8,13 @@ from gt4py.definitions import Extent
 from gtc import common
 from gtc.python import npir, npir_gen
 
-from .npir_utils import FieldDeclFactory, FieldSliceFactory, NativeFuncCallFactory
+from .npir_utils import (
+    FieldDeclFactory,
+    FieldSliceFactory,
+    NativeFuncCallFactory,
+    VectorAssignFactory,
+    VerticalPassFactory,
+)
 
 
 UNDEFINED_DTYPES = {common.DataType.INVALID, common.DataType.AUTO, common.DataType.DEFAULT}
@@ -121,30 +127,22 @@ def test_native_function() -> None:
 
 def test_vector_assign() -> None:
     result = npir_gen.NpirGen().visit(
-        npir.VectorAssign(
-            left=FieldSliceFactory(name="a"),
-            right=FieldSliceFactory(name="b"),
+        VectorAssignFactory(
+            left__name="a",
+            right__name="b",
         )
     )
     assert result == "a_[i:I, j:J, k_] = b_[i:I, j:J, k_]"
 
 
 def test_temp_definition() -> None:
-    result = npir_gen.NpirGen().visit(
-        npir.VectorAssign(
-            left=npir.VectorTemp(name="a"),
-            right=npir.EmptyTemp(dtype=common.DataType.INT64),
-        )
-    )
+    result = npir_gen.NpirGen().visit(VectorAssignFactory(temp_init=True, temp_name="a"))
     assert result == "a_ = ShimmedView(np.zeros(_domain_, dtype=np.int64), [0, 0, 0])"
 
 
 def test_temp_with_extent_definition() -> None:
     result = npir_gen.NpirGen().visit(
-        npir.VectorAssign(
-            left=npir.VectorTemp(name="a"),
-            right=npir.EmptyTemp(dtype=common.DataType.INT64),
-        ),
+        VectorAssignFactory(temp_init=True, temp_name="a"),
         field_extents={"a": Extent((0, 1), (-2, 3))},
     )
     assert (
@@ -199,9 +197,55 @@ def test_numerical_offset_zero() -> None:
     assert result == ""
 
 
+def test_mask_block_slice_mask() -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.MaskBlock(body=[], mask=FieldSliceFactory(name="mask1"), mask_name="mask1")
+    )
+    assert result == ""
+
+
+def test_mask_block_broadcast() -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.MaskBlock(
+            body=[],
+            mask=npir.BroadCast(
+                expr=npir.Literal(dtype=common.DataType.BOOL, value=common.BuiltInLiteral.TRUE)
+            ),
+            mask_name="mask1",
+        )
+    )
+    assert result == "mask1_ = np.full((I - i, J - j, K - k), np.bool(True))\n"
+
+
+def test_mask_block_other() -> None:
+    result = npir_gen.NpirGen().visit(
+        npir.MaskBlock(
+            body=[],
+            mask=npir.VectorLogic(
+                op=common.LogicalOperator.AND,
+                left=FieldSliceFactory(name="a"),
+                right=FieldSliceFactory(name="b"),
+            ),
+            mask_name="mask1",
+        )
+    )
+    assert result.startswith("mask1_ = np.bitwise_and(a_[i:I")
+
+
+def test_horizontal_block() -> None:
+    result = npir_gen.NpirGen().visit(npir.HorizontalBlock(body=[]))
+    print(result)
+    match = re.match(
+        r"(#.*?\n)?i, I = _di_ - 0, _dI_ \+ 0\nj, J = _dj_ - 0, _dJ_ \+ 0\n",
+        result,
+        re.MULTILINE,
+    )
+    assert match
+
+
 def test_vertical_pass_seq() -> None:
     result = npir_gen.NpirGen().visit(
-        npir.VerticalPass(
+        VerticalPassFactory(
             temp_defs=[],
             body=[],
             lower=common.AxisBound.from_start(offset=1),
@@ -219,15 +263,7 @@ def test_vertical_pass_seq() -> None:
 
 
 def test_vertical_pass_par() -> None:
-    result = npir_gen.NpirGen().visit(
-        npir.VerticalPass(
-            temp_defs=[],
-            body=[],
-            lower=common.AxisBound.start(),
-            upper=common.AxisBound.end(),
-            direction=common.LoopOrder.PARALLEL,
-        )
-    )
+    result = npir_gen.NpirGen().visit(VerticalPassFactory(body=[], temp_defs=[]))
     print(result)
     match = re.match(
         (r"(#.*?\n)?" r"k, K = _dk_, _dK_\n"),
@@ -239,10 +275,9 @@ def test_vertical_pass_par() -> None:
 
 def test_verticall_pass_start_start_forward() -> None:
     result = npir_gen.NpirGen().visit(
-        npir.VerticalPass(
-            temp_defs=[],
+        VerticalPassFactory(
             body=[],
-            lower=common.AxisBound.start(),
+            temp_defs=[],
             upper=common.AxisBound.from_start(offset=5),
             direction=common.LoopOrder.FORWARD,
         )
@@ -258,9 +293,9 @@ def test_verticall_pass_start_start_forward() -> None:
 
 def test_verticall_pass_end_end_backward() -> None:
     result = npir_gen.NpirGen().visit(
-        npir.VerticalPass(
-            temp_defs=[],
+        VerticalPassFactory(
             body=[],
+            temp_defs=[],
             lower=common.AxisBound.from_end(offset=-4),
             upper=common.AxisBound.from_end(offset=-1),
             direction=common.LoopOrder.BACKWARD,
@@ -277,12 +312,9 @@ def test_verticall_pass_end_end_backward() -> None:
 
 def test_vertical_pass_temp_def() -> None:
     result = npir_gen.NpirGen().visit(
-        npir.VerticalPass(
+        VerticalPassFactory(
             temp_defs=[
-                npir.VectorAssign(
-                    left=npir.VectorTemp(name="a"),
-                    right=npir.EmptyTemp(dtype=common.DataType.INT64),
-                )
+                VectorAssignFactory(temp_init=True, temp_name="a"),
             ],
             body=[],
             lower=common.AxisBound.from_end(offset=-4),
@@ -334,15 +366,12 @@ def test_full_computation_valid(tmp_path) -> None:
                 FieldDeclFactory(name="f3"),
             ],
             vertical_passes=[
-                npir.VerticalPass(
+                VerticalPassFactory(
                     temp_defs=[],
-                    lower=common.AxisBound.start(),
-                    upper=common.AxisBound.end(),
-                    direction=common.LoopOrder.PARALLEL,
                     body=[
                         npir.HorizontalBlock(
                             body=[
-                                npir.VectorAssign(
+                                VectorAssignFactory(
                                     left=FieldSliceFactory(name="f1", parallel_k=True),
                                     right=npir.VectorArithmetic(
                                         op=common.ArithmeticOperator.MUL,
@@ -358,16 +387,16 @@ def test_full_computation_valid(tmp_path) -> None:
                         ),
                     ],
                 ),
-                npir.VerticalPass(
-                    temp_defs=[],
+                VerticalPassFactory(
                     lower=common.AxisBound.from_start(offset=1),
                     upper=common.AxisBound.from_end(offset=-3),
                     direction=common.LoopOrder.BACKWARD,
+                    temp_defs=[],
                     body=[
                         npir.HorizontalBlock(
                             body=[
-                                npir.VectorAssign(
-                                    left=FieldSliceFactory(name="f2", parallel_k=False),
+                                VectorAssignFactory(
+                                    left__name="f2",
                                     right=npir.VectorArithmetic(
                                         op=common.ArithmeticOperator.ADD,
                                         left=FieldSliceFactory(name="f2", parallel_k=False),

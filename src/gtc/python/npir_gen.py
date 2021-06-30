@@ -256,7 +256,7 @@ class NpirGen(TemplatedGenerator):
 
     HorizontalBlock = JinjaTemplate(
         textwrap.dedent(
-            """
+            """\
             # --- begin horizontal block --
             i, I = _di_ - {{ h_lower[0] }}, _dI_ + {{ h_upper[0] }}
             j, J = _dj_ - {{ h_lower[1] }}, _dJ_ + {{ h_upper[1] }}
