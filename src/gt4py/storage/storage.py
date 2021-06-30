@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import List
+
 import numpy as np
 
 
@@ -249,7 +251,7 @@ class Storage(np.ndarray):
 
 
 class GPUStorage(Storage):
-    _modified_storages: dict = {}
+    _modified_storages: List["GPUStorage"] = []
 
     @classmethod
     def _construct(cls, backend, dtype, default_origin, shape, alignment, layout_map):
@@ -300,8 +302,8 @@ class GPUStorage(Storage):
     def __setitem__(self, key, value):
         if hasattr(value, "__cuda_array_interface__"):
             gpu_view = storage_utils.gpu_view(self)
-            gpu_view[key] = cp.asarray(value.data)
             self.device_to_host(True)
+            gpu_view[key] = cp.asarray(value)
             return value
         else:
             return super().__setitem__(key, value)
@@ -316,17 +318,25 @@ class GPUStorage(Storage):
 
     @property
     def _is_device_modified(self):
-        return id(self) in self.__class__._modified_storages
+        return any(np.may_share_memory(self, v) for v in self.__class__._modified_storages)
 
     def _set_clean(self):
         if not self._is_clean():
-            self.__class__._modified_storages.pop(id(self))
+            deleteables = []
+            for i, cand in enumerate(self.__class__._modified_storages):
+                if (
+                    cand._raw_buffer.ctypes.data == self._raw_buffer.ctypes.data
+                    and cand._raw_buffer[-1:].ctypes.data == self._raw_buffer.ctypes.data
+                ):
+                    deleteables.append(i)
+            for i in reversed(deleteables):
+                del self.__class__._modified_storages[i]
 
     def _set_host_modified(self):
         pass
 
     def _set_device_modified(self):
-        self.__class__._modified_storages[id(self)] = self
+        self.__class__._modified_storages.append(self)
 
     def synchronize(self):
         self.device_to_host()
