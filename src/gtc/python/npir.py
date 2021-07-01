@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Any, List, Optional, Tuple, Union, cast
+from typing import List, Optional, Tuple, Union, cast
 
 from pydantic import validator
 
@@ -7,18 +7,12 @@ import eve
 from gtc import common
 
 
+@eve.utils.noninstantiable
 class Expr(common.Expr):
-    # TODO: remove when abstract nodes implemented in eve
-    def __init__(self, *args: Any, **kwargs: Any):
-        if type(self) is Expr:
-            raise TypeError("Cannot instantiate abstract Expr type of numpy IR")
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class Literal(common.Literal, Expr):
-    kind = cast(common.ExprKind, common.ExprKind.SCALAR)
-    dtype: common.DataType
-
     @validator("dtype")
     def is_defined(cls, dtype: common.DataType) -> common.DataType:
         undefined = [common.DataType.AUTO, common.DataType.DEFAULT, common.DataType.INVALID]
@@ -28,7 +22,6 @@ class Literal(common.Literal, Expr):
 
 
 class Cast(common.Cast[Expr], Expr):
-    dtype: common.DataType
     pass
 
 
@@ -64,14 +57,9 @@ class AxisOffset(eve.Node):
         return cls.from_int(axis_name=AxisName.K, offset=offset, parallel=parallel)
 
 
+@eve.utils.noninstantiable
 class VectorExpression(Expr):
-    # TODO: remove when abstract nodes implemented in eve
     kind = cast(common.ExprKind, common.ExprKind.FIELD)
-
-    def __init__(self, *args: Any, **kwargs: Any):
-        if type(self) is VectorExpression:
-            raise TypeError("Cannot instantiate abstract VectorExpression type of numpy IR")
-        super().__init__(*args, **kwargs)
 
 
 class BroadCast(VectorExpression):
