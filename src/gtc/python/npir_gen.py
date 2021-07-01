@@ -86,14 +86,18 @@ class NpirGen(TemplatedGenerator):
     def visit_AxisOffset(self, node: npir.AxisOffset, **kwargs: Any) -> Union[str, Collection[str]]:
         offset = self.visit(node.offset)
         axis_name = self.visit(node.axis_name)
-        if node.parallel:
-            parts = [f"{axis_name.lower()}{offset}", f"{axis_name.upper()}{offset}"]
-            if node.offset.value != 0:
-                parts = [f"({part})" for part in parts]
-            return self.generic_visit(node, from_visitor=":".join(parts), **kwargs)
-        return self.generic_visit(node, from_visitor=f"{axis_name.lower()}_{offset}", **kwargs)
+        lpar, rpar = "()" if offset else ("", "")
+        variant = self.AxisOffset_parallel if node.parallel else self.AxisOffset_serial
+        rendered = variant.render(lpar=lpar, rpar=rpar, axis_name=axis_name, offset=offset)
+        return self.generic_visit(node, parallel_or_serial_variant=rendered, **kwargs)
 
-    AxisOffset = FormatTemplate("{from_visitor}")
+    AxisOffset_parallel = JinjaTemplate(
+        "{{ lpar }}{{ axis_name | lower }}{{ offset }}{{ rpar }}:{{ lpar }}{{ axis_name | upper }}{{ offset }}{{ rpar }}"
+    )
+
+    AxisOffset_serial = JinjaTemplate("{{ axis_name | lower }}_{{ offset }}")
+
+    AxisOffset = FormatTemplate("{parallel_or_serial_variant}")
 
     def visit_FieldDecl(self, node: npir.FieldDecl, **kwargs) -> Union[str, Collection[str]]:
         if all(node.dimensions):
@@ -199,35 +203,25 @@ class NpirGen(TemplatedGenerator):
         return "K" if node == common.LevelMarker.END else "k"
 
     def visit_AxisBound(self, node: common.AxisBound, **kwargs: Any) -> Union[str, Collection[str]]:
-        if node.offset == 0:
-            return self.generic_visit(node, op="", delta="", **kwargs)
-        operator = " - " if node.offset < 0 else " + "
-        delta = str(abs(node.offset))
+        operator, delta = op_delta_from_int(node.offset)
         return self.generic_visit(node, op=operator, delta=delta, **kwargs)
 
     AxisBound = FormatTemplate("_d{level}_{op}{delta}")
 
-    def visit_VerticalPass(
-        self, node: npir.VerticalPass, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
-        for_loop_line = ""
-        body_indent = 0
-        if node.direction == common.LoopOrder.FORWARD:
-            for_loop_line = "\nfor k_ in range(k, K):"
-            body_indent = 4
-        elif node.direction == common.LoopOrder.BACKWARD:
-            for_loop_line = "\nfor k_ in range(K-1, k-1, -1):"
-            body_indent = 4
-        return self.generic_visit(
-            node, for_loop_line=for_loop_line, body_indent=body_indent, **kwargs
-        )
+    def visit_LoopOrder(self, node: common.LoopOrder, **kwargs) -> Union[str, Collection[str]]:
+        if node is common.LoopOrder.FORWARD:
+            return "for k_ in range(k, K):"
+        elif node is common.LoopOrder.BACKWARD:
+            return "for k_ in range(K-1, k-1, -1):"
+        return ""
 
     VerticalPass = JinjaTemplate(
         textwrap.dedent(
             """\
-            # -- begin vertical block --
+            # -- begin vertical block --{% set body_indent = 0 %}
             {% for assign in temp_defs %}{{ assign }}
-            {% endfor %}k, K = {{ lower }}, {{ upper }}{{ for_loop_line }}
+            {% endfor %}k, K = {{ lower }}, {{ upper }}{% if direction %}
+            {{ direction }}{% set body_indent = 4 %}{% endif %}
             {% for hblock in body %}{{ hblock | indent(body_indent, first=True) }}
             {% endfor %}# -- end vertical block --
             """
