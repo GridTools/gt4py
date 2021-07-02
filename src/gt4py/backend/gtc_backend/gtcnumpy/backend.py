@@ -42,7 +42,7 @@ class GTCModuleGenerator(BaseModuleGenerator):
         )
 
     def generate_implementation(self) -> str:
-        params = [f"{p.name}={p.name}" for p in self.backend.gtir.params]
+        params = [f"{p.name}={p.name}" for p in self.builder.gtir.params]
         params.extend(["_domain_=_domain_", "_origin_=_origin_"])
         return f"computation.run({', '.join(params)})"
 
