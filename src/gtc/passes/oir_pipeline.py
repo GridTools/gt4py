@@ -51,7 +51,7 @@ class OirPipeline:
             KCacheDetection().visit,
             PruneKCacheFills().visit,
             PruneKCacheFlushes().visit,
-            FillFlushToLocalKCaches,
+            FillFlushToLocalKCaches().visit,
         ]
 
     def apply(self, steps: Sequence[PASS_T]) -> oir.Stencil:
