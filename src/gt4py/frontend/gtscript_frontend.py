@@ -261,8 +261,8 @@ class AxisIntervalParser(ast.NodeVisitor):
                 if node.value.axis != self.axis_name:
                     raise self.interval_error
                 offset = node.value.offset
-            elif isinstance(node.value, int):
-                offset = node.value
+            elif isinstance(node.value, numbers.Integral):
+                offset = int(node.value)
             else:
                 raise self.interval_error
             return self.make_axis_bound(offset, self.loc)

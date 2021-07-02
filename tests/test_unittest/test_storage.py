@@ -790,53 +790,95 @@ def test_view_gpu():
     run_test_view(backend="gtcuda")
 
 
-def test_numpy_patch():
-    storage = gt_store.from_array(
-        np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtmc"
-    )
+class TestNumpyPatch:
+    def test_asarray(self):
+        storage = gt_store.from_array(
+            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtmc"
+        )
 
-    class npsub(np.ndarray):
-        pass
+        class NDArraySub(np.ndarray):
+            pass
 
-    numpy_array = np.ones((3, 3, 3))
-    matrix = np.ones((3, 3)).view(npsub)
+        numpy_array = np.ones((3, 3, 3))
+        matrix = np.ones((3, 3)).view(NDArraySub)
 
-    assert isinstance(np.asarray(storage), np.ndarray)
-    assert isinstance(np.asarray(numpy_array), np.ndarray)
-    assert isinstance(np.asarray(matrix), np.ndarray)
-    assert isinstance(np.asanyarray(storage), type(storage))
-    assert isinstance(np.asanyarray(numpy_array), np.ndarray)
-    assert isinstance(np.asanyarray(matrix), npsub)
-    assert isinstance(np.array(storage), np.ndarray)
-    assert isinstance(np.array(matrix), np.ndarray)
-    assert isinstance(np.array(numpy_array), np.ndarray)
+        assert isinstance(np.asarray(storage), np.ndarray)
+        assert isinstance(np.asarray(numpy_array), np.ndarray)
+        assert isinstance(np.asarray(matrix), np.ndarray)
+        assert isinstance(np.asanyarray(storage), type(storage))
+        assert isinstance(np.asanyarray(numpy_array), np.ndarray)
+        assert isinstance(np.asanyarray(matrix), NDArraySub)
+        assert isinstance(np.array(storage), np.ndarray)
+        assert isinstance(np.array(matrix), np.ndarray)
+        assert isinstance(np.array(numpy_array), np.ndarray)
 
-    # apply numpy patch
-    gt_store.prepare_numpy()
+        # apply numpy patch
+        gt_store.prepare_numpy()
 
-    assert isinstance(np.asarray(storage), type(storage))
-    assert isinstance(np.asarray(numpy_array), np.ndarray)
-    assert isinstance(np.asarray(matrix), np.ndarray)
+        try:
+            assert isinstance(np.asarray(storage), type(storage))
+            assert isinstance(np.asarray(numpy_array), np.ndarray)
+            assert isinstance(np.asarray(matrix), np.ndarray)
 
-    assert isinstance(np.array(matrix), np.ndarray)
-    assert isinstance(np.array(numpy_array), np.ndarray)
-    try:
-        np.array(storage)
-    except RuntimeError:
-        pass
-    else:
-        assert False
+            assert isinstance(np.array(matrix), np.ndarray)
+            assert isinstance(np.array(numpy_array), np.ndarray)
+            with pytest.raises(RuntimeError):
+                np.array(storage)
+        finally:
+            # undo patch
+            gt_store.restore_numpy()
 
-    # undo patch
-    gt_store.restore_numpy()
+        assert isinstance(np.asarray(storage), np.ndarray)
+        assert isinstance(np.asarray(numpy_array), np.ndarray)
+        assert isinstance(np.asarray(matrix), np.ndarray)
 
-    assert isinstance(np.asarray(storage), np.ndarray)
-    assert isinstance(np.asarray(numpy_array), np.ndarray)
-    assert isinstance(np.asarray(matrix), np.ndarray)
+        assert isinstance(np.array(storage), np.ndarray)
+        assert isinstance(np.array(matrix), np.ndarray)
+        assert isinstance(np.array(numpy_array), np.ndarray)
 
-    assert isinstance(np.array(storage), np.ndarray)
-    assert isinstance(np.array(matrix), np.ndarray)
-    assert isinstance(np.array(numpy_array), np.ndarray)
+    def test_array(self):
+        storage = gt_store.from_array(
+            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtmc"
+        )
+
+        class NDArraySub(np.ndarray):
+            pass
+
+        numpy_array = np.ones((3, 3, 3))
+        matrix = np.ones((3, 3)).view(NDArraySub)
+
+        assert isinstance(np.array(storage, copy=False), np.ndarray)
+        assert isinstance(np.array(numpy_array, copy=False), np.ndarray)
+        assert isinstance(np.array(matrix, copy=False), np.ndarray)
+        assert isinstance(np.asanyarray(storage), type(storage))
+        assert isinstance(np.asanyarray(numpy_array), np.ndarray)
+        assert isinstance(np.asanyarray(matrix), NDArraySub)
+        assert isinstance(np.array(storage), np.ndarray)
+        assert isinstance(np.array(matrix), np.ndarray)
+        assert isinstance(np.array(numpy_array), np.ndarray)
+
+        # apply numpy patch
+        gt_store.prepare_numpy()
+        try:
+            assert isinstance(np.array(storage, copy=False), type(storage))
+            assert isinstance(np.array(numpy_array, copy=False), np.ndarray)
+            assert isinstance(np.array(matrix, copy=False), np.ndarray)
+
+            assert isinstance(np.array(matrix), np.ndarray)
+            assert isinstance(np.array(numpy_array), np.ndarray)
+            with pytest.raises(RuntimeError):
+                np.array(storage)
+        finally:
+            # undo patch
+            gt_store.restore_numpy()
+
+        assert isinstance(np.array(storage, copy=False), np.ndarray)
+        assert isinstance(np.array(numpy_array, copy=False), np.ndarray)
+        assert isinstance(np.array(matrix, copy=False), np.ndarray)
+
+        assert isinstance(np.array(storage), np.ndarray)
+        assert isinstance(np.array(matrix), np.ndarray)
+        assert isinstance(np.array(numpy_array), np.ndarray)
 
 
 @pytest.mark.requires_gpu

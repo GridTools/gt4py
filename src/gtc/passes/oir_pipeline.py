@@ -12,6 +12,7 @@ from gtc.passes.oir_optimizations.caches import (
     PruneKCacheFills,
     PruneKCacheFlushes,
 )
+from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
 from gtc.passes.oir_optimizations.temporaries import (
@@ -44,6 +45,7 @@ class OirPipeline:
             WriteBeforeReadTemporariesToScalars().visit,
             OnTheFlyMerging().visit,
             MaskStmtMerging().visit,
+            MaskInlining().visit,
             NoFieldAccessPruning().visit,
             IJCacheDetection().visit,
             KCacheDetection().visit,
