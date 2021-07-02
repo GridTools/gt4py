@@ -9,8 +9,10 @@ from gt4py.backend.debug_backend import (
     debug_is_compatible_type,
     debug_layout,
 )
-from gt4py.backend.gtc_backend.mixin import GTCBackendMixin
+from gtc.passes.caching import FillFlushToLocalKCaches
 from gtc.passes.gtir_legacy_extents import compute_legacy_extents
+from gtc.passes.horizontal_execution_merging import GreedyMerging
+from gtc.passes.oir_pipeline import OirPipeline
 from gtc.python import npir
 from gtc.python.npir_gen import NpirGen
 from gtc.python.oir_to_npir import OirToNpir
@@ -60,9 +62,8 @@ def recursive_write(root_path: pathlib.Path, tree: Dict[str, Union[str, dict]]):
             src_path.write_text(cast(str, value))
 
 
-# TODO (ricoh): replace GTCBackendMixin with a pipeline analog to gtir pipeline.
 @register
-class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
+class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
     """NumPy backend using gtc."""
 
     name = "gtc:numpy"
@@ -105,7 +106,11 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin, GTCBackendMixin):
         return self.make_module()
 
     def _make_npir(self) -> npir.Computation:
-        return OirToNpir().visit(self.oir)
+        return OirToNpir().visit(
+            OirPipeline(self.builder.gtir)
+            .full(skip=[GreedyMerging().visit, FillFlushToLocalKCaches().visit])
+            .oir
+        )
 
     @property
     def npir(self) -> npir.Computation:

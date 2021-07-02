@@ -37,6 +37,8 @@ from gtc import oir
 from gtc.dace.nodes import HorizontalExecutionLibraryNode
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
+from .api import optimize_horizontal_executions
+
 
 OFFSETS_T = Dict[str, Set[Tuple[int, int, int]]]
 IJ_OFFSETS_T = Dict[str, Set[Tuple[int, int]]]
@@ -254,3 +256,7 @@ class GraphMerging(Transformation):
                     res.remove_in_connector("IN_" + acc.label)
             elif not state.out_edges:
                 acc.access = dace.AccessType.WriteOnly
+
+
+def graph_merge_horizontal_executions(node: oir.Stencil) -> oir.Stencil:
+    return optimize_horizontal_executions(oir, GraphMerging)
