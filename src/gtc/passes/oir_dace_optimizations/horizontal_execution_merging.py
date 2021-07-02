@@ -259,4 +259,4 @@ class GraphMerging(Transformation):
 
 
 def graph_merge_horizontal_executions(node: oir.Stencil) -> oir.Stencil:
-    return optimize_horizontal_executions(oir, GraphMerging)
+    return optimize_horizontal_executions(node, GraphMerging)

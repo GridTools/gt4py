@@ -107,9 +107,9 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
 
     def _make_npir(self) -> npir.Computation:
         return OirToNpir().visit(
-            OirPipeline(self.builder.gtir)
-            .full(skip=[GreedyMerging().visit, FillFlushToLocalKCaches().visit])
-            .oir
+            OirPipeline(self.builder.gtir).full(
+                skip=[GreedyMerging().visit, FillFlushToLocalKCaches().visit]
+            )
         )
 
     @property
