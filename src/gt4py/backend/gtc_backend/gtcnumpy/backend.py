@@ -9,6 +9,7 @@ from gt4py.backend.debug_backend import (
     debug_is_compatible_type,
     debug_layout,
 )
+from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_legacy_extents import compute_legacy_extents
 from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
@@ -107,7 +108,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
 
     def _make_npir(self) -> npir.Computation:
         return OirToNpir().visit(
-            OirPipeline(self.builder.gtir).full(
+            OirPipeline(GTIRToOIR().visit(self.builder.gtir)).full(
                 skip=[GreedyMerging().visit, FillFlushToLocalKCaches().visit]
             )
         )
