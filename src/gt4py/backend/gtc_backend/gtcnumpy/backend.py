@@ -11,8 +11,6 @@ from gt4py.backend.debug_backend import (
 )
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_legacy_extents import compute_legacy_extents
-from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 from gtc.passes.oir_pipeline import OirPipeline
 from gtc.python import npir
 from gtc.python.npir_gen import NpirGen
@@ -90,7 +88,8 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         )
         return {
             computation_name: format_source(
-                "python", NpirGen.apply(self.npir, field_extents=compute_legacy_extents(self.gtir))
+                "python",
+                NpirGen.apply(self.npir, field_extents=compute_legacy_extents(self.builder.gtir)),
             ),
         }
 
@@ -108,9 +107,8 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
 
     def _make_npir(self) -> npir.Computation:
         return OirToNpir().visit(
-            OirPipeline(GTIRToOIR().visit(self.builder.gtir)).full(
-                skip=[GreedyMerging().visit, FillFlushToLocalKCaches().visit]
-            )
+            # TODO (ricoh) apply optimizations, skip only the ones that fail
+            OirPipeline(GTIRToOIR().visit(self.builder.gtir)).apply([])
         )
 
     @property
