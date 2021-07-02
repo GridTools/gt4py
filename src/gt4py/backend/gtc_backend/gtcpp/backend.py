@@ -36,9 +36,9 @@ from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
-from gtc.passes.caches import FillFlushToLocalKCaches
 from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.horizontal_execution_merging import GreedyMerging
+from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 from gtc.passes.oir_pipeline import OirPipeline
 
 

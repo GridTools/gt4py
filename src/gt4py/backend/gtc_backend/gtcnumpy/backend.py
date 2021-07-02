@@ -9,9 +9,9 @@ from gt4py.backend.debug_backend import (
     debug_is_compatible_type,
     debug_layout,
 )
-from gtc.passes.caching import FillFlushToLocalKCaches
 from gtc.passes.gtir_legacy_extents import compute_legacy_extents
-from gtc.passes.horizontal_execution_merging import GreedyMerging
+from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 from gtc.passes.oir_pipeline import OirPipeline
 from gtc.python import npir
 from gtc.python.npir_gen import NpirGen
