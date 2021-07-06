@@ -48,11 +48,9 @@ class GTCCudaExtGenerator:
         self.backend = backend
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full().gtir
-        oir = (
-            OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir))
-            .full(skip=[GreedyMerging().visit, NoFieldAccessPruning().visit])
-            .oir
+        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(
+            skip=[GreedyMerging().visit, NoFieldAccessPruning().visit]
         )
         cuir = oir_to_cuir.OIRToCUIR().visit(oir)
         cuir = kernel_fusion.FuseKernels().visit(cuir)
