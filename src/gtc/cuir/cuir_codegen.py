@@ -501,8 +501,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             kernel_${id(kernel)},
                             0);
                     % endfor
-
-                    GT_CUDA_CHECK(cudaDeviceSynchronize());
                 };
             }
         }

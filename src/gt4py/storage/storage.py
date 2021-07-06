@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Dict
+
 import numpy as np
 
 
@@ -249,7 +251,7 @@ class Storage(np.ndarray):
 
 
 class GPUStorage(Storage):
-    _modified_storages: dict = {}
+    _modified_storages: Dict[int, "GPUStorage"] = dict()
 
     @classmethod
     def _construct(cls, backend, dtype, default_origin, shape, alignment, layout_map):
@@ -265,7 +267,7 @@ class GPUStorage(Storage):
 
     @classmethod
     def get_modified_storages(cls):
-        return cls._modified_storages
+        return list(cls._modified_storages.values())
 
     @property
     def __cuda_array_interface__(self):
@@ -300,15 +302,18 @@ class GPUStorage(Storage):
     def __setitem__(self, key, value):
         if hasattr(value, "__cuda_array_interface__"):
             gpu_view = storage_utils.gpu_view(self)
-            gpu_view[key] = cp.asarray(value.data)
-            self.device_to_host(True)
+            gpu_view[key] = cp.asarray(value)
+            self._set_device_modified()
             return value
         else:
+            self.device_to_host()
+            if isinstance(value, GPUStorage):
+                value.device_to_host()
             return super().__setitem__(key, value)
 
     @property
     def _is_clean(self):
-        return not self._is_device_modified()
+        return not self._is_device_modified
 
     @property
     def _is_host_modified(self):
@@ -316,17 +321,22 @@ class GPUStorage(Storage):
 
     @property
     def _is_device_modified(self):
-        return id(self) in self.__class__._modified_storages
+        return any(np.may_share_memory(self, v) for v in GPUStorage._modified_storages.values())
 
     def _set_clean(self):
-        if not self._is_clean():
-            self.__class__._modified_storages.pop(id(self))
+        if not self._is_clean:
+            for cand_id, cand in list(GPUStorage._modified_storages.items()):
+                if (
+                    cand._raw_buffer.data.ptr >= self._raw_buffer.data.ptr
+                    and cand._raw_buffer[-1:].data.ptr <= self._raw_buffer[-1:].data.ptr
+                ):
+                    del GPUStorage._modified_storages[cand_id]
 
     def _set_host_modified(self):
         pass
 
     def _set_device_modified(self):
-        self.__class__._modified_storages[id(self)] = self
+        GPUStorage._modified_storages[id(self)] = self
 
     def synchronize(self):
         self.device_to_host()
@@ -334,7 +344,7 @@ class GPUStorage(Storage):
     def device_to_host(self, force=False):
         if force or self._is_device_modified:
             cp.cuda.Device(0).synchronize()
-            self.__class__._modified_storages.clear()
+            GPUStorage._modified_storages.clear()
 
 
 class CPUStorage(Storage):
