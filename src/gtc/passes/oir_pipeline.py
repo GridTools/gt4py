@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Optional, Sequence, Tuple
+from typing import Callable, Dict, Optional, Protocol, Sequence, Tuple, cast
 
 from gtc import oir
 from gtc.passes.oir_dace_optimizations.horizontal_execution_merging import (
@@ -23,6 +23,10 @@ from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMergi
 
 
 PASS_T = Callable[[oir.Stencil], oir.Stencil]
+
+
+class ClassMethodPass(Protocol):
+    __func__: Callable[[oir.Stencil], oir.Stencil]
 
 
 class OirPipeline:
@@ -66,7 +70,16 @@ class OirPipeline:
     def _set_cached(self, steps: Sequence[PASS_T], node: oir.Stencil) -> oir.Stencil:
         return self._cache.setdefault(tuple(steps), node)
 
+    def _should_execute_step(self, step: PASS_T, skip: Sequence[PASS_T]) -> bool:
+        if step in skip:
+            return False
+        if hasattr(step, "__func__"):
+            skip_func = [cast(ClassMethodPass, s).__func__ for s in skip if hasattr(s, "__func__")]
+            if cast(ClassMethodPass, step).__func__ in skip_func:
+                return False
+        return True
+
     def full(self, skip: Sequence[PASS_T] = None) -> oir.Stencil:
         skip = skip or []
-        pipeline = [step for step in self.steps() if step not in skip]
+        pipeline = [step for step in self.steps() if self._should_execute_step(step, skip)]
         return self._get_cached(pipeline) or self._set_cached(pipeline, self.apply(pipeline))
