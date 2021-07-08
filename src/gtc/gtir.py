@@ -252,44 +252,6 @@ class VerticalLoop(LocNode):
             )
         return values
 
-    @root_validator(skip_on_failure=True)
-    def no_writes_before_horizontal_region_offset(
-        values: RootValidatorValuesType,
-    ) -> RootValidatorValuesType:
-        """
-        Check for race conditions associated with horizontal regions quirks.
-
-        A VerticalLoop cannot contain writes to a field before it is used with horizontal offsets
-        inside a HorizontalRegion.
-        """
-
-        def collect_writes(stmt: Stmt) -> Set[str]:
-            return (
-                stmt.iter_tree()
-                .if_isinstance(ParAssignStmt)
-                .getattr("left")
-                .getattr("name")
-                .to_set()
-            )
-
-        def reads_with_horizontal_offsets(stmt: Stmt) -> Set[str]:
-            return (
-                stmt.body.iter_tree()
-                .if_isinstance(FieldAccess)
-                .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
-                .getattr("name")
-                .to_set()
-            )
-
-        writes_so_far: Set[str] = set()
-        for stmt in values["body"]:
-            if isinstance(stmt, HorizontalRegion):
-                if writes_before_reads := writes_so_far & reads_with_horizontal_offsets(stmt):
-                    raise ValueError(
-                        f"Write before reading with an offset in a horizontal region detected for {writes_before_reads}."
-                    )
-            writes_so_far |= collect_writes(stmt)
-
 
 class Stencil(LocNode, SymbolTableTrait):
     name: Str
