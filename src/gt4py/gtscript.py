@@ -326,7 +326,6 @@ def lazy_stencil(
             Defers the generation step until the last moment and allows syntax checking independently.
             Also gives access to a more fine grained generate / build process.
     """
-    from gt4py import backend as backend_module
     from gt4py import frontend
 
     def _decorator(func):
