@@ -329,9 +329,6 @@ def lazy_stencil(
     from gt4py import backend as backend_module
     from gt4py import frontend
 
-    if isinstance(backend, str):
-        backend = backend_module.from_name(backend)
-
     def _decorator(func):
         _set_arg_dtypes(func, dtypes or {})
         options = gt_definitions.BuildOptions(

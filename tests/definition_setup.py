@@ -199,8 +199,6 @@ class TComputationBlock(TObject):
 
     def build(self) -> ComputationBlock:
         self.loc.scope = self.parent.child_scope if self.parent else self.scope
-        if self.parent:
-            self.loc.scope = self.parent.child_scope
         temp_fields = self.fields.difference(self.parent.fields) if self.parent else set()
         temp_decls = [
             FieldDecl(
