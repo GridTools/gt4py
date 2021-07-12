@@ -207,10 +207,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         self, node: gtcpp.GTComputationCall, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         computation_name = type(node).__name__ + str(id(node))
-        extra_decls_name = [d.name for d in node.extra_decls]
-        return self.generic_visit(
-            node, computation_name=computation_name, extra_decls_name=extra_decls_name, **kwargs
-        )
+        return self.generic_visit(node, computation_name=computation_name, **kwargs)
 
     GTComputationCall = as_mako(
         """
@@ -219,13 +216,12 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             auto grid = make_grid(domain[0], domain[1], axis<1,
                 axis_config::offset_limit<${offset_limit}>>{domain[2]});
 
-            ${ '\\n'.join(extra_decls) }
-
-            auto ${ computation_name } = [${ ','.join(extra_decls_name) }](${ ','.join('auto ' + a for a in arguments) }) {
-
+            auto ${ computation_name } = [](${ ','.join('auto ' + a for a in arguments) }) {
                 ${ '\\n'.join(temporaries) }
                 return multi_pass(${ ','.join(multi_stages) });
             };
+
+            ${'\\n'.join(extra_decls)}
 
             run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(f"std::forward<decltype({arg})>({arg})" for arg in arguments)});
         }
@@ -238,7 +234,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
         #include <gridtools/stencil/positional.hpp>
-        
+
         namespace ${ name }_impl_{
             using Domain = std::array<gridtools::uint_t, 3>;
             using namespace gridtools::stencil;

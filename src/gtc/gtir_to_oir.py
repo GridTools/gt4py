@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass, field
 from typing import Any, List, Union
 
 from eve import NodeTranslator
@@ -213,7 +212,7 @@ class GTIRToOIR(NodeTranslator):
         )
 
     def visit_AxisIndex(self, node: gtir.AxisIndex) -> oir.AxisIndex:
-        return oir.AxisIndex(name=node.name)
+        return oir.AxisIndex(axis=node.axis)
 
     def visit_For(self, node: gtir.For, ctx: Context, **kwargs: Any) -> None:
         ctx.add_horizontal_execution(

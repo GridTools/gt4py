@@ -408,8 +408,8 @@ class NumPySourceGenerator(PythonSourceGenerator):
         return sources
 
     def visit_AxisIndex(self, node: gt_ir.AxisIndex):
-        assert node.name == "K"
-        return node.name
+        assert node.axis == "K"
+        return node.axis
 
     def _visit_branch_stmt(self, stmt: gt_ir.Statement) -> List[str]:
         sources = []

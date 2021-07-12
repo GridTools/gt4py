@@ -28,7 +28,6 @@ Analysis is required to generate valid code (complying with the parallel model)
 """
 
 from typing import Any, Generator, List, Set, Tuple, Union
-from gt4py.ir.nodes import AxisIndex
 
 from pydantic import validator
 from pydantic.class_validators import root_validator
@@ -185,8 +184,10 @@ class ScalarDecl(Decl):
     pass
 
 
-class AxisIndex(common.AxisIndex, Expr):
-    pass
+class AxisIndex(Expr):
+    axis: str
+    dtype = common.DataType.INT32
+    kind = common.ExprKind.SCALAR
 
 
 class For(Stmt):

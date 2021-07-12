@@ -255,7 +255,7 @@ class DefIRToGTIR(IRNodeVisitor):
             )
 
     def visit_AxisIndex(self, node: AxisIndex) -> gtir.AxisIndex:
-        return gtir.AxisIndex(name=node.name)
+        return gtir.AxisIndex(axis=node.axis)
 
     def visit_For(self, node: For) -> gtir.For:
         return gtir.For(

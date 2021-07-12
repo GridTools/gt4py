@@ -385,7 +385,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
     def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
         self.requires_positional = True
-        return f"eval.{node.name.lower()}()"
+        return f"eval.{node.axis.lower()}()"
 
     def _visit_ForLoopBound(self, node: gt_ir.AxisBound, axis):
         return "static_cast<gt::int_t>({endpt}{offset:+d})".format(

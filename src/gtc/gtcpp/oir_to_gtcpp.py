@@ -16,7 +16,7 @@
 
 import itertools
 from dataclasses import dataclass, field
-from typing import Any, List, Set, Union
+from typing import Any, Dict, List, Set, Union
 
 from devtools import debug  # noqa: F401
 
@@ -81,6 +81,7 @@ class OIRToGTCpp(eve.NodeTranslator):
     class GTComputationContext:
         temporaries: List[gtcpp.Temporary] = field(default_factory=list)
         arguments: Set[gtcpp.Arg] = field(default_factory=set)
+        axis_indices: Dict[str, str] = field(default_factory=dict)
 
         def add_temporaries(
             self, temporaries: List[gtcpp.Temporary]
@@ -90,6 +91,11 @@ class OIRToGTCpp(eve.NodeTranslator):
 
         def add_arguments(self, arguments: Set[gtcpp.Arg]) -> "OIRToGTCpp.GTComputationContext":
             self.arguments.update(arguments)
+            return self
+
+        def add_axis_index(self, axis_index: oir.AxisIndex) -> "OIRToGTCpp.GTComputationContext":
+            axis_name = axis_index.axis.lower()
+            self.axis_indices[axis_name] = f"{axis_name}_pos"
             return self
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> gtcpp.Literal:
@@ -178,24 +184,17 @@ class OIRToGTCpp(eve.NodeTranslator):
             true_branch=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),
         )
 
-    # def visit_AxisIndex(self, node: oir.AxisIndex, **kwargs: Any) -> gtcpp.AxisIndex:
-    #     return gtcpp.AxisIndex(name=node.name)
-
-    def visit_AxisIndex(self, node: oir.AxisIndex, **kwargs: Any) -> gtcpp.AccessorRef:
-        self.axes_indices[node.name] = f"{node.name.lower()}_pos"
+    def visit_AxisIndex(
+        self, node: oir.AxisIndex, *, comp_ctx: GTComputationContext, **kwargs: Any
+    ) -> gtcpp.AccessorRef:
+        comp_ctx.add_axis_index(node)
         return gtcpp.AccessorRef(
-            name=self.axes_indices[node.name],
+            name=comp_ctx.axis_indices[node.axis.lower()],
             offset=common.CartesianOffset.zero(),
             dtype=common.DataType.INT32,
         )
 
     def visit_For(self, node: oir.For, **kwargs: Any) -> gtcpp.For:
-        # for name in node.start.iter_tree().if_isinstance(oir.AxisIndex).getattr("name").to_set():
-        #     self.axes_indices[name] = f"{name.lower()}_pos"
-
-        # for name in node.end.iter_tree().if_isinstance(oir.AxisIndex).getattr("name").to_set():
-        #     self.axes_indices[name] = f"{name.lower()}_pos"
-
         return gtcpp.For(
             target_name=node.target_name,
             start=self.visit(node.start, **kwargs),
@@ -215,11 +214,9 @@ class OIRToGTCpp(eve.NodeTranslator):
     ) -> gtcpp.GTStage:
         assert "stencil_symtable" in kwargs
 
-        self.axes_indices = {}
-
         apply_method = gtcpp.GTApplyMethod(
             interval=self.visit(interval, **kwargs),
-            body=self.visit(node.body, **kwargs),
+            body=self.visit(node.body, comp_ctx=comp_ctx, **kwargs),
             local_variables=self.visit(node.declarations, **kwargs),
         )
         accessors = _extract_accessors(apply_method)
@@ -229,8 +226,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             {
                 param_arg
                 for param_arg in stage_args
-                if param_arg.name
-                not in [tmp.name for tmp in comp_ctx.temporaries] + list(self.axes_indices.values())
+                if param_arg.name not in [tmp.name for tmp in comp_ctx.temporaries]
             }
         )
 
@@ -303,11 +299,10 @@ class OIRToGTCpp(eve.NodeTranslator):
         )
 
         bindings = [
-            gtcpp.Binding(name=variable, expr=gtcpp.Positional(dim=axis.lower()))
-            for axis, variable in self.axes_indices.items()
+            gtcpp.Binding(name=name, expr=gtcpp.Positional(dim=axis))
+            for axis, name in comp_ctx.axis_indices.items()
         ]
 
-        # TODO(johannd): Build up bindings inside comp_ctx instead of visitor state.
         gt_computation = gtcpp.GTComputationCall(
             arguments=comp_ctx.arguments,
             extra_decls=bindings,

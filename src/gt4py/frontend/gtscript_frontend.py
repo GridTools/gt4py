@@ -963,7 +963,7 @@ class IRMaker(ast.NodeVisitor):
     def _parse_vertical_index(self, node: ast.Call) -> gt_ir.AxisIndex:
         if node.args[0].id != "K":
             raise GTScriptSyntaxError("Only K is supported")
-        return gt_ir.AxisIndex(name="K")
+        return gt_ir.AxisIndex(axis="K")
 
     def _parse_forloop_args_call(self, node: ast.Call) -> list:
         assert isinstance(node, ast.Call)
@@ -1265,7 +1265,7 @@ class IRMaker(ast.NodeVisitor):
         if isinstance(node.func, ast.Name) and node.func.id == "index":
             assert len(node.args) == 1
             axis_name = node.args[0].id
-            return gt_ir.AxisIndex(name=axis_name, data_type=gt_ir.DataType.INT32)
+            return gt_ir.AxisIndex(axis=axis_name, data_type=gt_ir.DataType.INT32)
 
         else:
             native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
