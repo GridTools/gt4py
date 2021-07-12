@@ -706,6 +706,13 @@ class AxisInterval(Node):
 
         return interval
 
+    @property
+    def is_single_index(self) -> bool:
+        if not isinstance(self.start, AxisBound) or not isinstance(self.end, AxisBound):
+            return False
+
+        return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
+
     def disjoint_from(self, other: "AxisInterval") -> bool:
         # This made-up constant must be larger than any LevelMarker.offset used
         DOMAIN_SIZE: int = 1000
@@ -731,6 +738,13 @@ class AxisInterval(Node):
             return False
 
         return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
+
+
+# TODO Find a better place for this in the file.
+@attribclass
+class HorizontalIf(Statement):
+    intervals = attribute(of=DictOf[str, AxisInterval])
+    body = attribute(of=BlockStmt)
 
 
 # TODO Find a better place for this in the file.

@@ -28,15 +28,18 @@ import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
 from gt4py.gtscript import (
-    __INLINED,
     PARALLEL,
+    I,
+    J,
     K,
     abs,
     asin,
     compile_assert,
     computation,
+    horizontal,
     interval,
     isfinite,
+    region,
     sin,
 )
 
@@ -438,7 +441,7 @@ class TestIntervalSyntax:
 
     def test_overlapping_intervals_none(self):
         def definition_func(field: gtscript.Field[float]):
-            with computation(FORWARD):
+            with computation(PARALLEL):
                 with interval(0, None):
                     field = 0
                 with interval(-1, None):
@@ -451,7 +454,7 @@ class TestIntervalSyntax:
 
     def test_overlapping_intervals(self):
         def definition_func(field: gtscript.Field[float]):
-            with computation(FORWARD):
+            with computation(PARALLEL):
                 with interval(0, 3):
                     field = 0
                 with interval(2, None):
@@ -464,7 +467,7 @@ class TestIntervalSyntax:
 
     def test_nonoverlapping_intervals(self):
         def definition_func(field: gtscript.Field[float]):
-            with computation(FORWARD):
+            with computation(PARALLEL):
                 with interval(0, 2):
                     field = 0
                 with interval(3, -1):
@@ -475,6 +478,116 @@ class TestIntervalSyntax:
         parse_definition(
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
+
+
+class TestRegions:
+    def test_one_interval_only(self):
+        def stencil(in_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...), horizontal(region[I[0:3], :]):
+                in_f = 1.0
+
+        def_ir = parse_definition(
+            stencil, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+        assert len(def_ir.computations) == 1
+        assert isinstance(def_ir.computations[0].body.stmts[0], gt_ir.HorizontalIf)
+
+    def test_one_interval_only_single(self):
+        def stencil(in_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...), horizontal(region[I[0], :]):
+                in_f = 1.0
+
+        def_ir = parse_definition(
+            stencil, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+        assert len(def_ir.computations) == 1
+        assert def_ir.computations[0].body.stmts[0].intervals["I"].is_single_index
+
+    def test_from_external(self):
+        def stencil(in_f: gtscript.Field[np.float_]):
+            from gt4py.__externals__ import i1
+
+            with computation(PARALLEL), interval(...), horizontal(region[i1, :]):
+                in_f = 1.0
+
+        def_ir = parse_definition(
+            stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            externals={"i1": I[1]},
+        )
+
+        assert len(def_ir.computations) == 1
+        assert (
+            def_ir.computations[0].body.stmts[0].intervals["I"].start.level
+            == gt_ir.LevelMarker.START
+        )
+        assert def_ir.computations[0].body.stmts[0].intervals["I"].start.offset == 1
+        assert def_ir.computations[0].body.stmts[0].intervals["I"].is_single_index
+
+    def test_multiple_inline(self):
+        def stencil(in_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_f = in_f + 1.0
+                with horizontal(region[I[0], :], region[:, J[-1]]):
+                    in_f = 1.0
+
+        def_ir = parse_definition(
+            stencil, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+        assert len(def_ir.computations[0].body.stmts) == 3
+
+    def test_inside_function(self):
+        @gtscript.function
+        def region_func():
+            from gt4py.__externals__ import ie
+
+            field = 0.0
+            with horizontal(region[ie, :]):
+                field = 1.0
+
+            return field
+
+        def stencil(in_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_f = region_func()
+
+        def_ir = parse_definition(
+            stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            externals={"ie": I[-1]},
+        )
+
+    def test_error_undefined(self):
+        def stencil(in_f: gtscript.Field[np.float_]):
+            from gt4py.__externals__ import i0  # forget to add 'ia'
+
+            with computation(PARALLEL), interval(...):
+                in_f = in_f + 1.0
+                with horizontal(region[i0 : 1 + ia, :]):
+                    in_f = 1.0
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Unknown symbol"):
+            parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+    def test_error_nested(self):
+        def stencil(in_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                in_f = in_f + 1.0
+                with horizontal(region[I[0], :]):
+                    in_f = 1.0
+                    with horizontal(region[:, J[-1]]):
+                        in_f = 2.0
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Cannot nest `with` node inside horizontal region",
+        ):
+            parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
 
 class TestExternalsWithSubroutines:

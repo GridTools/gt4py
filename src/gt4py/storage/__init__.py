@@ -20,7 +20,8 @@
 from .storage import Storage, empty, from_array, ones, zeros
 
 
-_numpy_patch = None
+_numpy_array_patch = None
+_numpy_asarray_patch = None
 
 
 def prepare_numpy():
@@ -33,20 +34,31 @@ def prepare_numpy():
 
         from gt4py import utils as gt_utils
 
-        global _numpy_patch
+        global _numpy_array_patch
+        global _numpy_asarray_patch
 
         original_array_func = np.array
+        original_asarray_func = np.asarray
 
         @wraps(np.array)
         def __array_with_subok_patch(
-            object, dtype=None, copy=True, order="K", subok=False, ndmin=0
+            object, dtype=None, *, copy=True, order="K", subok=False, ndmin=0, **kwargs
         ):
             subok = getattr(object, "__array_subok__", subok)
             return original_array_func(
-                object, dtype=dtype, copy=copy, order=order, subok=subok, ndmin=ndmin
+                object, dtype=dtype, copy=copy, order=order, subok=subok, ndmin=ndmin, **kwargs
             )
 
-        _numpy_patch = gt_utils.patch_module(np, np.array, __array_with_subok_patch)
+        @wraps(np.asarray)
+        def __asarray_with_subok_patch(a, dtype=None, order=None, **kwargs):
+            subok = getattr(a, "__array_subok__", False)
+            if subok:
+                return np.asanyarray(a, dtype=dtype, order=order, **kwargs)
+            else:
+                return original_asarray_func(a, dtype=dtype, order=order, **kwargs)
+
+        _numpy_array_patch = gt_utils.patch_module(np, np.array, __array_with_subok_patch)
+        _numpy_asarray_patch = gt_utils.patch_module(np, np.asarray, __asarray_with_subok_patch)
 
         np.__dict__["__gt_array_patch__"] = True
 
@@ -59,5 +71,6 @@ def restore_numpy():
     if "__gt_array_patch__" in np.__dict__:
         from gt4py import utils as gt_utils
 
-        gt_utils.restore_module(_numpy_patch)
+        gt_utils.restore_module(_numpy_asarray_patch)
+        gt_utils.restore_module(_numpy_array_patch)
         del np.__dict__["__gt_array_patch__"]
