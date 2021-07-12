@@ -790,53 +790,95 @@ def test_view_gpu():
     run_test_view(backend="gtcuda")
 
 
-def test_numpy_patch():
-    storage = gt_store.from_array(
-        np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtmc"
-    )
+class TestNumpyPatch:
+    def test_asarray(self):
+        storage = gt_store.from_array(
+            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtmc"
+        )
 
-    class npsub(np.ndarray):
-        pass
+        class NDArraySub(np.ndarray):
+            pass
 
-    numpy_array = np.ones((3, 3, 3))
-    matrix = np.ones((3, 3)).view(npsub)
+        numpy_array = np.ones((3, 3, 3))
+        matrix = np.ones((3, 3)).view(NDArraySub)
 
-    assert isinstance(np.asarray(storage), np.ndarray)
-    assert isinstance(np.asarray(numpy_array), np.ndarray)
-    assert isinstance(np.asarray(matrix), np.ndarray)
-    assert isinstance(np.asanyarray(storage), type(storage))
-    assert isinstance(np.asanyarray(numpy_array), np.ndarray)
-    assert isinstance(np.asanyarray(matrix), npsub)
-    assert isinstance(np.array(storage), np.ndarray)
-    assert isinstance(np.array(matrix), np.ndarray)
-    assert isinstance(np.array(numpy_array), np.ndarray)
+        assert isinstance(np.asarray(storage), np.ndarray)
+        assert isinstance(np.asarray(numpy_array), np.ndarray)
+        assert isinstance(np.asarray(matrix), np.ndarray)
+        assert isinstance(np.asanyarray(storage), type(storage))
+        assert isinstance(np.asanyarray(numpy_array), np.ndarray)
+        assert isinstance(np.asanyarray(matrix), NDArraySub)
+        assert isinstance(np.array(storage), np.ndarray)
+        assert isinstance(np.array(matrix), np.ndarray)
+        assert isinstance(np.array(numpy_array), np.ndarray)
 
-    # apply numpy patch
-    gt_store.prepare_numpy()
+        # apply numpy patch
+        gt_store.prepare_numpy()
 
-    assert isinstance(np.asarray(storage), type(storage))
-    assert isinstance(np.asarray(numpy_array), np.ndarray)
-    assert isinstance(np.asarray(matrix), np.ndarray)
+        try:
+            assert isinstance(np.asarray(storage), type(storage))
+            assert isinstance(np.asarray(numpy_array), np.ndarray)
+            assert isinstance(np.asarray(matrix), np.ndarray)
 
-    assert isinstance(np.array(matrix), np.ndarray)
-    assert isinstance(np.array(numpy_array), np.ndarray)
-    try:
-        np.array(storage)
-    except RuntimeError:
-        pass
-    else:
-        assert False
+            assert isinstance(np.array(matrix), np.ndarray)
+            assert isinstance(np.array(numpy_array), np.ndarray)
+            with pytest.raises(RuntimeError):
+                np.array(storage)
+        finally:
+            # undo patch
+            gt_store.restore_numpy()
 
-    # undo patch
-    gt_store.restore_numpy()
+        assert isinstance(np.asarray(storage), np.ndarray)
+        assert isinstance(np.asarray(numpy_array), np.ndarray)
+        assert isinstance(np.asarray(matrix), np.ndarray)
 
-    assert isinstance(np.asarray(storage), np.ndarray)
-    assert isinstance(np.asarray(numpy_array), np.ndarray)
-    assert isinstance(np.asarray(matrix), np.ndarray)
+        assert isinstance(np.array(storage), np.ndarray)
+        assert isinstance(np.array(matrix), np.ndarray)
+        assert isinstance(np.array(numpy_array), np.ndarray)
 
-    assert isinstance(np.array(storage), np.ndarray)
-    assert isinstance(np.array(matrix), np.ndarray)
-    assert isinstance(np.array(numpy_array), np.ndarray)
+    def test_array(self):
+        storage = gt_store.from_array(
+            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtmc"
+        )
+
+        class NDArraySub(np.ndarray):
+            pass
+
+        numpy_array = np.ones((3, 3, 3))
+        matrix = np.ones((3, 3)).view(NDArraySub)
+
+        assert isinstance(np.array(storage, copy=False), np.ndarray)
+        assert isinstance(np.array(numpy_array, copy=False), np.ndarray)
+        assert isinstance(np.array(matrix, copy=False), np.ndarray)
+        assert isinstance(np.asanyarray(storage), type(storage))
+        assert isinstance(np.asanyarray(numpy_array), np.ndarray)
+        assert isinstance(np.asanyarray(matrix), NDArraySub)
+        assert isinstance(np.array(storage), np.ndarray)
+        assert isinstance(np.array(matrix), np.ndarray)
+        assert isinstance(np.array(numpy_array), np.ndarray)
+
+        # apply numpy patch
+        gt_store.prepare_numpy()
+        try:
+            assert isinstance(np.array(storage, copy=False), type(storage))
+            assert isinstance(np.array(numpy_array, copy=False), np.ndarray)
+            assert isinstance(np.array(matrix, copy=False), np.ndarray)
+
+            assert isinstance(np.array(matrix), np.ndarray)
+            assert isinstance(np.array(numpy_array), np.ndarray)
+            with pytest.raises(RuntimeError):
+                np.array(storage)
+        finally:
+            # undo patch
+            gt_store.restore_numpy()
+
+        assert isinstance(np.array(storage, copy=False), np.ndarray)
+        assert isinstance(np.array(numpy_array, copy=False), np.ndarray)
+        assert isinstance(np.array(matrix, copy=False), np.ndarray)
+
+        assert isinstance(np.array(storage), np.ndarray)
+        assert isinstance(np.array(matrix), np.ndarray)
+        assert isinstance(np.array(numpy_array), np.ndarray)
 
 
 @pytest.mark.requires_gpu
@@ -940,11 +982,31 @@ def test_auto_sync_storage():
         shape=shape,
         managed_memory=True,
     )
+    q0_view = q0[3:, 3:, 3:]
 
     assert not gt_store.storage.GPUStorage.get_modified_storages()
 
+    # call stencil and mark original storage clean
     swap_stencil(q0, q1)
     assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 2
+    assert q0._is_device_modified
+    assert q0_view._is_device_modified
+    q0_view._set_clean()
+    assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 1
+    assert not q0._is_device_modified
+    assert not q0_view._is_device_modified
 
+    # call stencil and mark original storage clean
+    swap_stencil(q0, q1)
+    assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 2
+    assert q0._is_device_modified
+    assert q0_view._is_device_modified
+    q0_view._set_clean()
+    assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 1
+    assert not q0._is_device_modified
+    assert not q0_view._is_device_modified
+
+    # call stencil and mark original storage clean
+    swap_stencil(q0, q1)
     q0.device_to_host()
     assert not gt_store.storage.GPUStorage.get_modified_storages()

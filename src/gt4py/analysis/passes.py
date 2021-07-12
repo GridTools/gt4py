@@ -264,9 +264,19 @@ class InitInfoPass(TransformPass):
             return result
 
         def visit_FieldRef(self, node: gt_ir.FieldRef):
-            extent = Extent.from_offset([node.offset.get(ax, 0) for ax in self.data.axes_names])
-            result = [(node.name, extent)]
-            return result
+            offsets = []
+            refs = []
+            for ax in self.data.axes_names:
+                axis_offset = node.offset.get(ax, 0)
+                if isinstance(axis_offset, gt_ir.Expr):
+                    refs.extend(self.visit(axis_offset))
+                    offsets.append(0)
+                else:
+                    offsets.append(axis_offset)
+
+            extent = Extent.from_offset(offsets)
+            refs.append((node.name, extent))
+            return refs
 
         def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr):
             result = self.visit(node.arg)
@@ -316,6 +326,18 @@ class InitInfoPass(TransformPass):
             inputs = self._merge_extents(list(inputs.items()) + cond_info)
 
             result = StatementInfo(self.data.id_generator.new, node, inputs, outputs)
+
+            return result
+
+        def visit_While(self, node: gt_ir.While) -> StatementInfo:
+            body_stmt_info = self.visit(node.body)
+            condition_input_extents = self.visit(node.condition)
+
+            inputs = self._merge_extents(
+                list(body_stmt_info.inputs.items()) + condition_input_extents
+            )
+
+            result = StatementInfo(self.data.id_generator.new, node, inputs, body_stmt_info.outputs)
 
             return result
 
@@ -1083,6 +1105,10 @@ class ComputeUsedSymbolsPass(TransformPass):
             self.data.symbols[node.name].in_use = True
 
         def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
+            domain = self.data.definition_ir.domain
+            sequential_offset = node.offset.get(domain.sequential_axis.name, None)
+            if isinstance(sequential_offset, gt_ir.Expr):
+                self.visit(sequential_offset)
             self.data.symbols[node.name].in_use = True
 
     @classmethod
@@ -1336,6 +1362,9 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
         def visit_FieldRef(
             self, path: tuple, node_name: str, node: gt_ir.FieldRef
         ) -> Tuple[bool, Union[gt_ir.FieldRef, gt_ir.VarRef]]:
+            for axis in node.offset:
+                if isinstance(node.offset[axis], gt_ir.Expr):
+                    node.offset[axis] = self.visit(node.offset[axis])
             if node.name in self.demotables:
                 if node.name not in self.local_symbols:
                     field_decl = self.fields[node.name]

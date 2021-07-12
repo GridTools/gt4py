@@ -217,8 +217,7 @@ def enabled(**kwargs: Any) -> Iterator:
 
         ## use mystencil
 
-        import some_other_stencil  # in the same directory as some_stencil.gt.py
-        ## import error
+        import some_other_stencil  # in the same directory as some_stencil.gt.py raises error
     """
     backup_import_system: Tuple[
         List[str], List[importlib.abc.MetaPathFinder], Dict[str, ModuleType]
