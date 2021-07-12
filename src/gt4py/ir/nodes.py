@@ -91,7 +91,7 @@ storing a reference to the piece of source code which originated the node.
 
     NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
-    Cast(dtype: DataType, expr: Expr)
+    Cast(expr: Expr, data_type: DataType)
 
     AxisIndex(name: str)
 
@@ -112,6 +112,7 @@ storing a reference to the piece of source code which originated the node.
                 | Assign(target: Ref, value: Expr)
                 | If(condition: expr, main_body: BlockStmt, else_body: BlockStmt)
                 | For(target: Decl, start: AxisBound | Expr, stop: AxisBound | Expr, body: BlockStmt)
+                | HorizontalIf(intervals: Dict[str, Interval], body: BlockStmt)
                 | While(condition: expr, body: BlockStmt)
                 | BlockStmt
 
@@ -714,6 +715,13 @@ class AxisInterval(Node):
 
         return interval
 
+    @property
+    def is_single_index(self) -> bool:
+        if not isinstance(self.start, AxisBound) or not isinstance(self.end, AxisBound):
+            return False
+
+        return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
+
     def disjoint_from(self, other: "AxisInterval") -> bool:
         # This made-up constant must be larger than any LevelMarker.offset used
         DOMAIN_SIZE: int = 1000
@@ -744,6 +752,13 @@ class For(Statement):
     step = attribute(of=int)
     body = attribute(of=BlockStmt)
     loc = attribute(of=Location, optional=True)
+
+
+# TODO Find a better place for this in the file.
+@attribclass
+class HorizontalIf(Statement):
+    intervals = attribute(of=DictOf[str, AxisInterval])
+    body = attribute(of=BlockStmt)
 
 
 @attribclass
