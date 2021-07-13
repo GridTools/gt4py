@@ -15,8 +15,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import re
+import sys
 from typing import Iterator, Optional, Set
 
+import numpy as np
 import pytest
 
 from gt4py.definitions import Extent
@@ -435,11 +437,9 @@ def test_full_computation_valid(tmp_path) -> None:
     print(result)
     mod_path = tmp_path / "npir_gen_1.py"
     mod_path.write_text(result)
-    import sys
 
     sys.path.append(str(tmp_path))
     import npir_gen_1 as mod
-    import numpy as np
 
     f1 = np.zeros((10, 10, 10))
     f2 = np.ones_like(f1) * 3
