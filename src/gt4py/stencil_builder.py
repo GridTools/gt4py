@@ -73,12 +73,10 @@ class StencilBuilder:
     def build(self) -> Type["StencilObject"]:
         """Generate, compile and/or load everything necessary to provide a usable stencil class."""
         # load, defer, or generate
-        if self.options.rebuild:
-            stencil_class = None
-        elif self.caching.is_deferred():
-            stencil_class = self.caching.build(self)
+        if self.caching.is_deferred():
+            stencil_class = self.caching.build()
         else:
-            stencil_class = self.backend.load()
+            stencil_class = None if self.options.rebuild else self.backend.load()
         if stencil_class is None:
             stencil_class = self.backend.generate()
         return stencil_class
