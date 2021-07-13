@@ -96,7 +96,9 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     Positional = as_fmt("positional<dim::{dim}>()")
 
-    AxisEndpoint = as_fmt("domain[{axis}]")
+    AxisEndpoint = as_fmt(
+        "gridtools::stencil::make_global_parameter(static_cast<gridtools::int_t>(domain[{axis}]))"
+    )
 
     Binding = as_fmt("auto {name} = {expr};")
 
@@ -236,6 +238,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
         #include <gridtools/stencil/positional.hpp>
+        #include <gridtools/stencil/global_parameter.hpp>
 
         namespace ${ name }_impl_{
             using Domain = std::array<gridtools::uint_t, 3>;
