@@ -62,9 +62,9 @@ class StencilBuilder:
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
         strategy_name = "jit"
         strategy_opts = {}
-        if options and "build_function" in options.backend_opts:
+        if options and "defer_function" in options.backend_opts:
             strategy_name = "deferred"
-            strategy_opts["build_function"] = options.backend_opts.pop("build_function")
+            strategy_opts["defer_function"] = options.backend_opts.pop("defer_function")
         self.caching = gt4py.caching.strategy_factory(strategy_name, self, **strategy_opts)
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}

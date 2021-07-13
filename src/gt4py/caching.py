@@ -325,15 +325,15 @@ class DeferredCachingStrategy(JITCachingStrategy):
 
     name = "deferred"
 
-    def __init__(self, builder: "StencilBuilder", build_function: Callable):
+    def __init__(self, builder: "StencilBuilder", defer_function: Callable):
         super().__init__(builder)
-        self._build_function = build_function
+        self._defer_function = defer_function
 
     def is_deferred(self) -> bool:
         return True
 
-    def build(self):
-        return self._build_function(self.builder)
+    def defer(self):
+        return self._defer_function(self.builder)
 
 
 class NoCachingStrategy(CachingStrategy):
@@ -403,10 +403,12 @@ class NoCachingStrategy(CachingStrategy):
         )
 
 
-def strategy_factory(name: str, builder: "StencilBuilder", **kwargs: Any) -> CachingStrategy:
+def strategy_factory(
+    name: str, builder: "StencilBuilder", *args: Any, **kwargs: Any
+) -> CachingStrategy:
     strategies = {
         "jit": JITCachingStrategy,
         "deferred": DeferredCachingStrategy,
         "nocaching": NoCachingStrategy,
     }
-    return strategies[name](builder, **kwargs)
+    return strategies[name](builder, *args, **kwargs)
