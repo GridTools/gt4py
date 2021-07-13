@@ -31,23 +31,11 @@ from gt4py.ir import StencilDefinition
 from gtc import gtir, gtir_to_oir
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import array_dimensions
-from gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-from gtc.passes.gtir_upcaster import upcast
-from gtc.passes.oir_dace_optimizations import GraphMerging, optimize_horizontal_executions
-from gtc.passes.oir_optimizations.caches import (
-    IJCacheDetection,
-    KCacheDetection,
-    PruneKCacheFills,
-    PruneKCacheFlushes,
-)
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
-from gtc.passes.oir_optimizations.temporaries import (
-    LocalTemporariesToScalars,
-    WriteBeforeReadTemporariesToScalars,
-)
-from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
+from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
+from gtc.passes.oir_optimizations.inlining import MaskInlining
+from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
+from gtc.passes.oir_pipeline import OirPipeline
 
 
 if TYPE_CHECKING:
@@ -61,16 +49,17 @@ class GTCDaCeExtGenerator:
         self.backend = backend
 
     def __call__(self, definition_ir: StencilDefinition) -> Dict[str, Dict[str, str]]:
-        gtir = DefIRToGTIR.apply(definition_ir)
-        gtir_without_unused_params = prune_unused_parameters(gtir)
-        dtype_deduced = resolve_dtype(gtir_without_unused_params)
-        upcasted = upcast(dtype_deduced)
-        oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
-        oir = self._optimize_oir(oir)
+        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(
+            skip=[
+                MaskStmtMerging().visit,
+                MaskInlining().visit,
+                FillFlushToLocalKCaches().visit,
+            ]
+        )
         sdfg = OirSDFGBuilder().visit(oir)
         sdfg.expand_library_nodes(recursive=True)
-        # TODO uncomment once the branch dace/linus-fixes-8 is merged into dace/master
-        # sdfg.apply_strict_transformations(validate=True) # noqa: E800 Found commented out code
+        sdfg.apply_strict_transformations(validate=True)
 
         implementation = DaCeComputationCodegen.apply(gtir, sdfg)
         bindings = DaCeBindingsCodegen.apply(
@@ -82,20 +71,6 @@ class GTCDaCeExtGenerator:
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings" + bindings_ext: bindings},
         }
-
-    def _optimize_oir(self, oir):
-        oir = optimize_horizontal_executions(oir, GraphMerging)
-        oir = GreedyMerging().visit(oir)
-        oir = AdjacentLoopMerging().visit(oir)
-        oir = LocalTemporariesToScalars().visit(oir)
-        oir = WriteBeforeReadTemporariesToScalars().visit(oir)
-        oir = OnTheFlyMerging().visit(oir)
-        oir = NoFieldAccessPruning().visit(oir)
-        oir = IJCacheDetection().visit(oir)
-        oir = KCacheDetection().visit(oir)
-        oir = PruneKCacheFills().visit(oir)
-        oir = PruneKCacheFlushes().visit(oir)
-        return oir
 
 
 class DaCeComputationCodegen:

@@ -37,22 +37,9 @@ from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_dace_optimizations import GraphMerging, optimize_horizontal_executions
-from gtc.passes.oir_optimizations.caches import (
-    IJCacheDetection,
-    KCacheDetection,
-    PruneKCacheFills,
-    PruneKCacheFlushes,
-)
-from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
-from gtc.passes.oir_optimizations.inlining import MaskInlining
-from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
-from gtc.passes.oir_optimizations.temporaries import (
-    LocalTemporariesToScalars,
-    WriteBeforeReadTemporariesToScalars,
-)
-from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
+from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
+from gtc.passes.oir_pipeline import OirPipeline
 
 
 if TYPE_CHECKING:
@@ -67,8 +54,9 @@ class GTCGTExtGenerator:
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        oir = gtir_to_oir.GTIRToOIR().visit(gtir)
-        oir = self._optimize_oir(oir)
+        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(
+            skip=[GreedyMerging().visit, FillFlushToLocalKCaches().visit]
+        )
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(
             gtcpp, gt_backend_t=self.backend.GT_BACKEND_T
@@ -81,21 +69,6 @@ class GTCGTExtGenerator:
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings" + bindings_ext: bindings},
         }
-
-    def _optimize_oir(self, oir):
-        oir = optimize_horizontal_executions(oir, GraphMerging)
-        oir = AdjacentLoopMerging().visit(oir)
-        oir = LocalTemporariesToScalars().visit(oir)
-        oir = WriteBeforeReadTemporariesToScalars().visit(oir)
-        oir = OnTheFlyMerging().visit(oir)
-        oir = MaskStmtMerging().visit(oir)
-        oir = MaskInlining().visit(oir)
-        oir = NoFieldAccessPruning().visit(oir)
-        oir = IJCacheDetection().visit(oir)
-        oir = KCacheDetection().visit(oir)
-        oir = PruneKCacheFills().visit(oir)
-        oir = PruneKCacheFlushes().visit(oir)
-        return oir
 
 
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):
