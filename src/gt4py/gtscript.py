@@ -22,7 +22,9 @@ definitions for the keywords of the DSL.
 
 import collections
 import inspect
+import numbers
 import types
+from typing import Callable, Dict, Type
 
 import numpy as np
 
@@ -71,6 +73,8 @@ builtins = {
     "externals",
     "computation",
     "interval",
+    "horizontal",
+    "region",
     "__gtscript__",
     "__externals__",
     "__INLINED",
@@ -100,7 +104,7 @@ _VALID_DATA_TYPES = (
 )
 
 
-def _set_arg_dtypes(definition, dtypes):
+def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
     assert isinstance(definition, types.FunctionType)
     annotations = getattr(definition, "__annotations__", {})
     original_annotations = {**annotations}
@@ -118,7 +122,7 @@ def _set_arg_dtypes(definition, dtypes):
             else:
                 raise ValueError(f"Missing '{value}' dtype definition for arg '{arg}'")
 
-    return definition, original_annotations
+    return original_annotations
 
 
 def function(func):
@@ -249,7 +253,7 @@ def stencil(
             elif callable(definition_func):  # General callable
                 definition_func = definition_func.__call__
 
-        _, original_annotations = _set_arg_dtypes(definition_func, dtypes or {})
+        original_annotations = _set_arg_dtypes(definition_func, dtypes or {})
         out = gt_loader.gtscript_loader(
             definition_func,
             backend=backend,
@@ -353,15 +357,36 @@ def lazy_stencil(
 
 
 class AxisIndex:
-    def __init__(self, axis: str, offset: int):
+    def __init__(self, axis: str, index: int, offset: int = 0):
         self.axis = axis
+        self.index = index
         self.offset = offset
 
     def __repr__(self):
-        return f"AxisIndex(axis={self.axis}, offset={self.offset})"
+        return f"AxisIndex(axis={self.axis}, index={self.index}, offset={self.offset})"
+
+    def __eq__(self, other):
+        return repr(self) == repr(other)
 
     def __str__(self):
-        return f"{self.axis}[{self.offset}]"
+        return f"{self.axis}[{self.index}] + {self.offset}"
+
+    def __add__(self, offset: int):
+        if not isinstance(offset, numbers.Integral):
+            raise TypeError("Offset should be an integer type")
+        if offset == 0:
+            return self
+        else:
+            return AxisIndex(self.axis, self.index, self.offset + offset)
+
+    def __radd__(self, offset: int):
+        return self.__add__(offset)
+
+    def __sub__(self, offset: int):
+        return self.__add__(-offset)
+
+    def __rsub__(self, offset: int):
+        return self.__radd__(-offset)
 
 
 class AxisInterval:
@@ -551,6 +576,21 @@ def computation(order):
 def interval(*args):
     """Define the interval of computation in the 'K' sequential axis."""
     pass
+
+
+def horizontal(*args):
+    """Define a block of code that is restricted to a set of regions in the parallel axes."""
+    pass
+
+
+class _Region:
+    def __getitem__(self, *args):
+        """Define a region in the parallel axes."""
+        pass
+
+
+# Horizontal regions
+region = _Region()
 
 
 def __INLINED(compile_if_expression):
