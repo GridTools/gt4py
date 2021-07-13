@@ -96,6 +96,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     Positional = as_fmt("positional<dim::{dim}>()")
 
+    AxisEndpoint = as_fmt("domain[{axis}]")
+
     Binding = as_fmt("auto {name} = {expr};")
 
     def visit_For(self, node: gtcpp.For, **kwargs):

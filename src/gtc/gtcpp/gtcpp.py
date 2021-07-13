@@ -135,6 +135,12 @@ class GTApplyMethod(LocNode):
     local_variables: List[LocalVarDecl]
 
 
+class AxisEndpoint(Expr):
+    axis: int
+    dtype = common.DataType.INT32
+    kind = common.ExprKind.SCALAR
+
+
 class For(Stmt):
     target_name: Str
     start: Expr

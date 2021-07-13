@@ -1094,26 +1094,30 @@ class IRMaker(ast.NodeVisitor):
         return start_expr, stop_expr, step
 
     def _parse_forloop_args_slice(self, node: ast.Slice) -> list:
-        gt_ir_args = []
-
         def make_axis_bound(offset: int) -> gt_ir.AxisBound:
             return gt_ir.AxisBound(
                 level=gt_ir.LevelMarker.START if offset >= 0 else gt_ir.LevelMarker.END,
                 offset=offset,
             )
 
-        if node.lower is not None:
-            lower_offset = gt_utils.meta.ast_eval(node.lower, {})
+        if isinstance(node.lower, ast.Call):
+            start_expr = self._parse_vertical_index(node.lower)
+        elif node.lower is not None:
+            start_expr = make_axis_bound(gt_utils.meta.ast_eval(node.lower, {}))
         else:
-            lower_offset = 0
-        if node.upper is not None:
-            upper_offset = gt_utils.meta.ast_eval(node.upper, {})
-        else:
-            upper_offset = -1  # TODO: take care of the +1
+            start_expr = make_axis_bound(0)
 
-        start_expr = make_axis_bound(lower_offset)
-        stop_expr = make_axis_bound(upper_offset)
-        step = ast.literal_eval(node.step)
+        if isinstance(node.upper, ast.Call):
+            stop_expr = self._parse_vertical_index(node.upper)
+        elif node.upper is not None:
+            stop_expr = make_axis_bound(gt_utils.meta.ast_eval(node.upper, {}))
+        else:
+            stop_expr = gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=0)
+
+        if node.step is not None:
+            step = ast.literal_eval(node.step)
+        else:
+            step = 1
 
         return start_expr, stop_expr, step
 

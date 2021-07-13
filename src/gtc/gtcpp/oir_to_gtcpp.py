@@ -82,6 +82,7 @@ class OIRToGTCpp(eve.NodeTranslator):
         temporaries: List[gtcpp.Temporary] = field(default_factory=list)
         arguments: Set[gtcpp.Arg] = field(default_factory=set)
         axis_indices: Dict[str, str] = field(default_factory=dict)
+        axis_endpoints: Dict[str, str] = field(default_factory=dict)
 
         def add_temporaries(
             self, temporaries: List[gtcpp.Temporary]
@@ -93,9 +94,12 @@ class OIRToGTCpp(eve.NodeTranslator):
             self.arguments.update(arguments)
             return self
 
-        def add_axis_index(self, axis_index: oir.AxisIndex) -> "OIRToGTCpp.GTComputationContext":
-            axis_name = axis_index.axis.lower()
-            self.axis_indices[axis_name] = f"{axis_name}_pos"
+        def add_axis_index(self, axis: str) -> "OIRToGTCpp.GTComputationContext":
+            self.axis_indices[axis] = f"{axis.lower()}_pos"
+            return self
+
+        def add_axis_endpoint(self, axis: str) -> "OIRToGTCpp.GTComputationContext":
+            self.axis_endpoints[axis] = f"{axis.lower()}_length"
             return self
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> gtcpp.Literal:
@@ -187,18 +191,48 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_AxisIndex(
         self, node: oir.AxisIndex, *, comp_ctx: GTComputationContext, **kwargs: Any
     ) -> gtcpp.AccessorRef:
-        comp_ctx.add_axis_index(node)
+        comp_ctx.add_axis_index(node.axis)
         return gtcpp.AccessorRef(
-            name=comp_ctx.axis_indices[node.axis.lower()],
+            name=comp_ctx.axis_indices[node.axis],
             offset=common.CartesianOffset.zero(),
             dtype=common.DataType.INT32,
         )
 
-    def visit_For(self, node: oir.For, **kwargs: Any) -> gtcpp.For:
+    def visit_For(
+        self, node: oir.For, *, comp_ctx: GTComputationContext, **kwargs: Any
+    ) -> gtcpp.For:
+        def lower_axis_bound(axis_bound: oir.AxisBound) -> gtcpp.Expr:
+            offset_literal = gtcpp.Literal(
+                value=str(axis_bound.offset), dtype=common.DataType.INT32
+            )
+            if axis_bound.level == common.LevelMarker.START:
+                return offset_literal
+            else:
+                axis = "K"
+                comp_ctx.add_axis_endpoint(axis)
+                endpt = gtcpp.AccessorRef(
+                    name=comp_ctx.axis_endpoints[axis],
+                    offset=common.CartesianOffset.zero(),
+                    dtype=common.DataType.INT32,
+                )
+                return (
+                    gtcpp.BinaryOp(
+                        op=common.ArithmeticOperator.ADD, left=endpt, right=offset_literal
+                    )
+                    if axis_bound.offset != 0
+                    else endpt
+                )
+
+        def make_bound(endpt: Union[oir.Expr, common.AxisBound], **kwargs: Any) -> gtcpp.Expr:
+            if isinstance(endpt, oir.Expr):
+                return self.visit(endpt, comp_ctx=comp_ctx, **kwargs)
+            else:
+                return lower_axis_bound(endpt)
+
         return gtcpp.For(
             target_name=node.target_name,
-            start=self.visit(node.start, **kwargs),
-            end=self.visit(node.end, **kwargs),
+            start=make_bound(node.start, **kwargs),
+            end=make_bound(node.end, **kwargs),
             inc=node.inc,
             body=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),
         )
@@ -299,8 +333,11 @@ class OIRToGTCpp(eve.NodeTranslator):
         )
 
         bindings = [
-            gtcpp.Binding(name=name, expr=gtcpp.Positional(dim=axis))
+            gtcpp.Binding(name=name, expr=gtcpp.Positional(dim=axis.lower()))
             for axis, name in comp_ctx.axis_indices.items()
+        ] + [
+            gtcpp.Binding(name=name, expr=gtcpp.AxisEndpoint(axis={"I": 0, "J": 1, "K": 2}[axis]))
+            for axis, name in comp_ctx.axis_endpoints.items()
         ]
 
         gt_computation = gtcpp.GTComputationCall(
