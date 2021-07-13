@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 import gt4py
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.definitions import BuildOptions, StencilID
-from gt4py.future_stencil import FutureStencil
 from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
 from gtc import gtir
 from gtc.passes.gtir_pipeline import GtirPipeline

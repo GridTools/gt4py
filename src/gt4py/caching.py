@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import gt4py
 from gt4py.definitions import StencilID
-from gt4py.future_stencil import FutureStencil
 
 
 if TYPE_CHECKING:
