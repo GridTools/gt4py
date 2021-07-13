@@ -63,21 +63,24 @@ class StencilBuilder:
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
         strategy_name = "jit"
         strategy_opts = {}
-        if options and "distrib_ctx" in options.backend_opts:
-            strategy_name = "distributed"
-            strategy_opts["distrib_ctx"] = options.backend_opts.pop("distrib_ctx")
+        if options and "build_function" in options.backend_opts:
+            strategy_name = "deferred"
+            strategy_opts["build_function"] = options.backend_opts.pop("build_function")
         self.caching = gt4py.caching.strategy_factory(strategy_name, self, **strategy_opts)
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}
 
     def build(self) -> Type["StencilObject"]:
         """Generate, compile and/or load everything necessary to provide a usable stencil class."""
-        # load or generate
-        stencil_class = None if self.options.rebuild else self.backend.load()
+        # load, defer, or generate
+        if self.options.rebuild:
+            stencil_class = None
+        elif self.caching.is_deferred():
+            stencil_class = self.caching.build(self)
+        else:
+            stencil_class = self.backend.load()
         if stencil_class is None:
-            stencil_class = (
-                self.backend.generate() if self.caching.is_generator() else FutureStencil
-            )
+            stencil_class = self.backend.generate()
         return stencil_class
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:

@@ -21,7 +21,7 @@ import pathlib
 import pickle
 import sys
 import types
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import gt4py
 from gt4py.definitions import StencilID
@@ -156,10 +156,9 @@ class CachingStrategy(abc.ABC):
         """Calculate the name for the stencil class, default is to read from build options."""
         return self.builder.options.name
 
-    @abc.abstractmethod
-    def is_generator(self) -> bool:
-        """Check if this cache is responsible for generating the stencil."""
-        raise NotImplementedError
+    def is_deferred(self) -> bool:
+        """Check if this cache is deferred."""
+        return False
 
 
 class JITCachingStrategy(CachingStrategy):
@@ -317,51 +316,25 @@ class JITCachingStrategy(CachingStrategy):
         name = self.builder.options.name
         return f"{name}__{self.module_postfix}"
 
-    def is_generator(self) -> bool:
+
+class DeferredCachingStrategy(JITCachingStrategy):
+    """
+    Caching strategy for JIT stencil generation in a deferred context.
+
+    Defers the responsibility for code generation and compilation to another class or function.
+    """
+
+    name = "deferred"
+
+    def __init__(self, builder: "StencilBuilder", build_function: Callable):
+        super().__init__(builder)
+        self._build_function = build_function
+
+    def is_deferred(self) -> bool:
         return True
 
-
-class DistributedCachingStrategy(JITCachingStrategy):
-    """
-    Caching strategy for JIT stencil generation in a distributed context.
-
-    Applies the JIT caching strategy across a distributed system.
-
-    If the cache info check is inconsistent and a rebuild is required, the
-    current node will attempt to create a lock file and writes is own unique
-    ID (e.g,. MPI rank) to the lock file. If a lock file exists then another
-    node is already compiling this stencil, so the current node will block
-    until the stencil has been compiled. The compiling node will delete the
-    lock file when it has finished compiling the stencil and writing the
-    cache info file.
-    """
-
-    name = "distributed"
-
-    def __init__(self, builder: "StencilBuilder", distrib_ctx: List[Union[int, List[int]]]):
-        super().__init__(builder)
-        self._distrib_ctx = distrib_ctx
-
-    def is_cache_info_available_and_consistent(
-        self, *, validate_hash: bool, catch_exceptions: bool = True
-    ) -> bool:
-        result = super().is_cache_info_available_and_consistent(
-            validate_hash=validate_hash, catch_exceptions=catch_exceptions
-        )
-        FutureStencil._builder = self.builder
-        return result
-
-    def get_generator_id(self):
-        n_nodes, node_groups = self._distrib_ctx[1:]
-        if node_groups:
-            n_nodes = len(node_groups)
-        generator_id = int(self.builder.stencil_id.version, 16) % n_nodes
-        if node_groups:
-            generator_id = node_groups[generator_id]
-        return generator_id
-
-    def is_generator(self) -> bool:
-        return self.get_generator_id() == self._distrib_ctx[0]
+    def build(self):
+        return self._build_function(self.builder)
 
 
 class NoCachingStrategy(CachingStrategy):
@@ -430,16 +403,11 @@ class NoCachingStrategy(CachingStrategy):
             qualified_name=self.builder.options.qualified_name, version=""
         )
 
-    def is_generator(self) -> bool:
-        return True
 
-
-def strategy_factory(
-    name: str, builder: "StencilBuilder", *args: Any, **kwargs: Any
-) -> CachingStrategy:
+def strategy_factory(name: str, builder: "StencilBuilder", **kwargs: Any) -> CachingStrategy:
     strategies = {
         "jit": JITCachingStrategy,
-        "distributed": DistributedCachingStrategy,
+        "deferred": DeferredCachingStrategy,
         "nocaching": NoCachingStrategy,
     }
-    return strategies[name](builder, *args, **kwargs)
+    return strategies[name](builder, **kwargs)
