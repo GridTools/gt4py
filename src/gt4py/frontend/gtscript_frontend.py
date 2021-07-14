@@ -1071,6 +1071,8 @@ class IRMaker(ast.NodeVisitor):
         def parse_expression(arg: ast.AST) -> Union[gt_ir.AxisIndex, gt_ir.ScalarLiteral]:
             if isinstance(arg, ast.Call):
                 return self._parse_vertical_index(arg)
+            elif isinstance(arg, ast.BinOp):
+                return self.visit(arg)
             else:
                 return make_int32_scalar_literal(ast.literal_eval(arg))
 
