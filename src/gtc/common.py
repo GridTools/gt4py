@@ -313,7 +313,7 @@ class FieldAccess(LocNode):
 
     @validator("data_index")
     def nonnegative_data_index(cls, data_index: List[Any]) -> List[Any]:
-        if data_index and any(isinstance(int, index) and index < 0 for index in data_index):
+        if data_index and any(isinstance(index, int) and index < 0 for index in data_index):
             raise ValueError("Data indices must be nonnegative")
         return data_index
 
