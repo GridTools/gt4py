@@ -1363,6 +1363,25 @@ class TestForLoopSyntax:
         assert for_node.stop == gt_ir.AxisIndex(axis="K")
         assert for_node.step == 1
 
+    def test_K_slice_stop_expr(self):
+        def func(field: gtscript.Field[int]):
+            with computation(FORWARD), interval(...):
+                for i in K[0 : index(K) + 1]:
+                    field += i
+
+        def_ir = parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
+        for_node = def_ir.computations[0].body.stmts[0]
+        assert for_node.target == gt_ir.VarDecl(
+            name="i", data_type=DataType.INT32, length=1, is_api=False
+        )
+        assert isinstance(for_node.start, gt_ir.AxisBound)
+        assert for_node.start.level == gt_ir.LevelMarker.START
+        assert for_node.start.offset == 0
+        assert for_node.stop.op == gt_ir.BinaryOperator.ADD
+        assert for_node.stop.lhs == gt_ir.AxisIndex(axis="K")
+        assert for_node.stop.rhs == gt_ir.ScalarLiteral(value=1, data_type=DataType.INT64)
+        assert for_node.step == 1
+
     def test_K_start_stop_nostep(self):
         def func(field: gtscript.Field[int]):
             with computation(FORWARD), interval(...):

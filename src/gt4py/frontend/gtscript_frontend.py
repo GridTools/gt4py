@@ -1104,6 +1104,8 @@ class IRMaker(ast.NodeVisitor):
 
         if isinstance(node.lower, ast.Call):
             start_expr = self._parse_vertical_index(node.lower)
+        elif isinstance(node.lower, ast.BinOp):
+            start_expr = self.visit(node.lower)
         elif node.lower is not None:
             start_expr = make_axis_bound(gt_utils.meta.ast_eval(node.lower, {}))
         else:
@@ -1111,6 +1113,8 @@ class IRMaker(ast.NodeVisitor):
 
         if isinstance(node.upper, ast.Call):
             stop_expr = self._parse_vertical_index(node.upper)
+        elif isinstance(node.upper, ast.BinOp):
+            stop_expr = self.visit(node.upper)
         elif node.upper is not None:
             stop_expr = make_axis_bound(gt_utils.meta.ast_eval(node.upper, {}))
         else:
