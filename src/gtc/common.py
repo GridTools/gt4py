@@ -311,11 +311,11 @@ class FieldAccess(LocNode):
     def centered(cls, *, name: str, loc: SourceLocation = None) -> "FieldAccess":
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
-    # @validator("data_index")
-    # def nonnegative_data_index(cls, data_index: List[int]) -> List[int]:
-    #     if data_index and any(index < 0 for index in data_index):
-    #         raise ValueError("Data indices must be nonnegative")
-    #     return data_index
+    @validator("data_index")
+    def nonnegative_data_index(cls, data_index: List[Any]) -> List[Any]:
+        if data_index and any(isinstance(int, index) and index < 0 for index in data_index):
+            raise ValueError("Data indices must be nonnegative")
+        return data_index
 
 
 class BlockStmt(GenericNode, SymbolTableTrait, Generic[StmtT]):
