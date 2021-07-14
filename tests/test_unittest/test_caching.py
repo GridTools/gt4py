@@ -19,6 +19,7 @@ import pytest
 import gt4py
 from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
+from gt4py.stencil_object import StencilObject
 
 
 # type ignores in stencils are because mypy does not yet
@@ -164,3 +165,23 @@ def test_nocaching_generate(builder, tmp_path):
     builder_g.backend.generate()
 
     assert_nocaching_gtcpp_source_file_tree_conforms_to_expectations(tmp_path / "foo_g", "foo")
+
+
+def test_deferred_generate(builder):
+    def build_function(builder):
+        return builder.backend.generate()
+
+    def defer_function(builder):
+        build_function.builder = builder
+        return build_function
+
+    # Assert that stencil building has been deferred to the build function...
+    deferred_builder = builder(simple_stencil, "gtx86").with_caching("deferred", defer_function=defer_function)
+    stencil_class = deferred_builder.build()
+    assert stencil_class == build_function
+
+    # Assert that the build function builds the stencil
+    stencil_class = build_function(build_function.builder)
+    assert stencil_class is not None
+    stencil_object = stencil_class()
+    assert isinstance(stencil_object, StencilObject)
