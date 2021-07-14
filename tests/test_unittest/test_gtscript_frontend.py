@@ -1249,6 +1249,9 @@ class TestForLoopSyntax:
 
         def_ir = parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
         for_node = def_ir.computations[0].body.stmts[0]
+        assert for_node.target == gt_ir.VarDecl(
+            name="i", data_type=DataType.INT32, length=1, is_api=False
+        )
         assert isinstance(for_node.start, gt_ir.Expr)
         assert for_node.start == gt_ir.ScalarLiteral(value=0, data_type=DataType.INT32)
         assert for_node.stop == gt_ir.ScalarLiteral(value=5, data_type=DataType.INT32)
@@ -1262,12 +1265,15 @@ class TestForLoopSyntax:
 
         def_ir = parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
         for_node = def_ir.computations[0].body.stmts[0]
+        assert for_node.target == gt_ir.VarDecl(
+            name="i", data_type=DataType.INT32, length=1, is_api=False
+        )
         assert isinstance(for_node.start, gt_ir.Expr)
         assert for_node.start == gt_ir.ScalarLiteral(value=0, data_type=DataType.INT32)
         assert for_node.stop == gt_ir.ScalarLiteral(value=5, data_type=DataType.INT32)
         assert for_node.step == 2
 
-    def test_range_start_top_backward(self):
+    def test_range_start_stop_backward(self):
         def func(field: gtscript.Field[int]):
             with computation(FORWARD), interval(...):
                 for i in range(5, 0, -1):
@@ -1275,6 +1281,9 @@ class TestForLoopSyntax:
 
         def_ir = parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
         for_node = def_ir.computations[0].body.stmts[0]
+        assert for_node.target == gt_ir.VarDecl(
+            name="i", data_type=DataType.INT32, length=1, is_api=False
+        )
         assert isinstance(for_node.start, gt_ir.Expr)
         assert for_node.start == gt_ir.ScalarLiteral(value=5, data_type=DataType.INT32)
         assert for_node.stop == gt_ir.ScalarLiteral(value=0, data_type=DataType.INT32)
@@ -1295,6 +1304,9 @@ class TestForLoopSyntax:
             externals={"offset": 2},
         )
         for_node = def_ir.computations[0].body.stmts[0]
+        assert for_node.target == gt_ir.VarDecl(
+            name="i", data_type=DataType.INT32, length=1, is_api=False
+        )
         assert isinstance(for_node.start, gt_ir.Expr)
         assert for_node.start == gt_ir.ScalarLiteral(value=0, data_type=DataType.INT32)
         assert for_node.stop == gt_ir.ScalarLiteral(value=5, data_type=DataType.INT32)
@@ -1308,19 +1320,43 @@ class TestForLoopSyntax:
 
         def_ir = parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
         for_node = def_ir.computations[0].body.stmts[0]
+        assert for_node.target == gt_ir.VarDecl(
+            name="i", data_type=DataType.INT32, length=1, is_api=False
+        )
         assert isinstance(for_node.start, gt_ir.Expr)
         assert for_node.start == gt_ir.ScalarLiteral(value=0, data_type=DataType.INT32)
         assert for_node.stop == gt_ir.AxisIndex(axis="K")
         assert for_node.step == 1
 
-    def test_K_stop_only_index(self):
+    def test_range_with_index_K_expr(self):
         def func(field: gtscript.Field[int]):
             with computation(FORWARD), interval(...):
-                for k in K[: index(K)]:
-                    field += k
+                for i in range(0, index(K) + 1):
+                    field += i
 
         def_ir = parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
         for_node = def_ir.computations[0].body.stmts[0]
+        assert for_node.target == gt_ir.VarDecl(
+            name="i", data_type=DataType.INT32, length=1, is_api=False
+        )
+        assert isinstance(for_node.start, gt_ir.Expr)
+        assert for_node.start == gt_ir.ScalarLiteral(value=0, data_type=DataType.INT32)
+        assert for_node.stop.op == gt_ir.BinaryOperator.ADD
+        assert for_node.stop.lhs == gt_ir.AxisIndex(axis="K")
+        assert for_node.stop.rhs == gt_ir.ScalarLiteral(value=1, data_type=DataType.INT64)
+        assert for_node.step == 1
+
+    def test_K_stop_only_index(self):
+        def func(field: gtscript.Field[int]):
+            with computation(FORWARD), interval(...):
+                for i in K[: index(K)]:
+                    field += i
+
+        def_ir = parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
+        for_node = def_ir.computations[0].body.stmts[0]
+        assert for_node.target == gt_ir.VarDecl(
+            name="i", data_type=DataType.INT32, length=1, is_api=False
+        )
         assert isinstance(for_node.start, gt_ir.AxisBound)
         assert for_node.start.level == gt_ir.LevelMarker.START
         assert for_node.start.offset == 0
@@ -1330,34 +1366,38 @@ class TestForLoopSyntax:
     def test_K_start_stop_nostep(self):
         def func(field: gtscript.Field[int]):
             with computation(FORWARD), interval(...):
-                for k in K[1:-1]:
-                    field += k
+                for i in K[1:-1]:
+                    field += i
 
         def_ir = parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
         for_node = def_ir.computations[0].body.stmts[0]
+        assert for_node.target == gt_ir.VarDecl(
+            name="i", data_type=DataType.INT32, length=1, is_api=False
+        )
         assert isinstance(for_node.start, gt_ir.AxisBound)
         assert for_node.start.level == gt_ir.LevelMarker.START
         assert for_node.start.offset == 1
         assert isinstance(for_node.stop, gt_ir.AxisBound)
-        # TODO[EW]: stop does not work
-        assert for_node.stop == gt_ir.LevelMarker.END
-        assert for_node.stop.offset == 0
+        assert for_node.stop.level == gt_ir.LevelMarker.END
+        assert for_node.stop.offset == -1
         assert for_node.step == 1
 
     def test_K_backwards_start_stop(self):
         def func(field: gtscript.Field[int]):
             with computation(FORWARD), interval(...):
-                for k in K[-1:0:-1]:
-                    field += k
+                for i in K[-1:0:-1]:
+                    field += i
 
         def_ir = parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
         for_node = def_ir.computations[0].body.stmts[0]
+        assert for_node.target == gt_ir.VarDecl(
+            name="i", data_type=DataType.INT32, length=1, is_api=False
+        )
         assert isinstance(for_node.start, gt_ir.AxisBound)
         assert for_node.start.level == gt_ir.LevelMarker.END
         assert for_node.start.offset == -1
         assert isinstance(for_node.stop, gt_ir.AxisBound)
-        # TODO[EW]: stop does not work
-        assert for_node.stop == gt_ir.LevelMarker.START
+        assert for_node.stop.level == gt_ir.LevelMarker.START
         assert for_node.stop.offset == 0
         assert for_node.step == -1
 
