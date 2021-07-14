@@ -50,7 +50,6 @@ class GTCModuleGenerator(BaseModuleGenerator):
                 "path_backup = sys.path.copy()",
                 "sys.path.append(str(pathlib.Path(__file__).parent))",
                 f"import {comp_pkg} as computation",
-                "print(repr(computation))",
                 "sys.path = path_backup",
                 "del path_backup",
             ]
