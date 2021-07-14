@@ -13,6 +13,7 @@ from gtc.passes.gtir_pipeline import GtirPipeline
 if TYPE_CHECKING:
     from gt4py.backend.base import Backend as BackendType
     from gt4py.backend.base import CLIBackendMixin
+    from gt4py.caching import CachingStrategy
     from gt4py.frontend.base import Frontend as FrontendType
     from gt4py.ir import StencilDefinition, StencilImplementation
     from gt4py.stencil_object import StencilObject
@@ -60,12 +61,7 @@ class StencilBuilder:
             backend(self) if backend else gt4py.backend.from_name("debug")(self)
         )
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
-        strategy_name = "jit"
-        strategy_opts = {}
-        if options and "defer_function" in options.backend_opts:
-            strategy_name = "deferred"
-            strategy_opts["defer_function"] = options.backend_opts.pop("defer_function")
-        self.caching = gt4py.caching.strategy_factory(strategy_name, self, **strategy_opts)
+        self.caching = self.get_caching_strategy(options)
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}
 
@@ -87,6 +83,14 @@ class StencilBuilder:
     def generate_bindings(self, targe_language: str) -> Dict[str, Union[str, Dict]]:
         """Generate ``target_language`` bindings source, fail if backend does not support CLI."""
         return self.cli_backend.generate_bindings(targe_language)
+
+    def get_caching_strategy(self, options: BuildOptions) -> Type["CachingStrategy"]:
+        strategy_name = "jit"
+        strategy_opts = {}
+        if options and "defer_function" in options.backend_opts:
+            strategy_name = "deferred"
+            strategy_opts["defer_function"] = options.backend_opts.pop("defer_function")
+        return gt4py.caching.strategy_factory(strategy_name, self, **strategy_opts)
 
     def with_caching(
         self: "StencilBuilder", caching_strategy_name: str, *args: Any, **kwargs: Any
