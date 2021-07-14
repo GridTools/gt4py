@@ -108,6 +108,7 @@ def make_compilation_input_and_expected():
                     multi_stages__0__stages__0__args=[ArgFactory(name="outer_param")],
                     arguments=[ArgFactory(name="outer_param")],
                     temporaries=[],
+                    extra_decls=[],
                 ),
             ),
             r"",
