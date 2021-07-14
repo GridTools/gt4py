@@ -113,14 +113,18 @@ def format_python_source(
     string_normalization: bool = True,
 ) -> str:
     """Format Python source code using black formatter."""
-    target_versions = target_versions or {f"{sys.version_info.major}{sys.version_info.minor}"}
-    target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in target_versions)
+    target_versions_with_default = target_versions or {
+        f"{sys.version_info.major}{sys.version_info.minor}"
+    }
+    versions = set(
+        black.TargetVersion[f"PY{v.replace('.', '')}"] for v in target_versions_with_default
+    )
 
     formatted_source = black.format_str(
         source,
         mode=black.FileMode(
             line_length=line_length,
-            target_versions=target_versions,
+            target_versions=versions,
             string_normalization=string_normalization,
         ),
     )
@@ -630,9 +634,7 @@ class TemplatedGenerator(NodeVisitor):
             {
                 key: value
                 for key, value in cls.__dict__.items()
-                if isinstance(value, Template)
-                and not key.startswith("_")
-                and not key.endswith("_")
+                if isinstance(value, Template) and not key.startswith("_") and not key.endswith("_")
             }
         )
 

@@ -421,9 +421,7 @@ def binary_op_dtype_propagation(*, strict: bool) -> RootValidatorType:
                 if common_dtype is not DataType.BOOL:
                     values["dtype"] = common_dtype
                 else:
-                    raise ValueError(
-                        "Boolean expression is not allowed with arithmetic operation."
-                    )
+                    raise ValueError("Boolean expression is not allowed with arithmetic operation.")
             elif isinstance(values["op"], LogicalOperator):
                 if common_dtype is DataType.BOOL:
                     values["dtype"] = DataType.BOOL

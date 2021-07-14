@@ -112,9 +112,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             false_expr=self.visit(node.false_expr, **kwargs),
         )
 
-    def visit_NativeFuncCall(
-        self, node: oir.NativeFuncCall, **kwargs: Any
-    ) -> gtcpp.NativeFuncCall:
+    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> gtcpp.NativeFuncCall:
         return gtcpp.NativeFuncCall(func=node.func, args=self.visit(node.args, **kwargs))
 
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> gtcpp.Cast:
