@@ -15,6 +15,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import pytest
+from tests.definition_setup import ijk_domain  # noqa: F401
+from tests.definition_setup import (
+    BlockStmt,
+    IterationOrder,
+    TAssign,
+    TComputationBlock,
+    TDefinition,
+    TFieldRef,
+)
 
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.ir.nodes import (
@@ -28,15 +37,6 @@ from gt4py.ir.nodes import (
     ScalarLiteral,
 )
 from gtc import common, gtir
-from tests.definition_setup import ijk_domain  # noqa: F401
-from tests.definition_setup import (
-    BlockStmt,
-    IterationOrder,
-    TAssign,
-    TComputationBlock,
-    TDefinition,
-    TFieldRef,
-)
 
 
 @pytest.fixture
