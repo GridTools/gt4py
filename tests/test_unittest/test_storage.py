@@ -13,7 +13,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import cupy.cuda
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
 import numpy as np
@@ -952,7 +951,7 @@ def test_sum_gpu():
 def test_auto_sync_storage():
 
     # make sure no storages are modified to begin with, e.g. by other tests.
-    cupy.cuda.Device(0).synchronize()
+    cp.cuda.Device(0).synchronize()
     GPUStorage._modified_storages.clear()
 
     BACKEND = "gtcuda"
