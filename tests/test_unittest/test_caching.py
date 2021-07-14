@@ -176,7 +176,9 @@ def test_deferred_generate(builder):
         return build_function
 
     # Assert that stencil building has been deferred to the build function...
-    deferred_builder = builder(simple_stencil, "gtx86").with_caching("deferred", defer_function=defer_function)
+    deferred_builder = builder(simple_stencil, "gtx86").with_caching(
+        "deferred", defer_function=defer_function
+    )
     stencil_class = deferred_builder.build()
     assert stencil_class == build_function
 
