@@ -73,7 +73,7 @@ class StencilBuilder:
         """Generate, compile and/or load everything necessary to provide a usable stencil class."""
         # load, defer, or generate
         if self.caching.is_deferred():
-            stencil_class = self.caching.build()
+            stencil_class = self.caching.defer()
         else:
             stencil_class = None if self.options.rebuild else self.backend.load()
         if stencil_class is None:
