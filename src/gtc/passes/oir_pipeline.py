@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Callable, Dict, Optional, Protocol, Sequence, Tuple, cast
+from typing import Callable, Dict, Optional, Protocol, Sequence, Tuple
 
 from gtc import oir
 from gtc.passes.oir_dace_optimizations.horizontal_execution_merging import (
@@ -45,6 +45,10 @@ class ClassMethodPass(Protocol):
     __func__: Callable[[oir.Stencil], oir.Stencil]
 
 
+def hash_step(step: Callable) -> int:
+    return hash(getattr(step, "__func__", step))
+
+
 class OirPipeline:
     """
     OIR passes pipeline runs passes in order and allows skipping.
@@ -54,7 +58,7 @@ class OirPipeline:
 
     def __init__(self, node: oir.Stencil):
         self.oir = node
-        self._cache: Dict[Tuple[PASS_T, ...], oir.Stencil] = {}
+        self._cache: Dict[Tuple[int, ...], oir.Stencil] = {}
 
     def steps(self) -> Sequence[PASS_T]:
         return [
@@ -81,18 +85,15 @@ class OirPipeline:
         return result
 
     def _get_cached(self, steps: Sequence[PASS_T]) -> Optional[oir.Stencil]:
-        return self._cache.get(tuple(steps))
+        return self._cache.get(tuple(hash_step(step) for step in steps))
 
     def _set_cached(self, steps: Sequence[PASS_T], node: oir.Stencil) -> oir.Stencil:
-        return self._cache.setdefault(tuple(steps), node)
+        return self._cache.setdefault(tuple(hash_step(step) for step in steps), node)
 
     def _should_execute_step(self, step: PASS_T, skip: Sequence[PASS_T]) -> bool:
-        if step in skip:
+        skip_hashes = [hash_step(skip_step) for skip_step in skip]
+        if hash_step(step) in skip_hashes:
             return False
-        if hasattr(step, "__func__"):
-            skip_func = [cast(ClassMethodPass, s).__func__ for s in skip if hasattr(s, "__func__")]
-            if cast(ClassMethodPass, step).__func__ in skip_func:
-                return False
         return True
 
     def full(self, skip: Sequence[PASS_T] = None) -> oir.Stencil:
