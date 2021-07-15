@@ -73,7 +73,8 @@ class CheckHorizontalRegionAccesses(eve.NodeVisitor):
         fields_set: Set[str],
         inside_region: bool = False,
     ) -> None:
-        if inside_region and not node.offset.is_zero() and node.name in fields_set:
+        zero_horizontal_offset = node.offset.i == 0 and node.offset.j == 0
+        if inside_region and not zero_horizontal_offset and node.name in fields_set:
             # This access will potentially read memory that has not been updated yet
             raise ValueError(f"Race condition detected on read of {node.name}")
 
