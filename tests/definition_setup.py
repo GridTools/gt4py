@@ -198,8 +198,7 @@ class TComputationBlock(TObject):
         return set(itertools.chain.from_iterable([stmt.field_names for stmt in self.children]))
 
     def build(self) -> ComputationBlock:
-        if self.parent:
-            self.loc.scope = self.parent.child_scope
+        self.loc.scope = self.parent.child_scope if self.parent else self.scope
         temp_fields = self.fields.difference(self.parent.fields) if self.parent else set()
         temp_decls = [
             FieldDecl(

@@ -13,7 +13,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
 import numpy as np
@@ -26,12 +25,10 @@ except ImportError:
     pass
 
 import gt4py.backend as gt_backend
-import gt4py.definitions as gt_definitions
-import gt4py.ir as gt_ir
 import gt4py.storage as gt_store
 import gt4py.storage.utils as gt_storage_utils
-import gt4py.utils as gt_utils
 from gt4py.gtscript import PARALLEL, Field, computation, interval, stencil
+from gt4py.storage.storage import GPUStorage
 
 from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 
@@ -952,6 +949,11 @@ def test_sum_gpu():
 
 @pytest.mark.requires_gpu
 def test_auto_sync_storage():
+
+    # make sure no storages are modified to begin with, e.g. by other tests.
+    cp.cuda.Device(0).synchronize()
+    GPUStorage._modified_storages.clear()
+
     BACKEND = "gtcuda"
 
     @stencil(backend=BACKEND, device_sync=False)

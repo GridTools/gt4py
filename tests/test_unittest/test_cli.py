@@ -107,6 +107,7 @@ BACKEND_ROW_PATTERN_BY_NAME = {
     "dawn:naive": r"^\s*dawn:naive\s*c\+\+\s*python\s*No",
     "dawn:cxxopt": r"^\s*dawn:cxxopt\s*c\+\+\s*python\s*No",
     "dawn:cuda": r"^\s*dawn:cuda\s*cuda\s*python\s*No",
+    "gtc:numpy": r"^\s*gtc:numpy\s*python\s*python\s*Yes",
     "nocli": r"^\s*nocli\s*\?\s*\?\s*No",
 }
 
