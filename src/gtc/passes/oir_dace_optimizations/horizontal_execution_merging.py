@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 #
-# GTC Toolchain - GT4Py Project - GridTools Framework
+# GridTools Compiler Toolchain (GTC) - GridTools Framework
 #
 # Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
+# This file is part of the GTC project and the GridTools framework.
+# GTC is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or any later
 # version. See the LICENSE.txt file at the top-level directory of this
@@ -36,6 +36,8 @@ from dace.transformation.transformation import PatternNode, Transformation
 from gtc import oir
 from gtc.dace.nodes import HorizontalExecutionLibraryNode
 from gtc.passes.oir_optimizations.utils import AccessCollector
+
+from .api import optimize_horizontal_executions
 
 
 OFFSETS_T = Dict[str, Set[Tuple[int, int, int]]]
@@ -254,3 +256,7 @@ class GraphMerging(Transformation):
                     res.remove_in_connector("IN_" + acc.label)
             elif not state.out_edges:
                 acc.access = dace.AccessType.WriteOnly
+
+
+def graph_merge_horizontal_executions(node: oir.Stencil) -> oir.Stencil:
+    return optimize_horizontal_executions(node, GraphMerging)
