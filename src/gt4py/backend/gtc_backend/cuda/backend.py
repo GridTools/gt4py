@@ -31,25 +31,10 @@ from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion, oir_to_cuir
-from gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-from gtc.passes.gtir_upcaster import upcast
-from gtc.passes.oir_dace_optimizations import GraphMerging, optimize_horizontal_executions
-from gtc.passes.oir_optimizations.caches import (
-    FillFlushToLocalKCaches,
-    IJCacheDetection,
-    KCacheDetection,
-    PruneKCacheFills,
-    PruneKCacheFlushes,
-)
-from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
-from gtc.passes.oir_optimizations.inlining import MaskInlining
-from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
-from gtc.passes.oir_optimizations.temporaries import (
-    LocalTemporariesToScalars,
-    WriteBeforeReadTemporariesToScalars,
-)
-from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
+from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
+from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.passes.oir_pipeline import OirPipeline
 
 
 if TYPE_CHECKING:
@@ -63,12 +48,10 @@ class GTCCudaExtGenerator:
         self.backend = backend
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = DefIRToGTIR.apply(definition_ir)
-        gtir_without_unused_params = prune_unused_parameters(gtir)
-        dtype_deduced = resolve_dtype(gtir_without_unused_params)
-        upcasted = upcast(dtype_deduced)
-        oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
-        oir = self._optimize_oir(oir)
+        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(
+            skip=[GreedyMerging, NoFieldAccessPruning]
+        )
         cuir = oir_to_cuir.OIRToCUIR().visit(oir)
         cuir = kernel_fusion.FuseKernels().visit(cuir)
         cuir = extent_analysis.ComputeExtents().visit(cuir)
@@ -81,21 +64,6 @@ class GTCCudaExtGenerator:
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings.cu": bindings},
         }
-
-    def _optimize_oir(self, oir):
-        oir = optimize_horizontal_executions(oir, GraphMerging)
-        oir = AdjacentLoopMerging().visit(oir)
-        oir = LocalTemporariesToScalars().visit(oir)
-        oir = WriteBeforeReadTemporariesToScalars().visit(oir)
-        oir = OnTheFlyMerging().visit(oir)
-        oir = MaskStmtMerging().visit(oir)
-        oir = MaskInlining().visit(oir)
-        oir = IJCacheDetection().visit(oir)
-        oir = KCacheDetection().visit(oir)
-        oir = PruneKCacheFills().visit(oir)
-        oir = PruneKCacheFlushes().visit(oir)
-        oir = FillFlushToLocalKCaches().visit(oir)
-        return oir
 
 
 class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
