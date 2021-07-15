@@ -16,9 +16,7 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
-import gtc.utils as gtc_utils
 from eve import codegen
-from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
@@ -28,28 +26,15 @@ from gt4py.backend.gt_backends import (
     cuda_is_compatible_type,
     make_cuda_layout_map,
 )
+from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion, oir_to_cuir
-from gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-from gtc.passes.gtir_upcaster import upcast
-from gtc.passes.oir_dace_optimizations import GraphMerging, optimize_horizontal_executions
-from gtc.passes.oir_optimizations.caches import (
-    FillFlushToLocalKCaches,
-    IJCacheDetection,
-    KCacheDetection,
-    PruneKCacheFills,
-    PruneKCacheFlushes,
-)
-from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
-from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
-from gtc.passes.oir_optimizations.temporaries import (
-    LocalTemporariesToScalars,
-    WriteBeforeReadTemporariesToScalars,
-)
-from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
+from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
+from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.passes.oir_pipeline import OirPipeline
 
 
 if TYPE_CHECKING:
@@ -57,46 +42,33 @@ if TYPE_CHECKING:
 
 
 class GTCCudaExtGenerator:
-    def __init__(self, class_name, module_name, gt_backend_t, options):
+    def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
-        self.options = options
+        self.backend = backend
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = DefIRToGTIR.apply(definition_ir)
-        gtir_without_unused_params = prune_unused_parameters(gtir)
-        dtype_deduced = resolve_dtype(gtir_without_unused_params)
-        upcasted = upcast(dtype_deduced)
-        oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
-        oir = self._optimize_oir(oir)
+        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(
+            skip=[GreedyMerging, NoFieldAccessPruning]
+        )
         cuir = oir_to_cuir.OIRToCUIR().visit(oir)
         cuir = kernel_fusion.FuseKernels().visit(cuir)
         cuir = extent_analysis.ComputeExtents().visit(cuir)
         cuir = extent_analysis.CacheExtents().visit(cuir)
         implementation = cuir_codegen.CUIRCodegen.apply(cuir)
-        bindings = GTCCudaBindingsCodegen.apply(cuir, module_name=self.module_name)
+        bindings = GTCCudaBindingsCodegen.apply(
+            cuir, module_name=self.module_name, backend=self.backend
+        )
         return {
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings.cu": bindings},
         }
 
-    def _optimize_oir(self, oir):
-        oir = optimize_horizontal_executions(oir, GraphMerging)
-        oir = AdjacentLoopMerging().visit(oir)
-        oir = LocalTemporariesToScalars().visit(oir)
-        oir = WriteBeforeReadTemporariesToScalars().visit(oir)
-        oir = OnTheFlyMerging().visit(oir)
-        oir = MaskStmtMerging().visit(oir)
-        oir = IJCacheDetection().visit(oir)
-        oir = KCacheDetection().visit(oir)
-        oir = PruneKCacheFills().visit(oir)
-        oir = PruneKCacheFlushes().visit(oir)
-        oir = FillFlushToLocalKCaches().visit(oir)
-        return oir
-
 
 class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
-    def __init__(self):
+    def __init__(self, backend):
+        self.backend = backend
         self._unique_index: int = 0
 
     def unique_index(self) -> int:
@@ -117,29 +89,13 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
                     sid_ndim=sid_ndim,
                 )
             else:
-                sid_def = """gt::as_cuda_sid<{dtype}, {sid_ndim},
-                    gt::integral_constant<int, {unique_index}>>({name})""".format(
+                return pybuffer_to_sid(
                     name=node.name,
-                    dtype=self.visit(node.dtype),
-                    unique_index=self.unique_index(),
-                    sid_ndim=sid_ndim,
-                )
-                if domain_ndim != 3:
-                    gt_dims = [
-                        f"gt::stencil::dim::{dim}"
-                        for dim in gtc_utils.dimension_flags_to_names(node.dimensions)
-                    ]
-                    if data_ndim:
-                        gt_dims += [
-                            f"gt::integral_constant<int, {3 + dim}>" for dim in range(data_ndim)
-                        ]
-                    sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
-                        gt_dims=", ".join(gt_dims), sid_def=sid_def
-                    )
-
-                return "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-                    sid_def=sid_def,
-                    name=node.name,
+                    ctype=self.visit(node.dtype),
+                    domain_dim_flags=node.dimensions,
+                    data_ndim=len(node.data_dims),
+                    stride_kind_index=self.unique_index(),
+                    backend=self.backend,
                 )
 
     def visit_ScalarDecl(self, node: cuir.ScalarDecl, **kwargs):
@@ -160,49 +116,11 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
             **kwargs,
         )
 
-    Program = as_mako(
-        """
-        #include <chrono>
-        #include <pybind11/pybind11.h>
-        #include <pybind11/stl.h>
-        #include <gridtools/storage/adapter/python_sid_adapter.hpp>
-        #include <gridtools/stencil/global_parameter.hpp>
-        #include <gridtools/sid/sid_shift_origin.hpp>
-        #include <gridtools/sid/rename_dimensions.hpp>
-        #include "computation.hpp"
-        namespace gt = gridtools;
-        namespace py = ::pybind11;
-        %if len(entry_params) > 0:
-        PYBIND11_MODULE(${module_name}, m) {
-            m.def("run_computation", [](std::array<gt::uint_t, 3> domain,
-            ${','.join(entry_params)},
-            py::object exec_info){
-                if (!exec_info.is(py::none()))
-                {
-                    auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_start_time"] = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
-                }
-
-                ${name}(domain)(${','.join(sid_params)});
-
-                if (!exec_info.is(py::none()))
-                {
-                    auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_end_time"] = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
-                }
-
-            }, "Runs the given computation");}
-        %endif
-        """
-    )
+    Program = bindings_main_template()
 
     @classmethod
-    def apply(cls, root, *, module_name="stencil", **kwargs) -> str:
-        generated_code = cls().visit(root, module_name=module_name, **kwargs)
+    def apply(cls, root, *, module_name="stencil", backend, **kwargs) -> str:
+        generated_code = cls(backend).visit(root, module_name=module_name, **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
 

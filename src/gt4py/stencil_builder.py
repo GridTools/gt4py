@@ -259,7 +259,7 @@ class StencilBuilder:
 
     @property
     def gtir(self) -> gtir.Stencil:
-        return self.gtir_pipeline.full().gtir
+        return self.gtir_pipeline.full()
 
     @property
     def module_name(self) -> str:

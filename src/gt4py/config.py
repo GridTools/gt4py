@@ -42,7 +42,6 @@ GT2_INCLUDE_PATH: str = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "_external_src", GT2_REPO_DIRNAME, "include")
 )
 
-
 # Settings dict
 build_settings: Dict[str, Any] = {
     "boost_include_path": os.path.join(BOOST_ROOT, "include"),
