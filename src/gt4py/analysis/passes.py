@@ -1380,7 +1380,9 @@ class DemoteLocalTemporariesToVariablesPass(TransformPass):
 
         def visit_Assign(self, node: gt_ir.Assign, **kwargs: Any) -> None:
             self.visit(node.value, **kwargs)
-            if node.target.name in self.demotables:
+            if kwargs.get("inside_horizontal_if", False):
+                self.demotables.pop(node.target.name, None)
+            elif node.target.name in self.demotables:
                 self.demotables[node.target.name] = kwargs["stage_name"]
 
         def visit_HorizontalIf(self, node: gt_ir.HorizontalIf, **kwargs: Any) -> None:
