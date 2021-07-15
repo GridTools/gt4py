@@ -52,9 +52,9 @@ class GTCDaCeExtGenerator:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
         oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(
             skip=[
-                MaskStmtMerging().visit,
-                MaskInlining().visit,
-                FillFlushToLocalKCaches().visit,
+                MaskStmtMerging,
+                MaskInlining,
+                FillFlushToLocalKCaches,
             ]
         )
         sdfg = OirSDFGBuilder().visit(oir)
