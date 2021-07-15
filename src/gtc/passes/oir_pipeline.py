@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-
 from typing import Callable, Dict, Optional, Protocol, Sequence, Tuple, Type, Union
 
 from eve.visitors import NodeVisitor
