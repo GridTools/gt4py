@@ -497,7 +497,9 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
         subset: dace.subsets.Range
         k_size = subset.bounding_box_size()[axis_idx]
 
-        if bool(dace.symbolic.pystr_to_symbolic(k_size) >= dace.symbol("__K")):
+        k_sym = dace.symbol("__K")
+        k_size_symbolic = dace.symbolic.pystr_to_symbolic(k_size)
+        if k_sym in k_size_symbolic.free_symbols and bool(k_size_symbolic >= k_sym):
             return k_size
         else:
             return "__K"

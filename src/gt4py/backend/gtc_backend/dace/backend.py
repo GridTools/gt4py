@@ -128,7 +128,8 @@ class DaCeComputationCodegen:
 
     def generate_dace_args(self, gtir, sdfg):
         offset_dict: Dict[str, Tuple[int, int, int]] = {
-            k: (-v[0][0], -v[1][0], -v[2][0]) for k, v in compute_legacy_extents(gtir).items()
+            k: (-v[0][0], -v[1][0], -v[2][0])
+            for k, v in compute_legacy_extents(gtir, k_zero=False).items()
         }
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
         for name, array in sdfg.arrays.items():

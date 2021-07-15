@@ -11,14 +11,27 @@ def _iter_field_names(node: Union[gtir.Stencil, gtir.ParAssignStmt]) -> XIterato
     return node.iter_tree().if_isinstance(gtir.FieldDecl).getattr("name").unique()
 
 
+def _iter_vertical_loops(node: gtir.Stencil) -> XIterator[gtir.ParAssignStmt]:
+    return node.iter_tree().if_isinstance(gtir.VerticalLoop)
+
+
 def _iter_assigns(node: gtir.Stencil) -> XIterator[gtir.ParAssignStmt]:
     return node.iter_tree().if_isinstance(gtir.ParAssignStmt)
 
 
 def _ext_from_off(offset: gtir.CartesianOffset) -> Extent:
     return Extent(
-        ((min(offset.i, 0), max(offset.i, 0)), (min(offset.j, 0), max(offset.j, 0)), (0, 0))
+        (
+            (min(offset.i, 0), max(offset.i, 0)),
+            (min(offset.j, 0), max(offset.j, 0)),
+            (min(offset.k, 0), max(offset.k, 0)),
+        )
     )
+
+
+def _update_extents(extent_dict, new_values):
+    for name, extent in new_values.items():
+        extent_dict[name] = extent_dict[name] | extent
 
 
 FIELD_EXT_T = Dict[str, Extent]
@@ -38,10 +51,22 @@ class LegacyExtentsVisitor(NodeVisitor):
         field_extents = {name: Extent.zeros() for name in _iter_field_names(node)}
         ctx = self.StencilContext()
         for field_if in node.iter_tree().if_isinstance(gtir.FieldIfStmt):
-            self.visit(field_if, ctx=ctx)
-        for assign in reversed(_iter_assigns(node).to_list()):
-            self.visit(assign, ctx=ctx, field_extents=field_extents)
+            self.visit(field_if, ctx=ctx, **kwargs)
+        for vl in reversed(_iter_vertical_loops(node).to_list()):
+            self.visit(vl, ctx=ctx, field_extents=field_extents, **kwargs)
         return field_extents
+
+    def visit_VerticalLoop(
+        self, node: gtir.VerticalLoop, *, k_zero=True, ctx, field_extents, **kwargs
+    ):
+        loc_field_extents = {name: Extent.zeros() for name in _iter_field_names(node)}
+        for assign in reversed(_iter_assigns(node).to_list()):
+            self.visit(assign, ctx=ctx, field_extents=loc_field_extents, **kwargs)
+        if k_zero:
+            for name, ext in loc_field_extents.items():
+                ext = list(ext)
+                loc_field_extents[name] = Extent(ext[0], ext[1], (0, 0))
+        _update_extents(field_extents, loc_field_extents)
 
     def visit_ParAssignStmt(
         self,
@@ -85,5 +110,5 @@ class LegacyExtentsVisitor(NodeVisitor):
         pa_ctx.assign_extents[node.name] |= pa_ctx.left_extent + _ext_from_off(node.offset)
 
 
-def compute_legacy_extents(node: gtir.Stencil) -> FIELD_EXT_T:
-    return LegacyExtentsVisitor().visit(node)
+def compute_legacy_extents(node: gtir.Stencil, k_zero=True) -> FIELD_EXT_T:
+    return LegacyExtentsVisitor().visit(node, k_zero=k_zero)

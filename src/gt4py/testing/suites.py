@@ -67,14 +67,7 @@ class SuiteMeta(type):
     to test a stencil definition and implementations using Hypothesis and pytest.
     """
 
-    required_members = {
-        "domain_range",
-        "symbols",
-        "definition",
-        "validation",
-        "backends",
-        "dtypes",
-    }
+    required_members = {"domain_range", "symbols", "definition", "validation", "backends", "dtypes"}
 
     def collect_symbols(cls_name, cls_dict):
         domain_range = cls_dict["domain_range"]
@@ -208,8 +201,7 @@ class SuiteMeta(type):
             @hyp.given(hypothesis_data=test["generation_strategy"]())
             def hyp_wrapper(test_hyp, hypothesis_data):
                 self._test_generation(
-                    test_hyp,
-                    {**test_hyp["constants"], **hypothesis_data, **cls_dict["singletons"]},
+                    test_hyp, {**test_hyp["constants"], **hypothesis_data, **cls_dict["singletons"]}
                 )
 
             hyp_wrapper(test)
@@ -468,17 +460,25 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
         # Assert strict equality for Dawn backends
         if implementation.backend.startswith("dawn"):
-            assert all(
-                field_info.boundary == cls.global_boundaries[name]
-                for name, field_info in implementation.field_info.items()
-                if field_info is not None
-            )
+            for name, field_info in implementation.field_info.items():
+                if field_info is None:
+                    continue
+                for i, ax in enumerate("IJK"):
+                    assert (
+                        ax not in field_info.axes
+                        or ax == "K"
+                        or field_info.boundary[i] == cls.global_boundaries[name][i]
+                    )
         else:
-            assert all(
-                field_info.boundary >= cls.global_boundaries[name]
-                for name, field_info in implementation.field_info.items()
-                if field_info is not None
-            )
+            for name, field_info in implementation.field_info.items():
+                if field_info is None:
+                    continue
+                for i, ax in enumerate("IJK"):
+                    assert (
+                        ax not in field_info.axes
+                        or ax == "K"
+                        or field_info.boundary[i] >= cls.global_boundaries[name][i]
+                    )
 
         test["implementations"].append(implementation)
 
@@ -550,8 +550,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 validation_values[name] = None
 
         # call implementation
-        implementation(**test_values, origin=origin, exec_info=exec_info)
-        assert domain == exec_info["domain"]
+        implementation(**test_values, origin=origin, domain=domain, exec_info=exec_info)
 
         # for validation data, data is cropped to actually touched domain, so that origin offseting
         # does not have to be implemented for every test suite. This is done based on info
