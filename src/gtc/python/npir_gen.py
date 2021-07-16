@@ -296,7 +296,6 @@ class NpirGen(TemplatedGenerator):
                 _dI_, _dJ_, _dK_ = _domain_
                 # -- end domain padding --
 
-                _origin_ = dict(_origin_)
                 {% for decl in field_decls %}{{ decl | indent(4) }}
                 {% endfor %}
                 # -- begin data views --

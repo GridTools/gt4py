@@ -467,4 +467,4 @@ def test_origin_unchanged(backend):
 
     assert all(k in origin_ref for k in origin.keys())
     assert all(k in origin for k in origin_ref.keys())
-    assert all(v is origin_ref[k] for k, v in origin)
+    assert all(v is origin_ref[k] for k, v in origin.items())
