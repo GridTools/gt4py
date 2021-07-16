@@ -156,7 +156,6 @@ class DaCeComputationCodegen:
         }
         k_origins = compute_k_origins(gtir)
         for name, origin in k_origins.items():
-            print(origin)
             offset_dict[name] = (offset_dict[name][0], offset_dict[name][1], origin)
 
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
