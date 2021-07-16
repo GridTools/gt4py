@@ -202,6 +202,25 @@ def test_lower_dimensional_inputs(backend):
     stencil(field_3d, field_2d, field_1d)
 
 
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
+    @gtscript.stencil(backend=backend)
+    def copy_2to3(
+        inp: gtscript.Field[gtscript.IJ, np.float_], outp: gtscript.Field[gtscript.IJK, np.float_]
+    ):
+        with computation(FORWARD), interval(...):
+            outp[0, 0, 0] = inp
+
+    inp_f = gt_storage.from_array(np.random.randn(10, 10), default_origin=(0, 0), backend=backend)
+    outp_f = gt_storage.from_array(
+        np.random.randn(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    )
+    copy_2to3(inp_f, outp_f)
+    inp_f.device_to_host()
+    outp_f.device_to_host()
+    assert np.allclose(np.asarray(outp_f), np.asarray(inp_f)[:, :, np.newaxis])
+
+
 @pytest.mark.parametrize(
     "backend",
     [

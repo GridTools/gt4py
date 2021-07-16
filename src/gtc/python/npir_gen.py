@@ -110,7 +110,9 @@ class NpirGen(TemplatedGenerator):
         "{{ lpar }}{{ axis_name | lower }}{{ offset }}{{ rpar }}:{{ lpar }}{{ axis_name | upper }}{{ offset }}{{ rpar }}"
     )
 
-    AxisOffset_serial = JinjaTemplate("{{ axis_name | lower }}_{{ offset }}")
+    AxisOffset_serial = JinjaTemplate(
+        "{{ lpar }}{{ axis_name | lower }}_{{ offset }}{{ rpar }}:({{ axis_name | lower }}_{{ offset}} + 1)"
+    )
 
     AxisOffset = FormatTemplate("{parallel_or_serial_variant}")
 
