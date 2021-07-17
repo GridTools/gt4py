@@ -167,5 +167,15 @@ def test_device_sync_option(backend_name, mode, device_sync):
         assert "cupy.cuda.Device(0).synchronize()" not in source
 
 
+@pytest.mark.parametrize("backend_name", GPU_BACKENDS)
+def test_device_sync_option_registered(backend_name):
+    backend_cls = backend_registry[backend_name]
+    backend_opts = backend_cls.options
+    option_name = "device_sync"
+    assert option_name in backend_opts
+    assert backend_opts[option_name]["versioning"]
+    assert backend_opts[option_name]["type"] is bool
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
