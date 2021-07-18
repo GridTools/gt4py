@@ -18,6 +18,7 @@ import textwrap
 from typing import Any, Collection, Tuple, Union
 
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
+from gt4py.definitions import Extent
 from gtc import common
 from gtc.passes.gtir_legacy_extents import FIELD_EXT_T
 from gtc.python import npir
@@ -258,9 +259,10 @@ class NpirGen(TemplatedGenerator):
         lower, upper = [0, 0], [0, 0]
 
         if extents := kwargs.get("field_extents"):
-            fields = set(node.iter_tree().if_isinstance(npir.FieldSlice).getattr("name")) & set(
-                extents
-            )
+            fields = set(node.iter_tree().if_isinstance(npir.FieldSlice).getattr("name"))
+            for field in fields:
+                # The extent of masks hsa not yet been collected but is always zero.
+                extents.setdefault(field, Extent.zeros())
             lower[0] = min(extents[field].to_boundary()[0][0] for field in fields)
             lower[1] = min(extents[field].to_boundary()[1][0] for field in fields)
             upper[0] = min(extents[field].to_boundary()[0][1] for field in fields)
