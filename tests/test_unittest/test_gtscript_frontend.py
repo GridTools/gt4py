@@ -481,7 +481,7 @@ class TestIntervalSyntax:
     def test_overlapping_intervals_regions(self):
         def definition_func(in_f: gtscript.Field[np.float_], out_f: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
-                with horizontal(region[: I[0] + 3, :], region[I[-1] - 3:, :]):
+                with horizontal(region[: I[0] + 3, :], region[I[-1] - 3 :, :]):
                     out_f = 0.5 * (in_f + in_f[0, 1, 0])
 
         parse_definition(
