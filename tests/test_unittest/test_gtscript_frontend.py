@@ -24,7 +24,6 @@ import pytest
 
 import gt4py.definitions as gt_definitions
 import gt4py.ir as gt_ir
-import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
 from gt4py.gtscript import (
@@ -477,6 +476,16 @@ class TestIntervalSyntax:
 
         parse_definition(
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_overlapping_intervals_regions(self):
+        def definition_func(in_f: gtscript.Field[np.float_], out_f: gtscript.Field[np.float_]):
+            with computation(PARALLEL), interval(...):
+                with horizontal(region[: I[0] + 3, :], region[I[-1] - 3:, :]):
+                    out_f = 0.5 * (in_f + in_f[0, 1, 0])
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__, rebuild=True
         )
 
 
