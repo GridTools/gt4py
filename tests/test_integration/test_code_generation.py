@@ -73,10 +73,7 @@ def test_stage_without_effect(backend):
 def test_ignore_np_errstate():
     def setup_and_run(backend, **kwargs):
         field_a = gt_storage.zeros(
-            dtype=np.float_,
-            backend=backend,
-            shape=(3, 3, 1),
-            default_origin=(0, 0, 0),
+            dtype=np.float_, backend=backend, shape=(3, 3, 1), default_origin=(0, 0, 0)
         )
 
         @gtscript.stencil(backend=backend, **kwargs)
@@ -318,9 +315,7 @@ def test_higher_dimensional_fields(backend):
 def test_input_order(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
-        in_field: gtscript.Field[np.float],
-        parameter: np.float,
-        out_field: gtscript.Field[np.float],
+        in_field: gtscript.Field[np.float], parameter: np.float, out_field: gtscript.Field[np.float]
     ):
         with computation(PARALLEL), interval(...):
             out_field = in_field * parameter
@@ -367,3 +362,27 @@ def test_variable_offsets_and_while_loop(backend):
                     qsum += qin[0, 0, lev] / (pe2[0, 0, 1] - pe1[0, 0, lev])
                     lev = lev + 1
                 qout = qsum / (pe2[0, 0, 1] - pe2)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_mask_with_offset_written_in_conditional(backend):
+    @gtscript.stencil(backend, externals={"mord": 5})
+    def stencil(
+        outp: gtscript.Field[np.float_],
+    ):
+
+        with computation(PARALLEL), interval(...):
+            cond = True
+            if cond[0, -1, 0] or cond[0, 0, 0]:
+                outp = 1.0
+            else:
+                outp = 0.0
+
+    outp = gt_storage.zeros(
+        shape=(10, 10, 10), backend=backend, default_origin=(0, 0, 0), dtype=float
+    )
+
+    stencil(outp)
+
+    outp.device_to_host()
+    assert np.allclose(1.0, np.asarray(outp))
