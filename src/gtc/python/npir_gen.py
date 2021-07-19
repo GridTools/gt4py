@@ -261,7 +261,7 @@ class NpirGen(TemplatedGenerator):
         if extents := kwargs.get("field_extents"):
             fields = set(node.iter_tree().if_isinstance(npir.FieldSlice).getattr("name"))
             for field in fields:
-                # The extent of masks hsa not yet been collected but is always zero.
+                # The extent of masks has not yet been collected but is always zero.
                 extents.setdefault(field, Extent.zeros())
             lower[0] = min(extents[field].to_boundary()[0][0] for field in fields)
             lower[1] = min(extents[field].to_boundary()[1][0] for field in fields)

@@ -373,7 +373,6 @@ def test_mask_with_offset_written_in_conditional(backend):
 
         with computation(PARALLEL), interval(...):
             cond = True
-            # outp = 1.0 if cond[0, -1, 0] or cond[0, 0, 0] else 0.0 # this works
             if cond[0, -1, 0] or cond[0, 0, 0]:
                 outp = 1.0
             else:
