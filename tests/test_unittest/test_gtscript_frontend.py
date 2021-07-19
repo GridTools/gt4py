@@ -485,7 +485,7 @@ class TestIntervalSyntax:
                     out_f = 0.5 * (in_f + in_f[0, 1, 0])
 
         parse_definition(
-            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__, rebuild=True
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
 
 
