@@ -124,7 +124,7 @@ class StencilObject(abc.ABC):
     def _make_origin_dict(origin: Any) -> Dict[str, Index]:
         try:
             if isinstance(origin, dict):
-                return origin
+                return dict(origin)
             if origin is None:
                 return {}
             if isinstance(origin, collections.abc.Iterable):
