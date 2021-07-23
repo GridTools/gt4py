@@ -58,9 +58,11 @@ class GTIRToOIR(NodeTranslator):
                 if declarations is not None:
                     raise ValueError("Only possible at interval scope")
                 self.stmts.append(stmt)
+                return self
 
             def add_decl(self, decl):
                 self.parent.add_decl(decl)
+                return self
 
         decls: List[oir.Decl] = field(default_factory=list)
         horizontal_executions: List[oir.HorizontalExecution] = field(default_factory=list)
@@ -69,12 +71,13 @@ class GTIRToOIR(NodeTranslator):
             self.decls.append(decl)
             return self
 
-        def add_stmt(self, stmt, declarations=None):
+        def add_stmt(self, stmt, declarations=None) -> "GTIRToOIR.Context":
             self.horizontal_executions.append(
                 oir.HorizontalExecution(body=[stmt], declarations=declarations or [])
             )
+            return self
 
-        def new_scope(self):
+        def new_scope(self) -> "ContextInScope":
             return self.ContextInScope(self)
 
     def visit_ParAssignStmt(
@@ -178,6 +181,7 @@ class GTIRToOIR(NodeTranslator):
     def visit_VerticalLoop(
         self, node: gtir.VerticalLoop, *, ctx: Context, **kwargs: Any
     ) -> oir.VerticalLoop:
+        ctx.horizontal_executions.clear()
         self.visit(node.body, ctx=ctx)
 
         for temp in node.temporaries:
