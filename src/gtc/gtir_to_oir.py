@@ -25,21 +25,16 @@ from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 def _create_mask(ctx: "GTIRToOIR.Context", name: str, cond: oir.Expr) -> oir.Temporary:
     mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL, dimensions=(True, True, True))
     ctx.add_decl(mask_field_decl)
-
-    fill_mask_field = oir.HorizontalExecution(
-        body=[
-            oir.AssignStmt(
-                left=oir.FieldAccess(
-                    name=mask_field_decl.name,
-                    offset=CartesianOffset.zero(),
-                    dtype=mask_field_decl.dtype,
-                ),
-                right=cond,
-            )
-        ],
-        declarations=[],
+    ctx.add_stmt(
+        oir.AssignStmt(
+            left=oir.FieldAccess(
+                name=mask_field_decl.name,
+                offset=CartesianOffset.zero(),
+                dtype=mask_field_decl.dtype,
+            ),
+            right=cond,
+        )
     )
-    ctx.add_horizontal_execution(fill_mask_field)
     return mask_field_decl
 
 
@@ -54,32 +49,44 @@ class GTIRToOIR(NodeTranslator):
         they attach their result to the Context object.
         """
 
-        decls: List = field(default_factory=list)
-        horizontal_executions: List = field(default_factory=list)
-        in_while_loop: bool = False
+        class ContextInScope:
+            def __init__(self, parent):
+                self.parent = parent
+                self.stmts = []
+
+            def add_stmt(self, stmt, declarations=None):
+                if declarations is not None:
+                    raise ValueError("Only possible at interval scope")
+                self.stmts.append(stmt)
+                return self
+
+            def add_decl(self, decl):
+                self.parent.add_decl(decl)
+                return self
+
+        decls: List[oir.Decl] = field(default_factory=list)
+        horizontal_executions: List[oir.HorizontalExecution] = field(default_factory=list)
 
         def add_decl(self, decl: oir.Decl) -> "GTIRToOIR.Context":
             self.decls.append(decl)
             return self
 
-        def add_horizontal_execution(
-            self, horizontal_execution: oir.HorizontalExecution
-        ) -> "GTIRToOIR.Context":
-            self.horizontal_executions.append(horizontal_execution)
+        def add_stmt(self, stmt, declarations=None) -> "GTIRToOIR.Context":
+            self.horizontal_executions.append(
+                oir.HorizontalExecution(body=[stmt], declarations=declarations or [])
+            )
             return self
+
+        def new_scope(self) -> "ContextInScope":
+            return self.ContextInScope(self)
 
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> None:
-        body = [oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))]
+        stmt = oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
         if mask is not None:
-            body = [oir.MaskStmt(body=body, mask=mask, is_loop=ctx.in_while_loop)]
-        ctx.add_horizontal_execution(
-            oir.HorizontalExecution(
-                body=body,
-                declarations=[],
-            ),
-        )
+            stmt = oir.MaskStmt(body=[stmt], mask=mask)
+        ctx.add_stmt(stmt)
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> oir.FieldAccess:
         return oir.FieldAccess(
@@ -171,10 +178,9 @@ class GTIRToOIR(NodeTranslator):
         combined_mask = current_mask
         if mask:
             combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=current_mask)
-
-        ctx.in_while_loop = True
-        self.visit(node.body, mask=combined_mask, ctx=ctx)
-        ctx.in_while_loop = False
+        scoped_ctx = ctx.new_scope()
+        self.visit(node.body, mask=combined_mask, ctx=scoped_ctx)
+        ctx.add_stmt(oir.While(cond=combined_mask, body=scoped_ctx.stmts))
 
     def visit_Interval(self, node: gtir.Interval, **kwargs: Any) -> oir.Interval:
         return oir.Interval(

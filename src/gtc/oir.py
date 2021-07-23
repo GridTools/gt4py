@@ -67,7 +67,6 @@ class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt
 class MaskStmt(Stmt):
     mask: Expr
     body: List[Stmt]
-    is_loop: bool = False
 
     @validator("mask")
     def mask_is_boolean_field_expr(cls, v: Expr) -> Expr:
@@ -94,6 +93,10 @@ class Cast(common.Cast[Expr], Expr):  # type: ignore
 
 class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
+
+
+class While(common.While[Stmt, Expr], Stmt):
+    pass
 
 
 class Decl(LocNode):

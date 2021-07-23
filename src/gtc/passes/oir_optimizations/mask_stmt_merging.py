@@ -50,4 +50,4 @@ class MaskStmtMerging(NodeTranslator):
         return oir.HorizontalExecution(body=self._merge(node.body), declarations=node.declarations)
 
     def visit_MaskStmt(self, node: oir.MaskStmt) -> oir.MaskStmt:
-        return oir.MaskStmt(mask=node.mask, body=self._merge(node.body), is_loop=node.is_loop)
+        return oir.MaskStmt(mask=node.mask, body=self._merge(node.body))

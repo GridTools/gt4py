@@ -28,6 +28,7 @@ from .oir_utils import (
     StencilFactory,
     VerticalLoopFactory,
     VerticalLoopSectionFactory,
+    WhileFactory,
 )
 
 
@@ -295,15 +296,7 @@ def test_loop_mask():
         vertical_loops__0=VerticalLoopFactory(
             sections=[
                 VerticalLoopSectionFactory(
-                    horizontal_executions=[
-                        HorizontalExecutionFactory(
-                            body=[
-                                MaskStmtFactory(
-                                    mask=FieldAccessFactory(dtype=DataType.BOOL), is_loop=True
-                                )
-                            ]
-                        )
-                    ]
+                    horizontal_executions=[HorizontalExecutionFactory(body=[WhileFactory()])]
                 )
             ],
         ),

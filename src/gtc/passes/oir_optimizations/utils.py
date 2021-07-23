@@ -66,6 +66,10 @@ class AccessCollector(NodeVisitor):
         self.visit(node.mask, is_write=False, **kwargs)
         self.visit(node.body, **kwargs)
 
+    def visit_While(self, node: oir.While, **kwargs: Any) -> None:
+        self.visit(node.cond, is_write=False, **kwargs)
+        self.visit(node.body, **kwargs)
+
     @dataclass
     class Result:
         _ordered_accesses: List["Access"]
