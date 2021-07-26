@@ -63,6 +63,10 @@ class LegacyExtentsVisitor(NodeVisitor):
         for key, value in pa_ctx.assign_extents.items():
             field_extents[key] |= value
 
+    def visit_HorizontalRegion(self, node: gtir.HorizontalRegion, **kwargs: Any) -> None:
+        # Skip extent analysis within horizontal regions.
+        pass
+
     def visit_FieldIfStmt(
         self, node: gtir.FieldIfStmt, *, ctx: StencilContext, **kwargs: Any
     ) -> None:
