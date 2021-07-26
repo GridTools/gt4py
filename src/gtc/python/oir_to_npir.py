@@ -182,11 +182,12 @@ class OirToNpir(NodeTranslator):
         **kwargs: Any,
     ) -> npir.FieldSlice:
         dims = decl.dimensions if (decl := ctx.symbol_table.get(node.name)) else (True, True, True)
+        k_offset = self.visit(node.offset.k, ctx=ctx, parallel_k=parallel_k, **kwargs)
         return npir.FieldSlice(
             name=str(node.name),
             i_offset=npir.AxisOffset.i(node.offset.i) if dims[0] else None,
             j_offset=npir.AxisOffset.j(node.offset.j) if dims[1] else None,
-            k_offset=npir.AxisOffset.k(node.offset.k, parallel=parallel_k) if dims[2] else None,
+            k_offset=npir.AxisOffset.k(k_offset, parallel=parallel_k) if dims[2] else None,
         )
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs) -> npir.FieldDecl:

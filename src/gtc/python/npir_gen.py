@@ -62,6 +62,11 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
                     )
                 else:
                     new_args.append(idx + self.offsets[dim])
+            if isinstance(new_args[-1], np.ndarray):
+                new_args[0:2] = np.broadcast_arrays(
+                    np.arange(new_args[0].start, new_args[0].stop)[:, None, None],
+                    np.arange(new_args[1].start, new_args[1].stop)[None, :, None],
+                )
             return tuple(new_args)
 
         def __getitem__(self, key):
@@ -99,12 +104,18 @@ class NpirGen(TemplatedGenerator):
 
     NumericalOffset = FormatTemplate("{op}{delta}")
 
+    def visit_VariableOffset(self, node: npir.VariableOffset, **kwargs: Any) -> str:
+        return self.visit(node.value)
+
     def visit_AxisOffset(self, node: npir.AxisOffset, **kwargs: Any) -> Union[str, Collection[str]]:
         offset = self.visit(node.offset)
         axis_name = self.visit(node.axis_name)
         lpar, rpar = "()" if offset else ("", "")
-        variant = self.AxisOffset_parallel if node.parallel else self.AxisOffset_serial
-        rendered = variant.render(lpar=lpar, rpar=rpar, axis_name=axis_name, offset=offset)
+        if isinstance(node.offset, npir.VariableOffset):
+            rendered = f"{axis_name.lower()}_ + np.asarray({offset}[:])"
+        else:
+            variant = self.AxisOffset_parallel if node.parallel else self.AxisOffset_serial
+            rendered = variant.render(lpar=lpar, rpar=rpar, axis_name=axis_name, offset=offset)
         return self.generic_visit(node, parallel_or_serial_variant=rendered, **kwargs)
 
     AxisOffset_parallel = JinjaTemplate(
@@ -138,14 +149,14 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_FieldSlice(
-        self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, **kwargs: Any
+        self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, is_rhs=False, **kwargs: Any
     ) -> Union[str, Collection[str]]:
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
 
         offset_str = ", ".join(self.visit(off, **kwargs) if off else ":" for off in offset)
 
-        if mask_acc and any(off is None for off in offset):
+        if is_rhs and mask_acc and any(off is None for off in offset):
             k_size = 1 if is_serial else "K - k"
             arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I - i, J - j, {k_size}))"
         else:
@@ -204,9 +215,9 @@ class NpirGen(TemplatedGenerator):
             mask_acc = f"[{self.visit(node.mask, **kwargs)}]"
         if isinstance(node.right, npir.EmptyTemp):
             kwargs["temp_name"] = node.left.name
-        return self.generic_visit(node, mask_acc=mask_acc, **kwargs)
-
-    VectorAssign = FormatTemplate("{left} = {right}")
+        right = self.visit(node.right, mask_acc=mask_acc, is_rhs=True, **kwargs)
+        left = self.visit(node.left, mask_acc=mask_acc, is_rhs=False, **kwargs)
+        return f"{left} = {right}"
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")
 

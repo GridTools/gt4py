@@ -44,6 +44,10 @@ class NumericalOffset(eve.Node):
     value: int
 
 
+class VariableOffset(eve.Node):
+    value: Expr
+
+
 class AxisName(eve.StrEnum):
     I = "I"  # noqa: E741 (ambiguous variable name)
     J = "J"
@@ -51,9 +55,13 @@ class AxisName(eve.StrEnum):
 
 
 class AxisOffset(eve.Node):
-    offset: NumericalOffset
+    offset: Union[NumericalOffset, VariableOffset]
     axis_name: AxisName
     parallel: bool
+
+    @classmethod
+    def from_expr(cls, *, axis_name: str, offset: Expr, parallel: bool) -> "AxisOffset":
+        return cls(axis_name=axis_name, offset=VariableOffset(value=offset), parallel=parallel)
 
     @classmethod
     def from_int(cls, *, axis_name: str, offset: int, parallel: bool) -> "AxisOffset":
@@ -68,8 +76,12 @@ class AxisOffset(eve.Node):
         return cls.from_int(axis_name=AxisName.J, offset=offset, parallel=parallel)
 
     @classmethod
-    def k(cls, offset: int, *, parallel: bool = False) -> "AxisOffset":
-        return cls.from_int(axis_name=AxisName.K, offset=offset, parallel=parallel)
+    def k(cls, offset: Union[int, Expr], *, parallel: bool = False) -> "AxisOffset":
+        return (
+            cls.from_int(axis_name=AxisName.K, offset=offset, parallel=parallel)
+            if isinstance(offset, int)
+            else cls.from_expr(axis_name=AxisName.K, offset=offset, parallel=parallel)
+        )
 
 
 @eve.utils.noninstantiable
