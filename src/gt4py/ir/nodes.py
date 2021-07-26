@@ -691,13 +691,16 @@ class AxisInterval(Node):
     end = attribute(of=AxisBound)
     loc = attribute(of=Location, optional=True)
 
-    def equals(self, other: "AxisInterval") -> bool:
+    def __eq__(self, other: "AxisInterval") -> bool:
         return (
             self.start.level.value == other.start.level.value
             and self.start.offset == other.start.offset
             and self.end.level.value == other.end.level.value
             and self.end.offset == other.end.offset
         )
+
+    def __ne__(self, other: "AxisInterval") -> bool:
+        return not (self == other)
 
     @classmethod
     def full_interval(cls, order=IterationOrder.PARALLEL):
