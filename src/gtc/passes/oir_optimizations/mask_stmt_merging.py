@@ -31,7 +31,6 @@ class MaskStmtMerging(NodeTranslator):
                 isinstance(stmt, oir.MaskStmt)
                 and isinstance(merged[-1], oir.MaskStmt)
                 and stmt.mask == merged[-1].mask
-                and stmt.is_loop == merged[-1].is_loop
                 and not (
                     AccessCollector.apply(merged[-1].body).write_fields()
                     & AccessCollector.apply(stmt.mask, is_write=False).fields()
@@ -40,7 +39,6 @@ class MaskStmtMerging(NodeTranslator):
                 merged[-1] = oir.MaskStmt(
                     mask=merged[-1].mask,
                     body=merged[-1].body + stmt.body,
-                    is_loop=merged[-1].is_loop,
                 )
             else:
                 merged.append(stmt)
