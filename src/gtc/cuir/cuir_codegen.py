@@ -38,11 +38,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     MaskStmt = as_mako(
         """
-        % if _this_node.is_loop:
-        while (${mask}) {
-        % else:
         if (${mask}) {
-        % endif
+            ${'\\n'.join(body)}
+        }
+        """
+    )
+
+    While = as_mako(
+        """
+        while (${cond}) {
             ${'\\n'.join(body)}
         }
         """
