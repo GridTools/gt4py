@@ -250,3 +250,8 @@ class OirToNpir(NodeTranslator):
         if broadcast:
             return npir.BroadCast(expr=name, dtype=name.dtype)
         return name
+
+    def visit_While(self, node: oir.While, **kwargs: Any) -> npir.While:
+        cond = self.visit(node.cond, **kwargs)
+        body = self.visit(node.body, **kwargs)
+        return npir.While(cond=cond, body=body)

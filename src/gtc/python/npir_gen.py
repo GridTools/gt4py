@@ -333,3 +333,24 @@ class NpirGen(TemplatedGenerator):
         return self.generic_visit(node, **kwargs)
 
     NativeFuncCall = FormatTemplate("np.{func}({', '.join(arg for arg in args)})")
+
+    While = JinjaTemplate(
+        textwrap.dedent(
+            """\
+            _while_result = {{ cond }}
+            while np.any(_while_result):
+                {% for stmt in body %}{{ stmt }}
+                {% endfor %}
+                _while_result = {{ cond }}
+            """
+        )
+    )
+
+    def visit_While(self, node: npir.While, **kwargs: Any) -> str:
+        cond = self.visit(node.cond, **kwargs)
+
+        body = []
+        for body_stmt in self.visit(node.body, **kwargs):
+            body.extend([stmt for stmt in body_stmt.split("\n") if stmt])
+
+        return self.While.render(cond=cond, body=body)
