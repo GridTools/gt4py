@@ -348,9 +348,7 @@ class NpirGen(TemplatedGenerator):
 
     def visit_While(self, node: npir.While, **kwargs: Any) -> str:
         cond = self.visit(node.cond, **kwargs)
-
         body = []
-        for body_stmt in self.visit(node.body, **kwargs):
-            body.extend([stmt for stmt in body_stmt.split("\n") if stmt])
-
+        for stmt in self.visit(node.body, **kwargs):
+            body.extend(stmt.split("\n"))
         return self.While.render(cond=cond, body=body)
