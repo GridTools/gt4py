@@ -50,7 +50,7 @@ class GTCCudaExtGenerator:
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
         oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(
-            skip=[GreedyMerging.visit, NoFieldAccessPruning.visit]
+            skip=[GreedyMerging, NoFieldAccessPruning]
         )
         cuir = oir_to_cuir.OIRToCUIR().visit(oir)
         cuir = kernel_fusion.FuseKernels().visit(cuir)
@@ -130,7 +130,7 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     """CUDA backend using gtc."""
 
     name = "gtc:cuda"
-    options = BaseGTBackend.GT_BACKEND_OPTS
+    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
     languages = {"computation": "cuda", "bindings": ["python"]}
     storage_info = {
         "alignment": 32,

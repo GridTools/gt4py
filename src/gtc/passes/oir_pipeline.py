@@ -14,8 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Callable, Dict, Optional, Protocol, Sequence, Tuple
+from typing import Callable, Dict, Optional, Protocol, Sequence, Tuple, Type, Union
 
+from eve.visitors import NodeVisitor
 from gtc import oir
 from gtc.passes.oir_dace_optimizations.horizontal_execution_merging import (
     graph_merge_horizontal_executions,
@@ -38,7 +39,7 @@ from gtc.passes.oir_optimizations.temporaries import (
 from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 
 
-PASS_T = Callable[[oir.Stencil], oir.Stencil]
+PASS_T = Union[Callable[[oir.Stencil], oir.Stencil], Type[NodeVisitor]]
 
 
 class ClassMethodPass(Protocol):
@@ -46,7 +47,7 @@ class ClassMethodPass(Protocol):
 
 
 def hash_step(step: Callable) -> int:
-    return hash(getattr(step, "__func__", step))
+    return hash(step)
 
 
 class OirPipeline:
@@ -63,25 +64,28 @@ class OirPipeline:
     def steps(self) -> Sequence[PASS_T]:
         return [
             graph_merge_horizontal_executions,
-            GreedyMerging().visit,
-            AdjacentLoopMerging().visit,
-            LocalTemporariesToScalars().visit,
-            WriteBeforeReadTemporariesToScalars().visit,
-            OnTheFlyMerging().visit,
-            MaskStmtMerging().visit,
-            MaskInlining().visit,
-            NoFieldAccessPruning().visit,
-            IJCacheDetection().visit,
-            KCacheDetection().visit,
-            PruneKCacheFills().visit,
-            PruneKCacheFlushes().visit,
-            FillFlushToLocalKCaches().visit,
+            GreedyMerging,
+            AdjacentLoopMerging,
+            LocalTemporariesToScalars,
+            WriteBeforeReadTemporariesToScalars,
+            OnTheFlyMerging,
+            MaskStmtMerging,
+            MaskInlining,
+            NoFieldAccessPruning,
+            IJCacheDetection,
+            KCacheDetection,
+            PruneKCacheFills,
+            PruneKCacheFlushes,
+            FillFlushToLocalKCaches,
         ]
 
     def apply(self, steps: Sequence[PASS_T]) -> oir.Stencil:
         result = self.oir
         for step in steps:
-            result = step(result)
+            if isinstance(step, type) and issubclass(step, NodeVisitor):
+                result = step().visit(result)
+            else:
+                result = step(result)
         return result
 
     def _get_cached(self, steps: Sequence[PASS_T]) -> Optional[oir.Stencil]:

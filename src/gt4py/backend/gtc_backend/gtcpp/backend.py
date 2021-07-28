@@ -55,7 +55,7 @@ class GTCGTExtGenerator:
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
         oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(
-            skip=[GreedyMerging.visit, FillFlushToLocalKCaches.visit]
+            skip=[GreedyMerging, FillFlushToLocalKCaches]
         )
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(
@@ -204,6 +204,7 @@ class GTCGTGpuBackend(GTCGTBaseBackend):
     name = "gtc:gt:gpu"
     GT_BACKEND_T = "gpu"
     languages = {"computation": "cuda", "bindings": ["python"]}
+    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
     storage_info = {
         "alignment": 32,
         "device": "gpu",
