@@ -459,27 +459,22 @@ class StencilTestSuite(metaclass=SuiteMeta):
         assert implementation.backend == test["backend"]
 
         # Assert strict equality for Dawn backends
-        if implementation.backend.startswith("dawn"):
-            for name, field_info in implementation.field_info.items():
-                if field_info is None:
-                    continue
-                for i, ax in enumerate("IJK"):
+        for name, field_info in implementation.field_info.items():
+            if field_info is None:
+                continue
+            for i, ax in enumerate("IJK"):
+                if implementation.backend.startswith("dawn"):
                     assert (
                         ax not in field_info.axes
                         or ax == "K"
                         or field_info.boundary[i] == cls.global_boundaries[name][i]
                     )
-        else:
-            for name, field_info in implementation.field_info.items():
-                if field_info is None:
-                    continue
-                for i, ax in enumerate("IJK"):
+                else:
                     assert (
                         ax not in field_info.axes
                         or ax == "K"
                         or field_info.boundary[i] >= cls.global_boundaries[name][i]
                     )
-
         test["implementations"].append(implementation)
 
     @classmethod
