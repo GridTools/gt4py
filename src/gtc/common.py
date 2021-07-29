@@ -318,7 +318,7 @@ class FieldAccess(LocNode):
         return data_index
 
 
-class BlockStmt(GenericNode, SymbolTableTrait, Generic[StmtT]):
+class BlockStmt(GenericNode, Generic[StmtT]):
     body: List[StmtT]
 
 
