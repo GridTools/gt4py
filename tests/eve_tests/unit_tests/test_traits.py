@@ -74,9 +74,9 @@ class TestSymbolTable:
             for symbol_name, symbol_node in expected_symbols.items()
         )
 
-    def test_add_symtable_kwarg(self, symtable_node_and_expected_symbols):
+    def test_add_symtable(self, symtable_node_and_expected_symbols):
         node = _NodeWithSymbolTable(symbols=[_NodeWithSymbolName()])
         kwargs = {}
-        kwargs = eve.SymbolTableTrait.add_symtable_kwarg(node, **kwargs)
+        kwargs = eve.SymbolTableTrait.add_symtable(node, **kwargs)
         assert "symtable" in kwargs
         assert "symbol_name" in kwargs["symtable"]

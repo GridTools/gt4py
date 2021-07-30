@@ -36,7 +36,7 @@ class OnTheFlyMerging(NodeTranslator):
     allow_expensive_function_duplication: bool = False
 
     def __init__(self):
-        super().__init__(SymbolTableTrait.add_symtable_kwarg)
+        super().__init__(SymbolTableTrait.add_symtable)
 
     def visit_CartesianOffset(
         self,

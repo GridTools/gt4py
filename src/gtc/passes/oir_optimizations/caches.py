@@ -263,7 +263,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
     """
 
     def __init__(self):
-        super().__init__(SymbolTableTrait.add_symtable_kwarg)
+        super().__init__(SymbolTableTrait.add_symtable)
 
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, name_map: Dict[str, str], **kwargs: Any

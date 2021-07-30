@@ -32,7 +32,7 @@ class _GTIRResolveAuto(NodeTranslator):
     """
 
     def __init__(self):
-        super().__init__(SymbolTableTrait.add_symtable_kwarg)
+        super().__init__(SymbolTableTrait.add_symtable)
 
     class _GTIRUpdateAutoDecl(NodeTranslator):
         """Updates FieldDecls with resolved types."""
@@ -88,7 +88,7 @@ class _GTIRPropagateDtypeToAccess(NodeTranslator):
     """
 
     def __init__(self):
-        super().__init__(SymbolTableTrait.add_symtable_kwarg)
+        super().__init__(SymbolTableTrait.add_symtable)
 
     def visit_FieldAccess(
         self, node: gtir.FieldAccess, *, symtable: Dict[str, Any], **kwargs: Any
