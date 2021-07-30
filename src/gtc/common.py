@@ -550,7 +550,6 @@ def validate_symbol_refs() -> RootValidatorType:
         class SymtableValidator(NodeVisitor):
             def __init__(self) -> None:
                 self.missing_symbols: List[str] = []
-                super().__init__()
 
             def visit_Node(self, node: Node, *, symtable: Dict[str, Any], **kwargs: Any) -> None:
                 for name, metadata in node.__node_children__.items():

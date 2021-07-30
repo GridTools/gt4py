@@ -36,7 +36,11 @@ from .typingx import (
     Optional,
     Tuple,
     Union,
+    cast,
 )
+
+
+PREVISITOR = Callable[[concepts.TreeNode, Dict[str, Any]], Dict[str, Any]]
 
 
 class NodeVisitor:
@@ -103,8 +107,10 @@ class NodeVisitor:
 
     """
 
-    def __init__(self, previsitor: Optional[Callable[..., Dict[str, Any]]] = None):
-        self.previsitor = previsitor
+    previsitors: Optional[Tuple[PREVISITOR]] = None
+
+    def __init__(self, *args: PREVISITOR):
+        self.previsitors = cast(Optional[Tuple[PREVISITOR]], args)
 
     def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         visitor = self.generic_visit
@@ -122,8 +128,9 @@ class NodeVisitor:
                 if node_class is concepts.Node:
                     break
 
-        if self.previsitor:
-            kwargs = self.previsitor(node, **kwargs)
+        if self.previsitors:
+            for previsitor in self.previsitors:
+                kwargs = previsitor(node, kwargs)
 
         return visitor(node, **kwargs)
 
