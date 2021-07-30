@@ -8,6 +8,7 @@ Authors
 * Cruz, Felipe. ETH Zurich - CSCS
 * Dahm, Johann. Vulcan Inc.
 * Davis, Eddie. Vulcan Inc.
+* Deconinck, Florian. Vulcan Inc.
 * Ehrengruber, Till. ETH Zurich - CSCS
 * George, Rhea. Vulcan Inc.
 * González Paredes, Enrique. ETH Zurich - CSCS

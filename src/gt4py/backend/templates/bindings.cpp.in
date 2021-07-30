@@ -32,25 +32,13 @@
 #include <vector>
 #include <chrono>
 
+#include "numpy/ndarraytypes.h"
+
 namespace py = ::pybind11;
 
 static constexpr int MAX_DIM = 3;
 
 namespace {
-
-// Per Numpy C struct
-// https://numpy.org/doc/stable/reference/c-api/types-and-structures.html#pyarray-type-and-pyarrayobject
-typedef struct {
-    int two;
-    int nd;
-    char typekind;
-    int itemsize;
-    int flags;
-    int64_t *shape;
-    int64_t *strides;
-    void *data;
-    PyObject *descr;
-} PyArrayInterface;
 
 BufferInfo make_buffer_info(const py::capsule& buffer_as_capsule) {
     PyArrayInterface* b = buffer_as_capsule.cast<py::capsule>();

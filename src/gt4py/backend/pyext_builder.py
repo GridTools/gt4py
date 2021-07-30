@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 import pybind11
 import setuptools
 from setuptools.command.build_ext import build_ext
+import numpy as np
 
 from gt4py import config as gt_config
 
@@ -48,7 +49,7 @@ def get_gt_pyext_build_opts(
     gt_version: int = 1,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
 
-    include_dirs = [gt_config.build_settings["boost_include_path"]]
+    include_dirs = [gt_config.build_settings["boost_include_path"], np.get_include()]
     extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
 
     if uses_cuda:
@@ -86,6 +87,7 @@ def get_gt_pyext_build_opts(
             "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
             "-isystem{}".format(os.path.dirname(dace.__file__) + "/runtime/include/"),
             "-DBOOST_PP_VARIADICS",
+            "-DNPY_NO_DEPRECATED_API",
             *extra_compile_args_from_config["cxx"],
         ],
         nvcc=[
@@ -101,6 +103,7 @@ def get_gt_pyext_build_opts(
             "-fvisibility=hidden",
             "--compiler-options",
             "-fPIC",
+            "-DNPY_NO_DEPRECATED_API",
             *extra_compile_args_from_config["nvcc"],
         ],
     )
