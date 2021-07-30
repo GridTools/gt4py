@@ -55,6 +55,10 @@ def node_with_duplicated_names_maker():
 
 
 class TestSymbolTable:
+    def test_no_duplicated_names(self, node_with_duplicated_names_maker):
+        with pytest.raises(ValueError, match="Multiple definitions of symbol"):
+            node_with_duplicated_names_maker()
+
     def test_symbol_table_creation(self, symtable_node_and_expected_symbols):
         node, expected_symbols = symtable_node_and_expected_symbols
         collected_symtable = node.symtable_
@@ -69,3 +73,10 @@ class TestSymbolTable:
             collected_symtable[symbol_name] is symbol_node
             for symbol_name, symbol_node in expected_symbols.items()
         )
+
+    def test_add_symtable(self, symtable_node_and_expected_symbols):
+        node = _NodeWithSymbolTable(symbols=[_NodeWithSymbolName()])
+        kwargs = {}
+        kwargs = eve.SymbolTableTrait.add_symtable(node, kwargs)
+        assert "symtable" in kwargs
+        assert "symbol_name" in kwargs["symtable"]

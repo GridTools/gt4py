@@ -17,13 +17,16 @@
 import collections
 from typing import Any, Callable, Dict, Set, Union
 
-from eve import NodeTranslator
+from eve import NodeTranslator, SymbolTableTrait
 from gtc import oir
 
 from .utils import AccessCollector, symbol_name_creator
 
 
 class TemporariesToScalarsBase(NodeTranslator):
+    def __init__(self):
+        super().__init__(SymbolTableTrait.add_symtable)
+
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, tmps_name_map: Dict[str, str], **kwargs: Any
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
@@ -52,7 +55,7 @@ class TemporariesToScalarsBase(NodeTranslator):
         tmps_name_map = {tmp: new_symbol_name(tmp) for tmp in local_tmps_to_replace}
 
         return oir.HorizontalExecution(
-            body=self.visit(node.body, tmps_name_map=tmps_name_map, **kwargs),
+            body=self.visit(node.body, tmps_name_map=tmps_name_map, symtable=symtable, **kwargs),
             declarations=node.declarations
             + [
                 oir.LocalScalar(
@@ -81,9 +84,8 @@ class TemporariesToScalarsBase(NodeTranslator):
             params=node.params,
             vertical_loops=self.visit(
                 node.vertical_loops,
-                tmps_to_replace=tmps_to_replace,
-                symtable=node.symtable_,
                 new_symbol_name=symbol_name_creator(set(node.symtable_)),
+                **kwargs,
             ),
             declarations=[d for d in node.declarations if d.name not in tmps_to_replace],
         )
