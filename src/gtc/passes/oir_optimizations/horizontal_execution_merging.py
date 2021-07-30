@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from eve import NodeTranslator, SymbolTableTrait
@@ -23,7 +22,6 @@ from gtc import common, oir
 from .utils import AccessCollector, symbol_name_creator
 
 
-@dataclass
 class OnTheFlyMerging(NodeTranslator):
     """Merges consecutive horizontal executions inside parallel vertical loops by introducing redundant computations.
 
@@ -32,10 +30,13 @@ class OnTheFlyMerging(NodeTranslator):
     * The chosen default merge limits are totally arbitrary.
     """
 
-    max_horizontal_execution_body_size: int = 100
-    allow_expensive_function_duplication: bool = False
-
-    def __init__(self):
+    def __init__(
+        self,
+        max_horizontal_execution_body_size: int = 100,
+        allow_expensive_function_duplication: bool = False,
+    ):
+        self.max_horizontal_execution_body_size = max_horizontal_execution_body_size
+        self.allow_expensive_function_duplication = allow_expensive_function_duplication
         super().__init__(SymbolTableTrait.add_symtable)
 
     def visit_CartesianOffset(
