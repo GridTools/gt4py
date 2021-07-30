@@ -116,7 +116,7 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
             collections.Counter(),
         )
         local_tmps = {tmp for tmp, count in counts.items() if count == 1}
-        return super().visit_Stencil(node, tmps_to_replace=local_tmps)
+        return super().visit_Stencil(node, tmps_to_replace=local_tmps, **kwargs)
 
 
 class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
@@ -144,4 +144,4 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
                 tmp for tmp in write_before_read_tmps if write_before_read(tmp)
             }
 
-        return super().visit_Stencil(node, tmps_to_replace=write_before_read_tmps)
+        return super().visit_Stencil(node, tmps_to_replace=write_before_read_tmps, **kwargs)
