@@ -16,7 +16,7 @@
 
 from typing import Any, Collection, Dict, List, Set, Union
 
-from eve import codegen
+from eve import codegen, traits
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
@@ -364,7 +364,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             )
 
         def ctype(symbol: str) -> str:
-            return self.visit(node.symtable_[symbol].dtype, **kwargs)
+            return self.visit(kwargs["symtable"][symbol].dtype, **kwargs)
 
         return self.generic_visit(
             node,
@@ -374,7 +374,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             loop_start=loop_start,
             loop_fields=loop_fields,
             ctype=ctype,
-            symtable=node.symtable_,
             cuir=cuir,
             **kwargs,
         )
@@ -506,6 +505,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         using ${name}_impl_::${name};
         """
     )
+
+    def __init__(self):
+        super().__init__(traits.SymbolTableTrait.add_symtable)
 
     @classmethod
     def apply(cls, root: LeafNode, **kwargs: Any) -> str:

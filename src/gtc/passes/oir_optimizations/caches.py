@@ -577,7 +577,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
             vertical_loops=self.visit(
                 node.vertical_loops,
                 new_tmps=new_tmps,
-                new_symbol_name=symbol_name_creator(set(node.symtable_)),
+                new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
                 **kwargs,
             ),
             declarations=node.declarations + new_tmps,

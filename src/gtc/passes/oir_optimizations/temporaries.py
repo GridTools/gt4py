@@ -84,7 +84,7 @@ class TemporariesToScalarsBase(NodeTranslator):
             params=node.params,
             vertical_loops=self.visit(
                 node.vertical_loops,
-                new_symbol_name=symbol_name_creator(set(node.symtable_)),
+                new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
                 **kwargs,
             ),
             declarations=[d for d in node.declarations if d.name not in tmps_to_replace],
@@ -124,7 +124,9 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         write_before_read_tmps = {
-            symbol for symbol, value in node.symtable_.items() if isinstance(value, oir.Temporary)
+            symbol
+            for symbol, value in kwargs["symtable"].items()
+            if isinstance(value, oir.Temporary)
         }
         horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
 

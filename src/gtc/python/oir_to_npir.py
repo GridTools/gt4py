@@ -18,8 +18,9 @@ import itertools
 import typing
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List, Optional, Union
 
+from eve.traits import SymbolTableTrait
 from eve.visitors import NodeTranslator
 
 from .. import common, oir
@@ -32,8 +33,6 @@ class OirToNpir(NodeTranslator):
     @dataclass
     class ComputationContext:
         """Top Level Context."""
-
-        symbol_table: Dict[str, Any] = field(default_factory=lambda: {})
 
         temp_defs: typing.OrderedDict[str, npir.VectorAssign] = field(
             default_factory=lambda: OrderedDict({})
@@ -48,8 +47,11 @@ class OirToNpir(NodeTranslator):
                     right=npir.EmptyTemp(dtype=temp.dtype),
                 )
 
+    def __init__(self):
+        super().__init__(SymbolTableTrait.add_symtable)
+
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
-        ctx = self.ComputationContext(symbol_table=node.symtable_)
+        ctx = self.ComputationContext()
         vertical_passes = list(
             itertools.chain(
                 *[self.visit(vloop, ctx=ctx, **kwargs) for vloop in node.vertical_loops]
@@ -149,7 +151,7 @@ class OirToNpir(NodeTranslator):
         **kwargs: Any,
     ) -> npir.VectorAssign:
         ctx = ctx or self.ComputationContext()
-        if isinstance(ctx.symbol_table.get(node.left.name, None), oir.Temporary):
+        if isinstance(kwargs["symtable"].get(node.left.name, None), oir.Temporary):
             ctx.ensure_temp_defined(node.left)
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, is_lvalue=True, **kwargs),
@@ -181,7 +183,9 @@ class OirToNpir(NodeTranslator):
         parallel_k: bool,
         **kwargs: Any,
     ) -> npir.FieldSlice:
-        dims = decl.dimensions if (decl := ctx.symbol_table.get(node.name)) else (True, True, True)
+        dims = (
+            decl.dimensions if (decl := kwargs["symtable"].get(node.name)) else (True, True, True)
+        )
         return npir.FieldSlice(
             name=str(node.name),
             i_offset=npir.AxisOffset.i(node.offset.i) if dims[0] else None,
