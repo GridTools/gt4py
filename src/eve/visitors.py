@@ -22,6 +22,7 @@ from __future__ import annotations
 import collections.abc
 import copy
 import operator
+from typing import Optional
 
 from . import concepts, iterators, utils
 from .concepts import NOTHING
@@ -102,6 +103,9 @@ class NodeVisitor:
 
     """
 
+    def __init__(self, previsitor: Optional[Callable[..., None]] = None):
+        self.previsitor = previsitor
+
     def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         visitor = self.generic_visit
 
@@ -117,6 +121,9 @@ class NodeVisitor:
 
                 if node_class is concepts.Node:
                     break
+
+        if self.previsitor:
+            self.previsitor(node, **kwargs)
 
         return visitor(node, **kwargs)
 

@@ -29,6 +29,7 @@ from .typingx import Any, Dict, Type
 class _CollectSymbols(visitors.NodeVisitor):
     def __init__(self) -> None:
         self.collected: Dict[str, Any] = {}
+        super().__init__()
 
     def visit_Node(self, node: concepts.Node) -> None:
         for name, metadata in node.__node_children__.items():
@@ -68,3 +69,14 @@ class SymbolTableTrait(concepts.Model):
     def collect_symbols(self) -> None:
         self.symtable_ = dict()
         self.symtable_ = self._collect_symbols(self)
+
+    @staticmethod
+    def add_symtable_kwarg(node: concepts.Node, **kwargs: Any) -> None:
+        """Update or add the symtable to kwargs in the visitor calls.
+
+        This is a previsitor that is registered with classes in eve.visitors
+        by passing this to the base class constructor.
+        """
+        kwargs["symtable"] = kwargs.get("symtable", {}).copy()
+        if isinstance(node, SymbolTableTrait):
+            kwargs["symtable"].update(node.symtable_)

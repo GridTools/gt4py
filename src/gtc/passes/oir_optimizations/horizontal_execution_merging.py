@@ -17,7 +17,7 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from eve import NodeTranslator
+from eve import NodeTranslator, SymbolTableTrait
 from gtc import common, oir
 from gtc.common import GTCPostconditionError, GTCPreconditionError
 
@@ -93,6 +93,9 @@ class OnTheFlyMerging(NodeTranslator):
 
     max_horizontal_execution_body_size: int = 100
     allow_expensive_function_duplication: bool = False
+
+    def __init__(self):
+        super().__init__(SymbolTableTrait.add_symtable_kwarg)
 
     def visit_CartesianOffset(
         self,
@@ -204,7 +207,12 @@ class OnTheFlyMerging(NodeTranslator):
             )
             for offset in read_offsets:
                 merged.body = (
-                    self.visit(first.body, shift=offset, offset_symbol_map=offset_symbol_map)
+                    self.visit(
+                        first.body,
+                        shift=offset,
+                        offset_symbol_map=offset_symbol_map,
+                        symtable=symtable,
+                    )
                     + merged.body
                 )
             others_otf.append(merged)
@@ -233,8 +241,7 @@ class OnTheFlyMerging(NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         vertical_loops = self.visit(
             node.vertical_loops,
-            symtable=node.symtable_,
-            new_symbol_name=symbol_name_creator(set(node.symtable_)),
+            new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
             **kwargs,
         )
         accessed = AccessCollector.apply(vertical_loops).fields()
