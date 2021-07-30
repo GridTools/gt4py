@@ -84,7 +84,6 @@ class TemporariesToScalarsBase(NodeTranslator):
             params=node.params,
             vertical_loops=self.visit(
                 node.vertical_loops,
-                tmps_to_replace=tmps_to_replace,
                 new_symbol_name=symbol_name_creator(set(node.symtable_)),
                 **kwargs,
             ),
