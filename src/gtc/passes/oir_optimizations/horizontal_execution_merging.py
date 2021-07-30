@@ -201,7 +201,7 @@ class OnTheFlyMerging(NodeTranslator):
                 0,
                 self.visit(
                     vl,
-                    new_symbol_name=symbol_name_creator(set(node.symtable_)),
+                    new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
                     protected_fields=protected_fields,
                     **kwargs,
                 ),
