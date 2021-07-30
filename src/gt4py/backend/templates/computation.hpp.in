@@ -39,8 +39,8 @@ using py_size_t = std::intptr_t;
 
 struct BufferInfo {
     py_size_t ndim;
-    std::vector<py_size_t> shape;
-    std::vector<py_size_t> strides;
+    py_size_t* shape;
+    py_size_t* strides;
     void* ptr;
 };
 

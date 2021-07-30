@@ -472,9 +472,11 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         api_fields = set(field.name for field in definition_ir.api_fields)
         for arg in definition_ir.api_signature:
             if arg.name not in self.args_data.unreferenced:
-                args.append(arg.name)
                 if arg.name in api_fields:
+                    args.append(f"{arg.name}.__array_struct__")
                     args.append("list(_origin_['{}'])".format(arg.name))
+                else:
+                    args.append(f"{arg.name}")
 
         # only generate implementation if any multi_stages are present. e.g. if no statement in the
         # stencil has any effect on the API fields, this may not be the case since they could be

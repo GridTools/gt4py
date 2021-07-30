@@ -38,43 +38,23 @@ static constexpr int MAX_DIM = 3;
 
 namespace {
 
-BufferInfo make_buffer_info(py::object& b) {
-{%- if gt_backend == "cuda" %}
-    py_size_t ndim = static_cast<py_size_t>(b.attr("ndim").cast<int>());
-//    auto shape_tuple = b.attr("shape").cast<std::tuple<int, int, int>>();
-//    std::vector<py_size_t> shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple), std::get<2>(shape_tuple)};
-//    auto strides_tuple = b.attr("strides").cast<std::tuple<int, int, int>>();
-//    std::vector<py_size_t> strides = {std::get<0>(strides_tuple), std::get<1>(strides_tuple), std::get<2>(strides_tuple)};
-//    void* ptr =  reinterpret_cast<void*>(b.attr("data").attr("ptr").cast<std::size_t>());
-    py::dict __cuda_array_interface__ = b.attr("__cuda_array_interface__").cast<py::dict>();
-    std::vector<py_size_t> shape;
-    std::vector<py_size_t> strides;
-    if(ndim == 1) {
-        auto shape_tuple =  __cuda_array_interface__["shape"].cast<std::tuple<int>>();
-        shape = {std::get<0>(shape_tuple)};
-        auto strides_tuple = __cuda_array_interface__["strides"].cast<std::tuple<int>>();
-        strides = {std::get<0>(strides_tuple)};
-    } else if(ndim == 2) {
-        auto shape_tuple =  __cuda_array_interface__["shape"].cast<std::tuple<int, int>>();
-        shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple)};
-        auto strides_tuple = __cuda_array_interface__["strides"].cast<std::tuple<int, int>>();
-        strides = {std::get<0>(strides_tuple), std::get<1>(strides_tuple)};
-    } else {
-        auto shape_tuple =  __cuda_array_interface__["shape"].cast<std::tuple<int, int, int>>();
-        shape = {std::get<0>(shape_tuple), std::get<1>(shape_tuple), std::get<2>(shape_tuple)};
-        auto strides_tuple = __cuda_array_interface__["strides"].cast<std::tuple<int, int, int>>();
-        strides = {std::get<0>(strides_tuple), std::get<1>(strides_tuple), std::get<2>(strides_tuple)};
-    }
-    void* ptr =  reinterpret_cast<void*>(std::get<0>(__cuda_array_interface__["data"].cast<std::tuple<std::size_t, bool>>()));
-{%- else %}
-    auto buffer_info = static_cast<py::buffer&>(b).request();
-    py_size_t ndim = static_cast<py_size_t>(buffer_info.ndim);
-    std::vector<py_size_t>& shape = buffer_info.shape;
-    std::vector<py_size_t>& strides = buffer_info.strides;
-    void* ptr = static_cast<void*>(buffer_info.ptr);
-{%- endif %}
+// Per Numpy C struct
+// https://numpy.org/doc/stable/reference/c-api/types-and-structures.html#pyarray-type-and-pyarrayobject
+typedef struct {
+    int two;
+    int nd;
+    char typekind;
+    int itemsize;
+    int flags;
+    int64_t *shape;
+    int64_t *strides;
+    void *data;
+    PyObject *descr;
+} PyArrayInterface;
 
-    return BufferInfo{ndim, shape, strides, ptr};
+BufferInfo make_buffer_info(const py::capsule& buffer_as_capsule) {
+    PyArrayInterface* b = buffer_as_capsule.cast<py::capsule>();
+    return BufferInfo{b->nd, b->shape, b->strides, b->data};
 }
 
 void run_computation(const std::array<gt::uint_t, MAX_DIM>& domain,
@@ -83,7 +63,7 @@ void run_computation(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- for field in arg_fields -%}
 {%- if api_name == field.name -%}
                      {{- comma() }}
-                     py::object {{ field.name }}, const std::array<gt::uint_t, {{ field.naxes }}>& {{ field.name }}_origin
+                     const py::capsule& {{ field.name }}_capsule, const std::array<gt::uint_t, {{ field.naxes }}>& {{ field.name }}_origin
 {%- endif -%}
 {%- endfor -%}
 {%- for param in parameters -%}
@@ -101,7 +81,7 @@ void run_computation(const std::array<gt::uint_t, MAX_DIM>& domain,
     }
 
 {%- for field in arg_fields %}
-    auto bi_{{ field.name }} = make_buffer_info({{ field.name }});
+    auto bi_{{ field.name }} = make_buffer_info({{ field.name }}_capsule);
 {%- endfor %}
 
     {{ stencil_unique_name }}::run(domain,
