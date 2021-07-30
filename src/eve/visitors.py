@@ -22,7 +22,6 @@ from __future__ import annotations
 import collections.abc
 import copy
 import operator
-from typing import Optional
 
 from . import concepts, iterators, utils
 from .concepts import NOTHING
@@ -34,6 +33,7 @@ from .typingx import (
     Iterable,
     MutableSequence,
     MutableSet,
+    Optional,
     Tuple,
     Union,
 )
@@ -103,7 +103,7 @@ class NodeVisitor:
 
     """
 
-    def __init__(self, previsitor: Optional[Callable[..., None]] = None):
+    def __init__(self, previsitor: Optional[Callable[..., Dict[str, Any]]] = None):
         self.previsitor = previsitor
 
     def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
@@ -123,7 +123,7 @@ class NodeVisitor:
                     break
 
         if self.previsitor:
-            self.previsitor(node, **kwargs)
+            kwargs = self.previsitor(node, **kwargs)
 
         return visitor(node, **kwargs)
 
