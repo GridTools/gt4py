@@ -167,7 +167,7 @@ class OIRToCUIR(eve.NodeTranslator):
         accessed_fields: Set[str] = set()
         kernels = self.visit(
             node.vertical_loops,
-            new_symbol_name=symbol_name_creator(set(node.symtable_)),
+            new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
             accessed_fields=accessed_fields,
             **kwargs,
         )
