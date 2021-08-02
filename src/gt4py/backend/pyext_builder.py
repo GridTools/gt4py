@@ -23,10 +23,10 @@ import os
 import shutil
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
+import numpy as np
 import pybind11
 import setuptools
 from setuptools.command.build_ext import build_ext
-import numpy as np
 
 from gt4py import config as gt_config
 
