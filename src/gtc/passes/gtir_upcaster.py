@@ -69,8 +69,9 @@ class _GTIRUpcasting(NodeTranslator):
 
     def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> gtir.ParAssignStmt:
         assert node.left.dtype
+        left = _upcast_node(node.left.dtype, self.visit(node.left))
         right = _upcast_node(node.left.dtype, self.visit(node.right))
-        return _update_node(node, {"right": right})
+        return _update_node(node, {"left": left, "right": right})
 
 
 def upcast(node: gtir.Stencil) -> gtir.Stencil:
