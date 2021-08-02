@@ -200,10 +200,13 @@ class BaseOirSDFGBuilder(ABC):
         for interval, access_collection in collections:
             for name in access_collection.write_fields():
                 access_node = self._get_current_sink(name)
-                if (
-                    access_node is None
-                    or access_node in self._get_recent_reads(name, interval)
-                    or access_node in self._get_recent_writes(name, interval)
+                if access_node is None or (
+                    (name not in write_accesses)
+                    and (
+                        access_node in self._get_recent_reads(name, interval)
+                        or access_node in self._get_recent_writes(name, interval)
+                        or nx.has_path(self._state.nx, access_node, node)
+                    )
                 ):
                     write_accesses[name] = self._get_new_sink(name)
                 else:
