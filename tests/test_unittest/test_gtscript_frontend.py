@@ -663,7 +663,9 @@ class TestExternalsWithSubroutines:
             with computation(PARALLEL), interval(...):
                 phi = lap(lap(phi, dx), dx)
 
-        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"):
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"
+        ):
             parse_definition(
                 definition_func,
                 name=inspect.stack()[0][3],
@@ -796,7 +798,9 @@ class TestCompileTimeAssertions:
             gt_frontend.GTScriptSyntaxError,
             match="Evaluation of compile_assert condition failed",
         ):
-            parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
+            parse_definition(
+                definition, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
 
 
 class TestReducedDimensions:
@@ -843,7 +847,9 @@ class TestReducedDimensions:
             gt_frontend.GTScriptSyntaxError,
             match="Incorrect offset specification detected. Found .* but the field has dimensions .*",
         ):
-            parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
+            parse_definition(
+                definition, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
 
     def test_error_write_1d(self):
         def definition(
@@ -857,7 +863,9 @@ class TestReducedDimensions:
             gt_frontend.GTScriptSyntaxError,
             match="Cannot assign to field .* as all parallel axes .* are not present",
         ):
-            parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
+            parse_definition(
+                definition, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
 
 
 class TestDataDimensions:
@@ -873,6 +881,38 @@ class TestDataDimensions:
                 field_out[0, 0, 0][2] = field_in[0, 0, 0] + another_field[0, 0, 0][2]
 
         parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+    def test_indirect_access_read(self):
+        def definition(
+            field_3d: gtscript.Field[np.float_],
+            field_4d: gtscript.Field[gtscript.IJK, (np.float_, (2,))],
+            variable: float,
+        ):
+            with computation(PARALLEL), interval(...):
+                field_3d = field_4d[0, 0, 0][variable]
+
+        def_ir = parse_definition(
+            definition, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert isinstance(
+            def_ir.computations[0].body.stmts[0].value.data_index[0], gt_ir.nodes.VarRef
+        )
+
+    def test_indirect_access_write(self):
+        def definition(
+            field_3d: gtscript.Field[np.float_],
+            field_4d: gtscript.Field[gtscript.IJK, (np.float_, (2,))],
+            variable: float,
+        ):
+            with computation(PARALLEL), interval(...):
+                field_4d[0, 0, 0][variable] = field_3d
+
+        def_ir = parse_definition(
+            definition, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert isinstance(
+            def_ir.computations[0].body.stmts[0].target.data_index[0], gt_ir.nodes.VarRef
+        )
 
 
 class TestImports:
