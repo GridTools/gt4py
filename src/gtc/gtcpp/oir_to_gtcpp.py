@@ -265,8 +265,8 @@ class OIRToGTCpp(eve.NodeTranslator):
                 return next((expr for expr in (start_expr, end_expr) if expr is not None), None)
 
     def visit_HorizontalMask(self, node: oir.HorizontalMask, **kwargs: Any) -> gtcpp.Expr:
-        i_expr = self._expr_from_horizontal_interval(node.i, axis="i", **kwargs)
-        j_expr = self._expr_from_horizontal_interval(node.j, axis="j", **kwargs)
+        i_expr = self._expr_from_horizontal_interval(node.i, axis="I", **kwargs)
+        j_expr = self._expr_from_horizontal_interval(node.j, axis="J", **kwargs)
         if i_expr and j_expr:
             return gtcpp.BinaryOp(op=common.LogicalOperator.AND, left=i_expr, right=j_expr)
         else:
