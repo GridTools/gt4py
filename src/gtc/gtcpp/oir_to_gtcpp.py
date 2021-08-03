@@ -37,9 +37,9 @@ def _extract_accessors(apply_method: gtcpp.GTApplyMethod) -> List[gtcpp.GTAccess
         apply_method: gtcpp.GTApplyMethod,
     ) -> Generator[TreeIterationItem, None, None]:
         for stmt in apply_method.body:
-            if (
-                not isinstance(stmt, gtcpp.IfStmt)
-                or stmt.cond.iter_tree()
+            if not (
+                isinstance(stmt, gtcpp.IfStmt)
+                and stmt.cond.iter_tree()
                 .if_isinstance(gtcpp.AccessorRef)
                 .filter(lambda acc: acc.name[2:] == "pos")
                 .to_list()
