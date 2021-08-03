@@ -162,6 +162,13 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         body_code = [indent + b for b in body_code]
         return "\n".join([mask_str] + body_code)
 
+    def visit_HorizontalMask(self, node: oir.HorizontalMask, **kwargs):
+        imin = get_axis_bound_str(node.i.start, "__I")
+        imax = get_axis_bound_str(node.i.end, "__I")
+        jmin = get_axis_bound_str(node.j.start, "__J")
+        jmax = get_axis_bound_str(node.j.end, "__J")
+        return f"i >= {imin} and i < {imax} and j >= {jmin} and j < {jmax}"
+
     @classmethod
     def apply(cls, node: oir.HorizontalExecution, **kwargs: Any) -> str:
         if not isinstance(node, oir.HorizontalExecution):
