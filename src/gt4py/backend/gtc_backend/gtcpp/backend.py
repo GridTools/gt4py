@@ -38,7 +38,6 @@ from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging
 from gtc.passes.oir_pipeline import OirPipeline
 
 
@@ -54,9 +53,7 @@ class GTCGTExtGenerator:
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(
-            skip=[GreedyMerging, FillFlushToLocalKCaches]
-        )
+        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(skip=[FillFlushToLocalKCaches])
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         implementation = gtcpp_codegen.GTCppCodegen.apply(
             gtcpp, gt_backend_t=self.backend.GT_BACKEND_T
@@ -204,6 +201,7 @@ class GTCGTGpuBackend(GTCGTBaseBackend):
     name = "gtc:gt:gpu"
     GT_BACKEND_T = "gpu"
     languages = {"computation": "cuda", "bindings": ["python"]}
+    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
     storage_info = {
         "alignment": 32,
         "device": "gpu",

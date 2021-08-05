@@ -20,7 +20,7 @@ import pytest
 import gt4py.backend as gt_backend
 import gt4py.gtscript as gtscript
 import gt4py.storage as gt_storage
-from gt4py.gtscript import Field
+from gt4py.gtscript import Field, K
 
 from ..definitions import INTERNAL_BACKENDS, INTERNAL_CPU_BACKENDS
 
@@ -436,3 +436,35 @@ class TestAxesMismatch:
                     default_origin=(0, 0),
                 )
             )
+
+
+@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+def test_origin_unchanged(backend):
+    @gtscript.stencil(backend=backend)
+    def calc_damp(outp: Field[float], inp: Field[K, float]):
+        with computation(FORWARD), interval(...):
+            outp = inp
+
+    outp = gt_storage.ones(
+        backend=backend,
+        default_origin=(1, 1, 1),
+        shape=(4, 4, 4),
+        dtype=float,
+        mask=[True, True, True],
+    )
+    inp = gt_storage.ones(
+        backend=backend,
+        default_origin=(1,),
+        shape=(4, 4, 4),
+        dtype=float,
+        mask=[False, False, True],
+    )
+
+    origin = {"_all_": (1, 1, 1), "inp": (1,)}
+    origin_ref = dict(origin)
+
+    calc_damp(outp, inp, origin=origin, domain=(3, 3, 3))
+
+    assert all(k in origin_ref for k in origin.keys())
+    assert all(k in origin for k in origin_ref.keys())
+    assert all(v is origin_ref[k] for k, v in origin.items())
