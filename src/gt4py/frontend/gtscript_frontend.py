@@ -984,10 +984,10 @@ class IRMaker(ast.NodeVisitor):
                             gt_ir.HorizontalIf(
                                 intervals=intervals_dict, body=gt_ir.BlockStmt(stmts=stmts)
                             )
+                            for intervals_dict in intervals_dicts
                         ]
                     ),
                 )
-                for intervals_dict in intervals_dicts
             ]
         else:
             results = [
