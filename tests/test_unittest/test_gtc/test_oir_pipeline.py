@@ -1,4 +1,5 @@
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
+from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
+from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 from gtc.passes.oir_pipeline import OirPipeline, hash_step
 
 from .oir_utils import StencilFactory
@@ -15,10 +16,10 @@ def test_no_skipping():
 
 def test_skip_one():
     pipeline = OirPipeline(StencilFactory())
-    pipeline.full(skip=[GreedyMerging])
+    pipeline.full(skip=[AdjacentLoopMerging])
 
     steps = tuple(hash_step(i) for i in pipeline.steps())
-    skipped = tuple(i for i in steps if i != hash_step(GreedyMerging))
+    skipped = tuple(i for i in steps if i != hash_step(AdjacentLoopMerging))
     wrong_skipped = tuple(i for i in steps if i != hash_step(OnTheFlyMerging))
 
     assert steps not in pipeline._cache
