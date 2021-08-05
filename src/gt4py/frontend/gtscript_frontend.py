@@ -1402,7 +1402,9 @@ class IRMaker(ast.NodeVisitor):
             #    ...
             # otherwise just parse the node
             if self.parsing_context == ParsingContext.CONTROL_FLOW and all(
-                isinstance(child_node, ast.With) for child_node in node.body
+                isinstance(child_node, ast.With)
+                and child_node.items[0].context_expr.func.id == "interval"
+                for child_node in node.body
             ):
                 # Ensure top level `with` specifies the iteration order
                 if not any(
