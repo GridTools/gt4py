@@ -19,6 +19,7 @@ from typing import Dict, List, Tuple, Union
 
 import dace
 import dace.properties
+import dace.subsets
 import networkx as nx
 import numpy as np
 from dace import SDFG
@@ -36,6 +37,12 @@ from gtc.dace.utils import (
 )
 from gtc.oir import FieldDecl, Interval, ScalarDecl, Stencil, Temporary
 from gtc.passes.oir_optimizations.utils import AccessCollector
+
+
+def _offset_origin(interval: oir.Interval, origin: oir.AxisBound) -> oir.Interval:
+    if origin >= oir.AxisBound.start():
+        return interval
+    return interval.shifted(-origin.offset)
 
 
 class BaseOirSDFGBuilder(ABC):
@@ -69,15 +76,13 @@ class BaseOirSDFGBuilder(ABC):
         if self._axes[name][0]:
             subsets.append(
                 "{start}:__I{end:+d}".format(
-                    start=origin[0] + access_space[0][0],
-                    end=origin[0] + access_space[0][1],
+                    start=origin[0] + access_space[0][0], end=origin[0] + access_space[0][1]
                 )
             )
         if self._axes[name][1]:
             subsets.append(
                 "{start}:__J{end:+d}".format(
-                    start=origin[1] + access_space[1][0],
-                    end=origin[1] + access_space[1][1],
+                    start=origin[1] + access_space[1][0], end=origin[1] + access_space[1][1]
                 )
             )
         return subsets
@@ -187,23 +192,20 @@ class BaseOirSDFGBuilder(ABC):
 
         for name, recent_access in read_accesses.items():
             node.add_in_connector("IN_" + name)
-            self._state.add_edge(
-                recent_access,
-                None,
-                node,
-                "IN_" + name,
-                dace.Memlet(),
-            )
+            self._state.add_edge(recent_access, None, node, "IN_" + name, dace.Memlet())
 
     def _add_write_edges(self, node, collections: List[Tuple[Interval, AccessCollector.Result]]):
         write_accesses = dict()
         for interval, access_collection in collections:
             for name in access_collection.write_fields():
                 access_node = self._get_current_sink(name)
-                if (
-                    access_node is None
-                    or access_node in self._get_recent_reads(name, interval)
-                    or access_node in self._get_recent_writes(name, interval)
+                if access_node is None or (
+                    (name not in write_accesses)
+                    and (
+                        access_node in self._get_recent_reads(name, interval)
+                        or access_node in self._get_recent_writes(name, interval)
+                        or nx.has_path(self._state.nx, access_node, node)
+                    )
                 ):
                     write_accesses[name] = self._get_new_sink(name)
                 else:
@@ -212,13 +214,7 @@ class BaseOirSDFGBuilder(ABC):
 
         for name, access_node in write_accesses.items():
             node.add_out_connector("OUT_" + name)
-            self._state.add_edge(
-                node,
-                "OUT_" + name,
-                access_node,
-                None,
-                dace.Memlet(),
-            )
+            self._state.add_edge(node, "OUT_" + name, access_node, None, dace.Memlet())
 
     def _add_write_after_write_edges(
         self, node, collections: List[Tuple[Interval, AccessCollector.Result]]
@@ -489,15 +485,34 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
         return shapes
 
     def get_k_size(self, name):
+
         if not self._axes[name][2]:
             return None
-        return "__K"
+
+        axis_idx = sum(self._axes[name][:2])
+
+        subset = None
+        for edge in self._state.edges():
+            if edge.data.data is not None and edge.data.data == name:
+                if subset is None:
+                    subset = edge.data.subset
+                subset = dace.subsets.union(subset, edge.data.subset)
+        subset: dace.subsets.Range
+        k_size = subset.bounding_box_size()[axis_idx]
+
+        k_sym = dace.symbol("__K")
+        k_size_symbolic = dace.symbolic.pystr_to_symbolic(k_size)
+        if k_sym in k_size_symbolic.free_symbols and bool(k_size_symbolic >= k_sym):
+            return k_size
+        else:
+            return "__K"
 
     def get_k_subsets(self, node):
         assert isinstance(node, VerticalLoopLibraryNode)
 
         write_intervals = dict()
         read_intervals = dict()
+        k_origins = dict()
         for interval, sdfg in node.sections:
             collection = self._get_access_collection(sdfg)
             for name, offsets in collection.read_offsets().items():
@@ -509,6 +524,9 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
                             start=min(read_intervals[name].start, read_interval.start),
                             end=max(read_intervals[name].end, read_interval.end),
                         )
+                        k_origins[name] = min(
+                            k_origins.get(name, read_interval.start), read_interval.start
+                        )
 
             for name in collection.write_fields():
                 if self._axes[name][2]:
@@ -517,21 +535,24 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
                         start=min(write_intervals[name].start, interval.start),
                         end=max(write_intervals[name].end, interval.end),
                     )
+                    k_origins[name] = min(k_origins.get(name, interval.start), interval.start)
         write_subsets = dict()
         for name, interval in write_intervals.items():
+            res_interval = _offset_origin(interval, k_origins[name])
             write_subsets[name] = "{}{:+d}:{}{:+d}".format(
-                "__K" if interval.start.level == LevelMarker.END else "",
-                interval.start.offset,
-                "__K" if interval.end.level == LevelMarker.END else "",
-                interval.end.offset,
+                "__K" if res_interval.start.level == LevelMarker.END else "",
+                res_interval.start.offset,
+                "__K" if res_interval.end.level == LevelMarker.END else "",
+                res_interval.end.offset,
             )
         read_subsets = dict()
         for name, interval in read_intervals.items():
+            res_interval = _offset_origin(interval, k_origins[name])
             read_subsets[name] = "{}{:+d}:{}{:+d}".format(
-                "__K" if interval.start.level == LevelMarker.END else "",
-                interval.start.offset,
-                "__K" if interval.end.level == LevelMarker.END else "",
-                interval.end.offset,
+                "__K" if res_interval.start.level == LevelMarker.END else "",
+                res_interval.start.offset,
+                "__K" if res_interval.end.level == LevelMarker.END else "",
+                res_interval.end.offset,
             )
         return read_subsets, write_subsets
 
