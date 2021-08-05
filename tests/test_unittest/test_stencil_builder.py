@@ -124,3 +124,32 @@ def test_regression_run_analysis_twice(tmp_path):
     ir = builder.implementation_ir
     # this raises an error if the analysis pipeline is reevaluated:
     assert ir is builder.implementation_ir
+
+
+def test_deferred_generate():
+    def build_function(builder):
+        return builder.backend.generate()
+
+    def defer_function(builder):
+        build_function.builder = builder
+        return build_function
+
+    # Assert that stencil building has been deferred to the build function...
+    deferred_builder = (
+        StencilBuilder(simple_stencil)
+        .with_backend("numpy")
+        .with_externals({"a": 1.0})
+        .with_options(
+            name="simple_stencil",
+            module="",
+            defer_function=defer_function,
+        )
+    )
+    stencil_class = deferred_builder.build()
+    assert stencil_class == build_function
+
+    # Assert that the build function builds the stencil
+    stencil_class = build_function(build_function.builder)
+    assert stencil_class is not None
+    stencil_object = stencil_class()
+    assert isinstance(stencil_object, StencilObject)

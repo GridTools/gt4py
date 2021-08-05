@@ -21,7 +21,7 @@ import pathlib
 import pickle
 import sys
 import types
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import gt4py
 from gt4py.definitions import StencilID
@@ -154,10 +154,6 @@ class CachingStrategy(abc.ABC):
     def class_name(self) -> str:
         """Calculate the name for the stencil class, default is to read from build options."""
         return self.builder.options.name
-
-    def is_deferred(self) -> bool:
-        """Check if this cache is deferred."""
-        return False
 
 
 class JITCachingStrategy(CachingStrategy):
@@ -316,26 +312,6 @@ class JITCachingStrategy(CachingStrategy):
         return f"{name}__{self.module_postfix}"
 
 
-class DeferredCachingStrategy(JITCachingStrategy):
-    """
-    Caching strategy for JIT stencil generation in a deferred context.
-
-    Defers the responsibility for code generation and compilation to another class or function.
-    """
-
-    name = "deferred"
-
-    def __init__(self, builder: "StencilBuilder", defer_function: Callable):
-        super().__init__(builder)
-        self._defer_function = defer_function
-
-    def is_deferred(self) -> bool:
-        return True
-
-    def defer(self):
-        return self._defer_function(self.builder)
-
-
 class NoCachingStrategy(CachingStrategy):
     """
     Apply no caching, useful for CLI.
@@ -406,9 +382,5 @@ class NoCachingStrategy(CachingStrategy):
 def strategy_factory(
     name: str, builder: "StencilBuilder", *args: Any, **kwargs: Any
 ) -> CachingStrategy:
-    strategies = {
-        "jit": JITCachingStrategy,
-        "deferred": DeferredCachingStrategy,
-        "nocaching": NoCachingStrategy,
-    }
+    strategies = {"jit": JITCachingStrategy, "nocaching": NoCachingStrategy}
     return strategies[name](builder, *args, **kwargs)
