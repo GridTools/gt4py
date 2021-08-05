@@ -73,10 +73,7 @@ def test_stage_without_effect(backend):
 def test_ignore_np_errstate():
     def setup_and_run(backend, **kwargs):
         field_a = gt_storage.zeros(
-            dtype=np.float_,
-            backend=backend,
-            shape=(3, 3, 1),
-            default_origin=(0, 0, 0),
+            dtype=np.float_, backend=backend, shape=(3, 3, 1), default_origin=(0, 0, 0)
         )
 
         @gtscript.stencil(backend=backend, **kwargs)
@@ -202,6 +199,56 @@ def test_lower_dimensional_inputs(backend):
     stencil(field_3d, field_2d, field_1d)
 
 
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_lower_dimensional_masked(backend):
+    @gtscript.stencil(backend=backend)
+    def copy_2to3(
+        cond: gtscript.Field[gtscript.IJK, np.float_],
+        inp: gtscript.Field[gtscript.IJ, np.float_],
+        outp: gtscript.Field[gtscript.IJK, np.float_],
+    ):
+        with computation(PARALLEL), interval(...):
+            if cond > 0.0:
+                outp = inp
+
+    inp = np.random.randn(10, 10)
+    outp = np.random.randn(10, 10, 10)
+    cond = np.random.randn(10, 10, 10)
+
+    inp_f = gt_storage.from_array(inp, default_origin=(0, 0), backend=backend)
+    outp_f = gt_storage.from_array(outp, default_origin=(0, 0, 0), backend=backend)
+    cond_f = gt_storage.from_array(cond, default_origin=(0, 0, 0), backend=backend)
+
+    copy_2to3(cond_f, inp_f, outp_f)
+
+    inp3d = np.empty_like(outp)
+    inp3d[...] = inp[:, :, np.newaxis]
+
+    outp = np.choose(cond > 0.0, [outp, inp3d])
+
+    outp_f.device_to_host()
+    assert np.allclose(outp, np.asarray(outp_f))
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
+    @gtscript.stencil(backend=backend)
+    def copy_2to3(
+        inp: gtscript.Field[gtscript.IJ, np.float_], outp: gtscript.Field[gtscript.IJK, np.float_]
+    ):
+        with computation(FORWARD), interval(...):
+            outp[0, 0, 0] = inp
+
+    inp_f = gt_storage.from_array(np.random.randn(10, 10), default_origin=(0, 0), backend=backend)
+    outp_f = gt_storage.from_array(
+        np.random.randn(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    )
+    copy_2to3(inp_f, outp_f)
+    inp_f.device_to_host()
+    outp_f.device_to_host()
+    assert np.allclose(np.asarray(outp_f), np.asarray(inp_f)[:, :, np.newaxis])
+
+
 @pytest.mark.parametrize(
     "backend",
     [
@@ -268,9 +315,7 @@ def test_higher_dimensional_fields(backend):
 def test_input_order(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
-        in_field: gtscript.Field[np.float],
-        parameter: np.float,
-        out_field: gtscript.Field[np.float],
+        in_field: gtscript.Field[np.float], parameter: np.float, out_field: gtscript.Field[np.float]
     ):
         with computation(PARALLEL), interval(...):
             out_field = in_field * parameter
@@ -317,3 +362,27 @@ def test_variable_offsets_and_while_loop(backend):
                     qsum += qin[0, 0, lev] / (pe2[0, 0, 1] - pe1[0, 0, lev])
                     lev = lev + 1
                 qout = qsum / (pe2[0, 0, 1] - pe2)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_mask_with_offset_written_in_conditional(backend):
+    @gtscript.stencil(backend, externals={"mord": 5})
+    def stencil(
+        outp: gtscript.Field[np.float_],
+    ):
+
+        with computation(PARALLEL), interval(...):
+            cond = True
+            if cond[0, -1, 0] or cond[0, 0, 0]:
+                outp = 1.0
+            else:
+                outp = 0.0
+
+    outp = gt_storage.zeros(
+        shape=(10, 10, 10), backend=backend, default_origin=(0, 0, 0), dtype=float
+    )
+
+    stencil(outp)
+
+    outp.device_to_host()
+    assert np.allclose(1.0, np.asarray(outp))
