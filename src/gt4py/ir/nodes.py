@@ -691,14 +691,6 @@ class AxisInterval(Node):
     end = attribute(of=AxisBound)
     loc = attribute(of=Location, optional=True)
 
-    def __eq__(self, other: "AxisInterval") -> bool:
-        return (
-            self.start.level.value == other.start.level.value
-            and self.start.offset == other.start.offset
-            and self.end.level.value == other.end.level.value
-            and self.end.offset == other.end.offset
-        )
-
     def __ne__(self, other: "AxisInterval") -> bool:
         return not (self == other)
 
@@ -741,6 +733,14 @@ class AxisInterval(Node):
 
         return not (self_start <= other_start < self_end) and not (
             other_start <= self_start < other_end
+        )
+
+    def same_as(self, other: "AxisInterval") -> bool:
+        return (
+            self.start.level.value == other.start.level.value
+            and self.start.offset == other.start.offset
+            and self.end.level.value == other.end.level.value
+            and self.end.offset == other.end.offset
         )
 
 

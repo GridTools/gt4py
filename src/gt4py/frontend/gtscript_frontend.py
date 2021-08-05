@@ -862,7 +862,7 @@ class IRMaker(ast.NodeVisitor):
     def _are_intervals_nonoverlapping(self, compute_blocks: List[gt_ir.ComputationBlock]):
         for i, block in enumerate(compute_blocks[1:]):
             other = compute_blocks[i]
-            if block.interval != other.interval and not block.interval.disjoint_from(
+            if not block.interval.same_as(other.interval) and not block.interval.disjoint_from(
                 other.interval
             ):
                 return False
