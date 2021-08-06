@@ -663,9 +663,7 @@ class TestExternalsWithSubroutines:
             with computation(PARALLEL), interval(...):
                 phi = lap(lap(phi, dx), dx)
 
-        with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"
-        ):
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"):
             parse_definition(
                 definition_func,
                 name=inspect.stack()[0][3],
@@ -798,9 +796,7 @@ class TestCompileTimeAssertions:
             gt_frontend.GTScriptSyntaxError,
             match="Evaluation of compile_assert condition failed",
         ):
-            parse_definition(
-                definition, name=inspect.stack()[0][3], module=self.__class__.__name__
-            )
+            parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
 
 class TestReducedDimensions:
@@ -847,9 +843,7 @@ class TestReducedDimensions:
             gt_frontend.GTScriptSyntaxError,
             match="Incorrect offset specification detected. Found .* but the field has dimensions .*",
         ):
-            parse_definition(
-                definition, name=inspect.stack()[0][3], module=self.__class__.__name__
-            )
+            parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_error_write_1d(self):
         def definition(
@@ -863,9 +857,7 @@ class TestReducedDimensions:
             gt_frontend.GTScriptSyntaxError,
             match="Cannot assign to field .* as all parallel axes .* are not present",
         ):
-            parse_definition(
-                definition, name=inspect.stack()[0][3], module=self.__class__.__name__
-            )
+            parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
 
 class TestDataDimensions:

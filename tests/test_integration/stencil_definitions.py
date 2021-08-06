@@ -186,10 +186,7 @@ def vertical_advection_dycore(
             # update the d column
             correction_term = -cs * (u_stage[0, 0, 1] - u_stage[0, 0, 0])
             dcol = (
-                dtr_stage * u_pos[0, 0, 0]
-                + utens[0, 0, 0]
-                + utens_stage[0, 0, 0]
-                + correction_term
+                dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
             )
 
             # Thomas forward
@@ -213,10 +210,7 @@ def vertical_advection_dycore(
                 u_stage[0, 0, 1] - u_stage[0, 0, 0]
             )
             dcol = (
-                dtr_stage * u_pos[0, 0, 0]
-                + utens[0, 0, 0]
-                + utens_stage[0, 0, 0]
-                + correction_term
+                dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
             )
 
             # Thomas forward
@@ -233,10 +227,7 @@ def vertical_advection_dycore(
             # update the d column
             correction_term = -as_ * (u_stage[0, 0, -1] - u_stage[0, 0, 0])
             dcol = (
-                dtr_stage * u_pos[0, 0, 0]
-                + utens[0, 0, 0]
-                + utens_stage[0, 0, 0]
-                + correction_term
+                dtr_stage * u_pos[0, 0, 0] + utens[0, 0, 0] + utens_stage[0, 0, 0] + correction_term
             )
 
             # Thomas forward
