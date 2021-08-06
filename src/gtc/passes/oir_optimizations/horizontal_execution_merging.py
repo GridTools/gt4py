@@ -30,6 +30,8 @@ class OnTheFlyMerging(NodeTranslator):
     * The chosen default merge limits are totally arbitrary.
     """
 
+    previsitors = (SymbolTableTrait.add_symtable,)
+
     def __init__(
         self,
         max_horizontal_execution_body_size: int = 100,
@@ -37,7 +39,6 @@ class OnTheFlyMerging(NodeTranslator):
     ):
         self.max_horizontal_execution_body_size = max_horizontal_execution_body_size
         self.allow_expensive_function_duplication = allow_expensive_function_duplication
-        super().__init__(SymbolTableTrait.add_symtable)
 
     def visit_CartesianOffset(
         self,

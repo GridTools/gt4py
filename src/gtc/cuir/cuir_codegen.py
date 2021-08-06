@@ -26,6 +26,8 @@ from gtc.cuir import cuir
 
 class CUIRCodegen(codegen.TemplatedGenerator):
 
+    previsitors = (traits.SymbolTableTrait.add_symtable,)
+
     LocalScalar = as_fmt("{dtype} {name};")
 
     FieldDecl = as_fmt("{name}")
@@ -507,7 +509,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     )
 
     def __init__(self):
-        super().__init__(traits.SymbolTableTrait.add_symtable)
+        super().__init__()
 
     @classmethod
     def apply(cls, root: LeafNode, **kwargs: Any) -> str:

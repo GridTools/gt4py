@@ -47,8 +47,7 @@ class OirToNpir(NodeTranslator):
                     right=npir.EmptyTemp(dtype=temp.dtype),
                 )
 
-    def __init__(self):
-        super().__init__(SymbolTableTrait.add_symtable)
+    previsitors = (SymbolTableTrait.add_symtable,)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
         ctx = self.ComputationContext()

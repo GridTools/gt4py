@@ -28,6 +28,7 @@ from .concepts import NOTHING
 from .typingx import (
     Any,
     Callable,
+    ClassVar,
     Collection,
     Dict,
     Iterable,
@@ -36,11 +37,10 @@ from .typingx import (
     Optional,
     Tuple,
     Union,
-    cast,
 )
 
 
-PREVISITOR = Callable[[concepts.TreeNode, Dict[str, Any]], Dict[str, Any]]
+PrevisitCallable = Callable[[concepts.TreeNode, Dict[str, Any]], Dict[str, Any]]
 
 
 class NodeVisitor:
@@ -107,10 +107,7 @@ class NodeVisitor:
 
     """
 
-    previsitors: Optional[Tuple[PREVISITOR]] = None
-
-    def __init__(self, *args: PREVISITOR):
-        self.previsitors = cast(Optional[Tuple[PREVISITOR]], args)
+    previsitors: ClassVar[Optional[Tuple[PrevisitCallable]]] = None
 
     def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         visitor = self.generic_visit
