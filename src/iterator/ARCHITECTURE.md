@@ -58,3 +58,10 @@ Generates from the IR an aquivalent Python iterator view program which is then e
 ### Double roundtrip
 
 Generates the Python iterator view program, traces it again, generates again and executes. Ensures that the generated Python code can still be traced. While the original program might be different from the generated program (e.g. `+` will be converted to `plus()` builtin). The programs from the embedded and double roundtrip backends should be identical.
+
+## Adding a new builtin
+
+Currently there are 4 places where a new builtin needs to be added
+- `builtin.py`: for dispatching to an actual implementation
+- `embedded.py` and `tracing.py`: for the respective implementation
+- `ir.py`: we check for consistent use of symbols, therefore if a `FunCall` to the new builtin is used, it needs to be available in the symbol table.
