@@ -508,9 +508,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    def __init__(self):
-        super().__init__()
-
     @classmethod
     def apply(cls, root: LeafNode, **kwargs: Any) -> str:
         if not isinstance(root, cuir.Program):
