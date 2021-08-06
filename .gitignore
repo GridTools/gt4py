@@ -107,6 +107,7 @@ venv.bak/
 /site
 
 # DaCe
+.dacecache
 *.sdfg
 .dace.conf
 

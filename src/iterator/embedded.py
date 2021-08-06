@@ -70,7 +70,7 @@ def lift(stencil):
                 return wrap_iterator(offsets=self.offsets, elem=index)
 
             def shift(self, *offsets):
-                return wrap_iterator(offsets=[*offsets, *self.offsets], elem=self.elem)
+                return wrap_iterator(offsets=[*self.offsets, *offsets], elem=self.elem)
 
             def max_neighbors(self):
                 # TODO cleanup, test edge cases
@@ -83,32 +83,7 @@ def lift(stencil):
                 return args[0].offset_provider[open_offsets[0].value].max_neighbors
 
             def deref(self):
-                class DelayedIterator:
-                    def __init__(self, wrapped_iterator, lifted_offsets, *, offsets=[]) -> None:
-                        self.wrapped_iterator = wrapped_iterator
-                        self.lifted_offsets = lifted_offsets
-                        self.offsets = offsets
-
-                    def is_none(self):
-                        shifted = self.wrapped_iterator.shift(*self.lifted_offsets, *self.offsets)
-                        return shifted.is_none()
-
-                    def max_neighbors(self):
-                        shifted = self.wrapped_iterator.shift(*self.lifted_offsets, *self.offsets)
-                        return shifted.max_neighbors()
-
-                    def shift(self, *offsets):
-                        return DelayedIterator(
-                            self.wrapped_iterator,
-                            self.lifted_offsets,
-                            offsets=[*offsets, *self.offsets],
-                        )
-
-                    def deref(self):
-                        shifted = self.wrapped_iterator.shift(*self.lifted_offsets, *self.offsets)
-                        return shifted.deref()
-
-                shifted_args = tuple(map(lambda arg: DelayedIterator(arg, self.offsets), args))
+                shifted_args = tuple(map(lambda arg: arg.shift(*self.offsets), args))
 
                 if any(shifted_arg.is_none() for shifted_arg in shifted_args):
                     return None
@@ -268,33 +243,26 @@ def execute_shift(pos, tag, index, *, offset_provider):
 # shift(tag)(inp) -> incomplete shift
 # shift(index)(shift(tag)(inp)) -> full shift
 # Therefore the following transformation holds
-# shift(e2c,0)(shift(v2c,2)(cell_field))
-# = shift(0)(shift(e2c)(shift(2)(shift(v2c)(cell_field))))
-# = shift(v2c, 2, e2c, 0)(cell_field)
-# = shift(v2c,e2c,2,0)(cell_field) <-- v2c,e2c twice incomplete shift
-# = shift(2,0)(shift(v2c,e2c)(cell_field))
+# shift(e2v,0)(shift(c2e,2)(cell_field))
+# = shift(0)(shift(e2v)(shift(2)(shift(c2e)(cell_field))))
+# = shift(c2e, 2, e2v, 0)(cell_field)
+# = shift(c2e,e2v,2,0)(cell_field) <-- v2c,e2c twice incomplete shift
+# = shift(2,0)(shift(c2e,e2v)(cell_field))
 # for implementations it means everytime we have an index, we can "execute" a concrete shift
 def group_offsets(*offsets):
     tag_stack = []
-    index_stack = []
     complete_offsets = []
     for offset in offsets:
         if not isinstance(offset, int):
-            if index_stack:
-                index = index_stack.pop(0)
-                complete_offsets.append((offset, index))
-            else:
-                tag_stack.append(offset)
+            tag_stack.append(offset)
         else:
-            assert not tag_stack
-            index_stack.append(offset)
+            assert tag_stack
+            tag = tag_stack.pop(0)
+            complete_offsets.append((tag, offset))
     return complete_offsets, tag_stack
 
 
-def shift_position(pos, *offsets, offset_provider):
-    complete_offsets, open_offsets = group_offsets(*offsets)
-    # assert not open_offsets # TODO enable this, check failing test and make everything saver
-
+def shift_position(pos, *complete_offsets, offset_provider):
     new_pos = pos.copy()
     for tag, index in complete_offsets:
         new_pos = execute_shift(new_pos, tag, index, offset_provider=offset_provider)
@@ -308,33 +276,37 @@ def get_open_offsets(*offsets):
 
 
 class MDIterator:
-    def __init__(self, field, pos, *, offsets=[], offset_provider, column_axis=None) -> None:
+    def __init__(
+        self, field, pos, *, incomplete_offsets=[], offset_provider, column_axis=None
+    ) -> None:
         self.field = field
         self.pos = pos
-        self.offsets = offsets
+        self.incomplete_offsets = incomplete_offsets
         self.offset_provider = offset_provider
         self.column_axis = column_axis
 
     def shift(self, *offsets):
+        complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
         return MDIterator(
             self.field,
-            self.pos,
-            offsets=[*offsets, *self.offsets],
+            shift_position(self.pos, *complete_offsets, offset_provider=self.offset_provider),
+            incomplete_offsets=open_offsets,
             offset_provider=self.offset_provider,
             column_axis=self.column_axis,
         )
 
     def max_neighbors(self):
-        open_offsets = get_open_offsets(*self.offsets)
-        assert open_offsets
-        assert isinstance(self.offset_provider[open_offsets[0].value], NeighborTableOffsetProvider)
-        return self.offset_provider[open_offsets[0].value].max_neighbors
+        assert self.incomplete_offsets
+        assert isinstance(
+            self.offset_provider[self.incomplete_offsets[0].value], NeighborTableOffsetProvider
+        )
+        return self.offset_provider[self.incomplete_offsets[0].value].max_neighbors
 
     def is_none(self):
-        return shift_position(self.pos, *self.offsets, offset_provider=self.offset_provider) is None
+        return self.pos is None
 
     def deref(self):
-        shifted_pos = shift_position(self.pos, *self.offsets, offset_provider=self.offset_provider)
+        shifted_pos = self.pos.copy()
 
         if not all(axis in shifted_pos.keys() for axis in self.field.axises):
             raise IndexError("Iterator position doesn't point to valid location for its field.")
@@ -362,7 +334,7 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
     return MDIterator(
         inp,
         new_pos,
-        offsets=[*sparse_dimensions],
+        incomplete_offsets=[*sparse_dimensions],
         offset_provider=offset_provider,
         column_axis=column_axis,
     )
@@ -463,7 +435,7 @@ def index_field(axis):
 @iterator.builtins.shift.register(EMBEDDED)
 def shift(*offsets):
     def impl(iter):
-        return iter.shift(*reversed(offsets))
+        return iter.shift(*offsets)
 
     return impl
 

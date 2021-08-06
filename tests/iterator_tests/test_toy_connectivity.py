@@ -12,16 +12,31 @@ from iterator.embedded import (
 
 Vertex = CartesianAxis("Vertex")
 Edge = CartesianAxis("Edge")
+Cell = CartesianAxis("Cell")
 
 
-# 3x3 periodic   edges
+# 3x3 periodic   edges        cells
 # 0 - 1 - 2 -    0 1 2
-# |   |   |      9 10 11
+# |   |   |      9 10 11      0 1 2
 # 3 - 4 - 5 -    3 4 5
-# |   |   |      12 13 14
+# |   |   |      12 13 14     3 4 5
 # 6 - 7 - 8 -    6 7 8
-# |   |   |      15 16 17
+# |   |   |      15 16 17     6 7 8
 
+
+c2e_arr = np.array(
+    [
+        [0, 10, 3, 9],  # 0
+        [1, 11, 4, 10],
+        [2, 9, 5, 11],
+        [3, 13, 6, 12],  # 3
+        [4, 14, 7, 13],
+        [5, 12, 8, 14],
+        [6, 16, 0, 15],  # 6
+        [7, 17, 1, 16],
+        [8, 15, 2, 17],
+    ]
+)
 
 v2v_arr = np.array(
     [
@@ -78,6 +93,7 @@ v2e_arr = np.array(
 
 V2E = offset("V2E")
 E2V = offset("E2V")
+C2E = offset("C2E")
 
 
 @fundef
@@ -132,6 +148,35 @@ def test_sum_edges_to_vertices_reduce():
 
     e2v_sum_fencil_reduce(None, None, backend="cpptoy")
     e2v_sum_fencil_reduce(inp, out, backend="double_roundtrip")
+    assert allclose(out, ref)
+
+
+@fundef
+def first_vertex_neigh_of_first_edge_neigh_of_cells(in_vertices):
+    return deref(shift(E2V, 0)(shift(C2E, 0)(in_vertices)))
+
+
+@fendef(
+    offset_provider={
+        "E2V": NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
+        "C2E": NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4),
+    }
+)
+def first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(in_vertices, out_cells):
+    closure(
+        domain(named_range(Cell, 0, 9)),
+        first_vertex_neigh_of_first_edge_neigh_of_cells,
+        [out_cells],
+        [in_vertices],
+    )
+
+
+def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil():
+    inp = index_field(Vertex)
+    out = np_as_located_field(Cell)(np.zeros([9]))
+    ref = np.asarray(list(v2e_arr[c[0]][0] for c in c2e_arr))
+
+    first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(inp, out, backend="double_roundtrip")
     assert allclose(out, ref)
 
 
@@ -247,7 +292,7 @@ def test_shift_sparse_input_field():
 
 @fundef
 def shift_shift_stencil2(inp):
-    return deref(shift(V2E, 3)(shift(E2V, 1)(inp)))
+    return deref(shift(E2V, 1)(shift(V2E, 3)(inp)))
 
 
 @fundef
