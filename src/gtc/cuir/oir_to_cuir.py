@@ -23,8 +23,7 @@ from gtc.passes.oir_optimizations.utils import symbol_name_creator
 
 
 class OIRToCUIR(eve.NodeTranslator):
-    def __init__(self):
-        super().__init__(eve.SymbolTableTrait.add_symtable)
+    previsitors = (eve.SymbolTableTrait.add_symtable,)
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> cuir.Literal:
         return cuir.Literal(value=node.value, dtype=node.dtype)
