@@ -39,9 +39,8 @@ def register(func=None, *, externals=None, name=None):
     return _register_decorator(func) if func else _register_decorator
 
 
-Field0D = gtscript.Field[np.float_, ()]
 Field3D = gtscript.Field[np.float_]
-Field3DBool = gtscript.Field[np.bool]
+Field3DBool = gtscript.Field[np.bool_]
 
 
 @register
@@ -59,6 +58,32 @@ def afunc(b):
 def arithmetic_ops(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
         field_a = (((((field_b + 42.0) - 42.0) * +42.0) / -42.0) % 42.0) ** 2
+
+
+@register
+def data_types(
+    bool_field: gtscript.Field[bool],
+    npbool_field: gtscript.Field[np.bool_],
+    int_field: gtscript.Field[int],
+    int8_field: gtscript.Field[np.int8],
+    int16_field: gtscript.Field[np.int16],
+    int32_field: gtscript.Field[np.int32],
+    int64_field: gtscript.Field[np.int64],
+    float_field: gtscript.Field[float],
+    float32_field: gtscript.Field[np.float32],
+    float64_field: gtscript.Field[np.float64],
+):
+    with computation(PARALLEL), interval(...):
+        bool_field = True
+        npbool_field = False
+        int_field = 2147483647
+        int8_field = 127
+        int16_field = 32767
+        int32_field = 2147483647
+        int64_field = 9223372036854775807
+        float_field = 37.5
+        float32_field = 37.5
+        float64_field = 37.5
 
 
 @register
@@ -251,7 +276,7 @@ def single_level_with_offset(in_field: Field3D, out_field: Field3D):
 
 
 @register
-def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool]):
+def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool_]):
     with computation(PARALLEL), interval(...):
         mask = in_field >= 0
 

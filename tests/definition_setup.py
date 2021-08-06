@@ -14,7 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Iterator, List, Set, Tuple, Union
+import itertools
+from typing import Any, Iterator, List, Set, Tuple, Union
 
 import pytest
 
@@ -36,6 +37,7 @@ from gt4py.ir.nodes import (
     IterationOrder,
     LevelMarker,
     Location,
+    ScalarLiteral,
     StencilDefinition,
     StencilImplementation,
 )
@@ -146,12 +148,7 @@ class TDefinition(TObject):
 
     @property
     def api_fields(self) -> List[FieldDecl]:
-        tmp_field_names = self.field_names.difference(self.fields)
-        tmp_fields = [
-            FieldDecl(name=n, data_type=DataType.AUTO, axes=self.domain.axes_names, is_api=False)
-            for n in tmp_field_names
-        ]
-        return tmp_fields + [
+        return [
             FieldDecl(name=n, data_type=DataType.AUTO, axes=self.domain.axes_names, is_api=True)
             for n in self.fields
         ]
@@ -196,9 +193,19 @@ class TComputationBlock(TObject):
     def width(self) -> int:
         return 0
 
+    @property
+    def fields(self) -> Set[str]:
+        return set(itertools.chain.from_iterable([stmt.field_names for stmt in self.children]))
+
     def build(self) -> ComputationBlock:
-        if self.parent:
-            self.loc.scope = self.parent.child_scope
+        self.loc.scope = self.parent.child_scope if self.parent else self.scope
+        temp_fields = self.fields.difference(self.parent.fields) if self.parent else set()
+        temp_decls = [
+            FieldDecl(
+                name=n, data_type=DataType.AUTO, axes=self.parent.domain.axes_names, is_api=False
+            )
+            for n in temp_fields
+        ]
         return ComputationBlock(
             interval=AxisInterval(
                 start=AxisBound(level=LevelMarker.START, offset=self.start),
@@ -206,7 +213,7 @@ class TComputationBlock(TObject):
             ),
             iteration_order=self.order,
             body=BlockStmt(
-                stmts=[stmt.build() for stmt in self.children],
+                stmts=temp_decls + [stmt.build() for stmt in self.children],
             ),
             loc=self.loc,
         )
@@ -221,7 +228,7 @@ class TStatement(TObject):
 
 
 class TAssign(TStatement):
-    def __init__(self, target: str, value: Union[str, Expr], offset: Tuple[int, int, int]):
+    def __init__(self, target: str, value: Union[str, Expr, TObject], offset: Tuple[int, int, int]):
         super().__init__(Location(line=0, column=0))
         self._target = target
         self._value = value
@@ -307,3 +314,36 @@ class TFieldRef(TObject):
     @property
     def field_names(self) -> Set[str]:
         return {self.name}
+
+
+class TScalarLiteral(TObject):
+    def __init__(
+        self,
+        *,
+        value: Any,
+        loc: Location = None,
+        parent: TObject = None,
+    ):
+        super().__init__(loc or Location(line=0, column=0), parent=parent)
+        self.value = value
+
+    def build(self):
+        if self.parent:
+            self.loc.scope = self.parent.child_scope
+        return ScalarLiteral(
+            value=self.value,
+            data_type=DataType.AUTO,
+            loc=self.loc,
+        )
+
+    @property
+    def height(self) -> int:
+        return 1
+
+    @property
+    def width(self) -> int:
+        return len(str(self.value))
+
+    @property
+    def field_names(self) -> Set[str]:
+        return {str(self.value)}

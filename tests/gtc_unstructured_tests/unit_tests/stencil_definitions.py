@@ -15,12 +15,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # ignore flake8 error: local variable '...' is assigned to but never used
 # flake8: noqa: F841
+import types
+
 from gtc_unstructured.frontend.gtscript import (
     FORWARD,
+    Cell,
+    Connectivity,
     Edge,
     Field,
-    Local,
-    Mesh,
+    LocalField,
+    SparseField,
     Vertex,
     computation,
     edges,
@@ -32,28 +36,45 @@ from gtc_unstructured.irs import common
 
 
 dtype = common.DataType.FLOAT64
+E2V = types.new_class("E2V", (Connectivity[Edge, Vertex, 2, False],))
+V2E = types.new_class("V2E", (Connectivity[Vertex, Edge, 7, True],))
+C2C = types.new_class("C2C", (Connectivity[Cell, Cell, 4, False],))
 
-valid_stencils = ["edge_reduction", "sparse_ex", "nested", "fvm_nabla", "temporary_field"]
+valid_stencils = [
+    "copy",
+    "copy2",
+    "edge_reduction",
+    "sparse_ex",
+    "nested",
+    "temporary_field",
+    "fvm_nabla",
+    "weights",
+    "sparse_field_assign",
+    "native_functions",
+]
 
 
-def copy(mesh: Mesh, field_in: Field[Vertex, dtype], field_out: Field[Vertex, dtype]):
+def copy(field_in: Field[Vertex, dtype], field_out: Field[Vertex, dtype]):
     with computation(FORWARD), interval(0, None), location(Vertex) as v:
-        field_in = field_out
+        field_out = field_in
 
 
-def edge_reduction(mesh: Mesh, edge_field: Field[Edge, dtype], vertex_field: Field[Vertex, dtype]):
+def copy2(field_in: Field[Vertex, dtype], field_out: Field[Vertex, dtype]):
+    with computation(FORWARD), interval(0, None), location(Vertex) as v:
+        field_in[v] = field_out[v]
+
+
+def edge_reduction(e2v: E2V, edge_field: Field[Edge, dtype], vertex_field: Field[Vertex, dtype]):
     with computation(FORWARD), interval(0, None), location(Edge) as e:
-        edge_field = 0.5 * sum(vertex_field[v] for v in vertices(e))
+        edge_field = 0.5 * sum(vertex_field[v] for v in e2v[e])
 
 
-def sparse_ex(
-    mesh: Mesh, edge_field: Field[Edge, dtype], sparse_field: Field[Edge, Local[Vertex], dtype]
-):
+def sparse_ex(e2v: E2V, edge_field: Field[Edge, dtype], sparse_field: SparseField[E2V, dtype]):
     with computation(FORWARD), interval(0, None), location(Edge) as e:
-        edge_field = sum(sparse_field[e, v] for v in vertices(e))
+        edge_field = sum(sparse_field[e, v] for v in e2v[e])
 
 
-def nested(mesh: Mesh, f_1: Field[Edge, dtype], f_2: Field[Vertex, dtype], f_3: Field[Edge, dtype]):
+def nested(f_1: Field[Edge, dtype], f_2: Field[Vertex, dtype], f_3: Field[Edge, dtype]):
     with computation(FORWARD), interval(0, None):
         with location(Edge) as e:
             f_1 = 1
@@ -63,7 +84,7 @@ def nested(mesh: Mesh, f_1: Field[Edge, dtype], f_2: Field[Vertex, dtype], f_3: 
         f_3 = 3
 
 
-def temporary_field(mesh: Mesh, out: Field[Vertex, dtype]):
+def temporary_field(out: Field[Vertex, dtype]):
     with computation(FORWARD), interval(0, None), location(Vertex) as e:
         tmp = 1
     with computation(FORWARD), interval(0, None), location(Vertex) as v:
@@ -71,23 +92,48 @@ def temporary_field(mesh: Mesh, out: Field[Vertex, dtype]):
 
 
 def fvm_nabla(
-    mesh: Mesh,
+    v2e: V2E,
+    e2v: E2V,
     S_MXX: Field[Edge, dtype],
     S_MYY: Field[Edge, dtype],
     pp: Field[Vertex, dtype],
     pnabla_MXX: Field[Vertex, dtype],
     pnabla_MYY: Field[Vertex, dtype],
     vol: Field[Vertex, dtype],
-    sign: Field[Vertex, Local[Edge], dtype],
+    sign: SparseField[V2E, dtype],
 ):
     with computation(FORWARD), interval(0, None):
         with location(Edge) as e:
-            zavg = 0.5 * sum(pp[v] for v in vertices(e))
-            zavg = sum(pp[v] for v in vertices(e))
+            zavg = 0.5 * sum(pp[v] for v in e2v[e])
             zavgS_MXX = S_MXX * zavg
             zavgS_MYY = S_MYY * zavg
         with location(Vertex) as v:
-            pnabla_MXX = sum(zavgS_MXX[e] * sign[v, e] for e in edges(v))
-            pnabla_MYY = sum(zavgS_MYY[e] * sign[v, e] for e in edges(v))
+            pnabla_MXX = sum(zavgS_MXX[e] * sign[v, e] for e in v2e[v])
+            pnabla_MYY = sum(zavgS_MYY[e] * sign[v, e] for e in v2e[v])
             pnabla_MXX = pnabla_MXX / vol
             pnabla_MYY = pnabla_MYY / vol
+
+
+def weights(e2v: E2V, in_field: Field[Vertex, dtype], out_field: Field[Edge, dtype]):
+    with computation(FORWARD), interval(0, None):
+        with location(Edge) as e:
+            weights = LocalField[E2V, dtype]([2, 1])
+            out_field = sum(in_field[v] * weights[e, v] for v in e2v[e])
+
+
+def sparse_field_assign(
+    e2v: E2V, in_sparse_field: SparseField[E2V, dtype], out_sparse_field: SparseField[E2V, dtype]
+):
+    with computation(FORWARD), interval(0, None):
+        with location(Edge) as e:
+            # TODO: maybe support slicing for lhs: out_sparse_field[e,:]
+            out_sparse_field = (in_sparse_field[e, v] for v in e2v[e])
+            # TODO: Fix silently generates invalid code
+            # out_sparse_field = in_sparse_field
+
+
+def native_functions(c2c: C2C, field_in: Field[Cell, dtype], field_out: Field[Cell, dtype]):
+    with computation(FORWARD), location(Cell) as c1:
+        field_out[c1] = (
+            sqrt(field_in) + max(1, 2) + sum(max(field_in[c1], field_in[c2]) for c2 in c2c[c1])
+        )

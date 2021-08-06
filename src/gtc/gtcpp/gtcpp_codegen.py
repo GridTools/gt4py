@@ -37,7 +37,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     GTExtent = as_fmt("extent<{i[0]},{i[1]},{j[0]},{j[1]},{k[0]},{k[1]}>")
 
-    GTAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}>;")
+    GTAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}, {ndim}>;")
 
     GTParamList = as_mako(
         """${ '\\n'.join(accessors) }
@@ -73,11 +73,18 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
-    AccessorRef = as_fmt("eval({name}({offset}))")
+    def visit_AccessorRef(self, accessor_ref: gtcpp.AccessorRef, **kwargs):
+        offset = accessor_ref.offset
+        if offset.i == offset.j == offset.k == 0 and not accessor_ref.data_index:
+            # Skip offsets in the accessor if possible, improves generated code readability and reduces code size for point-wise computations significantly
+            return f"eval({accessor_ref.name}())"
+        return (
+            f"eval({accessor_ref.name}({offset.i}, {offset.j}, {offset.k}"
+            + "".join(f", {d}" for d in accessor_ref.data_index)
+            + "))"
+        )
 
-    ScalarAccess = as_fmt("{name}")
-
-    CartesianOffset = as_fmt("{i}, {j}, {k}")
+    LocalAccess = as_fmt("{name}")
 
     BinaryOp = as_fmt("({left} {op} {right})")
 
@@ -127,29 +134,33 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
-    def visit_DataType(self, dtype: DataType, **kwargs: Any) -> str:
-        if dtype == DataType.INT64:
-            return "long long"
-        elif dtype == DataType.FLOAT64:
-            return "double"
-        elif dtype == DataType.FLOAT32:
-            return "float"
-        elif dtype == DataType.BOOL:
-            return "bool"
-        raise NotImplementedError("Not implemented NativeFunction encountered.")
+    DATA_TYPE_TO_CODE = {
+        DataType.BOOL: "bool",
+        DataType.INT8: "std::int8_t",
+        DataType.INT16: "std::int16_t",
+        DataType.INT32: "std::int32_t",
+        DataType.INT64: "std::int64_t",
+        DataType.FLOAT32: "float",
+        DataType.FLOAT64: "double",
+    }
 
-    def visit_UnaryOperator(self, op: UnaryOperator, **kwargs: Any) -> str:
-        if op == UnaryOperator.NOT:
-            return "!"
-        elif op == UnaryOperator.NEG:
-            return "-"
-        elif op == UnaryOperator.POS:
-            return "+"
-        raise NotImplementedError("Not implemented UnaryOperator encountered.")
+    def visit_DataType(self, dtype: DataType, **kwargs: Any) -> str:
+        try:
+            return self.DATA_TYPE_TO_CODE[dtype]
+        except KeyError as error:
+            raise NotImplementedError(
+                f"Not implemented DataType '{dtype.name}' encountered."
+            ) from error
+
+    UNARY_OPERATOR_TO_CODE = {
+        UnaryOperator.NOT: "!",
+        UnaryOperator.NEG: "-",
+        UnaryOperator.POS: "+",
+    }
+
+    UnaryOp = as_fmt("({_this_generator.UNARY_OPERATOR_TO_CODE[_this_node.op]}{expr})")
 
     Arg = as_fmt("{name}")
-
-    Param = as_fmt("{name}")
 
     ApiParamDecl = as_fmt("{name}")
 
@@ -184,7 +195,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     def visit_GTComputationCall(
         self, node: gtcpp.GTComputationCall, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        return self.generic_visit(node, computation_name=node.id_, **kwargs)
+        computation_name = type(node).__name__ + str(id(node))
+        return self.generic_visit(node, computation_name=computation_name, **kwargs)
 
     GTComputationCall = as_mako(
         """
@@ -199,14 +211,15 @@ class GTCppCodegen(codegen.TemplatedGenerator):
                 return multi_pass(${ ','.join(multi_stages) });
             };
 
-            run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(arguments)});
+            run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(f"std::forward<decltype({arg})>({arg})" for arg in arguments)});
         }
         %endif
         """
     )
 
     Program = as_mako(
-        """#include <gridtools/stencil/${gt_backend_t}.hpp>
+        """
+        #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
 
         namespace ${ name }_impl_{

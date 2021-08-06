@@ -140,6 +140,20 @@ def unique_data_items(request):
     ]
 
 
+def test_instantiate_noninstantiable_class():
+    @eve.utils.noninstantiable
+    class TestClass(pydantic.BaseModel):
+        param: int
+
+    with pytest.raises(TypeError, match="Trying to instantiate `TestClass` non-instantiable class"):
+        TestClass(param=0)
+
+    class Another(TestClass):
+        pass
+
+    Another(param=0)
+
+
 @pytest.fixture(
     params=[None, hashlib.md5(), "md5", hashlib.sha1(), "sha1", hashlib.sha256(), "sha256"]
 )

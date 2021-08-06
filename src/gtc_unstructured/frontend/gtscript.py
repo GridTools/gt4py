@@ -18,13 +18,22 @@ from typing import Callable
 
 import gtc_unstructured.irs.common as common
 
-from .built_in_types import Field, Local, Location, Mesh, TemporaryField
+from .built_in_types import (
+    Connectivity,
+    Field,
+    LocalField,
+    Location,
+    SparseField,
+    TemporaryField,
+    TemporarySparseField,
+)
 
 
 # built-in symbols
 Vertex = common.LocationType.Vertex
 Edge = common.LocationType.Edge
 Cell = common.LocationType.Cell
+K = common.VerticalLocationType.K
 FORWARD = common.LoopOrder.FORWARD
 BACKWARD = common.LoopOrder.BACKWARD
 
@@ -40,10 +49,11 @@ _built_in_functions = [
 
 __all__ = _built_in_functions + [
     "Field",
-    "Local",
-    "Location",
-    "Mesh",
+    "SparseField",
+    "LocalField",
+    "Connectivity",
     "TemporaryField",
+    "TemporarySparseField",
     "Vertex",
     "Edge",
     "Cell",

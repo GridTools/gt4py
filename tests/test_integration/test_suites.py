@@ -16,12 +16,13 @@
 
 
 import numpy as np
+import pytest
 
 from gt4py import gtscript
 from gt4py import testing as gt_testing
 from gt4py.gtscript import PARALLEL, computation, interval
 
-from ..definitions import ALL_BACKENDS, DAWN_BACKENDS, DAWN_GPU_BACKENDS, INTERNAL_BACKENDS
+from ..definitions import INTERNAL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields
 
 
@@ -393,7 +394,7 @@ class Test3FoldNestedIf(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(3, 3), (3, 3), (3, 3)]
-    backends = ["debug", "numpy", "gtx86"]
+    backends = INTERNAL_BACKENDS
     symbols = dict(field_a=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(field_a):
@@ -460,11 +461,13 @@ class TestTernaryOp(gt_testing.StencilTestSuite):
 
         with computation(PARALLEL), interval(...):
             outfield = (  # noqa: F841 # Local name is assigned to but never used
-                infield > 0.0
-            ) * infield + (infield <= 0.0) * (-infield[0, 1, 0])
+                infield if infield > 0.0 else -infield[0, 1, 0]
+            )
 
     def validation(infield, outfield, *, domain, origin, **kwargs):
-        outfield[...] = np.choose(infield[:, :-1, :] > 0, [-infield[:, 1:, :], infield[:, :-1, :]])
+        outfield[...] = (infield[:, :-1, :] > 0.0) * infield[:, :-1, :] + (
+            infield[:, :-1, :] <= 0.0
+        ) * (-infield[:, 1:, :])
 
 
 class TestThreeWayAnd(gt_testing.StencilTestSuite):
@@ -518,7 +521,7 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
 class TestOptionalField(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 32), (1, 32), (1, 32)]
-    backends = list(set(ALL_BACKENDS) - set(DAWN_GPU_BACKENDS))
+    backends = INTERNAL_BACKENDS
     symbols = dict(
         PHYS_TEND=gt_testing.global_name(one_of=(False, True)),
         in_field=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -538,7 +541,7 @@ class TestOptionalField(gt_testing.StencilTestSuite):
 
 
 class TestNotSpecifiedOptionalField(TestOptionalField):
-    backends = list(set(ALL_BACKENDS) - set(DAWN_BACKENDS))
+    backends = INTERNAL_BACKENDS
     symbols = TestOptionalField.symbols.copy()
     symbols["PHYS_TEND"] = gt_testing.global_name(one_of=(False,))
     symbols["phys_tend"] = gt_testing.none()
@@ -547,7 +550,7 @@ class TestNotSpecifiedOptionalField(TestOptionalField):
 class TestTwoOptionalFields(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 32), (1, 32), (1, 32)]
-    backends = list(set(ALL_BACKENDS) - set(DAWN_GPU_BACKENDS))
+    backends = INTERNAL_BACKENDS
     symbols = dict(
         PHYS_TEND_A=gt_testing.global_name(one_of=(False, True)),
         PHYS_TEND_B=gt_testing.global_name(one_of=(False, True)),
@@ -589,7 +592,152 @@ class TestTwoOptionalFields(gt_testing.StencilTestSuite):
 
 
 class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
-    backends = list(set(ALL_BACKENDS) - set(DAWN_BACKENDS))
+    backends = INTERNAL_BACKENDS
     symbols = TestTwoOptionalFields.symbols.copy()
     symbols["PHYS_TEND_A"] = gt_testing.global_name(one_of=(False,))
     symbols["phys_tend_a"] = gt_testing.none()
+
+
+class TestConstantFolding(gt_testing.StencilTestSuite):
+    dtypes = {("outfield",): np.float64, ("cond",): np.float64}
+    domain_range = [(15, 15), (15, 15), (15, 15)]
+    backends = INTERNAL_BACKENDS
+    symbols = dict(
+        outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+        cond=gt_testing.field(in_range=(1, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
+    )
+
+    def definition(outfield, cond):
+        with computation(PARALLEL), interval(...):
+            if cond != 0:
+                tmp = 1
+            outfield = tmp  # noqa: F841  # local variable assigned to but never used
+
+    def validation(outfield, cond, *, domain, origin, **kwargs):
+        outfield[np.array(cond, dtype=np.bool_)] = 1
+
+
+class TestNon3DFields(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float64,
+        "another_field": np.float64,
+        "field_out": np.float64,
+    }
+    domain_range = [(4, 10), (4, 10), (4, 10)]
+    backends = [
+        "debug",
+        "numpy",
+        pytest.param("gtx86", marks=[pytest.mark.xfail]),
+        pytest.param("gtmc", marks=[pytest.mark.xfail]),
+        pytest.param("gtcuda", marks=[pytest.mark.xfail]),
+        "gtc:gt:cpu_ifirst",
+        "gtc:gt:cpu_kfirst",
+        "gtc:gt:gpu",
+        "gtc:dace",
+    ]
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "another_field": gt_testing.field(
+            in_range=(-10, 10), axes="IJ", data_dims=(3, 2, 2), boundary=[(1, 1), (1, 1), (0, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", data_dims=(3, 2), boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, another_field, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out[0, 0, 0][0, 0] = (
+                field_in[0] + another_field[-1, -1][0, 0, 0] + another_field[-1, -1][0, 0, 1]
+            )
+            field_out[0, 0, 0][0, 1] = 2 * (
+                another_field[-1, -1][1, 0, 0]
+                + another_field[-1, -1][1, 0, 1]
+                + another_field[-1, -1][1, 1, 0]
+                + another_field[-1, -1][1, 1, 1]
+            )
+
+            field_out[0, 0, 0][1, 0] = (
+                field_in[0] + another_field[1, 1][0, 0, 0] + another_field[1, 1][0, 0, 1]
+            )
+            field_out[0, 0, 0][1, 1] = 3 * (
+                another_field[1, 1][1, 0, 0]
+                + another_field[1, 1][1, 0, 1]
+                + another_field[1, 1][1, 1, 0]
+                + another_field[1, 1][1, 1, 1]
+            )
+
+            field_out[0, 0, 0][2, 0] = (
+                field_in[0] + another_field[0, 0][0, 0, 0] + another_field[-1, 1][0, 0, 1]
+            )
+            field_out[0, 0, 0][2, 1] = 4 * (
+                another_field[-1, 1][1, 0, 0]
+                + another_field[-1, 1][1, 0, 1]
+                + another_field[-1, 1][1, 1, 0]
+                + another_field[-1, 1][1, 1, 1]
+            )
+
+    def validation(field_in, another_field, field_out, *, domain, origin):
+        field_out[:, :, :, 0, 0] = (
+            field_in[:]
+            + another_field[:-2, :-2, None, 0, 0, 0]
+            + another_field[:-2, :-2, None, 0, 0, 1]
+        )
+        field_out[:, :, :, 0, 1] = 2 * (
+            another_field[:-2, :-2, None, 1, 0, 0]
+            + another_field[:-2, :-2, None, 1, 0, 1]
+            + another_field[:-2, :-2, None, 1, 1, 0]
+            + another_field[:-2, :-2, None, 1, 1, 1]
+        )
+
+        field_out[:, :, :, 1, 0] = (
+            field_in[:]
+            + another_field[2:, 2:, None, 0, 0, 0]
+            + another_field[2:, 2:, None, 0, 0, 1]
+        )
+        field_out[:, :, :, 1, 1] = 3 * (
+            another_field[2:, 2:, None, 1, 0, 0]
+            + another_field[2:, 2:, None, 1, 0, 1]
+            + another_field[2:, 2:, None, 1, 1, 0]
+            + another_field[2:, 2:, None, 1, 1, 1]
+        )
+
+        field_out[:, :, :, 2, 0] = (
+            field_in[:]
+            + another_field[1:-1, 1:-1, None, 0, 0, 0]
+            + another_field[:-2, 2:, None, 0, 0, 1]
+        )
+        field_out[:, :, :, 2, 1] = 4 * (
+            another_field[:-2, 2:, None, 1, 0, 0]
+            + another_field[:-2, 2:, None, 1, 0, 1]
+            + another_field[:-2, 2:, None, 1, 1, 0]
+            + another_field[:-2, 2:, None, 1, 1, 1]
+        )
+
+
+class TestReadOutsideKInterval(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float64,
+        "field_out": np.float64,
+    }
+    domain_range = [(4, 4), (4, 4), (4, 4)]
+    backends = INTERNAL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (1, 1)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out = (  # noqa: F841  # Local name is assigned to but never used
+                field_in[0, 0, -1] + field_in[0, 0, 1]
+            )
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, :] = field_in[:, :, 0:-2] + field_in[:, :, 2:]

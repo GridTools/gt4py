@@ -102,7 +102,8 @@ repos:
     - flake8-docstrings
     - flake8-eradicate
     - flake8-mutable
-    - flake8-rst-docstrings
+  # Disabled for now due to random false positives
+  # - flake8-rst-docstrings
     - pygments
     exclude: |
       (?x)^(
@@ -184,7 +185,9 @@ repos:
       src/gt4py/stencil_object.py |
       src/gt4py/utils/meta.py |
       src/gtc_unstructured/irs/nir_to_usid.py |
+      src/gtc_unstructured/irs/nir_passes/merge_neighbor_loops.py |
       tests/definitions.py |
+      tests/eve_tests/definitions.py |
       tests/test_integration/stencil_definitions.py |
       tests/test_integration/test_code_generation.py |
       tests/test_unittest/test_call_interface.py |
@@ -197,5 +200,6 @@ repos:
       tests/test_unittest/test_gtc/gtir_utils.py |
       tests/test_unittest/test_gtc/test_gtir_upcaster.py |
       tests/test_unittest/test_gtc/test_gtir_to_oir.py |
+      tests/test_unittest/test_gtc/test_passes/test_legacy_extents.py |
       tests/gtc_unstructured_tests/.* |
       )$

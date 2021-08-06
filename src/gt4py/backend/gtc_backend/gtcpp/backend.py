@@ -16,9 +16,7 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
-import gtc.utils as gtc_utils
 from eve import codegen
-from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
@@ -26,33 +24,21 @@ from gt4py.backend.gt_backends import (
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
     cuda_is_compatible_type,
-    cuda_layout,
     gtcpu_is_compatible_type,
+    make_cuda_layout_map,
     make_mc_layout_map,
     make_x86_layout_map,
     mc_is_compatible_layout,
     x86_is_compatible_layout,
 )
+from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
-from gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-from gtc.passes.gtir_upcaster import upcast
-from gtc.passes.oir_optimizations.caches import (
-    IJCacheDetection,
-    KCacheDetection,
-    PruneKCacheFills,
-    PruneKCacheFlushes,
-)
-from gtc.passes.oir_optimizations.horizontal_execution_merging import GreedyMerging, OnTheFlyMerging
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
-from gtc.passes.oir_optimizations.temporaries import (
-    LocalTemporariesToScalars,
-    WriteBeforeReadTemporariesToScalars,
-)
-from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
+from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
+from gtc.passes.oir_pipeline import OirPipeline
 
 
 if TYPE_CHECKING:
@@ -60,42 +46,26 @@ if TYPE_CHECKING:
 
 
 class GTCGTExtGenerator:
-    def __init__(self, class_name, module_name, gt_backend_t, options):
+    def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
-        self.gt_backend_t = gt_backend_t
-        self.options = options
+        self.backend = backend
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = DefIRToGTIR.apply(definition_ir)
-        gtir_without_unused_params = prune_unused_parameters(gtir)
-        dtype_deduced = resolve_dtype(gtir_without_unused_params)
-        upcasted = upcast(dtype_deduced)
-        oir = gtir_to_oir.GTIRToOIR().visit(upcasted)
-        oir = self._optimize_oir(oir)
+        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(skip=[FillFlushToLocalKCaches])
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
-        implementation = gtcpp_codegen.GTCppCodegen.apply(gtcpp, gt_backend_t=self.gt_backend_t)
-        bindings = GTCppBindingsCodegen.apply(
-            gtcpp, module_name=self.module_name, gt_backend_t=self.gt_backend_t
+        implementation = gtcpp_codegen.GTCppCodegen.apply(
+            gtcpp, gt_backend_t=self.backend.GT_BACKEND_T
         )
-        bindings_ext = ".cu" if self.gt_backend_t == "gpu" else ".cpp"
+        bindings = GTCppBindingsCodegen.apply(
+            gtcpp, module_name=self.module_name, backend=self.backend
+        )
+        bindings_ext = ".cu" if self.backend.GT_BACKEND_T == "gpu" else ".cpp"
         return {
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings" + bindings_ext: bindings},
         }
-
-    def _optimize_oir(self, oir):
-        oir = GreedyMerging().visit(oir)
-        oir = AdjacentLoopMerging().visit(oir)
-        oir = LocalTemporariesToScalars().visit(oir)
-        oir = WriteBeforeReadTemporariesToScalars().visit(oir)
-        oir = OnTheFlyMerging().visit(oir)
-        oir = NoFieldAccessPruning().visit(oir)
-        oir = IJCacheDetection().visit(oir)
-        oir = KCacheDetection().visit(oir)
-        oir = PruneKCacheFills().visit(oir)
-        oir = PruneKCacheFlushes().visit(oir)
-        return oir
 
 
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):
@@ -107,46 +77,27 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return self._unique_index
 
     def visit_DataType(self, dtype: DataType, **kwargs):
-        if dtype == DataType.INT64:
-            return "long long"
-        elif dtype == DataType.FLOAT64:
-            return "double"
-        elif dtype == DataType.FLOAT32:
-            return "float"
-        elif dtype == DataType.BOOL:
-            return "bool"
-        else:
-            raise AssertionError(f"Invalid DataType value: {dtype}")
+        return gtcpp_codegen.GTCppCodegen().visit_DataType(dtype)
 
     def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
-        assert "gt_backend_t" in kwargs
+        backend = kwargs["backend"]
         if "external_arg" in kwargs:
+            domain_ndim = node.dimensions.count(True)
+            data_ndim = len(node.data_dims)
+            sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,{ndim}> {name}_origin".format(
+                return "py::buffer {name}, std::array<gt::uint_t,{sid_ndim}> {name}_origin".format(
                     name=node.name,
-                    ndim=node.dimensions.count(True),
+                    sid_ndim=sid_ndim,
                 )
             else:
-                num_dims = node.dimensions.count(True)
-                sid_def = """gt::as_{sid_type}<{dtype}, {num_dims},
-                    std::integral_constant<int, {unique_index}>>({name})""".format(
-                    sid_type="cuda_sid" if kwargs["gt_backend_t"] == "gpu" else "sid",
+                return pybuffer_to_sid(
                     name=node.name,
-                    dtype=self.visit(node.dtype),
-                    unique_index=self.unique_index(),
-                    num_dims=num_dims,
-                )
-                if num_dims != 3:
-                    gt_dims = [
-                        f"gt::stencil::dim::{dim}"
-                        for dim in gtc_utils.dimension_flags_to_names(node.dimensions)
-                    ]
-                    sid_def = "gt::sid::rename_numbered_dimensions<{gt_dims}>({sid_def})".format(
-                        gt_dims=", ".join(gt_dims), sid_def=sid_def
-                    )
-                return "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-                    sid_def=sid_def,
-                    name=node.name,
+                    ctype=self.visit(node.dtype),
+                    domain_dim_flags=node.dimensions,
+                    data_ndim=len(node.data_dims),
+                    stride_kind_index=self.unique_index(),
+                    backend=backend,
                 )
 
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
@@ -167,45 +118,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             **kwargs,
         )
 
-    Program = as_mako(
-        """
-        #include <chrono>
-        #include <pybind11/pybind11.h>
-        #include <pybind11/stl.h>
-        #include <gridtools/storage/adapter/python_sid_adapter.hpp>
-        #include <gridtools/stencil/global_parameter.hpp>
-        #include <gridtools/sid/sid_shift_origin.hpp>
-        #include <gridtools/sid/rename_dimensions.hpp>
-        #include "computation.hpp"
-        namespace gt = gridtools;
-        namespace py = ::pybind11;
-        %if len(entry_params) > 0:
-        PYBIND11_MODULE(${module_name}, m) {
-            m.def("run_computation", [](std::array<gt::uint_t, 3> domain,
-            ${','.join(entry_params)},
-            py::object exec_info){
-                if (!exec_info.is(py::none()))
-                {
-                    auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_start_time"] = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
-                }
-
-                ${name}(domain)(${','.join(sid_params)});
-
-                if (!exec_info.is(py::none()))
-                {
-                    auto exec_info_dict = exec_info.cast<py::dict>();
-                    exec_info_dict["run_cpp_end_time"] = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
-                }
-
-            }, "Runs the given computation");}
-        %endif
-        """
-    )
+    Program = bindings_main_template()
 
     @classmethod
     def apply(cls, root, *, module_name="stencil", **kwargs) -> str:
@@ -217,6 +130,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
+    USE_LEGACY_TOOLCHAIN = False
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
         return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=uses_cuda)
@@ -287,10 +201,11 @@ class GTCGTGpuBackend(GTCGTBaseBackend):
     name = "gtc:gt:gpu"
     GT_BACKEND_T = "gpu"
     languages = {"computation": "cuda", "bindings": ["python"]}
+    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
     storage_info = {
         "alignment": 32,
         "device": "gpu",
-        "layout_map": cuda_layout,
+        "layout_map": make_cuda_layout_map,
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }

@@ -1,4 +1,5 @@
 ### Custom ####
+_build
 _local_
 
 ### GT4Py ####
@@ -104,3 +105,8 @@ venv.bak/
 
 # mkdocs documentation
 /site
+
+# DaCe
+*.sdfg
+.dace.conf
+
