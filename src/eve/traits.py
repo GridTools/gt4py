@@ -70,7 +70,9 @@ class SymbolTableTrait(concepts.Model):
         self.symtable_ = self._collect_symbols(self)
 
     @staticmethod
-    def add_symtable(node: concepts.Node, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def add_symtable(
+        node: concepts.Node, visitor: visitors.NodeVisitor, kwargs: Dict[str, Any]
+    ) -> None:
         """Update or add the symtable to kwargs in the visitor calls.
 
         This is a previsitor that is registered with classes in eve.visitors
@@ -79,4 +81,3 @@ class SymbolTableTrait(concepts.Model):
         kwargs["symtable"] = kwargs.get("symtable", {}).copy()
         if isinstance(node, SymbolTableTrait):
             kwargs["symtable"].update(node.symtable_)
-        return kwargs

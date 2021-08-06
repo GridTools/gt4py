@@ -40,7 +40,7 @@ from .typingx import (
 )
 
 
-PrevisitCallable = Callable[[concepts.TreeNode, Dict[str, Any]], Dict[str, Any]]
+PrevisitCallable = Callable[[concepts.TreeNode, "NodeVisitor", Dict[str, Any]], None]
 
 
 class NodeVisitor:
@@ -127,7 +127,7 @@ class NodeVisitor:
 
         if self.previsitors:
             for previsitor in self.previsitors:
-                kwargs = previsitor(node, kwargs)
+                previsitor(node, self, kwargs)
 
         return visitor(node, **kwargs)
 
