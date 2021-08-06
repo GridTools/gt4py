@@ -22,7 +22,7 @@
     - halo_sizes: [int]
     - k_axis: { "n_intervals": int, "offset_limit": int}
     - max_ndim: int
-    - requires_positional: bool
+    - positional_computation: bool
     - multi_stages: [{ "exec": str, "steps": [[str]]]
     - parameters: [{ "name": str, "dtype": str }]
     - stage_functors: {
@@ -166,7 +166,7 @@ using p_{{ field.name }} = gt::arg<{{ arg_counter + loop.index0 }}, typename sto
 using p_{{ param.name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_parameter<{{ param.dtype }}>>;
 {%- endfor %}
 {% set arg_counter = arg_counter + parameters|length %}
-{%- if requires_positional -%}
+{%- if positional_computation -%}
 {% for axis_name in axes_names %}
 using p_domain_size_{{ axis_name }} = gt::arg<{{ arg_counter + loop.index0 }}, gt::global_parameter<gt::uint_t>>;
 {%- endfor %}
@@ -272,7 +272,7 @@ void run(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- endfor %}
 
     // Run computation and wait for the synchronization of the output stores
-{%- if requires_positional %}
+{%- if positional_computation %}
     auto gt_computation = gt::make_positional_computation<backend_t>(
 {%- else %}
     auto gt_computation = gt::make_computation<backend_t>(
@@ -281,7 +281,7 @@ void run(const std::array<gt::uint_t, MAX_DIM>& domain,
 {%- for param in parameters %}
         p_{{ param.name }}() = gt::make_global_parameter<{{ param.dtype }}>({{ param.name }}),
 {% endfor -%}
-{%- if requires_positional -%}
+{%- if positional_computation -%}
 {%- for axis_name in axes_names %}
         p_domain_size_{{ axis_name }}() = gt::make_global_parameter(domain[{{ loop.index0 }}]),
 {%- endfor -%}

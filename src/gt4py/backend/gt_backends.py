@@ -619,7 +619,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             if name not in node.unreferenced
         ]
 
-        requires_positional = len(tuple(gt_ir.iter_nodes_of_type(node, gt_ir.AxisPosition))) > 0
+        positional_computation = len(tuple(gt_ir.iter_nodes_of_type(node, gt_ir.AxisPosition))) > 0
         stage_functors = {}
         for multi_stage in node.multi_stages:
             for group in multi_stage.groups:
@@ -639,7 +639,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             halo_sizes=halo_sizes,
             k_axis=k_axis,
             module_name=self.module_name,
-            requires_positional=requires_positional,
+            positional_computation=positional_computation,
             multi_stages=multi_stages,
             parameters=parameters,
             stage_functors=stage_functors,
