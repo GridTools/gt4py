@@ -19,6 +19,8 @@
 
 from __future__ import annotations
 
+from collections import ChainMap
+
 import pydantic
 
 from . import concepts, visitors
@@ -71,13 +73,14 @@ class SymbolTableTrait(concepts.Model):
 
     @staticmethod
     def add_symtable(
-        node: concepts.Node, visitor: visitors.NodeVisitor, kwargs: Dict[str, Any]
+        visitor: visitors.NodeVisitor, node: concepts.Node, kwargs: Dict[str, Any]
     ) -> None:
         """Update or add the symtable to kwargs in the visitor calls.
 
-        This is a previsitor that is registered with classes in eve.visitors
-        by passing this to the base class constructor.
+        This is a previsitor that when inclded to the previsitors classvar, will
+        automatically pass 'symtable' as a keyword argument to visitor methods.
         """
-        kwargs["symtable"] = kwargs.get("symtable", {}).copy()
+        if "symtable" not in kwargs:
+            kwargs["symtable"] = ChainMap()
         if isinstance(node, SymbolTableTrait):
-            kwargs["symtable"].update(node.symtable_)
+            kwargs["symtable"] = kwargs["symtable"].new_child(node.symtable_)
