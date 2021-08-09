@@ -133,7 +133,7 @@ class NodeVisitor:
         return_value = method(node, **kwargs)
 
         if self.contexts:
-            for ctx in self.contexts[::-1]:
+            for ctx in self.contexts:
                 ctx.postvisit(self, node, kwargs)
 
         return return_value
