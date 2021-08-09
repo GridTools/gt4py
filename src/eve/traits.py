@@ -71,16 +71,29 @@ class SymbolTableTrait(concepts.Model):
         self.symtable_ = dict()
         self.symtable_ = self._collect_symbols(self)
 
-    @staticmethod
-    def add_symtable(
-        visitor: visitors.NodeVisitor, node: concepts.Node, kwargs: Dict[str, Any]
-    ) -> None:
+    class Context(visitors.VisitorContext):
         """Update or add the symtable to kwargs in the visitor calls.
 
-        This is a previsitor that when inclded to the previsitors classvar, will
+        This is a visitor context that when inclded to the contexts classvar, will
         automatically pass 'symtable' as a keyword argument to visitor methods.
         """
-        if "symtable" not in kwargs:
-            kwargs["symtable"] = ChainMap()
-        if isinstance(node, SymbolTableTrait):
-            kwargs["symtable"] = kwargs["symtable"].new_child(node.symtable_)
+
+        def previsit(
+            self,
+            node_visitor: visitors.NodeVisitor,
+            node: concepts.TreeNode,
+            kwargs: Dict[str, Any],
+        ) -> None:
+            if "symtable" not in kwargs:
+                kwargs["symtable"] = ChainMap()
+            self.prestate = kwargs["symtable"]
+            if isinstance(node, SymbolTableTrait):
+                kwargs["symtable"] = kwargs["symtable"].new_child(node.symtable_)
+
+        def postvisit(
+            self,
+            node_visitor: visitors.NodeVisitor,
+            node: concepts.TreeNode,
+            kwargs: Dict[str, Any],
+        ) -> None:
+            kwargs["symtable"] = self.prestate

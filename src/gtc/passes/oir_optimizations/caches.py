@@ -262,7 +262,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
     4. Flush statements from the temporary to the original field are introduced.
     """
 
-    previsitors = (SymbolTableTrait.add_symtable,)
+    contexts = (SymbolTableTrait.Context,)
 
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, name_map: Dict[str, str], **kwargs: Any

@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from typing import ChainMap
+
 import pytest
 
 import eve
@@ -74,9 +76,16 @@ class TestSymbolTable:
             for symbol_name, symbol_node in expected_symbols.items()
         )
 
-    def test_add_symtable(self, symtable_node_and_expected_symbols):
+    def test_symtable_ctx(self):
         node = _NodeWithSymbolTable(symbols=[_NodeWithSymbolName()])
-        kwargs = {}
-        kwargs = eve.SymbolTableTrait.add_symtable(node, kwargs)
+        kwargs = dict(symtable=ChainMap({"a": True}))
+        ctx = eve.SymbolTableTrait.Context()
+
+        ctx.previsit(None, node, kwargs)
         assert "symtable" in kwargs
         assert "symbol_name" in kwargs["symtable"]
+        assert "a" in ctx.prestate
+
+        ctx.postvisit(None, node, kwargs)
+        assert "symtable" in kwargs
+        assert "symbol_name" not in kwargs["symtable"]

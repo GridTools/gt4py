@@ -22,6 +22,7 @@ from __future__ import annotations
 import collections.abc
 import copy
 import operator
+from abc import abstractmethod
 
 from . import concepts, iterators, utils
 from .concepts import NOTHING
@@ -40,7 +41,22 @@ from .typingx import (
 )
 
 
-PrevisitCallable = Callable[["NodeVisitor", concepts.TreeNode, Dict[str, Any]], None]
+class VisitorContext:
+    """A context wrapped around visitor calls that provides pre- and post-visit hooks."""
+
+    @abstractmethod
+    def previsit(
+        self, node_visitor: "NodeVisitor", node: concepts.TreeNode, kwargs: Dict[str, Any]
+    ) -> None:
+        """Call before the visit method."""
+        pass
+
+    @abstractmethod
+    def postvisit(
+        self, node_visitor: "NodeVisitor", node: concepts.TreeNode, kwargs: Dict[str, Any]
+    ) -> None:
+        """Call after the visit method."""
+        pass
 
 
 class NodeVisitor:
@@ -107,7 +123,20 @@ class NodeVisitor:
 
     """
 
-    previsitors: ClassVar[Optional[Tuple[PrevisitCallable, ...]]] = None
+    contexts: ClassVar[Optional[Tuple[VisitorContext, ...]]] = None
+
+    def _do_visit(self, node: concepts.TreeNode, method, **kwargs: Any) -> Any:
+        if self.contexts:
+            for ctx in self.contexts[::-1]:
+                ctx.previsit(self, node, kwargs)
+
+        return_value = method(node, **kwargs)
+
+        if self.contexts:
+            for ctx in self.contexts[::-1]:
+                ctx.postvisit(self, node, kwargs)
+
+        return return_value
 
     def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         visitor = self.generic_visit
@@ -125,11 +154,7 @@ class NodeVisitor:
                 if node_class is concepts.Node:
                     break
 
-        if self.previsitors:
-            for previsitor in self.previsitors:
-                previsitor(self, node, kwargs)
-
-        return visitor(node, **kwargs)
+        return self._do_visit(node, visitor, **kwargs)
 
     def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         for child in iterators.generic_iter_children(node):
