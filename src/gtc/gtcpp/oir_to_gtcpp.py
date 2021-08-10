@@ -53,6 +53,15 @@ def _extract_accessors(apply_method: gtcpp.GTApplyMethod) -> List[gtcpp.GTAccess
         as_dict=True,
     )
 
+    accessor_names = {
+        name: gtcpp.GTExtent.zero()
+        for name in apply_method.iter_tree()
+        .if_isinstance(gtcpp.AccessorRef)
+        .getattr("name")
+        .to_set()
+    }
+    extents = {**{name: gtcpp.GTExtent.zero() for name in accessor_names}, **extents}
+
     inout_fields: Set[str] = (
         apply_method.iter_tree()
         .if_isinstance(gtcpp.AssignStmt)
