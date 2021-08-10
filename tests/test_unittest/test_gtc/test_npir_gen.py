@@ -106,20 +106,20 @@ def test_parallel_offset_zero() -> None:
 def test_sequential_offset() -> None:
     result = npir_gen.NpirGen().visit(npir.AxisOffset.k(5))
     print(result)
-    assert result == "k_ + 5"
+    assert result == "(k_ + 5):(k_ + 5 + 1)"
 
 
 def test_sequential_offset_zero() -> None:
     result = npir_gen.NpirGen().visit(npir.AxisOffset.k(0))
     print(result)
-    assert result == "k_"
+    assert result == "k_:(k_ + 1)"
 
 
 def test_field_slice_sequential_k() -> None:
     result = npir_gen.NpirGen().visit(
         FieldSliceFactory(name="a_field", parallel_k=False, offsets=(-1, 0, 4))
     )
-    assert result == "a_field_[(i - 1):(I - 1), j:J, k_ + 4]"
+    assert result == "a_field_[(i - 1):(I - 1), j:J, (k_ + 4):(k_ + 4 + 1)]"
 
 
 def test_field_slice_parallel_k() -> None:
@@ -139,7 +139,7 @@ def test_native_function() -> None:
             ],
         )
     )
-    assert result == "np.minimum(a_[i:I, j:J, k_], b_[i:I, j:J, k_])"
+    assert result == "np.minimum(a_[i:I, j:J, k_:(k_ + 1)], b_[i:I, j:J, k_:(k_ + 1)])"
 
 
 def test_vector_assign() -> None:
@@ -149,7 +149,7 @@ def test_vector_assign() -> None:
             right__name="b",
         )
     )
-    assert result == "a_[i:I, j:J, k_] = b_[i:I, j:J, k_]"
+    assert result == "a_[i:I, j:J, k_:(k_ + 1)] = b_[i:I, j:J, k_:(k_ + 1)]"
 
 
 def test_temp_definition() -> None:
@@ -176,7 +176,7 @@ def test_vector_arithmetic() -> None:
             op=common.ArithmeticOperator.ADD,
         )
     )
-    assert result == "(a_[i:I, j:J, k_] + b_[i:I, j:J, k_])"
+    assert result == "(a_[i:I, j:J, k_:(k_ + 1)] + b_[i:I, j:J, k_:(k_ + 1)])"
 
 
 def test_vector_unary_op() -> None:
@@ -186,7 +186,7 @@ def test_vector_unary_op() -> None:
             op=common.UnaryOperator.NEG,
         )
     )
-    assert result == "(-(a_[i:I, j:J, k_]))"
+    assert result == "(-(a_[i:I, j:J, k_:(k_ + 1)]))"
 
 
 def test_vector_unary_not() -> None:
@@ -196,7 +196,7 @@ def test_vector_unary_not() -> None:
             op=common.UnaryOperator.NOT,
         )
     )
-    assert result == "(np.bitwise_not(a_[i:I, j:J, k_]))"
+    assert result == "(np.bitwise_not(a_[i:I, j:J, k_:(k_ + 1)]))"
 
 
 def test_numerical_offset_pos() -> None:
