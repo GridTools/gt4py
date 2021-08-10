@@ -41,7 +41,6 @@ def register(func=None, *, externals=None, name=None):
 
 Field3D = gtscript.Field[np.float_]
 Field3DBool = gtscript.Field[np.bool_]
-Field4D = gtscript.Field[(np.float_, (2,))]
 
 
 @register
@@ -375,29 +374,3 @@ def two_optional_fields(
             out_a = out_a + dt * phys_tend_a
         if __INLINED(PHYS_TEND_B):
             out_b = out_b + dt * phys_tend_b
-
-
-@register
-def produce_higher_dimensional_field(input_field: Field3D, output_field: Field4D):
-    with computation(PARALLEL), interval(...):
-        output_field[0, 0, 0][0] = input_field
-
-
-@register
-def consume_higher_dimensional_field(input_field: Field3D, output_field: Field4D):
-    with computation(PARALLEL), interval(...):
-        input_field = output_field[0, 0, 0][0]
-
-
-@register
-def produce_higher_dimensional_field_indirect_addressing(
-    input_field: Field3D, output_field: Field4D, variable: float
-):
-    output_field[0, 0, 0][variable] = input_field
-
-
-@register
-def consume_higher_dimensional_field_indirect_addressing(
-    input_field: Field3D, output_field: Field4D, variable: float
-):
-    input_field = output_field[0, 0, 0][variable]

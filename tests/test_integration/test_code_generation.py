@@ -21,7 +21,7 @@ from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, computation, interval
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, OLD_BACKENDS, make_backend_params
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GTC_GRIDTOOLS_BACKENDS, OLD_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
@@ -36,7 +36,7 @@ def test_generation(name, backend):
     for k, v in stencil_definition.__annotations__.items():
         if isinstance(v, gtscript._FieldDescriptor):
             args[k] = gt_storage.ones(
-                dtype=v.dtype,
+                dtype=(v.dtype, v.data_dims) if v.data_dims else v.dtype,
                 mask=gtscript.mask_from_axes(v.axes),
                 backend=backend,
                 shape=(23, 23, 23),
@@ -317,3 +317,36 @@ def test_variable_offsets_and_while_loop(backend):
                     qsum += qin[0, 0, lev] / (pe2[0, 0, 1] - pe1[0, 0, lev])
                     lev = lev + 1
                 qout = qsum / (pe2[0, 0, 1] - pe2)
+
+
+# NOTE: These should probably be part of a test_suite test instead of here
+# {
+@pytest.mark.parametrize(
+    "backend", GTC_GRIDTOOLS_BACKENDS + [pytest.param("numpy"), pytest.param("debug")]
+)
+def test_write_data_dim_indirect_addressing(backend):
+    @gtscript.stencil(backend=backend)
+    def stencil(
+        input_field: gtscript.Field[gtscript.IJK, np.float_],
+        output_field: gtscript.Field[gtscript.IJK, (np.float_, (1,))],
+        index: int,
+    ):
+        with computation(PARALLEL), interval(...):
+            output_field[0, 0, 0][index] = input_field
+
+
+@pytest.mark.parametrize(
+    "backend", GTC_GRIDTOOLS_BACKENDS + [pytest.param("numpy"), pytest.param("debug")]
+)
+def test_read_data_dim_indirect_addressing(backend):
+    @gtscript.stencil(backend=backend)
+    def stencil(
+        input_field: gtscript.Field[gtscript.IJK, np.float_],
+        output_field: gtscript.Field[gtscript.IJK, (np.float_, (1,))],
+        index: int,
+    ):
+        with computation(PARALLEL), interval(...):
+            input_field = output_field[0, 0, 0][index]
+
+
+# }
