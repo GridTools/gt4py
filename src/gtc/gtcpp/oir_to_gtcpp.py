@@ -92,7 +92,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             self.arguments.update(arguments)
             return self
 
-    contexts = (eve.SymbolTableTrait.Context,)
+    contexts = (eve.SymbolTableTrait.add_symtable,)
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> gtcpp.Literal:
         return gtcpp.Literal(value=node.value, dtype=node.dtype)

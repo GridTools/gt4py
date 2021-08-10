@@ -20,9 +20,9 @@
 from __future__ import annotations
 
 import collections.abc
+import contextlib
 import copy
 import operator
-from abc import abstractmethod
 
 from . import concepts, iterators, utils
 from .concepts import NOTHING
@@ -31,6 +31,7 @@ from .typingx import (
     Callable,
     ClassVar,
     Collection,
+    ContextManager,
     Dict,
     Iterable,
     MutableSequence,
@@ -41,22 +42,7 @@ from .typingx import (
 )
 
 
-class VisitorContext:
-    """A context wrapped around visitor calls that provides pre- and post-visit hooks."""
-
-    @abstractmethod
-    def previsit(
-        self, node_visitor: "NodeVisitor", node: concepts.TreeNode, kwargs: Dict[str, Any]
-    ) -> None:
-        """Call before the visit method."""
-        pass
-
-    @abstractmethod
-    def postvisit(
-        self, node_visitor: "NodeVisitor", node: concepts.TreeNode, kwargs: Dict[str, Any]
-    ) -> None:
-        """Call after the visit method."""
-        pass
+ContextCallable = Callable[["NodeVisitor", concepts.TreeNode, Dict[str, Any]], ContextManager[None]]
 
 
 class NodeVisitor:
@@ -123,19 +109,14 @@ class NodeVisitor:
 
     """
 
-    contexts: ClassVar[Optional[Tuple[VisitorContext, ...]]] = None
+    contexts: ClassVar[Optional[Tuple[ContextCallable, ...]]] = None
 
     def _do_visit(self, node: concepts.TreeNode, method, **kwargs: Any) -> Any:
-        if self.contexts:
-            for ctx in self.contexts[::-1]:
-                ctx.previsit(self, node, kwargs)
+        with contextlib.ExitStack() as stack:
+            for ctx in self.contexts or []:
+                stack.enter_context(ctx(self, node, kwargs))
 
-        return_value = method(node, **kwargs)
-
-        if self.contexts:
-            for ctx in self.contexts:
-                ctx.postvisit(self, node, kwargs)
-
+            return_value = method(node, **kwargs)
         return return_value
 
     def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:

@@ -79,13 +79,10 @@ class TestSymbolTable:
     def test_symtable_ctx(self):
         node = _NodeWithSymbolTable(symbols=[_NodeWithSymbolName()])
         kwargs = dict(symtable=ChainMap({"a": True}))
-        ctx = eve.SymbolTableTrait.Context()
 
-        ctx.previsit(None, node, kwargs)
-        assert "symtable" in kwargs
-        assert "symbol_name" in kwargs["symtable"]
-        assert "a" in ctx.prestate
+        with eve.SymbolTableTrait.add_symtable(None, node, kwargs):
+            assert "symtable" in kwargs
+            assert "symbol_name" in kwargs["symtable"]
 
-        ctx.postvisit(None, node, kwargs)
         assert "symtable" in kwargs
         assert "symbol_name" not in kwargs["symtable"]

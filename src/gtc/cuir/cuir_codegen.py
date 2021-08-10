@@ -26,7 +26,7 @@ from gtc.cuir import cuir
 
 class CUIRCodegen(codegen.TemplatedGenerator):
 
-    contexts = (traits.SymbolTableTrait.Context,)
+    contexts = (traits.SymbolTableTrait.add_symtable,)
 
     LocalScalar = as_fmt("{dtype} {name};")
 

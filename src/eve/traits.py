@@ -20,12 +20,13 @@
 from __future__ import annotations
 
 from collections import ChainMap
+from contextlib import contextmanager
 
 import pydantic
 
 from . import concepts, visitors
 from .type_definitions import SymbolName
-from .typingx import Any, Dict, Type
+from .typingx import Any, Dict, Iterator, Type
 
 
 class _CollectSymbols(visitors.NodeVisitor):
@@ -71,29 +72,24 @@ class SymbolTableTrait(concepts.Model):
         self.symtable_ = dict()
         self.symtable_ = self._collect_symbols(self)
 
-    class Context(visitors.VisitorContext):
+    @staticmethod
+    @contextmanager
+    def add_symtable(
+        node_visitor: visitors.NodeVisitor, node: concepts.Node, kwargs: Dict[str, Any]
+    ) -> Iterator[None]:
         """Update or add the symtable to kwargs in the visitor calls.
 
-        This is a visitor context that when inclded to the contexts classvar, will
+        This is a context that when included to the contexts classvar, will
         automatically pass 'symtable' as a keyword argument to visitor methods.
         """
+        if (has_table := isinstance(node, SymbolTableTrait)) :
+            kwargs.setdefault("symtable", ChainMap())
+            kwargs["symtable"] = kwargs["symtable"].new_child(node.symtable_)
 
-        def previsit(
-            self,
-            node_visitor: visitors.NodeVisitor,
-            node: concepts.TreeNode,
-            kwargs: Dict[str, Any],
-        ) -> None:
-            if "symtable" not in kwargs:
-                kwargs["symtable"] = ChainMap()
-            self.prestate = kwargs["symtable"]
-            if isinstance(node, SymbolTableTrait):
-                kwargs["symtable"] = kwargs["symtable"].new_child(node.symtable_)
+        yield
 
-        def postvisit(
-            self,
-            node_visitor: visitors.NodeVisitor,
-            node: concepts.TreeNode,
-            kwargs: Dict[str, Any],
-        ) -> None:
-            kwargs["symtable"] = self.prestate
+        if has_table:
+            if len(kwargs["symtable"].maps) > 1:
+                kwargs["symtable"] = kwargs["symtable"].parents
+            else:
+                kwargs.pop("symtable")
