@@ -715,3 +715,29 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
             + another_field[:-2, 2:, None, 1, 1, 0]
             + another_field[:-2, 2:, None, 1, 1, 1]
         )
+
+
+class TestReadOutsideKInterval(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float64,
+        "field_out": np.float64,
+    }
+    domain_range = [(4, 4), (4, 4), (4, 4)]
+    backends = INTERNAL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (1, 1)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out = (  # noqa: F841  # Local name is assigned to but never used
+                field_in[0, 0, -1] + field_in[0, 0, 1]
+            )
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, :] = field_in[:, :, 0:-2] + field_in[:, :, 2:]
