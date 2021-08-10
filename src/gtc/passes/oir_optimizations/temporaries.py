@@ -24,8 +24,7 @@ from .utils import AccessCollector, symbol_name_creator
 
 
 class TemporariesToScalarsBase(NodeTranslator):
-    def __init__(self):
-        super().__init__(SymbolTableTrait.add_symtable)
+    contexts = (SymbolTableTrait.add_symtable,)
 
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, tmps_name_map: Dict[str, str], **kwargs: Any

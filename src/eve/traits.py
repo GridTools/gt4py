@@ -19,11 +19,14 @@
 
 from __future__ import annotations
 
+from collections import ChainMap
+from contextlib import contextmanager
+
 import pydantic
 
 from . import concepts, visitors
 from .type_definitions import SymbolName
-from .typingx import Any, Dict, Type
+from .typingx import Any, Dict, Iterator, Type
 
 
 class _CollectSymbols(visitors.NodeVisitor):
@@ -70,13 +73,23 @@ class SymbolTableTrait(concepts.Model):
         self.symtable_ = self._collect_symbols(self)
 
     @staticmethod
-    def add_symtable(node: concepts.Node, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    @contextmanager
+    def add_symtable(
+        node_visitor: visitors.NodeVisitor, node: concepts.Node, kwargs: Dict[str, Any]
+    ) -> Iterator[None]:
         """Update or add the symtable to kwargs in the visitor calls.
 
-        This is a previsitor that is registered with classes in eve.visitors
-        by passing this to the base class constructor.
+        This is a context that when included to the contexts classvar, will
+        automatically pass 'symtable' as a keyword argument to visitor methods.
         """
-        kwargs["symtable"] = kwargs.get("symtable", {}).copy()
-        if isinstance(node, SymbolTableTrait):
-            kwargs["symtable"].update(node.symtable_)
-        return kwargs
+        kwargs.setdefault("symtable", ChainMap())
+        if (has_table := isinstance(node, SymbolTableTrait)) :
+            kwargs["symtable"] = kwargs["symtable"].new_child(node.symtable_)
+
+        yield
+
+        if has_table:
+            if len(kwargs["symtable"].maps) > 1:
+                kwargs["symtable"] = kwargs["symtable"].parents
+            else:
+                kwargs.pop("symtable")

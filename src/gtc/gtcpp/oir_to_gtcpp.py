@@ -102,8 +102,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             self.axis_endpoints[axis] = f"{axis.lower()}_length"
             return self
 
-    def __init__(self):
-        super().__init__(eve.SymbolTableTrait.add_symtable)
+    contexts = (eve.SymbolTableTrait.add_symtable,)
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> gtcpp.Literal:
         return gtcpp.Literal(value=node.value, dtype=node.dtype)

@@ -611,9 +611,6 @@ class TemplatedGenerator(NodeVisitor):
 
     __templates__: ClassVar[Mapping[str, Template]]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     @classmethod
     def __init_subclass__(cls, *, inherit_templates: bool = True, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)  # type: ignore  # mypy issues 4335, 4660
