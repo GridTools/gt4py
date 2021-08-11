@@ -547,11 +547,17 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
                     arg["extent"] = gt_utils.flatten(accessor.extent[:-1]) + [-1000, 1000]
             args.append(arg)
 
-        if len(tuple(gt_ir.iter_nodes_of_type(node, gt_ir.AxisPosition))) > 0:
+        parallel_axes_names = [axis.name for axis in self.domain.parallel_axes]
+        has_horizontal_region = False
+        for pos_node in gt_ir.iter_nodes_of_type(node, gt_ir.AxisPosition):
+            if pos_node.axis in parallel_axes_names:
+                has_horizontal_region = True
+
+        if has_horizontal_region:
             args.extend(
                 [
                     {"name": f"domain_size_{name}", "access_type": "in", "extent": None}
-                    for name in self.domain.axes_names
+                    for name in parallel_axes_names
                 ]
             )
 
