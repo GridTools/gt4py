@@ -34,7 +34,7 @@ class OnTheFlyMerging(NodeTranslator):
 
     max_horizontal_execution_body_size: int = 100
     allow_expensive_function_duplication: bool = False
-    contexts = (SymbolTableTrait.add_symtable,)
+    contexts = (SymbolTableTrait.symtable_merger,)
 
     def visit_CartesianOffset(
         self,

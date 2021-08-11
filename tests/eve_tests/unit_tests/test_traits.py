@@ -80,7 +80,7 @@ class TestSymbolTable:
         node = _NodeWithSymbolTable(symbols=[_NodeWithSymbolName()])
         kwargs = dict(symtable=ChainMap({"a": True}))
 
-        with eve.SymbolTableTrait.add_symtable(None, node, kwargs):
+        with eve.SymbolTableTrait.symtable_merger(None, node, kwargs):
             assert "symtable" in kwargs
             assert "symbol_name" in kwargs["symtable"]
 

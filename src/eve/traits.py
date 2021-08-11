@@ -74,7 +74,7 @@ class SymbolTableTrait(concepts.Model):
 
     @staticmethod
     @contextmanager
-    def add_symtable(
+    def symtable_merger(
         node_visitor: visitors.NodeVisitor, node: concepts.Node, kwargs: Dict[str, Any]
     ) -> Iterator[None]:
         """Update or add the symtable to kwargs in the visitor calls.
