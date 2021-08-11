@@ -116,8 +116,7 @@ class NodeVisitor:
             for ctx in self.contexts or []:
                 stack.enter_context(ctx(self, node, kwargs))
 
-            return_value = method(node, **kwargs)
-        return return_value
+            return method(node, **kwargs)
 
     def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         visitor = self.generic_visit
