@@ -57,11 +57,13 @@ class OIRToCUIR(eve.NodeTranslator):
         accessed_fields: Set[str],
         **kwargs: Any,
     ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
+        in_horizontal_mask = kwargs.get("in_horizontal_mask", False)
         if node.name in ij_caches:
             return cuir.IJCacheAccess(
                 name=ij_caches[node.name].name,
                 offset=node.offset,
                 dtype=node.dtype,
+                in_horizontal_mask=in_horizontal_mask,
             )
         if node.name in k_caches:
             return cuir.KCacheAccess(
@@ -69,7 +71,11 @@ class OIRToCUIR(eve.NodeTranslator):
             )
         accessed_fields.add(node.name)
         return cuir.FieldAccess(
-            name=node.name, offset=node.offset, data_index=node.data_index, dtype=node.dtype
+            name=node.name,
+            offset=node.offset,
+            data_index=node.data_index,
+            dtype=node.dtype,
+            in_horizontal_mask=in_horizontal_mask,
         )
 
     def visit_ScalarAccess(
@@ -86,9 +92,90 @@ class OIRToCUIR(eve.NodeTranslator):
             left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
+    def _ref_from_axis_bound(self, axis_bound: common.AxisBound, *, axis: str) -> cuir.Expr:
+        scalar_name = f"{axis}_size"
+        int_type = common.DataType.INT32
+
+        if axis_bound.level == common.LevelMarker.END:
+            return cuir.BinaryOp(
+                op=common.ArithmeticOperator.ADD,
+                left=cuir.ScalarAccess(name=scalar_name, dtype=int_type),
+                right=cuir.Literal(value=str(axis_bound.offset), dtype=int_type),
+                dtype=int_type,
+            )
+        else:
+            return cuir.Literal(value=str(axis_bound.offset), dtype=int_type)
+
+    def _expr_from_horizontal_interval(
+        self,
+        interval: common.HorizontalInterval,
+        *,
+        axis: str,
+        **kwargs: Any,
+    ) -> cuir.Expr:
+        scalar_name = f"{axis}_pos"
+        int_type = common.DataType.INT32
+
+        if interval.is_single_index:
+            return cuir.BinaryOp(
+                op=common.ComparisonOperator.EQ,
+                left=cuir.ScalarAccess(name=scalar_name, dtype=int_type),
+                right=self._ref_from_axis_bound(interval.start, axis=axis),
+                dtype=int_type,
+            )
+        else:
+            if interval.start:
+                start_expr = cuir.BinaryOp(
+                    op=common.ComparisonOperator.GE,
+                    left=cuir.ScalarAccess(
+                        name=scalar_name,
+                        dtype=int_type,
+                    ),
+                    right=self._ref_from_axis_bound(interval.start, axis=axis),
+                    dtype=int_type,
+                )
+            else:
+                start_expr = None
+
+            if interval.end:
+                end_expr = cuir.BinaryOp(
+                    op=common.ComparisonOperator.LT,
+                    left=cuir.ScalarAccess(
+                        name=scalar_name,
+                        dtype=int_type,
+                    ),
+                    right=self._ref_from_axis_bound(interval.end, axis=axis),
+                    dtype=int_type,
+                )
+            else:
+                end_expr = None
+
+            if start_expr and end_expr:
+                return cuir.BinaryOp(
+                    op=common.LogicalOperator.AND, left=start_expr, right=end_expr, dtype=int_type
+                )
+            else:
+                # Return the first non-None expr, or if all are None, then return None
+                return next((expr for expr in (start_expr, end_expr) if expr is not None), None)
+
+    def visit_HorizontalMask(self, node: oir.HorizontalMask, **kwargs: Any) -> cuir.Expr:
+        i_expr = self._expr_from_horizontal_interval(node.i, axis="i", **kwargs)
+        j_expr = self._expr_from_horizontal_interval(node.j, axis="j", **kwargs)
+        if i_expr and j_expr:
+            return cuir.BinaryOp(op=common.LogicalOperator.AND, left=i_expr, right=j_expr, dtype=common.DataType.INT32)
+        else:
+            true_value = cuir.Literal(
+                value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL
+            )
+            # Return the first non-None expr, or if all are None, then return True
+            return next((expr for expr in (i_expr, j_expr) if expr is not None), true_value)
+
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> cuir.MaskStmt:
         return cuir.MaskStmt(
-            mask=self.visit(node.mask, **kwargs), body=self.visit(node.body, **kwargs)
+            mask=self.visit(node.mask, **kwargs),
+            body=self.visit(
+                node.body, in_horizontal_mask=isinstance(node.mask, oir.HorizontalMask), **kwargs
+            ),
         )
 
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> cuir.Cast:

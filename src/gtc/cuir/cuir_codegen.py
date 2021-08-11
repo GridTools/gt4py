@@ -262,6 +262,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         struct loop_${id(_this_node)}_f {
             sid::ptr_holder_type<Sid> m_ptr_holder;
             sid::strides_type<Sid> m_strides;
+            int i_size;
+            int j_size;
             int k_size;
 
             template <class Validator>
@@ -281,6 +283,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 sid::shift(_ptr,
                            sid::get_stride<dim::j>(m_strides),
                            _j_block);
+                const int i_pos = blockDim.x * blockIdx.x + threadIdx.x;
+                const int j_pos = blockDim.y * blockIdx.y + threadIdx.y;
                 % if order == cuir.LoopOrder.PARALLEL:
                 const int _k_block = blockIdx.z;
                 sid::shift(_ptr,
@@ -479,7 +483,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             loop_${id(vertical_loop)}_f<composite_${id(vertical_loop)}_t> loop_${id(vertical_loop)}{
                                 sid::get_origin(composite_${id(vertical_loop)}),
                                 sid::get_strides(composite_${id(vertical_loop)}),
-                                k_size
+                                i_size, j_size, k_size
                             };
 
                         % endfor

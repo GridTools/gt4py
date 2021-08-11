@@ -92,7 +92,14 @@ class ComputeExtents(NodeTranslator):
                 horizontal_execution.iter_tree()
                 .if_isinstance(cuir.FieldAccess, cuir.IJCacheAccess)
                 .reduceby(
-                    lambda acc, x: acc.union(extent + cuir.IJExtent.from_offset(x.offset)),
+                    lambda acc, x: acc.union(
+                        extent
+                        + (
+                            cuir.IJExtent.zero()
+                            if x.in_horizontal_mask
+                            else cuir.IJExtent.from_offset(x.offset)
+                        )
+                    ),
                     "name",
                     init=cuir.IJExtent.zero(),
                     as_dict=True,

@@ -42,11 +42,12 @@ class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
 
 
 class FieldAccess(common.FieldAccess, Expr):  # type: ignore
-    pass
+    in_horizontal_mask: bool = False
 
 
 class IJCacheAccess(common.FieldAccess, Expr):
     ij_cache_is_different_from_field_access = True
+    in_horizontal_mask: bool = False
 
     @validator("offset")
     def zero_k_offset(cls, v: CartesianOffset) -> CartesianOffset:
