@@ -50,7 +50,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         else:
             name = node.name + "__" + self.visit(node.offset)
         if node.data_index:
-            offset_str = str(node.data_index)
+            offset_str = "[" + ",".join(self.visit(node.data_index)) + "]"
         else:
             offset_str = ""
         return name + offset_str
