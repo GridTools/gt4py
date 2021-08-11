@@ -227,7 +227,6 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         self.stage_symbols = None
         self.apply_block_symbols = None
         self.declared_symbols = None
-        self.requires_positional = False
         self.requires_K_size = False
 
     def __call__(self, impl_node: gt_ir.StencilImplementation) -> Dict[str, Dict[str, str]]:
@@ -384,7 +383,6 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         return body_sources
 
     def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
-        self.requires_positional = True
         return f"eval.{node.axis.lower()}()"
 
     def _visit_ForLoopBound(self, node: gt_ir.AxisBound, axis):
@@ -572,6 +570,8 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             if name not in node.unreferenced
         ]
 
+        positional_computation = len(tuple(gt_ir.iter_nodes_of_type(node, gt_ir.AxisIndex))) > 0
+
         stage_functors = {}
         for multi_stage in node.multi_stages:
             for group in multi_stage.groups:
@@ -596,7 +596,7 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             stage_functors=stage_functors,
             stencil_unique_name=self.class_name,
             tmp_fields=tmp_fields,
-            positional_computation=self.requires_positional,
+            positional_computation=positional_computation,
             requires_K_size=self.requires_K_size,
         )
 
