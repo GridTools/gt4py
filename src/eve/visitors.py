@@ -111,12 +111,17 @@ class NodeVisitor:
 
     contexts: ClassVar[Optional[Tuple[ContextCallable, ...]]] = None
 
-    def _do_visit(self, node: concepts.TreeNode, method, **kwargs: Any) -> Any:
+    def _do_visit(
+        self,
+        visitor: Callable[[concepts.TreeNode], Any],
+        node: concepts.TreeNode,
+        **kwargs: Any
+    ) -> Any:
         with contextlib.ExitStack() as stack:
             for ctx in self.contexts or []:
                 stack.enter_context(ctx(self, node, kwargs))
 
-            return method(node, **kwargs)
+            return visitor(node, **kwargs)
 
     def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         visitor = self.generic_visit
@@ -134,7 +139,7 @@ class NodeVisitor:
                 if node_class is concepts.Node:
                     break
 
-        return self._do_visit(node, visitor, **kwargs)
+        return self._do_visit(visitor, node, **kwargs)
 
     def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         for child in iterators.generic_iter_children(node):
