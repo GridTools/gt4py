@@ -71,7 +71,10 @@ class NodeVisitor:
         3. ``self.generic_visit()``.
 
     This dispatching mechanism is implemented in the main :meth:`visit`
-    method and can be overriden in subclasses.
+    method and can be overriden in subclasses. Additionally, a class can
+    define a list of context handlers to be applied before the actual visit
+    to customize the context. Each context receives the visitor instance,
+    the node instance, and the keywords arguments of the call.
 
     Note that return values are not forwarded to the caller in the default
     :meth:`generic_visit` implementation. If you want to return a value from
@@ -111,7 +114,7 @@ class NodeVisitor:
 
     contexts: ClassVar[Optional[Tuple[ContextCallable, ...]]] = None
 
-    def _do_visit(self, visitor: Callable, node: concepts.TreeNode, **kwargs: Any) -> Any:
+    def _managed_visit(self, visitor: Callable, node: concepts.TreeNode, **kwargs: Any) -> Any:
         with contextlib.ExitStack() as stack:
             for ctx in self.contexts or []:
                 stack.enter_context(ctx(self, node, kwargs))
@@ -134,7 +137,7 @@ class NodeVisitor:
                 if node_class is concepts.Node:
                     break
 
-        return self._do_visit(visitor, node, **kwargs)
+        return self._managed_visit(visitor, node, **kwargs)
 
     def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         for child in iterators.generic_iter_children(node):
