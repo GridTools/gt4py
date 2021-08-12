@@ -18,7 +18,7 @@ import collections
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
 
-from eve import NodeTranslator
+from eve import NodeTranslator, SymbolTableTrait
 from gtc import common, oir
 
 from .utils import AccessCollector, symbol_name_creator
@@ -261,6 +261,8 @@ class FillFlushToLocalKCaches(NodeTranslator):
     3. Fill statements from the original field to the temporary are introduced.
     4. Flush statements from the temporary to the original field are introduced.
     """
+
+    contexts = (SymbolTableTrait.symtable_merger,)
 
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, name_map: Dict[str, str], **kwargs: Any
@@ -554,6 +556,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
                     fills=fills,
                     flushes=flushes,
                     name_map=filling_or_flushing_fields,
+                    symtable=symtable,
                     **kwargs,
                 )
             )
@@ -573,8 +576,8 @@ class FillFlushToLocalKCaches(NodeTranslator):
             vertical_loops=self.visit(
                 node.vertical_loops,
                 new_tmps=new_tmps,
-                symtable=node.symtable_,
-                new_symbol_name=symbol_name_creator(set(node.symtable_)),
+                new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
+                **kwargs,
             ),
             declarations=node.declarations + new_tmps,
         )
