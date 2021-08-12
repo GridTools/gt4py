@@ -111,12 +111,7 @@ class NodeVisitor:
 
     contexts: ClassVar[Optional[Tuple[ContextCallable, ...]]] = None
 
-    def _do_visit(
-        self,
-        visitor: Callable,
-        node: concepts.TreeNode,
-        **kwargs: Any
-    ) -> Any:
+    def _do_visit(self, visitor: Callable, node: concepts.TreeNode, **kwargs: Any) -> Any:
         with contextlib.ExitStack() as stack:
             for ctx in self.contexts or []:
                 stack.enter_context(ctx(self, node, kwargs))

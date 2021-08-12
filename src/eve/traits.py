@@ -83,7 +83,7 @@ class SymbolTableTrait(concepts.Model):
         automatically pass 'symtable' as a keyword argument to visitor methods.
         """
         kwargs.setdefault("symtable", collections.ChainMap())
-        if (has_table := isinstance(node, SymbolTableTrait)) :
+        if has_table := isinstance(node, SymbolTableTrait):
             kwargs["symtable"] = kwargs["symtable"].new_child(node.symtable_)
 
         yield
