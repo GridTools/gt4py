@@ -149,14 +149,14 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_FieldSlice(
-        self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, is_rhs=False, **kwargs: Any
+        self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, is_right=False, **kwargs: Any
     ) -> Union[str, Collection[str]]:
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
 
         offset_str = ", ".join(self.visit(off, **kwargs) if off else ":" for off in offset)
 
-        if is_rhs and mask_acc and any(off is None for off in offset):
+        if is_right and mask_acc and any(off is None for off in offset):
             k_size = 1 if is_serial else "K - k"
             arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I - i, J - j, {k_size}))"
         else:
@@ -215,8 +215,8 @@ class NpirGen(TemplatedGenerator):
             mask_acc = f"[{self.visit(node.mask, **kwargs)}]"
         if isinstance(node.right, npir.EmptyTemp):
             kwargs["temp_name"] = node.left.name
-        right = self.visit(node.right, mask_acc=mask_acc, is_rhs=True, **kwargs)
-        left = self.visit(node.left, mask_acc=mask_acc, is_rhs=False, **kwargs)
+        right = self.visit(node.right, mask_acc=mask_acc, is_right=True, **kwargs)
+        left = self.visit(node.left, mask_acc=mask_acc, is_right=False, **kwargs)
         return f"{left} = {right}"
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")
