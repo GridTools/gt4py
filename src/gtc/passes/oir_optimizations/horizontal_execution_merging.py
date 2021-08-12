@@ -17,7 +17,7 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from eve import NodeTranslator
+from eve import NodeTranslator, SymbolTableTrait
 from gtc import common, oir
 
 from .utils import AccessCollector, symbol_name_creator
@@ -34,6 +34,7 @@ class OnTheFlyMerging(NodeTranslator):
 
     max_horizontal_execution_body_size: int = 100
     allow_expensive_function_duplication: bool = False
+    contexts = (SymbolTableTrait.symtable_merger,)
 
     def visit_CartesianOffset(
         self,
@@ -150,7 +151,12 @@ class OnTheFlyMerging(NodeTranslator):
             )
             for offset in read_offsets:
                 merged.body = (
-                    self.visit(first.body, shift=offset, offset_symbol_map=offset_symbol_map)
+                    self.visit(
+                        first.body,
+                        shift=offset,
+                        offset_symbol_map=offset_symbol_map,
+                        symtable=symtable,
+                    )
                     + merged.body
                 )
             others_otf.append(merged)
@@ -193,8 +199,7 @@ class OnTheFlyMerging(NodeTranslator):
                 0,
                 self.visit(
                     vl,
-                    symtable=node.symtable_,
-                    new_symbol_name=symbol_name_creator(set(node.symtable_)),
+                    new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
                     protected_fields=protected_fields,
                     **kwargs,
                 ),
