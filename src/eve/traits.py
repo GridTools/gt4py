@@ -76,7 +76,7 @@ class SymbolTableTrait(concepts.Model):
     @contextlib.contextmanager
     def symtable_merger(
         node_visitor: visitors.NodeVisitor, node: concepts.Node, kwargs: Dict[str, Any]
-    ) -> None:
+    ) -> Iterator[None]:
         """Update or add the symtable to kwargs in the visitor calls.
 
         This is a context manager that, when included to the contexts classvar, will
