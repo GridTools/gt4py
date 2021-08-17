@@ -122,6 +122,8 @@ class OIRToGTCpp(eve.NodeTranslator):
             self.axis_endpoints[axis] = f"{axis.lower()}_length"
             return self
 
+    contexts = (eve.SymbolTableTrait.symtable_merger,)
+
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> gtcpp.Literal:
         return gtcpp.Literal(value=node.value, dtype=node.dtype)
 
@@ -167,9 +169,9 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, **kwargs: Any
     ) -> Union[gtcpp.AccessorRef, gtcpp.LocalAccess]:
-        assert "stencil_symtable" in kwargs
-        if node.name in kwargs["stencil_symtable"]:
-            symbol = kwargs["stencil_symtable"][node.name]
+        assert "symtable" in kwargs
+        if node.name in kwargs["symtable"]:
+            symbol = kwargs["symtable"][node.name]
             if isinstance(symbol, oir.ScalarDecl):
                 return gtcpp.AccessorRef(
                     name=symbol.name, offset=CartesianOffset.zero(), dtype=symbol.dtype
@@ -197,7 +199,7 @@ class OIRToGTCpp(eve.NodeTranslator):
         )
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> gtcpp.AssignStmt:
-        assert "stencil_symtable" in kwargs
+        assert "symtable" in kwargs
         return gtcpp.AssignStmt(
             left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
@@ -300,7 +302,7 @@ class OIRToGTCpp(eve.NodeTranslator):
         interval: gtcpp.GTInterval,
         **kwargs: Any,
     ) -> gtcpp.GTStage:
-        assert "stencil_symtable" in kwargs
+        assert "symtable" in kwargs
         apply_method = gtcpp.GTApplyMethod(
             interval=self.visit(interval, **kwargs),
             body=self.visit(node.body, comp_ctx=comp_ctx, **kwargs),
@@ -379,7 +381,6 @@ class OIRToGTCpp(eve.NodeTranslator):
 
         multi_stages = self.visit(
             node.vertical_loops,
-            stencil_symtable=node.symtable_,
             prog_ctx=prog_ctx,
             comp_ctx=comp_ctx,
             **kwargs,

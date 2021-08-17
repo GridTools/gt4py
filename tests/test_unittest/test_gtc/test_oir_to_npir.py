@@ -174,8 +174,14 @@ def test_temp_assign(parallel_k):
             name="b", offset=common.CartesianOffset(i=-1, j=22, k=0), dtype=common.DataType.FLOAT64
         ),
     )
-    ctx = OirToNpir.ComputationContext(symbol_table={"a": TemporaryFactory(name="a")})
-    _ = OirToNpir().visit(assign_stmt, ctx=ctx, parallel_k=parallel_k, mask=None)
+    ctx = OirToNpir.ComputationContext()
+    _ = OirToNpir().visit(
+        assign_stmt,
+        ctx=ctx,
+        parallel_k=parallel_k,
+        mask=None,
+        symtable={"a": TemporaryFactory(name="a")},
+    )
     assert len(ctx.temp_defs) == 1
     assert isinstance(ctx.temp_defs["a"].left, npir.VectorTemp)
     assert isinstance(ctx.temp_defs["a"].right, npir.EmptyTemp)
