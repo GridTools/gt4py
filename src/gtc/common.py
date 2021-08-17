@@ -15,7 +15,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union, cast
+import functools
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import numpy as np
 import pydantic
@@ -308,20 +322,35 @@ class IJExtent(LocNode):
     def from_offset(cls, offset: CartesianOffset) -> "IJExtent":
         return cls(i=(offset.i, offset.i), j=(offset.j, offset.j))
 
-    def union(*extents: "IJExtent") -> "IJExtent":
+    def _apply(
+        self,
+        other: "IJExtent",
+        *,
+        lower_op: Callable[[int, int], int],
+        upper_op: Callable[[int, int], int],
+    ) -> "IJExtent":
         return IJExtent(
-            i=(min(e.i[0] for e in extents), max(e.i[1] for e in extents)),
-            j=(min(e.j[0] for e in extents), max(e.j[1] for e in extents)),
+            i=(lower_op(self.i[0], other.i[0]), upper_op(self.i[1], other.i[1])),
+            j=(lower_op(self.j[0], other.j[0]), upper_op(self.j[1], other.j[1])),
+        )
+
+    def __add__(self, other: "IJExtent") -> "IJExtent":
+        return self._apply(other, lower_op=lambda x, y: x + y, upper_op=lambda x, y: x + y)
+
+    def __sub__(self, other: "IJExtent") -> "IJExtent":
+        return self._apply(other, lower_op=lambda x, y: x - y, upper_op=lambda x, y: x - y)
+
+    def union(self, *extents: "IJExtent") -> "IJExtent":
+        return functools.reduce(
+            lambda this, other: this._apply(
+                other, lower_op=lambda x, y: min(x, y), upper_op=lambda x, y: max(x, y)
+            ),
+            extents,
+            self,
         )
 
     def __or__(self, other: "IJExtent") -> "IJExtent":
         return self.union(other)
-
-    def __add__(self, other: "IJExtent") -> "IJExtent":
-        return IJExtent(
-            i=(self.i[0] + other.i[0], self.i[1] + other.i[1]),
-            j=(self.j[0] + other.j[0], self.j[1] + other.j[1]),
-        )
 
 
 class ScalarAccess(LocNode):
