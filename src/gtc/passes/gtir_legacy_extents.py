@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Union
 from eve import NodeVisitor
 from eve.utils import XIterator
 from gt4py.definitions import Extent
-from gtc import gtir
+from gtc import common, gtir
 
 
 def _iter_field_names(node: Union[gtir.Stencil, gtir.ParAssignStmt]) -> XIterator[gtir.FieldAccess]:
@@ -15,27 +15,28 @@ def _iter_assigns(node: gtir.Stencil) -> XIterator[gtir.ParAssignStmt]:
     return node.iter_tree().if_isinstance(gtir.ParAssignStmt)
 
 
-def _ext_from_off(offset: gtir.CartesianOffset) -> Extent:
-    return Extent(
-        ((min(offset.i, 0), max(offset.i, 0)), (min(offset.j, 0), max(offset.j, 0)), (0, 0))
+def _ext_from_off(offset: gtir.CartesianOffset) -> common.IJExtent:
+    return common.IExtent(
+        i=(min(offset.i, 0), max(offset.i, 0)), j=(min(offset.j, 0), max(offset.j, 0))
     )
 
 
-FIELD_EXT_T = Dict[str, Extent]
+def _to_gt4py_extent(extent: common.IJExtent) -> Extent:
+    return Extent(extent.i, extent.j, (0, 0))
 
 
 class LegacyExtentsVisitor(NodeVisitor):
     @dataclass
     class AssignContext:
-        left_extent: Extent
-        assign_extents: FIELD_EXT_T = field(default_factory=dict)
+        left_extent: common.IJExtent
+        assign_extents: Dict[str, common.IJExtent] = field(default_factory=dict)
 
     @dataclass
     class StencilContext:
         assign_conditions: Dict[int, List[gtir.FieldAccess]] = field(default_factory=dict)
 
-    def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> FIELD_EXT_T:
-        field_extents = {name: Extent.zeros() for name in _iter_field_names(node)}
+    def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> Dict[str, common.IJExtent]:
+        field_extents = {name: common.IJExtent.zeros() for name in _iter_field_names(node)}
         ctx = self.StencilContext()
         for field_if in node.iter_tree().if_isinstance(gtir.FieldIfStmt):
             self.visit(field_if, ctx=ctx)
@@ -48,10 +49,10 @@ class LegacyExtentsVisitor(NodeVisitor):
         node: gtir.ParAssignStmt,
         *,
         ctx: StencilContext,
-        field_extents: FIELD_EXT_T,
+        field_extents: Dict[str, common.IJExtent],
         **kwargs: Any,
     ) -> None:
-        left_extent = field_extents.setdefault(node.left.name, Extent.zeros())
+        left_extent = field_extents.setdefault(node.left.name, common.IJExtent.zeros())
         pa_ctx = self.AssignContext(left_extent=left_extent)
         self.visit(
             ctx.assign_conditions.get(id(node), []),
@@ -75,15 +76,18 @@ class LegacyExtentsVisitor(NodeVisitor):
         self,
         node: gtir.FieldAccess,
         *,
-        field_extents: FIELD_EXT_T,
+        field_extents: Dict[str, common.IJExtent],
         pa_ctx: AssignContext,
         **kwargs: Any,
     ) -> None:
         pa_ctx.assign_extents.setdefault(
-            node.name, field_extents.setdefault(node.name, Extent.zeros())
+            node.name, field_extents.setdefault(node.name, common.IJExtent.zeros())
         )
         pa_ctx.assign_extents[node.name] |= pa_ctx.left_extent + _ext_from_off(node.offset)
 
 
-def compute_legacy_extents(node: gtir.Stencil) -> FIELD_EXT_T:
-    return LegacyExtentsVisitor().visit(node)
+def compute_legacy_extents(node: gtir.Stencil) -> Dict[str, Extent]:
+    return {
+        name: _to_gt4py_extent(extent)
+        for name, extent in LegacyExtentsVisitor().visit(node).items()
+    }

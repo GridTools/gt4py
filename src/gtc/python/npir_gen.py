@@ -15,12 +15,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import textwrap
-from typing import Any, Collection, Tuple, Union
+from typing import Any, Collection, Dict, Tuple, Union
 
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
 from gt4py.definitions import Extent
 from gtc import common
-from gtc.passes.gtir_legacy_extents import FIELD_EXT_T
 from gtc.python import npir
 
 
@@ -289,7 +288,7 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_Computation(
-        self, node: npir.Computation, *, field_extents: FIELD_EXT_T, **kwargs: Any
+        self, node: npir.Computation, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> Union[str, Collection[str]]:
         signature = ["*", *node.params, "_domain_", "_origin_"]
         kwargs["field_extents"] = field_extents
