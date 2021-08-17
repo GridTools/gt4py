@@ -17,7 +17,7 @@ def _iter_assigns(node: gtir.Stencil) -> XIterator[gtir.ParAssignStmt]:
 
 
 def _ext_from_off(offset: gtir.CartesianOffset) -> common.IJExtent:
-    return common.IExtent(
+    return common.IJExtent(
         i=(min(offset.i, 0), max(offset.i, 0)), j=(min(offset.j, 0), max(offset.j, 0))
     )
 
@@ -37,7 +37,7 @@ class LegacyExtentsVisitor(NodeVisitor):
         assign_conditions: Dict[int, List[gtir.FieldAccess]] = field(default_factory=dict)
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> Dict[str, common.IJExtent]:
-        field_extents = {name: common.IJExtent.zeros() for name in _iter_field_names(node)}
+        field_extents = {name: common.IJExtent.zero() for name in _iter_field_names(node)}
         ctx = self.StencilContext()
         for field_if in node.iter_tree().if_isinstance(gtir.FieldIfStmt):
             self.visit(field_if, ctx=ctx)
@@ -57,7 +57,7 @@ class LegacyExtentsVisitor(NodeVisitor):
         horizontal_mask: Optional[common.HorizontalMask] = None,
         **kwargs: Any,
     ) -> None:
-        left_extent = field_extents.setdefault(node.left.name, common.IJExtent.zeros())
+        left_extent = field_extents.setdefault(node.left.name, common.IJExtent.zero())
         if horizontal_mask:
             dist_from_edge = utils.compute_extent_difference(left_extent, horizontal_mask)
             if dist_from_edge is None:
@@ -92,7 +92,7 @@ class LegacyExtentsVisitor(NodeVisitor):
         **kwargs: Any,
     ) -> None:
         pa_ctx.assign_extents.setdefault(
-            node.name, field_extents.setdefault(node.name, common.IJExtent.zeros())
+            node.name, field_extents.setdefault(node.name, common.IJExtent.zero())
         )
         pa_ctx.assign_extents[node.name] |= pa_ctx.left_extent + _ext_from_off(node.offset)
 
