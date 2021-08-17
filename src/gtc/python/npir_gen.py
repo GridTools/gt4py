@@ -15,11 +15,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import textwrap
-from typing import Any, Collection, Tuple, Union
+from typing import Any, Collection, Dict, Tuple, Union
 
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
+from gt4py.definitions import Extent
 from gtc import common
-from gtc.passes.gtir_legacy_extents import FIELD_EXT_T
 from gtc.python import npir
 
 
@@ -110,7 +110,9 @@ class NpirGen(TemplatedGenerator):
         "{{ lpar }}{{ axis_name | lower }}{{ offset }}{{ rpar }}:{{ lpar }}{{ axis_name | upper }}{{ offset }}{{ rpar }}"
     )
 
-    AxisOffset_serial = JinjaTemplate("{{ axis_name | lower }}_{{ offset }}")
+    AxisOffset_serial = JinjaTemplate(
+        "{{ lpar }}{{ axis_name | lower }}_{{ offset }}{{ rpar }}:({{ axis_name | lower }}_{{ offset}} + 1)"
+    )
 
     AxisOffset = FormatTemplate("{parallel_or_serial_variant}")
 
@@ -134,15 +136,23 @@ class NpirGen(TemplatedGenerator):
         "{name} = np.reshape({name}, ({shape}))\n_origin_['{name}'] = [{origin}]"
     )
 
-    def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
-        kwargs.setdefault("mask_acc", "")
-        offsets = ", ".join(
-            self.visit(offset, **kwargs) if offset else ":"
-            for offset in [node.i_offset, node.j_offset, node.k_offset]
-        )
-        return self.generic_visit(node, offsets=offsets, **kwargs)
+    def visit_FieldSlice(
+        self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
 
-    FieldSlice = FormatTemplate("{name}_[{offsets}]{mask_acc}")
+        offset = [node.i_offset, node.j_offset, node.k_offset]
+
+        offset_str = ", ".join(self.visit(off, **kwargs) if off else ":" for off in offset)
+
+        if mask_acc and any(off is None for off in offset):
+            k_size = 1 if is_serial else "K - k"
+            arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I - i, J - j, {k_size}))"
+        else:
+            arr_expr = f"{node.name}_[{offset_str}]"
+
+        return self.generic_visit(node, arr_expr=arr_expr, mask_acc=mask_acc, **kwargs)
+
+    FieldSlice = FormatTemplate("{arr_expr}{mask_acc}")
 
     def visit_EmptyTemp(
         self, node: npir.EmptyTemp, *, temp_name: str, **kwargs
@@ -230,6 +240,11 @@ class NpirGen(TemplatedGenerator):
             return "for k_ in range(K-1, k-1, -1):"
         return ""
 
+    def visit_VerticalPass(self, node: npir.VerticalPass, **kwargs):
+        return self.generic_visit(
+            node, is_serial=(node.direction != common.LoopOrder.PARALLEL), **kwargs
+        )
+
     VerticalPass = JinjaTemplate(
         textwrap.dedent(
             """\
@@ -249,9 +264,10 @@ class NpirGen(TemplatedGenerator):
         lower, upper = [0, 0], [0, 0]
 
         if extents := kwargs.get("field_extents"):
-            fields = set(node.iter_tree().if_isinstance(npir.FieldSlice).getattr("name")) & set(
-                extents
-            )
+            fields = set(node.iter_tree().if_isinstance(npir.FieldSlice).getattr("name"))
+            for field in fields:
+                # The extent of masks has not yet been collected but is always zero.
+                extents.setdefault(field, Extent.zeros())
             lower[0] = min(extents[field].to_boundary()[0][0] for field in fields)
             lower[1] = min(extents[field].to_boundary()[1][0] for field in fields)
             upper[0] = min(extents[field].to_boundary()[0][1] for field in fields)
@@ -272,7 +288,7 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_Computation(
-        self, node: npir.Computation, *, field_extents: FIELD_EXT_T, **kwargs: Any
+        self, node: npir.Computation, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> Union[str, Collection[str]]:
         signature = ["*", *node.params, "_domain_", "_origin_"]
         kwargs["field_extents"] = field_extents

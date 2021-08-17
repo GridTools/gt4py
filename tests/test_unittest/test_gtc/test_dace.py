@@ -21,14 +21,22 @@ import pytest
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.definitions import BuildOptions
 from gt4py.frontend.gtscript_frontend import GTScriptFrontend
+from gtc.common import AxisBound
 from gtc.dace.dace_to_oir import convert
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import assert_sdfg_equal
 from gtc.gtir_to_oir import GTIRToOIR
+from gtc.oir import Interval
 from gtc.passes.gtir_pipeline import GtirPipeline
 
 from ...test_integration.stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from ...test_integration.stencil_definitions import REGISTRY as stencil_registry
+from .oir_utils import (
+    AssignStmtFactory,
+    StencilFactory,
+    VerticalLoopFactory,
+    VerticalLoopSectionFactory,
+)
 
 
 def stencil_def_to_oir(stencil_def, externals):
@@ -56,3 +64,29 @@ def test_stencils_roundtrip(stencil_name):
     oir = convert(sdfg)
     sdfg_post = OirSDFGBuilder().visit(oir)
     assert_sdfg_equal(sdfg_pre, sdfg_post)
+
+
+def test_same_node_read_write_not_overlap():
+
+    oir = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                sections__0=VerticalLoopSectionFactory(
+                    interval=Interval(start=AxisBound.start(), end=AxisBound.from_start(1)),
+                    horizontal_executions__0__body__0=AssignStmtFactory(
+                        left__name="field", right__name="other"
+                    ),
+                )
+            ),
+            VerticalLoopFactory(
+                sections__0=VerticalLoopSectionFactory(
+                    interval=Interval(start=AxisBound.from_start(1), end=AxisBound.from_start(2)),
+                    horizontal_executions__0__body__0=AssignStmtFactory(
+                        left__name="field", right__name="field", right__offset__k=-1
+                    ),
+                )
+            ),
+        ]
+    )
+    sdfg = OirSDFGBuilder().visit(oir)
+    convert(sdfg)
