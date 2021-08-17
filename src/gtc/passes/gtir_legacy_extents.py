@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 from eve import NodeVisitor
 from eve.utils import XIterator
 from gt4py.definitions import Extent
 from gtc import common, gtir
+from gtc.passes import utils
 
 
 def _iter_field_names(node: Union[gtir.Stencil, gtir.ParAssignStmt]) -> XIterator[gtir.FieldAccess]:
@@ -44,16 +45,26 @@ class LegacyExtentsVisitor(NodeVisitor):
             self.visit(assign, ctx=ctx, field_extents=field_extents)
         return field_extents
 
+    def visit_HorizontalRegion(self, node: gtir.HorizontalRegion, **kwargs: Any) -> None:
+        self.visit(node.body, horizontal_mask=node.mask, **kwargs)
+
     def visit_ParAssignStmt(
         self,
         node: gtir.ParAssignStmt,
         *,
         ctx: StencilContext,
         field_extents: Dict[str, common.IJExtent],
+        horizontal_mask: Optional[common.HorizontalMask] = None,
         **kwargs: Any,
     ) -> None:
         left_extent = field_extents.setdefault(node.left.name, common.IJExtent.zeros())
-        pa_ctx = self.AssignContext(left_extent=left_extent)
+        if horizontal_mask:
+            dist_from_edge = utils.compute_extent_difference(left_extent, horizontal_mask)
+            if dist_from_edge is None:
+                return
+        else:
+            dist_from_edge = common.IJExtent.zero()
+        pa_ctx = self.AssignContext(left_extent=left_extent - dist_from_edge)
         self.visit(
             ctx.assign_conditions.get(id(node), []),
             field_extents=field_extents,
