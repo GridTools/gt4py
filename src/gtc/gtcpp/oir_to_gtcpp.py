@@ -129,11 +129,8 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> gtcpp.AccessorRef:
         return gtcpp.AccessorRef(
             name=node.name,
-            offset=self.visit(node.offset),
-            data_index=[
-                index if isinstance(index, int) else self.visit(index, **kwargs)
-                for index in node.data_index
-            ],
+            offset=self.visit(node.offset, **kwargs),
+            data_index=[self.visit(index, **kwargs) for index in node.data_index],
             dtype=node.dtype,
         )
 

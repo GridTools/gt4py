@@ -1099,7 +1099,10 @@ class IRMaker(ast.NodeVisitor):
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}
             elif isinstance(node.value, ast.Subscript):
                 result.data_index = [
-                    gt_ir.ScalarLiteral(value=i, data_type=gt_ir.DataType.INT64) for i in index
+                    gt_ir.ScalarLiteral(value=value, data_type=gt_ir.DataType.INT64)
+                    if isinstance(value, numbers.Integral)
+                    else value
+                    for value in index
                 ]
             else:
                 raise GTScriptSyntaxError(
