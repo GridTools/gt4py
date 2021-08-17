@@ -179,7 +179,7 @@ class GTIRToOIR(NodeTranslator):
     ) -> None:
         current_mask = self.visit(node.mask)
         combined_mask = (
-            oir.BinaryOf(op=LogicalOperator.AND, left=mask, right=current_mask)
+            oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=current_mask)
             if mask
             else current_mask
         )
