@@ -801,9 +801,6 @@ class HorizontalInterval(Node):
                     base_offset = DOMAIN_SIZE
                     factor = 1
 
-                if bound != level:
-                    raise ValueError(f"If LevelMarker, it must be {str(level)}")
-
                 offset = base_offset + factor * OFFSET_SIZE
             else:
                 base_offset = 0 if bound.level == LevelMarker.START else DOMAIN_SIZE
