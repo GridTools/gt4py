@@ -789,30 +789,27 @@ class HorizontalInterval(Node):
 
     @root_validator
     def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        def get_offset(bound: Optional[AxisBound], level) -> int:
-            DOMAIN_SIZE = 1000
-            OFFSET_SIZE = 1000
-
+        def get_offset(bound: Optional[AxisBound], level: LevelMarker) -> Tuple[LevelMarker, int]:
             if not bound:
                 if level == LevelMarker.START:
-                    base_offset = 0
-                    factor = -1
+                    return level, -np.iinfo(np.int32).max
                 else:
-                    base_offset = DOMAIN_SIZE
-                    factor = 1
-
-                offset = base_offset + factor * OFFSET_SIZE
+                    return level, np.iinfo(np.int32).max
             else:
-                base_offset = 0 if bound.level == LevelMarker.START else DOMAIN_SIZE
-                offset = base_offset + bound.offset
+                return bound.level, bound.offset
 
-            return offset
+        start_level, start_offset = get_offset(
+            values["start"], cast(LevelMarker, LevelMarker.START)
+        )
+        end_level, end_offset = get_offset(values["end"], cast(LevelMarker, LevelMarker.END))
 
-        start = get_offset(values["start"], LevelMarker.START)
-        end = get_offset(values["end"], LevelMarker.END)
+        error = ValueError("Start must come strictly before end in an interval")
 
-        if end <= start:
-            raise ValueError("Start must come strictly before end in an interval")
+        level_to_int = {LevelMarker.START: 1, LevelMarker.END: 2}
+        if level_to_int[start_level] == level_to_int[end_level] and start_offset >= end_offset:
+            raise error
+        elif level_to_int[start_level] > level_to_int[end_level]:
+            raise error
 
         return values
 
