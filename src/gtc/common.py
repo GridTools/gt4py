@@ -124,11 +124,11 @@ class DataType(IntEnum):
 
     @property
     def isinteger(self):
-        return self == self.INT8 or self == self.INT32 or self == self.INT64
+        return self in (self.INT8, self.INT32, self.INT64)
 
     @property
     def isfloat(self):
-        return self == self.FLOAT32 or self == self.FLOAT64
+        return self in (self.FLOAT32, self.FLOAT64)
 
 
 @enum.unique

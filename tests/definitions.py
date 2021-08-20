@@ -89,11 +89,7 @@ DAWN_GPU_BACKENDS = [
     if "dawn:" in name and gt_backend.from_name(name).storage_info["device"] == "gpu"
 ]
 
-GTC_GRIDTOOLS_BACKENDS = [
-    _backend_name_as_param(name)
-    for name in _ALL_BACKEND_NAMES
-    if name.startswith("gtc:") and (":gt:" in name or ":cuda" in name)
-]
+LEGACY_GRIDTOOLS_BACKENDS = [_backend_name_as_param(name) for name in ("gtx86", "gtmc", "gtcuda")]
 
 
 @pytest.fixture()
