@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Dict, List, Union, cast
+from typing import Any, Dict, List, Union, cast
 
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
@@ -171,40 +171,44 @@ class DefIRToGTIR(IRNodeVisitor):
             temporaries=temporaries,
         )
 
-    def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
-        return [self.visit(s) for s in node.stmts]
+    def visit_BlockStmt(self, node: BlockStmt, **kwargs: Any) -> List[gtir.Stmt]:
+        return [self.visit(s, **kwargs) for s in node.stmts]
 
-    def visit_Assign(self, node: Assign) -> gtir.ParAssignStmt:
+    def visit_Assign(self, node: Assign, **kwargs: Any) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
-        left = self.visit(node.target)
-        return gtir.ParAssignStmt(left=left, right=self.visit(node.value))
+        left = self.visit(node.target, **kwargs)
+        return gtir.ParAssignStmt(left=left, right=self.visit(node.value, **kwargs))
 
     def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
         return gtir.Literal(value=str(node.value), dtype=common.DataType(node.data_type.value))
 
-    def visit_UnaryOpExpr(self, node: UnaryOpExpr) -> gtir.UnaryOp:
-        return gtir.UnaryOp(op=self.GT4PY_UNARYOP_TO_GTIR[node.op], expr=self.visit(node.arg))
+    def visit_UnaryOpExpr(self, node: UnaryOpExpr, **kwargs: Any) -> gtir.UnaryOp:
+        return gtir.UnaryOp(
+            op=self.GT4PY_UNARYOP_TO_GTIR[node.op], expr=self.visit(node.arg, **kwargs)
+        )
 
-    def visit_BinOpExpr(self, node: BinOpExpr) -> Union[gtir.BinaryOp, gtir.NativeFuncCall]:
+    def visit_BinOpExpr(
+        self, node: BinOpExpr, **kwargs: Any
+    ) -> Union[gtir.BinaryOp, gtir.NativeFuncCall]:
         if node.op in (BinaryOperator.POW, BinaryOperator.MOD):
             return gtir.NativeFuncCall(
                 func=common.NativeFunction[node.op.name],
-                args=[self.visit(node.lhs), self.visit(node.rhs)],
+                args=[self.visit(node.lhs, **kwargs), self.visit(node.rhs, **kwargs)],
             )
         return gtir.BinaryOp(
-            left=self.visit(node.lhs),
-            right=self.visit(node.rhs),
+            left=self.visit(node.lhs, **kwargs),
+            right=self.visit(node.rhs, **kwargs),
             op=self.GT4PY_OP_TO_GTIR_OP[node.op],
         )
 
-    def visit_TernaryOpExpr(self, node: TernaryOpExpr) -> gtir.TernaryOp:
+    def visit_TernaryOpExpr(self, node: TernaryOpExpr, **kwargs: Any) -> gtir.TernaryOp:
         return gtir.TernaryOp(
-            cond=self.visit(node.condition),
-            true_expr=self.visit(node.then_expr),
-            false_expr=self.visit(node.else_expr),
+            cond=self.visit(node.condition, **kwargs),
+            true_expr=self.visit(node.then_expr, **kwargs),
+            false_expr=self.visit(node.else_expr, **kwargs),
         )
 
-    def visit_BuiltinLiteral(self, node: BuiltinLiteral) -> gtir.Literal:  # type: ignore[return]
+    def visit_BuiltinLiteral(self, node: BuiltinLiteral, **kwargs: Any) -> gtir.Literal:  # type: ignore[return]
         # currently deals only with boolean literals
         if node.value in self.GT4PY_BUILTIN_TO_GTIR.keys():
             return gtir.Literal(
@@ -212,43 +216,47 @@ class DefIRToGTIR(IRNodeVisitor):
             )
         raise NotImplementedError(f"BuiltIn.{node.value} not implemented in lowering")
 
-    def visit_Cast(self, node: Cast) -> gtir.Cast:
-        return gtir.Cast(dtype=common.DataType(node.data_type.value), expr=self.visit(node.expr))
-
-    def visit_NativeFuncCall(self, node: NativeFuncCall) -> gtir.NativeFuncCall:
-        return gtir.NativeFuncCall(
-            func=self.GT4PY_NATIVE_FUNC_TO_GTIR[node.func],
-            args=[self.visit(arg) for arg in node.args],
+    def visit_Cast(self, node: Cast, **kwargs: Any) -> gtir.Cast:
+        return gtir.Cast(
+            dtype=common.DataType(node.data_type.value), expr=self.visit(node.expr, **kwargs)
         )
 
-    def visit_FieldRef(self, node: FieldRef) -> gtir.FieldAccess:
+    def visit_NativeFuncCall(self, node: NativeFuncCall, **kwargs: Any) -> gtir.NativeFuncCall:
+        return gtir.NativeFuncCall(
+            func=self.GT4PY_NATIVE_FUNC_TO_GTIR[node.func],
+            args=[self.visit(arg, **kwargs) for arg in node.args],
+        )
+
+    def visit_FieldRef(self, node: FieldRef, **kwargs: Any) -> gtir.FieldAccess:
         return gtir.FieldAccess(
             name=node.name,
-            offset=self._transform_offset(node.offset),
+            offset=self._transform_offset(node.offset, **kwargs),
             data_index=node.data_index,
             dtype=self._field_params[node.name].dtype if node.name in self._field_params else None,
         )
 
-    def visit_If(self, node: If) -> Union[gtir.FieldIfStmt, gtir.ScalarIfStmt]:
+    def visit_If(self, node: If, **kwargs: Any) -> Union[gtir.FieldIfStmt, gtir.ScalarIfStmt]:
         cond = self.visit(node.condition)
         if cond.kind == ExprKind.FIELD:
             return gtir.FieldIfStmt(
                 cond=cond,
-                true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
-                false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
+                true_branch=gtir.BlockStmt(body=self.visit(node.main_body, **kwargs)),
+                false_branch=gtir.BlockStmt(body=self.visit(node.else_body, **kwargs))
                 if node.else_body
                 else None,
             )
         else:
             return gtir.ScalarIfStmt(
                 cond=cond,
-                true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
-                false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
+                true_branch=gtir.BlockStmt(body=self.visit(node.main_body, **kwargs)),
+                false_branch=gtir.BlockStmt(body=self.visit(node.else_body, **kwargs))
                 if node.else_body
                 else None,
             )
 
-    def visit_VarRef(self, node: VarRef) -> Union[gtir.ScalarAccess, gtir.FieldAccess]:
+    def visit_VarRef(
+        self, node: VarRef, **kwargs: Any
+    ) -> Union[gtir.ScalarAccess, gtir.FieldAccess]:
         # TODO(havogt) seems wrong, but check the DefinitionIR for
         # test_code_generation.py::test_generation_cpu[native_functions,
         # there we have a FieldAccess on a VarDecl
@@ -282,10 +290,10 @@ class DefIRToGTIR(IRNodeVisitor):
         # datatype conversion works via same ID
         return gtir.ScalarDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
 
-    def _transform_offset(self, offset: Dict[str, int]) -> gtir.CartesianOffset:
+    def _transform_offset(self, offset: Dict[str, int], **kwargs: Any) -> gtir.CartesianOffset:
         i = offset["I"] if "I" in offset else 0
         j = offset["J"] if "J" in offset else 0
         k = offset["K"] if "K" in offset else 0
         if isinstance(k, int):
             return gtir.CartesianOffset(i=i, j=j, k=k)
-        return gtir.VariableOffset(i=i, j=j, k=self.visit(k))
+        return gtir.VariableOffset(i=i, j=j, k=self.visit(k, **kwargs))
