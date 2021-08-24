@@ -19,8 +19,8 @@
 
 from __future__ import annotations
 
-from collections import ChainMap
-from contextlib import contextmanager
+import collections
+import contextlib
 
 import pydantic
 
@@ -73,23 +73,20 @@ class SymbolTableTrait(concepts.Model):
         self.symtable_ = self._collect_symbols(self)
 
     @staticmethod
-    @contextmanager
+    @contextlib.contextmanager
     def symtable_merger(
         node_visitor: visitors.NodeVisitor, node: concepts.Node, kwargs: Dict[str, Any]
     ) -> Iterator[None]:
         """Update or add the symtable to kwargs in the visitor calls.
 
-        This is a context that when included to the contexts classvar, will
+        This is a context manager that, when included to the contexts classvar, will
         automatically pass 'symtable' as a keyword argument to visitor methods.
         """
-        kwargs.setdefault("symtable", ChainMap())
-        if (has_table := isinstance(node, SymbolTableTrait)) :
+        kwargs.setdefault("symtable", collections.ChainMap())
+        if has_table := isinstance(node, SymbolTableTrait):
             kwargs["symtable"] = kwargs["symtable"].new_child(node.symtable_)
 
         yield
 
         if has_table:
-            if len(kwargs["symtable"].maps) > 1:
-                kwargs["symtable"] = kwargs["symtable"].parents
-            else:
-                kwargs.pop("symtable")
+            kwargs["symtable"] = kwargs["symtable"].parents
