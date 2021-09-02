@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 from eve import NodeVisitor
 from eve.utils import XIterator
@@ -35,18 +35,23 @@ class LegacyExtentsVisitor(NodeVisitor):
     @dataclass
     class StencilContext:
         assign_conditions: Dict[int, List[gtir.FieldAccess]] = field(default_factory=dict)
+        assign_mask: Dict[int, List[gtir.HorizontalMask]] = field(default_factory=dict)
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> Dict[str, common.IJExtent]:
         field_extents = {name: common.IJExtent.zero() for name in _iter_field_names(node)}
         ctx = self.StencilContext()
         for field_if in node.iter_tree().if_isinstance(gtir.FieldIfStmt):
             self.visit(field_if, ctx=ctx)
+        for region in node.iter_tree().if_isinstance(gtir.HorizontalRegion):
+            self.visit(region, ctx=ctx)
         for assign in reversed(_iter_assigns(node).to_list()):
             self.visit(assign, ctx=ctx, field_extents=field_extents)
         return field_extents
 
-    def visit_HorizontalRegion(self, node: gtir.HorizontalRegion, **kwargs: Any) -> None:
-        self.visit(node.body, horizontal_mask=node.mask, **kwargs)
+    def visit_HorizontalRegion(
+        self, node: gtir.HorizontalRegion, *, ctx: StencilContext, **kwargs: Any
+    ) -> None:
+        ctx.assign_mask.update({id(assign): node.mask for assign in _iter_assigns(node).to_list()})
 
     def visit_ParAssignStmt(
         self,
@@ -54,12 +59,11 @@ class LegacyExtentsVisitor(NodeVisitor):
         *,
         ctx: StencilContext,
         field_extents: Dict[str, common.IJExtent],
-        horizontal_mask: Optional[common.HorizontalMask] = None,
         **kwargs: Any,
     ) -> None:
         left_extent = field_extents.setdefault(node.left.name, common.IJExtent.zero())
-        if horizontal_mask:
-            dist_from_edge = utils.compute_extent_difference(left_extent, horizontal_mask)
+        if mask := ctx.assign_mask.get(id(node), None):
+            dist_from_edge = utils.compute_extent_difference(left_extent, mask)
             if dist_from_edge is None:
                 return
         else:
