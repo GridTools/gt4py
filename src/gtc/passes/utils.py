@@ -16,10 +16,10 @@
 
 """Utility functions used across passes."""
 
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 from gtc import common
-
+from gt4py.definitions import Extent
 
 CARTESIAN_PARALLEL_AXES = ("i", "j")
 
@@ -31,12 +31,12 @@ def _overlap_along_axis(
     """Return a tuple of the distances to the edge of the compute domain, if overlapping."""
     LARGE_NUM = 10000
 
-    if interval.start.level == common.LevelMarker.START:
+    if hasattr(interval.start, "level") and interval.start.level == common.LevelMarker.START:
         start_diff = extent[0] - interval.start.offset
     else:
         start_diff = None
 
-    if interval.end.level == common.LevelMarker.END:
+    if hasattr(interval.end, "level") and interval.end.level == common.LevelMarker.END:
         end_diff = extent[1] - interval.end.offset
     else:
         end_diff = None
@@ -53,20 +53,26 @@ def _overlap_along_axis(
     return (start_diff, end_diff)
 
 
-def compute_extent_difference(
-    extent: common.IJExtent, mask: common.HorizontalMask
-) -> Optional[common.IJExtent]:
+def compute_extent_difference(extent: Extent, mask: common.HorizontalMask) -> Optional[Extent]:
     """Compute the difference between an compute extent and a common.HorizontalMask.
 
     This is used to augment the extents on fields for gtir_legacy_extents and removing
     unexecuted regions.
     """
-    diffs: Dict[str, Tuple[int, int]] = {}
-    for axis in CARTESIAN_PARALLEL_AXES:
-        axis_diff = _overlap_along_axis(getattr(extent, axis), getattr(mask, axis))
-        if not axis_diff:
-            return None
-        else:
-            diffs[axis] = axis_diff
+    diffs = [
+        _overlap_along_axis(extent[i], interval) if interval else None
+        for i, interval in enumerate((mask.i, mask.j))
+    ]
+    if any(d is None for d in diffs):
+        return None
+    return Extent((diffs[0], diffs[1], (0, 0)))
 
-    return common.IJExtent(**diffs)
+
+def extent_from_offset(offset: common.CartesianOffset) -> Extent:
+    return Extent(
+        (
+            (min(offset.i, 0), max(offset.i, 0)),
+            (min(offset.j, 0), max(offset.j, 0)),
+            (min(offset.k, 0), max(offset.k, 0)),
+        )
+    )
