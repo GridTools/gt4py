@@ -61,6 +61,7 @@ class ComputeExtents(NodeTranslator):
             sections=sections,
             ij_caches=node.ij_caches,
             k_caches=node.k_caches,
+            has_horizontal_masks=node.has_horizontal_masks,
         )
 
     def visit_VerticalLoopSection(

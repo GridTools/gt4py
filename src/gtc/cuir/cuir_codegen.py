@@ -155,11 +155,31 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """
         // HorizontalExecution ${id(_this_node)}
         if (validator(${extent}())) {
+            % if is_positional:
+            % if _this_node.extent.i == _this_node.extent.j == (0, 0):
+            const int i_pos = _i_thread;
+            const int j_pos = _j_thread;
+            % else:
+            const int i_pos = validator.m_i_lo;
+            const int j_pos = validator.m_j_lo;
+            % endif
+            % endif
             ${'\\n'.join(declarations)}
             ${'\\n'.join(body)}
         }
         """
     )
+
+    def visit_HorizontalExecution(self, node: cuir.HorizontalExecution, **kwargs: Any) -> str:
+        is_positional = (
+            list(
+                node.iter_tree()
+                .if_isinstance(cuir.ScalarAccess)
+                .filter(lambda acc: acc.name.endswith("_pos"))
+            )
+            != []
+        )
+        return self.generic_visit(node, is_positional=is_positional, **kwargs)
 
     def visit_AxisBound(self, node: cuir.AxisBound, **kwargs: Any) -> str:
         if node.level == LevelMarker.START:
@@ -285,13 +305,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 sid::shift(_ptr,
                            sid::get_stride<dim::j>(m_strides),
                            _j_block);
-                const int i_pos = blockDim.x * blockIdx.x + threadIdx.x;
-                const int j_pos = blockDim.y * blockIdx.y + threadIdx.y;
                 % if order == cuir.LoopOrder.PARALLEL:
                 const int _k_block = blockIdx.z;
                 sid::shift(_ptr,
                            sid::get_stride<dim::k>(m_strides),
                            _k_block);
+                % endif
+                % if has_horizontal_masks == True:
+                const int _i_thread = blockDim.x * blockIdx.x + threadIdx.x;
+                const int _j_thread = blockDim.y * blockIdx.y + threadIdx.y;
                 % endif
 
                 % for field, data_dims in fields:

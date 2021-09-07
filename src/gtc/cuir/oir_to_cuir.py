@@ -164,11 +164,14 @@ class OIRToCUIR(eve.NodeTranslator):
         i_expr = self._expr_from_horizontal_interval(node.i, axis="i", **kwargs)
         j_expr = self._expr_from_horizontal_interval(node.j, axis="j", **kwargs)
         if i_expr and j_expr:
-            return cuir.BinaryOp(op=common.LogicalOperator.AND, left=i_expr, right=j_expr, dtype=common.DataType.INT32)
-        else:
-            true_value = cuir.Literal(
-                value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL
+            return cuir.BinaryOp(
+                op=common.LogicalOperator.AND,
+                left=i_expr,
+                right=j_expr,
+                dtype=common.DataType.INT32,
             )
+        else:
+            true_value = cuir.Literal(value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL)
             # Return the first non-None expr, or if all are None, then return True
             return next((expr for expr in (i_expr, j_expr) if expr is not None), true_value)
 
@@ -222,6 +225,7 @@ class OIRToCUIR(eve.NodeTranslator):
         **kwargs: Any,
     ) -> cuir.Kernel:
         assert not any(c.fill or c.flush for c in node.caches if isinstance(c, oir.KCache))
+        has_horizontal_masks = list(node.iter_tree().if_isinstance(oir.HorizontalMask)) != []
         ij_caches = {
             c.name: cuir.IJCacheDecl(name=new_symbol_name(c.name), dtype=symtable[c.name].dtype)
             for c in node.caches
@@ -240,6 +244,7 @@ class OIRToCUIR(eve.NodeTranslator):
                         node.sections,
                         ij_caches=ij_caches,
                         k_caches=k_caches,
+                        has_horizontal_masks=has_horizontal_masks,
                         symtable=symtable,
                         **kwargs,
                     ),
