@@ -31,11 +31,7 @@ class LegacyExtentsVisitor(NodeVisitor):
         field_extents = {name: Extent.zeros() for name in _iter_field_names(node)}
         ctx = self.StencilContext()
         for horizontal_region in node.iter_tree().if_isinstance(gtir.HorizontalRegion):
-            self.visit(
-                horizontal_region,
-                ctx=ctx,
-                field_extents=field_extents,
-            )
+            self.visit(horizontal_region, ctx=ctx)
         for field_if in node.iter_tree().if_isinstance(gtir.FieldIfStmt):
             self.visit(field_if, ctx=ctx)
         for region in node.iter_tree().if_isinstance(gtir.HorizontalRegion):
