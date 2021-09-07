@@ -18,8 +18,9 @@
 
 from typing import Optional, Tuple
 
-from gtc import common
 from gt4py.definitions import Extent
+from gtc import common
+
 
 CARTESIAN_PARALLEL_AXES = ("i", "j")
 

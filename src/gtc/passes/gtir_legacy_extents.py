@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Union
 from eve import NodeVisitor
 from eve.utils import XIterator
 from gt4py.definitions import Extent
-from gtc import common, gtir
+from gtc import gtir
 from gtc.passes import utils
 
 

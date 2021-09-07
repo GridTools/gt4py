@@ -15,14 +15,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Removes horizontal executions that is never executed and computes the correct extents."""
-from dataclasses import field, dataclass
-from typing import Any, Dict, Optional, Tuple
-from gt4py.definitions import Extent
+from dataclasses import dataclass, field
+from typing import Any, Dict
 
 import eve
-from gtc import common, oir
+from gt4py.definitions import Extent
+from gtc import oir
 from gtc.passes import utils
-
 
 
 class RemoveUnexecutedRegions(eve.NodeTranslator):
