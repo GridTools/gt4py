@@ -127,13 +127,13 @@ class OirToNpir(NodeTranslator):
         parallel_k: bool,
         **kwargs,
     ) -> npir.MaskBlock:
+        mask: Optional[npir.VectorExpression] = None
         mask_expr = self.visit(node.mask, ctx=ctx, parallel_k=parallel_k, broadcast=True, **kwargs)
         if isinstance(mask_expr, npir.FieldSlice):
             mask_name = mask_expr.name
             mask = mask_expr
         elif isinstance(mask_expr, npir.HorizontalMask):
             mask_name = ""
-            mask = None
         else:
             mask_name = f"_mask_{ctx.mask_temp_counter}"
             mask = npir.VectorTemp(

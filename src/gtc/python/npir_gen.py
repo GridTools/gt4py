@@ -15,19 +15,25 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import textwrap
-from typing import Any, Collection, Dict, Tuple, Union, Optional
+from typing import Any, Collection, Dict, Optional, Tuple, Union
 
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
 from gt4py.definitions import Extent
 from gtc import common
-from gtc.python import npir
 from gtc.passes import utils
+from gtc.python import npir
+
 
 __all__ = ["NpirGen"]
 
 
 AxisBoundTuple = Tuple[common.AxisBound, common.AxisBound]
 HorizontalBlockBounds = Tuple[AxisBoundTuple, AxisBoundTuple, AxisBoundTuple]
+
+
+def unrestricted_axis_bounds() -> HorizontalBlockBounds:
+    full_interval: AxisBoundTuple = (common.AxisBound.start(), common.AxisBound.end())
+    return (full_interval, full_interval, full_interval)
 
 
 def op_delta_from_int(value: int) -> Tuple[str, str]:
@@ -105,7 +111,6 @@ class NpirGen(TemplatedGenerator):
     def visit_AxisOffset(
         self, node: npir.AxisOffset, *, bounds: Optional[AxisBoundTuple] = None, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        # offset = self.visit(node.offset)
         axis_name = self.visit(node.axis_name)
         LEVEL_TO_AXISFUNC = {
             common.LevelMarker.START: lambda axis: axis.lower(),
@@ -152,13 +157,9 @@ class NpirGen(TemplatedGenerator):
     ) -> Union[str, Collection[str]]:
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
-
-        if not axis_bounds:
-            axis_bounds = [(common.AxisBound.start(), common.AxisBound.end())] * 3
-
         offset_str = ", ".join(
             self.visit(off, bounds=bounds, **kwargs) if off else ":"
-            for off, bounds in zip(offset, axis_bounds)
+            for off, bounds in zip(offset, axis_bounds or unrestricted_axis_bounds())
         )
 
         if mask_acc and any(off is None for off in offset):
@@ -297,9 +298,7 @@ class NpirGen(TemplatedGenerator):
             lower[1] = min(extents[field].to_boundary()[1][0] for field in fields)
             upper[0] = min(extents[field].to_boundary()[0][1] for field in fields)
             upper[1] = min(extents[field].to_boundary()[1][1] for field in fields)
-        return self.generic_visit(
-            node, h_lower=lower, h_upper=upper, **kwargs
-        )
+        return self.generic_visit(node, h_lower=lower, h_upper=upper, **kwargs)
 
     HorizontalBlock = JinjaTemplate(
         textwrap.dedent(

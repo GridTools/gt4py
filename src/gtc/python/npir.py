@@ -137,6 +137,7 @@ class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpr
 class HorizontalMask(common.HorizontalMask, VectorExpression):
     pass
 
+
 class MaskBlock(common.Stmt):
     mask: VectorExpression
     mask_name: str

@@ -16,10 +16,9 @@
 
 """Utility functions used across passes."""
 
-from gt4py.definitions import CartesianSpace
-from typing import Optional, Tuple, Dict
+from typing import Dict, Optional, Tuple
 
-from gt4py.definitions import Extent
+from gt4py.definitions import CartesianSpace, Extent
 from gtc import common
 
 
@@ -71,11 +70,12 @@ def compute_extent_difference(extent: Extent, mask: common.HorizontalMask) -> Op
 
 
 def compute_relative_mask(extent: Extent, mask: common.HorizontalMask) -> common.HorizontalMask:
-    """Computes a HorizontalMask that is relative to the compute extent in `extent`.
+    """Compute a HorizontalMask relative to the compute extent in `extent`.
 
     This is used in the numpy backend to compute HorizontalMask bounds relative to
     the start/end bounds of each axis in the HorizontalBlock.
     """
+
     def compute_level_offset(
         bound: Optional[common.AxisBound], extent: Tuple[int, int], start: bool = True
     ) -> Tuple[common.LevelMarker, int]:
