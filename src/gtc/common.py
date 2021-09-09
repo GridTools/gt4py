@@ -787,6 +787,10 @@ class HorizontalInterval(Node):
     start: Optional[AxisBound]
     end: Optional[AxisBound]
 
+    @classmethod
+    def full(cls) -> "HorizontalInterval":
+        return cls(start=AxisBound.start(), end=AxisBound.end())
+
     @root_validator
     def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
         def get_offset(bound: Optional[AxisBound], level: LevelMarker) -> Tuple[LevelMarker, int]:

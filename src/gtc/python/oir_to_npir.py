@@ -116,6 +116,9 @@ class OirToNpir(NodeTranslator):
             body=self.visit(node.body, ctx=ctx, **kwargs),
         )
 
+    def visit_HorizontalMask(self, node: oir.HorizontalMask, **kwargs: Any) -> npir.HorizontalMask:
+        return npir.HorizontalMask(i=node.i, j=node.j)
+
     def visit_MaskStmt(
         self,
         node: oir.MaskStmt,
@@ -128,6 +131,9 @@ class OirToNpir(NodeTranslator):
         if isinstance(mask_expr, npir.FieldSlice):
             mask_name = mask_expr.name
             mask = mask_expr
+        elif isinstance(mask_expr, npir.HorizontalMask):
+            mask_name = ""
+            mask = None
         else:
             mask_name = f"_mask_{ctx.mask_temp_counter}"
             mask = npir.VectorTemp(

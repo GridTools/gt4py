@@ -16,7 +16,8 @@
 
 """Utility functions used across passes."""
 
-from typing import Optional, Tuple
+from gt4py.definitions import CartesianSpace
+from typing import Optional, Tuple, Dict
 
 from gt4py.definitions import Extent
 from gtc import common
@@ -67,6 +68,50 @@ def compute_extent_difference(extent: Extent, mask: common.HorizontalMask) -> Op
     if any(d is None for d in diffs):
         return None
     return Extent((diffs[0], diffs[1], (0, 0)))
+
+
+def compute_relative_mask(extent: Extent, mask: common.HorizontalMask) -> common.HorizontalMask:
+    """Computes a HorizontalMask that is relative to the compute extent in `extent`.
+
+    This is used in the numpy backend to compute HorizontalMask bounds relative to
+    the start/end bounds of each axis in the HorizontalBlock.
+    """
+    def compute_level_offset(
+        bound: Optional[common.AxisBound], extent: Tuple[int, int], start: bool = True
+    ) -> Tuple[common.LevelMarker, int]:
+        if bound:
+            level = bound.level
+            if start:
+                if level == common.LevelMarker.START:
+                    offset = max(0, bound.offset - extent[0])
+                else:
+                    offset = min(0, extent[1] - bound.offset)
+            else:
+                if level == common.LevelMarker.END:
+                    offset = min(0, extent[1] - bound.offset)
+                else:
+                    offset = max(0, bound.offset - extent[0])
+        else:
+            level = common.LevelMarker.START if start else common.LevelMarker.END
+            offset = 0
+        return level, offset
+
+    args: Dict[str, common.HorizontalInterval] = {}
+    for i, axis in enumerate(CartesianSpace.names[:-1]):
+        horizontal_interval = getattr(mask, axis.lower())
+        start_level, start_offset = compute_level_offset(
+            horizontal_interval.start, extent[i], start=True
+        )
+        end_level, end_offset = compute_level_offset(
+            horizontal_interval.end, extent[i], start=False
+        )
+
+        args[axis.lower()] = common.HorizontalInterval(
+            start=common.AxisBound(level=start_level, offset=start_offset),
+            end=common.AxisBound(level=end_level, offset=end_offset),
+        )
+
+    return common.HorizontalMask(**args)
 
 
 def extent_from_offset(offset: common.CartesianOffset) -> Extent:
