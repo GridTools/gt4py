@@ -151,35 +151,27 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     IJExtent = as_fmt("extent<{i[0]}, {i[1]}, {j[0]}, {j[1]}>")
 
+    def visit_HorizontalExecution(self, node: cuir.HorizontalExecution, **kwargs: Any) -> str:
+        accesses = node.iter_tree().if_isinstance(
+            cuir.ScalarAccess).filter(lambda acc: acc.name.endswith("_pos")
+        )
+        for acc in accesses:
+            if acc.name[0] == 'i':
+                acc.name = f"{acc.name}(0, 0)" if node.extent.i == (0, 0) else "validator.m_i_lo"
+            else:
+                acc.name = f"{acc.name}({node.extent.j[0]}, {node.extent.j[1]})"
+
+        return self.generic_visit(node, **kwargs)
+
     HorizontalExecution = as_mako(
         """
         // HorizontalExecution ${id(_this_node)}
         if (validator(${extent}())) {
-            % if is_positional:
-            % if _this_node.extent.i == _this_node.extent.j == (0, 0):
-            const int i_pos = _i_thread;
-            const int j_pos = _j_thread;
-            % else:
-            const int i_pos = validator.m_i_lo;
-            const int j_pos = validator.m_j_lo;
-            % endif
-            % endif
             ${'\\n'.join(declarations)}
             ${'\\n'.join(body)}
         }
         """
     )
-
-    def visit_HorizontalExecution(self, node: cuir.HorizontalExecution, **kwargs: Any) -> str:
-        is_positional = (
-            list(
-                node.iter_tree()
-                .if_isinstance(cuir.ScalarAccess)
-                .filter(lambda acc: acc.name.endswith("_pos"))
-            )
-            != []
-        )
-        return self.generic_visit(node, is_positional=is_positional, **kwargs)
 
     def visit_AxisBound(self, node: cuir.AxisBound, **kwargs: Any) -> str:
         if node.level == LevelMarker.START:
@@ -280,13 +272,18 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     VerticalLoop = as_mako(
         """
+        % if _this_node.has_horizontal_masks == True:
+        #define i_pos(iminus_extent, iplus_extent) (blockDim.x * blockIdx.x + threadIdx.x) + iminus_extent - iplus_extent
+        #define j_pos(jminus_extent, jplus_extent) (blockDim.y * blockIdx.y + threadIdx.y) + jminus_extent - (blockIdx.y > 0 ? 2 : 0) * jplus_extent
+        % endif
+
         template <class Sid>
         struct loop_${id(_this_node)}_f {
             sid::ptr_holder_type<Sid> m_ptr_holder;
             sid::strides_type<Sid> m_strides;
-            int i_size;
-            int j_size;
-            int k_size;
+            const int i_size;
+            const int j_size;
+            const int k_size;
 
             template <class Validator>
             GT_FUNCTION_DEVICE void operator()(const int _i_block,
@@ -310,10 +307,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 sid::shift(_ptr,
                            sid::get_stride<dim::k>(m_strides),
                            _k_block);
-                % endif
-                % if has_horizontal_masks == True:
-                const int _i_thread = blockDim.x * blockIdx.x + threadIdx.x;
-                const int _j_thread = blockDim.y * blockIdx.y + threadIdx.y;
                 % endif
 
                 % for field, data_dims in fields:
@@ -352,6 +345,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         };
         """
     )
+
+    def visit_Kernel(self, node: cuir.Kernel, kernel_extents: List[str], **kwargs: Any) -> str:
+        kernel_extents.append(
+            self.visit(
+                cuir.IJExtent.zero().union(*node.iter_tree().if_isinstance(cuir.IJExtent)), **kwargs
+            )
+        )
+        return self.generic_visit(node, **kwargs)
+
 
     Kernel = as_mako(
         """
@@ -394,11 +396,13 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         def ctype(symbol: str) -> str:
             return self.visit(kwargs["symtable"][symbol].dtype, **kwargs)
 
+        kernel_extents: List[str] = []
         return self.generic_visit(
             node,
             max_extent=self.visit(
                 cuir.IJExtent.zero().union(*node.iter_tree().if_isinstance(cuir.IJExtent)), **kwargs
             ),
+            kernel_extents=kernel_extents,
             loop_start=loop_start,
             loop_fields=loop_fields,
             ctype=ctype,
@@ -470,7 +474,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             tmp_alloc);
                     % endfor
 
-                    % for kernel in _this_node.kernels:
+                    % for index, kernel in enumerate(_this_node.kernels):
 
                         // kernel ${id(kernel)}
 
@@ -514,7 +518,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                         kernel_${id(kernel)}_f<${', '.join(f'decltype(loop_{id(vl)})' for vl in kernel.vertical_loops)}> kernel_${id(kernel)}{
                             ${', '.join(f'loop_{id(vl)}' for vl in kernel.vertical_loops)}
                         };
-                        gpu_backend::launch_kernel<${max_extent},
+                        gpu_backend::launch_kernel<${kernel_extents[index]},
                             i_block_size_t::value, j_block_size_t::value>(
                             i_size,
                             j_size,
