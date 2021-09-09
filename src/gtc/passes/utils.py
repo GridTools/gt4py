@@ -85,10 +85,10 @@ def compute_relative_mask(extent: Extent, mask: common.HorizontalMask) -> common
                 if level == common.LevelMarker.START:
                     offset = max(0, bound.offset - extent[0])
                 else:
-                    offset = min(0, extent[1] - bound.offset)
+                    offset = min(0, bound.offset - extent[1])
             else:
                 if level == common.LevelMarker.END:
-                    offset = min(0, extent[1] - bound.offset)
+                    offset = min(0, bound.offset - extent[1])
                 else:
                     offset = max(0, bound.offset - extent[0])
         else:
