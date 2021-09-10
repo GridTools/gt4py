@@ -114,7 +114,7 @@ def compute_relative_mask(
     j_interval = _compute_relative_interval(extent[1], mask.j)
 
     return (
-        common.HorizontalInterval(i=i_interval, j=j_interval) if i_interval and j_interval else None
+        common.HorizontalMask(i=i_interval, j=j_interval) if i_interval and j_interval else None
     )
 
 
