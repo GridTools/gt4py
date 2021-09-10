@@ -14,11 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Tuple, Optional
+from typing import Optional, Tuple
+
 import pytest
+
 from gtc import common
+from gtc.common import AxisBound, HorizontalInterval, LevelMarker
 from gtc.passes import utils
-from gtc.common import HorizontalInterval, AxisBound, LevelMarker
 
 
 @pytest.mark.parametrize(
