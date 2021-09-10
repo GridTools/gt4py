@@ -16,12 +16,13 @@
 
 """Utility functions used across passes."""
 
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
-from gt4py.definitions import CartesianSpace, Extent
+from gt4py.definitions import Extent
 from gtc import common
 
 
+_LARGE_NUM = 10000
 CARTESIAN_PARALLEL_AXES = ("i", "j")
 
 
@@ -30,8 +31,6 @@ def _overlap_along_axis(
     interval: common.HorizontalInterval,
 ) -> Optional[Tuple[int, int]]:
     """Return a tuple of the distances to the edge of the compute domain, if overlapping."""
-    LARGE_NUM = 10000
-
     if hasattr(interval.start, "level") and interval.start.level == common.LevelMarker.START:
         start_diff = extent[0] - interval.start.offset
     else:
@@ -49,8 +48,8 @@ def _overlap_along_axis(
         if interval.start.offset > extent[1]:
             return None
 
-    start_diff = min(start_diff, 0) if start_diff is not None else -LARGE_NUM
-    end_diff = max(end_diff, 0) if end_diff is not None else LARGE_NUM
+    start_diff = min(start_diff, 0) if start_diff is not None else -_LARGE_NUM
+    end_diff = max(end_diff, 0) if end_diff is not None else _LARGE_NUM
     return (start_diff, end_diff)
 
 
@@ -69,49 +68,42 @@ def compute_extent_difference(extent: Extent, mask: common.HorizontalMask) -> Op
     return Extent((diffs[0], diffs[1], (0, 0)))
 
 
-def compute_relative_mask(extent: Extent, mask: common.HorizontalMask) -> common.HorizontalMask:
+def compute_relative_mask(
+    extent: Extent, mask: common.HorizontalMask
+) -> Optional[common.HorizontalMask]:
     """Compute a HorizontalMask relative to the compute extent in `extent`.
 
     This is used in the numpy backend to compute HorizontalMask bounds relative to
     the start/end bounds of each axis in the HorizontalBlock.
     """
+    ext_diff = compute_extent_difference(extent, mask)
 
-    def compute_level_offset(
-        bound: Optional[common.AxisBound], extent: Tuple[int, int], start: bool = True
-    ) -> Tuple[common.LevelMarker, int]:
-        if bound:
-            level = bound.level
-            if start:
-                if level == common.LevelMarker.START:
-                    offset = max(0, bound.offset - extent[0])
-                else:
-                    offset = min(0, bound.offset - extent[1])
-            else:
-                if level == common.LevelMarker.END:
-                    offset = min(0, bound.offset - extent[1])
-                else:
-                    offset = max(0, bound.offset - extent[0])
-        else:
-            level = common.LevelMarker.START if start else common.LevelMarker.END
-            offset = 0
-        return level, offset
-
-    args: Dict[str, common.HorizontalInterval] = {}
-    for i, axis in enumerate(CartesianSpace.names[:-1]):
-        horizontal_interval = getattr(mask, axis.lower())
-        start_level, start_offset = compute_level_offset(
-            horizontal_interval.start, extent[i], start=True
-        )
-        end_level, end_offset = compute_level_offset(
-            horizontal_interval.end, extent[i], start=False
+    def relativize_difference(d, mask):
+        return Extent(
+            (
+                d[0][0] if d[0][0] > -_LARGE_NUM else mask.i.start.offset,
+                d[0][1] if d[0][1] < _LARGE_NUM else mask.i.end.offset,
+            ),
+            (
+                d[1][0] if d[1][0] > -_LARGE_NUM else mask.j.start.offset,
+                d[1][1] if d[1][1] < _LARGE_NUM else mask.j.end.offset,
+            ),
         )
 
-        args[axis.lower()] = common.HorizontalInterval(
-            start=common.AxisBound(level=start_level, offset=start_offset),
-            end=common.AxisBound(level=end_level, offset=end_offset),
+    if ext_diff:
+        rel_mask = relativize_difference(ext_diff, mask)
+        return common.HorizontalMask(
+            i=common.HorizontalInterval(
+                start=common.AxisBound(level=mask.i.start.level, offset=rel_mask[0][0]),
+                end=common.AxisBound(level=mask.i.end.level, offset=rel_mask[0][1]),
+            ),
+            j=common.HorizontalInterval(
+                start=common.AxisBound(level=mask.j.start.level, offset=rel_mask[1][0]),
+                end=common.AxisBound(level=mask.j.end.level, offset=rel_mask[1][1]),
+            ),
         )
-
-    return common.HorizontalMask(**args)
+    else:
+        return None
 
 
 def extent_from_offset(offset: common.CartesianOffset) -> Extent:
