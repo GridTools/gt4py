@@ -22,13 +22,11 @@ from gt4py.definitions import Extent
 from gtc import common
 
 
-_LARGE_NUM = 10000
 CARTESIAN_PARALLEL_AXES = ("i", "j")
 
 
 def _overlap_along_axis(
-    extent: Tuple[int, int],
-    interval: common.HorizontalInterval,
+    extent: Tuple[int, int], interval: common.HorizontalInterval, use_interval_offsets: bool = False
 ) -> Optional[Tuple[int, int]]:
     """Return a tuple of the distances to the edge of the compute domain, if overlapping."""
     if hasattr(interval.start, "level") and interval.start.level == common.LevelMarker.START:
@@ -48,19 +46,27 @@ def _overlap_along_axis(
         if interval.start.offset > extent[1]:
             return None
 
-    start_diff = min(start_diff, 0) if start_diff is not None else -_LARGE_NUM
-    end_diff = max(end_diff, 0) if end_diff is not None else _LARGE_NUM
+    LARGE_NUM = 10000
+    start_max = -LARGE_NUM if not use_interval_offsets else interval.start.offset
+    end_max = LARGE_NUM if not use_interval_offsets else interval.end.offset
+
+    start_diff = min(start_diff, 0) if start_diff is not None else start_max
+    end_diff = max(end_diff, 0) if end_diff is not None else end_max
     return (start_diff, end_diff)
 
 
-def compute_extent_difference(extent: Extent, mask: common.HorizontalMask) -> Optional[Extent]:
+def compute_extent_difference(
+    extent: Extent, mask: common.HorizontalMask, use_interval_offsets: bool = False
+) -> Optional[Extent]:
     """Compute the difference between an compute extent and a common.HorizontalMask.
 
     This is used to augment the extents on fields for gtir_legacy_extents and removing
     unexecuted regions.
     """
     diffs = [
-        _overlap_along_axis(extent[i], interval) if interval else None
+        _overlap_along_axis(extent[i], interval, use_interval_offsets=use_interval_offsets)
+        if interval
+        else None
         for i, interval in enumerate((mask.i, mask.j))
     ]
     if any(d is None for d in diffs):
@@ -76,30 +82,15 @@ def compute_relative_mask(
     This is used in the numpy backend to compute HorizontalMask bounds relative to
     the start/end bounds of each axis in the HorizontalBlock.
     """
-    ext_diff = compute_extent_difference(extent, mask)
-
-    def relativize_difference(d, mask):
-        return Extent(
-            (
-                d[0][0] if d[0][0] > -_LARGE_NUM else mask.i.start.offset,
-                d[0][1] if d[0][1] < _LARGE_NUM else mask.i.end.offset,
-            ),
-            (
-                d[1][0] if d[1][0] > -_LARGE_NUM else mask.j.start.offset,
-                d[1][1] if d[1][1] < _LARGE_NUM else mask.j.end.offset,
-            ),
-        )
-
-    if ext_diff:
-        rel_mask = relativize_difference(ext_diff, mask)
+    if rel_ext := compute_extent_difference(extent, mask, use_interval_offsets=True):
         return common.HorizontalMask(
             i=common.HorizontalInterval(
-                start=common.AxisBound(level=mask.i.start.level, offset=rel_mask[0][0]),
-                end=common.AxisBound(level=mask.i.end.level, offset=rel_mask[0][1]),
+                start=common.AxisBound(level=mask.i.start.level, offset=rel_ext[0][0]),
+                end=common.AxisBound(level=mask.i.end.level, offset=rel_ext[0][1]),
             ),
             j=common.HorizontalInterval(
-                start=common.AxisBound(level=mask.j.start.level, offset=rel_mask[1][0]),
-                end=common.AxisBound(level=mask.j.end.level, offset=rel_mask[1][1]),
+                start=common.AxisBound(level=mask.j.start.level, offset=rel_ext[1][0]),
+                end=common.AxisBound(level=mask.j.end.level, offset=rel_ext[1][1]),
             ),
         )
     else:

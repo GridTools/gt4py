@@ -202,9 +202,12 @@ class NpirGen(TemplatedGenerator):
         elif isinstance(node.mask, common.HorizontalMask):
             lower, upper = (kwargs[x] for x in ("h_lower", "h_upper"))
             horizontal_extent = Extent(((lower[0], upper[0]), (lower[1], upper[1]), (0, 0)))
-            mask = utils.compute_relative_mask(horizontal_extent, node.mask)
-            axis_bounds[0] = (mask.i.start, mask.i.end)
-            axis_bounds[1] = (mask.j.start, mask.j.end)
+            rel_mask: Optional[common.HorizontalMask] = utils.compute_relative_mask(
+                horizontal_extent, node.mask
+            )
+            assert rel_mask is not None
+            axis_bounds[0] = (rel_mask.i.start, rel_mask.i.end)
+            axis_bounds[1] = (rel_mask.j.start, rel_mask.j.end)
             mask_def = ""
         else:
             mask_name = node.mask_name
