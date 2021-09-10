@@ -26,6 +26,7 @@ from gt4py.backend.debug_backend import (
 )
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_legacy_extents import compute_legacy_extents
+from gtc.passes.oir_optimizations.remove_regions import RemoveUnexecutedRegions
 from gtc.passes.oir_pipeline import OirPipeline
 from gtc.python import npir
 from gtc.python.npir_gen import NpirGen
@@ -122,7 +123,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
     def _make_npir(self) -> npir.Computation:
         return OirToNpir().visit(
             # TODO (ricoh) apply optimizations, skip only the ones that fail
-            OirPipeline(GTIRToOIR().visit(self.builder.gtir)).apply([])
+            OirPipeline(GTIRToOIR().visit(self.builder.gtir)).apply([RemoveUnexecutedRegions])
         )
 
     @property

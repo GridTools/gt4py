@@ -32,6 +32,7 @@ from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMe
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.passes.oir_optimizations.remove_regions import RemoveUnexecutedRegions
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
@@ -63,6 +64,7 @@ class OirPipeline:
 
     def steps(self) -> Sequence[PASS_T]:
         return [
+            RemoveUnexecutedRegions,
             graph_merge_horizontal_executions,
             AdjacentLoopMerging,
             LocalTemporariesToScalars,

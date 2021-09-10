@@ -58,6 +58,14 @@ from gtc.passes import utils
             ),
             None,
         ),
+        (
+            (0, 1),
+            HorizontalInterval(
+                start=None,
+                end=None,
+            ),
+            (0, 0),
+        ),
     ],
 )
 def test_overlap_along_axis(
@@ -66,3 +74,79 @@ def test_overlap_along_axis(
     expected: Optional[Tuple[int, int]],
 ):
     assert expected == utils._overlap_along_axis(extent, interval)
+
+
+@pytest.mark.parametrize(
+    "extent, interval, expected",
+    [
+        (
+            (0, 0),
+            HorizontalInterval(
+                start=AxisBound(level=LevelMarker.START, offset=2),
+                end=AxisBound(level=LevelMarker.END, offset=-2),
+            ),
+            HorizontalInterval(
+                start=AxisBound(level=LevelMarker.START, offset=2),
+                end=AxisBound(level=LevelMarker.END, offset=-2),
+            ),
+        ),
+        (
+            (0, 0),
+            HorizontalInterval(
+                start=AxisBound(level=LevelMarker.START, offset=-2),
+                end=AxisBound(level=LevelMarker.END, offset=2),
+            ),
+            HorizontalInterval(
+                start=AxisBound(level=LevelMarker.START, offset=0),
+                end=AxisBound(level=LevelMarker.END, offset=0),
+            ),
+        ),
+        (
+            (-2, 0),
+            HorizontalInterval(
+                start=AxisBound(level=LevelMarker.START, offset=-3),
+                end=AxisBound(level=LevelMarker.START, offset=-1),
+            ),
+            HorizontalInterval(
+                start=AxisBound(level=LevelMarker.START, offset=0),
+                end=AxisBound(level=LevelMarker.START, offset=1),
+            ),
+        ),
+        (
+            (0, 2),
+            HorizontalInterval(
+                start=AxisBound(level=LevelMarker.END, offset=-3),
+                end=AxisBound(level=LevelMarker.END, offset=1),
+            ),
+            HorizontalInterval(
+                start=AxisBound(level=LevelMarker.END, offset=-5),
+                end=AxisBound(level=LevelMarker.END, offset=-1),
+            ),
+        ),
+        (
+            (0, 1),
+            HorizontalInterval(
+                start=None,
+                end=None,
+            ),
+            HorizontalInterval(
+                start=AxisBound(level=LevelMarker.START, offset=0),
+                end=AxisBound(level=LevelMarker.END, offset=0),
+            ),
+        ),
+        (
+            (0, 1),
+            HorizontalInterval(
+                start=AxisBound(level=LevelMarker.END, offset=2),
+                end=AxisBound(level=LevelMarker.END, offset=100),
+            ),
+            None,
+        ),
+    ],
+)
+def test_compute_relative_interval(
+    extent: Tuple[int, int],
+    interval: common.HorizontalInterval,
+    expected: Optional[common.HorizontalInterval],
+):
+    assert utils._compute_relative_interval(extent, interval) == expected
