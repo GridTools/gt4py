@@ -81,7 +81,7 @@ class RemoveUnexecutedRegions(eve.NodeTranslator):
         **kwargs: Any,
     ) -> oir.MaskStmt:
         if isinstance(node.mask, oir.HorizontalMask):
-            dist_from_edge = utils.compute_extent_diff(compute_extent, node.mask)
+            dist_from_edge = utils.compute_extent_difference(compute_extent, node.mask)
             if dist_from_edge is None:
                 return eve.NOTHING
         else:
