@@ -27,15 +27,6 @@ from gtc.python import npir
 __all__ = ["NpirGen"]
 
 
-AxisBoundTuple = Tuple[common.AxisBound, common.AxisBound]
-HorizontalBlockBounds = Tuple[AxisBoundTuple, AxisBoundTuple, AxisBoundTuple]
-
-
-def unrestricted_axis_bounds() -> HorizontalBlockBounds:
-    full_interval: AxisBoundTuple = (common.AxisBound.start(), common.AxisBound.end())
-    return (full_interval, full_interval, full_interval)
-
-
 def op_delta_from_int(value: int) -> Tuple[str, str]:
     operator = ""
     delta = str(value)
@@ -108,21 +99,21 @@ class NpirGen(TemplatedGenerator):
 
     NumericalOffset = FormatTemplate("{op}{delta}")
 
-    def visit_AxisOffset(
-        self, node: npir.AxisOffset, *, bounds: Optional[AxisBoundTuple] = None, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    def visit_AxisOffset(self, node: npir.AxisOffset, **kwargs: Any) -> Union[str, Collection[str]]:
+        offset = self.visit(node.offset)
         axis_name = self.visit(node.axis_name)
-        LEVEL_TO_AXISFUNC = {
-            common.LevelMarker.START: lambda axis: axis.lower(),
-            common.LevelMarker.END: lambda axis: axis.upper(),
-        }
-        # TODO(jdahm): fix NumericalOffset parsing
-        bounds = bounds or (common.AxisBound.start(), common.AxisBound.end())
-        lower_offset = bounds[0].offset + int(node.offset.value or 0)
-        upper_offset = bounds[1].offset + int(node.offset.value or 0)
-        lower = LEVEL_TO_AXISFUNC[bounds[0].level](axis_name) + "{:+d}".format(lower_offset)
-        upper = LEVEL_TO_AXISFUNC[bounds[1].level](axis_name) + "{:+d}".format(upper_offset)
-        return f"{lower}:{upper}" if node.parallel else f"{lower}:{lower} + 1"
+        lpar, rpar = "()" if offset else ("", "")
+        variant = self.AxisOffset_parallel if node.parallel else self.AxisOffset_serial
+        rendered = variant.render(lpar=lpar, rpar=rpar, axis_name=axis_name, offset=offset)
+        return self.generic_visit(node, parallel_or_serial_variant=rendered, **kwargs)
+
+    AxisOffset_parallel = JinjaTemplate(
+        "{{ lpar }}{{ axis_name | lower }}{{ offset }}{{ rpar }}:{{ lpar }}{{ axis_name | upper }}{{ offset }}{{ rpar }}"
+    )
+
+    AxisOffset_serial = JinjaTemplate(
+        "{{ lpar }}{{ axis_name | lower }}_{{ offset }}{{ rpar }}:({{ axis_name | lower }}_{{ offset}} + 1)"
+    )
 
     AxisOffset = FormatTemplate("{parallel_or_serial_variant}")
 
@@ -147,20 +138,12 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_FieldSlice(
-        self,
-        node: npir.FieldSlice,
-        mask_acc="",
-        *,
-        is_serial=False,
-        axis_bounds: Optional[HorizontalBlockBounds] = None,
-        **kwargs: Any,
+        self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, **kwargs: Any
     ) -> Union[str, Collection[str]]:
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
-        offset_str = ", ".join(
-            self.visit(off, bounds=bounds, **kwargs) if off else ":"
-            for off, bounds in zip(offset, axis_bounds or unrestricted_axis_bounds())
-        )
+
+        offset_str = ", ".join(self.visit(off, **kwargs) if off else ":" for off in offset)
 
         if mask_acc and any(off is None for off in offset):
             k_size = 1 if is_serial else "K - k"
@@ -191,29 +174,47 @@ class NpirGen(TemplatedGenerator):
 
     VectorTemp = FormatTemplate("{name}_")
 
-    def visit_MaskBlock(self, node: npir.MaskBlock, **kwargs) -> Union[str, Collection[str]]:
-        axis_bounds = [(common.AxisBound.start(), common.AxisBound.end())] * 3
+    def visit_HorizontalMask(
+        self,
+        node: npir.HorizontalMask,
+        h_lower: Tuple[int, int],
+        h_upper: Tuple[int, int],
+        **kwargs: Any,
+    ) -> Union[str, Collection[str]]:
+        def compute_offset(bound: common.AxisBound, axis: str) -> str:
+            return "{base}{offset:+d}".format(
+                base=axis.lower() if bound.level == common.LevelMarker.START else axis.upper(),
+                offset=bound.offset,
+            )
+
+        horizontal_extent = Extent(((h_lower[0], h_upper[0]), (h_lower[1], h_upper[1]), (0, 0)))
+        rel_mask: Optional[common.HorizontalMask] = utils.compute_relative_mask(
+            horizontal_extent, node
+        )
+        assert rel_mask is not None
+        i_lower: str = compute_offset(rel_mask.i.start, "i")
+        i_upper = compute_offset(rel_mask.i.end, "i")
+        j_lower = compute_offset(rel_mask.j.start, "j")
+        j_upper = compute_offset(rel_mask.j.end, "j")
+
+        return self.generic_visit(node, ioffsets=(i_lower, i_upper), joffsets=(j_lower, j_upper))
+
+    HorizontalMask = FormatTemplate(
+        "np.bitwise_and(np.broadcast_to(np.bitwise_and(ii >= {ioffsets[0]}, ii < {ioffsets[1]}), (I - i, J - j)), np.broadcast_to(np.bitwise_and(jj >= {joffsets[0]}, jj < {joffsets[1]}), (I - i, J - j)))"
+    )
+
+    def visit_MaskBlock(self, node: npir.MaskBlock, **kwargs: Any) -> Union[str, Collection[str]]:
         if isinstance(node.mask, npir.FieldSlice):
             mask_def = ""
         elif isinstance(node.mask, npir.BroadCast):
             mask_name = node.mask_name
-            mask = self.visit(node.mask)
+            mask = self.visit(node.mask, **kwargs)
             mask_def = f"{mask_name}_ = np.full((I - i, J - j, K - k), {mask})\n"
-        elif isinstance(node.mask, common.HorizontalMask):
-            lower, upper = (kwargs[x] for x in ("h_lower", "h_upper"))
-            horizontal_extent = Extent(((lower[0], upper[0]), (lower[1], upper[1]), (0, 0)))
-            rel_mask: Optional[common.HorizontalMask] = utils.compute_relative_mask(
-                horizontal_extent, node.mask
-            )
-            assert rel_mask is not None
-            axis_bounds[0] = (rel_mask.i.start, rel_mask.i.end)
-            axis_bounds[1] = (rel_mask.j.start, rel_mask.j.end)
-            mask_def = ""
         else:
             mask_name = node.mask_name
-            mask = self.visit(node.mask)
+            mask = self.visit(node.mask, **kwargs)
             mask_def = f"{mask_name}_ = {mask}\n"
-        return self.generic_visit(node, mask_def=mask_def, axis_bounds=axis_bounds, **kwargs)
+        return self.generic_visit(node, mask_def=mask_def, **kwargs)
 
     MaskBlock = JinjaTemplate(
         textwrap.dedent(
@@ -301,7 +302,11 @@ class NpirGen(TemplatedGenerator):
             lower[1] = min(extents[field].to_boundary()[1][0] for field in fields)
             upper[0] = min(extents[field].to_boundary()[0][1] for field in fields)
             upper[1] = min(extents[field].to_boundary()[1][1] for field in fields)
-        return self.generic_visit(node, h_lower=lower, h_upper=upper, **kwargs)
+
+        create_axes = len(node.iter_tree().if_isinstance(npir.HorizontalMask).to_list()) > 0
+        return self.generic_visit(
+            node, h_lower=lower, h_upper=upper, create_axes=create_axes, **kwargs
+        )
 
     HorizontalBlock = JinjaTemplate(
         textwrap.dedent(
@@ -309,6 +314,10 @@ class NpirGen(TemplatedGenerator):
             # --- begin horizontal block --
             i, I = _di_ - {{ h_lower[0] }}, _dI_ + {{ h_upper[0] }}
             j, J = _dj_ - {{ h_lower[1] }}, _dJ_ + {{ h_upper[1] }}
+            {% if create_axes -%}
+            ii = np.arange(i, I)[:, np.newaxis]
+            jj = np.arange(j, J)[np.newaxis, :]
+            {%- endif %}
             {% for assign in body %}{{ assign }}
             {% endfor %}# --- end horizontal block --
 
