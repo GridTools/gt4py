@@ -64,13 +64,17 @@ class IJCacheDetection(NodeTranslator):
         def has_vertical_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
             return any(offset[2] != 0 for offset in offsets)
 
-        accesses = AccessCollector.apply(node).offsets()
+        collection = AccessCollector.apply(node)
+        accesses = collection.offsets()
+        region_writes = collection.region_writes()
+
         cacheable = {
             field
             for field, offsets in accesses.items()
             if field in local_tmps
             and not already_cached(field)
             and not has_vertical_offset(offsets)
+            and field not in region_writes
         }
         caches = self.visit(node.caches, **kwargs) + [
             oir.IJCache(name=field) for field in cacheable
