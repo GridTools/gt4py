@@ -16,7 +16,7 @@
 
 """Removes horizontal executions that is never executed and computes the correct extents."""
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import eve
 from gt4py.definitions import Extent
@@ -31,7 +31,8 @@ class RemoveUnexecutedRegions(eve.NodeTranslator):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         ctx = self.Context()
-        vertical_loops = [self.visit(loop, ctx=ctx) for loop in reversed(node.vertical_loops)]
+        rev_vertical_loops = [self.visit(loop, ctx=ctx) for loop in reversed(node.vertical_loops)]
+        vertical_loops = [vloop for vloop in reversed(rev_vertical_loops) if isinstance(vloop, oir.VerticalLoop)]
         return oir.Stencil(
             name=node.name,
             params=node.params,
@@ -39,17 +40,28 @@ class RemoveUnexecutedRegions(eve.NodeTranslator):
             declarations=node.declarations,
         )
 
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
+        if sections := [self.visit(section, **kwargs) for section in node.sections]:
+            # Clear caches
+            return oir.VerticalLoop(loop_order=node.loop_order, sections=sections, caches=[])
+        else:
+            return eve.NOTHING
+
     def visit_VerticalLoopSection(
         self,
         node: oir.VerticalLoopSection,
         **kwargs: Any,
-    ) -> oir.VerticalLoopSection:
-        horizontal_executions = [
-            self.visit(execution, **kwargs) for execution in reversed(node.horizontal_executions)
+    ) -> Optional[oir.VerticalLoopSection]:
+        rev_executions = [
+            self.visit(execution, **kwargs)
+            for execution in reversed(node.horizontal_executions)
         ]
-        return oir.VerticalLoopSection(
-            interval=node.interval, horizontal_executions=horizontal_executions
-        )
+        if executions := [execution for execution in reversed(rev_executions) if isinstance(execution, oir.HorizontalExecution)]:
+            return oir.VerticalLoopSection(
+                interval=node.interval, horizontal_executions=executions
+            )
+        else:
+            return eve.NOTHING
 
     def visit_HorizontalExecution(
         self,
@@ -57,7 +69,7 @@ class RemoveUnexecutedRegions(eve.NodeTranslator):
         *,
         ctx: Context,
         **kwargs: Any,
-    ) -> oir.HorizontalExecution:
+    ) -> Optional[oir.HorizontalExecution]:
         compute_extent = (
             node.iter_tree()
             .if_is(oir.AssignStmt)
@@ -69,9 +81,12 @@ class RemoveUnexecutedRegions(eve.NodeTranslator):
             )
         )
 
-        filtered_body = self.visit(node.body, ctx=ctx, compute_extent=compute_extent, **kwargs)
-
-        return oir.HorizontalExecution(body=filtered_body, declarations=node.declarations, **kwargs)
+        if filtered_body := self.visit(node.body, ctx=ctx, compute_extent=compute_extent, **kwargs):
+            return oir.HorizontalExecution(
+                body=filtered_body, declarations=node.declarations, **kwargs
+            )
+        else:
+            return eve.NOTHING
 
     def visit_MaskStmt(
         self,
