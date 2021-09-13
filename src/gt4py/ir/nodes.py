@@ -50,10 +50,6 @@ NativeFunction enumeration (:class:`NativeFunction`)
     [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
     `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
-AccessIntent enumeration (:class:`AccessIntent`)
-    Access permissions
-    [`READ_ONLY`, `READ_WRITE`]
-
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
     [`START`, `END`]
@@ -84,17 +80,18 @@ storing a reference to the piece of source code which originated the node.
     Axis(name: str)
 
     Domain(parallel_axes: List[Axis], [sequential_axis: Axis])
-        # LatLonGrids -> parallel_axes: ["I", "J], sequential_axis: "K"
+        # LatLonGrids -> parallel_axes: ["I", "J"], sequential_axis: "K"
 
     Literal     = ScalarLiteral(value: Any (should match DataType), data_type: DataType)
                 | BuiltinLiteral(value: Builtin)
 
     Ref         = VarRef(name: str, [index: int])
-                | FieldRef(name: str, offset: Dict[str, int])
+                | FieldRef(name: str, offset: Dict[str, int | Expr])
+                # Horizontal indices must be ints
 
     NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
-    Cast(dtype: DataType, expr: Expr)
+    Cast(expr: Expr, data_type: DataType)
 
     Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch
 
@@ -112,6 +109,8 @@ storing a reference to the piece of source code which originated the node.
     Statement   = Decl
                 | Assign(target: Ref, value: Expr)
                 | If(condition: expr, main_body: BlockStmt, else_body: BlockStmt)
+                | HorizontalIf(intervals: Dict[str, Interval], body: BlockStmt)
+                | While(condition: expr, body: BlockStmt)
                 | BlockStmt
 
     AxisBound(level: LevelMarker | VarRef, offset: int)
@@ -143,7 +142,7 @@ Implementation IR
  ::
 
     Accessor    = ParameterAccessor(symbol: str)
-                | FieldAccessor(symbol: str, intent: AccessIntent, extent: Extent)
+                | FieldAccessor(symbol: str, intent: AccessKind, extent: Extent)
 
     ApplyBlock(interval: AxisInterval,
                local_symbols: Dict[str, VarDecl],
@@ -174,12 +173,13 @@ import collections
 import copy
 import enum
 import operator
-from typing import List, Sequence
+import sys
+from typing import Generator, Sequence, Type
 
 import numpy as np
 
 from gt4py import utils as gt_utils
-from gt4py.definitions import CartesianSpace, Extent, Index
+from gt4py.definitions import AccessKind, CartesianSpace, Extent, Index
 from gt4py.utils.attrib import Any as Any
 from gt4py.utils.attrib import Dict as DictOf
 from gt4py.utils.attrib import List as ListOf
@@ -272,15 +272,6 @@ class Builtin(enum.Enum):
             result = cls.FALSE
 
         return result
-
-    def __str__(self):
-        return self.name
-
-
-@enum.unique
-class AccessIntent(enum.Enum):
-    READ_ONLY = 0
-    READ_WRITE = 1
 
     def __str__(self):
         return self.name
@@ -384,7 +375,7 @@ class VarRef(Ref):
 @attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, int])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
     data_index = attribute(of=ListOf[int], factory=list)
     loc = attribute(of=Location, optional=True)
 
@@ -645,6 +636,13 @@ class If(Statement):
     loc = attribute(of=Location, optional=True)
 
 
+@attribclass
+class While(Statement):
+    condition = attribute(of=Expr)
+    body = attribute(of=BlockStmt)
+    loc = attribute(of=Location, optional=True)
+
+
 # ---- IR: computations ----
 @enum.unique
 class LevelMarker(enum.Enum):
@@ -708,6 +706,39 @@ class AxisInterval(Node):
 
         return interval
 
+    @property
+    def is_single_index(self) -> bool:
+        if not isinstance(self.start, AxisBound) or not isinstance(self.end, AxisBound):
+            return False
+
+        return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
+
+    def disjoint_from(self, other: "AxisInterval") -> bool:
+        # This made-up constant must be larger than any LevelMarker.offset used
+        DOMAIN_SIZE: int = 1000
+
+        def get_offset(bound: AxisBound) -> int:
+            return (
+                0 + bound.offset if bound.level == LevelMarker.START else sys.maxsize + bound.offset
+            )
+
+        self_start = get_offset(self.start)
+        self_end = get_offset(self.end)
+
+        other_start = get_offset(other.start)
+        other_end = get_offset(other.end)
+
+        return not (self_start <= other_start < self_end) and not (
+            other_start <= self_start < other_end
+        )
+
+
+# TODO Find a better place for this in the file.
+@attribclass
+class HorizontalIf(Statement):
+    intervals = attribute(of=DictOf[str, AxisInterval])
+    body = attribute(of=BlockStmt)
+
 
 @attribclass
 class ComputationBlock(Node):
@@ -755,7 +786,7 @@ class ParameterAccessor(Accessor):
 @attribclass
 class FieldAccessor(Accessor):
     symbol = attribute(of=str)
-    intent = attribute(of=AccessIntent)
+    intent = attribute(of=AccessKind)
     extent = attribute(of=Extent, default=Extent.zeros())
 
 
@@ -998,3 +1029,26 @@ class IRNodeDumper(IRNodeMapper):
 
 
 dump_ir = IRNodeDumper.apply
+
+
+def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None, None]:
+    """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
+
+    def recurse(node: Node) -> Generator[Node, None, None]:
+        for key, value in iter_attributes(node):
+            if isinstance(node, collections.abc.Iterable):
+                if isinstance(node, collections.abc.Mapping):
+                    children = node.values()
+                else:
+                    children = node
+            else:
+                children = gt_utils.listify(value)
+
+            for value in children:
+                if isinstance(value, Node):
+                    yield from recurse(value)
+
+            if isinstance(node, node_type):
+                yield node
+
+    yield from recurse(root_node)

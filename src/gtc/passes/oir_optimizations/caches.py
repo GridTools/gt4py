@@ -18,7 +18,7 @@ import collections
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
 
-from eve import NodeTranslator
+from eve import NodeTranslator, SymbolTableTrait
 from gtc import common, oir
 
 from .utils import AccessCollector, symbol_name_creator
@@ -186,6 +186,30 @@ class PruneKCacheFills(NodeTranslator):
             return {field for field in filling_fields if not requires_fill(field)}
 
         pruneable = set.intersection(*(pruneable_fields(section) for section in node.sections))
+
+        # Consider accesses outside of loop interval
+        # Note: those accesses would not require a fill in the whole loop interval in in theory
+        # but restriction to the GridTools k-cache types makes this necessary
+        # E.g. consider the following loop with k = 1, 2:
+        # k | no fill required | initial fill required |
+        # - | ---------------- | --------------------- |
+        # 1 | a[k] = init      | a[k] = a[k - 1]       |
+        # 2 | a[k] = a[k - 1]  | a[k] = a[k - 1]       |
+        # In the first case, no fill is required. In the second case, a[0] has to be filled on
+        # level k = 1. On level k = 2, no fill would be necessary, but GridTools C++ does not
+        # support a k-cache type that only fills on the initial level, so fills are inserted on all
+        # levels here.
+
+        first_section_offsets = AccessCollector.apply(node.sections[0]).offsets()
+        last_section_offsets = AccessCollector.apply(node.sections[-1]).offsets()
+        for field in list(pruneable):
+            first_k_offsets = (o[2] for o in first_section_offsets.get(field, {(0, 0, 0)}))
+            last_k_offsets = (o[2] for o in last_section_offsets.get(field, {(0, 0, 0)}))
+            if node.loop_order == common.LoopOrder.BACKWARD:
+                first_k_offsets, last_k_offsets = last_k_offsets, first_k_offsets
+            if min(first_k_offsets) < 0 or max(last_k_offsets) > 0:
+                pruneable.remove(field)
+
         return self.generic_visit(node, pruneable=pruneable, **kwargs)
 
 
@@ -237,6 +261,8 @@ class FillFlushToLocalKCaches(NodeTranslator):
     3. Fill statements from the original field to the temporary are introduced.
     4. Flush statements from the temporary to the original field are introduced.
     """
+
+    contexts = (SymbolTableTrait.symtable_merger,)
 
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, name_map: Dict[str, str], **kwargs: Any
@@ -530,6 +556,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
                     fills=fills,
                     flushes=flushes,
                     name_map=filling_or_flushing_fields,
+                    symtable=symtable,
                     **kwargs,
                 )
             )
@@ -549,8 +576,8 @@ class FillFlushToLocalKCaches(NodeTranslator):
             vertical_loops=self.visit(
                 node.vertical_loops,
                 new_tmps=new_tmps,
-                symtable=node.symtable_,
-                new_symbol_name=symbol_name_creator(set(node.symtable_)),
+                new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
+                **kwargs,
             ),
             declarations=node.declarations + new_tmps,
         )

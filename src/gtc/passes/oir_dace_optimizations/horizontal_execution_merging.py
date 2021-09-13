@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 #
-# GTC Toolchain - GT4Py Project - GridTools Framework
+# GridTools Compiler Toolchain (GTC) - GridTools Framework
 #
 # Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
+# This file is part of the GTC project and the GridTools framework.
+# GTC is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or any later
 # version. See the LICENSE.txt file at the top-level directory of this
@@ -29,6 +29,7 @@ import dace
 import dace.subsets
 import networkx as nx
 from dace import SDFGState
+from dace.properties import Property, make_properties
 from dace.sdfg import graph
 from dace.sdfg.utils import node_path_graph
 from dace.transformation.transformation import PatternNode, Transformation
@@ -36,6 +37,8 @@ from dace.transformation.transformation import PatternNode, Transformation
 from gtc import oir
 from gtc.dace.nodes import HorizontalExecutionLibraryNode
 from gtc.passes.oir_optimizations.utils import AccessCollector
+
+from .api import optimize_horizontal_executions
 
 
 OFFSETS_T = Dict[str, Set[Tuple[int, int, int]]]
@@ -73,6 +76,22 @@ def offsets_match(
         ij_offsets(left_accesses.read_offsets()), ij_offsets(right_accesses.write_offsets())
     )
     return not conflicting
+
+
+def iteration_space_compatible(
+    left: HorizontalExecutionLibraryNode,
+    right: HorizontalExecutionLibraryNode,
+    api_fields: Set[str],
+):
+
+    if left.iteration_space == right.iteration_space:
+        return True
+
+    for conn_name in set(left.out_connectors) | set(right.out_connectors):
+        name = conn_name[len("OUT_") :]
+        if name in api_fields:
+            return False
+    return True
 
 
 def unwire_access_node(
@@ -149,7 +168,14 @@ def optional_node(pattern_node: PatternNode, sdfg: dace.SDFG) -> Optional[dace.n
 
 
 @dace.registry.autoregister_params(singlestate=True)
+@make_properties
 class GraphMerging(Transformation):
+
+    api_fields = Property(
+        dtype=set,
+        desc="Set of field names that are parameters to the parent stencil",
+    )
+
     left = PatternNode(HorizontalExecutionLibraryNode)
     right = PatternNode(HorizontalExecutionLibraryNode)
     access = PatternNode(dace.nodes.AccessNode)
@@ -168,7 +194,7 @@ class GraphMerging(Transformation):
         graph: SDFGState,
         candidate: Dict[str, dace.nodes.Node],
         expr_index: int,
-        sdfg: Union[dace.SDFG, SDFGState],
+        sdfg: dace.SDFG,
         strict: bool = False,
     ) -> bool:
         left = self.left(sdfg)
@@ -197,7 +223,9 @@ class GraphMerging(Transformation):
         if len(protected_intermediate_names & output_names) > 0:
             return False
 
-        return offsets_match(left, right)
+        return offsets_match(left, right) and iteration_space_compatible(
+            left, right, self.api_fields
+        )
 
     def apply(self, sdfg: dace.SDFG) -> None:
         state = sdfg.node(self.state_id)
@@ -254,3 +282,7 @@ class GraphMerging(Transformation):
                     res.remove_in_connector("IN_" + acc.label)
             elif not state.out_edges:
                 acc.access = dace.AccessType.WriteOnly
+
+
+def graph_merge_horizontal_executions(node: oir.Stencil) -> oir.Stencil:
+    return optimize_horizontal_executions(node, GraphMerging)
