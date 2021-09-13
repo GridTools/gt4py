@@ -151,18 +151,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     IJExtent = as_fmt("extent<{i[0]}, {i[1]}, {j[0]}, {j[1]}>")
 
-    def visit_HorizontalExecution(self, node: cuir.HorizontalExecution, **kwargs: Any) -> str:
-        accesses = node.iter_tree().if_isinstance(
-            cuir.ScalarAccess).filter(lambda acc: acc.name.endswith("_pos")
-        )
-        for acc in accesses:
-            if acc.name[0] == 'i':
-                acc.name = f"{acc.name}(0, 0)" if node.extent.i == (0, 0) else "validator.m_i_lo"
-            else:
-                acc.name = f"{acc.name}({node.extent.j[0]}, {node.extent.j[1]})"
-
-        return self.generic_visit(node, **kwargs)
-
     HorizontalExecution = as_mako(
         """
         // HorizontalExecution ${id(_this_node)}
@@ -172,6 +160,17 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         }
         """
     )
+
+    def visit_HorizontalExecution(self, node: cuir.HorizontalExecution, **kwargs: Any) -> str:
+        accesses = node.iter_tree().if_isinstance(
+            cuir.ScalarAccess).filter(lambda acc: acc.name.endswith("_pos")
+        )
+        for acc in accesses:
+            index = acc.name[0:1]
+            extent = node.extent.i if index == "i" else node.extent.j
+            acc.name = f"{acc.name}<{extent[0]}, {extent[1]}>(_{index}_block)"
+
+        return self.generic_visit(node, **kwargs)
 
     def visit_AxisBound(self, node: cuir.AxisBound, **kwargs: Any) -> str:
         if node.level == LevelMarker.START:
@@ -273,8 +272,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     VerticalLoop = as_mako(
         """
         % if _this_node.has_horizontal_masks == True:
-        #define i_pos(iminus_extent, iplus_extent) (blockDim.x * blockIdx.x + threadIdx.x) + iminus_extent - iplus_extent
-        #define j_pos(jminus_extent, jplus_extent) (blockDim.y * blockIdx.y + threadIdx.y) + jminus_extent - (blockIdx.y > 0 ? 2 : 0) * jplus_extent
+        template<int iminus_extent = 0, int iplus_extent = 0>
+        GT_FUNCTION_DEVICE const int i_pos(const int i_block) {
+            return (blockDim.x * blockIdx.x + i_block);  // + iminus_extent - iplus_extent;
+        }
+
+        template<int jminus_extent = 0, int jplus_extent = 0>
+        GT_FUNCTION_DEVICE const int j_pos(const int j_block) {
+            return (blockDim.y * blockIdx.y + threadIdx.y) + jminus_extent - (blockIdx.y > 0 ? 2 : 0) * jplus_extent;
+        }
         % endif
 
         template <class Sid>
