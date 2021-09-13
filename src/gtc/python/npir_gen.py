@@ -187,17 +187,16 @@ class NpirGen(TemplatedGenerator):
                 offset=bound.offset,
             )
 
-        horizontal_extent = Extent(((h_lower[0], h_upper[0]), (h_lower[1], h_upper[1]), (0, 0)))
+        horizontal_extent = Extent(((-h_lower[0], h_upper[0]), (-h_lower[1], h_upper[1]), (0, 0)))
         rel_mask: Optional[common.HorizontalMask] = utils.compute_relative_mask(
             horizontal_extent, node
         )
         assert rel_mask is not None
-        i_lower: str = compute_offset(rel_mask.i.start, "i")
-        i_upper = compute_offset(rel_mask.i.end, "i")
-        j_lower = compute_offset(rel_mask.j.start, "j")
-        j_upper = compute_offset(rel_mask.j.end, "j")
-
-        return self.generic_visit(node, ioffsets=(i_lower, i_upper), joffsets=(j_lower, j_upper))
+        return self.generic_visit(
+            node,
+            ioffsets=(compute_offset(rel_mask.i.start, "i"), compute_offset(rel_mask.i.end, "i")),
+            joffsets=(compute_offset(rel_mask.j.start, "j"), compute_offset(rel_mask.j.end, "j")),
+        )
 
     HorizontalMask = FormatTemplate(
         "np.bitwise_and(np.broadcast_to(np.bitwise_and(ii >= {ioffsets[0]}, ii < {ioffsets[1]}), (I - i, J - j)), np.broadcast_to(np.bitwise_and(jj >= {joffsets[0]}, jj < {joffsets[1]}), (I - i, J - j)))"
