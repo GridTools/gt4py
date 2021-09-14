@@ -128,13 +128,13 @@ class KCacheDetection(NodeTranslator):
 
         collection = AccessCollector.apply(node)
         accesses = collection.offsets()
-        region_writes = collection.region_writes()
+        mask_writes = collection.mask_writes()
 
         cacheable = {
             field
             for field, offsets in accesses.items()
             if not already_cached(field)
-            and field not in region_writes
+            and field not in mask_writes
             and accessed_more_than_once(offsets)
             and not has_horizontal_offset(offsets)
             and offsets_within_limits(offsets)

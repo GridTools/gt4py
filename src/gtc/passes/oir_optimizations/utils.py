@@ -29,7 +29,7 @@ class Access:
     field: str
     offset: Tuple[int, int, int]
     is_write: bool
-    in_region: bool = False
+    in_mask: bool = False
 
     @property
     def is_read(self) -> bool:
@@ -52,7 +52,7 @@ class AccessCollector(NodeVisitor):
                 field=node.name,
                 offset=(node.offset.i, node.offset.j, node.offset.k),
                 is_write=is_write,
-                in_region=kwargs.get("in_region", False),
+                in_mask=kwargs.get("in_mask", False),
             )
         )
 
@@ -66,9 +66,7 @@ class AccessCollector(NodeVisitor):
 
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
         self.visit(node.mask, is_write=False, **kwargs)
-        self.visit(
-            node.body, in_region=isinstance(node.mask, oir.HorizontalMask), **kwargs
-        )
+        self.visit(node.body, in_mask=True, **kwargs)
 
     @dataclass
     class Result:
@@ -104,9 +102,9 @@ class AccessCollector(NodeVisitor):
             """Get a set of all written fields' names."""
             return {acc.field for acc in self._ordered_accesses if acc.is_write}
 
-        def region_writes(self) -> Set[str]:
-            """Get a set of all fields' names written in horizontal regions."""
-            return {acc.field for acc in self._ordered_accesses if acc.is_write and acc.in_region}
+        def mask_writes(self) -> Set[str]:
+            """Get a set of all fields' names written in mask statements."""
+            return {acc.field for acc in self._ordered_accesses if acc.is_write and acc.in_mask}
 
         def ordered_accesses(self) -> List[Access]:
             """Get a list of ordered accesses."""
