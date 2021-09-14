@@ -244,12 +244,12 @@ class OIRToCUIR(eve.NodeTranslator):
                         node.sections,
                         ij_caches=ij_caches,
                         k_caches=k_caches,
-                        has_horizontal_masks=has_horizontal_masks,
                         symtable=symtable,
                         **kwargs,
                     ),
                     ij_caches=list(ij_caches.values()),
                     k_caches=list(k_caches.values()),
+                    has_horizontal_masks=has_horizontal_masks,
                 )
             ],
         )
