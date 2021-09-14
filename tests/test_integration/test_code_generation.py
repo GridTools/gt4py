@@ -231,6 +231,37 @@ def test_lower_dimensional_masked(backend):
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_lower_dimensional_masked_2dcond(backend):
+    @gtscript.stencil(backend=backend)
+    def copy_2to3(
+        cond: gtscript.Field[gtscript.IJK, np.float_],
+        inp: gtscript.Field[gtscript.IJ, np.float_],
+        outp: gtscript.Field[gtscript.IJK, np.float_],
+    ):
+        with computation(FORWARD), interval(...):
+            if cond > 0.0:
+                outp = inp
+
+    inp = np.random.randn(10, 10)
+    outp = np.random.randn(10, 10, 10)
+    cond = np.random.randn(10, 10, 10)
+
+    inp_f = gt_storage.from_array(inp, default_origin=(0, 0), backend=backend)
+    outp_f = gt_storage.from_array(outp, default_origin=(0, 0, 0), backend=backend)
+    cond_f = gt_storage.from_array(cond, default_origin=(0, 0, 0), backend=backend)
+
+    copy_2to3(cond_f, inp_f, outp_f)
+
+    inp3d = np.empty_like(outp)
+    inp3d[...] = inp[:, :, np.newaxis]
+
+    outp = np.choose(cond > 0.0, [outp, inp3d])
+
+    outp_f.device_to_host()
+    assert np.allclose(outp, np.asarray(outp_f))
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
     @gtscript.stencil(backend=backend)
     def copy_2to3(

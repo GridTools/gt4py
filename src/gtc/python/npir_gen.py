@@ -138,7 +138,7 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_FieldSlice(
-        self, node: npir.FieldSlice, mask_acc="", mask_shape=None, **kwargs: Any
+        self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, **kwargs: Any
     ) -> Union[str, Collection[str]]:
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
@@ -146,7 +146,8 @@ class NpirGen(TemplatedGenerator):
         offset_str = ", ".join(self.visit(off, **kwargs) if off else ":" for off in offset)
 
         if mask_acc and any(off is None for off in offset):
-            arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I-i, J-j, K-k))"
+            k_size = 1 if is_serial else "K - k"
+            arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I - i, J - j, {k_size}))"
         else:
             arr_expr = f"{node.name}_[{offset_str}]"
 
@@ -239,6 +240,11 @@ class NpirGen(TemplatedGenerator):
         elif node is common.LoopOrder.BACKWARD:
             return "for k_ in range(K-1, k-1, -1):"
         return ""
+
+    def visit_VerticalPass(self, node: npir.VerticalPass, **kwargs):
+        return self.generic_visit(
+            node, is_serial=(node.direction != common.LoopOrder.PARALLEL), **kwargs
+        )
 
     VerticalPass = JinjaTemplate(
         textwrap.dedent(
