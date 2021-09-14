@@ -115,7 +115,7 @@ class OIRToCUIR(eve.NodeTranslator):
         axis: str,
         **kwargs: Any,
     ) -> cuir.Expr:
-        scalar_name = f"{axis}_pos"
+        scalar_name = f"{axis}_pos(0_c, 0_c, 0_c)"
         int_type = common.DataType.INT32
 
         if interval.is_single_index:
