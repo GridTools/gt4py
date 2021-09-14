@@ -180,7 +180,7 @@ class VerticalLoop(LocNode):
     sections: List[VerticalLoopSection]
     ij_caches: List[IJCacheDecl]
     k_caches: List[KCacheDecl]
-    has_horizontal_masks: bool
+    has_horizontal_masks: bool = False
 
 
 class Kernel(LocNode):
