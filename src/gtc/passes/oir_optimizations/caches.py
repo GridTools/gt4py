@@ -126,6 +126,15 @@ class KCacheDetection(NodeTranslator):
         def offsets_within_limits(offsets: Set[Tuple[int, int, int]]) -> bool:
             return all(abs(offset[2]) <= self.max_cacheable_offset for offset in offsets)
 
+        def matches_loop_order(
+            offsets: Set[Tuple[int, int, int]], loop_order: common.LoopOrder
+        ) -> bool:
+            if loop_order == common.LoopOrder.FORWARD:
+                return all(offset[2] <= 0 for offset in offsets)
+            if loop_order == common.LoopOrder.BACKWARD:
+                return all(offset[2] >= 0 for offset in offsets)
+            return True
+
         collection = AccessCollector.apply(node)
         accesses = collection.offsets()
         mask_writes = collection.mask_writes()
@@ -138,6 +147,7 @@ class KCacheDetection(NodeTranslator):
             and accessed_more_than_once(offsets)
             and not has_horizontal_offset(offsets)
             and offsets_within_limits(offsets)
+            and matches_loop_order(offsets, node.loop_order)
         }
         caches = self.visit(node.caches, **kwargs) + [
             oir.KCache(name=field, fill=True, flush=True) for field in cacheable
