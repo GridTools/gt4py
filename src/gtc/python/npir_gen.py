@@ -101,6 +101,31 @@ def get_horizontal_restriction(
     )
 
 
+def compute_axis_bounds(bounds: Optional[DomainBounds], axis_name: str, offset: int) -> str:
+    def lpar(offset: int) -> str:
+        return "(" if offset != 0 else ""
+
+    def rpar(offset: int) -> str:
+        return ")" if offset != 0 else ""
+
+    def offset_str(offset: int) -> str:
+        if offset < 0:
+            return str(offset)
+        elif offset > 0:
+            return f"+ {offset}"
+        else:
+            return ""
+
+    if not bounds:
+        bounds = ((axis_name.lower(), 0), (axis_name.upper(), 0))
+        # NOTE(jdahm): This no longer uses a visitor for the NumericalOffsets..
+    loffset = bounds[0][1] + offset
+    lower = lpar(loffset) + f"{bounds[0][0]}{offset_str(loffset)}" + rpar(loffset)
+    uoffset = bounds[1][1] + offset
+    upper = lpar(uoffset) + f"{bounds[1][0]}{offset_str(uoffset)}" + rpar(uoffset)
+    return lower, upper
+
+
 class NpirGen(TemplatedGenerator):
     def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
         return f"np.{node.name.lower()}"
@@ -134,30 +159,10 @@ class NpirGen(TemplatedGenerator):
         bounds: Optional[DomainBounds] = None,
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
-        def lpar(offset: int) -> str:
-            return "(" if offset != 0 else ""
-
-        def rpar(offset: int) -> str:
-            return ")" if offset != 0 else ""
-
-        def offset_str(offset: int) -> str:
-            if offset < 0:
-                return str(offset)
-            elif offset > 0:
-                return f"+ {offset}"
-            else:
-                return ""
-
         offset = self.visit(node.offset)
         axis_name = self.visit(node.axis_name)
         if node.parallel:
-            if not bounds:
-                bounds = ((axis_name.lower(), 0), (axis_name.upper(), 0))
-                # NOTE(jdahm): This no longer uses a visitor for the NumericalOffsets..
-            loffset = bounds[0][1] + node.offset.value
-            lower = lpar(loffset) + f"{bounds[0][0]}{offset_str(loffset)}" + rpar(loffset)
-            uoffset = bounds[1][1] + node.offset.value
-            upper = lpar(uoffset) + f"{bounds[1][0]}{offset_str(uoffset)}" + rpar(uoffset)
+            lower, upper = compute_axis_bounds(bounds, axis_name, node.offset.value)
             return f"{lower}:{upper}"
         else:
             return f"{axis_name.lower()}_{offset}:({axis_name.lower()}_{offset} + 1)"
@@ -194,7 +199,7 @@ class NpirGen(TemplatedGenerator):
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
         if not domain:
-            domain = [((axis.lower(), 0), (axis.upper(), 0)) for axis in ("I", "J")] + [None]
+            domain = [None] * 3
 
         offset_str = ", ".join(
             self.visit(off, bounds=bounds, **kwargs) if off else ":"
@@ -202,8 +207,15 @@ class NpirGen(TemplatedGenerator):
         )
 
         if mask_acc and any(off is None for off in offset):
-            k_size = 1 if is_serial else "K - k"
-            arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I - i, J - j, {k_size}))"
+            axes_bounds = (
+                compute_axis_bounds(bounds, axis_name, 0)
+                for bounds, axis_name in zip(domain, ("I", "J"))
+            )
+            k_size = "1" if is_serial else "K - k"
+            broadcast_str = (
+                ",".join([f"{upper}-{lower}" for lower, upper in axes_bounds]) + f", {k_size}"
+            )
+            arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], ({broadcast_str}))"
         else:
             arr_expr = f"{node.name}_[{offset_str}]"
 

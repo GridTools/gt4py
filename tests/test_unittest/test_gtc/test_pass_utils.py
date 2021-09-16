@@ -64,7 +64,7 @@ from gtc.passes import utils
                 start=None,
                 end=None,
             ),
-            (0, 0),
+            (-10000, 10000),
         ),
     ],
 )

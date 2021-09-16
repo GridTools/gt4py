@@ -148,6 +148,7 @@ class MaskBlock(VectorStmt):
     mask: VectorExpression
     mask_name: str
     body: List[VectorAssign]
+    horiz_mask: Optional[HorizontalMask]
 
 
 class HorizontalBlock(common.LocNode):

@@ -34,6 +34,12 @@ class AssignStmt(oir.AssignStmt):
     horiz_mask: Optional[oir.HorizontalMask] = None
 
 
+class MaskStmt(oir.MaskStmt):
+    """MaskStmt used in the lowering from oir to npir."""
+
+    horiz_mask: Optional[oir.HorizontalMask] = None
+
+
 class HorizontalMaskInliner(NodeTranslator):
     def __init__(self):
         self.horiz_mask: Optional[oir.HorizontalMask] = None
@@ -84,7 +90,9 @@ class HorizontalMaskInliner(NodeTranslator):
                     body.extend(stmts)
                 else:
                     # This mask had more than a horizontal restriction
-                    body.append(oir.MaskStmt(mask=mask_wout_regions, body=stmts))
+                    body.append(
+                        MaskStmt(mask=mask_wout_regions, body=stmts, horiz_mask=self.horiz_mask)
+                    )
                 # (Re)set horiz_mask to None after visit call
                 self.horiz_mask = None
             else:
@@ -188,7 +196,7 @@ class OirToNpir(NodeTranslator):
 
     def visit_MaskStmt(
         self,
-        node: oir.MaskStmt,
+        node: MaskStmt,
         *,
         ctx: ComputationContext,
         parallel_k: bool,
@@ -209,6 +217,7 @@ class OirToNpir(NodeTranslator):
             mask=mask_expr,
             mask_name=mask_name,
             body=self.visit(node.body, ctx=ctx, parallel_k=parallel_k, mask=mask, **kwargs),
+            horiz_mask=node.horiz_mask,
         )
 
     def visit_AssignStmt(
