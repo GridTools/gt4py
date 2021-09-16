@@ -77,28 +77,30 @@ DomainSpec = Tuple[Optional[DomainBounds], Optional[DomainBounds], Optional[Doma
 
 
 def get_horizontal_restriction(
-    domain_mask: npir.HorizontalMask,
+    horiz_mask: Optional[npir.HorizontalMask],
     *,
-    h_lower: Tuple[int, int],
-    h_upper: Tuple[int, int],
-    is_serial: bool,
+    h_lower: Tuple[int, int] = (0, 0),
+    h_upper: Tuple[int, int] = (0, 0),
     **kwargs: Any,
-) -> Tuple[DomainBounds, DomainBounds]:
+) -> DomainSpec:
     def base_and_offset(bound: common.AxisBound, axis: str) -> str:
         return (
             axis.lower() if bound.level == common.LevelMarker.START else axis.upper(),
             bound.offset,
         )
 
-    horizontal_extent = Extent(((-h_lower[0], h_upper[0]), (-h_lower[1], h_upper[1]), (0, 0)))
-    rel_mask: Optional[common.HorizontalMask] = utils.compute_relative_mask(
-        horizontal_extent, domain_mask
-    )
-    assert rel_mask is not None
-    return (
-        (base_and_offset(interval.start, axis), base_and_offset(interval.end, axis))
-        for axis, interval in (("I", rel_mask.i), ("J", rel_mask.j))
-    )
+    if horiz_mask:
+        horizontal_extent = Extent(((-h_lower[0], h_upper[0]), (-h_lower[1], h_upper[1]), (0, 0)))
+        rel_mask: Optional[common.HorizontalMask] = utils.compute_relative_mask(
+            horizontal_extent, horiz_mask
+        )
+        assert rel_mask is not None
+        return [
+            (base_and_offset(interval.start, axis), base_and_offset(interval.end, axis))
+            for axis, interval in (("I", rel_mask.i), ("J", rel_mask.j))
+        ] + [None]
+    else:
+        return [None] * 3
 
 
 def compute_axis_bounds(bounds: Optional[DomainBounds], axis_name: str, offset: int) -> str:
@@ -243,15 +245,16 @@ class NpirGen(TemplatedGenerator):
     VectorTemp = FormatTemplate("{name}_")
 
     def visit_MaskBlock(self, node: npir.MaskBlock, **kwargs: Any) -> Union[str, Collection[str]]:
+        domain = get_horizontal_restriction(node.horiz_mask, **kwargs)
         if isinstance(node.mask, npir.FieldSlice):
             mask_def = ""
         elif isinstance(node.mask, npir.BroadCast):
             mask_name = node.mask_name
-            mask = self.visit(node.mask, **kwargs)
+            mask = self.visit(node.mask, domain=domain, **kwargs)
             mask_def = f"{mask_name}_ = np.full((I - i, J - j, K - k), {mask})\n"
         else:
             mask_name = node.mask_name
-            mask = self.visit(node.mask, **kwargs)
+            mask = self.visit(node.mask, domain=domain, **kwargs)
             mask_def = f"{mask_name}_ = {mask}\n"
         return self.generic_visit(node, mask_def=mask_def, **kwargs)
 
@@ -268,9 +271,7 @@ class NpirGen(TemplatedGenerator):
         self, node: npir.VectorAssign, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         mask_acc = ""
-        domain = None
-        if node.horiz_mask:
-            domain = list(get_horizontal_restriction(node.horiz_mask, **kwargs)) + [None]
+        domain = get_horizontal_restriction(node.horiz_mask, **kwargs)
         if node.mask:
             mask_acc = f"[{self.visit(node.mask, domain=domain, **kwargs)}]"
         if isinstance(node.right, npir.EmptyTemp):
