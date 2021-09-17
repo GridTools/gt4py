@@ -32,7 +32,9 @@ class RemoveUnexecutedRegions(eve.NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         ctx = self.Context()
         rev_vertical_loops = [self.visit(loop, ctx=ctx) for loop in reversed(node.vertical_loops)]
-        vertical_loops = [vloop for vloop in reversed(rev_vertical_loops) if isinstance(vloop, oir.VerticalLoop)]
+        vertical_loops = [
+            vloop for vloop in reversed(rev_vertical_loops) if isinstance(vloop, oir.VerticalLoop)
+        ]
         return oir.Stencil(
             name=node.name,
             params=node.params,
@@ -53,13 +55,14 @@ class RemoveUnexecutedRegions(eve.NodeTranslator):
         **kwargs: Any,
     ) -> Optional[oir.VerticalLoopSection]:
         rev_executions = [
-            self.visit(execution, **kwargs)
-            for execution in reversed(node.horizontal_executions)
+            self.visit(execution, **kwargs) for execution in reversed(node.horizontal_executions)
         ]
-        if executions := [execution for execution in reversed(rev_executions) if isinstance(execution, oir.HorizontalExecution)]:
-            return oir.VerticalLoopSection(
-                interval=node.interval, horizontal_executions=executions
-            )
+        if executions := [
+            execution
+            for execution in reversed(rev_executions)
+            if isinstance(execution, oir.HorizontalExecution)
+        ]:
+            return oir.VerticalLoopSection(interval=node.interval, horizontal_executions=executions)
         else:
             return eve.NOTHING
 

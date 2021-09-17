@@ -14,12 +14,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import copy
 import itertools
 import typing
-import copy
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Union, Dict, Tuple
+from typing import Any, List, Optional, Union
 
 from eve.traits import SymbolTableTrait
 from eve.visitors import NodeTranslator
@@ -45,7 +45,7 @@ class HorizontalMaskInliner(NodeTranslator):
         self.horiz_mask: Optional[oir.HorizontalMask] = None
 
     @classmethod
-    def apply(cls, stencil: oir.Stencil) -> Tuple[oir.Stencil, Dict[int, oir.HorizontalMask]]:
+    def apply(cls, stencil: oir.Stencil) -> oir.Stencil:
         transformer = cls()
         return transformer.visit(copy.deepcopy(stencil))
 
@@ -67,9 +67,8 @@ class HorizontalMaskInliner(NodeTranslator):
         else:
             return node
 
-    def visit_HorizontalMask(self, node: oir.HorizontalMask, **kwargs: Any) -> oir.HorizontalMask:
+    def visit_HorizontalMask(self, node: oir.HorizontalMask, **kwargs: Any) -> None:
         self.horiz_mask = node
-        return None
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> AssignStmt:
         return AssignStmt(left=node.left, right=node.right, horiz_mask=self.horiz_mask)
