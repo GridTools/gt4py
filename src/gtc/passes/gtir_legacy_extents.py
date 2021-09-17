@@ -30,8 +30,6 @@ class LegacyExtentsVisitor(NodeVisitor):
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> Dict[str, Extent]:
         field_extents = {name: Extent.zeros() for name in _iter_field_names(node)}
         ctx = self.StencilContext()
-        for horizontal_region in node.iter_tree().if_isinstance(gtir.HorizontalRegion):
-            self.visit(horizontal_region, ctx=ctx)
         for field_if in node.iter_tree().if_isinstance(gtir.FieldIfStmt):
             self.visit(field_if, ctx=ctx)
         for region in node.iter_tree().if_isinstance(gtir.HorizontalRegion):
