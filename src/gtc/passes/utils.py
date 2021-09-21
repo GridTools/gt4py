@@ -69,11 +69,13 @@ def compute_extent_difference(extent: Extent, mask: common.HorizontalMask) -> Op
     return Extent((diffs[0], diffs[1], (0, 0)))
 
 
-def extent_from_offset(offset: common.CartesianOffset) -> Extent:
-    return Extent(
-        (
-            (min(offset.i, 0), max(offset.i, 0)),
-            (min(offset.j, 0), max(offset.j, 0)),
-            (min(offset.k, 0), max(offset.k, 0)),
-        )
+def extent_from_offset(offset: common.CartesianOffset, use_k: bool = True) -> Extent:
+    horizontal = (
+        (min(offset.i, 0), max(offset.i, 0)),
+        (min(offset.j, 0), max(offset.j, 0)),
     )
+
+    if use_k:
+        return Extent((*horizontal, (min(offset.k, 0), max(offset.k, 0))))
+    else:
+        return Extent((*horizontal, (0, 0)))
