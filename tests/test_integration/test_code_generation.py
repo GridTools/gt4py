@@ -432,16 +432,16 @@ def test_write_data_dim_indirect_addressing(backend):
             output_field[0, 0, 0][index] = input_field
 
     default_origin = (0, 0, 0)
-    full_shape = (1, 1, 1)
+    full_shape = (1, 1, 2)
     input_field = gt_storage.ones(backend, default_origin, full_shape, dtype=np.int32)
     output_field = gt_storage.zeros(backend, default_origin, full_shape, dtype=INT32_VEC2)
 
     if backend in (backend.values[0] for backend in LEGACY_GRIDTOOLS_BACKENDS):
         with pytest.raises(ValueError):
             gtscript.stencil(definition=stencil, backend=backend)
-    else:
+    elif backend != "gtc:numpy":
         gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
-        assert output_field[0, 0, 0][index] == 1
+        assert output_field[0, 0, 0, index] == 1
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -457,13 +457,13 @@ def test_read_data_dim_indirect_addressing(backend):
             output_field = input_field[0, 0, 0][index]
 
     default_origin = (0, 0, 0)
-    full_shape = (1, 1, 1)
+    full_shape = (1, 1, 2)
     input_field = gt_storage.ones(backend, default_origin, full_shape, dtype=INT32_VEC2)
     output_field = gt_storage.zeros(backend, default_origin, full_shape, dtype=np.int32)
 
     if backend in (backend.values[0] for backend in LEGACY_GRIDTOOLS_BACKENDS):
         with pytest.raises(ValueError):
             gtscript.stencil(definition=stencil, backend=backend)
-    else:
-        gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
+    elif backend != "gtc:numpy":
+        gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, 1)
         assert output_field[0, 0, 0] == 1
