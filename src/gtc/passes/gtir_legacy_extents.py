@@ -94,7 +94,7 @@ class LegacyExtentsVisitor(NodeVisitor):
             node.name, field_extents.setdefault(node.name, Extent.zeros())
         )
         pa_ctx.assign_extents[node.name] |= pa_ctx.left_extent + utils.extent_from_offset(
-            node.offset
+            node.offset, use_k=False
         )
 
 

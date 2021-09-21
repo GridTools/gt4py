@@ -116,11 +116,13 @@ def compute_relative_mask(
     return common.HorizontalMask(i=i_interval, j=j_interval) if i_interval and j_interval else None
 
 
-def extent_from_offset(offset: common.CartesianOffset) -> Extent:
-    return Extent(
-        (
-            (min(offset.i, 0), max(offset.i, 0)),
-            (min(offset.j, 0), max(offset.j, 0)),
-            (min(offset.k, 0), max(offset.k, 0)),
-        )
+def extent_from_offset(offset: common.CartesianOffset, use_k: bool = True) -> Extent:
+    horizontal = (
+        (min(offset.i, 0), max(offset.i, 0)),
+        (min(offset.j, 0), max(offset.j, 0)),
     )
+
+    if use_k:
+        return Extent((*horizontal, (min(offset.k, 0), max(offset.k, 0))))
+    else:
+        return Extent((*horizontal, (0, 0)))
