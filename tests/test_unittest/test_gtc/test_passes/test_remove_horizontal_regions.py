@@ -14,8 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Dict
-
 import pytest
 from tests.test_unittest.test_gtc.oir_utils import (
     HorizontalExecutionFactory,
@@ -23,6 +21,7 @@ from tests.test_unittest.test_gtc.oir_utils import (
     VerticalLoopSectionFactory,
 )
 
+import eve
 from gtc import common
 from gtc.oir import HorizontalMask
 from gtc.passes.oir_optimizations.remove_regions import RemoveUnexecutedRegions
@@ -43,8 +42,5 @@ def test_remove_unexecuted(inaccessible_horizontal_mask):
         ]
     )
 
-    fields_extents: Dict[str, common.IJExtent] = {}
-    transformed = RemoveUnexecutedRegions().visit(testee, fields_extents=fields_extents)
-
-    # The pass should remove the regions that is not executed
-    assert not transformed.horizontal_executions[0].body
+    ctx = RemoveUnexecutedRegions.Context()
+    assert RemoveUnexecutedRegions().visit(testee, ctx=ctx) == eve.NOTHING
