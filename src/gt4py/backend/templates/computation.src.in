@@ -180,7 +180,7 @@ using p_{{ field.name }} = gt::tmp_arg<{{ arg_counter + loop.index0 }}, typename
 
 // Computation
 using computation_t =
-    gt::computation<p_{{ (arg_fields|list + parameters|list)|map(attribute='name')|join(", p_")}}>;
+    gt::computation<p_{{ (arg_fields|list)|map(attribute='name')|join(", p_")}}>;
 
 
 // Constants
