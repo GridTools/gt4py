@@ -1213,6 +1213,16 @@ class TestNativeFunctions:
 
 
 class TestForLoopSyntax:
+    def _check_scalar_literal(self, literal: gt_ir.ScalarLiteral, value: int) -> bool:
+        return isinstance(literal, gt_ir.ScalarLiteral) and literal.value == value
+
+    def _check_axis_bound(
+        self, bound: gt_ir.AxisBound, level: gt_ir.LevelMarker, offset: int
+    ) -> bool:
+        return (
+            isinstance(bound, gt_ir.AxisBound) and bound.level == level and bound.offset == offset
+        )
+
     # for i in range
     # - stop, start-stop, start-stop-step
     # - forwards
@@ -1237,8 +1247,8 @@ class TestForLoopSyntax:
             name="i", data_type=gt_ir.DataType.INT32, length=1, is_api=False
         )
         assert isinstance(for_node.start, gt_ir.Expr)
-        assert for_node.start == gt_ir.ScalarLiteral(value=0, data_type=gt_ir.DataType.INT32)
-        assert for_node.stop == gt_ir.ScalarLiteral(value=5, data_type=gt_ir.DataType.INT32)
+        assert self._check_scalar_literal(for_node.start, 0)
+        assert self._check_scalar_literal(for_node.stop, 5)
         assert for_node.step == 1
 
     def test_range_start_stop_forward(self):
@@ -1253,8 +1263,8 @@ class TestForLoopSyntax:
             name="i", data_type=gt_ir.DataType.INT32, length=1, is_api=False
         )
         assert isinstance(for_node.start, gt_ir.Expr)
-        assert for_node.start == gt_ir.ScalarLiteral(value=0, data_type=gt_ir.DataType.INT32)
-        assert for_node.stop == gt_ir.ScalarLiteral(value=5, data_type=gt_ir.DataType.INT32)
+        assert self._check_scalar_literal(for_node.start, 0)
+        assert self._check_scalar_literal(for_node.stop, 5)
         assert for_node.step == 1
 
     def test_range_start_stop_offset_forward(self):
@@ -1269,8 +1279,8 @@ class TestForLoopSyntax:
             name="i", data_type=gt_ir.DataType.INT32, length=1, is_api=False
         )
         assert isinstance(for_node.start, gt_ir.Expr)
-        assert for_node.start == gt_ir.ScalarLiteral(value=0, data_type=gt_ir.DataType.INT32)
-        assert for_node.stop == gt_ir.ScalarLiteral(value=5, data_type=gt_ir.DataType.INT32)
+        assert self._check_scalar_literal(for_node.start, 0)
+        assert self._check_scalar_literal(for_node.stop, 5)
         assert for_node.step == 2
 
     def test_range_start_stop_backward(self):
@@ -1285,8 +1295,8 @@ class TestForLoopSyntax:
             name="i", data_type=gt_ir.DataType.INT32, length=1, is_api=False
         )
         assert isinstance(for_node.start, gt_ir.Expr)
-        assert for_node.start == gt_ir.ScalarLiteral(value=5, data_type=gt_ir.DataType.INT32)
-        assert for_node.stop == gt_ir.ScalarLiteral(value=0, data_type=gt_ir.DataType.INT32)
+        assert self._check_scalar_literal(for_node.start, 5)
+        assert self._check_scalar_literal(for_node.stop, 0)
         assert for_node.step == -1
 
     def test_range_with_external_input(self):
@@ -1308,8 +1318,8 @@ class TestForLoopSyntax:
             name="i", data_type=gt_ir.DataType.INT32, length=1, is_api=False
         )
         assert isinstance(for_node.start, gt_ir.Expr)
-        assert for_node.start == gt_ir.ScalarLiteral(value=0, data_type=gt_ir.DataType.INT32)
-        assert for_node.stop == gt_ir.ScalarLiteral(value=5, data_type=gt_ir.DataType.INT32)
+        assert self._check_scalar_literal(for_node.start, 0)
+        assert self._check_scalar_literal(for_node.stop, 5)
         assert for_node.step == 2
 
     def test_range_with_index_K(self):
@@ -1324,7 +1334,7 @@ class TestForLoopSyntax:
             name="i", data_type=gt_ir.DataType.INT32, length=1, is_api=False
         )
         assert isinstance(for_node.start, gt_ir.Expr)
-        assert for_node.start == gt_ir.ScalarLiteral(value=0, data_type=gt_ir.DataType.INT32)
+        assert self._check_scalar_literal(for_node.start, 0)
         assert for_node.stop == gt_ir.AxisIndex(axis="K")
         assert for_node.step == 1
 
@@ -1340,10 +1350,8 @@ class TestForLoopSyntax:
             name="i", data_type=gt_ir.DataType.INT32, length=1, is_api=False
         )
         assert isinstance(for_node.start, gt_ir.Expr)
-        assert for_node.start == gt_ir.ScalarLiteral(value=0, data_type=gt_ir.DataType.INT32)
-        assert for_node.stop.op == gt_ir.BinaryOperator.ADD
-        assert for_node.stop.lhs == gt_ir.AxisIndex(axis="K")
-        assert for_node.stop.rhs == gt_ir.ScalarLiteral(value=1, data_type=gt_ir.DataType.INT64)
+        assert self._check_scalar_literal(for_node.start, 0)
+        assert isinstance(for_node.stop, gt_ir.BinOpExpr)
         assert for_node.step == 1
 
     def test_K_stop_only_index(self):
@@ -1357,9 +1365,7 @@ class TestForLoopSyntax:
         assert for_node.target == gt_ir.VarDecl(
             name="i", data_type=gt_ir.DataType.INT32, length=1, is_api=False
         )
-        assert isinstance(for_node.start, gt_ir.AxisBound)
-        assert for_node.start.level == gt_ir.LevelMarker.START
-        assert for_node.start.offset == 0
+        assert self._check_axis_bound(for_node.start, gt_ir.LevelMarker.START, 0)
         assert for_node.stop == gt_ir.AxisIndex(axis="K")
         assert for_node.step == 1
 
@@ -1374,12 +1380,8 @@ class TestForLoopSyntax:
         assert for_node.target == gt_ir.VarDecl(
             name="i", data_type=gt_ir.DataType.INT32, length=1, is_api=False
         )
-        assert isinstance(for_node.start, gt_ir.AxisBound)
-        assert for_node.start.level == gt_ir.LevelMarker.START
-        assert for_node.start.offset == 0
-        assert for_node.stop.op == gt_ir.BinaryOperator.ADD
-        assert for_node.stop.lhs == gt_ir.AxisIndex(axis="K")
-        assert for_node.stop.rhs == gt_ir.ScalarLiteral(value=1, data_type=gt_ir.DataType.INT64)
+        assert self._check_axis_bound(for_node.start, gt_ir.LevelMarker.START, 0)
+        assert isinstance(for_node.stop, gt_ir.BinOpExpr)
         assert for_node.step == 1
 
     def test_K_start_stop_nostep(self):
@@ -1393,12 +1395,8 @@ class TestForLoopSyntax:
         assert for_node.target == gt_ir.VarDecl(
             name="i", data_type=gt_ir.DataType.INT32, length=1, is_api=False
         )
-        assert isinstance(for_node.start, gt_ir.AxisBound)
-        assert for_node.start.level == gt_ir.LevelMarker.START
-        assert for_node.start.offset == 1
-        assert isinstance(for_node.stop, gt_ir.AxisBound)
-        assert for_node.stop.level == gt_ir.LevelMarker.END
-        assert for_node.stop.offset == -1
+        assert self._check_axis_bound(for_node.start, gt_ir.LevelMarker.START, 1)
+        assert self._check_axis_bound(for_node.stop, gt_ir.LevelMarker.END, -1)
         assert for_node.step == 1
 
     def test_K_backwards_start_stop(self):
@@ -1412,12 +1410,8 @@ class TestForLoopSyntax:
         assert for_node.target == gt_ir.VarDecl(
             name="i", data_type=gt_ir.DataType.INT32, length=1, is_api=False
         )
-        assert isinstance(for_node.start, gt_ir.AxisBound)
-        assert for_node.start.level == gt_ir.LevelMarker.END
-        assert for_node.start.offset == -1
-        assert isinstance(for_node.stop, gt_ir.AxisBound)
-        assert for_node.stop.level == gt_ir.LevelMarker.START
-        assert for_node.stop.offset == 0
+        assert self._check_axis_bound(for_node.start, gt_ir.LevelMarker.END, -1)
+        assert self._check_axis_bound(for_node.stop, gt_ir.LevelMarker.START, 0)
         assert for_node.step == -1
 
 

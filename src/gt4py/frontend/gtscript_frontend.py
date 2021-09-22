@@ -1061,7 +1061,7 @@ class IRMaker(ast.NodeVisitor):
         assert isinstance(node.func, ast.Name) and node.func.id == "range"
 
         if len(node.args) == 1:
-            start_expr = gt_ir.ScalarLiteral(value=0, data_type=gt_ir.DataType.INT64, loc=None)
+            start_expr = gt_ir.ScalarLiteral(value=0, data_type=gt_ir.DataType.INT32, loc=None)
             stop_expr = self.visit(node.args[0])
             step = 1
         elif len(node.args) == 2:
@@ -1086,18 +1086,14 @@ class IRMaker(ast.NodeVisitor):
                 offset=offset,
             )
 
-        if isinstance(node.lower, ast.Call):
-            start_expr = self._parse_vertical_index(node.lower)
-        elif isinstance(node.lower, ast.BinOp):
+        if isinstance(node.lower, (ast.Call, ast.BinOp)):
             start_expr = self.visit(node.lower)
         elif node.lower is not None:
             start_expr = make_axis_bound(gt_utils.meta.ast_eval(node.lower, {}))
         else:
             start_expr = make_axis_bound(0)
 
-        if isinstance(node.upper, ast.Call):
-            stop_expr = self._parse_vertical_index(node.upper)
-        elif isinstance(node.upper, ast.BinOp):
+        if isinstance(node.upper, (ast.Call, ast.BinOp)):
             stop_expr = self.visit(node.upper)
         elif node.upper is not None:
             stop_expr = make_axis_bound(gt_utils.meta.ast_eval(node.upper, {}))
