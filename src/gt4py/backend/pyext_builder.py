@@ -79,7 +79,7 @@ def get_gt_pyext_build_opts(
     extra_compile_args = dict(
         cxx=[
             "-std=c++14",
-            "-ftemplate-depth=800",
+            "-ftemplate-depth=1024",
             "-fvisibility=hidden",
             "-fPIC",
             "-isystem{}".format(gt_include_path),
@@ -90,6 +90,7 @@ def get_gt_pyext_build_opts(
         ],
         nvcc=[
             "-std=c++14",
+            "-ftemplate-depth=1024",
             "-arch=sm_{}".format(cuda_arch),
             "-isystem={}".format(gt_include_path),
             "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
