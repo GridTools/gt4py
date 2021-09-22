@@ -118,7 +118,7 @@ class ExtentCalculator(NodeVisitor):
             writes,
             Extent.zeros(),
         )
-        ctx.block_extents[id(node)] = extent[:-1]
+        ctx.block_extents[id(node)] = extent
 
         for acc in node.iter_tree().if_isinstance(npir.FieldSlice).to_list():
             ctx.field_extents[acc.name] = ctx.field_extents.get(acc.name, Extent.zeros()).union(
@@ -322,15 +322,18 @@ class NpirGen(TemplatedGenerator):
         block_extents: Dict[int, HorizontalExtent] = None,
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
-        ij_extents = (block_extents or {}).get(id(node), ((0, 0), (0, 0)))
-        return self.generic_visit(node, ij_extents=ij_extents, **kwargs)
+        ij_extent: Extent = (block_extents or {}).get(id(node), Extent.zeros())
+        boundary = ij_extent.to_boundary()
+        lower = (boundary[0][0], boundary[1][0])
+        upper = (boundary[0][1], boundary[1][1])
+        return self.generic_visit(node, lower=lower, upper=upper, **kwargs)
 
     HorizontalBlock = JinjaTemplate(
         textwrap.dedent(
             """\
             # --- begin horizontal block --
-            i, I = _di_ {{ '{:+d}'.format(ij_extents[0][0]) }}, _dI_ {{ '{:+d}'.format(ij_extents[0][1]) }}
-            j, J = _dj_ {{ '{:+d}'.format(ij_extents[1][0]) }}, _dJ_ {{ '{:+d}'.format(ij_extents[1][1]) }}
+            i, I = _di_ - {{ lower[0] }}, _dI_ + {{ upper[0] }}
+            j, J = _dj_ - {{ lower[1] }}, _dJ_ + {{ upper[1] }}
             {% for assign in body %}{{ assign }}
             {% endfor %}# --- end horizontal block --
 
