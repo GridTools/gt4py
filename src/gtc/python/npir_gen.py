@@ -114,9 +114,9 @@ def compute_axis_bounds(
 
     def offset_str(offset: int) -> str:
         if offset < 0:
-            return str(offset)
+            return f" - {-offset}"
         elif offset > 0:
-            return f"+ {offset}"
+            return f" + {offset}"
         else:
             return ""
 
@@ -163,13 +163,14 @@ class NpirGen(TemplatedGenerator):
         bounds: Optional[DomainBounds] = None,
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
-        offset = self.visit(node.offset)
         axis_name = self.visit(node.axis_name)
         if node.parallel:
             lower, upper = compute_axis_bounds(bounds, axis_name, node.offset.value)
             return f"{lower}:{upper}"
         else:
-            return f"{axis_name.lower()}_{offset}:({axis_name.lower()}_{offset} + 1)"
+            offset = self.visit(node.offset)
+            lpar, rpar = "()" if offset else ("", "")
+            return f"{lpar}{axis_name.lower()}_{offset}{rpar}:({axis_name.lower()}_{offset} + 1)"
 
     def visit_FieldDecl(self, node: npir.FieldDecl, **kwargs) -> Union[str, Collection[str]]:
         if all(node.dimensions):
