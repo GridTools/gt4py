@@ -24,10 +24,10 @@ import pytest
 
 import gt4py.definitions as gt_definitions
 import gt4py.ir as gt_ir
-import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
 from gt4py.gtscript import (
+    FORWARD,
     PARALLEL,
     I,
     J,
@@ -37,12 +37,12 @@ from gt4py.gtscript import (
     compile_assert,
     computation,
     horizontal,
+    index,
     interval,
     isfinite,
     region,
     sin,
 )
-from gt4py.utils.attrib import Union as UnionOf
 
 
 # ---- Utilities -----
