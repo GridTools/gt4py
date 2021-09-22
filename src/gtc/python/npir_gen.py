@@ -118,7 +118,7 @@ class ExtentCalculator(NodeVisitor):
 
         for acc in node.iter_tree().if_isinstance(npir.FieldSlice).to_list():
             ctx.field_extents[acc.name] = ctx.field_extents.get(acc.name, Extent.zeros()).union(
-                slice_to_extent(acc)
+                extent + slice_to_extent(acc)
             )
 
 
