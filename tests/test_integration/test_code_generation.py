@@ -288,6 +288,7 @@ def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
         pytest.param("gtx86", marks=[pytest.mark.xfail]),
         pytest.param("gtmc", marks=[pytest.mark.xfail]),
         pytest.param("gtcuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
+        "gtc:numpy",
         "gtc:gt:cpu_ifirst",
         "gtc:gt:cpu_kfirst",
         pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
