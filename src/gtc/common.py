@@ -806,7 +806,7 @@ class HorizontalInterval(Node):
         error = ValueError("Start must come strictly before end in an interval")
 
         level_to_int = {LevelMarker.START: 1, LevelMarker.END: 2}
-        if level_to_int[start_level] == level_to_int[end_level] and start_offset >= end_offset:
+        if level_to_int[start_level] == level_to_int[end_level] and start_offset > end_offset:
             raise error
         elif level_to_int[start_level] > level_to_int[end_level]:
             raise error
