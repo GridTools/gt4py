@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import functools
 import textwrap
 from dataclasses import dataclass, field
 from typing import Any, Collection, Dict, Tuple, Union
@@ -77,20 +78,21 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
 def slice_to_extent(acc: npir.FieldSlice) -> Extent:
     return Extent(
         (
-            (acc.i_offset.offset.value, acc.i_offset.offset.value) if acc.i_offset else (0, 0),
-            (acc.j_offset.offset.value, acc.j_offset.offset.value) if acc.j_offset else (0, 0),
-            (acc.k_offset.offset.value, acc.k_offset.offset.value) if acc.k_offset else (0, 0),
+            [acc.i_offset.offset.value] * 2 if acc.i_offset else (0, 0),
+            [acc.j_offset.offset.value] * 2 if acc.j_offset else (0, 0),
+            [acc.k_offset.offset.value] * 2 if acc.k_offset else (0, 0),
         )
     )
+
+
+HorizontalExtent = Tuple[Tuple[int, int], Tuple[int, int]]
 
 
 class ExtentCalculator(NodeVisitor):
     @dataclass
     class Context:
         field_extents: Dict[str, Extent] = field(default_factory=dict)
-        block_extents: Dict[int, Tuple[Tuple[int, int], Tuple[int, int]]] = field(
-            default_factory=dict
-        )
+        block_extents: Dict[int, HorizontalExtent] = field(default_factory=dict)
 
     def visit_Computation(self, node: npir.Computation):
         ctx = self.Context()
@@ -111,9 +113,11 @@ class ExtentCalculator(NodeVisitor):
             .getattr("name")
             .to_set()
         )
-        extent = Extent.zeros()
-        for name in writes:
-            extent |= ctx.field_extents.get(name, Extent.zeros())
+        extent = functools.reduce(
+            lambda ext, name: ext | ctx.field_extents.get(name, Extent.zeros()),
+            writes,
+            Extent.zeros(),
+        )
         ctx.block_extents[id(node)] = extent[:-1]
 
         for acc in node.iter_tree().if_isinstance(npir.FieldSlice).to_list():
@@ -312,21 +316,21 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_HorizontalBlock(
-        self, node: npir.HorizontalBlock, **kwargs
+        self,
+        node: npir.HorizontalBlock,
+        *,
+        block_extents: Dict[int, HorizontalExtent] = None,
+        **kwargs: Any,
     ) -> Union[str, Collection[str]]:
-        lower, upper = [0, 0], [0, 0]
-
-        if extents := kwargs.get("block_extents", {})[id(node)]:
-            lower = [extents[0][0], extents[1][0]]
-            upper = [extents[0][1], extents[1][1]]
-        return self.generic_visit(node, h_lower=lower, h_upper=upper, **kwargs)
+        ij_extent = (block_extents or {}).get(id(node), ((0, 0), (0, 0)))
+        return self.generic_visit(node, ij_extent=ij_extent, **kwargs)
 
     HorizontalBlock = JinjaTemplate(
         textwrap.dedent(
             """\
             # --- begin horizontal block --
-            i, I = _di_ - {{ h_lower[0] }}, _dI_ + {{ h_upper[0] }}
-            j, J = _dj_ - {{ h_lower[1] }}, _dJ_ + {{ h_upper[1] }}
+            i, I = _di_ - {{ ij_extent[0][0] }}, _dI_ + {{ ij_extent[0][1] }}
+            j, J = _dj_ - {{ ij_extent[1][0] }}, _dJ_ + {{ ij_extent[1][1] }}
             {% for assign in body %}{{ assign }}
             {% endfor %}# --- end horizontal block --
 
