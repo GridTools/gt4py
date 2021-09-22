@@ -55,11 +55,12 @@ class GTCGTExtGenerator:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
         oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(skip=[FillFlushToLocalKCaches])
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
+        format_source = self.backend.builder.options.format_source
         implementation = gtcpp_codegen.GTCppCodegen.apply(
-            gtcpp, gt_backend_t=self.backend.GT_BACKEND_T
+            gtcpp, gt_backend_t=self.backend.GT_BACKEND_T, format_source=format_source
         )
         bindings = GTCppBindingsCodegen.apply(
-            gtcpp, module_name=self.module_name, backend=self.backend
+            gtcpp, module_name=self.module_name, backend=self.backend, format_source=format_source
         )
         bindings_ext = ".cu" if self.backend.GT_BACKEND_T == "gpu" else ".cpp"
         return {
@@ -123,8 +124,10 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     @classmethod
     def apply(cls, root, *, module_name="stencil", **kwargs) -> str:
         generated_code = cls().visit(root, module_name=module_name, **kwargs)
-        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return formatted_code
+        if kwargs.get("format_source", True):
+            formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
+            generated_code = formatted_code
+        return generated_code
 
 
 class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):

@@ -249,5 +249,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         if "gt_backend_t" not in kwargs:
             raise TypeError("apply() missing 1 required keyword-only argument: 'gt_backend_t'")
         generated_code = super().apply(root, offset_limit=_offset_limit(root), **kwargs)
-        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return formatted_code
+        if kwargs.get("format_source", True):
+            formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
+            generated_code = formatted_code
+        return generated_code
