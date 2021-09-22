@@ -195,7 +195,7 @@ class OirToNpir(NodeTranslator):
 
     def visit_MaskStmt(
         self,
-        node: MaskStmt,
+        node: Union[MaskStmt, oir.MaskStmt],
         *,
         ctx: ComputationContext,
         parallel_k: bool,
@@ -212,16 +212,20 @@ class OirToNpir(NodeTranslator):
             )
             ctx.mask_temp_counter += 1
 
+        attrs = {}
+        if isinstance(node, MaskStmt):
+            attrs["horiz_mask"] = node.horiz_mask
+
         return npir.MaskBlock(
             mask=mask_expr,
             mask_name=mask_name,
             body=self.visit(node.body, ctx=ctx, parallel_k=parallel_k, mask=mask, **kwargs),
-            horiz_mask=node.horiz_mask,
+            **attrs,
         )
 
     def visit_AssignStmt(
         self,
-        node: AssignStmt,
+        node: Union[AssignStmt, oir.AssignStmt],
         *,
         ctx: Optional[ComputationContext] = None,
         mask: Optional[npir.VectorExpression] = None,
@@ -230,11 +234,16 @@ class OirToNpir(NodeTranslator):
         ctx = ctx or self.ComputationContext()
         if isinstance(kwargs["symtable"].get(node.left.name, None), oir.Temporary):
             ctx.ensure_temp_defined(node.left)
+
+        attrs = {}
+        if isinstance(node, AssignStmt):
+            attrs["horiz_mask"] = node.horiz_mask
+
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, is_lvalue=True, **kwargs),
             right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),
             mask=mask,
-            horiz_mask=node.horiz_mask,
+            **attrs,
         )
 
     def visit_Cast(
