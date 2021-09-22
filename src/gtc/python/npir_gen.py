@@ -322,15 +322,15 @@ class NpirGen(TemplatedGenerator):
         block_extents: Dict[int, HorizontalExtent] = None,
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
-        ij_extent = (block_extents or {}).get(id(node), ((0, 0), (0, 0)))
-        return self.generic_visit(node, ij_extent=ij_extent, **kwargs)
+        ij_extents = (block_extents or {}).get(id(node), ((0, 0), (0, 0)))
+        return self.generic_visit(node, ij_extents=ij_extents, **kwargs)
 
     HorizontalBlock = JinjaTemplate(
         textwrap.dedent(
             """\
             # --- begin horizontal block --
-            i, I = _di_ - {{ ij_extent[0][0] }}, _dI_ + {{ ij_extent[0][1] }}
-            j, J = _dj_ - {{ ij_extent[1][0] }}, _dJ_ + {{ ij_extent[1][1] }}
+            i, I = _di_ {{ '{:+d}'.format(ij_extents[0][0]) }}, _dI_ {{ '{:+d}'.format(ij_extents[0][1]) }}
+            j, J = _dj_ {{ '{:+d}'.format(ij_extents[1][0]) }}, _dJ_ {{ '{:+d}'.format(ij_extents[1][1]) }}
             {% for assign in body %}{{ assign }}
             {% endfor %}# --- end horizontal block --
 
