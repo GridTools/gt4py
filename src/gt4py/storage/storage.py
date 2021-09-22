@@ -539,7 +539,7 @@ class ExplicitlySyncedGPUStorage(Storage):
     def _finalize_view(self, base):
 
         if self.shape != base.shape or self.strides != base.strides:
-            offset = (base.ctypes.data - self.ctypes.data) + (
+            offset = (self.ctypes.data - base.ctypes.data) + (
                 self._device_field.data.ptr - self._device_raw_buffer.data.ptr
             )
             assert not offset % self.dtype.itemsize
