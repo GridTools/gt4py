@@ -518,7 +518,7 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
             for name, offsets in collection.read_offsets().items():
                 if self._axes[name][2]:
                     for offset in offsets:
-                        k_offset = 0 if offset[2] == VariableOffset.LARGE_NUM else offset[2]
+                        k_offset = 0 if offset[2] == VariableOffset.MAX_OFFSET else offset[2]
                         read_interval = interval.shifted(k_offset)
                         read_intervals.setdefault(name, read_interval)
                         read_intervals[name] = Interval(

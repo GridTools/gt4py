@@ -32,7 +32,7 @@ from gtc.gtcpp import gtcpp
 
 def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
     def _check_extent(extent):
-        if extent[1].k[1] == VariableOffset.LARGE_NUM:
+        if extent[1].k[1] == VariableOffset.MAX_OFFSET:
             extent[1].k = (-extent[1].k[1], extent[1].k[1])
         return extent
 
