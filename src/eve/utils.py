@@ -27,6 +27,7 @@ import itertools
 import operator
 import pickle
 import re
+import sys
 import types
 import typing
 import uuid
@@ -74,6 +75,16 @@ except ModuleNotFoundError:
     import toolz  # noqa: F401  # imported but unused
 
 T = TypeVar("T")
+
+
+if sys.version_info[:3] <= (3, 9, 0):
+
+    class GenericIterable(collections.abc.Iterable, Iterable[T]):  # type: ignore
+        ...
+
+
+else:
+    GenericIterable = collections.abc.Iterable  # type: ignore
 
 
 def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
@@ -520,7 +531,7 @@ def as_xiter(iterator_func: Callable[..., Iterator[T]]) -> Callable[..., XIterab
 xenumerate = as_xiter(enumerate)
 
 
-class XIterable(collections.abc.Iterable, Iterable[T]):
+class XIterable(GenericIterable[T]):
     """Iterable wrapper supporting method chaining for extra functionality."""
 
     iterator: Iterator[T]

@@ -101,11 +101,10 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
             + ".py"
         )
         return {
-            computation_name: NpirGen.apply(self.npir, field_extents=compute_legacy_extents(self.builder.gtir))
-            # computation_name: format_source(
-            #     "python",
-            #     NpirGen.apply(self.npir, field_extents=compute_legacy_extents(self.builder.gtir)),
-            # ),
+            computation_name: format_source(
+                "python",
+                NpirGen.apply(self.npir, field_extents=compute_legacy_extents(self.builder.gtir)),
+            ),
         }
 
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:

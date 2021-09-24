@@ -52,11 +52,13 @@ def generic_iter_children(
 
     if isinstance(node, concepts.Node):
         return node.iter_children() if with_keys else node.iter_children_values()
-    elif isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes)):
+    elif isinstance(node, (list, tuple)) or (
+        isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
+    ):
         return enumerate(node) if with_keys else iter(node)
-    elif isinstance(node, collections.abc.Set):
+    elif isinstance(node, (set, frozenset, collections.abc.Set)):
         return zip(node, node) if with_keys else iter(node)  # type: ignore  # problems with iter(Set)
-    elif isinstance(node, collections.abc.Mapping):
+    elif isinstance(node, (dict, collections.abc.Mapping)):
         return node.items() if with_keys else node.values()
 
     return iter(())
