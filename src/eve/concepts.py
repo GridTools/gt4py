@@ -140,13 +140,14 @@ class NodeMetaclass(pydantic.main.ModelMetaclass):
         impl_fields_metadata = {}
         children_metadata = {}
         for name, model_field in cls.__fields__.items():
-            if name.endswith(_EVE_NODE_IMPL_SUFFIX):
-                impl_fields_metadata[name] = {"definition": model_field}
-            elif not name.endswith(_EVE_NODE_INTERNAL_SUFFIX):
-                children_metadata[name] = {
-                    "definition": model_field,
-                    **model_field.field_info.extra.get(_EVE_METADATA_KEY, {}),
-                }
+            if not name.endswith(_EVE_NODE_INTERNAL_SUFFIX):
+                if name.endswith(_EVE_NODE_IMPL_SUFFIX):
+                    impl_fields_metadata[name] = {"definition": model_field}
+                else:
+                    children_metadata[name] = {
+                        "definition": model_field,
+                        **model_field.field_info.extra.get(_EVE_METADATA_KEY, {}),
+                    }
 
         cls.__node_impl_fields__ = impl_fields_metadata
         cls.__node_children__ = children_metadata
@@ -186,30 +187,24 @@ class BaseNode(pydantic.BaseModel, metaclass=NodeMetaclass):
     __node_children__: ClassVar[NodeChildrenMetadataDict]
 
     def iter_impl_fields(self) -> Generator[Tuple[str, Any], None, None]:
-        for name, _ in self.__fields__.items():
-            if name.endswith(_EVE_NODE_IMPL_SUFFIX) and not name.endswith(
-                _EVE_NODE_INTERNAL_SUFFIX
-            ):
-                yield name, getattr(self, name)
+        for name in self.__node_impl_fields__.keys():
+            yield name, getattr(self, name)
 
     def iter_children(self) -> Generator[Tuple[str, Any], None, None]:
-        for name, _ in self.__fields__.items():
-            if not (
-                name.endswith(_EVE_NODE_IMPL_SUFFIX) or name.endswith(_EVE_NODE_INTERNAL_SUFFIX)
-            ):
-                yield name, getattr(self, name)
+        for name in self.__node_children__.keys():
+            yield name, getattr(self, name)
 
     def iter_children_values(self) -> Generator[Any, None, None]:
-        for _, node in self.iter_children():
-            yield node
+        for name in self.__node_children__.keys():
+            yield getattr(self, name)
 
-    def iter_tree_pre(self) -> utils.XIterator:
+    def iter_tree_pre(self) -> utils.XIterable:
         return iterators.iter_tree_pre(self)
 
-    def iter_tree_post(self) -> utils.XIterator:
+    def iter_tree_post(self) -> utils.XIterable:
         return iterators.iter_tree_post(self)
 
-    def iter_tree_levels(self) -> utils.XIterator:
+    def iter_tree_levels(self) -> utils.XIterable:
         return iterators.iter_tree_levels(self)
 
     iter_tree = iter_tree_pre
