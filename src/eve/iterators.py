@@ -55,7 +55,7 @@ def generic_iter_children(
         isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
     ):
         return enumerate(node) if with_keys else iter(node)
-    elif isinstance(node, (set, frozenset, collections.abc.Set)):
+    elif isinstance(node, (set, collections.abc.Set)):
         return zip(node, node) if with_keys else iter(node)  # type: ignore  # problems with iter(Set)
     elif isinstance(node, (dict, collections.abc.Mapping)):
         return node.items() if with_keys else node.values()
