@@ -74,17 +74,14 @@ except ModuleNotFoundError:
     # Fall back to pure Python toolz
     import toolz  # noqa: F401  # imported but unused
 
+
 T = TypeVar("T")
 
 
 if sys.version_info[:3] <= (3, 9, 0):
-
-    class GenericIterable(collections.abc.Iterable, Iterable[T]):  # type: ignore
-        ...
-
-
+    GenericIterable = typing.Iterable[T]
 else:
-    GenericIterable = collections.abc.Iterable  # type: ignore
+    GenericIterable = collections.abc.Iterable  # type: ignore[misc]
 
 
 def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:

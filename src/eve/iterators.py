@@ -49,7 +49,6 @@ def generic_iter_children(
             Defaults to `False`.
 
     """
-
     if isinstance(node, concepts.Node):
         return node.iter_children() if with_keys else node.iter_children_values()
     elif isinstance(node, (list, tuple)) or (
@@ -163,7 +162,6 @@ def iter_tree(
             Defaults to `False`.
 
     """
-
     if traversal_order is traversal_order.PRE_ORDER:
         return iter_tree_pre(node=node, with_keys=with_keys)
     elif traversal_order is traversal_order.POST_ORDER:
