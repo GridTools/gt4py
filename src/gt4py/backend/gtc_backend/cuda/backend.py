@@ -120,8 +120,8 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
     def apply(cls, root, *, module_name="stencil", backend, **kwargs) -> str:
         generated_code = cls(backend).visit(root, module_name=module_name, **kwargs)
         if kwargs.get("format_source", True):
-            formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-            generated_code = formatted_code
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+
         return generated_code
 
 
