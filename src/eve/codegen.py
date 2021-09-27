@@ -659,7 +659,7 @@ class TemplatedGenerator(NodeVisitor):
             String (or collection of strings) with the dumped version of the root IR node.
 
         """
-        return cls().visit(root, **kwargs)  # 33type: ignore
+        return cls().visit(root, **kwargs)
 
     @classmethod
     def generic_dump(cls, node: TreeNode, **kwargs: Any) -> str:
