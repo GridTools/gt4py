@@ -80,7 +80,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return f"eval({accessor_ref.name}())"
         offset_k = (
             self.visit(offset.k, **kwargs)
-            if isinstance(offset, gtcpp.VariableOffset)
+            if isinstance(offset, gtcpp.VariableKOffset)
             else f"{offset.k}"
         )
         data_index = "".join(f", {d}" for d in accessor_ref.data_index)

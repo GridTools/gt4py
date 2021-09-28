@@ -308,7 +308,7 @@ class CartesianOffset(Node):
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
-class VariableOffset(CartesianOffset):
+class VariableKOffset(CartesianOffset):
     k: Expr
     MAX_OFFSET: ClassVar[int] = 10000
 

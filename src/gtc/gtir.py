@@ -61,7 +61,7 @@ class CartesianOffset(common.CartesianOffset):
     pass
 
 
-class VariableOffset(common.VariableOffset):
+class VariableKOffset(common.VariableKOffset):
     pass
 
 

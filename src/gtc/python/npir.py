@@ -44,7 +44,7 @@ class NumericalOffset(eve.Node):
     value: int
 
 
-class VariableOffset(eve.Node):
+class VariableKOffset(eve.Node):
     value: Expr
 
 
@@ -55,13 +55,13 @@ class AxisName(eve.StrEnum):
 
 
 class AxisOffset(eve.Node):
-    offset: Union[NumericalOffset, VariableOffset]
+    offset: Union[NumericalOffset, VariableKOffset]
     axis_name: AxisName
     parallel: bool
 
     @classmethod
     def from_expr(cls, *, axis_name: str, offset: Expr, parallel: bool) -> "AxisOffset":
-        return cls(axis_name=axis_name, offset=VariableOffset(value=offset), parallel=parallel)
+        return cls(axis_name=axis_name, offset=VariableKOffset(value=offset), parallel=parallel)
 
     @classmethod
     def from_int(cls, *, axis_name: str, offset: int, parallel: bool) -> "AxisOffset":

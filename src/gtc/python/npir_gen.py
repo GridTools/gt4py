@@ -104,14 +104,14 @@ class NpirGen(TemplatedGenerator):
 
     NumericalOffset = FormatTemplate("{op}{delta}")
 
-    def visit_VariableOffset(self, node: npir.VariableOffset, **kwargs: Any) -> str:
-        return self.visit(node.value)
+    def visit_VariableKOffset(self, node: npir.VariableKOffset, **kwargs: Any) -> str:
+        return self.visit(node.value, **kwargs)
 
     def visit_AxisOffset(self, node: npir.AxisOffset, **kwargs: Any) -> Union[str, Collection[str]]:
         offset = self.visit(node.offset)
         axis_name = self.visit(node.axis_name)
         lpar, rpar = "()" if offset else ("", "")
-        if isinstance(node.offset, npir.VariableOffset):
+        if isinstance(node.offset, npir.VariableKOffset):
             rendered = f"{axis_name.lower()}_ + np.asarray({offset}[:])"
         else:
             variant = self.AxisOffset_parallel if node.parallel else self.AxisOffset_serial

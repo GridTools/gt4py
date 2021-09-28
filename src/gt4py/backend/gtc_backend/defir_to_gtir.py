@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from types import SimpleNamespace
 from typing import Any, Dict, List, Union, cast
 
 from gt4py.ir import IRNodeVisitor
@@ -302,4 +301,4 @@ class DefIRToGTIR(IRNodeVisitor):
         k = offset["K"] if "K" in offset else 0
         if isinstance(k, int):
             return gtir.CartesianOffset(i=i, j=j, k=k)
-        return gtir.VariableOffset(i=i, j=j, k=self.visit(k, **kwargs))
+        return gtir.VariableKOffset(i=i, j=j, k=self.visit(k, **kwargs))

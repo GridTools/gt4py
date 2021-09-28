@@ -104,7 +104,7 @@ class Cast(common.Cast[Expr], Expr):  # type: ignore
     pass
 
 
-class VariableOffset(common.VariableOffset):
+class VariableKOffset(common.VariableKOffset):
     pass
 
 

@@ -22,7 +22,7 @@ from devtools import debug  # noqa: F401
 
 import eve
 from gtc import common, oir
-from gtc.common import CartesianOffset, VariableOffset
+from gtc.common import CartesianOffset, VariableKOffset
 from gtc.gtcpp import gtcpp
 
 
@@ -32,7 +32,7 @@ from gtc.gtcpp import gtcpp
 
 def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
     def _check_extent(extent):
-        if extent[1].k[1] == VariableOffset.MAX_OFFSET:
+        if extent[1].k[1] == VariableKOffset.MAX_OFFSET:
             extent[1].k = (-extent[1].k[1], extent[1].k[1])
         return extent
 
@@ -133,10 +133,10 @@ class OIRToGTCpp(eve.NodeTranslator):
     ) -> common.CartesianOffset:
         return node
 
-    def visit_VariableOffset(
-        self, node: common.VariableOffset, **kwargs: Any
-    ) -> gtcpp.VariableOffset:
-        return gtcpp.VariableOffset(i=node.i, j=node.j, k=self.visit(node.k, **kwargs))
+    def visit_VariableKOffset(
+        self, node: common.VariableKOffset, **kwargs: Any
+    ) -> gtcpp.VariableKOffset:
+        return gtcpp.VariableKOffset(i=node.i, j=node.j, k=self.visit(node.k, **kwargs))
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> gtcpp.AccessorRef:
         return gtcpp.AccessorRef(

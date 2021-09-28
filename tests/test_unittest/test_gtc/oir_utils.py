@@ -48,9 +48,9 @@ class LiteralFactory(factory.Factory):
     dtype = common.DataType.FLOAT32
 
 
-class VariableOffsetFactory(factory.Factory):
+class VariableKOffsetFactory(factory.Factory):
     class Meta:
-        model = common.VariableOffset
+        model = common.VariableKOffset
 
     i = 0
     j = 0
