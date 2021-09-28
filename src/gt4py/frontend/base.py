@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import abc
-from typing import Any, Dict, Union
+from typing import Any, Dict, Type, Union
 
 from gt4py import utils as gt_utils
 from gt4py.definitions import BuildOptions, StencilID
@@ -27,17 +27,28 @@ REGISTRY = gt_utils.Registry()
 AnyStencilFunc = Union[StencilFunc, AnnotatedStencilFunc]
 
 
-def from_name(name: str):
+def from_name(name: str) -> Type["Frontend"]:
     return REGISTRY.get(name, None)
 
 
-def register(frontend_cls):
+def register(frontend_cls: Type["Frontend"]) -> None:
     assert issubclass(frontend_cls, Frontend) and frontend_cls.name is not None
-    return REGISTRY.register(frontend_cls.name, frontend_cls)
+
+    if isinstance(frontend_cls.name, str):
+        return REGISTRY.register(frontend_cls.name, frontend_cls)
+
+    else:
+        raise ValueError(
+            "Invalid 'name' attribute ('{name}') in frontend class '{cls}'".format(
+                name=frontend_cls.name, cls=frontend_cls
+            )
+        )
 
 
 class Frontend(abc.ABC):
-    name = None
+
+    name: str
+    """Frontend name."""
 
     @classmethod
     @abc.abstractmethod
@@ -48,6 +59,25 @@ class Frontend(abc.ABC):
         externals: Dict[str, Any],
         options_id: str,
     ) -> StencilID:
+        """Create a StencilID object that contains a unique hash for the stencil.
+
+        Notes
+        -----
+        This method seems to no longer be used through StencilBuilder.
+
+        Returns
+        -------
+        StencilID:
+            An object that contains the qualified name and unique hash.
+
+        Raises
+        ------
+        GTSyntaxError
+            If there is a parsing error.
+
+        TypeError
+            If there is a error resolving external types.
+        """
         pass
 
     @classmethod
@@ -55,6 +85,20 @@ class Frontend(abc.ABC):
     def generate(
         cls, definition: AnyStencilFunc, externals: Dict[str, Any], options: BuildOptions
     ) -> StencilDefinition:
+        """
+        Generate a StencilDefinition from a stencil Python function.
+
+        Raises
+        ------
+        GTScriptSyntaxError
+            If there is a parsing error.
+
+        GTScriptDefinitionError
+            If types are misused in the definition.
+
+        TypeError
+            If there is an error in resolving external types.
+        """
         pass
 
     @classmethod
@@ -62,4 +106,15 @@ class Frontend(abc.ABC):
     def prepare_stencil_definition(
         cls, definition: AnyStencilFunc, externals: Dict[str, Any]
     ) -> AnnotatedStencilFunc:
+        """
+        Annotates the stencil function if not already done so.
+
+        Raises
+        ------
+        GTSyntaxError
+            If there is a parsing error.
+
+        TypeError
+            If there is a error resolving external types.
+        """
         pass
