@@ -440,7 +440,7 @@ def test_write_data_dim_indirect_addressing(backend):
     if backend in (backend.values[0] for backend in LEGACY_GRIDTOOLS_BACKENDS):
         with pytest.raises(ValueError):
             gtscript.stencil(definition=stencil, backend=backend)
-    elif backend != "gtc:numpy":
+    else:
         gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
         assert output_field[0, 0, 0, index] == 1
 
@@ -465,6 +465,6 @@ def test_read_data_dim_indirect_addressing(backend):
     if backend in (backend.values[0] for backend in LEGACY_GRIDTOOLS_BACKENDS):
         with pytest.raises(ValueError):
             gtscript.stencil(definition=stencil, backend=backend)
-    elif backend != "gtc:numpy":
+    else:
         gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, 1)
         assert output_field[0, 0, 0] == 1

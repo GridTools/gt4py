@@ -199,7 +199,7 @@ class NpirGen(TemplatedGenerator):
         offset_str = ", ".join(self.visit(off, **kwargs) if off else ":" for off in offset)
 
         if node.data_index:
-            offset_str += ", " + ", ".join(str(x) for x in node.data_index)
+            offset_str += ", " + ", ".join(self.visit(x, **kwargs) for x in node.data_index)
 
         if mask_acc and any(off is None for off in offset):
             k_size = 1 if is_serial else "K - k"

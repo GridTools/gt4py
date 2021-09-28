@@ -190,7 +190,7 @@ class OirToNpir(NodeTranslator):
             i_offset=npir.AxisOffset.i(node.offset.i) if dims[0] else None,
             j_offset=npir.AxisOffset.j(node.offset.j) if dims[1] else None,
             k_offset=npir.AxisOffset.k(node.offset.k, parallel=parallel_k) if dims[2] else None,
-            data_index=node.data_index,
+            data_index=self.visit(node.data_index, ctx=ctx, parallel_k=parallel_k, **kwargs),
         )
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs) -> npir.FieldDecl:
