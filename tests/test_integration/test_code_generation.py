@@ -420,6 +420,18 @@ def test_mask_with_offset_written_in_conditional(backend):
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_indirect_vertical_index(backend):
+    @gtscript.stencil(backend=backend)
+    def stencil(
+        input_field: gtscript.Field[gtscript.IJK, np.int32],
+        output_field: gtscript.Field[gtscript.IJK, np.int32],
+        vertical_index: gtscript.Field[gtscript.K, np.int32],
+    ):
+        with computation(PARALLEL), interval(...):
+            output_field = input_field[0, 0, vertical_index]
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_write_data_dim_indirect_addressing(backend):
     INT32_VEC2 = (np.int32, (2,))
 

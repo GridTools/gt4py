@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import numbers
 from typing import Any, Dict, List, Union, cast
 
 from gt4py.ir import IRNodeVisitor
@@ -29,6 +30,7 @@ from gt4py.ir.nodes import (
     BuiltinLiteral,
     Cast,
     ComputationBlock,
+    Expr,
     FieldDecl,
     FieldRef,
     If,
@@ -296,9 +298,16 @@ class DefIRToGTIR(IRNodeVisitor):
         return gtir.ScalarDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
 
     def _transform_offset(self, offset: Dict[str, int], **kwargs: Any) -> gtir.CartesianOffset:
-        i = offset["I"] if "I" in offset else 0
-        j = offset["J"] if "J" in offset else 0
-        k = offset["K"] if "K" in offset else 0
-        if isinstance(k, int):
-            return gtir.CartesianOffset(i=i, j=j, k=k)
-        return gtir.VariableKOffset(i=i, j=j, k=self.visit(k, **kwargs))
+        transformed = {axis.lower(): offset.get(axis, 0) for axis in ("I", "J")}
+
+        k_val = offset["K"]
+        if isinstance(k_val, numbers.Integral):
+            transformed["k"] = offset.get("K", 0)
+            cls_type = gtir.CartesianOffset
+        elif isinstance(offset["K"], Expr):
+            transformed["k"] = self.visit(k_val, **kwargs)
+            cls_type = gtir.VariableOffset
+        else:
+            raise TypeError("Unrecognized vertical offset type")
+
+        return cls_type(**transformed)
