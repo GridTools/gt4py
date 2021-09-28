@@ -15,21 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-import functools
-from typing import (
-    Any,
-    Callable,
-    ClassVar,
-    Dict,
-    Generic,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union, cast
 
 import numpy as np
 import pydantic
@@ -323,49 +309,6 @@ class CartesianOffset(Node):
 
     def is_zero(self) -> bool:
         return all(x == 0 for x in self.to_dict().values())
-
-
-class IJExtent(LocNode):
-    i: Tuple[int, int]
-    j: Tuple[int, int]
-
-    @classmethod
-    def zero(cls) -> "IJExtent":
-        return cls(i=(0, 0), j=(0, 0))
-
-    @classmethod
-    def from_offset(cls, offset: CartesianOffset) -> "IJExtent":
-        return cls(i=(offset.i, offset.i), j=(offset.j, offset.j))
-
-    def _apply(
-        self,
-        other: "IJExtent",
-        *,
-        lower_op: Callable[[int, int], int],
-        upper_op: Callable[[int, int], int],
-    ) -> "IJExtent":
-        return IJExtent(
-            i=(lower_op(self.i[0], other.i[0]), upper_op(self.i[1], other.i[1])),
-            j=(lower_op(self.j[0], other.j[0]), upper_op(self.j[1], other.j[1])),
-        )
-
-    def __add__(self, other: "IJExtent") -> "IJExtent":
-        return self._apply(other, lower_op=lambda x, y: x + y, upper_op=lambda x, y: x + y)
-
-    def __sub__(self, other: "IJExtent") -> "IJExtent":
-        return self._apply(other, lower_op=lambda x, y: x - y, upper_op=lambda x, y: x - y)
-
-    def union(self, *extents: "IJExtent") -> "IJExtent":
-        return functools.reduce(
-            lambda this, other: this._apply(
-                other, lower_op=lambda x, y: min(x, y), upper_op=lambda x, y: max(x, y)
-            ),
-            extents,
-            self,
-        )
-
-    def __or__(self, other: "IJExtent") -> "IJExtent":
-        return self.union(other)
 
 
 class ScalarAccess(LocNode):
