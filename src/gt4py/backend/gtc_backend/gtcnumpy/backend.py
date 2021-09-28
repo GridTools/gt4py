@@ -99,9 +99,12 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
             + self.builder.caching.module_postfix
             + ".py"
         )
-        return {
-            computation_name: format_source("python", NpirGen.apply(self.npir)),
-        }
+
+        source = NpirGen.apply(self.npir)
+        if self.builder.options.format_source:
+            source = format_source("python", source)
+
+        return {computation_name: source}
 
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
         super().generate_bindings(language_name)
