@@ -297,7 +297,9 @@ class DefIRToGTIR(IRNodeVisitor):
         # datatype conversion works via same ID
         return gtir.ScalarDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
 
-    def _transform_offset(self, offset: Dict[str, int], **kwargs: Any) -> gtir.CartesianOffset:
+    def _transform_offset(
+        self, offset: Dict[str, int], **kwargs: Any
+    ) -> Union[gtir.CartesianOffset, gtir.VariableKOffset]:
         transformed = {axis.lower(): offset.get(axis, 0) for axis in ("I", "J")}
 
         k_val = offset["K"]
@@ -306,7 +308,7 @@ class DefIRToGTIR(IRNodeVisitor):
             cls_type = gtir.CartesianOffset
         elif isinstance(offset["K"], Expr):
             transformed["k"] = self.visit(k_val, **kwargs)
-            cls_type = gtir.VariableOffset
+            cls_type = gtir.VariableKOffset
         else:
             raise TypeError("Unrecognized vertical offset type")
 
