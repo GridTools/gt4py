@@ -132,6 +132,18 @@ class DataType(IntEnum):
     FLOAT32 = 104
     FLOAT64 = 108
 
+    @property
+    def isbool(self):
+        return self == self.BOOL
+
+    @property
+    def isinteger(self):
+        return self in (self.INT8, self.INT32, self.INT64)
+
+    @property
+    def isfloat(self):
+        return self in (self.FLOAT32, self.FLOAT64)
+
 
 @enum.unique
 class LoopOrder(StrEnum):
@@ -364,7 +376,7 @@ class ScalarAccess(LocNode):
 class FieldAccess(LocNode):
     name: SymbolRef
     offset: CartesianOffset
-    data_index: List[int] = []
+    data_index: List[Expr] = []
     kind = ExprKind.FIELD
 
     @classmethod
@@ -372,9 +384,11 @@ class FieldAccess(LocNode):
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
     @validator("data_index")
-    def nonnegative_data_index(cls, data_index: List[int]) -> List[int]:
-        if data_index and any(index < 0 for index in data_index):
-            raise ValueError("Data indices must be nonnegative")
+    def data_index_exprs_are_int(cls, data_index: List[Expr]) -> List[Expr]:
+        if data_index and any(
+            index.dtype is not None and not index.dtype.isinteger for index in data_index
+        ):
+            raise ValueError("Data indices must be integer expressions")
         return data_index
 
 

@@ -553,6 +553,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             raise ValueError("apply() requires gtcpp.Progam root node")
         generated_code = super().apply(root, **kwargs)
         if kwargs.get("format_source", True):
-            formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-            generated_code = formatted_code
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+
         return generated_code
