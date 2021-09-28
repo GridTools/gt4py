@@ -83,11 +83,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             if isinstance(offset, gtcpp.VariableOffset)
             else f"{offset.k}"
         )
-        return (
-            f"eval({accessor_ref.name}({offset.i}, {offset.j}, {offset_k}"
-            + "".join(f", {d}" for d in accessor_ref.data_index)
-            + "))"
-        )
+        data_index = "".join(f", {d}" for d in accessor_ref.data_index)
+        return f"eval({accessor_ref.name}({offset.i}, {offset.j}, {offset_k}{data_index}))"
 
     LocalAccess = as_fmt("{name}")
 
@@ -254,5 +251,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         if "gt_backend_t" not in kwargs:
             raise TypeError("apply() missing 1 required keyword-only argument: 'gt_backend_t'")
         generated_code = super().apply(root, offset_limit=_offset_limit(root), **kwargs)
-        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return formatted_code
+        if kwargs.get("format_source", True):
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+
+        return generated_code

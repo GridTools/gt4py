@@ -142,7 +142,7 @@ class OIRToGTCpp(eve.NodeTranslator):
         return gtcpp.AccessorRef(
             name=node.name,
             offset=self.visit(node.offset, **kwargs),
-            data_index=node.data_index,
+            data_index=[self.visit(index, **kwargs) for index in node.data_index],
             dtype=node.dtype,
         )
 

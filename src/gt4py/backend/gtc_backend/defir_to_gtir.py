@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from types import SimpleNamespace
 from typing import Any, Dict, List, Union, cast
 
 from gt4py.ir import IRNodeVisitor
@@ -176,8 +177,9 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_Assign(self, node: Assign, **kwargs: Any) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
-        left = self.visit(node.target, **kwargs)
-        return gtir.ParAssignStmt(left=left, right=self.visit(node.value, **kwargs))
+        return gtir.ParAssignStmt(
+            left=self.visit(node.target, **kwargs), right=self.visit(node.value, **kwargs)
+        )
 
     def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
         return gtir.Literal(value=str(node.value), dtype=common.DataType(node.data_type.value))
@@ -228,11 +230,15 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_FieldRef(self, node: FieldRef, **kwargs: Any) -> gtir.FieldAccess:
+        if field_decl := self._field_params.get(node.name, None):
+            dtype = field_decl.dtype
+        else:
+            dtype = None
         return gtir.FieldAccess(
             name=node.name,
             offset=self._transform_offset(node.offset, **kwargs),
             data_index=node.data_index,
-            dtype=self._field_params[node.name].dtype if node.name in self._field_params else None,
+            dtype=dtype,
         )
 
     def visit_If(self, node: If, **kwargs: Any) -> Union[gtir.FieldIfStmt, gtir.ScalarIfStmt]:

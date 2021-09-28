@@ -515,5 +515,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         if not isinstance(root, cuir.Program):
             raise ValueError("apply() requires gtcpp.Progam root node")
         generated_code = super().apply(root, **kwargs)
-        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return formatted_code
+        if kwargs.get("format_source", True):
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+
+        return generated_code
