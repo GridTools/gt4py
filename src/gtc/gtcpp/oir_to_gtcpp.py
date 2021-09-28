@@ -16,11 +16,12 @@
 
 import itertools
 from dataclasses import dataclass, field
-from typing import Any, List, Set, Union
+from typing import Any, Dict, Generator, List, Set, Union
 
 from devtools import debug  # noqa: F401
 
 import eve
+from eve.iterators import TreeIterationItem
 from gtc import common, oir
 from gtc.common import CartesianOffset
 from gtc.gtcpp import gtcpp
@@ -30,20 +31,39 @@ from gtc.gtcpp import gtcpp
 # - Each VerticalLoop is MultiStage
 
 
-def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
-    extents = (
-        node.iter_tree()
-        .if_isinstance(gtcpp.AccessorRef)
-        .reduceby(
-            (lambda extent, accessor_ref: extent + accessor_ref.offset),
-            "name",
-            init=gtcpp.GTExtent.zero(),
-            as_dict=True,
-        )
+def _extract_accessors(apply_method: gtcpp.GTApplyMethod) -> List[gtcpp.GTAccessor]:
+    @eve.utils.as_xiter
+    def _iter_valid_accessors(
+        apply_method: gtcpp.GTApplyMethod,
+    ) -> Generator[TreeIterationItem, None, None]:
+        for stmt in apply_method.body:
+            if not (
+                isinstance(stmt, gtcpp.IfStmt)
+                and stmt.cond.iter_tree()
+                .if_isinstance(gtcpp.AccessorRef)
+                .filter(lambda acc: acc.name[2:] == "pos")
+                .to_list()
+            ):
+                yield from stmt.iter_tree().if_isinstance(gtcpp.AccessorRef)
+
+    extents = _iter_valid_accessors(apply_method).reduceby(
+        (lambda extent, accessor_ref: extent + accessor_ref.offset),
+        "name",
+        init=gtcpp.GTExtent.zero(),
+        as_dict=True,
     )
 
+    accessor_names = {
+        name: gtcpp.GTExtent.zero()
+        for name in apply_method.iter_tree()
+        .if_isinstance(gtcpp.AccessorRef)
+        .getattr("name")
+        .to_set()
+    }
+    extents = {**{name: gtcpp.GTExtent.zero() for name in accessor_names}, **extents}
+
     inout_fields: Set[str] = (
-        node.iter_tree()
+        apply_method.iter_tree()
         .if_isinstance(gtcpp.AssignStmt)
         .getattr("left")
         .if_isinstance(gtcpp.AccessorRef)
@@ -51,7 +71,7 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
         .to_set()
     )
     ndims = dict(
-        node.iter_tree()
+        apply_method.iter_tree()
         .if_isinstance(gtcpp.AccessorRef)
         .map(lambda accessor: (accessor.name, 3 + len(accessor.data_index)))
     )
@@ -81,6 +101,8 @@ class OIRToGTCpp(eve.NodeTranslator):
     class GTComputationContext:
         temporaries: List[gtcpp.Temporary] = field(default_factory=list)
         arguments: Set[gtcpp.Arg] = field(default_factory=set)
+        axis_indices: Dict[str, str] = field(default_factory=dict)
+        axis_endpoints: Dict[str, str] = field(default_factory=dict)
 
         def add_temporaries(
             self, temporaries: List[gtcpp.Temporary]
@@ -90,6 +112,14 @@ class OIRToGTCpp(eve.NodeTranslator):
 
         def add_arguments(self, arguments: Set[gtcpp.Arg]) -> "OIRToGTCpp.GTComputationContext":
             self.arguments.update(arguments)
+            return self
+
+        def add_axis_index(self, axis: str) -> "OIRToGTCpp.GTComputationContext":
+            self.axis_indices[axis] = f"{axis.lower()}_pos"
+            return self
+
+        def add_axis_endpoint(self, axis: str) -> "OIRToGTCpp.GTComputationContext":
+            self.axis_endpoints[axis] = f"{axis.lower()}_length"
             return self
 
     contexts = (eve.SymbolTableTrait.symtable_merger,)
@@ -174,6 +204,89 @@ class OIRToGTCpp(eve.NodeTranslator):
             left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
 
+    def _ref_from_axis_bound(
+        self, axis_bound: common.AxisBound, *, axis: str, comp_ctx: GTComputationContext
+    ) -> gtcpp.Expr:
+        if axis_bound.level == common.LevelMarker.END:
+            comp_ctx.add_axis_endpoint(axis)
+            return gtcpp.BinaryOp(
+                op=common.ArithmeticOperator.ADD,
+                left=gtcpp.AccessorRef(
+                    name=comp_ctx.axis_endpoints[axis],
+                    offset=common.CartesianOffset.zero(),
+                    dtype=common.DataType.INT32,
+                ),
+                right=gtcpp.Literal(value=str(axis_bound.offset), dtype=common.DataType.INT32),
+            )
+        else:
+            return gtcpp.Literal(value=str(axis_bound.offset), dtype=common.DataType.INT32)
+
+    def _expr_from_horizontal_interval(
+        self,
+        interval: common.HorizontalInterval,
+        *,
+        axis: str,
+        comp_ctx: GTComputationContext,
+        **kwargs: Any,
+    ) -> gtcpp.Expr:
+        comp_ctx.add_axis_index(axis)
+        if interval.is_single_index:
+            return gtcpp.BinaryOp(
+                op=common.ComparisonOperator.EQ,
+                left=gtcpp.AccessorRef(
+                    name=comp_ctx.axis_indices[axis],
+                    offset=common.CartesianOffset.zero(),
+                    dtype=common.DataType.INT32,
+                ),
+                right=self._ref_from_axis_bound(interval.start, axis=axis, comp_ctx=comp_ctx),
+            )
+        else:
+            if interval.start:
+                start_expr = gtcpp.BinaryOp(
+                    op=common.ComparisonOperator.GE,
+                    left=gtcpp.AccessorRef(
+                        name=comp_ctx.axis_indices[axis],
+                        offset=common.CartesianOffset.zero(),
+                        dtype=common.DataType.INT32,
+                    ),
+                    right=self._ref_from_axis_bound(interval.start, axis=axis, comp_ctx=comp_ctx),
+                )
+            else:
+                start_expr = None
+
+            if interval.end:
+                end_expr = gtcpp.BinaryOp(
+                    op=common.ComparisonOperator.LT,
+                    left=gtcpp.AccessorRef(
+                        name=comp_ctx.axis_indices[axis],
+                        offset=common.CartesianOffset.zero(),
+                        dtype=common.DataType.INT32,
+                    ),
+                    right=self._ref_from_axis_bound(interval.end, axis=axis, comp_ctx=comp_ctx),
+                )
+            else:
+                end_expr = None
+
+            if start_expr and end_expr:
+                return gtcpp.BinaryOp(
+                    op=common.LogicalOperator.AND, left=start_expr, right=end_expr
+                )
+            else:
+                # Return the first non-None expr, or if all are None, then return None
+                return next((expr for expr in (start_expr, end_expr) if expr is not None), None)
+
+    def visit_HorizontalMask(self, node: oir.HorizontalMask, **kwargs: Any) -> gtcpp.Expr:
+        i_expr = self._expr_from_horizontal_interval(node.i, axis="I", **kwargs)
+        j_expr = self._expr_from_horizontal_interval(node.j, axis="J", **kwargs)
+        if i_expr and j_expr:
+            return gtcpp.BinaryOp(op=common.LogicalOperator.AND, left=i_expr, right=j_expr)
+        else:
+            true_value = common.Literal(
+                value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL
+            )
+            # Return the first non-None expr, or if all are None, then return True
+            return next((expr for expr in (i_expr, j_expr) if expr is not None), true_value)
+
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> gtcpp.IfStmt:
         return gtcpp.IfStmt(
             cond=self.visit(node.mask, **kwargs),
@@ -192,7 +305,7 @@ class OIRToGTCpp(eve.NodeTranslator):
         assert "symtable" in kwargs
         apply_method = gtcpp.GTApplyMethod(
             interval=self.visit(interval, **kwargs),
-            body=self.visit(node.body, **kwargs),
+            body=self.visit(node.body, comp_ctx=comp_ctx, **kwargs),
             local_variables=self.visit(node.declarations, **kwargs),
         )
         accessors = _extract_accessors(apply_method)
@@ -273,8 +386,17 @@ class OIRToGTCpp(eve.NodeTranslator):
             **kwargs,
         )
 
+        bindings = [
+            gtcpp.Binding(name=name, expr=gtcpp.Positional(dim=axis.lower()))
+            for axis, name in comp_ctx.axis_indices.items()
+        ] + [
+            gtcpp.Binding(name=name, expr=gtcpp.AxisEndpoint(axis={"I": 0, "J": 1, "K": 2}[axis]))
+            for axis, name in comp_ctx.axis_endpoints.items()
+        ]
+
         gt_computation = gtcpp.GTComputationCall(
             arguments=comp_ctx.arguments,
+            extra_decls=bindings,
             temporaries=comp_ctx.temporaries,
             multi_stages=multi_stages,
         )

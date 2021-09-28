@@ -158,6 +158,7 @@ class GTComputationCallFactory(factory.Factory):
         model = gtcpp.GTComputationCall
 
     arguments: List[gtcpp.Arg] = []
+    extra_decls: List[gtcpp.Binding] = []
     multi_stages = factory.List([factory.SubFactory(GTMultiStageFactory)])
     temporaries = undefined_symbol_list(lambda name: TemporaryFactory(name=name), "multi_stages")
 
