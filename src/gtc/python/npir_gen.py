@@ -112,11 +112,15 @@ class NpirGen(TemplatedGenerator):
         axis_name = self.visit(node.axis_name)
         lpar, rpar = "()" if offset else ("", "")
         if isinstance(node.offset, npir.VariableKOffset):
-            rendered = f"{axis_name.lower()}_ + np.asarray({offset}[:])"
+            variant = self.AxisOffset_variable
+        elif node.parallel:
+            variant = self.AxisOffset_parallel
         else:
-            variant = self.AxisOffset_parallel if node.parallel else self.AxisOffset_serial
-            rendered = variant.render(lpar=lpar, rpar=rpar, axis_name=axis_name, offset=offset)
+            variant = self.AxisOffset_serial
+        rendered = variant.render(lpar=lpar, rpar=rpar, axis_name=axis_name, offset=offset)
         return self.generic_visit(node, parallel_or_serial_variant=rendered, **kwargs)
+
+    AxisOffset_variable = JinjaTemplate("{{ axis_name | lower }}_ + np.asarray({{ offset }}[:])")
 
     AxisOffset_parallel = JinjaTemplate(
         "{{ lpar }}{{ axis_name | lower }}{{ offset }}{{ rpar }}:{{ lpar }}{{ axis_name | upper }}{{ offset }}{{ rpar }}"
