@@ -20,6 +20,7 @@ import dace
 import dace.library
 import dace.subsets
 
+import eve
 import gtc.common as common
 import gtc.oir as oir
 from eve import codegen
@@ -50,7 +51,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         else:
             name = node.name + "__" + self.visit(node.offset)
         if node.data_index:
-            offset_str = str(node.data_index)
+            offset_str = "[" + ",".join(self.visit(node.data_index)) + "]"
         else:
             offset_str = ""
         return name + offset_str
@@ -83,7 +84,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
             return "False"
         raise NotImplementedError("Not implemented BuiltInLiteral encountered.")
 
-    Literal = as_fmt("{dtype}({value})")
+    Literal = as_fmt("{value}")
 
     Cast = as_fmt("{dtype}({expr})")
 
@@ -169,11 +170,31 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         jmax = get_axis_bound_str(node.j.end, "__J")
         return f"i >= {imin} and i < {imax} and j >= {jmin} and j < {jmax}"
 
+    class RemoveCastInIndexVisitor(eve.NodeTranslator):
+        def visit_FieldAccess(self, node: oir.FieldAccess):
+            if node.data_index:
+                return self.generic_visit(node, in_idx=True)
+            else:
+                return self.generic_visit(node)
+
+        def visit_Cast(self, node: oir.Cast, in_idx=False):
+            if in_idx:
+                return node.expr
+            else:
+                return node
+
+        def visit_Literal(self, node: oir.Cast, in_idx=False):
+            if in_idx:
+                return node
+            else:
+                return oir.Cast(dtype=node.dtype, expr=node)
+
     @classmethod
     def apply(cls, node: oir.HorizontalExecution, **kwargs: Any) -> str:
+        preprocessed_node = cls.RemoveCastInIndexVisitor().visit(node)
         if not isinstance(node, oir.HorizontalExecution):
             raise ValueError("apply() requires oir.HorizontalExecution node")
-        generated_code = super().apply(node)
+        generated_code = super().apply(preprocessed_node)
         formatted_code = codegen.format_source("python", generated_code)
         return formatted_code
 
