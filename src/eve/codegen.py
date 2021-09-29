@@ -690,7 +690,7 @@ class TemplatedGenerator(NodeVisitor):
                         node=node,
                     ) from e.__cause__
 
-        elif isinstance(node, (list, tuple, set, collections.abc.Set)) or (
+        elif isinstance(node, (list, tuple, collections.abc.Set)) or (
             isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
         ):
             return [self.visit(value, **kwargs) for value in node]
