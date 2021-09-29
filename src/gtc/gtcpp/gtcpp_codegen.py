@@ -83,7 +83,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             if isinstance(offset, gtcpp.VariableKOffset)
             else f"{offset.k}"
         )
-        data_index = "".join(f", {d}" for d in accessor_ref.data_index)
+        data_index = "".join(f", {self.visit(d)}" for d in accessor_ref.data_index)
         return f"eval({accessor_ref.name}({offset.i}, {offset.j}, {offset_k}{data_index}))"
 
     LocalAccess = as_fmt("{name}")
