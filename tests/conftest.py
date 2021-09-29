@@ -22,6 +22,7 @@ import shutil
 
 import hypothesis as hyp
 import pytest
+from tempfile import mkdtemp
 
 from gt4py import config as gt_config
 
@@ -47,11 +48,17 @@ from .definition_setup import (
 )
 
 
-# Delete cache folder
-shutil.rmtree(
-    os.path.join(gt_config.cache_settings["root_path"], gt_config.cache_settings["dir_name"]),
-    ignore_errors=True,
-)
+# Setup cache folder
+pytest_gt_cache_dir = mkdtemp(prefix=".gt_cache_pytest_", dir=gt_config.cache_settings["root_path"])
+
+
+def pytest_sessionstart():
+    gt_config.cache_settings["dir_name"] = pytest_gt_cache_dir
+
+
+def pytest_sessionfinish():
+    shutil.rmtree(pytest_gt_cache_dir, ignore_errors=True)
+
 
 # Ignore hidden folders and disabled tests
 collect_ignore_glob = [".*", "_disabled*"]
