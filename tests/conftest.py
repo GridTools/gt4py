@@ -19,10 +19,10 @@
 
 import os
 import shutil
+from tempfile import mkdtemp
 
 import hypothesis as hyp
 import pytest
-from tempfile import mkdtemp
 
 from gt4py import config as gt_config
 
