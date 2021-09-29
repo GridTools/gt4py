@@ -20,7 +20,7 @@ from typing import Any, Callable, Dict, List, Set, Tuple
 
 from eve import NodeVisitor
 from eve.concepts import TreeNode
-from eve.utils import XIterator, xiter
+from eve.utils import XIterable, xiter
 from gtc import common, oir
 
 
@@ -85,7 +85,7 @@ class AccessCollector(NodeVisitor):
         _ordered_accesses: List["Access"]
 
         @staticmethod
-        def _offset_dict(accesses: XIterator) -> Dict[str, Set[Tuple[int, int, int]]]:
+        def _offset_dict(accesses: XIterable) -> Dict[str, Set[Tuple[int, int, int]]]:
             return accesses.reduceby(
                 lambda acc, x: acc | {x.offset}, "field", init=set(), as_dict=True
             )

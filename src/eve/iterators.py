@@ -49,17 +49,18 @@ def generic_iter_children(
             Defaults to `False`.
 
     """
-    children_iterator: Iterable[Union[Any, Tuple[KeyValue, Any]]] = iter(())
     if isinstance(node, concepts.Node):
-        children_iterator = node.iter_children() if with_keys else node.iter_children_values()
-    elif isinstance(node, collections.abc.Sequence) and utils.is_collection(node):
-        children_iterator = enumerate(node) if with_keys else iter(node)
-    elif isinstance(node, collections.abc.Set):
-        children_iterator = zip(node, node) if with_keys else iter(node)  # type: ignore  # problems with iter(Set)
-    elif isinstance(node, collections.abc.Mapping):
-        children_iterator = node.items() if with_keys else node.values()
+        return node.iter_children() if with_keys else node.iter_children_values()
+    elif isinstance(node, (list, tuple)) or (
+        isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
+    ):
+        return enumerate(node) if with_keys else iter(node)
+    elif isinstance(node, (set, collections.abc.Set)):
+        return zip(node, node) if with_keys else iter(node)  # type: ignore  # problems with iter(Set)
+    elif isinstance(node, (dict, collections.abc.Mapping)):
+        return node.items() if with_keys else node.values()
 
-    return children_iterator
+    return iter(())
 
 
 class TraversalOrder(Enum):
@@ -68,8 +69,7 @@ class TraversalOrder(Enum):
     LEVELS_ORDER = "levels"
 
 
-@utils.as_xiter
-def iter_tree_pre(
+def _iter_tree_pre(
     node: concepts.TreeNode, *, with_keys: bool = False, __key__: Optional[Any] = None
 ) -> Generator[TreeIterationItem, None, None]:
     """Create a pre-order tree traversal iterator (Depth-First Search).
@@ -83,15 +83,14 @@ def iter_tree_pre(
     if with_keys:
         yield __key__, node
         for key, child in generic_iter_children(node, with_keys=True):
-            yield from iter_tree_pre(child, with_keys=True, __key__=key)
+            yield from _iter_tree_pre(child, with_keys=True, __key__=key)
     else:
         yield node
         for child in generic_iter_children(node, with_keys=False):
-            yield from iter_tree_pre(child, with_keys=False)
+            yield from _iter_tree_pre(child, with_keys=False)
 
 
-@utils.as_xiter
-def iter_tree_post(
+def _iter_tree_post(
     node: concepts.TreeNode, *, with_keys: bool = False, __key__: Optional[Any] = None
 ) -> Generator[TreeIterationItem, None, None]:
     """Create a post-order tree traversal iterator (Depth-First Search).
@@ -104,16 +103,15 @@ def iter_tree_post(
     """
     if with_keys:
         for key, child in generic_iter_children(node, with_keys=True):
-            yield from iter_tree_post(child, with_keys=True, __key__=key)
+            yield from _iter_tree_post(child, with_keys=True, __key__=key)
         yield __key__, node
     else:
         for child in generic_iter_children(node, with_keys=False):
-            yield from iter_tree_post(child, with_keys=False)
+            yield from _iter_tree_post(child, with_keys=False)
         yield node
 
 
-@utils.as_xiter
-def iter_tree_levels(
+def _iter_tree_levels(
     node: concepts.TreeNode,
     *,
     with_keys: bool = False,
@@ -134,13 +132,18 @@ def iter_tree_levels(
         __queue__.extend(generic_iter_children(node, with_keys=True))
         if __queue__:
             key, child = __queue__.pop(0)
-            yield from iter_tree_levels(child, with_keys=True, __key__=key, __queue__=__queue__)
+            yield from _iter_tree_levels(child, with_keys=True, __key__=key, __queue__=__queue__)
     else:
         yield node
         __queue__.extend(generic_iter_children(node, with_keys=False))
         if __queue__:
             child = __queue__.pop(0)
-            yield from iter_tree_levels(child, with_keys=False, __queue__=__queue__)
+            yield from _iter_tree_levels(child, with_keys=False, __queue__=__queue__)
+
+
+iter_tree_pre = utils.as_xiter(_iter_tree_pre)
+iter_tree_post = utils.as_xiter(_iter_tree_post)
+iter_tree_levels = utils.as_xiter(_iter_tree_levels)
 
 
 def iter_tree(
@@ -148,7 +151,7 @@ def iter_tree(
     traversal_order: TraversalOrder = TraversalOrder.PRE_ORDER,
     *,
     with_keys: bool = False,
-) -> utils.XIterator[TreeIterationItem]:
+) -> utils.XIterable[TreeIterationItem]:
     """Create a tree traversal iterator.
 
     Args:
@@ -159,8 +162,11 @@ def iter_tree(
             Defaults to `False`.
 
     """
-    assert isinstance(traversal_order, TraversalOrder)
-    iterator = globals()[f"iter_tree_{traversal_order.value}"](node=node, with_keys=with_keys)
-    assert isinstance(iterator, utils.XIterator)
-
-    return iterator
+    if traversal_order is traversal_order.PRE_ORDER:
+        return iter_tree_pre(node=node, with_keys=with_keys)
+    elif traversal_order is traversal_order.POST_ORDER:
+        return iter_tree_post(node=node, with_keys=with_keys)
+    elif traversal_order is traversal_order.LEVELS_ORDER:
+        return iter_tree_levels(node=node, with_keys=with_keys)
+    else:
+        raise ValueError(f"Invalid '{traversal_order}' traversal order.")
