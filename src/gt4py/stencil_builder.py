@@ -47,7 +47,7 @@ class StencilBuilder:
         self,
         definition_func: Union[StencilFunc, AnnotatedStencilFunc],
         *,
-        backend: Optional[str] = None,
+        backend: Optional[Union[str, Type["BackendType"]]] = None,
         options: Optional[BuildOptions] = None,
         frontend: Optional["FrontendType"] = None,
     ):
@@ -57,7 +57,8 @@ class StencilBuilder:
             **self.default_options_dict(definition_func)
         )
         backend = backend or "debug"
-        self.backend: "BackendType" = gt4py.backend.from_name(backend)(self)
+        backend = gt4py.backend.from_name(backend) if isinstance(backend, str) else backend
+        self.backend: "BackendType" = backend(self)
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
         self.caching = gt4py.caching.strategy_factory("jit", self)
         self._build_data: Dict[str, Any] = {}
