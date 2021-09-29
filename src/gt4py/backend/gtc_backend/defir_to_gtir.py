@@ -302,7 +302,7 @@ class DefIRToGTIR(IRNodeVisitor):
     ) -> Union[gtir.CartesianOffset, gtir.VariableKOffset]:
         transformed = {axis.lower(): offset.get(axis, 0) for axis in ("I", "J")}
 
-        k_val = offset["K"]
+        k_val = offset.get("K", 0)
         if isinstance(k_val, numbers.Integral):
             transformed["k"] = offset.get("K", 0)
             cls_type = gtir.CartesianOffset
