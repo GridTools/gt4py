@@ -149,15 +149,14 @@ class GTExtent(LocNode):
         return cls(i=(0, 0), j=(0, 0), k=(0, 0))
 
     def __add__(self, offset: common.CartesianOffset) -> "GTExtent":
-        if isinstance(offset, common.CartesianOffset):
-            offsets = offset.to_dict()
-            return GTExtent(
-                i=(min(self.i[0], offsets["i"]), max(self.i[1], offsets["i"])),
-                j=(min(self.j[0], offsets["j"]), max(self.j[1], offsets["j"])),
-                k=(min(self.k[0], offsets["k"]), max(self.k[1], offsets["k"])),
-            )
-        else:
-            raise AssertionError("Can only add CartesianOffsets")
+        offsets = offset.to_dict()
+        MAX_OFFSET = 1000
+        k_bounds = (offsets["k"] or -MAX_OFFSET, offsets["k"] or MAX_OFFSET)
+        return GTExtent(
+            i=(min(self.i[0], offsets["i"]), max(self.i[1], offsets["i"])),
+            j=(min(self.j[0], offsets["j"]), max(self.j[1], offsets["j"])),
+            k=(min(self.k[0], k_bounds[0]), max(self.k[1], k_bounds[1])),
+        )
 
 
 class GTAccessor(LocNode):

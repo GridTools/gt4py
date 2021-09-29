@@ -16,7 +16,7 @@
 
 import re
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from eve import NodeVisitor
 from eve.concepts import TreeNode
@@ -27,7 +27,7 @@ from gtc import common, oir
 @dataclass(frozen=True)
 class Access:
     field: str
-    offset: Tuple[int, int, int]
+    offset: Tuple[int, int, Optional[int]]
     is_write: bool
 
     @property
@@ -49,6 +49,18 @@ class AccessCollector(NodeVisitor):
         self.visit(
             node.offset, accesses=accesses, field_name=node.name, is_write=is_write, **kwargs
         )
+
+    def visit_VariableKOffset(
+        self,
+        node: common.VariableKOffset,
+        *,
+        accesses: List[Access],
+        field_name: str,
+        is_write: bool,
+        **kwargs: Any,
+    ) -> None:
+        self.visit(node.k, accesses=accesses, is_write=is_write, **kwargs)
+        accesses.append(Access(field=field_name, offset=(0, 0, None), is_write=is_write))
 
     def visit_CartesianOffset(
         self,

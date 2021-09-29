@@ -304,16 +304,15 @@ class CartesianOffset(Node):
     def zero(cls) -> "CartesianOffset":
         return cls(i=0, j=0, k=0)
 
-    def to_dict(self) -> Dict[str, int]:
+    def to_dict(self) -> Dict[str, Optional[int]]:
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
 class VariableKOffset(CartesianOffset):
     k: Expr
-    MAX_OFFSET: ClassVar[int] = 10000
 
-    def to_dict(self) -> Dict[str, int]:
-        return {"i": self.i, "j": self.j, "k": self.MAX_OFFSET}
+    def to_dict(self) -> Dict[str, Optional[int]]:
+        return {"i": self.i, "j": self.j, "k": None}
 
     @validator("k")
     def integer_k_offset(cls, k: Expr) -> Expr:

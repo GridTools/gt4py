@@ -22,7 +22,7 @@ from devtools import debug  # noqa: F401
 
 import eve
 from gtc import common, oir
-from gtc.common import CartesianOffset, VariableKOffset
+from gtc.common import CartesianOffset
 from gtc.gtcpp import gtcpp
 
 
@@ -31,11 +31,6 @@ from gtc.gtcpp import gtcpp
 
 
 def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
-    def _check_extent(extent):
-        if extent[1].k[1] == VariableKOffset.MAX_OFFSET:
-            extent[1].k = (-extent[1].k[1], extent[1].k[1])
-        return extent
-
     extents = dict(
         node.iter_tree()
         .if_isinstance(gtcpp.AccessorRef)
@@ -44,7 +39,6 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
             "name",
             init=gtcpp.GTExtent.zero(),
         )
-        .map(_check_extent)
     )
 
     inout_fields: Set[str] = (

@@ -15,7 +15,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple, Union
+from dataclasses import dataclass
+from typing import Dict, Generator, List, Tuple, Union
 
 import dace
 import dace.properties
@@ -27,7 +28,7 @@ from dace.sdfg.graph import MultiConnectorEdge
 
 import eve
 import gtc.oir as oir
-from gtc.common import LevelMarker, VariableKOffset, data_type_to_typestr
+from gtc.common import LevelMarker, data_type_to_typestr
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.utils import (
     CartesianIJIndexSpace,
@@ -43,6 +44,18 @@ def _offset_origin(interval: oir.Interval, origin: oir.AxisBound) -> oir.Interva
     if origin >= oir.AxisBound.start():
         return interval
     return interval.shifted(-origin.offset)
+
+
+@dataclass
+class Collection:
+    interval: Interval
+    accesses: AccessCollector.Result
+
+
+def iter_collections(
+    collections: Tuple[Collection, ...]
+) -> Generator[Tuple[Interval, AccessCollector.Result], None, None]:
+    yield from ((coll.interval, coll.accesses) for coll in collections)
 
 
 class BaseOirSDFGBuilder(ABC):
@@ -168,13 +181,12 @@ class BaseOirSDFGBuilder(ABC):
     def _reset_writes(self):
         self._recent_write_acc = dict()
 
-    def _add_read_edges(self, node, collections: List[Tuple[Interval, AccessCollector.Result]]):
+    def _add_read_edges(self, node, *collections: Collection) -> None:
         read_accesses: Dict[str, dace.nodes.AccessNode] = dict()
-        for interval, access_collection in collections:
-
+        for interval, access_collection in iter_collections(collections):
             for name in access_collection.read_fields():
                 for offset in access_collection.read_offsets()[name]:
-                    read_interval = interval.shifted(offset[2])
+                    read_interval = interval.shifted(offset[2]) if offset[2] else Interval.full()
                     for candidate_access in self._get_recent_writes(name, read_interval):
                         if name not in read_accesses or self._are_nodes_ordered(
                             name, read_accesses[name], candidate_access
@@ -182,10 +194,10 @@ class BaseOirSDFGBuilder(ABC):
                             # candidate_access is downstream from recent_access, therefore candidate is more recent
                             read_accesses[name] = candidate_access
 
-        for interval, access_collection in collections:
+        for interval, access_collection in iter_collections(collections):
             for name in access_collection.read_fields():
                 for offset in access_collection.read_offsets()[name]:
-                    read_interval = interval.shifted(offset[2])
+                    read_interval = interval.shifted(offset[2]) if offset[2] else Interval.full()
                     if name not in read_accesses:
                         read_accesses[name] = self._get_source(name)
                     self._set_read(name, read_interval, read_accesses[name])
@@ -194,9 +206,9 @@ class BaseOirSDFGBuilder(ABC):
             node.add_in_connector("IN_" + name)
             self._state.add_edge(recent_access, None, node, "IN_" + name, dace.Memlet())
 
-    def _add_write_edges(self, node, collections: List[Tuple[Interval, AccessCollector.Result]]):
+    def _add_write_edges(self, node, *collections: Collection) -> None:
         write_accesses = dict()
-        for interval, access_collection in collections:
+        for interval, access_collection in iter_collections(collections):
             for name in access_collection.write_fields():
                 access_node = self._get_current_sink(name)
                 if access_node is None or (
@@ -216,27 +228,23 @@ class BaseOirSDFGBuilder(ABC):
             node.add_out_connector("OUT_" + name)
             self._state.add_edge(node, "OUT_" + name, access_node, None, dace.Memlet())
 
-    def _add_write_after_write_edges(
-        self, node, collections: List[Tuple[Interval, AccessCollector.Result]]
-    ):
-        for interval, collection in collections:
+    def _add_write_after_write_edges(self, node, *collections: Collection) -> None:
+        for interval, collection in iter_collections(collections):
             for name in collection.write_fields():
                 for src in self._get_recent_writes(name, interval):
                     edge = self._state.add_edge(src, None, node, None, dace.Memlet())
                     self._delete_candidates.append(edge)
 
-    def _add_write_after_read_edges(
-        self, node, collections: List[Tuple[Interval, AccessCollector.Result]]
-    ):
-        for interval, collection in collections:
+    def _add_write_after_read_edges(self, node, *collections: Collection) -> None:
+        for interval, collection in iter_collections(collections):
             for name in collection.read_fields():
                 for offset in collection.read_offsets()[name]:
-                    read_interval = interval.shifted(offset[2])
+                    read_interval = interval.shifted(offset[2]) if offset[2] else Interval.full()
                     for dst in self._get_recent_writes(name, read_interval):
                         edge = self._state.add_edge(node, None, dst, None, dace.Memlet())
                         self._delete_candidates.append(edge)
 
-        for interval, collection in collections:
+        for interval, collection in iter_collections(collections):
             for name in collection.write_fields():
                 self._set_write(name, interval, node)
 
@@ -409,14 +417,13 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         read_subsets = dict()
         k_origins = dict()
         for name, offsets in collection.offsets().items():
-            k_origins[name] = -min(o[2] for o in offsets)
+            k_accesses = set(filter(None, {o[2] for o in offsets})) or {0}
+            k_origins[name] = -min(k_accesses)
         for name, offsets in collection.read_offsets().items():
             if self._axes[name][2]:
-                read_subsets[name] = "{origin}{min_off:+d}:{origin}{max_off:+d}".format(
-                    origin=k_origins[name],
-                    min_off=min(o[2] for o in offsets),
-                    max_off=max(o[2] for o in offsets) + 1,
-                )
+                min_off = min(o[2] for o in offsets) or 0
+                max_off = (max(o[2] for o in offsets) or 0) + 1
+                read_subsets[name] = f"{k_origins[name]}{min_off:+d}:{k_origins[name]}{max_off:+d}"
         for name in collection.write_fields():
             if self._axes[name][2]:
                 write_subsets[name] = "{origin}:{origin}+1".format(origin=k_origins[name])
@@ -424,23 +431,23 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
 
     def add_read_edges(self, node):
         interval = Interval.full()
-        return self._add_read_edges(node, [(interval, self._get_access_collection(node))])
+        collection = Collection(interval=interval, accesses=self._get_access_collection(node))
+        return self._add_read_edges(node, collection)
 
     def add_write_edges(self, node):
         interval = Interval.full()
-        return self._add_write_edges(node, [(interval, self._get_access_collection(node))])
+        collection = Collection(interval=interval, accesses=self._get_access_collection(node))
+        return self._add_write_edges(node, collection)
 
     def add_write_after_write_edges(self, node):
         interval = Interval.full()
-        return self._add_write_after_write_edges(
-            node, [(interval, self._get_access_collection(node))]
-        )
+        collection = Collection(interval=interval, accesses=self._get_access_collection(node))
+        return self._add_write_after_write_edges(node, collection)
 
     def add_write_after_read_edges(self, node):
         interval = Interval.full()
-        return self._add_write_after_read_edges(
-            node, [(interval, self._get_access_collection(node))]
-        )
+        collection = Collection(interval=interval, accesses=self._get_access_collection(node))
+        return self._add_write_after_read_edges(node, collection)
 
     def get_access_spaces(self, node):
         assert isinstance(node, HorizontalExecutionLibraryNode)
@@ -518,8 +525,9 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
             for name, offsets in collection.read_offsets().items():
                 if self._axes[name][2]:
                     for offset in offsets:
-                        k_offset = 0 if offset[2] == VariableKOffset.MAX_OFFSET else offset[2]
-                        read_interval = interval.shifted(k_offset)
+                        read_interval = (
+                            interval.shifted(offset[2]) if offset[2] else interval.full()
+                        )
                         read_intervals.setdefault(name, read_interval)
                         read_intervals[name] = Interval(
                             start=min(read_intervals[name].start, read_interval.start),
@@ -595,28 +603,27 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
                         )
         return input_spaces, output_spaces
 
-    def _get_collection_from_sections(self, sections):
-        res = []
-        for interval, sdfg in sections:
-            collection = self._get_access_collection(sdfg)
-            res.append((interval, collection))
-        return res
+    def _get_collections_from_sections(self, sections):
+        return (
+            Collection(interval=interval, accesses=self._get_access_collection(sdfg))
+            for interval, sdfg in sections
+        )
 
     def add_read_edges(self, node):
-        collections = self._get_collection_from_sections(node.sections)
-        return self._add_read_edges(node, collections)
+        collections = self._get_collections_from_sections(node.sections)
+        return self._add_read_edges(node, *collections)
 
     def add_write_edges(self, node):
-        collections = self._get_collection_from_sections(node.sections)
-        return self._add_write_edges(node, collections)
+        collections = self._get_collections_from_sections(node.sections)
+        return self._add_write_edges(node, *collections)
 
     def add_write_after_write_edges(self, node):
-        collections = self._get_collection_from_sections(node.sections)
-        return self._add_write_after_write_edges(node, collections)
+        collections = self._get_collections_from_sections(node.sections)
+        return self._add_write_after_write_edges(node, *collections)
 
     def add_write_after_read_edges(self, node):
-        collections = self._get_collection_from_sections(node.sections)
-        return self._add_write_after_read_edges(node, collections)
+        collections = self._get_collections_from_sections(node.sections)
+        return self._add_write_after_read_edges(node, *collections)
 
 
 class OirSDFGBuilder(eve.NodeVisitor):
