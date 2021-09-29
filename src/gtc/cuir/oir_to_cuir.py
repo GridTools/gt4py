@@ -23,6 +23,8 @@ from gtc.passes.oir_optimizations.utils import symbol_name_creator
 
 
 class OIRToCUIR(eve.NodeTranslator):
+    contexts = (eve.SymbolTableTrait.symtable_merger,)
+
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> cuir.Literal:
         return cuir.Literal(value=node.value, dtype=node.dtype)
 
@@ -164,9 +166,9 @@ class OIRToCUIR(eve.NodeTranslator):
         accessed_fields: Set[str] = set()
         kernels = self.visit(
             node.vertical_loops,
-            symtable=node.symtable_,
-            new_symbol_name=symbol_name_creator(set(node.symtable_)),
+            new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
             accessed_fields=accessed_fields,
+            **kwargs,
         )
         temporaries = [self.visit(d) for d in node.declarations if d.name in accessed_fields]
         return cuir.Program(

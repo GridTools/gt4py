@@ -19,11 +19,14 @@
 
 from __future__ import annotations
 
+import collections
+import contextlib
+
 import pydantic
 
 from . import concepts, visitors
 from .type_definitions import SymbolName
-from .typingx import Any, Dict, Type
+from .typingx import Any, Dict, Iterator, Type
 
 
 class _CollectSymbols(visitors.NodeVisitor):
@@ -68,3 +71,22 @@ class SymbolTableTrait(concepts.Model):
     def collect_symbols(self) -> None:
         self.symtable_ = dict()
         self.symtable_ = self._collect_symbols(self)
+
+    @staticmethod
+    @contextlib.contextmanager
+    def symtable_merger(
+        node_visitor: visitors.NodeVisitor, node: concepts.Node, kwargs: Dict[str, Any]
+    ) -> Iterator[None]:
+        """Update or add the symtable to kwargs in the visitor calls.
+
+        This is a context manager that, when included to the contexts classvar, will
+        automatically pass 'symtable' as a keyword argument to visitor methods.
+        """
+        kwargs.setdefault("symtable", collections.ChainMap())
+        if has_table := isinstance(node, SymbolTableTrait):
+            kwargs["symtable"] = kwargs["symtable"].new_child(node.symtable_)
+
+        yield
+
+        if has_table:
+            kwargs["symtable"] = kwargs["symtable"].parents
