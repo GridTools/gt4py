@@ -633,7 +633,8 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
         "gtc:gt:cpu_ifirst",
         "gtc:gt:cpu_kfirst",
         "gtc:gt:gpu",
-        "gtc:dace",
+        "gtc:dace:cpu",
+        "gtc:dace:gpu",
     ]
     symbols = {
         "field_in": gt_testing.field(
@@ -750,7 +751,11 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
         "index": np.int32,
     }
     domain_range = [(2, 2), (2, 2), (2, 8)]
-    backends = [backend for backend in INTERNAL_BACKENDS if backend.values[0] not in ["gtc:dace"]]
+    backends = [
+        backend
+        for backend in INTERNAL_BACKENDS
+        if backend.values[0] not in ["gtc:dace:cpu", "gtc:dace:gpu"]
+    ]
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]

@@ -41,7 +41,7 @@ def pybuffer_to_sid(
     domain_ndim = domain_dim_flags.count(True)
     sid_ndim = domain_ndim + data_ndim
 
-    as_sid = "as_cuda_sid" if backend.GT_BACKEND_T == "gpu" else "as_sid"
+    as_sid = "as_cuda_sid" if backend.storage_info["device"] == "gpu" else "as_sid"
 
     sid_def = """gt::{as_sid}<{ctype}, {sid_ndim},
         gt::integral_constant<int, {unique_index}>, {unit_stride_dim}>({name})""".format(

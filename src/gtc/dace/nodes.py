@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import base64
+import pickle
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
@@ -43,6 +45,26 @@ class OIRLibraryNode(ABC, dace.nodes.LibraryNode):
     def __eq__(self, other):
         raise NotImplementedError("Implement in child class.")
 
+    def to_json(self, parent):
+        protocol = pickle.DEFAULT_PROTOCOL
+        pbytes = pickle.dumps(self, protocol=protocol)
+
+        jsonobj = super().to_json(parent)
+        jsonobj["classpath"] = dace.nodes.full_class_path(self)
+        jsonobj["attributes"]["protocol"] = protocol
+        jsonobj["attributes"]["pickle"] = base64.b64encode(pbytes).decode("utf-8")
+
+        return jsonobj
+
+    @classmethod
+    def from_json(cls, json_obj, context=None):
+        if "attributes" not in json_obj:
+            b64string = json_obj["pickle"]
+        else:
+            b64string = json_obj["attributes"]["pickle"]
+        pbytes = base64.b64decode(b64string)
+        return pickle.loads(pbytes)
+
 
 @library.node
 class VerticalLoopLibraryNode(OIRLibraryNode):
@@ -53,9 +75,23 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
     sections = dace.properties.ListProperty(
         element_type=Tuple[Interval, dace.SDFG], default=[], allow_none=False
     )
-    caches = dace.properties.ListProperty(
-        element_type=List[CacheDesc], default=[], allow_none=False
+    caches = dace.properties.ListProperty(element_type=CacheDesc, default=[], allow_none=False)
+    default_storage_type = dace.properties.EnumProperty(
+        dtype=dace.StorageType, default=dace.StorageType.Default
     )
+    ijcache_storage_type = dace.properties.EnumProperty(
+        dtype=dace.StorageType, default=dace.StorageType.Default
+    )
+    kcache_storage_type = dace.properties.EnumProperty(
+        dtype=dace.StorageType, default=dace.StorageType.Default
+    )
+    tiling_map_schedule = dace.properties.EnumProperty(
+        dtype=dace.ScheduleType, default=dace.ScheduleType.Default
+    )
+    map_schedule = dace.properties.EnumProperty(
+        dtype=dace.ScheduleType, default=dace.ScheduleType.Default
+    )
+    tile_sizes = dace.properties.ListProperty(element_type=int, default=None, allow_none=True)
 
     _dace_library_name = "oir.VerticalLoop"
 
@@ -150,6 +186,10 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
     )
     iteration_space = dace.properties.Property(
         dtype=CartesianIterationSpace, default=None, allow_none=True
+    )
+
+    map_schedule = dace.properties.EnumProperty(
+        dtype=dace.ScheduleType, default=dace.ScheduleType.Default
     )
     _dace_library_name = "oir.HorizontalExecution"
 

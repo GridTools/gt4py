@@ -70,7 +70,7 @@ def get_reference(test_name, backend, domain, origins, shapes, masks=None):
 
 
 @register
-@hyp.given(domain=hyp_st.tuples(*([hyp_st.integers(min_value=1, max_value=8)] * 3)))
+@hyp.given(domain=hyp_st.tuples(*([hyp_st.integers(min_value=5, max_value=8)] * 2), hyp_st.just(1)))
 def run_horizontal_diffusion(backend, id_version, domain):
 
     validate_field_names = ["out_field"]
