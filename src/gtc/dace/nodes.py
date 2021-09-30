@@ -17,7 +17,7 @@
 import base64
 import pickle
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 
 import dace.data
 import dace.properties
@@ -191,6 +191,13 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
     map_schedule = dace.properties.EnumProperty(
         dtype=dace.ScheduleType, default=dace.ScheduleType.Default
     )
+    sym_origin = dace.properties.ListProperty(
+        element_type=dace.symbol,
+        default=[dace.symbolic.pystr_to_symbolic("0"), dace.symbolic.pystr_to_symbolic("0")],
+    )
+    sym_domain = dace.properties.ListProperty(
+        element_type=dace.symbol, default=[dace.symbol("__I"), dace.symbol("__J")]
+    )
     _dace_library_name = "oir.HorizontalExecution"
 
     def __init__(
@@ -221,3 +228,10 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
 
     def __hash__(self):
         return super(OIRLibraryNode, self).__hash__()
+
+    @property
+    def free_symbols(self) -> Set[str]:
+        res = super().free_symbols
+        for dim in self.sym_domain:
+            res |= {str(s) for s in dace.symbolic.pystr_to_symbolic(dim).free_symbols}
+        return res

@@ -185,6 +185,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         if not isinstance(node, oir.HorizontalExecution):
             raise ValueError("apply() requires oir.HorizontalExecution node")
         generated_code = super().apply(preprocessed_node, **kwargs)
+
         formatted_code = codegen.format_source("python", generated_code)
         return formatted_code
 
@@ -590,8 +591,8 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
         in_memlets, out_memlets = self.get_innermost_memlets()
 
         map_ranges = OrderedDict(
-            j=get_interval_range_str(self.node.iteration_space.j_interval, "__J"),
-            i=get_interval_range_str(self.node.iteration_space.i_interval, "__I"),
+            j=get_interval_range_str(self.node.iteration_space.j_interval, self.node.sym_domain[1]),
+            i=get_interval_range_str(self.node.iteration_space.i_interval, self.node.sym_domain[0]),
         )
         inputs = [name[len("IN_") :] for name in self.node.in_connectors]
         outputs = [name[len("OUT_") :] for name in self.node.out_connectors]
@@ -605,7 +606,7 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
             outputs=out_memlets,
             input_nodes=input_nodes,
             output_nodes=output_nodes,
-            code=TaskletCodegen.apply(self.node.oir_node),
+            code=TaskletCodegen.apply(self.node.oir_node, sym_origin=self.node.sym_origin),
             external_edges=True,
         )
 
