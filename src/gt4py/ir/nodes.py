@@ -174,7 +174,7 @@ import copy
 import enum
 import operator
 import sys
-from typing import Generator, Sequence, Type, Optional, List
+from typing import Generator, List, Optional, Sequence, Type
 
 import numpy as np
 

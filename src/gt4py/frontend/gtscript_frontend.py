@@ -24,7 +24,7 @@ import sys
 import textwrap
 import types
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union, Set
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 
