@@ -787,6 +787,46 @@ def get_temp_annotations(
     return annotations, values
 
 
+def make_init_computation(
+    temp_decls: Dict[str, gt_ir.FieldDecl], temp_inits: Dict[str, gt_ir.ScalarLiteral]
+) -> gt_ir.ComputationBlock:
+    order = gt_ir.IterationOrder.PARALLEL
+    # Add computation to intiialize temporaries
+    axes = set().union(*(set(temp_decls[name].axes) for name in temp_inits))
+    if "K" in axes:
+        interval = gt_ir.AxisInterval.full_interval()
+    else:
+        interval = gt_ir.AxisInterval(
+            start=gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0),
+            end=gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=1),
+        )
+    stmts = []
+    for name in temp_inits:
+        decl = temp_decls[name]
+        stmts.append(decl)
+        if decl.data_dims:
+            for index in itertools.product(*(range(i) for i in decl.data_dims)):
+                stmts.append(
+                    gt_ir.Assign(
+                        target=gt_ir.FieldRef.at_center(
+                            name, axes=decl.axes, data_index=list(index)
+                        ),
+                        value=temp_inits[name],
+                    )
+                )
+        else:
+            stmts.append(
+                gt_ir.Assign(
+                    target=gt_ir.FieldRef.at_center(name, axes=decl.axes),
+                    value=temp_inits[name],
+                )
+            )
+
+    return gt_ir.ComputationBlock(
+        interval=interval, iteration_order=order, body=gt_ir.BlockStmt(stmts=stmts)
+    )
+
+
 @enum.unique
 class ParsingContext(enum.Enum):
     CONTROL_FLOW = 1
@@ -1955,6 +1995,13 @@ class GTScriptParser(ast.NodeVisitor):
         ValueInliner.apply(main_func_node, context=local_context)
 
         temp_decls, temp_inits = get_temp_annotations(main_func_node, context=local_context)
+        if temp_inits:
+            init_computation = make_init_computation(temp_decls, temp_inits)
+            fields_decls |= {name: decl for name, decl in temp_decls.items() if name in temp_inits}
+            temp_decls = {name: decl for name, decl in temp_decls.items() if name not in temp_inits}
+        else:
+            init_computation = None
+
         main_func_node.body = [
             stmt for stmt in main_func_node.body if not isinstance(stmt, ast.AnnAssign)
         ]
@@ -1967,46 +2014,6 @@ class GTScriptParser(ast.NodeVisitor):
         # Cleaner.apply(self.definition_ir)
 
         AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
-
-        if temp_inits:
-            order = gt_ir.IterationOrder.PARALLEL
-            # Add computation to intiialize temporaries
-            axes = set().union(*(set(temp_decls[name].axes) for name in temp_inits))
-            if "K" in axes:
-                interval = gt_ir.AxisInterval.full_interval()
-            else:
-                interval = gt_ir.AxisInterval(
-                    start=gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0),
-                    end=gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=1),
-                )
-            stmts = []
-            for name in temp_inits:
-                decl = temp_decls.pop(name)
-                fields_decls[name] = decl
-                stmts.append(decl)
-                if decl.data_dims:
-                    for index in itertools.product(*(range(i) for i in decl.data_dims)):
-                        stmts.append(
-                            gt_ir.Assign(
-                                target=gt_ir.FieldRef.at_center(
-                                    name, axes=decl.axes, data_index=list(index)
-                                ),
-                                value=temp_inits[name],
-                            )
-                        )
-                else:
-                    stmts.append(
-                        gt_ir.Assign(
-                            target=gt_ir.FieldRef.at_center(name, axes=decl.axes),
-                            value=temp_inits[name],
-                        )
-                    )
-
-            init_computation = gt_ir.ComputationBlock(
-                interval=interval, iteration_order=order, body=gt_ir.BlockStmt(stmts=stmts)
-            )
-        else:
-            init_computation = None
 
         # Generate definition IR
         domain = gt_ir.Domain.LatLonGrid()
