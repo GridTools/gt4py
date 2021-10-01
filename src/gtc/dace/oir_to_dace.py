@@ -186,7 +186,9 @@ class BaseOirSDFGBuilder(ABC):
         for interval, access_collection in iter_collections(collections):
             for name in access_collection.read_fields():
                 for offset in access_collection.read_offsets()[name]:
-                    read_interval = interval.shifted(offset[2]) if offset[2] else Interval.full()
+                    read_interval = (
+                        interval.shifted(offset[2]) if offset[2] is not None else Interval.full()
+                    )
                     for candidate_access in self._get_recent_writes(name, read_interval):
                         if name not in read_accesses or self._are_nodes_ordered(
                             name, read_accesses[name], candidate_access
@@ -197,7 +199,9 @@ class BaseOirSDFGBuilder(ABC):
         for interval, access_collection in iter_collections(collections):
             for name in access_collection.read_fields():
                 for offset in access_collection.read_offsets()[name]:
-                    read_interval = interval.shifted(offset[2]) if offset[2] else Interval.full()
+                    read_interval = (
+                        interval.shifted(offset[2]) if offset[2] is not None else Interval.full()
+                    )
                     if name not in read_accesses:
                         read_accesses[name] = self._get_source(name)
                     self._set_read(name, read_interval, read_accesses[name])
@@ -239,7 +243,9 @@ class BaseOirSDFGBuilder(ABC):
         for interval, collection in iter_collections(collections):
             for name in collection.read_fields():
                 for offset in collection.read_offsets()[name]:
-                    read_interval = interval.shifted(offset[2]) if offset[2] else Interval.full()
+                    read_interval = (
+                        interval.shifted(offset[2]) if offset[2] is not None else Interval.full()
+                    )
                     for dst in self._get_recent_writes(name, read_interval):
                         edge = self._state.add_edge(node, None, dst, None, dace.Memlet())
                         self._delete_candidates.append(edge)
@@ -417,13 +423,20 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         read_subsets = dict()
         k_origins = dict()
         for name, offsets in collection.offsets().items():
-            k_accesses = set(filter(None, {o[2] for o in offsets})) or {0}
-            k_origins[name] = -min(k_accesses)
+            if not any(o[2] is None for o in offsets):
+                k_origins[name] = -min({o[2] for o in offsets})
+            else:
+                k_origins[name] = None
         for name, offsets in collection.read_offsets().items():
             if self._axes[name][2]:
                 min_off = min(o[2] for o in offsets) or 0
-                max_off = (max(o[2] for o in offsets) or 0) + 1
-                read_subsets[name] = f"{k_origins[name]}{min_off:+d}:{k_origins[name]}{max_off:+d}"
+                max_off = max(o[2] for o in offsets) or 0
+                if k_origins[name] is None:
+                    read_subsets[name] = f"0:__K+{max_off-min_off}"
+                else:
+                    read_subsets[
+                        name
+                    ] = f"{k_origins[name]}{min_off:+d}:{k_origins[name]}{max_off+1:+d}"
         for name in collection.write_fields():
             if self._axes[name][2]:
                 write_subsets[name] = "{origin}:{origin}+1".format(origin=k_origins[name])
@@ -526,7 +539,9 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
                 if self._axes[name][2]:
                     for offset in offsets:
                         read_interval = (
-                            interval.shifted(offset[2]) if offset[2] else interval.full()
+                            interval.shifted(offset[2])
+                            if offset[2] is not None
+                            else interval.full()
                         )
                         read_intervals.setdefault(name, read_interval)
                         read_intervals[name] = Interval(

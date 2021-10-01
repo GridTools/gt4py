@@ -741,3 +741,27 @@ class TestReadOutsideKInterval(gt_testing.StencilTestSuite):
 
     def validation(field_in, field_out, *, domain, origin):
         field_out[:, :, :] = field_in[:, :, 0:-2] + field_in[:, :, 2:]
+
+
+class TestReadVariableOffset(gt_testing.StencilTestSuite):
+    dtypes = {"field_in": np.float64, "field_out": np.float64, "idx": np.int32}
+    domain_range = [(4, 4), (4, 4), (4, 4)]
+    backends = INTERNAL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "idx": gt_testing.field(in_range=(1, 1), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]),
+    }
+
+    def definition(field_in, field_out, idx):
+        with computation(PARALLEL), interval(0, -1):
+            field_out = field_in[  # noqa: F841  # Local name is assigned to but never used
+                0, 0, idx
+            ]
+
+    def validation(field_in, field_out, idx, *, domain, origin):
+        field_out[:, :, :-1] = field_in[:, :, 1:]
