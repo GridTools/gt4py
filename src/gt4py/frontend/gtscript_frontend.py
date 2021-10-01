@@ -20,10 +20,11 @@ import enum
 import inspect
 import itertools
 import numbers
+import sys
 import textwrap
 import types
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, Set
 
 import numpy as np
 
@@ -709,6 +710,83 @@ class CompiledIfInliner(ast.NodeTransformer):
 #
 
 
+def parse_annotation(
+    node: ast.AnnAssign,
+) -> Tuple[str, gt_ir.FieldDecl, Optional[gt_ir.ScalarLiteral]]:
+    if not isinstance(node.target, ast.Name):
+        raise TypeError("Annotation targets for temporaries should be ast.Name type")
+    if not isinstance(node.annotation, ast.Subscript):
+        raise TypeError("Annotations should be ast.Subscript type")
+
+    temp_name: str = node.target.id
+    annotation: ast.Subscript = node.annotation
+
+    type_name = gt_utils.meta.get_qualified_name_from_node(annotation.value)
+    assert type_name.endswith("Field"), "Type name should end with Field"
+
+    tuple_or_name = (
+        annotation.slice.value if isinstance(annotation.slice, ast.Index) else annotation.slice
+    )
+    dtype_and_axes = gt_utils.listify(
+        tuple_or_name.elts if isinstance(tuple_or_name, ast.Tuple) else tuple_or_name
+    )
+
+    if len(dtype_and_axes) > 1:
+        axes = gt_utils.meta.get_qualified_name_from_node(dtype_and_axes[0])
+        dtype_node = dtype_and_axes[1]
+    elif len(dtype_and_axes) == 1:
+        axes = "IJK"
+        dtype_node = dtype_and_axes[1]
+    else:
+        raise GTScriptSyntaxError(f"{type_name} requires at least one argument")
+
+    if isinstance(dtype_node, (ast.Name, ast.Attribute)):
+        dtype_name = gt_utils.meta.get_qualified_name_from_node(dtype_node)
+        # Assumption: "." in the qualified name implies this is a numpy dtype
+        if "." in dtype_name:
+            np_dtype_name = dtype_name.split(".")[-1]
+            dtype = gt_ir.DataType.NUMPY_TO_NATIVE_TYPE[np_dtype_name]
+        else:
+            # A python type specification
+            dtype = gt_ir.DataType.from_dtype(getattr(sys.modules["builtins"], dtype_name))
+    else:
+        raise NotImplementedError()
+
+    decl = gt_ir.FieldDecl(
+        name=temp_name,
+        data_type=dtype,
+        axes=list(axes),
+        is_api=False,
+        data_dims=[],
+    )
+
+    if hasattr(node, "value") and node.value is not None:
+        if not isinstance(node.value, ast.Constant):
+            raise GTScriptSyntaxError("Initializer values can only be scalars")
+        value = node.value.value
+        value_expr = gt_ir.ScalarLiteral(
+            value=value, data_type=gt_ir.DataType.from_dtype(type(value))
+        )
+    else:
+        value_expr = None
+
+    return temp_name, decl, value_expr
+
+
+def get_temp_annotations(
+    node: ast.FunctionDef, *, context: Dict[str, Any]
+) -> Tuple[Dict[str, gt_ir.FieldDecl], Dict[str, Any]]:
+    annotations: Dict[str, gt_ir.FieldDecl] = {}
+    values: Dict[str, Any] = {}
+    for stmt in (stmt for stmt in node.body if isinstance(stmt, ast.AnnAssign)):
+        name, decl, value = parse_annotation(stmt)
+        annotations[name] = decl
+        if value is not None:
+            values[name] = value
+
+    return annotations, values
+
+
 @enum.unique
 class ParsingContext(enum.Enum):
     CONTROL_FLOW = 1
@@ -723,7 +801,7 @@ class IRMaker(ast.NodeVisitor):
         local_symbols: dict,
         *,
         domain: gt_ir.Domain,
-        extra_temp_decls: dict,
+        temp_decls: Dict[str, gt_ir.FieldDecl],
     ):
         fields = fields or {}
         parameters = parameters or {}
@@ -737,7 +815,7 @@ class IRMaker(ast.NodeVisitor):
         self.parameters = parameters
         self.local_symbols = local_symbols
         self.domain = domain or gt_ir.Domain.LatLonGrid()
-        self.extra_temp_decls = extra_temp_decls or {}
+        self.temp_decls = temp_decls
         self.parsing_context = None
         self.iteration_order = None
         self.if_decls_stack = []
@@ -787,7 +865,12 @@ class IRMaker(ast.NodeVisitor):
         return name in self.local_symbols
 
     def _is_known(self, name: str):
-        return self._is_field(name) or self._is_parameter(name) or self._is_local_symbol(name)
+        return (
+            self._is_field(name)
+            or self._is_parameter(name)
+            or self._is_local_symbol(name)
+            or name in self.temps_inited
+        )
 
     def _are_blocks_sorted(self, compute_blocks: List[gt_ir.ComputationBlock]):
         def sort_blocks_key(comp_block):
@@ -1039,7 +1122,9 @@ class IRMaker(ast.NodeVisitor):
         symbol = node.id
         if self._is_field(symbol):
             result = gt_ir.FieldRef.at_center(
-                symbol, self.fields[symbol].axes, loc=gt_ir.Location.from_ast_node(node)
+                symbol,
+                axes=self.fields[symbol].axes,
+                loc=gt_ir.Location.from_ast_node(node),
             )
         elif self._is_parameter(symbol):
             result = gt_ir.VarRef(name=symbol)
@@ -1336,19 +1421,22 @@ class IRMaker(ast.NodeVisitor):
                     )
 
             if not self._is_known(name):
-                if data_index is not None and data_index:
-                    raise GTScriptSyntaxError(
-                        message="Temporaries may not use additional data dimensions.",
-                        loc=gt_ir.Location.from_ast_node(t),
+                if name in self.temp_decls:
+                    field_decl = self.temp_decls[name]
+                else:
+                    if data_index is not None and data_index:
+                        raise GTScriptSyntaxError(
+                            message="Temporaries may not use additional data dimensions.",
+                            loc=gt_ir.Location.from_ast_node(t),
+                        )
+                    field_decl = gt_ir.FieldDecl(
+                        name=name,
+                        data_type=gt_ir.DataType.AUTO,
+                        axes=gt_ir.Domain.LatLonGrid().axes_names,
+                        # layout_id=t.id,
+                        is_api=False,
                     )
 
-                field_decl = gt_ir.FieldDecl(
-                    name=name,
-                    data_type=gt_ir.DataType.AUTO,
-                    axes=gt_ir.Domain.LatLonGrid().axes_names,
-                    # layout_id=t.id,
-                    is_api=False,
-                )
                 if len(self.if_decls_stack):
                     self.if_decls_stack[-1].append(field_decl)
                 else:
@@ -1549,7 +1637,7 @@ class GTScriptParser(ast.NodeVisitor):
                 raise GTScriptDefinitionError(
                     name=qualified_name,
                     value=definition,
-                    message="'*kwargs' dict parameter is not supported in GTScript definitions",
+                    message="'**kwargs' dict parameter is not supported in GTScript definitions",
                 )
             else:
                 is_keyword = param.kind == inspect.Parameter.KEYWORD_ONLY
@@ -1638,7 +1726,7 @@ class GTScriptParser(ast.NodeVisitor):
 
         nonlocal_symbols = {}
 
-        name_nodes = gt_meta.collect_names(definition)
+        name_nodes = gt_meta.collect_names(definition, skip_annotations=False)
         for collected_name in name_nodes.keys():
             if collected_name not in gtscript.builtins:
                 root_name = collected_name.split(".")[0]
@@ -1863,7 +1951,13 @@ class GTScriptParser(ast.NodeVisitor):
             self.external_context,
             exhaustive=False,
         )
+
         ValueInliner.apply(main_func_node, context=local_context)
+
+        temp_decls, temp_inits = get_temp_annotations(main_func_node, context=local_context)
+        main_func_node.body = [
+            stmt for stmt in main_func_node.body if not isinstance(stmt, ast.AnnAssign)
+        ]
 
         # Inline function calls
         CallInliner.apply(main_func_node, context=local_context)
@@ -1874,6 +1968,46 @@ class GTScriptParser(ast.NodeVisitor):
 
         AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
 
+        if temp_inits:
+            order = gt_ir.IterationOrder.PARALLEL
+            # Add computation to intiialize temporaries
+            axes = set().union(*(set(temp_decls[name].axes) for name in temp_inits))
+            if "K" in axes:
+                interval = gt_ir.AxisInterval.full_interval()
+            else:
+                interval = gt_ir.AxisInterval(
+                    start=gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0),
+                    end=gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=1),
+                )
+            stmts = []
+            for name in temp_inits:
+                decl = temp_decls.pop(name)
+                fields_decls[name] = decl
+                stmts.append(decl)
+                if decl.data_dims:
+                    for index in itertools.product(*(range(i) for i in decl.data_dims)):
+                        stmts.append(
+                            gt_ir.Assign(
+                                target=gt_ir.FieldRef.at_center(
+                                    name, axes=decl.axes, data_index=list(index)
+                                ),
+                                value=temp_inits[name],
+                            )
+                        )
+                else:
+                    stmts.append(
+                        gt_ir.Assign(
+                            target=gt_ir.FieldRef.at_center(name, axes=decl.axes),
+                            value=temp_inits[name],
+                        )
+                    )
+
+            init_computation = gt_ir.ComputationBlock(
+                interval=interval, iteration_order=order, body=gt_ir.BlockStmt(stmts=stmts)
+            )
+        else:
+            init_computation = None
+
         # Generate definition IR
         domain = gt_ir.Domain.LatLonGrid()
         computations = IRMaker(
@@ -1881,7 +2015,7 @@ class GTScriptParser(ast.NodeVisitor):
             parameters=parameter_decls,
             local_symbols={},  # Not used
             domain=domain,
-            extra_temp_decls={},  # Not used
+            temp_decls=temp_decls,
         )(self.ast_root)
 
         self.definition_ir = gt_ir.StencilDefinition(
@@ -1894,7 +2028,7 @@ class GTScriptParser(ast.NodeVisitor):
             parameters=[
                 parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
             ],
-            computations=computations,
+            computations=[init_computation] + computations if init_computation else computations,
             externals=self.resolved_externals,
             docstring=inspect.getdoc(self.definition) or "",
             loc=gt_ir.Location.from_ast_node(self.ast_root.body[0]),
