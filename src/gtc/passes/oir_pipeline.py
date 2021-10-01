@@ -57,11 +57,12 @@ class OirPipeline:
     May only call existing passes and may not contain any pass logic itself.
     """
 
-    def __init__(self, node: oir.Stencil):
+    def __init__(self, node: oir.Stencil, step_order: Optional[Dict[str, int]] = None):
         self.oir = node
         self._cache: Dict[Tuple[int, ...], oir.Stencil] = {}
+        self._step_order = step_order
 
-    def steps(self) -> Sequence[PASS_T]:
+    def _default_steps(self) -> Sequence[PASS_T]:
         return [
             graph_merge_horizontal_executions,
             AdjacentLoopMerging,
@@ -77,6 +78,27 @@ class OirPipeline:
             PruneKCacheFlushes,
             FillFlushToLocalKCaches,
         ]
+
+    def _step_map(self) -> Dict[str, PASS_T]:
+        return {step.__name__: step for step in self._default_steps()}
+
+    def steps(self) -> Sequence[PASS_T]:
+        step_list = self._default_steps()
+        if self._step_order:
+            step_map = self._step_map()
+            for step_name in self._step_order:
+                if step_name in step_map:
+                    step = step_map[step_name]
+                    step_index = self._step_order[step_name]
+                    curr_index = step_list.index(step)
+                    step_list.remove(step)
+                    if step_index >= 0:
+                        if step_index > curr_index:
+                            step_index -= 1
+                        step_list.insert(step_index, step)
+                else:
+                    raise RuntimeError(f"Unknown OIR step name: {step_name}")
+        return step_list
 
     def apply(self, steps: Sequence[PASS_T]) -> oir.Stencil:
         result = self.oir

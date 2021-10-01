@@ -53,7 +53,9 @@ class GTCGTExtGenerator:
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(skip=[FillFlushToLocalKCaches])
+        pass_order = self.backend.builder.options.backend_opts.get("pass_order", {})
+        oir_pipeline = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir), pass_order)
+        oir = oir_pipeline.full(skip=[FillFlushToLocalKCaches])
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         format_source = self.backend.builder.options.format_source
         implementation = gtcpp_codegen.GTCppCodegen.apply(

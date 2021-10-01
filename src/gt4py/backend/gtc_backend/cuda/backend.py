@@ -48,7 +48,9 @@ class GTCCudaExtGenerator:
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(skip=[NoFieldAccessPruning])
+        pass_order = self.backend.builder.options.backend_opts.get("pass_order", {})
+        oir_pipeline = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir), pass_order)
+        oir = oir_pipeline.full(skip=[NoFieldAccessPruning])
         cuir = oir_to_cuir.OIRToCUIR().visit(oir)
         cuir = kernel_fusion.FuseKernels().visit(cuir)
         cuir = extent_analysis.ComputeExtents().visit(cuir)
