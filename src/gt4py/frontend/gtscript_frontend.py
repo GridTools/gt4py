@@ -842,7 +842,7 @@ class IRMaker(ast.NodeVisitor):
         local_symbols: dict,
         *,
         domain: gt_ir.Domain,
-        temp_decls: Dict[str, gt_ir.FieldDecl],
+        temp_decls: Optional[Dict[str, gt_ir.FieldDecl]] = None,
     ):
         fields = fields or {}
         parameters = parameters or {}
@@ -856,7 +856,7 @@ class IRMaker(ast.NodeVisitor):
         self.parameters = parameters
         self.local_symbols = local_symbols
         self.domain = domain or gt_ir.Domain.LatLonGrid()
-        self.temp_decls = temp_decls
+        self.temp_decls = temp_decls or {}
         self.parsing_context = None
         self.iteration_order = None
         self.if_decls_stack = []
