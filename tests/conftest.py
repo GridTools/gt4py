@@ -56,8 +56,11 @@ def pytest_sessionstart():
     gt_config.cache_settings["dir_name"] = pytest_gt_cache_dir
 
 
-def pytest_sessionfinish():
-    shutil.rmtree(pytest_gt_cache_dir, ignore_errors=True)
+def pytest_unconfigure(config):
+    if not config.option.keep_gtcache:
+        shutil.rmtree(pytest_gt_cache_dir, ignore_errors=True)
+    else:
+        print(f"NOTE: gt4py caches were retained at {pytest_gt_cache_dir}")
 
 
 # Ignore hidden folders and disabled tests
@@ -74,3 +77,7 @@ def pytest_configure(config):
         "requires_gpu: mark tests that require a Nvidia GPU (assume cupy and cudatoolkit are installed)",
     )
     hyp.settings.load_profile("slow")
+
+
+def pytest_addoption(parser):
+    parser.addoption("--keep-gtcache", action="store_true", default=False, dest="keep_gtcache")
