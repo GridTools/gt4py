@@ -85,7 +85,7 @@ def slice_to_extent(acc: npir.FieldSlice) -> Extent:
         (
             [acc.i_offset.offset.value] * 2 if acc.i_offset else (0, 0),
             [acc.j_offset.offset.value] * 2 if acc.j_offset else (0, 0),
-            [acc.k_offset.offset.value] * 2 if acc.k_offset else (0, 0),
+            (0, 0),
         )
     )
 
@@ -171,7 +171,8 @@ class NpirGen(TemplatedGenerator):
         else:
             variant = self.AxisOffset_serial
         rendered = variant.render(lpar=lpar, rpar=rpar, axis_name=axis_name, offset=offset)
-        return self.generic_visit(node, parallel_or_serial_variant=rendered, **kwargs)
+        kwargs["parallel_or_serial_variant"] = rendered
+        return self.generic_visit(node, **kwargs)
 
     AxisOffset_variable = JinjaTemplate("{{ axis_name | lower }}_ + np.asarray({{ offset }}[:])")
 
@@ -222,7 +223,10 @@ class NpirGen(TemplatedGenerator):
         else:
             arr_expr = f"{node.name}_[{offset_str}]"
 
-        return self.generic_visit(node, arr_expr=arr_expr, mask_acc=mask_acc, **kwargs)
+        kwargs["arr_expr"] = arr_expr
+        kwargs["mask_acc"] = mask_acc
+
+        return self.generic_visit(node, **kwargs)
 
     FieldSlice = FormatTemplate("{arr_expr}{mask_acc}")
 
