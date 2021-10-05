@@ -906,12 +906,7 @@ class IRMaker(ast.NodeVisitor):
         return name in self.local_symbols
 
     def _is_known(self, name: str):
-        return (
-            self._is_field(name)
-            or self._is_parameter(name)
-            or self._is_local_symbol(name)
-            or name in self.temps_inited
-        )
+        return self._is_field(name) or self._is_parameter(name) or self._is_local_symbol(name)
 
     def _are_blocks_sorted(self, compute_blocks: List[gt_ir.ComputationBlock]):
         def sort_blocks_key(comp_block):
