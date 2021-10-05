@@ -55,6 +55,17 @@ def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:
     return gtir.CartesianOffset(i=i, j=j, k=k)
 
 
+def convert_dtype(data_type) -> common.DataType:
+    dtype = common.DataType(int(data_type))
+    if dtype == common.DataType.DEFAULT:
+        # TODO this will be a frontend choice later
+        # in non-GTC parts, this is set in the backend
+        dtype = cast(
+            common.DataType, common.DataType.FLOAT64
+        )  # see https://github.com/GridTools/gtc/issues/100
+    return dtype
+
+
 class DefIRToGTIR(IRNodeVisitor):
 
     GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER = {
@@ -151,24 +162,11 @@ class DefIRToGTIR(IRNodeVisitor):
         stmts = []
         temporaries = []
         for s in node.body.stmts:
-            # FieldDecl or VarDecls in the body are temporaries
-            if isinstance(s, FieldDecl) or isinstance(s, VarDecl):
-                dtype = common.DataType(int(s.data_type.value))
-                if dtype == common.DataType.DEFAULT:
-                    # TODO this will be a frontend choice later
-                    # in non-GTC parts, this is set in the backend
-                    dtype = cast(
-                        common.DataType, common.DataType.FLOAT64
-                    )  # see https://github.com/GridTools/gtc/issues/100
-                temporaries.append(
-                    gtir.FieldDecl(
-                        name=s.name,
-                        dtype=dtype,
-                        dimensions=(True, True, True),
-                    )
-                )
+            decl_or_stmt = self.visit(s)
+            if isinstance(decl_or_stmt, gtir.Decl):
+                temporaries.append(decl_or_stmt)
             else:
-                stmts.append(self.visit(s))
+                stmts.append(decl_or_stmt)
         start, end = self.visit(node.interval)
         interval = gtir.Interval(start=start, end=end)
         return gtir.VerticalLoop(
@@ -278,11 +276,11 @@ class DefIRToGTIR(IRNodeVisitor):
         # datatype conversion works via same ID
         return gtir.FieldDecl(
             name=node.name,
-            dtype=common.DataType(int(node.data_type.value)),
+            dtype=convert_dtype(node.data_type.value),
             dimensions=dimensions,
             data_dims=node.data_dims,
         )
 
     def visit_VarDecl(self, node: VarDecl):
         # datatype conversion works via same ID
-        return gtir.ScalarDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
+        return gtir.ScalarDecl(name=node.name, dtype=convert_dtype(node.data_type.value))

@@ -790,12 +790,13 @@ def get_temp_annotations(
 def make_init_computation(
     temp_decls: Dict[str, gt_ir.FieldDecl], temp_inits: Dict[str, gt_ir.ScalarLiteral]
 ) -> gt_ir.ComputationBlock:
-    order = gt_ir.IterationOrder.PARALLEL
     # Add computation to intiialize temporaries
     axes = set().union(*(set(temp_decls[name].axes) for name in temp_inits))
     if "K" in axes:
+        order = gt_ir.IterationOrder.PARALLEL
         interval = gt_ir.AxisInterval.full_interval()
     else:
+        order = gt_ir.IterationOrder.FORWARD
         interval = gt_ir.AxisInterval(
             start=gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=0),
             end=gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=1),
@@ -1997,7 +1998,9 @@ class GTScriptParser(ast.NodeVisitor):
         temp_decls, temp_inits = get_temp_annotations(main_func_node, context=local_context)
         if temp_inits:
             init_computation = make_init_computation(temp_decls, temp_inits)
-            fields_decls |= {name: decl for name, decl in temp_decls.items() if name in temp_inits}
+            fields_decls.update(
+                {name: decl for name, decl in temp_decls.items() if name in temp_inits}
+            )
             temp_decls = {name: decl for name, decl in temp_decls.items() if name not in temp_inits}
         else:
             init_computation = None
