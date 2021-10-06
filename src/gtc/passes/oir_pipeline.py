@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Callable, Dict, Optional, Protocol, Sequence, Tuple, Type, Union
+from typing import Callable, Dict, List, Optional, Protocol, Sequence, Tuple, Type, Union
 
 from eve.visitors import NodeVisitor
 from gtc import oir
@@ -57,12 +57,16 @@ class OirPipeline:
     May only call existing passes and may not contain any pass logic itself.
     """
 
-    def __init__(self, node: oir.Stencil, step_order: Optional[Dict[str, int]] = None):
+    def __init__(
+        self, node: oir.Stencil, step_order: Optional[Union[Dict[str, int], Sequence[str]]] = None
+    ):
         self.oir = node
         self._cache: Dict[Tuple[int, ...], oir.Stencil] = {}
+        if isinstance(step_order, Sequence):
+            step_order = {step: index for index, step in enumerate(step_order)}
         self._step_order = step_order
 
-    def _default_steps(self) -> Sequence[PASS_T]:
+    def default_steps(self) -> List[PASS_T]:
         return [
             graph_merge_horizontal_executions,
             AdjacentLoopMerging,
@@ -80,10 +84,10 @@ class OirPipeline:
         ]
 
     def _step_map(self) -> Dict[str, PASS_T]:
-        return {step.__name__: step for step in self._default_steps()}
+        return {step.__name__: step for step in self.default_steps()}
 
     def steps(self) -> Sequence[PASS_T]:
-        step_list = self._default_steps()
+        step_list = self.default_steps()
         if self._step_order:
             step_map = self._step_map()
             for step_name in self._step_order:
