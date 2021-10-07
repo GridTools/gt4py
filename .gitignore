@@ -4,6 +4,7 @@ _local_
 
 ### GT4Py ####
 .gt_cache/
+.gt_cache_pytest_*/
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
@@ -109,4 +110,4 @@ venv.bak/
 # DaCe
 *.sdfg
 .dace.conf
-
+.dacecache/
