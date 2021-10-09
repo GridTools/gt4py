@@ -41,11 +41,11 @@ class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class FieldAccess(common.FieldAccess, Expr):  # type: ignore
+class FieldAccess(common.FieldAccess[Expr], Expr):  # type: ignore
     pass
 
 
-class IJCacheAccess(common.FieldAccess, Expr):
+class IJCacheAccess(common.FieldAccess[Expr], Expr):
     ij_cache_is_different_from_field_access = True
 
     @validator("offset")
@@ -61,7 +61,7 @@ class IJCacheAccess(common.FieldAccess, Expr):
         return v
 
 
-class KCacheAccess(common.FieldAccess, Expr):
+class KCacheAccess(common.FieldAccess[Expr], Expr):
     k_cache_is_different_from_field_access = True
 
     @validator("offset")

@@ -49,7 +49,7 @@ class LocalAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class AccessorRef(common.FieldAccess, Expr):  # type: ignore
+class AccessorRef(common.FieldAccess[Expr], Expr):  # type: ignore
     pass
 
 

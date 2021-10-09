@@ -118,15 +118,12 @@ class DataType(IntEnum):
     FLOAT32 = 104
     FLOAT64 = 108
 
-    @property
     def isbool(self):
         return self == self.BOOL
 
-    @property
     def isinteger(self):
         return self in (self.INT8, self.INT32, self.INT64)
 
-    @property
     def isfloat(self):
         return self in (self.FLOAT32, self.FLOAT64)
 
@@ -308,15 +305,28 @@ class CartesianOffset(Node):
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
+class VariableKOffset(GenericNode, Generic[ExprT]):
+    k: ExprT
+
+    def to_dict(self) -> Dict[str, Optional[int]]:
+        return {"i": self.i, "j": self.j, "k": None}
+
+    @validator("k")
+    def offset_expr_is_int(cls, k: ExprT) -> List[ExprT]:
+        if k.dtype is not None and not k.dtype.isinteger():
+            raise ValueError("Variable vertical index must be an integer expression")
+        return k
+
+
 class ScalarAccess(LocNode):
     name: SymbolRef
     kind = ExprKind.SCALAR
 
 
-class FieldAccess(LocNode):
+class FieldAccess(GenericNode, Generic[ExprT]):
     name: SymbolRef
-    offset: CartesianOffset
-    data_index: List[Expr] = []
+    offset: Union[CartesianOffset, VariableKOffset[ExprT]]
+    data_index: List[ExprT] = []
     kind = ExprKind.FIELD
 
     @classmethod
@@ -326,7 +336,7 @@ class FieldAccess(LocNode):
     @validator("data_index")
     def data_index_exprs_are_int(cls, data_index: List[Expr]) -> List[Expr]:
         if data_index and any(
-            index.dtype is not None and not index.dtype.isinteger for index in data_index
+            index.dtype is not None and not index.dtype.isinteger() for index in data_index
         ):
             raise ValueError("Data indices must be integer expressions")
         return data_index

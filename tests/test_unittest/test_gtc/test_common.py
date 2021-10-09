@@ -400,6 +400,12 @@ class ExprB(Expr):
     clearly_expr_b = ""
 
 
+class ExprC(Expr):
+    dtype: DataType = DataType.INT32
+    kind: ExprKind = ExprKind.FIELD
+    clearly_expr_c = ""
+
+
 class StmtA(Stmt):
     clearly_stmt_a = ""
 
@@ -472,3 +478,12 @@ def test_NativeFuncCall_category():
     Testee(func=NativeFunction.SIN, args=[ExprA()])
     with pytest.raises(ValidationError):
         Testee(func=NativeFunction.SIN, args=[ExprB()])
+
+
+def test_VariableKOffset_category():
+    class Testee(common.VariableKOffset[ExprC]):
+        pass
+
+    Testee(k=ExprC())
+    with pytest.raises(ValidationError):
+        Testee(k=ExprA())
