@@ -28,13 +28,13 @@ GT4PY_INSTALLATION_PATH = os.path.dirname(inspect.getabsfile(gt4py))
 EXTERNAL_SRC_PATH = os.path.join(GT4PY_INSTALLATION_PATH, "_external_src")
 
 
-assert gt_src_manager.has_gt_sources() or gt_src_manager.install_gt_sources()
+assert gt_src_manager.has_gt_sources(2) or gt_src_manager.install_gt_sources(2)
 
 
 def compile_reference():
     current_dir = os.path.dirname(__file__)
     build_opts = pyext_builder.get_gt_pyext_build_opts()
-    build_opts["include_dirs"].append(EXTERNAL_SRC_PATH)
+    build_opts["include_dirs"].extend([EXTERNAL_SRC_PATH, os.path.join(current_dir)])
 
     build_opts.setdefault("extra_compile_args", [])
     build_opts["extra_compile_args"].append("-Wno-sign-compare")
