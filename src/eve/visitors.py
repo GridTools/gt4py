@@ -20,22 +20,29 @@
 from __future__ import annotations
 
 import collections.abc
+import contextlib
 import copy
 import operator
 
 from . import concepts, iterators, utils
-from .concepts import NOTHING
+from .concepts import NOTHING, Node
 from .typingx import (
     Any,
     Callable,
+    ClassVar,
     Collection,
+    ContextManager,
     Dict,
     Iterable,
     MutableSequence,
     MutableSet,
+    Optional,
     Tuple,
     Union,
 )
+
+
+ContextCallable = Callable[["NodeVisitor", concepts.TreeNode, Dict[str, Any]], ContextManager[None]]
 
 
 class NodeVisitor:
@@ -64,7 +71,10 @@ class NodeVisitor:
         3. ``self.generic_visit()``.
 
     This dispatching mechanism is implemented in the main :meth:`visit`
-    method and can be overriden in subclasses.
+    method and can be overriden in subclasses. Additionally, a class can
+    define a list of context handlers to be applied before the actual visit
+    to customize the context. Each context receives the visitor instance,
+    the node instance, and the keywords arguments of the call.
 
     Note that return values are not forwarded to the caller in the default
     :meth:`generic_visit` implementation. If you want to return a value from
@@ -102,23 +112,31 @@ class NodeVisitor:
 
     """
 
+    contexts: ClassVar[Optional[Tuple[ContextCallable, ...]]] = None
+
     def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         visitor = self.generic_visit
 
         method_name = "visit_" + node.__class__.__name__
         if hasattr(self, method_name):
             visitor = getattr(self, method_name)
-        elif isinstance(node, concepts.Node):
+        elif isinstance(node, Node):
             for node_class in node.__class__.__mro__[1:]:
                 method_name = "visit_" + node_class.__name__
                 if hasattr(self, method_name):
                     visitor = getattr(self, method_name)
                     break
 
-                if node_class is concepts.Node:
+                if node_class is Node:
                     break
 
-        return visitor(node, **kwargs)
+        if ctxs := type(self).contexts:
+            with contextlib.ExitStack() as stack:
+                for ctx in ctxs:
+                    stack.enter_context(ctx(self, node, kwargs))
+                return visitor(node, **kwargs)
+        else:
+            return visitor(node, **kwargs)
 
     def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         for child in iterators.generic_iter_children(node):
@@ -152,33 +170,35 @@ class NodeTranslator(NodeVisitor):
     _memo_dict_: Dict[int, Any]
 
     def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
-        result: Any = None
-        if isinstance(node, (concepts.Node, collections.abc.Collection)) and utils.is_collection(
-            node
+        if isinstance(node, Node):
+            return node.__class__(  # type: ignore
+                **{key: value for key, value in node.iter_impl_fields()},
+                **{
+                    key: processed_value
+                    for key, value in node.iter_children()
+                    if (processed_value := self.visit(value, **kwargs)) is not NOTHING
+                },
+            )
+
+        elif isinstance(node, (list, tuple, set, collections.abc.Set)) or (
+            isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
         ):
-            tmp_items: Collection[concepts.TreeNode] = []
-            if isinstance(node, concepts.Node):
-                tmp_items = {
-                    key: self.visit(value, **kwargs) for key, value in node.iter_children()
+            # Sequence or set: create a new container instance with the new values
+            return node.__class__(  # type: ignore
+                processed_value
+                for value in node
+                if (processed_value := self.visit(value, **kwargs)) is not NOTHING  # type: ignore[no-redef]
+            )
+
+        elif isinstance(node, (dict, collections.abc.Mapping)):
+            # Mapping: create a new mapping instance with the new values
+            return node.__class__(  # type: ignore[call-arg]
+                {
+                    key: processed_value
+                    for key, value in node.items()
+                    if (processed_value := self.visit(value, **kwargs)) is not NOTHING  # type: ignore[no-redef]
                 }
-                result = node.__class__(  # type: ignore
-                    **{key: value for key, value in node.iter_impl_fields()},
-                    **{key: value for key, value in tmp_items.items() if value is not NOTHING},
-                )
-
-            elif isinstance(node, (collections.abc.Sequence, collections.abc.Set)):
-                # Sequence or set: create a new container instance with the new values
-                tmp_items = [self.visit(value, **kwargs) for value in node]
-                result = node.__class__(  # type: ignore
-                    value for value in tmp_items if value is not NOTHING
-                )
-
-            elif isinstance(node, collections.abc.Mapping):
-                # Mapping: create a new mapping instance with the new values
-                tmp_items = {key: self.visit(value, **kwargs) for key, value in node.items()}
-                result = node.__class__(  # type: ignore
-                    {key: value for key, value in tmp_items.items() if value is not NOTHING}
-                )
+            )
 
         else:
             if not hasattr(self, "_memo_dict_"):

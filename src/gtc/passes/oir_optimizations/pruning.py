@@ -23,7 +23,7 @@ from gtc import oir
 class NoFieldAccessPruning(NodeTranslator):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution) -> Any:
         try:
-            next(node.iter_tree().if_isinstance(oir.FieldAccess))
+            next(iter(node.iter_tree().if_isinstance(oir.FieldAccess)))
         except StopIteration:
             return NOTHING
         return node
