@@ -320,7 +320,7 @@ class NumPySourceGenerator(PythonSourceGenerator):
                     )
                 )
 
-        data_idx = f", {','.join(str(i) for i in node.data_index)}" if node.data_index else ""
+        data_idx = f", {','.join(self.visit(i) for i in node.data_index)}"
         if not variable_koffset:
             source = f"{node.name}[{', '.join(index)}{data_idx}]"
         else:
@@ -352,8 +352,10 @@ class NumPySourceGenerator(PythonSourceGenerator):
 
         super().visit_StencilImplementation(node)
 
-    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr, **kwargs) -> str:
+    def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral) -> str:
+        return str(node.value)
 
+    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr, **kwargs) -> str:
         if node.op is gt_ir.UnaryOperator.NOT:
             source = "np.logical_not({expr})".format(expr=self.visit(node.arg, **kwargs))
         else:

@@ -16,7 +16,7 @@
 
 from typing import Any, Collection, Dict, List, Set, Union
 
-from eve import codegen
+from eve import codegen, traits
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
@@ -25,6 +25,8 @@ from gtc.cuir import cuir
 
 
 class CUIRCodegen(codegen.TemplatedGenerator):
+
+    contexts = (traits.SymbolTableTrait.symtable_merger,)
 
     LocalScalar = as_fmt("{dtype} {name};")
 
@@ -364,7 +366,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             )
 
         def ctype(symbol: str) -> str:
-            return self.visit(node.symtable_[symbol].dtype, **kwargs)
+            return self.visit(kwargs["symtable"][symbol].dtype, **kwargs)
 
         return self.generic_visit(
             node,
@@ -374,7 +376,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             loop_start=loop_start,
             loop_fields=loop_fields,
             ctype=ctype,
-            symtable=node.symtable_,
             cuir=cuir,
             **kwargs,
         )
@@ -512,5 +513,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         if not isinstance(root, cuir.Program):
             raise ValueError("apply() requires gtcpp.Progam root node")
         generated_code = super().apply(root, **kwargs)
-        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return formatted_code
+        if kwargs.get("format_source", True):
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+
+        return generated_code

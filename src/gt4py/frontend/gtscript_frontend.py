@@ -1084,7 +1084,12 @@ class IRMaker(ast.NodeVisitor):
                         )
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}
             elif isinstance(node.value, ast.Subscript):
-                result.data_index = index
+                result.data_index = [
+                    gt_ir.ScalarLiteral(value=value, data_type=gt_ir.DataType.INT64)
+                    if isinstance(value, numbers.Integral)
+                    else value
+                    for value in index
+                ]
             else:
                 raise GTScriptSyntaxError(
                     "Unrecognized subscript expression", loc=gt_ir.Location.from_ast_node(node)
@@ -1401,7 +1406,9 @@ class IRMaker(ast.NodeVisitor):
             #    ...
             # otherwise just parse the node
             if self.parsing_context == ParsingContext.CONTROL_FLOW and all(
-                isinstance(child_node, ast.With) for child_node in node.body
+                isinstance(child_node, ast.With)
+                and child_node.items[0].context_expr.func.id == "interval"
+                for child_node in node.body
             ):
                 # Ensure top level `with` specifies the iteration order
                 if not any(

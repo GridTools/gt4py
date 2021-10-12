@@ -356,7 +356,6 @@ def test_computation() -> None:
             field_decls=[],
             vertical_passes=[],
         ),
-        field_extents={},
     )
     print(result)
     match = re.match(
@@ -428,11 +427,6 @@ def test_full_computation_valid(tmp_path) -> None:
                 ),
             ],
         ),
-        field_extents={
-            "f1": Extent([(0, 0), (0, 0)]),
-            "f2": Extent([(-2, 0), (-2, 0)]),
-            "f3": Extent([(0, 0), (0, 3)]),
-        },
     )
     print(result)
     mod_path = tmp_path / "npir_gen_1.py"

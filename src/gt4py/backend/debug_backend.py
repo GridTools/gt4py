@@ -125,7 +125,8 @@ class DebugSourceGenerator(PythonSourceGenerator):
             marker=self.origin_marker, name=node.name, index=index_str
         )
         if node.data_index:
-            source = f"{source}[{','.join(str(i) for i in node.data_index)}]"
+            index = [self.visit(index) for index in node.data_index]
+            source = f"{source}[{','.join(index)}]"
 
         return source
 
