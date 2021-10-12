@@ -24,7 +24,7 @@ from gt4py.backend.module_generator import make_args_data_from_gtir, make_args_d
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
-from ..definitions import ALL_BACKENDS, GPU_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS
 
 
 def stencil_def(
@@ -175,6 +175,34 @@ def test_device_sync_option_registered(backend_name):
     assert option_name in backend_opts
     assert backend_opts[option_name]["versioning"]
     assert backend_opts[option_name]["type"] is bool
+
+
+@pytest.mark.parametrize("rebuild", (True, False))
+@pytest.mark.parametrize("backend_name", CPU_BACKENDS)
+@pytest.mark.parametrize("mode", (2,))
+def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
+    build_info = {}
+    builder = (
+        StencilBuilder(stencil_def)
+        .with_backend(backend_name)
+        .with_externals({"MODE": mode})
+        .with_options(
+            name=stencil_def.__name__,
+            module=stencil_def.__module__,
+            rebuild=rebuild,
+            build_info=build_info,
+        )
+    )
+    stencil_class = builder.build()
+    assert stencil_class is not None
+    if rebuild:
+        assert build_info.get("parse_time", 0.0) > 0.0
+        assert build_info.get("module_time", 0.0) > 0.0
+        if backend_name.startswith("gt"):
+            assert build_info.get("codegen_time", 0.0) > 0.0
+            assert build_info.get("build_time", 0.0) > 0.0
+    else:
+        assert build_info.get("load_time", 0.0) > 0.0
 
 
 if __name__ == "__main__":
