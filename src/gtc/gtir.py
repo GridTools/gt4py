@@ -61,6 +61,10 @@ class CartesianOffset(common.CartesianOffset):
     pass
 
 
+class VariableKOffset(common.VariableKOffset[Expr]):
+    pass
+
+
 class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
