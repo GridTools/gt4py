@@ -179,7 +179,9 @@ def test_device_sync_option_registered(backend_name):
 
 
 @pytest.mark.parametrize("rebuild", (True, False))
-@pytest.mark.parametrize("backend_name", CPU_BACKENDS)
+@pytest.mark.parametrize(
+    "backend_name", [backend for backend in CPU_BACKENDS if backend != "gtc:numpy"]
+)
 @pytest.mark.parametrize("mode", (2,))
 def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
     build_info: Dict[str, Any] = {}
