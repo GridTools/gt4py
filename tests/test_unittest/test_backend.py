@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import inspect
+from typing import Any, Dict
 
 import pytest
 
@@ -181,7 +182,7 @@ def test_device_sync_option_registered(backend_name):
 @pytest.mark.parametrize("backend_name", CPU_BACKENDS)
 @pytest.mark.parametrize("mode", (2,))
 def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
-    build_info = {}
+    build_info: Dict[str, Any] = {}
     builder = (
         StencilBuilder(stencil_def)
         .with_backend(backend_name)
