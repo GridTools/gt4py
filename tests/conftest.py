@@ -60,7 +60,7 @@ def pytest_sessionfinish(session):
     if not session.config.option.keep_gtcache:
         shutil.rmtree(pytest_gt_cache_dir, ignore_errors=True)
     else:
-        print(f"NOTE: gt4py caches were retained at {pytest_gt_cache_dir}")
+        print(f"\nNOTE: gt4py caches were retained at {pytest_gt_cache_dir}")
 
 
 # Ignore hidden folders and disabled tests

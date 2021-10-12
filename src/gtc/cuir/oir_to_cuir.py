@@ -59,19 +59,33 @@ class OIRToCUIR(eve.NodeTranslator):
         accessed_fields: Set[str],
         **kwargs: Any,
     ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
+        data_index = [
+            self.visit(
+                index,
+                ij_caches=ij_caches,
+                k_caches=k_caches,
+                accessed_fields=accessed_fields,
+                **kwargs,
+            )
+            for index in node.data_index
+        ]
         if node.name in ij_caches:
             return cuir.IJCacheAccess(
                 name=ij_caches[node.name].name,
                 offset=node.offset,
                 dtype=node.dtype,
+                data_index=data_index,
             )
         if node.name in k_caches:
             return cuir.KCacheAccess(
-                name=k_caches[node.name].name, offset=node.offset, dtype=node.dtype
+                name=k_caches[node.name].name,
+                offset=node.offset,
+                dtype=node.dtype,
+                data_index=data_index,
             )
         accessed_fields.add(node.name)
         return cuir.FieldAccess(
-            name=node.name, offset=node.offset, data_index=node.data_index, dtype=node.dtype
+            name=node.name, offset=node.offset, dtype=node.dtype, data_index=data_index
         )
 
     def visit_ScalarAccess(

@@ -16,12 +16,33 @@
 
 from typing import Any, Collection, Dict, List, Set, Union
 
-from eve import codegen, traits
+from eve import NodeVisitor, codegen, traits
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
 from gtc.common import BuiltInLiteral, DataType, LevelMarker, NativeFunction, UnaryOperator
 from gtc.cuir import cuir
+
+
+def check_int(s: str) -> bool:
+    if s[0] in ("-", "+"):
+        return s[1:].isdigit()
+    return s.isdigit()
+
+
+class AccessCollector(NodeVisitor):
+    @classmethod
+    def apply(cls, node) -> Set[str]:
+        fields: Set[str] = set()
+        cls().visit(node, fields=fields)
+        return fields
+
+    def visit_FieldAccess(self, node: cuir.FieldAccess, *, fields: Set[str]) -> None:
+        fields.add(node.name)
+        self.generic_visit(node, fields=fields)
+
+    def visit_ScalarAccess(self, node: cuir.ScalarAccess, *, fields: Set[str]) -> None:
+        fields.add(node.name)
 
 
 class CUIRCodegen(codegen.TemplatedGenerator):
@@ -46,7 +67,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    FieldAccess = as_mako("${name}(${offset}${''.join(f', {i}_c' for i in _this_node.data_index)})")
+    def visit_FieldAccess(self, node: cuir.FieldAccess, **kwargs: Any):
+        kwargs["sep"] = "" if not node.data_index else ", "
+        parsed = [self.visit(index, **kwargs) for index in node.data_index]
+        kwargs["this_data_index"] = [
+            f"{index}_c" if check_int(index) else index for index in parsed
+        ]
+        return self.generic_visit(node, **kwargs)
+
+    FieldAccess = as_mako("${name}(${offset}${sep}${', '.join(this_data_index)})")
 
     def visit_IJCacheAccess(
         self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
@@ -245,13 +274,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         self, node: cuir.VerticalLoop, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> Union[str, Collection[str]]:
 
+        field_names = AccessCollector.apply(node)
+        fields = {
+            name: len(symtable[name].data_dims) if isinstance(symtable[name], cuir.FieldDecl) else 0
+            for name in field_names
+        }
+
         return self.generic_visit(
             node,
-            fields=node.iter_tree()
-            .if_isinstance(cuir.FieldAccess)
-            .getattr("name", "data_index")
-            .map(lambda x: (x[0], len(x[1])))
-            .to_set(),
+            fields=fields,
             k_cache_decls=node.k_caches,
             order=node.loop_order,
             symtable=symtable,
@@ -290,7 +321,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                            _k_block);
                 % endif
 
-                % for field, data_dims in fields:
+                % for field, data_dims in fields.items():
                     const auto ${field} = [&](auto i, auto j, auto k
                         % for i in range(data_dims):
                             , auto dim_${i + 3}
