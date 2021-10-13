@@ -238,8 +238,8 @@ class NpirGen(TemplatedGenerator):
         elif isinstance(node.mask, npir.BroadCast):
             mask_name = node.mask_name
             mask = self.visit(node.mask)
-            ksize = "1" if is_serial else "K - k"
-            mask_def = f"{mask_name}_ = np.full((I - i, J - j, {ksize}), {mask})\n"
+            k_size = "1" if is_serial else "K - k"
+            mask_def = f"{mask_name}_ = np.full((I - i, J - j, {k_size}), {mask})\n"
         else:
             mask_name = node.mask_name
             mask = self.visit(node.mask)
