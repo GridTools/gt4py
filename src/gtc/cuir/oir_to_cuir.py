@@ -59,16 +59,13 @@ class OIRToCUIR(eve.NodeTranslator):
         accessed_fields: Set[str],
         **kwargs: Any,
     ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
-        data_index = [
-            self.visit(
-                index,
-                ij_caches=ij_caches,
-                k_caches=k_caches,
-                accessed_fields=accessed_fields,
-                **kwargs,
-            )
-            for index in node.data_index
-        ]
+        data_index = self.visit(
+            node.data_index,
+            ij_caches=ij_caches,
+            k_caches=k_caches,
+            accessed_fields=accessed_fields,
+            **kwargs,
+        )
         if node.name in ij_caches:
             return cuir.IJCacheAccess(
                 name=ij_caches[node.name].name,

@@ -16,7 +16,7 @@
 
 from typing import Any, Collection, Dict, List, Set, Union
 
-from eve import NodeVisitor, codegen, traits
+from eve import codegen, traits
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
@@ -28,21 +28,6 @@ def check_int(s: str) -> bool:
     if s[0] in ("-", "+"):
         return s[1:].isdigit()
     return s.isdigit()
-
-
-class AccessCollector(NodeVisitor):
-    @classmethod
-    def apply(cls, node) -> Set[str]:
-        fields: Set[str] = set()
-        cls().visit(node, fields=fields)
-        return fields
-
-    def visit_FieldAccess(self, node: cuir.FieldAccess, *, fields: Set[str]) -> None:
-        fields.add(node.name)
-        self.generic_visit(node, fields=fields)
-
-    def visit_ScalarAccess(self, node: cuir.ScalarAccess, *, fields: Set[str]) -> None:
-        fields.add(node.name)
 
 
 class CUIRCodegen(codegen.TemplatedGenerator):
@@ -68,14 +53,18 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FieldAccess(self, node: cuir.FieldAccess, **kwargs: Any):
-        kwargs["sep"] = "" if not node.data_index else ", "
-        parsed = [self.visit(index, **kwargs) for index in node.data_index]
-        kwargs["this_data_index"] = [
-            f"{index}_c" if check_int(index) else index for index in parsed
-        ]
+        def maybe_const(s):
+            try:
+                return f"{int(s)}_c"
+            except ValueError:
+                return s
+
+        kwargs["this_data_index"] = "".join(
+            ", " + maybe_const(self.visit(index, **kwargs)) for index in node.data_index
+        )
         return self.generic_visit(node, **kwargs)
 
-    FieldAccess = as_mako("${name}(${offset}${sep}${', '.join(this_data_index)})")
+    FieldAccess = as_mako("${name}(${offset}${this_data_index})")
 
     def visit_IJCacheAccess(
         self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
@@ -274,7 +263,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         self, node: cuir.VerticalLoop, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> Union[str, Collection[str]]:
 
-        field_names = AccessCollector.apply(node)
+        field_names = node.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
         fields = {
             name: len(symtable[name].data_dims) if isinstance(symtable[name], cuir.FieldDecl) else 0
             for name in field_names
