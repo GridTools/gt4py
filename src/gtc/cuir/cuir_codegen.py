@@ -24,12 +24,6 @@ from gtc.common import BuiltInLiteral, DataType, LevelMarker, NativeFunction, Un
 from gtc.cuir import cuir
 
 
-def check_int(s: str) -> bool:
-    if s[0] in ("-", "+"):
-        return s[1:].isdigit()
-    return s.isdigit()
-
-
 class CUIRCodegen(codegen.TemplatedGenerator):
 
     contexts = (traits.SymbolTableTrait.symtable_merger,)
