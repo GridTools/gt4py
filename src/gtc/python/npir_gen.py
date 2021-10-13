@@ -230,21 +230,20 @@ class NpirGen(TemplatedGenerator):
 
     VectorTemp = FormatTemplate("{name}_")
 
-    def visit_MaskBlock(
-        self, node: npir.MaskBlock, *, is_serial: bool = False, **kwargs
-    ) -> Union[str, Collection[str]]:
+    def visit_MaskBlock(self, node: npir.MaskBlock, **kwargs) -> Union[str, Collection[str]]:
         if isinstance(node.mask, npir.FieldSlice):
             mask_def = ""
         elif isinstance(node.mask, npir.BroadCast):
+            assert "is_serial" in kwargs
             mask_name = node.mask_name
             mask = self.visit(node.mask)
-            k_size = "1" if is_serial else "K - k"
+            k_size = "1" if kwargs["is_serial"] else "K - k"
             mask_def = f"{mask_name}_ = np.full((I - i, J - j, {k_size}), {mask})\n"
         else:
             mask_name = node.mask_name
             mask = self.visit(node.mask)
             mask_def = f"{mask_name}_ = {mask}\n"
-        return self.generic_visit(node, mask_def=mask_def, is_serial=is_serial, **kwargs)
+        return self.generic_visit(node, mask_def=mask_def, **kwargs)
 
     MaskBlock = JinjaTemplate(
         textwrap.dedent(
