@@ -49,7 +49,11 @@ class LocalAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class AccessorRef(common.FieldAccess[Expr], Expr):  # type: ignore
+class VariableKOffset(common.VariableKOffset[Expr]):
+    pass
+
+
+class AccessorRef(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
     pass
 
 

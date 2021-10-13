@@ -290,6 +290,7 @@ class Literal(Node):
 StmtT = TypeVar("StmtT", bound=Stmt)
 ExprT = TypeVar("ExprT", bound=Expr)
 TargetT = TypeVar("TargetT", bound=Expr)
+VariableKOffsetT = TypeVar("VariableKOffsetT")
 
 
 class CartesianOffset(Node):
@@ -312,7 +313,7 @@ class VariableKOffset(GenericNode, Generic[ExprT]):
         return {"i": self.i, "j": self.j, "k": None}
 
     @validator("k")
-    def offset_expr_is_int(cls, k: ExprT) -> List[ExprT]:
+    def offset_expr_is_int(cls, k: Expr) -> List[Expr]:
         if k.dtype is not None and not k.dtype.isinteger():
             raise ValueError("Variable vertical index must be an integer expression")
         return k
@@ -323,9 +324,9 @@ class ScalarAccess(LocNode):
     kind = ExprKind.SCALAR
 
 
-class FieldAccess(GenericNode, Generic[ExprT]):
+class FieldAccess(GenericNode, Generic[ExprT, VariableKOffsetT]):
     name: SymbolRef
-    offset: Union[CartesianOffset, VariableKOffset[ExprT]]
+    offset: Union[CartesianOffset, VariableKOffsetT]
     data_index: List[ExprT] = []
     kind = ExprKind.FIELD
 
@@ -475,7 +476,7 @@ class TernaryOp(GenericNode, Generic[ExprT]):
     false_expr: ExprT
 
     @validator("cond")
-    def condition_is_boolean(cls, cond: ExprT) -> ExprT:
+    def condition_is_boolean(cls, cond: Expr) -> Expr:
         return verify_condition_is_boolean(cls, cond)
 
     @root_validator(pre=True)
