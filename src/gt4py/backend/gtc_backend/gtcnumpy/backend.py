@@ -119,10 +119,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         return self.make_module()
 
     def _make_npir(self) -> npir.Computation:
-        return OirToNpir().visit(
-            # TODO (ricoh) apply optimizations, skip only the ones that fail
-            OirPipeline(GTIRToOIR().visit(self.builder.gtir)).apply([])
-        )
+        return OirToNpir().visit(OirPipeline(GTIRToOIR().visit(self.builder.gtir)).full())
 
     @property
     def npir(self) -> npir.Computation:
