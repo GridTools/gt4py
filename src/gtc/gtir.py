@@ -97,6 +97,7 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
                 values["right"]
                 .iter_tree()
                 .if_isinstance(FieldAccess)
+                .filter(lambda acc: not isinstance(acc.offset, VariableKOffset))
                 .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
                 .getattr("name")
                 .to_set()
@@ -227,6 +228,7 @@ class VerticalLoop(LocNode):
             return (
                 _collection_iter_tree(stmts)
                 .if_isinstance(FieldAccess)
+                .filter(lambda acc: not isinstance(acc.offset, VariableKOffset))
                 .filter(
                     lambda acc: acc.offset.i != 0 or acc.offset.j != 0
                 )  # writes always have zero offset
