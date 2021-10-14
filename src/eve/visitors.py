@@ -25,7 +25,7 @@ import copy
 import operator
 
 from . import concepts, iterators, utils
-from .concepts import NOTHING, Node
+from .concepts import NOTHING, BaseNode, Node
 from .typingx import (
     Any,
     Callable,
@@ -170,7 +170,7 @@ class NodeTranslator(NodeVisitor):
     _memo_dict_: Dict[int, Any]
 
     def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
-        if isinstance(node, Node):
+        if isinstance(node, BaseNode):
             return node.__class__(  # type: ignore
                 **{key: value for key, value in node.iter_impl_fields()},
                 **{
