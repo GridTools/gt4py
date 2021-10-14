@@ -82,7 +82,7 @@ class OIRToCUIR(eve.NodeTranslator):
             )
         accessed_fields.add(node.name)
         return cuir.FieldAccess(
-            name=node.name, offset=node.offset, dtype=node.dtype, data_index=data_index
+            name=node.name, offset=node.offset, data_index=data_index, dtype=node.dtype
         )
 
     def visit_ScalarAccess(
