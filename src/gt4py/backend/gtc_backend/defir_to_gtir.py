@@ -125,10 +125,8 @@ class DefIRToGTIR(IRNodeVisitor):
         field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
         vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
-        # NOTE: node.name is the qualified name of the stencil.
-        # TODO: Change this behavior.
         return gtir.Stencil(
-            name=node.name.split(".")[-1],
+            name=node.name,
             params=[
                 self.visit(f, all_params={**field_params, **scalar_params})
                 for f in node.api_signature

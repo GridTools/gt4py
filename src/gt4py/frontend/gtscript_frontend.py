@@ -1507,7 +1507,7 @@ class GTScriptParser(ast.NodeVisitor):
         self.ast_root = ast.parse(self.source)
         self.options = options
         self.build_info = options.build_info
-        self.main_name = options.qualified_name
+        self.main_name = options.name
         self.definition_ir = None
         self.external_context = externals or {}
         self.resolved_externals = {}
