@@ -27,6 +27,7 @@ from .gtir_utils import (
     FieldAccessFactory,
     FieldIfStmtFactory,
     ScalarIfStmtFactory,
+    VariableKOffsetFactory,
 )
 
 
@@ -73,6 +74,17 @@ def test_create_mask():
 
     assert left.name == mask_name
     assert right == cond
+
+
+def test_visit_Assign_VariableKOffset():
+    testee = gtir.ParAssignStmt(
+        left=FieldAccessFactory(), right=FieldAccessFactory(offset=VariableKOffsetFactory())
+    )
+    ctx = GTIRToOIR.Context()
+    GTIRToOIR().visit(testee, ctx=ctx)
+
+    assert len(ctx.horizontal_executions) == 1
+    assert ctx.horizontal_executions[0].iter_tree().if_isinstance(oir.VariableKOffset).to_list()
 
 
 def test_visit_FieldIfStmt():
