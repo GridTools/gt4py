@@ -179,9 +179,7 @@ def test_device_sync_option_registered(backend_name):
 
 
 @pytest.mark.parametrize("rebuild", (True, False))
-@pytest.mark.parametrize(
-    "backend_name", [backend for backend in CPU_BACKENDS if backend != "gtc:numpy"]
-)
+@pytest.mark.parametrize("backend_name", CPU_BACKENDS)
 @pytest.mark.parametrize("mode", (2,))
 def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
     build_info: Dict[str, Any] = {}
@@ -201,7 +199,7 @@ def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
     if rebuild:
         assert build_info.get("parse_time", 0.0) > 0.0
         assert build_info.get("module_time", 0.0) > 0.0
-        if backend_name.startswith("gt"):
+        if backend_name.startswith("gt") and not backend_name.endswith("numpy"):
             assert build_info.get("codegen_time", 0.0) > 0.0
             assert build_info.get("build_time", 0.0) > 0.0
     else:
