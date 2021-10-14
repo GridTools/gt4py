@@ -63,7 +63,7 @@ def test_reorder_after_to_before():
 
 
 def test_remove_step():
-    step_order = {"LocalTemporariesToScalars": -1}
+    step_order = {"LocalTemporariesToScalars": None}
     pipeline = OirPipeline(StencilFactory(), step_order)
     steps = pipeline.steps()
     assert not any([step.__name__ == list(step_order.keys())[0] for step in steps])

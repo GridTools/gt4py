@@ -96,7 +96,7 @@ class OirPipeline:
                     step_index = self._step_order[step_name]
                     curr_index = step_list.index(step)
                     step_list.remove(step)
-                    if step_index >= 0:
+                    if step_index is not None:
                         if step_index > curr_index:
                             step_index -= 1
                         step_list.insert(step_index, step)
