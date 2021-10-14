@@ -257,15 +257,13 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         self, node: cuir.VerticalLoop, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> Union[str, Collection[str]]:
 
-        field_names = node.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
-        fields = {
-            name: len(symtable[name].data_dims) if isinstance(symtable[name], cuir.FieldDecl) else 0
-            for name in field_names
-        }
-
         return self.generic_visit(
             node,
-            fields=fields,
+            fields=node.iter_tree()
+            .if_isinstance(cuir.FieldAccess)
+            .getattr("name", "data_index")
+            .map(lambda x: (x[0], len(x[1])))
+            .to_set(),
             k_cache_decls=node.k_caches,
             order=node.loop_order,
             symtable=symtable,
