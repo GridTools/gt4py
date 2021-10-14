@@ -229,7 +229,8 @@ def test_mask_block_broadcast() -> None:
                 expr=npir.Literal(dtype=common.DataType.BOOL, value=common.BuiltInLiteral.TRUE)
             ),
             mask_name="mask1",
-        )
+        ),
+        is_serial=False,
     )
     assert result == "mask1_ = np.full((I - i, J - j, K - k), np.bool(True))\n"
 
