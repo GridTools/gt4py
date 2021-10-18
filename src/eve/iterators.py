@@ -49,7 +49,7 @@ def generic_iter_children(
             Defaults to `False`.
 
     """
-    if isinstance(node, concepts.Node):
+    if isinstance(node, concepts.BaseNode):
         return node.iter_children() if with_keys else node.iter_children_values()
     elif isinstance(node, (list, tuple)) or (
         isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
