@@ -202,7 +202,7 @@ class NpirGen(TemplatedGenerator):
             offset_str += ", " + ", ".join(self.visit(x, **kwargs) for x in node.data_index)
 
         if mask_acc and any(off is None for off in offset):
-            k_size = 1 if is_serial else "K - k"
+            k_size = "1" if is_serial else "K - k"
             arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I - i, J - j, {k_size}))"
         else:
             arr_expr = f"{node.name}_[{offset_str}]"
@@ -234,9 +234,11 @@ class NpirGen(TemplatedGenerator):
         if isinstance(node.mask, npir.FieldSlice):
             mask_def = ""
         elif isinstance(node.mask, npir.BroadCast):
+            assert "is_serial" in kwargs
             mask_name = node.mask_name
             mask = self.visit(node.mask)
-            mask_def = f"{mask_name}_ = np.full((I - i, J - j, K - k), {mask})\n"
+            k_size = "1" if kwargs["is_serial"] else "K - k"
+            mask_def = f"{mask_name}_ = np.full((I - i, J - j, {k_size}), {mask})\n"
         else:
             mask_name = node.mask_name
             mask = self.visit(node.mask)
