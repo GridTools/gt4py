@@ -231,7 +231,7 @@ class DefIRToGTIR(IRNodeVisitor):
         return gtir.FieldAccess(
             name=node.name,
             offset=transform_offset(node.offset),
-            data_index=self.visit(node.data_index),
+            data_index=self.visit(node.data_index) or [],
         )
 
     def visit_If(self, node: If):
