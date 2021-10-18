@@ -297,7 +297,7 @@ def shift_shift_stencil2(inp):
 
 @fundef
 def shift_sparse_stencil2(inp):
-    return deref(shift(3, 1)(shift(V2E)(inp)))
+    return deref(shift(1, 3)(shift(V2E)(inp)))
 
 
 @fendef
