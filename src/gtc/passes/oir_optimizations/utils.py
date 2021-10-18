@@ -16,7 +16,7 @@
 
 import re
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from eve import NodeVisitor
 from eve.concepts import TreeNode
@@ -24,10 +24,13 @@ from eve.utils import XIterable, xiter
 from gtc import oir
 
 
+OffsetTuple = Tuple[int, int, Optional[int]]
+
+
 @dataclass(frozen=True)
 class Access:
     field: str
-    offset: Tuple[int, int, int]
+    offset: OffsetTuple
     is_write: bool
 
     @property
@@ -46,10 +49,11 @@ class AccessCollector(NodeVisitor):
         is_write: bool,
         **kwargs: Any,
     ) -> None:
+        offsets = node.offset.to_dict()
         accesses.append(
             Access(
                 field=node.name,
-                offset=(node.offset.i, node.offset.j, node.offset.k),
+                offset=(offsets["i"], offsets["j"], offsets["k"]),
                 is_write=is_write,
             )
         )
@@ -71,20 +75,20 @@ class AccessCollector(NodeVisitor):
         _ordered_accesses: List["Access"]
 
         @staticmethod
-        def _offset_dict(accesses: XIterable) -> Dict[str, Set[Tuple[int, int, int]]]:
+        def _offset_dict(accesses: XIterable) -> Dict[str, Set[OffsetTuple]]:
             return accesses.reduceby(
                 lambda acc, x: acc | {x.offset}, "field", init=set(), as_dict=True
             )
 
-        def offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+        def offsets(self) -> Dict[str, Set[OffsetTuple]]:
             """Get a dictonary, mapping all accessed fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses))
 
-        def read_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+        def read_offsets(self) -> Dict[str, Set[OffsetTuple]]:
             """Get a dictonary, mapping read fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
 
-        def write_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+        def write_offsets(self) -> Dict[str, Set[OffsetTuple]]:
             """Get a dictonary, mapping written fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
 
