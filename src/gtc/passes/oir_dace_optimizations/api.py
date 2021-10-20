@@ -22,9 +22,15 @@ from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import iter_vertical_loop_section_sub_sdfgs
 
 
+def has_variable_access(stencil: oir.Stencil) -> bool:
+    return stencil.iter_tree().if_isinstance(oir.VariableKOffset).to_list() > 0
+
+
 def optimize_horizontal_executions(
     stencil: oir.Stencil, transformation: Transformation
 ) -> oir.Stencil:
+    if has_variable_access(stencil):
+        raise NotImplementedError("Not yet implemented for variable accesses")
     sdfg = OirSDFGBuilder().visit(stencil)
     api_fields = {param.name for param in stencil.params}
     for subgraph in iter_vertical_loop_section_sub_sdfgs(sdfg):
