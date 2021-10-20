@@ -310,7 +310,7 @@ class VariableKOffset(GenericNode, Generic[ExprT]):
     k: ExprT
 
     def to_dict(self) -> Dict[str, Optional[int]]:
-        return {"i": self.i, "j": self.j, "k": None}
+        return {"i": 0, "j": 0, "k": None}
 
     @validator("k")
     def offset_expr_is_int(cls, k: Expr) -> List[Expr]:
