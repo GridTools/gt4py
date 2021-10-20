@@ -187,11 +187,21 @@ class OirToNpir(NodeTranslator):
         dims = (
             decl.dimensions if (decl := kwargs["symtable"].get(node.name)) else (True, True, True)
         )
+        if isinstance(node.offset, common.CartesianOffset):
+            i_offset = npir.AxisOffset.i(node.offset.i) if dims[0] else None
+            j_offset = npir.AxisOffset.j(node.offset.j) if dims[1] else None
+            k_offset = npir.AxisOffset.k(node.offset.k, parallel=parallel_k) if dims[2] else None
+        else:
+            i_offset = npir.AxisOffset.i(0)
+            j_offset = npir.AxisOffset.j(0)
+            k_offset = npir.VariableKOffset(
+                k=self.visit(node.offset.k, ctx=ctx, parallel_k=parallel_k, **kwargs)
+            )
         return npir.FieldSlice(
             name=str(node.name),
-            i_offset=npir.AxisOffset.i(node.offset.i) if dims[0] else None,
-            j_offset=npir.AxisOffset.j(node.offset.j) if dims[1] else None,
-            k_offset=npir.AxisOffset.k(node.offset.k, parallel=parallel_k) if dims[2] else None,
+            i_offset=i_offset,
+            j_offset=j_offset,
+            k_offset=k_offset,
             data_index=self.visit(node.data_index, ctx=ctx, parallel_k=parallel_k, **kwargs),
         )
 

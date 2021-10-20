@@ -64,6 +64,16 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
                     )
                 else:
                     new_args.append(idx + self.offsets[dim])
+            if not isinstance(new_args[-1], (numbers.Integral, slice)):
+                assert all(isinstance(arg, slice) for arg in new_args[:-1])
+                args = [
+                    np.expand_dims(
+                        np.arange(new_args[i].start, new_args[i].stop),
+                        axis=tuple(j for j in range(self.field.ndim) if j != i),
+                    )
+                    for i in range(self.field.ndim - 1)
+                ]
+                new_args[:-1] = np.broadcast_arrays(*args)
             return tuple(new_args)
 
         def __getitem__(self, key):
@@ -75,12 +85,20 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
 )
 
 
+VARIABLE_OFFSET_FUNCTION = textwrap.dedent(
+    """
+    def var_k_expr(expr, k, K):
+        return np.expand_dims(np.arange(k, K), axis=tuple(i for i in range(expr.ndim - 1))) + expr
+    """
+)
+
+
 def slice_to_extent(acc: npir.FieldSlice) -> Extent:
     return Extent(
         (
-            [acc.i_offset.offset.value] * 2 if acc.i_offset else (0, 0),
-            [acc.j_offset.offset.value] * 2 if acc.j_offset else (0, 0),
-            [acc.k_offset.offset.value] * 2 if acc.k_offset else (0, 0),
+            [acc.i_offset.offset.value] * 2 if acc.i_offset else [0, 0],
+            [acc.j_offset.offset.value] * 2 if acc.j_offset else [0, 0],
+            [0, 0],
         )
     )
 
@@ -190,6 +208,13 @@ class NpirGen(TemplatedGenerator):
         "{name} = np.reshape({name}, ({shape}))\n_origin_['{name}'] = [{origin}]"
     )
 
+    def visit_VariableKOffset(
+        self, node: npir.VariableKOffset, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
+        return self.generic_visit(node, var_offset=self.visit(node.k, **kwargs))
+
+    VariableKOffset = FormatTemplate("var_k_expr({var_offset}, k, K)")
+
     def visit_FieldSlice(
         self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, **kwargs: Any
     ) -> Union[str, Collection[str]]:
@@ -207,7 +232,8 @@ class NpirGen(TemplatedGenerator):
         else:
             arr_expr = f"{node.name}_[{offset_str}]"
 
-        return self.generic_visit(node, arr_expr=arr_expr, mask_acc=mask_acc, **kwargs)
+        kwargs["arr_expr"] = arr_expr
+        return self.generic_visit(node, mask_acc=mask_acc, **kwargs)
 
     FieldSlice = FormatTemplate("{arr_expr}{mask_acc}")
 
@@ -352,6 +378,7 @@ class NpirGen(TemplatedGenerator):
             node,
             signature=", ".join(signature),
             data_view_class=ORIGIN_CORRECTED_VIEW_CLASS,
+            var_offset_func=VARIABLE_OFFSET_FUNCTION,
             field_extents=field_extents,
             block_extents=block_extents,
             **kwargs,
@@ -361,7 +388,9 @@ class NpirGen(TemplatedGenerator):
         textwrap.dedent(
             """\
             import numpy as np
+            import numbers
 
+            {{ var_offset_func }}
 
             def run({{ signature }}):
 

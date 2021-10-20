@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import sys
+
 from dace.transformation.transformation import Transformation
 
 from gtc import oir
@@ -23,14 +25,18 @@ from gtc.dace.utils import iter_vertical_loop_section_sub_sdfgs
 
 
 def has_variable_access(stencil: oir.Stencil) -> bool:
-    return stencil.iter_tree().if_isinstance(oir.VariableKOffset).to_list() > 0
+    return len(stencil.iter_tree().if_isinstance(oir.VariableKOffset).to_list()) > 0
 
 
 def optimize_horizontal_executions(
     stencil: oir.Stencil, transformation: Transformation
 ) -> oir.Stencil:
     if has_variable_access(stencil):
-        raise NotImplementedError("Not yet implemented for variable accesses")
+        print(
+            "oir dace optimize_horizontal_executions is not yet supported with variable vertical accesses. See https://github.com/GridTools/gt4py/issues/517",
+            file=sys.stderr,
+        )
+        return stencil
     sdfg = OirSDFGBuilder().visit(stencil)
     api_fields = {param.name for param in stencil.params}
     for subgraph in iter_vertical_loop_section_sub_sdfgs(sdfg):
