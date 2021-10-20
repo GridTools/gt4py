@@ -11,8 +11,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import itertools
+
 from iterator.atlas_utils import AtlasTable
-from iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
+from iterator.embedded import NeighborTableOffsetProvider, index_field, np_as_located_field
 from iterator.runtime import *
 from iterator.builtins import *
 from iterator import library
@@ -153,133 +155,81 @@ def test_nabla():
     assert_close(3.3540113705465301e-003, max(pnabla_MYY))
 
 
-# @stencil
-# def sign(e2v, v2e, node_indices, is_pole_edge):
-#     node_indices_of_neighbor_edge = node_indices[e2v[v2e]]
-#     pole_flag_of_neighbor_edges = is_pole_edge[v2e]
-#     sign_field = if_(
-#         pole_flag_of_neighbor_edges
-#         | (broadcast(V2E)(node_indices) == node_indices_of_neighbor_edge[E2V(0)]),
-#         constant_field(Vertex, V2E)(1.0),
-#         constant_field(Vertex, V2E)(-1.0),
-#     )
-#     return sign_field
+@fundef
+def sign(node_indices, is_pole_edge):
+    node_index = deref(node_indices)
+
+    @fundef
+    def sign_impl(node_index):
+        def impl2(node_indices, is_pole_edge):
+            return if_(
+                or_(deref(is_pole_edge), node_index == deref(shift(E2V, 0)(node_indices))),
+                1.0,
+                -1.0,
+            )
+
+        return impl2
+
+    return shift(V2E)(lift(sign_impl(node_index))(node_indices, is_pole_edge))
 
 
-# @stencil
-# def compute_pnabla_sign(e2v, v2e, pp, S_M, node_indices, is_pole_edge, vol):
-#     zavgS = compute_zavgS(pp[e2v], S_M)[v2e]
-#     pnabla_M = sum_reduce(V2E)(zavgS * sign(e2v, v2e, node_indices, is_pole_edge))
+@fundef
+def compute_pnabla_sign(pp, S_M, vol, node_index, is_pole_edge):
+    zavgS = lift(compute_zavgS)(pp, S_M)
+    pnabla_M = library.dot(shift(V2E)(zavgS), sign(node_index, is_pole_edge))
 
-#     return pnabla_M / vol
-
-
-# def nabla_sign(
-#     e2v,
-#     v2e,
-#     pp,
-#     S_MXX,
-#     S_MYY,
-#     node_indices,
-#     is_pole_edge,
-#     vol,
-# ):
-#     return (
-#         compute_pnabla_sign(e2v, v2e, pp, S_MXX, node_indices, is_pole_edge, vol),
-#         compute_pnabla_sign(e2v, v2e, pp, S_MYY, node_indices, is_pole_edge, vol),
-#     )
+    return pnabla_M / deref(vol)
 
 
-# def test_nabla_from_sign_stencil():
-#     setup = nabla_setup()
-
-#     pp = array_as_field(Vertex)(setup.input_field)
-#     S_MXX, S_MYY = tuple(map(array_as_field(Edge), setup.S_fields))
-#     vol = array_as_field(Vertex)(setup.vol_field)
-
-#     edge_flags = np.array(setup.mesh.edges.flags())
-#     is_pole_edge = array_as_field(Edge)(
-#         np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags])
-#     )
-
-#     node_index_field = index_field(Vertex, range(setup.nodes_size))
-
-#     e2v = make_sparse_index_field_from_atlas_connectivity(
-#         setup.edges2node_connectivity, Edge, E2V, Vertex
-#     )
-#     v2e = make_sparse_index_field_from_atlas_connectivity(
-#         setup.nodes2edge_connectivity, Vertex, V2E, Edge
-#     )
-
-#     pnabla_MXX = np.zeros((setup.nodes_size))
-#     pnabla_MYY = np.zeros((setup.nodes_size))
-
-#     print(f"nodes: {setup.nodes_size}")
-#     print(f"edges: {setup.edges_size}")
-
-#     pnabla_MXX[:], pnabla_MYY[:] = nabla_sign(
-#         e2v, v2e, pp, S_MXX, S_MYY, node_index_field, is_pole_edge, vol
-#     )
-
-#     assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
-#     assert_close(3.5455427772565435e-003, max(pnabla_MXX))
-#     assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
-#     assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+@fendef
+def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_pole_edge):
+    # TODO replace by single stencil which returns tuple
+    closure(
+        domain(named_range(Vertex, 0, n_nodes)),
+        compute_pnabla_sign,
+        [out_MXX],
+        [pp, S_MXX, vol, node_index, is_pole_edge],
+    )
+    closure(
+        domain(named_range(Vertex, 0, n_nodes)),
+        compute_pnabla_sign,
+        [out_MYY],
+        [pp, S_MYY, vol, node_index, is_pole_edge],
+    )
 
 
-# @stencil
-# def compute_pnabla_on_nodes(v2e, v2e_e2v_pp, S_M, sign, vol):
-#     zavgS = S_M[v2e] * 0.5 * (v2e_e2v_pp[E2V(0)] + v2e_e2v_pp[E2V(1)])
-#     pnabla_M = sum_reduce(V2E)(zavgS * sign)
+def test_nabla_sign():
+    setup = nabla_setup()
 
-#     return pnabla_M / vol
+    # sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
+    is_pole_edge = np_as_located_field(Edge)(setup.is_pole_edge_field)
+    pp = np_as_located_field(Vertex)(setup.input_field)
+    S_MXX, S_MYY = tuple(map(np_as_located_field(Edge), setup.S_fields))
+    vol = np_as_located_field(Vertex)(setup.vol_field)
 
+    pnabla_MXX = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+    pnabla_MYY = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
 
-# def nabla_on_nodes(
-#     v2e2v,
-#     v2e,
-#     pp,
-#     S_MXX,
-#     S_MYY,
-#     sign,
-#     vol,
-# ):
-#     v2e_e2v_pp = materialize(pp[v2e2v])
-#     return (
-#         compute_pnabla_on_nodes(v2e, v2e_e2v_pp, S_MXX, sign, vol),
-#         compute_pnabla_on_nodes(v2e, v2e_e2v_pp, S_MYY, sign, vol),
-#     )
+    e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
+    v2e = NeighborTableOffsetProvider(AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7)
 
+    nabla_sign(
+        setup.nodes_size,
+        pnabla_MXX,
+        pnabla_MYY,
+        pp,
+        S_MXX,
+        S_MYY,
+        vol,
+        index_field(Vertex),
+        is_pole_edge,
+        # backend="embedded",
+        backend="double_roundtrip",
+        offset_provider={"E2V": e2v, "V2E": v2e},
+        # debug=True,
+    )
 
-# def test_nabla_on_nodes():
-#     setup = nabla_setup()
-
-#     sign_acc = array_as_field(Vertex, V2E)(setup.sign_field)
-#     pp = array_as_field(Vertex)(setup.input_field)
-#     S_MXX, S_MYY = tuple(map(array_as_field(Edge), setup.S_fields))
-#     vol = array_as_field(Vertex)(setup.vol_field)
-
-#     e2v = make_sparse_index_field_from_atlas_connectivity(
-#         setup.edges2node_connectivity, Edge, E2V, Vertex
-#     )
-#     v2e = make_sparse_index_field_from_atlas_connectivity(
-#         setup.nodes2edge_connectivity, Vertex, V2E, Edge
-#     )
-#     v2e2v = e2v[
-#         v2e
-#     ]  # TODO materialize is broken because I don't preserver optional if materialized as np array
-
-#     pnabla_MXX = np.zeros((setup.nodes_size))
-#     pnabla_MYY = np.zeros((setup.nodes_size))
-
-#     print(f"nodes: {setup.nodes_size}")
-#     print(f"edges: {setup.edges_size}")
-
-#     pnabla_MXX[:], pnabla_MYY[:] = nabla_on_nodes(
-#         v2e2v, v2e, pp, S_MXX, S_MYY, sign_acc, vol
-#     )
-
-#     assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
-#     assert_close(3.5455427772565435e-003, max(pnabla_MXX))
-#     assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
-#     assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+    assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
+    assert_close(3.5455427772565435e-003, max(pnabla_MXX))
+    assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
+    assert_close(3.3540113705465301e-003, max(pnabla_MYY))

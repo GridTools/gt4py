@@ -11,10 +11,12 @@ __all__ = [
     "named_range",
     "compose",
     "if_",
+    "or_",
     "minus",
     "plus",
     "mul",
     "div",
+    "eq",
     "greater",
     "make_tuple",
     "nth",
@@ -79,6 +81,11 @@ def if_(*args):
 
 
 @builtin_dispatch
+def or_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def minus(*args):
     raise BackendNotSelectedError()
 
@@ -99,15 +106,20 @@ def div(*args):
 
 
 @builtin_dispatch
+def eq(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def greater(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
 def make_tuple(*args):
-    raise BackendNotSelectedError
+    raise BackendNotSelectedError()
 
 
 @builtin_dispatch
 def nth(*args):
-    raise BackendNotSelectedError
+    raise BackendNotSelectedError()

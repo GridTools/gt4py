@@ -59,6 +59,10 @@ def _patch_Expr():
         return FunCall(fun=SymRef(id="minus"), args=[self, make_node(other)])
 
     @monkeypatch_method(Expr)
+    def __eq__(self, other):
+        return FunCall(fun=SymRef(id="eq"), args=[self, make_node(other)])
+
+    @monkeypatch_method(Expr)
     def __gt__(self, other):
         return FunCall(fun=SymRef(id="greater"), args=[self, make_node(other)])
 
@@ -154,6 +158,11 @@ def if_(*args):
     return _f("if_", *args)
 
 
+@iterator.builtins.or_.register(TRACING)
+def or_(*args):
+    return _f("or_", *args)
+
+
 # shift promotes its arguments to literals, therefore special
 @iterator.builtins.shift.register(TRACING)
 def shift(*offsets):
@@ -179,6 +188,11 @@ def mul(*args):
 @iterator.builtins.div.register(TRACING)
 def div(*args):
     return _f("div", *args)
+
+
+@iterator.builtins.eq.register(TRACING)
+def eq(*args):
+    return _f("eq", *args)
 
 
 @iterator.builtins.greater.register(TRACING)
