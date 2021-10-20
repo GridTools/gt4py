@@ -13,11 +13,13 @@ from iterator.builtins import (
     domain,
     named_range,
     if_,
+    or_,
     minus,
     plus,
     mul,
     div,
     greater,
+    eq,
     nth,
     make_tuple,
 )
@@ -45,6 +47,11 @@ def deref(iter):
 @if_.register(EMBEDDED)
 def if_(cond, t, f):
     return t if cond else f
+
+
+@or_.register(EMBEDDED)
+def or_(a, b):
+    return a or b
 
 
 @nth.register(EMBEDDED)
@@ -193,6 +200,11 @@ def mul(first, second):
 @div.register(EMBEDDED)
 def div(first, second):
     return first / second
+
+
+@eq.register(EMBEDDED)
+def eq(first, second):
+    return first == second
 
 
 @greater.register(EMBEDDED)

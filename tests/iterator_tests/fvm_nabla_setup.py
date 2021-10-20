@@ -26,9 +26,7 @@ import math
 
 
 def assert_close(expected, actual):
-    assert math.isclose(expected, actual), "expected={}, actual={}".format(
-        expected, actual
-    )
+    assert math.isclose(expected, actual), "expected={}, actual={}".format(expected, actual)
 
 
 class nabla_setup:
@@ -49,10 +47,7 @@ class nabla_setup:
         build_median_dual_mesh(mesh)
 
         edges_per_node = max(
-            [
-                mesh.nodes.edge_connectivity.cols(node)
-                for node in range(0, fs_nodes.size)
-            ]
+            [mesh.nodes.edge_connectivity.cols(node) for node in range(0, fs_nodes.size)]
         )
 
         self.mesh = mesh
@@ -76,13 +71,23 @@ class nabla_setup:
     def edges_size(self):
         return self.fs_edges.size
 
+    @staticmethod
+    def _is_pole_edge(e, edge_flags):
+        return Topology.check(edge_flags[e], Topology.POLE)
+
+    @property
+    def is_pole_edge_field(self):
+        edge_flags = np.array(self.mesh.edges.flags())
+
+        pole_edge_field = np.zeros((self.edges_size,))
+        for e in range(self.edges_size):
+            pole_edge_field[e] = self._is_pole_edge(e, edge_flags)
+        return edge_flags
+
     @property
     def sign_field(self):
         node2edge_sign = np.zeros((self.nodes_size, self.edges_per_node))
         edge_flags = np.array(self.mesh.edges.flags())
-
-        def is_pole_edge(e):
-            return Topology.check(edge_flags[e], Topology.POLE)
 
         for jnode in range(0, self.nodes_size):
             node_edge_con = self.mesh.nodes.edge_connectivity
@@ -94,7 +99,7 @@ class nabla_setup:
                     node2edge_sign[jnode, jedge] = 1.0
                 else:
                     node2edge_sign[jnode, jedge] = -1.0
-                    if is_pole_edge(iedge):
+                    if self._is_pole_edge(iedge, edge_flags):
                         node2edge_sign[jnode, jedge] = 1.0
         return node2edge_sign
 
@@ -182,9 +187,7 @@ class nabla_setup:
         for jnode in range(0, self.nodes_size):
             for i in range(0, 2):
                 rcoords[jnode, klevel, i] = rcoords_deg[jnode, i] * deg2rad
-                rlonlatcr[jnode, klevel, i] = rcoords[
-                    jnode, klevel, i
-                ]  # This is not my pattern!
+                rlonlatcr[jnode, klevel, i] = rcoords[jnode, klevel, i]  # This is not my pattern!
             rcosa[jnode, klevel] = math.cos(rlonlatcr[jnode, klevel, MYY])
             rsina[jnode, klevel] = math.sin(rlonlatcr[jnode, klevel, MYY])
         for jnode in range(0, self.nodes_size):
