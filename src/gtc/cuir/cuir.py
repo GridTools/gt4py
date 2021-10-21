@@ -88,6 +88,14 @@ class MaskStmt(Stmt):
     body: List[Stmt]
 
 
+class For(Stmt):
+    target_name: Str
+    start: Expr
+    end: Expr
+    inc: int
+    body: List[Stmt]
+
+
 class UnaryOp(common.UnaryOp[Expr], Expr):
     pass
 

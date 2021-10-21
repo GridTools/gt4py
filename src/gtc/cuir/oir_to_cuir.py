@@ -107,6 +107,44 @@ class OIRToCUIR(eve.NodeTranslator):
             mask=self.visit(node.mask, **kwargs), body=self.visit(node.body, **kwargs)
         )
 
+    def visit_AxisIndex(self, node: oir.AxisIndex, **kwargs: Any) -> cuir.ScalarAccess:
+        offset = common.CartesianOffset.zero()
+        scalar_name = f"{node.axis.lower()}_pos({offset.i}_c, {offset.j}_c, {offset.k}_c)"
+        return cuir.ScalarAccess(name=scalar_name, dtype=common.DataType.INT32)
+
+    def visit_For(self, node: oir.For, **kwargs: Any) -> cuir.For:
+        def lower_axis_bound(axis_bound: oir.AxisBound) -> cuir.Expr:
+            int_type = common.DataType.INT32
+            offset_literal = cuir.Literal(value=str(axis_bound.offset), dtype=int_type)
+            if axis_bound.level == common.LevelMarker.START:
+                return offset_literal
+            else:
+                endpoint = cuir.ScalarAccess(name="k_size", dtype=int_type)
+                return (
+                    cuir.BinaryOp(
+                        op=common.ArithmeticOperator.ADD,
+                        left=endpoint,
+                        right=offset_literal,
+                        dtype=int_type,
+                    )
+                    if axis_bound.offset != 0
+                    else endpoint
+                )
+
+        def make_bound(endpt: Union[oir.Expr, common.AxisBound], **kwargs: Any) -> cuir.Expr:
+            if isinstance(endpt, oir.Expr):
+                return self.visit(endpt, **kwargs)
+            else:
+                return lower_axis_bound(endpt)
+
+        return cuir.For(
+            target_name=node.target_name,
+            start=make_bound(node.start, **kwargs),
+            end=make_bound(node.end, **kwargs),
+            inc=node.inc,
+            body=self.visit(node.body, **kwargs),
+        )
+
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> cuir.Cast:
         return cuir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 
