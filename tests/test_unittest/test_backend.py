@@ -197,13 +197,13 @@ def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
     stencil_class = builder.build()
     assert stencil_class is not None
     if rebuild:
-        assert build_info.get("parse_time", 0.0) > 0.0
-        assert build_info.get("module_time", 0.0) > 0.0
+        assert build_info["parse_time"] > 0.0
+        assert build_info["module_time"] > 0.0
         if backend_name.startswith("gt") and not backend_name.endswith("numpy"):
-            assert build_info.get("codegen_time", 0.0) > 0.0
-            assert build_info.get("build_time", 0.0) > 0.0
+            assert build_info["codegen_time"] > 0.0
+            assert build_info["build_time"] > 0.0
     else:
-        assert build_info.get("load_time", 0.0) > 0.0
+        assert build_info["load_time"] > 0.0
 
 
 if __name__ == "__main__":
