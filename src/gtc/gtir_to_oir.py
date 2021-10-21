@@ -91,7 +91,10 @@ class GTIRToOIR(NodeTranslator):
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> oir.FieldAccess:
         return oir.FieldAccess(
-            name=node.name, offset=node.offset, data_index=node.data_index, dtype=node.dtype
+            name=node.name,
+            offset=node.offset,
+            data_index=self.visit(node.data_index),
+            dtype=node.dtype,
         )
 
     def visit_ScalarAccess(self, node: gtir.ScalarAccess, **kwargs: Any) -> oir.ScalarAccess:
