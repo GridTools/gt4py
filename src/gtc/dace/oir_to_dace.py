@@ -117,7 +117,7 @@ class BaseOirSDFGBuilder(ABC):
         self, node: "Union[HorizontalExecutionLibraryNode, VerticalLoopLibraryNode, SDFG]"
     ) -> AccessCollector.CartesianAccessCollection:
         if isinstance(node, SDFG):
-            res = AccessCollector.CaresianAccessCollection([])
+            res = AccessCollector.CartesianAccessCollection([])
             for node in node.states()[0].nodes():
                 if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
                     collection = self._get_access_collection(node)
