@@ -37,7 +37,7 @@ import jinja2
 from mako import template as mako_tpl
 
 from . import exceptions, utils
-from .concepts import CollectionNode, LeafNode, Node, TreeNode
+from .concepts import BaseNode, CollectionNode, LeafNode, Node, TreeNode
 from .typingx import (
     Any,
     Callable,
@@ -670,7 +670,7 @@ class TemplatedGenerator(NodeVisitor):
         return str(node)
 
     def generic_visit(self, node: TreeNode, **kwargs: Any) -> Union[str, Collection[str]]:
-        if isinstance(node, Node):
+        if isinstance(node, BaseNode):
             template, key = self.get_template(node)
             if template:
                 try:
@@ -703,7 +703,7 @@ class TemplatedGenerator(NodeVisitor):
         """Get a template for a node instance (see class documentation)."""
         template: Optional[Template] = None
         template_key = None
-        if isinstance(node, Node):
+        if isinstance(node, BaseNode):
             for node_class in node.__class__.__mro__:
                 template_key = node_class.__name__
                 template = self.__templates__.get(template_key, None)
