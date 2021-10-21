@@ -65,7 +65,7 @@ class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class FieldAccess(common.FieldAccess, Expr):  # type: ignore
+class FieldAccess(common.FieldAccess[Expr], Expr):  # type: ignore
     pass
 
 

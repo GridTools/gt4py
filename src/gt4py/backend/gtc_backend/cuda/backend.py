@@ -53,9 +53,10 @@ class GTCCudaExtGenerator:
         cuir = kernel_fusion.FuseKernels().visit(cuir)
         cuir = extent_analysis.ComputeExtents().visit(cuir)
         cuir = extent_analysis.CacheExtents().visit(cuir)
-        implementation = cuir_codegen.CUIRCodegen.apply(cuir)
+        format_source = self.backend.builder.options.format_source
+        implementation = cuir_codegen.CUIRCodegen.apply(cuir, format_source=format_source)
         bindings = GTCCudaBindingsCodegen.apply(
-            cuir, module_name=self.module_name, backend=self.backend
+            cuir, module_name=self.module_name, backend=self.backend, format_source=format_source
         )
         return {
             "computation": {"computation.hpp": implementation},
@@ -118,8 +119,10 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
     @classmethod
     def apply(cls, root, *, module_name="stencil", backend, **kwargs) -> str:
         generated_code = cls(backend).visit(root, module_name=module_name, **kwargs)
-        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return formatted_code
+        if kwargs.get("format_source", True):
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+
+        return generated_code
 
 
 @gt_backend.register
@@ -139,6 +142,7 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     PYEXT_GENERATOR_CLASS = GTCCudaExtGenerator  # type: ignore
     MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
     GT_BACKEND_T = "gpu"
+    USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=True)
