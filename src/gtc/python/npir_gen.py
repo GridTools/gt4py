@@ -54,26 +54,27 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
             if not isinstance(key, tuple):
                 key = (key, )
             for dim, idx in enumerate(key):
-                if self.offsets[dim] == 0:
-                    new_args.append(idx)
-                elif isinstance(idx, slice):
-                    start = 0 if idx.start is None else idx.start
-                    stop = -1 if idx.stop is None else idx.stop
+                offset = self.offsets[dim]
+                if isinstance(idx, slice):
+                    if idx.start is None or idx.stop is None:
+                        assert offset == 0
                     new_args.append(
-                        slice(start + self.offsets[dim], stop + self.offsets[dim], idx.step)
+                        slice(idx.start + offset, idx.stop + offset, idx.step) if offset else idx
                     )
                 else:
-                    new_args.append(idx + self.offsets[dim])
-            if not isinstance(new_args[-1], (numbers.Integral, slice)):
-                assert all(isinstance(arg, slice) for arg in new_args[:-1])
-                args = [
+                    new_args.append(idx + offset)
+            if not isinstance(new_args[2], (numbers.Integral, slice)):
+                assert isinstance(new_args[0], slice) and isinstance(new_args[1], slice)
+                new_args[:2] = np.broadcast_arrays(
                     np.expand_dims(
-                        np.arange(new_args[i].start, new_args[i].stop),
-                        axis=tuple(j for j in range(self.field.ndim) if j != i),
-                    )
-                    for i in range(self.field.ndim - 1)
-                ]
-                new_args[:-1] = np.broadcast_arrays(*args)
+                        np.arange(new_args[0].start, new_args[0].stop),
+                        axis=tuple(i for i in range(self.field.ndim) if i != 0)
+                    ),
+                    np.expand_dims(
+                        np.arange(new_args[1].start, new_args[1].stop),
+                        axis=tuple(i for i in range(self.field.ndim) if i != 1)
+                    ),
+                )
             return tuple(new_args)
 
         def __getitem__(self, key):
@@ -87,8 +88,11 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
 
 VARIABLE_OFFSET_FUNCTION = textwrap.dedent(
     """
-    def var_k_expr(expr, k, K):
-        return np.expand_dims(np.arange(k, K), axis=tuple(i for i in range(expr.ndim - 1))) + expr
+    def var_k_expr(expr, k):
+        k_indices = np.arange(expr.shape[2]) + k
+        all_nonk_axes = tuple(i for i in range(expr.ndim) if i != 2)
+        expanded_k_indices = np.expand_dims(k_indices, axis=all_nonk_axes)
+        return expanded_k_indices + expr
     """
 )
 
@@ -211,9 +215,13 @@ class NpirGen(TemplatedGenerator):
     def visit_VariableKOffset(
         self, node: npir.VariableKOffset, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        return self.generic_visit(node, var_offset=self.visit(node.k, **kwargs))
+        return self.generic_visit(
+            node,
+            counter="k_" if kwargs["is_serial"] else "k",
+            var_offset=self.visit(node.k, **kwargs),
+        )
 
-    VariableKOffset = FormatTemplate("var_k_expr({var_offset}, k, K)")
+    VariableKOffset = FormatTemplate("var_k_expr({var_offset}, {counter})")
 
     def visit_FieldSlice(
         self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, **kwargs: Any
@@ -221,7 +229,9 @@ class NpirGen(TemplatedGenerator):
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
 
-        offset_str = ", ".join(self.visit(off, **kwargs) if off else ":" for off in offset)
+        offset_str = ", ".join(
+            self.visit(off, is_serial=is_serial, **kwargs) if off else ":" for off in offset
+        )
 
         if node.data_index:
             offset_str += ", " + ", ".join(self.visit(x, **kwargs) for x in node.data_index)
@@ -232,10 +242,7 @@ class NpirGen(TemplatedGenerator):
         else:
             arr_expr = f"{node.name}_[{offset_str}]"
 
-        kwargs["arr_expr"] = arr_expr
-        return self.generic_visit(node, mask_acc=mask_acc, **kwargs)
-
-    FieldSlice = FormatTemplate("{arr_expr}{mask_acc}")
+        return f"{arr_expr}{mask_acc}"
 
     def visit_EmptyTemp(
         self, node: npir.EmptyTemp, *, temp_name: str, **kwargs
