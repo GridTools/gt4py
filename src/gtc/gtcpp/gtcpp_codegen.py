@@ -80,7 +80,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             if offset.i == offset.j == offset.k == 0 and not accessor_ref.data_index:
                 # Skip offsets in the accessor if possible, improves generated code readability and reduces code size for point-wise computations significantly
                 return f"eval({accessor_ref.name}())"
-            i_offset, j_offset = offset.i, offset.j
+            i_offset, j_offset, k_offset = offset.i, offset.j, offset.k
         elif isinstance(accessor_ref.offset, gtcpp.VariableKOffset):
             i_offset, j_offset = 0, 0
             k_offset = self.visit(accessor_ref.offset.k, **kwargs)
