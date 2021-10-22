@@ -159,7 +159,7 @@ class GTExtent(LocNode):
             MAX_OFFSET = 1000
             return GTExtent(i=self.i, j=self.j, k=(-MAX_OFFSET, MAX_OFFSET))
         else:
-            raise AssertionError("Can only add CartesianOffsets")
+            raise AssertionError(f"Unrecognized offset type: {type(offset)}")
 
 
 class GTAccessor(LocNode):
