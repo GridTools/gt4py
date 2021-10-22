@@ -59,8 +59,6 @@ def resolve_dtype_and_validate(testee: Stencil, expected_dtypes: Dict[str, commo
     for name, _dtype in expected_dtypes.items():
         nodes = get_nodes_with_name(testee, name)
         assert len(nodes) > 0
-        print(name, nodes)
-        print("--")
         assert any([node.dtype is None for node in nodes])
 
     result: Stencil = resolve_dtype(testee)
@@ -68,7 +66,6 @@ def resolve_dtype_and_validate(testee: Stencil, expected_dtypes: Dict[str, commo
     for name, dtype in expected_dtypes.items():
         nodes = get_nodes_with_name(result, name)
         assert len(nodes) > 0
-        print(name, dtype, nodes)
         assert all([node.dtype == dtype for node in nodes])
 
 
