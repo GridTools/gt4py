@@ -161,15 +161,15 @@ def stencil(
 
         build_info : `dict`, optional
             Dictionary used to store information about the stencil generation.
-            (`None` by default). Possible values include:
-            - def_ir (StencilDefinition): Definition IR object
-            - iir (StencilImplementation): Implementation IR object
-            - symbol_info (Dict[str, SymbolInfo]): Dictionary of SymbolInfo objects
-            - parse_time (float): Frontend run time, e.g., parsing GTScript (seconds)
-            - module_time (float): Python module generation time (seconds)
-            - codegen_time (float): Backend-specific code generation time (seconds)
-            - build_time (float): Compilation time, i.e., for non-Python backends (seconds)
-            - load_time (float): Module load time for cached stencils (seconds)
+            (`None` by default). Possible key-value pairs include:
+            - 'def_ir': (StencilDefinition) Definition IR object
+            - 'iir': (StencilImplementation) Implementation IR object
+            - 'symbol_info': (Dict[str, SymbolInfo]) Dictionary of SymbolInfo objects
+            - 'parse_time': (float) Frontend run time, e.g., parsing GTScript in seconds
+            - 'module_time': (float) Python module generation time in seconds
+            - 'codegen_time'" (float) Backend-specific code generation time in seconds
+            - 'build_time': (float) Compilation time, i.e., for non-Python backends in seconds
+            - 'load_time': (float) Module load time for cached stencils in seconds
 
         dtypes: `dict`[`str`, dtype_definition], optional
             Specify dtypes for string keys in the argument annotations.
