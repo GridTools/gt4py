@@ -89,6 +89,7 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
 VARIABLE_OFFSET_FUNCTION = textwrap.dedent(
     """
     def var_k_expr(expr, k):
+
         k_indices = np.arange(expr.shape[2]) + k
         all_nonk_axes = tuple(i for i in range(expr.ndim) if i != 2)
         expanded_k_indices = np.expand_dims(k_indices, axis=all_nonk_axes)
@@ -397,8 +398,6 @@ class NpirGen(TemplatedGenerator):
             import numpy as np
             import numbers
 
-            {{ var_offset_func }}
-
             def run({{ signature }}):
 
                 # -- begin domain boundary shortcuts --
@@ -416,6 +415,8 @@ class NpirGen(TemplatedGenerator):
                 {% for pass in vertical_passes %}
                 {{ pass | indent(4) }}
                 {% endfor %}
+
+            {{ var_offset_func }}
             """
         )
     )
