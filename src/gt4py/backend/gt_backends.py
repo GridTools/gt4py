@@ -18,6 +18,7 @@ import abc
 import functools
 import numbers
 import os
+import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import jinja2
@@ -680,6 +681,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     def make_extension(
         self, *, gt_version: int = 1, ir: Any = None, uses_cuda: bool = False
     ) -> Tuple[str, str]:
+        build_info = self.builder.options.build_info
+        if build_info is not None:
+            start_time = time.perf_counter()
+
         if not ir:
             # in the GTC backend, `ir` is the definition_ir
             ir = self.builder.implementation_ir
@@ -692,6 +697,11 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             gt_pyext_sources = {
                 key: gt_utils.NOTHING for key in self.PYEXT_GENERATOR_CLASS.TEMPLATE_FILES.keys()
             }
+
+        if build_info is not None:
+            next_time = time.perf_counter()
+            build_info["codegen_time"] = next_time - start_time
+            start_time = next_time
 
         # Build extension module
         pyext_opts = dict(
@@ -706,6 +716,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         )
 
         result = self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
+
+        if build_info is not None:
+            build_info["build_time"] = time.perf_counter() - start_time
+
         return result
 
     def make_extension_sources(self, *, ir) -> Dict[str, Dict[str, str]]:
