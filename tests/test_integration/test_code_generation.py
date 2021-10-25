@@ -48,6 +48,14 @@ def test_generation(name, backend):
     stencil(**args, origin=(10, 10, 5), domain=(3, 3, 16))
 
 
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_lazy_stencil(backend):
+    @gtscript.lazy_stencil(backend=backend)
+    def definition(field_a: gtscript.Field[np.float_], field_b: gtscript.Field[np.float_]):
+        with computation(PARALLEL), interval(...):
+            field_a = field_b
+
+
 @pytest.mark.requires_gpu
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_temporary_field_declared_in_if(backend):
@@ -422,9 +430,6 @@ def test_mask_with_offset_written_in_conditional(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_write_data_dim_indirect_addressing(backend):
-    if backend == "gtc:cuda":
-        pytest.xfail("Indirect addressing not supported in gtc:cuda")
-
     INT32_VEC2 = (np.int32, (2,))
 
     def stencil(
@@ -450,9 +455,6 @@ def test_write_data_dim_indirect_addressing(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_read_data_dim_indirect_addressing(backend):
-    if backend == "gtc:cuda":
-        pytest.xfail("Indirect addressing not supported in gtc:cuda")
-
     INT32_VEC2 = (np.int32, (2,))
 
     def stencil(

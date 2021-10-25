@@ -21,8 +21,8 @@ import inspect
 import itertools
 import numbers
 import textwrap
+import time
 import types
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -1395,7 +1395,6 @@ class IRMaker(ast.NodeVisitor):
                     for intervals_dict in intervals_dicts
                 ]
             )
-
             return stmts
         else:
             # If we find nested `with` blocks flatten them, i.e. transform
@@ -1925,7 +1924,15 @@ class GTScriptFrontend(gt_frontend.Frontend):
 
     @classmethod
     def generate(cls, definition, externals, options):
+        if options.build_info is not None:
+            start_time = time.perf_counter()
+
         if not hasattr(definition, "_gtscript_"):
             cls.prepare_stencil_definition(definition, externals)
         translator = GTScriptParser(definition, externals=externals, options=options)
-        return translator.run()
+        definition_ir = translator.run()
+
+        if options.build_info is not None:
+            options.build_info["parse_time"] = time.perf_counter() - start_time
+
+        return definition_ir

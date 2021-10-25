@@ -52,7 +52,7 @@ def load_stencil(
         raise ValueError("Invalid frontend specification ({name})".format(name=frontend_name))
 
     builder = StencilBuilder(
-        definition_func, options=build_options, backend=backend_cls, frontend=frontend
+        definition_func, options=build_options, backend=backend_name, frontend=frontend
     ).with_externals(externals)
 
     return builder.build()
