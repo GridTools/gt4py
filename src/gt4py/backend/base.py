@@ -19,6 +19,7 @@ import copy
 import hashlib
 import os
 import pathlib
+import time
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional, Tuple, Type, Union
 
 from gt4py import definitions as gt_definitions
@@ -244,6 +245,10 @@ class BaseBackend(Backend):
     MODULE_GENERATOR_CLASS: ClassVar[Type["BaseModuleGenerator"]]
 
     def load(self) -> Optional[Type["StencilObject"]]:
+        build_info = self.builder.options.build_info
+        if build_info is not None:
+            start_time = time.perf_counter()
+
         stencil_class = None
         if self.builder.stencil_id is not None:
             self.check_options(self.builder.options)
@@ -254,6 +259,9 @@ class BaseBackend(Backend):
                 validate_hash=validate_hash
             ):
                 stencil_class = self._load()
+
+        if build_info is not None:
+            build_info["load_time"] = time.perf_counter() - start_time
 
         return stencil_class
 
@@ -283,6 +291,10 @@ class BaseBackend(Backend):
         self,
         **kwargs: Any,
     ) -> Type["StencilObject"]:
+        build_info = self.builder.options.build_info
+        if build_info is not None:
+            start_time = time.perf_counter()
+
         file_path = self.builder.module_path
         module_source = self.make_module_source(**kwargs)
 
@@ -291,7 +303,12 @@ class BaseBackend(Backend):
             file_path.write_text(module_source)
             self.builder.caching.update_cache_info()
 
-        return self._load()
+        module = self._load()
+
+        if build_info is not None:
+            build_info["module_time"] = time.perf_counter() - start_time
+
+        return module
 
     def make_module_source(self, *, args_data: Optional[ModuleData] = None, **kwargs: Any) -> str:
         """Generate the module source code with or without stencil id."""

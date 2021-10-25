@@ -29,7 +29,6 @@ from typing import Callable, Dict, Type
 import numpy as np
 
 from gt4py import definitions as gt_definitions
-from gt4py import utils as gt_utils
 from gt4py.lazy_stencil import LazyStencil
 from gt4py.stencil_builder import StencilBuilder
 
@@ -161,7 +160,15 @@ def stencil(
 
         build_info : `dict`, optional
             Dictionary used to store information about the stencil generation.
-            (`None` by default).
+            (`None` by default). Possible key-value pairs include:
+            - 'def_ir': (StencilDefinition) Definition IR object
+            - 'iir': (StencilImplementation) Implementation IR object
+            - 'symbol_info': (Dict[str, SymbolInfo]) Dictionary of SymbolInfo objects
+            - 'parse_time': (float) Frontend run time, e.g., parsing GTScript in seconds
+            - 'module_time': (float) Python module generation time in seconds
+            - 'codegen_time'" (float) Backend-specific code generation time in seconds
+            - 'build_time': (float) Compilation time, i.e., for non-Python backends in seconds
+            - 'load_time': (float) Module load time for cached stencils in seconds
 
         dtypes: `dict`[`str`, dtype_definition], optional
             Specify dtypes for string keys in the argument annotations.
@@ -235,6 +242,11 @@ def stencil(
             _impl_opts[key] = value
     for key in _impl_opts:
         kwargs.pop(key)
+
+    # Setup build_info timings
+    if build_info is not None:
+        time_keys = ("parse_time", "module_time", "codegen_time", "build_time", "load_time")
+        build_info.update({time_key: 0.0 for time_key in time_keys})
 
     build_options = gt_definitions.BuildOptions(
         name=name,

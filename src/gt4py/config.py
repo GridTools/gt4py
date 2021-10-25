@@ -42,6 +42,8 @@ GT2_INCLUDE_PATH: str = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "_external_src", GT2_REPO_DIRNAME, "include")
 )
 
+GT_CPP_TEMPLATE_DEPTH: int = 1024
+
 # Settings dict
 build_settings: Dict[str, Any] = {
     "boost_include_path": os.path.join(BOOST_ROOT, "include"),
@@ -63,6 +65,7 @@ build_settings: Dict[str, Any] = {
     },
     "extra_link_args": [],
     "parallel_jobs": multiprocessing.cpu_count(),
+    "cpp_template_depth": os.environ.get("GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH),
 }
 
 cache_settings: Dict[str, Any] = {

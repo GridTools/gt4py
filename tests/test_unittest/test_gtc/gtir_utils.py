@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import List
+
 import factory
 
 from gtc import common, gtir
@@ -35,6 +37,7 @@ class FieldAccessFactory(factory.Factory):
 
     name = identifier(gtir.FieldAccess)
     offset = factory.SubFactory(CartesianOffsetFactory)
+    data_index: List[gtir.Expr] = []
     dtype = common.DataType.FLOAT32
 
 
