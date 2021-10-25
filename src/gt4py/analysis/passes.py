@@ -1199,7 +1199,7 @@ class BuildIIRPass(TransformPass):
             apply_block = gt_ir.ApplyBlock(
                 interval=self._make_axis_interval(int_block.interval),
                 local_symbols=local_symbols,
-                body=gt_ir.BlockStmt(stmts=stmts),
+                body=gt_ir.BlockStmt(stmts=copy.deepcopy(stmts)),
             )
             apply_blocks.append(apply_block)
 
