@@ -464,9 +464,6 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         body_sources.append("}")
         return body_sources
 
-    def visit_AxisIndex(self, node: gt_ir.AxisIndex) -> str:
-        return f"eval.{node.axis.lower()}()"
-
     def _visit_ForLoopBound(self, node: gt_ir.AxisBound, axis):
         return "static_cast<gt::int_t>({endpt}{offset:+d})".format(
             endpt=f"eval(domain_size_{axis.name}())"
@@ -697,7 +694,6 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
             halo_sizes=halo_sizes,
             k_axis=k_axis,
             module_name=self.module_name,
-            positional_computation=positional_computation,
             multi_stages=multi_stages,
             parameters=parameters,
             stage_functors=stage_functors,
