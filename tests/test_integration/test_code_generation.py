@@ -48,6 +48,14 @@ def test_generation(name, backend):
     stencil(**args, origin=(10, 10, 5), domain=(3, 3, 16))
 
 
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_lazy_stencil(backend):
+    @gtscript.lazy_stencil(backend=backend)
+    def definition(field_a: gtscript.Field[np.float_], field_b: gtscript.Field[np.float_]):
+        with computation(PARALLEL), interval(...):
+            field_a = field_b
+
+
 @pytest.mark.requires_gpu
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_temporary_field_declared_in_if(backend):
@@ -288,6 +296,7 @@ def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
         pytest.param("gtx86", marks=[pytest.mark.xfail]),
         pytest.param("gtmc", marks=[pytest.mark.xfail]),
         pytest.param("gtcuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
+        "gtc:numpy",
         "gtc:gt:cpu_ifirst",
         "gtc:gt:cpu_kfirst",
         pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
@@ -439,7 +448,7 @@ def test_write_data_dim_indirect_addressing(backend):
     if backend in (backend.values[0] for backend in LEGACY_GRIDTOOLS_BACKENDS):
         with pytest.raises(ValueError):
             gtscript.stencil(definition=stencil, backend=backend)
-    elif backend != "gtc:numpy":
+    else:
         gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
         assert output_field[0, 0, 0, index] == 1
 
@@ -464,6 +473,6 @@ def test_read_data_dim_indirect_addressing(backend):
     if backend in (backend.values[0] for backend in LEGACY_GRIDTOOLS_BACKENDS):
         with pytest.raises(ValueError):
             gtscript.stencil(definition=stencil, backend=backend)
-    elif backend != "gtc:numpy":
+    else:
         gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, 1)
         assert output_field[0, 0, 0] == 1

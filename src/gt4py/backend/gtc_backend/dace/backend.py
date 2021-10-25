@@ -118,7 +118,9 @@ class DaCeComputationCodegen:
     def generate_tmp_allocs(self, sdfg):
         fmt = "dace_handle.{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
         return [
-            fmt.format(name=name, dtype=array.dtype.ctype, size=array.total_size)
+            fmt.format(
+                name=f"__{sdfg.sdfg_id}_{name}", dtype=array.dtype.ctype, size=array.total_size
+            )
             for name, array in sdfg.arrays.items()
             if array.transient and array.lifetime == dace.AllocationLifetime.Persistent
         ]

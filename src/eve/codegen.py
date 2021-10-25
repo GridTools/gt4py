@@ -37,7 +37,7 @@ import jinja2
 from mako import template as mako_tpl
 
 from . import exceptions, utils
-from .concepts import CollectionNode, LeafNode, Node, TreeNode
+from .concepts import BaseNode, CollectionNode, LeafNode, Node, TreeNode
 from .typingx import (
     Any,
     Callable,
@@ -54,7 +54,6 @@ from .typingx import (
     Tuple,
     TypeVar,
     Union,
-    cast,
 )
 from .visitors import NodeVisitor
 
@@ -664,7 +663,7 @@ class TemplatedGenerator(NodeVisitor):
             String (or collection of strings) with the dumped version of the root IR node.
 
         """
-        return cast(Union[str, Collection[str]], cls().visit(root, **kwargs))
+        return cls().visit(root, **kwargs)
 
     @classmethod
     def generic_dump(cls, node: TreeNode, **kwargs: Any) -> str:
@@ -675,12 +674,11 @@ class TemplatedGenerator(NodeVisitor):
         return str(node)
 
     def generic_visit(self, node: TreeNode, **kwargs: Any) -> Union[str, Collection[str]]:
-        result: Union[str, Collection[str]] = ""
-        if isinstance(node, Node):
+        if isinstance(node, BaseNode):
             template, key = self.get_template(node)
             if template:
                 try:
-                    result = self.render_template(
+                    return self.render_template(
                         template,
                         node,
                         self.transform_children(node, **kwargs),
@@ -696,22 +694,20 @@ class TemplatedGenerator(NodeVisitor):
                         node=node,
                     ) from e.__cause__
 
-        elif isinstance(
-            node, (collections.abc.Sequence, collections.abc.Set)
-        ) and utils.is_collection(node):
-            result = [self.visit(value, **kwargs) for value in node]
-        elif isinstance(node, collections.abc.Mapping):
-            result = {key: self.visit(value, **kwargs) for key, value in node.items()}
-        else:
-            result = self.generic_dump(node, **kwargs)
+        elif isinstance(node, (list, tuple, collections.abc.Set)) or (
+            isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
+        ):
+            return [self.visit(value, **kwargs) for value in node]
+        elif isinstance(node, (dict, collections.abc.Mapping)):
+            return {key: self.visit(value, **kwargs) for key, value in node.items()}
 
-        return result
+        return self.generic_dump(node, **kwargs)
 
     def get_template(self, node: TreeNode) -> Tuple[Optional[Template], Optional[str]]:
         """Get a template for a node instance (see class documentation)."""
         template: Optional[Template] = None
         template_key = None
-        if isinstance(node, Node):
+        if isinstance(node, BaseNode):
             for node_class in node.__class__.__mro__:
                 template_key = node_class.__name__
                 template = self.__templates__.get(template_key, None)

@@ -46,7 +46,19 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    FieldAccess = as_mako("${name}(${offset}${''.join(f', {i}_c' for i in _this_node.data_index)})")
+    def visit_FieldAccess(self, node: cuir.FieldAccess, **kwargs: Any):
+        def maybe_const(s):
+            try:
+                return f"{int(s)}_c"
+            except ValueError:
+                return s
+
+        kwargs["this_data_index"] = "".join(
+            ", " + maybe_const(self.visit(index, **kwargs)) for index in node.data_index
+        )
+        return self.generic_visit(node, **kwargs)
+
+    FieldAccess = as_mako("${name}(${offset}${this_data_index})")
 
     def visit_IJCacheAccess(
         self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
@@ -254,16 +266,19 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     def visit_VerticalLoop(
         self, node: cuir.VerticalLoop, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        fields = (
-            node.iter_tree()
+
+        fields = {
+            name: data_dims
+            for name, data_dims in node.iter_tree()
             .if_isinstance(cuir.FieldAccess)
             .getattr("name", "data_index")
             .map(lambda x: (x[0], len(x[1])))
-            .to_set()
-        )
+        }
+
         pos_accesses = CUIRCodegen.positional_accesses(node)
         if pos_accesses:
-            fields.update(set([(access.split("(")[0], 0) for access in pos_accesses]))
+            fields.update({name: 0 for name in pos_accesses})
+
         return self.generic_visit(
             node,
             fields=fields,
@@ -307,7 +322,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                            _k_block);
                 % endif
 
-                % for field, data_dims in fields:
+                % for field, data_dims in fields.items():
                     const auto ${field} = [&](auto i, auto j, auto k
                         % for i in range(data_dims):
                             , auto dim_${i + 3}

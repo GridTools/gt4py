@@ -25,7 +25,6 @@ from gt4py.backend.debug_backend import (
     debug_layout,
 )
 from gtc.gtir_to_oir import GTIRToOIR
-from gtc.passes.gtir_legacy_extents import compute_legacy_extents
 from gtc.passes.oir_pipeline import OirPipeline
 from gtc.python import npir
 from gtc.python.npir_gen import NpirGen
@@ -100,7 +99,8 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
             + self.builder.caching.module_postfix
             + ".py"
         )
-        source = NpirGen.apply(self.npir, field_extents=compute_legacy_extents(self.builder.gtir))
+
+        source = NpirGen.apply(self.npir)
         if self.builder.options.format_source:
             source = format_source("python", source)
 
@@ -119,10 +119,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         return self.make_module()
 
     def _make_npir(self) -> npir.Computation:
-        return OirToNpir().visit(
-            # TODO (ricoh) apply optimizations, skip only the ones that fail
-            OirPipeline(GTIRToOIR().visit(self.builder.gtir)).apply([])
-        )
+        return OirToNpir().visit(OirPipeline(GTIRToOIR().visit(self.builder.gtir)).full())
 
     @property
     def npir(self) -> npir.Computation:

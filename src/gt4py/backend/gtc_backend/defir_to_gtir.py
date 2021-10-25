@@ -158,13 +158,9 @@ class DefIRToGTIR(IRNodeVisitor):
         CheckHorizontalRegionAccesses().visit(stencil)
         return stencil
 
-    def __init__(self):
-        self._scalar_params = None
-
     def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
         field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
-        self._scalar_params = scalar_params
         vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
         return gtir.Stencil(
             name=node.name.split(".")[
@@ -314,15 +310,8 @@ class DefIRToGTIR(IRNodeVisitor):
                 else None,
             )
 
-    def visit_VarRef(self, node: VarRef, **kwargs: Any):
-        # TODO(havogt) seems wrong, but check the DefinitionIR for
-        # test_code_generation.py::test_generation_cpu[native_functions,
-        # there we have a FieldAccess on a VarDecl
-        # Probably the frontend needs to be fixed.
-        if node.name in self._scalar_params:
-            return gtir.ScalarAccess(name=node.name)
-        else:
-            return gtir.FieldAccess(name=node.name, offset=gtir.CartesianOffset.zero())
+    def visit_VarRef(self, node: VarRef, **kwargs):
+        return gtir.ScalarAccess(name=node.name)
 
     def visit_AxisInterval(self, node: AxisInterval):
         return self.visit(node.start), self.visit(node.end)

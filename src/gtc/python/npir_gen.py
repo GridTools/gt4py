@@ -14,10 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import functools
 import textwrap
+from dataclasses import dataclass, field
 from typing import Any, Collection, Dict, Tuple, Union
 
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
+from eve.visitors import NodeVisitor
 from gt4py.definitions import Extent
 from gtc import common
 from gtc.python import npir
@@ -70,6 +73,57 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
             return self.field.__setitem__(self.shim_key(key), value)
     """
 )
+
+
+def slice_to_extent(acc: npir.FieldSlice) -> Extent:
+    return Extent(
+        (
+            [acc.i_offset.offset.value] * 2 if acc.i_offset else (0, 0),
+            [acc.j_offset.offset.value] * 2 if acc.j_offset else (0, 0),
+            [acc.k_offset.offset.value] * 2 if acc.k_offset else (0, 0),
+        )
+    )
+
+
+HorizontalExtent = Tuple[Tuple[int, int], Tuple[int, int]]
+
+
+class ExtentCalculator(NodeVisitor):
+    @dataclass
+    class Context:
+        field_extents: Dict[str, Extent] = field(default_factory=dict)
+        block_extents: Dict[int, HorizontalExtent] = field(default_factory=dict)
+
+    def visit_Computation(self, node: npir.Computation):
+        ctx = self.Context()
+        for vertical_pass in reversed(node.vertical_passes):
+            self.visit(vertical_pass, ctx=ctx)
+        return ctx.field_extents, ctx.block_extents
+
+    def visit_VerticalPass(self, node: npir.VerticalPass, *, ctx: Context):
+        for block in reversed(node.body):
+            self.visit(block, ctx=ctx)
+
+    def visit_HorizontalBlock(self, node: npir.HorizontalBlock, *, ctx: Context):
+        writes = (
+            node.iter_tree()
+            .if_isinstance(npir.VectorAssign)
+            .getattr("left")
+            .if_isinstance(npir.FieldSlice)
+            .getattr("name")
+            .to_set()
+        )
+        extent = functools.reduce(
+            lambda ext, name: ext | ctx.field_extents.get(name, Extent.zeros()),
+            writes,
+            Extent.zeros(),
+        )
+        ctx.block_extents[id(node)] = extent
+
+        for acc in node.iter_tree().if_isinstance(npir.FieldSlice).to_list():
+            ctx.field_extents[acc.name] = ctx.field_extents.get(acc.name, Extent.zeros()).union(
+                extent + slice_to_extent(acc)
+            )
 
 
 class NpirGen(TemplatedGenerator):
@@ -144,8 +198,11 @@ class NpirGen(TemplatedGenerator):
 
         offset_str = ", ".join(self.visit(off, **kwargs) if off else ":" for off in offset)
 
+        if node.data_index:
+            offset_str += ", " + ", ".join(self.visit(x, **kwargs) for x in node.data_index)
+
         if mask_acc and any(off is None for off in offset):
-            k_size = 1 if is_serial else "K - k"
+            k_size = "1" if is_serial else "K - k"
             arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I - i, J - j, {k_size}))"
         else:
             arr_expr = f"{node.name}_[{offset_str}]"
@@ -177,9 +234,11 @@ class NpirGen(TemplatedGenerator):
         if isinstance(node.mask, npir.FieldSlice):
             mask_def = ""
         elif isinstance(node.mask, npir.BroadCast):
+            assert "is_serial" in kwargs
             mask_name = node.mask_name
             mask = self.visit(node.mask)
-            mask_def = f"{mask_name}_ = np.full((I - i, J - j, K - k), {mask})\n"
+            k_size = "1" if kwargs["is_serial"] else "K - k"
+            mask_def = f"{mask_name}_ = np.full((I - i, J - j, {k_size}), {mask})\n"
         else:
             mask_name = node.mask_name
             mask = self.visit(node.mask)
@@ -259,27 +318,24 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_HorizontalBlock(
-        self, node: npir.HorizontalBlock, **kwargs
+        self,
+        node: npir.HorizontalBlock,
+        *,
+        block_extents: Dict[int, HorizontalExtent] = None,
+        **kwargs: Any,
     ) -> Union[str, Collection[str]]:
-        lower, upper = [0, 0], [0, 0]
-
-        if extents := kwargs.get("field_extents"):
-            fields = set(node.iter_tree().if_isinstance(npir.FieldSlice).getattr("name"))
-            for field in fields:
-                # The extent of masks has not yet been collected but is always zero.
-                extents.setdefault(field, Extent.zeros())
-            lower[0] = min(extents[field].to_boundary()[0][0] for field in fields)
-            lower[1] = min(extents[field].to_boundary()[1][0] for field in fields)
-            upper[0] = min(extents[field].to_boundary()[0][1] for field in fields)
-            upper[1] = min(extents[field].to_boundary()[1][1] for field in fields)
-        return self.generic_visit(node, h_lower=lower, h_upper=upper, **kwargs)
+        ij_extent: Extent = (block_extents or {}).get(id(node), Extent.zeros())
+        boundary = ij_extent.to_boundary()
+        lower = (boundary[0][0], boundary[1][0])
+        upper = (boundary[0][1], boundary[1][1])
+        return self.generic_visit(node, lower=lower, upper=upper, **kwargs)
 
     HorizontalBlock = JinjaTemplate(
         textwrap.dedent(
             """\
             # --- begin horizontal block --
-            i, I = _di_ - {{ h_lower[0] }}, _dI_ + {{ h_upper[0] }}
-            j, J = _dj_ - {{ h_lower[1] }}, _dJ_ + {{ h_upper[1] }}
+            i, I = _di_ - {{ lower[0] }}, _dI_ + {{ upper[0] }}
+            j, J = _dj_ - {{ lower[1] }}, _dJ_ + {{ upper[1] }}
             {% for assign in body %}{{ assign }}
             {% endfor %}# --- end horizontal block --
 
@@ -291,11 +347,13 @@ class NpirGen(TemplatedGenerator):
         self, node: npir.Computation, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> Union[str, Collection[str]]:
         signature = ["*", *node.params, "_domain_", "_origin_"]
-        kwargs["field_extents"] = field_extents
+        field_extents, block_extents = ExtentCalculator().visit(node)
         return self.generic_visit(
             node,
             signature=", ".join(signature),
             data_view_class=ORIGIN_CORRECTED_VIEW_CLASS,
+            field_extents=field_extents,
+            block_extents=block_extents,
             **kwargs,
         )
 

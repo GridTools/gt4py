@@ -60,22 +60,33 @@ class OIRToCUIR(eve.NodeTranslator):
         **kwargs: Any,
     ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
         in_horizontal_mask = kwargs.get("in_horizontal_mask", False)
+        data_index = self.visit(
+            node.data_index,
+            ij_caches=ij_caches,
+            k_caches=k_caches,
+            accessed_fields=accessed_fields,
+            **kwargs,
+        )
         if node.name in ij_caches:
             return cuir.IJCacheAccess(
                 name=ij_caches[node.name].name,
                 offset=node.offset,
+                data_index=data_index,
                 dtype=node.dtype,
                 in_horizontal_mask=in_horizontal_mask,
             )
         if node.name in k_caches:
             return cuir.KCacheAccess(
-                name=k_caches[node.name].name, offset=node.offset, dtype=node.dtype
+                name=k_caches[node.name].name,
+                offset=node.offset,
+                data_index=data_index,
+                dtype=node.dtype,
             )
         accessed_fields.add(node.name)
         return cuir.FieldAccess(
             name=node.name,
             offset=node.offset,
-            data_index=node.data_index,
+            data_index=data_index,
             dtype=node.dtype,
             in_horizontal_mask=in_horizontal_mask,
         )
