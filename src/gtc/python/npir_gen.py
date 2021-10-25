@@ -344,7 +344,7 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_Computation(
-        self, node: npir.Computation, *, field_extents: Dict[str, Extent], **kwargs: Any
+        self, node: npir.Computation, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         signature = ["*", *node.params, "_domain_", "_origin_"]
         field_extents, block_extents = ExtentCalculator().visit(node)
