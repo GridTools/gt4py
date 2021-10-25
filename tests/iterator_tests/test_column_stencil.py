@@ -1,7 +1,10 @@
+import numpy as np
+import pytest
+
+from iterator.builtins import *
 from iterator.embedded import np_as_located_field
 from iterator.runtime import *
-from iterator.builtins import *
-import numpy as np
+
 
 I = offset("I")
 K = offset("K")
@@ -26,7 +29,8 @@ def fencil(i_size, k_size, inp, out):
     )
 
 
-def test_column_stencil():
+def test_column_stencil(backend, use_tmps):
+    backend, validate = backend
     shape = [5, 7]
     inp = np_as_located_field(IDim, KDim)(
         np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 1])
@@ -35,12 +39,22 @@ def test_column_stencil():
 
     ref = np.asarray(inp)[1:, 1:]
 
-    fencil(shape[0], shape[1], inp, out, offset_provider={"I": IDim, "K": KDim})
+    fencil(
+        shape[0],
+        shape[1],
+        inp,
+        out,
+        offset_provider={"I": IDim, "K": KDim},
+        backend=backend,
+        use_tmps=use_tmps,
+    )
 
-    assert np.allclose(ref, out)
+    if validate:
+        assert np.allclose(ref, out)
 
 
-def test_column_stencil_with_k_origin():
+def test_column_stencil_with_k_origin(backend, use_tmps):
+    backend, validate = backend
     shape = [5, 7]
     raw_inp = np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
     inp = np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(raw_inp)
@@ -48,9 +62,18 @@ def test_column_stencil_with_k_origin():
 
     ref = np.asarray(inp)[1:, 2:]
 
-    fencil(shape[0], shape[1], inp, out, offset_provider={"I": IDim, "K": KDim})
+    fencil(
+        shape[0],
+        shape[1],
+        inp,
+        out,
+        offset_provider={"I": IDim, "K": KDim},
+        backend=backend,
+        use_tmps=use_tmps,
+    )
 
-    assert np.allclose(ref, out)
+    if validate:
+        assert np.allclose(ref, out)
 
 
 @fundef
@@ -73,7 +96,10 @@ def ksum_fencil(i_size, k_size, inp, out):
     )
 
 
-def test_ksum_scan():
+def test_ksum_scan(backend, use_tmps):
+    if use_tmps:
+        pytest.xfail("use_tmps currently not supported for scans")
+    backend, validate = backend
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))
@@ -86,10 +112,12 @@ def test_ksum_scan():
         inp,
         out,
         offset_provider={"I": IDim, "K": KDim},
-        backend="double_roundtrip",
+        backend=backend,
+        use_tmps=use_tmps,
     )
 
-    assert np.allclose(ref, np.asarray(out))
+    if validate:
+        assert np.allclose(ref, np.asarray(out))
 
 
 @fundef
@@ -107,7 +135,10 @@ def ksum_back_fencil(i_size, k_size, inp, out):
     )
 
 
-def test_ksum_back_scan():
+def test_ksum_back_scan(backend, use_tmps):
+    if use_tmps:
+        pytest.xfail("use_tmps currently not supported for scans")
+    backend, validate = backend
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))
@@ -120,7 +151,9 @@ def test_ksum_back_scan():
         inp,
         out,
         offset_provider={"I": IDim, "K": KDim},
-        backend="double_roundtrip",
+        backend=backend,
+        use_tmps=use_tmps,
     )
 
-    assert np.allclose(ref, np.asarray(out))
+    if validate:
+        assert np.allclose(ref, np.asarray(out))

@@ -12,8 +12,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import pytest
 import numpy as np
+import pytest
 
 
 def hdiff_reference_impl():

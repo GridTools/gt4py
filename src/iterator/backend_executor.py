@@ -1,6 +1,7 @@
-from iterator.ir import Program
-from iterator.backends import backend
 from devtools import debug
+
+from iterator.backends import backend
+from iterator.ir import Program
 
 
 def execute_program(prog: Program, *args, **kwargs):

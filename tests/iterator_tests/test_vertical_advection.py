@@ -1,8 +1,9 @@
+import numpy as np
+import pytest
+
 from iterator.builtins import *
 from iterator.embedded import np_as_located_field
 from iterator.runtime import *
-import numpy as np
-import pytest
 
 
 @fundef
@@ -96,7 +97,10 @@ def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
     )
 
 
-def test_tridiag(tridiag_reference):
+def test_tridiag(tridiag_reference, backend, use_tmps):
+    if use_tmps:
+        pytest.xfail("use_tmps currently not supported for scans")
+    backend, validate = backend
     a, b, c, d, x = tridiag_reference
     shape = a.shape
     as_3d_field = np_as_located_field(IDim, JDim, KDim)
@@ -117,8 +121,9 @@ def test_tridiag(tridiag_reference):
         x_s,
         offset_provider={},
         column_axis=KDim,
-        backend="double_roundtrip",
-        # debug=True,
+        backend=backend,
+        use_tmps=use_tmps,
     )
 
-    assert np.allclose(x, np.asarray(x_s))
+    if validate:
+        assert np.allclose(x, np.asarray(x_s))

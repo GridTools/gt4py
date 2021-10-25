@@ -30,4 +30,4 @@ class AtlasTable:
             if neigh_index < 2:
                 return self.atlas_connectivity[primary_index, neigh_index]
             else:
-                assert False
+                raise AssertionError()

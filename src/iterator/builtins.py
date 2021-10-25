@@ -1,5 +1,6 @@
 from iterator.dispatcher import Dispatcher
 
+
 __all__ = [
     "deref",
     "shift",
@@ -20,6 +21,10 @@ __all__ = [
     "greater",
     "make_tuple",
     "nth",
+    "plus",
+    "reduce",
+    "scan",
+    "shift",
 ]
 
 builtin_dispatch = Dispatcher()

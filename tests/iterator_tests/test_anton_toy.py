@@ -1,7 +1,8 @@
-from iterator.builtins import *
-from iterator.embedded import np_as_located_field
-from iterator.runtime import *
 import numpy as np
+
+from iterator.builtins import deref, domain, lift, named_range, shift
+from iterator.embedded import np_as_located_field
+from iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 
 
 @fundef
@@ -11,13 +12,13 @@ def ldif(d):
 
 @fundef
 def rdif(d):
-    # return compose(ldif(d), shift(d, 1))
+    # return compose(ldif(d), shift(d, 1))  # noqa: E800
     return lambda inp: ldif(d)(shift(d, 1)(inp))
 
 
 @fundef
 def dif2(d):
-    # return compose(ldif(d), lift(rdif(d)))
+    # return compose(ldif(d), lift(rdif(d)))  # noqa: E800
     return lambda inp: ldif(d)(lift(rdif(d))(inp))
 
 
@@ -35,18 +36,14 @@ JDim = CartesianAxis("JDim")
 KDim = CartesianAxis("KDim")
 
 
-@fendef
-def fencil(x, y, z, output, input):
+@fendef(offset_provider={"i": IDim, "j": JDim})
+def fencil(x, y, z, out, inp):
     closure(
         domain(named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)),
         lap,
-        [output],
-        [input],
+        [out],
+        [inp],
     )
-
-
-fencil(*([None] * 5), backend="lisp")
-fencil(*([None] * 5), backend="cpptoy")
 
 
 def naive_lap(inp):
@@ -61,7 +58,8 @@ def naive_lap(inp):
     return out
 
 
-def test_anton_toy():
+def test_anton_toy(backend, use_tmps):
+    backend, validate = backend
     shape = [5, 7, 9]
     rng = np.random.default_rng()
     inp = np_as_located_field(IDim, JDim, KDim, origin={IDim: 1, JDim: 1, KDim: 0})(
@@ -76,8 +74,9 @@ def test_anton_toy():
         shape[2],
         out,
         inp,
-        backend="double_roundtrip",
-        offset_provider={"i": IDim, "j": JDim},
+        backend=backend,
+        use_tmps=use_tmps,
     )
 
-    assert np.allclose(out, ref)
+    if validate:
+        assert np.allclose(out, ref)

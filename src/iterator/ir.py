@@ -1,4 +1,5 @@
 from typing import List, Union
+
 from eve import Node
 from eve.traits import SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
@@ -6,7 +7,7 @@ from iterator.util.sym_validation import validate_symbol_refs
 
 
 class Sym(Node):  # helper
-    id: SymbolName
+    id: SymbolName  # noqa: A003
 
 
 class Expr(Node):
@@ -42,7 +43,7 @@ class AxisLiteral(Expr):
 
 
 class SymRef(Expr):
-    id: SymbolRef
+    id: SymbolRef  # noqa: A003
 
 
 class Lambda(Expr, SymbolTableTrait):
@@ -56,7 +57,7 @@ class FunCall(Expr):
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
-    id: SymbolName
+    id: SymbolName  # noqa: A003
     params: List[Sym]
     expr: Expr
 
@@ -68,7 +69,7 @@ class FunctionDefinition(Node, SymbolTableTrait):
 
 
 class Setq(Node):
-    id: SymbolName
+    id: SymbolName  # noqa: A003
     expr: Expr
 
 
@@ -80,7 +81,7 @@ class StencilClosure(Node):
 
 
 class FencilDefinition(Node, SymbolTableTrait):
-    id: SymbolName
+    id: SymbolName  # noqa: A003
     params: List[Sym]
     closures: List[StencilClosure]
 
