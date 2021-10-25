@@ -1395,7 +1395,6 @@ class IRMaker(ast.NodeVisitor):
                     for intervals_dict in intervals_dicts
                 ]
             )
-
             return stmts
         else:
             # If we find nested `with` blocks flatten them, i.e. transform
