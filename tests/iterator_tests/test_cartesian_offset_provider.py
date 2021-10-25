@@ -1,8 +1,9 @@
+import numpy as np
+
 from iterator.builtins import *
+from iterator.embedded import np_as_located_field
 from iterator.runtime import *
 
-from iterator.embedded import np_as_located_field
-import numpy as np
 
 I = offset("I")
 J = offset("J")

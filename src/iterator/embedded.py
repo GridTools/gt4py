@@ -1,32 +1,14 @@
-from dataclasses import dataclass
 import itertools
+import numbers
+from dataclasses import dataclass
+
+import numpy as np
 
 import iterator
-from iterator.builtins import (
-    builtin_dispatch,
-    is_none,
-    lift,
-    reduce,
-    shift,
-    deref,
-    scan,
-    domain,
-    named_range,
-    if_,
-    or_,
-    minus,
-    plus,
-    mul,
-    div,
-    greater,
-    eq,
-    nth,
-    make_tuple,
-)
+from iterator import builtins
 from iterator.runtime import CartesianAxis, Offset
 from iterator.utils import tupelize
-import numpy as np
-import numbers
+
 
 EMBEDDED = "embedded"
 
@@ -39,37 +21,37 @@ class NeighborTableOffsetProvider:
         self.max_neighbors = max_neighbors
 
 
-@deref.register(EMBEDDED)
-def deref(iter):
-    return iter.deref()
+@builtins.deref.register(EMBEDDED)
+def deref(it):
+    return it.deref()
 
 
-@if_.register(EMBEDDED)
+@builtins.if_.register(EMBEDDED)
 def if_(cond, t, f):
     return t if cond else f
 
 
-@or_.register(EMBEDDED)
+@builtins.or_.register(EMBEDDED)
 def or_(a, b):
     return a or b
 
 
-@nth.register(EMBEDDED)
+@builtins.nth.register(EMBEDDED)
 def nth(i, tup):
     return tup[i]
 
 
-@make_tuple.register(EMBEDDED)
+@builtins.make_tuple.register(EMBEDDED)
 def make_tuple(*args):
     return (*args,)
 
 
-@lift.register(EMBEDDED)
+@builtins.lift.register(EMBEDDED)
 def lift(stencil):
     def impl(*args):
         class wrap_iterator:
-            def __init__(self, *, offsets=[], elem=None) -> None:
-                self.offsets = offsets
+            def __init__(self, *, offsets=None, elem=None) -> None:
+                self.offsets = offsets or []
                 self.elem = elem
 
             # TODO needs to be supported by all iterators that represent tuples
@@ -105,21 +87,21 @@ def lift(stencil):
     return impl
 
 
-@reduce.register(EMBEDDED)
+@builtins.reduce.register(EMBEDDED)
 def reduce(fun, init):
     def sten(*iters):
-        # assert check_that_all_iterators_are_compatible(*iters)
+        # TODO: assert check_that_all_iterators_are_compatible(*iters)
         first_it = iters[0]
         n = first_it.max_neighbors()
         res = init
         for i in range(n):
             # we can check a single argument
             # because all arguments share the same pattern
-            if iterator.builtins.deref(iterator.builtins.shift(i)(first_it)) is None:
+            if builtins.deref(builtins.shift(i)(first_it)) is None:
                 break
             res = fun(
                 res,
-                *(iterator.builtins.deref(iterator.builtins.shift(i)(it)) for it in iters),
+                *(builtins.deref(builtins.shift(i)(it)) for it in iters),
             )
         return res
 
@@ -127,7 +109,7 @@ def reduce(fun, init):
 
 
 class _None:
-    """Dummy object to allow execution of expression containing Nones in non-active path
+    """Dummy object to allow execution of expression containing Nones in non-active path.
 
     E.g.
     `if_(is_none(state), 42, 42+state)`
@@ -164,12 +146,12 @@ class _None:
         return _None()
 
 
-@is_none.register(EMBEDDED)
+@builtins.is_none.register(EMBEDDED)
 def is_none(arg):
     return isinstance(arg, _None)
 
 
-@domain.register(EMBEDDED)
+@builtins.domain.register(EMBEDDED)
 def domain(*args):
     domain = {}
     for arg in args:
@@ -177,49 +159,51 @@ def domain(*args):
     return domain
 
 
-@named_range.register(EMBEDDED)
+@builtins.named_range.register(EMBEDDED)
 def named_range(tag, start, end):
     return {tag: range(start, end)}
 
 
-@minus.register(EMBEDDED)
+@builtins.minus.register(EMBEDDED)
 def minus(first, second):
     return first - second
 
 
-@plus.register(EMBEDDED)
+@builtins.plus.register(EMBEDDED)
 def plus(first, second):
     return first + second
 
 
-@mul.register(EMBEDDED)
+@builtins.mul.register(EMBEDDED)
 def mul(first, second):
     return first * second
 
 
-@div.register(EMBEDDED)
+@builtins.div.register(EMBEDDED)
 def div(first, second):
     return first / second
 
 
-@eq.register(EMBEDDED)
+@builtins.eq.register(EMBEDDED)
 def eq(first, second):
     return first == second
 
 
-@greater.register(EMBEDDED)
+@builtins.greater.register(EMBEDDED)
 def greater(first, second):
     return first > second
 
 
-def named_range(axis, range):
-    return ((axis, i) for i in range)
+def named_range_(axis, range_):
+    return ((axis, i) for i in range_)
 
 
 def domain_iterator(domain):
     return (
         dict(elem)
-        for elem in itertools.product(*map(lambda tup: named_range(tup[0], tup[1]), domain.items()))
+        for elem in itertools.product(
+            *map(lambda tup: named_range_(tup[0], tup[1]), domain.items())
+        )
     )
 
 
@@ -247,7 +231,7 @@ def execute_shift(pos, tag, index, *, offset_provider):
             ]
         return new_pos
 
-    assert False
+    raise AssertionError()
 
 
 # The following holds for shifts:
@@ -287,13 +271,62 @@ def get_open_offsets(*offsets):
     return group_offsets(*offsets)[1]
 
 
+class Undefined:
+    def __float__(self):
+        return np.nan
+
+    @classmethod
+    def _setup_math_operations(cls):
+        ops = [
+            "__add__",
+            "__sub__",
+            "__mul__",
+            "__matmul__",
+            "__truediv__",
+            "__floordiv__",
+            "__mod__",
+            "__divmod__",
+            "__pow__",
+            "__lshift__",
+            "__rshift__",
+            "__and__",
+            "__xor__",
+            "__or__",
+            "__radd__",
+            "__rsub__",
+            "__rmul__",
+            "__rmatmul__",
+            "__rtruediv__",
+            "__rfloordiv__",
+            "__rmod__",
+            "__rdivmod__",
+            "__rpow__",
+            "__rlshift__",
+            "__rrshift__",
+            "__rand__",
+            "__rxor__",
+            "__ror__",
+            "__neg__",
+            "__pos__",
+            "__abs__",
+            "__invert__",
+        ]
+        for op in ops:
+            setattr(cls, op, lambda self, *args, **kwargs: _UNDEFINED)
+
+
+Undefined._setup_math_operations()
+
+_UNDEFINED = Undefined()
+
+
 class MDIterator:
     def __init__(
-        self, field, pos, *, incomplete_offsets=[], offset_provider, column_axis=None
+        self, field, pos, *, incomplete_offsets=None, offset_provider, column_axis=None
     ) -> None:
         self.field = field
         self.pos = pos
-        self.incomplete_offsets = incomplete_offsets
+        self.incomplete_offsets = incomplete_offsets or []
         self.offset_provider = offset_provider
         self.column_axis = column_axis
 
@@ -331,7 +364,10 @@ class MDIterator:
             shifted_pos,
             slice_axises=slice_column,
         )
-        return self.field[ordered_indices]
+        try:
+            return self.field[ordered_indices]
+        except IndexError:
+            return _UNDEFINED
 
 
 def make_in_iterator(inp, pos, offset_provider, *, column_axis):
@@ -352,7 +388,7 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
     )
 
 
-builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
+builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
 class LocatedField:
@@ -388,8 +424,9 @@ class LocatedField:
         return self.array().shape
 
 
-def get_ordered_indices(axises, pos, *, slice_axises={}):
-    """pos is a dictionary from axis to offset"""
+def get_ordered_indices(axises, pos, *, slice_axises=None):
+    """pos is a dictionary from axis to offset."""  # noqa: D403
+    slice_axises = slice_axises or dict()
     assert all(axis in [*pos.keys(), *slice_axises] for axis in axises)
     return tuple(pos[axis] if axis in pos else slice_axises[axis] for axis in axises)
 
@@ -444,10 +481,10 @@ def index_field(axis):
     return LocatedField(lambda index: index[0], (axis,))
 
 
-@iterator.builtins.shift.register(EMBEDDED)
+@builtins.shift.register(EMBEDDED)
 def shift(*offsets):
-    def impl(iter):
-        return iter.shift(*offsets)
+    def impl(it):
+        return it.shift(*offsets)
 
     return impl
 
@@ -455,13 +492,13 @@ def shift(*offsets):
 @dataclass
 class Column:
     axis: CartesianAxis
-    range: range
+    range: range  # noqa: A003
 
 
 class ScanArgIterator:
-    def __init__(self, wrapped_iter, k_pos, *, offsets=[]) -> None:
+    def __init__(self, wrapped_iter, k_pos, *, offsets=None) -> None:
         self.wrapped_iter = wrapped_iter
-        self.offsets = offsets
+        self.offsets = offsets or []
         self.k_pos = k_pos
 
     def deref(self):
@@ -472,13 +509,13 @@ class ScanArgIterator:
 
 
 def shifted_scan_arg(k_pos):
-    def impl(iter):
-        return ScanArgIterator(iter, k_pos=k_pos)
+    def impl(it):
+        return ScanArgIterator(it, k_pos=k_pos)
 
     return impl
 
 
-def fendef_embedded(fun, *args, **kwargs):
+def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
     assert "offset_provider" in kwargs
 
     @iterator.runtime.closure.register(EMBEDDED)
@@ -490,7 +527,7 @@ def fendef_embedded(fun, *args, **kwargs):
             column = Column(_column_axis, domain[_column_axis])
             del domain[_column_axis]
 
-        @iterator.builtins.scan.register(
+        @builtins.scan.register(
             EMBEDDED
         )  # TODO this is a bit ugly, alternative: pass scan range via iterator
         def scan(scan_pass, is_forward, init):

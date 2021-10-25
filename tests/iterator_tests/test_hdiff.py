@@ -1,8 +1,11 @@
-from iterator.builtins import *
-from iterator.runtime import *
-from iterator.embedded import np_as_located_field
 import numpy as np
+
+from iterator.builtins import *
+from iterator.embedded import np_as_located_field
+from iterator.runtime import *
+
 from .hdiff_reference import hdiff_reference
+
 
 I = offset("I")
 J = offset("J")
@@ -51,11 +54,8 @@ def hdiff(inp, coeff, out, x, y):
     )
 
 
-hdiff(*([None] * 5), backend="lisp")
-hdiff(*([None] * 5), backend="cpptoy")
-
-
-def test_hdiff(hdiff_reference):
+def test_hdiff(hdiff_reference, backend, use_tmps):
+    backend, validate = backend
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
 
@@ -63,8 +63,7 @@ def test_hdiff(hdiff_reference):
     coeff_s = np_as_located_field(IDim, JDim)(coeff[:, :, 0])
     out_s = np_as_located_field(IDim, JDim)(np.zeros_like(coeff[:, :, 0]))
 
-    # hdiff(inp_s, coeff_s, out_s, shape[0], shape[1])
-    # hdiff(inp_s, coeff_s, out_s, shape[0], shape[1], backend="embedded")
-    hdiff(inp_s, coeff_s, out_s, shape[0], shape[1], backend="double_roundtrip")
+    hdiff(inp_s, coeff_s, out_s, shape[0], shape[1], backend=backend, use_tmps=use_tmps)
 
-    assert np.allclose(out[:, :, 0], out_s)
+    if validate:
+        assert np.allclose(out[:, :, 0], out_s)

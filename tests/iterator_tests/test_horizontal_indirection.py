@@ -10,11 +10,13 @@
 #     )
 #   )
 # )
+import numpy as np
 from numpy.core.numeric import allclose
+
+from iterator.builtins import *
 from iterator.embedded import np_as_located_field
 from iterator.runtime import *
-from iterator.builtins import *
-import numpy as np
+
 
 I = offset("I")
 

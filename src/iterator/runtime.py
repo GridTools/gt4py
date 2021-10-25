@@ -1,14 +1,15 @@
-from typing import Union
 from dataclasses import dataclass
+from typing import Callable, Dict, Optional, Union
 
 from iterator.builtins import BackendNotSelectedError, builtin_dispatch
+
 
 __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
 
 
 @dataclass
 class Offset:
-    value: Union[int, str] = None
+    value: Optional[Union[int, str]] = None
 
     def __hash__(self) -> int:
         return hash(self.value)
@@ -26,7 +27,7 @@ class CartesianAxis:
         return hash(self.value)
 
 
-fendef_registry = {}
+fendef_registry: Dict[Optional[Callable], Callable] = {}
 
 
 # TODO the dispatching is linear, not sure if there is an easy way to make it constant

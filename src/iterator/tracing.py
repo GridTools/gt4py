@@ -1,9 +1,12 @@
-from iterator.runtime import CartesianAxis
-from eve import Node
 import inspect
+from typing import List
+
+import iterator
+from eve import Node
 from iterator.backend_executor import execute_program
 from iterator.ir import (
     AxisLiteral,
+    BoolLiteral,
     Expr,
     FencilDefinition,
     FloatLiteral,
@@ -12,15 +15,14 @@ from iterator.ir import (
     IntLiteral,
     Lambda,
     NoneLiteral,
-    BoolLiteral,
     OffsetLiteral,
     Program,
     StencilClosure,
     Sym,
     SymRef,
 )
-from iterator.backends import backend
-import iterator
+from iterator.runtime import CartesianAxis
+
 
 TRACING = "tracing"
 
@@ -59,10 +61,6 @@ def _patch_Expr():
         return FunCall(fun=SymRef(id="minus"), args=[self, make_node(other)])
 
     @monkeypatch_method(Expr)
-    def __eq__(self, other):
-        return FunCall(fun=SymRef(id="eq"), args=[self, make_node(other)])
-
-    @monkeypatch_method(Expr)
     def __gt__(self, other):
         return FunCall(fun=SymRef(id="greater"), args=[self, make_node(other)])
 
@@ -83,8 +81,8 @@ class PatchedFunctionDefinition(FunctionDefinition):
         return FunCall(fun=SymRef(id=str(self.id)), args=[*make_node(args)])
 
 
-def _s(id):
-    return SymRef(id=id)
+def _s(id_):
+    return SymRef(id=id_)
 
 
 def trace_function_argument(arg):
@@ -225,6 +223,8 @@ def make_node(o):
         return list(make_node(arg) for arg in o)
     if o is None:
         return NoneLiteral()
+    if isinstance(o, iterator.runtime.FundefDispatcher):
+        return SymRef(id=o.fun.__name__)
     raise NotImplementedError(f"Cannot handle {o}")
 
 
@@ -266,12 +266,12 @@ iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
 
 
 class Tracer:
-    fundefs = []
-    closures = []
+    fundefs: List[FunctionDefinition] = []
+    closures: List[StencilClosure] = []
 
     @classmethod
     def add_fundef(cls, fun):
-        if not fun in cls.fundefs:
+        if fun not in cls.fundefs:
             cls.fundefs.append(fun)
 
     @classmethod
@@ -293,7 +293,7 @@ def closure(domain, stencil, outputs, inputs):
     Tracer.add_closure(
         StencilClosure(
             domain=domain,
-            stencil=SymRef(id=str(stencil.__name__)),
+            stencil=make_node(stencil),
             outputs=outputs,
             inputs=inputs,
         )

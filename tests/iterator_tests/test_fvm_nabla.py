@@ -11,18 +11,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import itertools
+import numpy as np
+import pytest
 
+from iterator import library
 from iterator.atlas_utils import AtlasTable
+from iterator.builtins import *
 from iterator.embedded import NeighborTableOffsetProvider, index_field, np_as_located_field
 from iterator.runtime import *
-from iterator.builtins import *
-from iterator import library
-from .fvm_nabla_setup import (
-    assert_close,
-    nabla_setup,
-)
-import numpy as np
+
+from .fvm_nabla_setup import assert_close, nabla_setup
 
 
 Vertex = CartesianAxis("Vertex")
@@ -90,7 +88,10 @@ def nabla(
     )
 
 
-def test_compute_zavgS():
+def test_compute_zavgS(backend, use_tmps):
+    if use_tmps:
+        pytest.xfail("use_tmps currently only supported for cartesian")
+    backend, validate = backend
     setup = nabla_setup()
 
     pp = np_as_located_field(Vertex)(setup.input_field)
@@ -108,8 +109,9 @@ def test_compute_zavgS():
         offset_provider={"E2V": e2v},
     )
 
-    assert_close(-199755464.25741270, min(zavgS))
-    assert_close(388241977.58389181, max(zavgS))
+    if validate:
+        assert_close(-199755464.25741270, min(zavgS))
+        assert_close(388241977.58389181, max(zavgS))
 
     compute_zavgS_fencil(
         setup.edges_size,
@@ -118,11 +120,15 @@ def test_compute_zavgS():
         S_MYY,
         offset_provider={"E2V": e2v},
     )
-    assert_close(-1000788897.3202186, min(zavgS))
-    assert_close(1000788897.3202186, max(zavgS))
+    if validate:
+        assert_close(-1000788897.3202186, min(zavgS))
+        assert_close(1000788897.3202186, max(zavgS))
 
 
-def test_nabla():
+def test_nabla(backend, use_tmps):
+    if use_tmps:
+        pytest.xfail("use_tmps currently only supported for cartesian")
+    backend, validate = backend
     setup = nabla_setup()
 
     sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
@@ -145,14 +151,16 @@ def test_nabla():
         S_MYY,
         sign,
         vol,
-        backend="double_roundtrip",
         offset_provider={"E2V": e2v, "V2E": v2e},
+        backend=backend,
+        use_tmps=use_tmps,
     )
 
-    assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
-    assert_close(3.5455427772565435e-003, max(pnabla_MXX))
-    assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
-    assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+    if validate:
+        assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
+        assert_close(3.5455427772565435e-003, max(pnabla_MXX))
+        assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
+        assert_close(3.3540113705465301e-003, max(pnabla_MYY))
 
 
 @fundef
@@ -163,7 +171,7 @@ def sign(node_indices, is_pole_edge):
     def sign_impl(node_index):
         def impl2(node_indices, is_pole_edge):
             return if_(
-                or_(deref(is_pole_edge), node_index == deref(shift(E2V, 0)(node_indices))),
+                or_(deref(is_pole_edge), eq(node_index, deref(shift(E2V, 0)(node_indices)))),
                 1.0,
                 -1.0,
             )
@@ -198,7 +206,11 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
     )
 
 
-def test_nabla_sign():
+def test_nabla_sign(backend, use_tmps):
+    if use_tmps:
+        pytest.xfail("use_tmps currently only supported for cartesian")
+
+    backend, validate = backend
     setup = nabla_setup()
 
     # sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
@@ -223,13 +235,13 @@ def test_nabla_sign():
         vol,
         index_field(Vertex),
         is_pole_edge,
-        # backend="embedded",
-        backend="double_roundtrip",
         offset_provider={"E2V": e2v, "V2E": v2e},
-        # debug=True,
+        backend=backend,
+        use_tmps=use_tmps,
     )
 
-    assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
-    assert_close(3.5455427772565435e-003, max(pnabla_MXX))
-    assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
-    assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+    if validate:
+        assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
+        assert_close(3.5455427772565435e-003, max(pnabla_MXX))
+        assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
+        assert_close(3.3540113705465301e-003, max(pnabla_MYY))

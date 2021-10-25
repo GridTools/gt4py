@@ -1,10 +1,9 @@
 from typing import Optional, Union
-from . import tracing
 
-from .builtins import *
-from .runtime import *
+from . import builtins, runtime, tracing
 
-__all__ = ["builtins", "runtime"]
+
+__all__ = ["builtins", "runtime", "tracing"]
 
 from packaging.version import LegacyVersion, Version, parse
 from pkg_resources import DistributionNotFound, get_distribution

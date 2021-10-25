@@ -1,10 +1,12 @@
 from typing import Any, Dict, List, Type
+
+import pydantic
+
+from eve import Node
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import SymbolRef
-from eve.visitors import NodeVisitor
-import pydantic
 from eve.typingx import RootValidatorType, RootValidatorValuesType
-from eve import Node
+from eve.visitors import NodeVisitor
 
 
 def validate_symbol_refs() -> RootValidatorType:
@@ -17,9 +19,7 @@ def validate_symbol_refs() -> RootValidatorType:
             def __init__(self) -> None:
                 self.missing_symbols: List[str] = []
 
-            def visit_Node(
-                self, node: Node, *, symtable: Dict[str, Any], **kwargs: Any
-            ) -> None:
+            def visit_Node(self, node: Node, *, symtable: Dict[str, Any], **kwargs: Any) -> None:
                 for name, metadata in node.__node_children__.items():
                     if isinstance(metadata["definition"].type_, type) and issubclass(
                         metadata["definition"].type_, SymbolRef
@@ -39,9 +39,7 @@ def validate_symbol_refs() -> RootValidatorType:
 
         missing_symbols = []
         for v in values.values():
-            missing_symbols.extend(
-                SymtableValidator.apply(v, symtable=values["symtable_"])
-            )
+            missing_symbols.extend(SymtableValidator.apply(v, symtable=values["symtable_"]))
 
         if len(missing_symbols) > 0:
             raise ValueError("Symbols {} not found.".format(missing_symbols))

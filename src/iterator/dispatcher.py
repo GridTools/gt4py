@@ -1,4 +1,5 @@
-from typing import Any
+from typing import Any, Callable, Dict, List
+
 
 # TODO test
 
@@ -12,9 +13,7 @@ class _fun_dispatcher:
         if self.dispatcher.key is None:
             return self.fun(*args, **kwargs)
         else:
-            return self.dispatcher._funs[self.dispatcher.key][self.fun.__name__](
-                *args, **kwargs
-            )
+            return self.dispatcher._funs[self.dispatcher.key][self.fun.__name__](*args, **kwargs)
 
     def register(self, key):
         self.dispatcher.register_key(key)
@@ -27,15 +26,15 @@ class _fun_dispatcher:
 
 class Dispatcher:
     def __init__(self) -> None:
-        self._funs = {}
-        self.key_stack = []
+        self._funs: Dict[str, Dict[str, Callable]] = {}
+        self.key_stack: List[str] = []
 
     @property
     def key(self):
         return self.key_stack[-1] if self.key_stack else None
 
     def register_key(self, key):
-        if not key in self._funs:
+        if key not in self._funs:
             self._funs[key] = {}
 
     def push_key(self, key):
