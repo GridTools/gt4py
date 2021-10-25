@@ -120,8 +120,8 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
     def apply(cls, root, *, module_name="stencil", backend, **kwargs) -> str:
         generated_code = cls(backend).visit(root, module_name=module_name, **kwargs)
         if kwargs.get("format_source", True):
-            formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-            generated_code = formatted_code
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+
         return generated_code
 
 
@@ -142,6 +142,7 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     PYEXT_GENERATOR_CLASS = GTCCudaExtGenerator  # type: ignore
     MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
     GT_BACKEND_T = "gpu"
+    USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=True)

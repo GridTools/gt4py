@@ -80,7 +80,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return f"eval({accessor_ref.name}())"
         return (
             f"eval({accessor_ref.name}({offset.i}, {offset.j}, {offset.k}"
-            + "".join(f", {d}" for d in accessor_ref.data_index)
+            + "".join(f", {self.visit(d)}" for d in accessor_ref.data_index)
             + "))"
         )
 
@@ -250,6 +250,6 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             raise TypeError("apply() missing 1 required keyword-only argument: 'gt_backend_t'")
         generated_code = super().apply(root, offset_limit=_offset_limit(root), **kwargs)
         if kwargs.get("format_source", True):
-            formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-            generated_code = formatted_code
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+
         return generated_code
