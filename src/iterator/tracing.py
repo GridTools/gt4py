@@ -314,4 +314,4 @@ def fendef_tracing(fun, *args, **kwargs):
     execute_program(prog, *args, **kwargs)
 
 
-iterator.runtime.fendef_registry[lambda kwargs: "backend" in kwargs] = fendef_tracing
+iterator.runtime.fendef_codegen = fendef_tracing

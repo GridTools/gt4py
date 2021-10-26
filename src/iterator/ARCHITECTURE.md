@@ -9,13 +9,13 @@ A program for the iterator view consists of Python functions decorated with `@fu
 Legal functions much not have side-effects, however, e.g., for debugging purposes, side-effects can be used in embedded execution.
 
 There are 2 modes of execution: *embedded* (direct execution in Python) and *tracing* (trace function calls -> Eve IR representation -> code generation).
-The implementations of *embedded* and *tracing* are decoupled by registering themselves (dependency inversion) in the functions defined in `builtins.py` (contains dispatch functions for all builtins of the model) and `runtime.py` (contains dispatch mechanism for the `fendef` and `fundef` decorators and the `closure(...)` function).
+The implementations of *embedded* and *tracing* are decoupled by registering themselves (dependency inversion) in `builtins.py` (contains dispatch functions for all builtins of the model) and `runtime.py` (contains dispatch mechanism for the `fendef` and `fundef` decorators and the `closure(...)` function).
 
 The builtins dispatcher is implemented in `dispatcher.py`. Implementations are registered with a key (`str`) (currently `tracing` and `embedded`). The active implementation is selected by pushing a key to the dispatcher stack.
 
 `fundef` returns a wrapper around the function, which dispatches `__call__` to a hook if a predicate is met (used for *tracing*). By default the original function is called (used in *embedded* mode).
 
-`fendef` return a wrapper that dispatches to a registered function. Should be simplified. *Embedded* registers itself as default, *tracing* registers itself such that it's used if the fencil is called with `backend` keyword argument.
+`fendef` return a wrapper that dispatches to a registered function. If `backend` is in the keyword arguments and not `None` `fendef_codegen` will be called, otherwise `fundef_embedded` will be called.
 
 ## Embedded execution
 
@@ -43,19 +43,19 @@ Sketch:
 
 See directory `backends/`.
 
-### Cpptoy
+### `cpptoy`
 
 Generates C++ code in the spirit of https://github.com/GridTools/gridtools/pull/1643. Incomplete, will be adapted to the full C++ prototype. (only code generation)
 
-### Lisp
+### `lisp`
 
 Incomplete. Example for the grammar used in the model design document. (not executable)
 
-### Embedded
+### `roundtrip`
 
-Generates from the IR an aquivalent Python iterator view program which is then executed in embedded mode (round trip).
+Generates from the IR an aquivalent Python iterator view program which is then executed in embedded mode.
 
-### Double roundtrip
+### `double_roundtrip`
 
 Generates the Python iterator view program, traces it again, generates again and executes. Ensures that the generated Python code can still be traced. While the original program might be different from the generated program (e.g. `+` will be converted to `plus()` builtin). The programs from the embedded and double roundtrip backends should be identical.
 

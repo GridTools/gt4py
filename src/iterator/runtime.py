@@ -27,23 +27,31 @@ class CartesianAxis:
         return hash(self.value)
 
 
-fendef_registry: Dict[Optional[Callable], Callable] = {}
+# dependency inversion, register fendef for embedded execution or for tracing/parsing here
+fendef_embedded = None
+fendef_codegen = None
 
 
-# TODO the dispatching is linear, not sure if there is an easy way to make it constant
 def fendef(*dec_args, **dec_kwargs):
+    """
+    Dispatches to embedded execution or execution with code generation.
+
+    If `backend` keyword argument is not set or None `fendef_embedded` will be called,
+    else `fendef_codegen` will be called.
+    """
+
     def wrapper(fun):
         def impl(*args, **kwargs):
             kwargs = {**kwargs, **dec_kwargs}
 
-            for key, val in fendef_registry.items():
-                if key is not None and key(kwargs):
-                    val(fun, *args, **kwargs)
-                    return
-            if None in fendef_registry:
-                fendef_registry[None](fun, *args, **kwargs)
-                return
-            raise RuntimeError("Unreachable")
+            if "backend" in kwargs and kwargs["backend"] is not None:
+                if fendef_codegen is None:
+                    raise RuntimeError("Backend execution is not registered")
+                fendef_codegen(fun, *args, **kwargs)
+            else:
+                if fendef_embedded is None:
+                    raise RuntimeError("Embedded execution is not registered")
+                fendef_embedded(fun, *args, **kwargs)
 
         return impl
 
