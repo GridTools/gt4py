@@ -265,3 +265,12 @@ class OirToNpir(NodeTranslator):
         if broadcast:
             return npir.BroadCast(expr=name, dtype=name.dtype)
         return name
+
+    def visit_For(self, node: oir.For, **kwargs: Any) -> npir.For:
+        return npir.For(
+            target_name=node.target_name,
+            start=self.visit(node.start, **kwargs),
+            end=self.visit(node.end, **kwargs),
+            inc=node.inc,
+            body=self.visit(node.body, **kwargs),
+        )

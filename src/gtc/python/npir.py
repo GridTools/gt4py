@@ -141,8 +141,16 @@ class MaskBlock(common.Stmt):
     body: List[VectorAssign]
 
 
-class HorizontalBlock(common.LocNode):
+class For(common.Stmt, eve.SymbolTableTrait):
+    target_name: eve.Str
+    start: Union[Expr, common.AxisBound]
+    end: Union[Expr, common.AxisBound]
+    inc: int
     body: List[Union[VectorAssign, MaskBlock]]
+
+
+class HorizontalBlock(common.LocNode):
+    body: List[Union[VectorAssign, MaskBlock, For]]
 
 
 class VerticalPass(common.LocNode):

@@ -300,9 +300,10 @@ class NpirGen(TemplatedGenerator):
         return ""
 
     def visit_VerticalPass(self, node: npir.VerticalPass, **kwargs):
-        return self.generic_visit(
-            node, is_serial=(node.direction != common.LoopOrder.PARALLEL), **kwargs
-        )
+        is_serial = (node.direction != common.LoopOrder.PARALLEL) or len(
+            node.iter_tree().if_isinstance(npir.For).to_list()
+        ) > 0
+        return self.generic_visit(node, is_serial=is_serial, **kwargs)
 
     VerticalPass = JinjaTemplate(
         textwrap.dedent(
@@ -314,6 +315,18 @@ class NpirGen(TemplatedGenerator):
             {% for hblock in body %}{{ hblock | indent(body_indent, first=True) }}
             {% endfor %}# -- end vertical block --
             """
+        )
+    )
+
+    For = JinjaTemplate(
+        textwrap.dedent(
+            """
+        {% set body_indent = 4 %}
+        for {{ target_name}} in range({{ start }}, {{ end }}, {{ inc }}):
+            {% for stmt in body %}
+            {{ stmt | indent(body_indent, first=True) }}
+            {% endfor %}
+        """
         )
     )
 
