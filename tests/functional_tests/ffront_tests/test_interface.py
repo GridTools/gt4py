@@ -22,30 +22,34 @@ Basic Interface Tests
 
 
 """
-def test_copy_lower():
-    Vertex = Dimension("Vertex")
+from __future__ import annotations
 
-    @field_operator
-    def copy_field(inp: Field[Vertex]):
+from functional.iterator.ir import FunctionDefinition, Sym, FunCall, SymRef
+from functional.ffront.parsers import FieldOperatorParser
+
+
+def test_copy_lower():
+
+    def copy_field(inp: Field):
         return inp
 
-    ## check the source to source
-    assert inspect.getsource(copy_field.__call__) == canonicalize("""
-        def copy_field(...):
-            return lift(deref(inp))
-    """)
+    # parsing
+    parsed = FieldOperatorParser.parse(copy_field)
+    assert isinstance(parsed, FunctionDefinition)
+    assert parsed == FunctionDefinition(
+        id="copy",
+        params=[Sym(id="inp")],
+        expr=FunCall(fun=SymRef(id="deref"), args=[SymRef(id="inp")]),
+    )
 
-    ## lowering
-    assert isinstance(generateIR(copy_field.__call__), FunctionDefinition)
 
+# def test_field_declaration(vertex_field, vertex_field_v_e):
+#     Vertex = Dimension("Vertex")
+#     V_E = Dimension("Edge Neighbors of Vertices")
 
-def test_field_declaration(vertex_field, vertex_field_v_e):
-    Vertex = Dimension("Vertex")
-    V_E = Dimension("Edge Neighbors of Vertices")
-    
-    @field_operator
-    def ddd(something: Field[Vertex, V_E]):
-        return something(V_E[0]) # V_E[0] -> Offset
-    
-    assert ddd.api_fields["something"].type == "Field"
-    assert ddd(vertex_field, offset_providers={"V_E": vertex_field_v_e})
+#     @field_operator
+#     def ddd(something: Field[Vertex, V_E]):
+#         return something(V_E[0]) # V_E[0] -> Offset
+
+#     assert ddd.api_fields["something"].type == "Field"
+#     assert ddd(vertex_field, offset_providers={"V_E": vertex_field_v_e})
