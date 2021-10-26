@@ -119,7 +119,11 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         return self.make_module()
 
     def _make_npir(self) -> npir.Computation:
-        return OirToNpir().visit(OirPipeline(GTIRToOIR().visit(self.builder.gtir)).full())
+        def default_pipeline(oir):
+            return OirPipeline(oir).full()
+
+        oir_pipeline = self.builder.options.backend_opts.get("oir_pipeline") or default_pipeline
+        return OirToNpir().visit(oir_pipeline(GTIRToOIR().visit(self.builder.gtir)))
 
     @property
     def npir(self) -> npir.Computation:

@@ -50,14 +50,20 @@ class GTCDaCeExtGenerator:
         self.backend = backend
 
     def __call__(self, definition_ir: StencilDefinition) -> Dict[str, Dict[str, str]]:
-        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(
-            skip=[
-                MaskStmtMerging,
-                MaskInlining,
-                FillFlushToLocalKCaches,
-            ]
+        def default_pipeline(oir):
+            return OirPipeline(oir).full(
+                skip=[
+                    MaskStmtMerging,
+                    MaskInlining,
+                    FillFlushToLocalKCaches,
+                ]
+            )
+
+        oir_pipeline = (
+            self.backend.builder.options.backend_opts.get("oir_pipeline") or default_pipeline
         )
+        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+        oir = oir_pipeline(gtir_to_oir.GTIRToOIR().visit(gtir))
         sdfg = OirSDFGBuilder().visit(oir)
         sdfg.expand_library_nodes(recursive=True)
         sdfg.apply_strict_transformations(validate=True)
