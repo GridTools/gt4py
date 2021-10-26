@@ -1,11 +1,11 @@
 import importlib.util
 import tempfile
 
-from functional import iterator
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import Node
+from functional import iterator
 from functional.iterator.backends import backend
 from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
 from functional.iterator.transforms import apply_common_transforms

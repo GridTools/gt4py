@@ -3,10 +3,10 @@ name: Formatting & compliance
 on:
   push:
     branches:
-    - functional
+    - master
   pull_request:
     branches:
-    - functional
+    - master
 
 jobs:
   pre-commit:
