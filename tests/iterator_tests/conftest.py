@@ -9,9 +9,10 @@ def use_tmps(request):
 @pytest.fixture(
     params=[
         # (backend, do_validate)
+        (None, True),
         ("lisp", False),
         ("cpptoy", False),
-        ("embedded", True),
+        ("roundtrip", True),
         ("double_roundtrip", True),
     ],
     ids=lambda p: f"backend={p[0]}",

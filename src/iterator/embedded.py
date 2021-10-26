@@ -588,4 +588,4 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
     fun(*args)
 
 
-iterator.runtime.fendef_registry[None] = fendef_embedded
+iterator.runtime.fendef_embedded = fendef_embedded

@@ -80,7 +80,7 @@ class WrapperGenerator(EmbeddedDSL):
         return f"\ndef {node.id}_wrapper({','.join(non_tmp_params)}, **kwargs):\n    {body}\n"
 
 
-_BACKEND_NAME = "embedded"
+_BACKEND_NAME = "roundtrip"
 
 
 def executor(ir: Node, *args, **kwargs):
