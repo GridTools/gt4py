@@ -12,13 +12,11 @@ def ldif(d):
 
 @fundef
 def rdif(d):
-    # return compose(ldif(d), shift(d, 1))  # noqa: E800
     return lambda inp: ldif(d)(shift(d, 1)(inp))
 
 
 @fundef
 def dif2(d):
-    # return compose(ldif(d), lift(rdif(d)))  # noqa: E800
     return lambda inp: ldif(d)(lift(rdif(d))(inp))
 
 

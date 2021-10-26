@@ -36,8 +36,8 @@ def or_(a, b):
     return a or b
 
 
-@builtins.nth.register(EMBEDDED)
-def nth(i, tup):
+@builtins.tuple_get.register(EMBEDDED)
+def tuple_get(i, tup):
     return tup[i]
 
 
@@ -174,13 +174,13 @@ def plus(first, second):
     return first + second
 
 
-@builtins.mul.register(EMBEDDED)
-def mul(first, second):
+@builtins.multiplies.register(EMBEDDED)
+def multiplies(first, second):
     return first * second
 
 
-@builtins.div.register(EMBEDDED)
-def div(first, second):
+@builtins.divides.register(EMBEDDED)
+def divides(first, second):
     return first / second
 
 
@@ -192,6 +192,11 @@ def eq(first, second):
 @builtins.greater.register(EMBEDDED)
 def greater(first, second):
     return first > second
+
+
+@builtins.less.register(EMBEDDED)
+def less(first, second):
+    return first < second
 
 
 def named_range_(axis, range_):
