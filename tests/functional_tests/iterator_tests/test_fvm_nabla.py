@@ -14,9 +14,10 @@
 import numpy as np
 import pytest
 
+
+pytest.importorskip("atlas4py")
+
 from functional.iterator import library
-
-
 from functional.iterator.atlas_utils import AtlasTable
 from functional.iterator.builtins import *
 from functional.iterator.embedded import (
