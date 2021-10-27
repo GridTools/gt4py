@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Optional, Tuple, Union
 
-from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
+from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch, lift
 
 
 __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
@@ -13,6 +13,12 @@ class Offset:
 
     def __hash__(self) -> int:
         return hash(self.value)
+
+    def __add__(self, offset: int) -> Tuple["Offset", int]:
+        return (self, offset)
+
+    def __sub__(self, offset: int) -> Tuple["Offset", int]:
+        return (self, -offset)
 
 
 def offset(value):
@@ -72,6 +78,14 @@ class FundefDispatcher:
     def __init__(self, fun) -> None:
         self.fun = fun
         self.__name__ = fun.__name__
+
+    def __getitem__(self, arg):
+        assert arg is Ellipsis
+
+        def fun(*args):
+            return lift(self)(*args)
+
+        return fun
 
     def __call__(self, *args):
         if type(self)._hook:

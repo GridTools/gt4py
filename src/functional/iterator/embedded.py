@@ -1,3 +1,4 @@
+import abc
 import itertools
 import numbers
 from dataclasses import dataclass
@@ -59,7 +60,7 @@ def make_tuple(*args):
 @builtins.lift.register(EMBEDDED)
 def lift(stencil):
     def impl(*args):
-        class wrap_iterator:
+        class wrap_iterator(Iterator):
             def __init__(self, *, offsets=None, elem=None) -> None:
                 self.offsets = offsets or []
                 self.elem = elem
@@ -335,7 +336,33 @@ Undefined._setup_math_operations()
 _UNDEFINED = Undefined()
 
 
-class MDIterator:
+class Iterator(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def shift(self, *offsets) -> "Iterator":
+        pass
+
+    @abc.abstractmethod
+    def deref(self):
+        return
+
+    def __call__(self, *args):
+        if args:
+            offsets = []
+            for arg in args:
+                if isinstance(arg, tuple):
+                    if len(arg) == 0:
+                        break
+                    assert len(arg) == 2
+                    offsets.append(arg[0])
+                    offsets.append(arg[1])
+                else:
+                    offsets.append(arg)
+            return self.shift(*offsets).deref()
+        else:
+            return self.deref()
+
+
+class MDIterator(Iterator):
     def __init__(
         self, field, pos, *, incomplete_offsets=None, offset_provider, column_axis=None
     ) -> None:
@@ -510,7 +537,7 @@ class Column:
     range: range  # noqa: A003
 
 
-class ScanArgIterator:
+class ScanArgIterator(Iterator):
     def __init__(self, wrapped_iter, k_pos, *, offsets=None) -> None:
         self.wrapped_iter = wrapped_iter
         self.offsets = offsets or []
