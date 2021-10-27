@@ -239,7 +239,7 @@ def execute_shift(pos, tag, index, *, offset_provider):
 # shift(tag)(inp) -> incomplete shift
 # shift(index)(shift(tag)(inp)) -> full shift
 # Therefore the following transformation holds
-# shift(e2v,0)(shift(c2e,2)(cell_field))
+# shift(e2v,0)(shift(c2e,2)(cell_field)) #noqa E800
 # = shift(0)(shift(e2v)(shift(2)(shift(c2e)(cell_field))))
 # = shift(c2e, 2, e2v, 0)(cell_field)
 # = shift(c2e,e2v,2,0)(cell_field) <-- v2c,e2c twice incomplete shift

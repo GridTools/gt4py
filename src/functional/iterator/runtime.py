@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional, Union
+from typing import Optional, Union
 
 from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
 

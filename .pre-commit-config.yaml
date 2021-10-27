@@ -161,6 +161,7 @@ repos:
       tests/test_unittest/test_gtscript_frontend.py |
       tests/test_unittest/test_storage.py |
       tests/gtc_unstructured_tests/.* |
+      tests/functional_tests/.* |
       )$
 
 - repo: https://github.com/pre-commit/mirrors-mypy
@@ -202,4 +203,5 @@ repos:
       tests/test_unittest/test_gtc/test_gtir_to_oir.py |
       tests/test_unittest/test_gtc/test_passes/test_legacy_extents.py |
       tests/gtc_unstructured_tests/.* |
+      tests/functional_tests/.* |
       )$
