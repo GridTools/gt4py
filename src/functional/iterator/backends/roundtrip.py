@@ -76,8 +76,8 @@ class WrapperGenerator(EmbeddedDSL):
             )
 
         body.append(f"{node.id}({','.join(params)}, **kwargs)")
-        body = "\n    ".join(body)
-        return f"\ndef {node.id}_wrapper({','.join(non_tmp_params)}, **kwargs):\n    {body}\n"
+        body_str = "\n    ".join(body)
+        return f"\ndef {node.id}_wrapper({','.join(non_tmp_params)}, **kwargs):\n    {body_str}\n"
 
 
 _BACKEND_NAME = "roundtrip"
