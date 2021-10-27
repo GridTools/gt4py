@@ -29,7 +29,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip setuptools wheel
         python -m pip install --upgrade --upgrade-strategy eager -r requirements-dev.txt .
-        python -m pip uninstall --yes cytoolz # problem with undefined symbol
     - name: Test
       run: |
         python -m pytest tests/functional_tests
