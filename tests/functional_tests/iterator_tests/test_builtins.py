@@ -1,12 +1,12 @@
 from typing import Iterable
-import pytest
-import numpy as np
 
-from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef
+import numpy as np
+import pytest
+from tests.functional_tests.iterator_tests.test_hdiff import I
+
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-
-from tests.functional_tests.iterator_tests.test_hdiff import I
+from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef
 
 
 def asarray(*lists):
