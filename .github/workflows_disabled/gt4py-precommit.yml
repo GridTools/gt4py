@@ -4,11 +4,9 @@ on:
   push:
     branches:
     - master
-    - functional
   pull_request:
     branches:
     - master
-    - functional
 
 jobs:
   pre-commit:

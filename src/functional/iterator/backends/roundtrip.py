@@ -1,11 +1,11 @@
 import importlib.util
 import tempfile
 
-from functional import iterator
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import Node
+from functional import iterator
 from functional.iterator.backends import backend
 from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
 from functional.iterator.transforms import apply_common_transforms
@@ -76,8 +76,8 @@ class WrapperGenerator(EmbeddedDSL):
             )
 
         body.append(f"{node.id}({','.join(params)}, **kwargs)")
-        body = "\n    ".join(body)
-        return f"\ndef {node.id}_wrapper({','.join(non_tmp_params)}, **kwargs):\n    {body}\n"
+        body_str = "\n    ".join(body)
+        return f"\ndef {node.id}_wrapper({','.join(non_tmp_params)}, **kwargs):\n    {body_str}\n"
 
 
 _BACKEND_NAME = "roundtrip"

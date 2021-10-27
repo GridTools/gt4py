@@ -1,8 +1,8 @@
 import inspect
 from typing import List
 
-from functional import iterator
 from eve import Node
+from functional import iterator
 from functional.iterator.backend_executor import execute_program
 from functional.iterator.ir import (
     AxisLiteral,
