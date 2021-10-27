@@ -107,7 +107,7 @@ class OIRToCUIR(eve.NodeTranslator):
             mask=self.visit(node.mask, **kwargs), body=self.visit(node.body, **kwargs)
         )
 
-    def visit_AxisIndex(self, node: oir.AxisIndex, **kwargs: Any) -> cuir.ScalarAccess:
+    def visit_AxisPosition(self, node: oir.AxisPosition, **kwargs: Any) -> cuir.ScalarAccess:
         offset = common.CartesianOffset.zero()
         scalar_name = f"{node.axis.lower()}_pos({offset.i}_c, {offset.j}_c, {offset.k}_c)"
         return cuir.ScalarAccess(name=scalar_name, dtype=common.DataType.INT32)

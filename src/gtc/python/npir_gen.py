@@ -318,6 +318,10 @@ class NpirGen(TemplatedGenerator):
         )
     )
 
+    def visit_AxisPosition(self, node: npir.AxisPosition, *, is_serial: bool, **kwargs: Any):
+        assert is_serial and node.axis.lower() == "k"
+        return "k_"
+
     For = JinjaTemplate(
         textwrap.dedent(
             """

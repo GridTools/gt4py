@@ -94,7 +94,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             self.arguments.update(arguments)
             return self
 
-        def add_axis_index(self, axis: str) -> "OIRToGTCpp.GTComputationContext":
+        def add_axis_position(self, axis: str) -> "OIRToGTCpp.GTComputationContext":
             self.axis_indices[axis] = f"{axis.lower()}_pos"
             return self
 
@@ -190,10 +190,10 @@ class OIRToGTCpp(eve.NodeTranslator):
             true_branch=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),
         )
 
-    def visit_AxisIndex(
-        self, node: oir.AxisIndex, *, comp_ctx: GTComputationContext, **kwargs: Any
+    def visit_AxisPosition(
+        self, node: oir.AxisPosition, *, comp_ctx: GTComputationContext, **kwargs: Any
     ) -> gtcpp.AccessorRef:
-        comp_ctx.add_axis_index(node.axis)
+        comp_ctx.add_axis_position(node.axis)
         return gtcpp.AccessorRef(
             name=comp_ctx.axis_indices[node.axis],
             offset=common.CartesianOffset.zero(),

@@ -1342,7 +1342,7 @@ class IRMaker(ast.NodeVisitor):
         if isinstance(node.func, ast.Name) and node.func.id == "index":
             assert len(node.args) == 1
             axis_name = node.args[0].id
-            return gt_ir.AxisIndex(axis=axis_name, data_type=gt_ir.DataType.INT32)
+            return gt_ir.AxisPosition(axis=axis_name)
 
         else:
             native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]

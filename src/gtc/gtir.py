@@ -184,7 +184,7 @@ class ScalarDecl(Decl):
     pass
 
 
-class AxisIndex(Expr):
+class AxisPosition(Expr):
     axis: str
     dtype = common.DataType.INT32
     kind = common.ExprKind.SCALAR

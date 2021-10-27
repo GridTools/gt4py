@@ -266,6 +266,9 @@ class OirToNpir(NodeTranslator):
             return npir.BroadCast(expr=name, dtype=name.dtype)
         return name
 
+    def visit_AxisPosition(self, node: oir.AxisPosition, **kwargs: Any) -> npir.AxisPosition:
+        return npir.AxisPosition(axis=node.axis)
+
     def visit_For(self, node: oir.For, **kwargs: Any) -> npir.For:
         return npir.For(
             target_name=node.target_name,

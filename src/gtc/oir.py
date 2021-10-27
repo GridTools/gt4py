@@ -218,7 +218,7 @@ class Stencil(LocNode, SymbolTableTrait):
     _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)
 
 
-class AxisIndex(Expr):
+class AxisPosition(Expr):
     axis: str
     dtype = common.DataType.INT32
     kind = common.ExprKind.SCALAR

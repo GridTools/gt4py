@@ -25,6 +25,8 @@ from gtc.dace.utils import iter_vertical_loop_section_sub_sdfgs
 def optimize_horizontal_executions(
     stencil: oir.Stencil, transformation: Transformation
 ) -> oir.Stencil:
+    if len(stencil.iter_tree().if_isinstance(oir.AxisPosition).to_list()) > 0:
+        raise NotImplementedError("AxisPosition are not yet supported in DaCe transform")
     sdfg = OirSDFGBuilder().visit(stencil)
     api_fields = {param.name for param in stencil.params}
     for subgraph in iter_vertical_loop_section_sub_sdfgs(sdfg):

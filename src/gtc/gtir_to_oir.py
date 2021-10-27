@@ -213,8 +213,8 @@ class GTIRToOIR(NodeTranslator):
             declarations=ctx.decls,
         )
 
-    def visit_AxisIndex(self, node: gtir.AxisIndex) -> oir.AxisIndex:
-        return oir.AxisIndex(axis=node.axis)
+    def visit_AxisPosition(self, node: gtir.AxisPosition) -> oir.AxisPosition:
+        return oir.AxisPosition(axis=node.axis)
 
     def visit_For(self, node: gtir.For, ctx: Context, **kwargs: Any) -> None:
         scoped_ctx = ctx.new_scope()

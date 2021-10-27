@@ -141,8 +141,14 @@ class MaskBlock(common.Stmt):
     body: List[VectorAssign]
 
 
+class AxisPosition(Expr):
+    axis: str
+    dtype: common.DataType = common.DataType.INT32
+    kind: common.ExprKind = common.ExprKind.SCALAR
+
+
 class For(common.Stmt, eve.SymbolTableTrait):
-    target_name: eve.Str
+    target_name: str
     start: Union[Expr, common.AxisBound]
     end: Union[Expr, common.AxisBound]
     inc: int
