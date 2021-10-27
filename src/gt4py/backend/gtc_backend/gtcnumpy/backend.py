@@ -32,7 +32,7 @@ from gtc.passes.oir_optimizations.caches import (
     PruneKCacheFills,
     PruneKCacheFlushes,
 )
-from gtc.passes.oir_pipeline import DefaultOirPipeline, OirPipeline
+from gtc.passes.oir_pipeline import DefaultPipeline, OirPipeline
 from gtc.python import npir
 from gtc.python.npir_gen import NpirGen
 from gtc.python.oir_to_npir import OirToNpir
@@ -128,7 +128,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         return self.make_module()
 
     def _make_npir(self) -> npir.Computation:
-        default_pipeline = DefaultOirPipeline(
+        default_pipeline = DefaultPipeline(
             skip=[
                 IJCacheDetection,
                 KCacheDetection,

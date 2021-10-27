@@ -65,7 +65,7 @@ class OirPipeline(ABC):
         pass
 
 
-class DefaultOirPipeline(OirPipeline):
+class DefaultPipeline(OirPipeline):
     """
     OIR passes pipeline runs passes in order and allows skipping.
 

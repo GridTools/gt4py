@@ -33,7 +33,7 @@ from gtc.common import DataType
 from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion, oir_to_cuir
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
-from gtc.passes.oir_pipeline import DefaultOirPipeline
+from gtc.passes.oir_pipeline import DefaultPipeline
 
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ class GTCCudaExtGenerator:
         self.backend = backend
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        default_pipeline = DefaultOirPipeline(skip=[NoFieldAccessPruning])
+        default_pipeline = DefaultPipeline(skip=[NoFieldAccessPruning])
 
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
         base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
