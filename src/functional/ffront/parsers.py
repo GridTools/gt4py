@@ -38,6 +38,8 @@ class FieldOperatorParser(ast.NodeVisitor):
         return [ir.Sym(id=arg.arg) for arg in node.args]
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ir.FunctionDefinition:
+        # TODO (ricoh): visit the whole node body,
+        # generic_visit seems to do nothing on lists.
         return ir.FunctionDefinition(
             id=node.name, params=self.visit(node.args), expr=self.visit(node.body[0])
         )
