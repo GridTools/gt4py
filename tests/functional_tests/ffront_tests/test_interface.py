@@ -17,14 +17,31 @@ Basic Interface Tests
         - arithmetics
         - shift
         - neighbor reductions
-        - math functions: abs(), max(), min, mod(), sin(), cos(), tan(), arcsin(), arccos(), arctan(),
-            sqrt(), exp(), log(), isfinite(), isinf(), isnan(), floor(), ceil(), trunc()
+        - math functions: abs(), max(), min, mod(), sin(), cos(), tan(), arcsin(), arccos(),
+            arctan(), sqrt(), exp(), log(), isfinite(), isinf(), isnan(), floor(), ceil(), trunc()
     - evaluation test cases
 """
 from __future__ import annotations
 
-from functional.ffront.parsers import FieldOperatorParser
+import pytest
+
+from functional.ffront.parsers import (
+    FieldOperatorLowering,
+    FieldOperatorParser,
+    FieldOperatorSyntaxError,
+)
 from functional.iterator.ir import FunCall, FunctionDefinition, Sym, SymRef
+
+
+def test_syntax_error():
+    def wrong_syntax(inp):
+        return
+
+    with pytest.raises(
+        FieldOperatorSyntaxError,
+        match=r"Invalid Field Operator Syntax: Empty return not allowed \(test_interface.py, line \d+\)",
+    ):
+        _ = FieldOperatorParser.parse(wrong_syntax)
 
 
 def test_copy_lower():
@@ -33,8 +50,9 @@ def test_copy_lower():
 
     # parsing
     parsed = FieldOperatorParser.parse(copy_field)
-    assert isinstance(parsed, FunctionDefinition)
-    assert parsed == FunctionDefinition(
+    lowered = FieldOperatorLowering.parse(parsed)
+    assert isinstance(lowered, FunctionDefinition)
+    assert lowered == FunctionDefinition(
         id="copy_field",
         params=[Sym(id="inp")],
         expr=FunCall(fun=SymRef(id="deref"), args=[SymRef(id="inp")]),
