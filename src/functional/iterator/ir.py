@@ -112,6 +112,8 @@ class Program(Node, SymbolTableTrait):
             "less",
             "greater",
             "if_",
+            "not_",
+            "and_",
             "or_",
         ]
     )

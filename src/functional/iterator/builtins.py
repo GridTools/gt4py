@@ -17,8 +17,8 @@ __all__ = [
     "greater",  # TODO not in c++
     "less",
     "eq",
-    # "not_",  # TODO
-    # "and_",  # TODO
+    "not_",
+    "and_",
     "or_",
     #
     "scan",
@@ -77,6 +77,16 @@ def named_range(*args):
 
 @builtin_dispatch
 def if_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def not_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def and_(*args):
     raise BackendNotSelectedError()
 
 

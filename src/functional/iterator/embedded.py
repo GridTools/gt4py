@@ -31,6 +31,16 @@ def if_(cond, t, f):
     return t if cond else f
 
 
+@builtins.not_.register(EMBEDDED)
+def not_(a):
+    return not a
+
+
+@builtins.and_.register(EMBEDDED)
+def and_(a, b):
+    return a and b
+
+
 @builtins.or_.register(EMBEDDED)
 def or_(a, b):
     return a or b

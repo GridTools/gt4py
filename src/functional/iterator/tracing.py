@@ -151,6 +151,16 @@ def if_(*args):
     return _f("if_", *args)
 
 
+@iterator.builtins.not_.register(TRACING)
+def not_(*args):
+    return _f("not_", *args)
+
+
+@iterator.builtins.and_.register(TRACING)
+def and_(*args):
+    return _f("and_", *args)
+
+
 @iterator.builtins.or_.register(TRACING)
 def or_(*args):
     return _f("or_", *args)
