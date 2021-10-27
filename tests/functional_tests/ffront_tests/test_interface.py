@@ -22,6 +22,9 @@ Basic Interface Tests
 
 
 """
+import pytest
+
+pytestmark = pytest.mark.skip(reason="incomplete")
 
 
 def test_copy_lower():
