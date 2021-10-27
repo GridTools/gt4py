@@ -46,7 +46,7 @@ def _patch_Expr():
 
     @monkeypatch_method(Expr)
     def __mul__(self, other):
-        return FunCall(fun=SymRef(id="mul"), args=[self, make_node(other)])
+        return FunCall(fun=SymRef(id="multiplies"), args=[self, make_node(other)])
 
     @monkeypatch_method(Expr)
     def __rmul__(self, other):
@@ -54,7 +54,7 @@ def _patch_Expr():
 
     @monkeypatch_method(Expr)
     def __truediv__(self, other):
-        return FunCall(fun=SymRef(id="div"), args=[self, make_node(other)])
+        return FunCall(fun=SymRef(id="divides"), args=[self, make_node(other)])
 
     @monkeypatch_method(Expr)
     def __sub__(self, other):
@@ -131,14 +131,9 @@ def make_tuple(*args):
     return _f("make_tuple", *args)
 
 
-@iterator.builtins.nth.register(TRACING)
-def nth(*args):
-    return _f("nth", *args)
-
-
-@iterator.builtins.compose.register(TRACING)
-def compose(*args):
-    return _f("compose", *args)
+@iterator.builtins.tuple_get.register(TRACING)
+def tuple_get(*args):
+    return _f("tuple_get", *args)
 
 
 @iterator.builtins.domain.register(TRACING)
@@ -154,6 +149,16 @@ def named_range(*args):
 @iterator.builtins.if_.register(TRACING)
 def if_(*args):
     return _f("if_", *args)
+
+
+@iterator.builtins.not_.register(TRACING)
+def not_(*args):
+    return _f("not_", *args)
+
+
+@iterator.builtins.and_.register(TRACING)
+def and_(*args):
+    return _f("and_", *args)
 
 
 @iterator.builtins.or_.register(TRACING)
@@ -178,14 +183,14 @@ def minus(*args):
     return _f("minus", *args)
 
 
-@iterator.builtins.mul.register(TRACING)
-def mul(*args):
-    return _f("mul", *args)
+@iterator.builtins.multiplies.register(TRACING)
+def multiplies(*args):
+    return _f("multiplies", *args)
 
 
-@iterator.builtins.div.register(TRACING)
-def div(*args):
-    return _f("div", *args)
+@iterator.builtins.divides.register(TRACING)
+def divides(*args):
+    return _f("divides", *args)
 
 
 @iterator.builtins.eq.register(TRACING)
@@ -196,6 +201,11 @@ def eq(*args):
 @iterator.builtins.greater.register(TRACING)
 def greater(*args):
     return _f("greater", *args)
+
+
+@iterator.builtins.less.register(TRACING)
+def less(*args):
+    return _f("less", *args)
 
 
 # helpers
@@ -300,7 +310,7 @@ def closure(domain, stencil, outputs, inputs):
     )
 
 
-def fendef_tracing(fun, *args, **kwargs):
+def trace(fun):
     with Tracer() as _:
         trace_function_call(fun)
 
@@ -309,8 +319,11 @@ def fendef_tracing(fun, *args, **kwargs):
             params=list(Sym(id=param) for param in inspect.signature(fun).parameters.keys()),
             closures=Tracer.closures,
         )
-        prog = Program(function_definitions=Tracer.fundefs, fencil_definitions=[fencil], setqs=[])
-    # after tracing is done
+        return Program(function_definitions=Tracer.fundefs, fencil_definitions=[fencil], setqs=[])
+
+
+def fendef_tracing(fun, *args, **kwargs):
+    prog = trace(fun)
     execute_program(prog, *args, **kwargs)
 
 

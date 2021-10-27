@@ -3,28 +3,28 @@ from functional.iterator.dispatcher import Dispatcher
 
 __all__ = [
     "deref",
+    # "can_deref",  # TODO
     "shift",
     "lift",
     "reduce",
+    "plus",
+    "minus",
+    "multiplies",
+    "divides",
+    "make_tuple",
+    "tuple_get",
+    "if_",
+    "greater",  # TODO not in c++
+    "less",
+    "eq",
+    "not_",
+    "and_",
+    "or_",
+    #
     "scan",
     "is_none",
     "domain",
     "named_range",
-    "compose",
-    "if_",
-    "or_",
-    "minus",
-    "plus",
-    "mul",
-    "div",
-    "eq",
-    "greater",
-    "make_tuple",
-    "nth",
-    "plus",
-    "reduce",
-    "scan",
-    "shift",
 ]
 
 builtin_dispatch = Dispatcher()
@@ -76,12 +76,17 @@ def named_range(*args):
 
 
 @builtin_dispatch
-def compose(sten):
+def if_(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
-def if_(*args):
+def not_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def and_(*args):
     raise BackendNotSelectedError()
 
 
@@ -101,12 +106,12 @@ def plus(*args):
 
 
 @builtin_dispatch
-def mul(*args):
+def multiplies(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
-def div(*args):
+def divides(*args):
     raise BackendNotSelectedError()
 
 
@@ -121,10 +126,15 @@ def greater(*args):
 
 
 @builtin_dispatch
+def less(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def make_tuple(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
-def nth(*args):
+def tuple_get(*args):
     raise BackendNotSelectedError()

@@ -23,9 +23,9 @@ def tridiag_forward(state, a, b, c, d):
     #     is_none(state),
     #     make_tuple(deref(c) / deref(b), deref(d) / deref(b)),
     #     make_tuple(
-    #         deref(c) / (deref(b) - deref(a) * nth(0, state)),
-    #         (deref(d) - deref(a) * nth(1, state))
-    #         / (deref(b) - deref(a) * nth(0, state)),
+    #         deref(c) / (deref(b) - deref(a) * tuple_get(0, state)),
+    #         (deref(d) - deref(a) * tuple_get(1, state))
+    #         / (deref(b) - deref(a) * tuple_get(0, state)),
     #     ),
     # )
 
@@ -35,8 +35,9 @@ def tridiag_forward(state, a, b, c, d):
 
     def step():
         return make_tuple(
-            deref(c) / (deref(b) - deref(a) * nth(0, state)),
-            (deref(d) - deref(a) * nth(1, state)) / (deref(b) - deref(a) * nth(0, state)),
+            deref(c) / (deref(b) - deref(a) * tuple_get(0, state)),
+            (deref(d) - deref(a) * tuple_get(1, state))
+            / (deref(b) - deref(a) * tuple_get(0, state)),
         )
 
     return if_(is_none(state), initial, step)()
@@ -55,8 +56,8 @@ def tridiag_backward(x_kp1, cp, dp):
 @fundef
 def solve_tridiag(a, b, c, d):
     tup = lift(scan(tridiag_forward, True, None))(a, b, c, d)
-    cp = nth(0, tup)
-    dp = nth(1, tup)
+    cp = tuple_get(0, tup)
+    dp = tuple_get(1, tup)
     return scan(tridiag_backward, False, None)(cp, dp)
 
 
