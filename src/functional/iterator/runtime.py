@@ -10,6 +10,10 @@ __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
 @dataclass
 class Offset:
     value: Optional[Union[int, str]] = None
+    length: Optional[int] = None
+
+    def __len__(self):
+        return self.length
 
     def __hash__(self) -> int:
         return hash(self.value)
@@ -20,9 +24,14 @@ class Offset:
     def __sub__(self, offset: int) -> Tuple["Offset", int]:
         return (self, -offset)
 
+    def __getitem__(self, offset: int) -> Tuple["Offset", int]:
+        if self.length is not None and offset >= self.length:
+            raise IndexError()
+        return (self, offset)
 
-def offset(value):
-    return Offset(value)
+
+def offset(value, length=None):
+    return Offset(value, length=length)
 
 
 @dataclass

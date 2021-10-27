@@ -361,6 +361,10 @@ class Iterator(metaclass=abc.ABCMeta):
         else:
             return self.deref()
 
+    def __getitem__(self, offset: int):
+        assert isinstance(offset, int)
+        return self.shift(offset).deref()
+
 
 class MDIterator(Iterator):
     def __init__(
