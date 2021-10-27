@@ -17,11 +17,7 @@ import pytest
 from functional.iterator import library
 
 
-try:
-    from functional.iterator.atlas_utils import AtlasTable
-except ModuleNotFoundError:
-    pytest.xfail("atlas not available")
-
+from functional.iterator.atlas_utils import AtlasTable
 from functional.iterator.builtins import *
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
