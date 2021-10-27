@@ -30,7 +30,7 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
         python -m pip cache purge
         python -m pip install --upgrade .
-        python -m pip install pytest
+        python -m pip install pytest hypothesis black flake8
     - name: Test
       run: |
         python -m pytest tests/functional_tests
