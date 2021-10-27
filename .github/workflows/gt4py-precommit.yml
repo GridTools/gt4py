@@ -3,9 +3,11 @@ name: Formatting & compliance
 on:
   push:
     branches:
+    - master
     - functional
   pull_request:
     branches:
+    - master
     - functional
 
 jobs:
