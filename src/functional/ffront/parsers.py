@@ -22,8 +22,11 @@ from typing import Any, Callable, List
 from functional.iterator import ir
 
 
-class FieldOperatorParser(ast.NodeVisitor):
+class EmptyReturnException(Exception):
+    ...
 
+
+class FieldOperatorParser(ast.NodeVisitor):
     @classmethod
     def parse(cls, func: Callable) -> ir.FunctionDefinition:
         source = textwrap.dedent(inspect.getsource(func))
@@ -33,17 +36,19 @@ class FieldOperatorParser(ast.NodeVisitor):
 
     def visit_arguments(self, node: ast.arguments) -> List[ir.Sym]:
         return [ir.Sym(id=arg.arg) for arg in node.args]
-    
+
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ir.FunctionDefinition:
-        return ir.FunctionDefinition(id=node.name, params=self.visit(node.args), expr=node.body)
+        return ir.FunctionDefinition(
+            id=node.name, params=self.visit(node.args), expr=self.visit(node.body[0])
+        )
 
     def visit_Return(self, node: ast.Return):
+        if not node.value:
+            raise EmptyReturnException("fundef may not have empty returns")
         return self.visit(node.value)
 
     def visit_Expr(self, node: ast.Expr) -> Any:
         return self.visit(node.value)
 
     def visit_Name(self, node: ast.Name) -> str:
-        return ir.FunCall(fun=ir.SymRef("deref"), args=[ir.SymRef(id=node.id)])
-    
-
+        return ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id=node.id)])
