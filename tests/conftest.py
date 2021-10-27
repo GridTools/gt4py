@@ -23,35 +23,36 @@ import shutil
 import hypothesis as hyp
 import pytest
 
-from gt4py import config as gt_config
 
-from .analysis_setup import (
-    AnalysisPass,
-    build_iir_pass,
-    compute_extents_pass,
-    compute_used_symbols_pass,
-    constant_folding_pass,
-    demote_locals_pass,
-    init_pass,
-    merge_blocks_pass,
-    normalize_blocks_pass,
-)
-from .definition_setup import (
-    TAssign,
-    TComputationBlock,
-    TDefinition,
-    ij_offset,
-    ijk_domain,
-    iteration_order,
-    non_parallel_iteration_order,
-)
+# from gt4py import config as gt_config
+
+# from .analysis_setup import (
+#     AnalysisPass,
+#     build_iir_pass,
+#     compute_extents_pass,
+#     compute_used_symbols_pass,
+#     constant_folding_pass,
+#     demote_locals_pass,
+#     init_pass,
+#     merge_blocks_pass,
+#     normalize_blocks_pass,
+# )
+# from .definition_setup import (
+#     TAssign,
+#     TComputationBlock,
+#     TDefinition,
+#     ij_offset,
+#     ijk_domain,
+#     iteration_order,
+#     non_parallel_iteration_order,
+# )
 
 
-# Delete cache folder
-shutil.rmtree(
-    os.path.join(gt_config.cache_settings["root_path"], gt_config.cache_settings["dir_name"]),
-    ignore_errors=True,
-)
+# # Delete cache folder
+# shutil.rmtree(
+#     os.path.join(gt_config.cache_settings["root_path"], gt_config.cache_settings["dir_name"]),
+#     ignore_errors=True,
+# )
 
 # Ignore hidden folders and disabled tests
 collect_ignore_glob = [".*", "_disabled*"]
