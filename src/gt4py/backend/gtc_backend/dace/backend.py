@@ -36,7 +36,7 @@ from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
-from gtc.passes.oir_pipeline import OirPipeline
+from gtc.passes.oir_pipeline import DefaultOirPipeline
 
 
 if TYPE_CHECKING:
@@ -50,20 +50,15 @@ class GTCDaCeExtGenerator:
         self.backend = backend
 
     def __call__(self, definition_ir: StencilDefinition) -> Dict[str, Dict[str, str]]:
-        def default_pipeline(oir):
-            return OirPipeline(oir).full(
-                skip=[
-                    MaskStmtMerging,
-                    MaskInlining,
-                    FillFlushToLocalKCaches,
-                ]
-            )
-
-        oir_pipeline = self.backend.builder.options.backend_opts.get(
-            "oir_pipeline", default_pipeline
+        default_pipeline = DefaultOirPipeline(
+            skip=[MaskStmtMerging, MaskInlining, FillFlushToLocalKCaches]
         )
+
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        oir = oir_pipeline(gtir_to_oir.GTIRToOIR().visit(gtir))
+        base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+        oir = self.backend.builder.options.backend_opts.get("oir_pipeline", default_pipeline).run(
+            base_oir
+        )
         sdfg = OirSDFGBuilder().visit(oir)
         sdfg.expand_library_nodes(recursive=True)
         sdfg.apply_strict_transformations(validate=True)
