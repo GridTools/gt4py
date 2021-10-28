@@ -19,7 +19,7 @@ import collections.abc
 import sys
 import time
 import warnings
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -27,6 +27,9 @@ import gt4py.backend as gt_backend
 import gt4py.storage as gt_storage
 import gt4py.utils as gt_utils
 from gt4py.definitions import DomainInfo, FieldInfo, Index, ParameterInfo, Shape
+
+
+FieldType = Union[gt_storage.storage.Storage, np.ndarray]
 
 
 class StencilObject(abc.ABC):
@@ -144,8 +147,8 @@ class StencilObject(abc.ABC):
 
     def _get_max_domain(
         self,
-        field_args: Dict[str, Any],
         origin: Dict[str, Tuple[int, ...]],
+        field_args: Dict[str, Any],
         *,
         squeeze: bool = True,
     ) -> Shape:
@@ -301,12 +304,14 @@ class StencilObject(abc.ABC):
             if parameter_info is not None:
                 if name not in param_args:
                     raise ValueError(f"Missing value for '{name}' parameter.")
-                if not type(parameter := param_args[name]) == self.parameter_info[name].dtype:
+                if type(parameter := param_args[name]) != parameter_info.dtype:
                     raise TypeError(
-                        f"The type of parameter '{name}' is '{type(parameter)}' instead of '{self.parameter_info[name].dtype}'"
+                        f"The type of parameter '{name}' is '{type(parameter)}' instead of '{parameter_info.dtype}'"
                     )
 
-    def _normalize_origins(self, field_args, origin) -> Dict[str, Tuple[int, ...]]:
+    def _normalize_origins(
+        self, origin, field_args: Dict[str, FieldType]
+    ) -> Dict[str, Tuple[int, ...]]:
         origin = self._make_origin_dict(origin)
         all_origin = origin.get("_all_", None)
 
@@ -330,7 +335,7 @@ class StencilObject(abc.ABC):
                         *((0,) * len(field_info.data_dims)),
                     )
 
-                elif isinstance(field_arg := field_args[name], gt_storage.storage.Storage):
+                elif isinstance(field_arg := field_args.get(name), gt_storage.storage.Storage):
                     origin[name] = field_arg.default_origin
 
                 else:
@@ -396,10 +401,10 @@ class StencilObject(abc.ABC):
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
 
-        origin = self._normalize_origins(field_args, origin)
+        origin = self._normalize_origins(origin, field_args)
 
         if domain is None:
-            domain = self._get_max_domain(field_args, origin)
+            domain = self._get_max_domain(origin, field_args)
 
         if validate_args:
             self._validate_args(field_args, parameter_args, domain, origin)
