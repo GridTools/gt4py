@@ -127,7 +127,7 @@ from functional.iterator.embedded import np_as_located_field
         tmp.flush()
 
         spec = importlib.util.spec_from_file_location("module.name", tmp.name)
-        foo = importlib.util.module_from_spec(spec)
+        foo = importlib.util.module_from_spec(spec)  # type: ignore
         spec.loader.exec_module(foo)  # type: ignore
 
         fencil_name = ir.fencil_definitions[0].id
