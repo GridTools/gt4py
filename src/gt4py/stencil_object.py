@@ -30,6 +30,7 @@ from gt4py.definitions import DomainInfo, FieldInfo, Index, ParameterInfo, Shape
 
 
 FieldType = Union[gt_storage.storage.Storage, np.ndarray]
+OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 
 class StencilObject(abc.ABC):
@@ -343,7 +344,14 @@ class StencilObject(abc.ABC):
         return origin
 
     def _call_run(
-        self, field_args, parameter_args, domain, origin, *, validate_args=True, exec_info=None
+        self,
+        field_args: Dict[str, FieldType],
+        parameter_args: Dict[str, Any],
+        domain: Optional[Tuple[int, ...]],
+        origin: Optional[OriginType],
+        *,
+        validate_args: bool = True,
+        exec_info: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
