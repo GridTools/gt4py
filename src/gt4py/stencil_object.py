@@ -19,7 +19,7 @@ import collections.abc
 import sys
 import time
 import warnings
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -42,6 +42,7 @@ class StencilObject(abc.ABC):
     # Those attributes are added to the class at loading time:
     _gt_id_: str
     definition_func: Callable[..., Any]
+    last_key: Optional[int] = None
 
     def __new__(cls, *args, **kwargs):
         if getattr(cls, "_instance", None) is None:
@@ -303,6 +304,37 @@ class StencilObject(abc.ABC):
                         f"The type of parameter '{name}' is '{type(parameter)}' instead of '{self.parameter_info[name].dtype}'"
                     )
 
+    def _normalize_origins(self, field_args, origin) -> Dict[str, Tuple[int, ...]]:
+        origin = self._make_origin_dict(origin)
+        all_origin = origin.get("_all_", None)
+
+        # Set an appropriate origin for all fields
+        for name, field_info in self.field_info.items():
+            if field_info is not None:
+                assert name in field_args, f"Missing value for '{name}' field."
+                field_origin = origin.get(name, None)
+
+                if field_origin is not None:
+                    field_origin_ndim = len(field_origin)
+                    if field_origin_ndim != field_info.ndim:
+                        assert (
+                            field_origin_ndim == field_info.domain_ndim
+                        ), f"Invalid origin specification ({field_origin}) for '{name}' field."
+                        origin[name] = (*field_origin, *((0,) * len(field_info.data_dims)))
+
+                elif all_origin is not None:
+                    origin[name] = (
+                        *gt_utils.filter_mask(all_origin, field_info.domain_mask),
+                        *((0,) * len(field_info.data_dims)),
+                    )
+
+                elif isinstance(field_arg := field_args[name], gt_storage.storage.Storage):
+                    origin[name] = field_arg.default_origin
+
+                else:
+                    origin[name] = (0,) * field_info.ndim
+        return origin
+
     def _call_run(
         self, field_args, parameter_args, domain, origin, *, validate_args=True, exec_info=None
     ) -> None:
@@ -362,43 +394,10 @@ class StencilObject(abc.ABC):
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
 
-        domain_ndim = self.domain_info.ndim
-        origin = self._make_origin_dict(origin)
-        all_origin = origin.get("_all_", None)
+        origin = self._normalize_origins(field_args, origin)
 
-        # Set an appropriate origin for all fields
-        for name, field_info in self.field_info.items():
-            if field_info is not None:
-                assert name in field_args, f"Missing value for '{name}' field."
-                field_origin = origin.get(name, None)
-
-                if field_origin is not None:
-                    field_origin_ndim = len(field_origin)
-                    if field_origin_ndim != field_info.ndim:
-                        assert (
-                            field_origin_ndim == field_info.domain_ndim
-                        ), f"Invalid origin specification ({field_origin}) for '{name}' field."
-                        origin[name] = (*field_origin, *((0,) * len(field_info.data_dims)))
-
-                elif all_origin is not None:
-                    origin[name] = (
-                        *gt_utils.filter_mask(all_origin, field_info.domain_mask),
-                        *((0,) * len(field_info.data_dims)),
-                    )
-
-                elif isinstance(field_arg := field_args[name], gt_storage.storage.Storage):
-                    origin[name] = field_arg.default_origin
-
-                else:
-                    origin[name] = (0,) * field_info.ndim
-
-        # Domain
         if domain is None:
             domain = self._get_max_domain(field_args, origin)
-
-        assert (
-            len(domain) == domain_ndim
-        ), f"Provided domain '{domain}' is not {domain_ndim}-dimensional."
 
         if validate_args:
             self._validate_args(field_args, parameter_args, domain, origin)
