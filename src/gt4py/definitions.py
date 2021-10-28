@@ -145,7 +145,7 @@ class NumericTuple(tuple):
         return self._apply(self._broadcast(other), operator.mul)
 
     def __floordiv__(self, other):
-        """"Element-wise integer division."""
+        """ "Element-wise integer division."""
         return self._apply(self._broadcast(other), operator.floordiv)
 
     def __and__(self, other):
