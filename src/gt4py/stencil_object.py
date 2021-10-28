@@ -1,27 +1,32 @@
 # -*- coding: utf-8 -*-
+#
+# GT4Py - GridTools4Py - GridTools for Python
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import abc
 import collections.abc
 import sys
 import time
 import warnings
-from typing import Any, Collection, Dict, Tuple
+from typing import Any, Callable, Dict, Tuple
 
 import numpy as np
 
 import gt4py.backend as gt_backend
-import gt4py.ir as gt_ir
 import gt4py.storage as gt_storage
 import gt4py.utils as gt_utils
-from gt4py.definitions import (
-    AccessKind,
-    Boundary,
-    CartesianSpace,
-    DomainInfo,
-    FieldInfo,
-    Index,
-    ParameterInfo,
-    Shape,
-)
+from gt4py.definitions import DomainInfo, FieldInfo, Index, ParameterInfo, Shape
 
 
 class StencilObject(abc.ABC):
@@ -33,6 +38,10 @@ class StencilObject(abc.ABC):
     implemented as a singleton: only one instance per subclass is actually
     allocated (and it is immutable).
     """
+
+    # Those attributes are added to the class at loading time:
+    _gt_id_: str
+    definition_func: Callable[..., Any]
 
     def __new__(cls, *args, **kwargs):
         if getattr(cls, "_instance", None) is None:
@@ -54,6 +63,7 @@ class StencilObject(abc.ABC):
     - I/O fields: {fields}
     - Parameters: {params}
     - Constants: {constants}
+    - Version: {version}
     - Definition ({func}):
 {source}
         """.format(
@@ -71,11 +81,6 @@ class StencilObject(abc.ABC):
 
     def __hash__(self) -> int:
         return int.from_bytes(type(self)._gt_id_.encode(), byteorder="little")
-
-    # Those attributes are added to the class at loading time:
-    #
-    #   _gt_id_ (stencil_id.version)
-    #   definition_func
 
     @property
     @abc.abstractmethod
@@ -131,7 +136,7 @@ class StencilObject(abc.ABC):
                 return {"_all_": Index.from_value(origin)}
             if isinstance(origin, int):
                 return {"_all_": Index.from_k(origin)}
-        except:
+        except Exception:
             pass
 
         raise ValueError("Invalid 'origin' value ({})".format(origin))
@@ -143,7 +148,8 @@ class StencilObject(abc.ABC):
         *,
         squeeze: bool = True,
     ) -> Shape:
-        """Return the maximum domain size possible
+        """
+        Return the maximum domain size possible.
 
         Parameters
         ----------
@@ -188,8 +194,9 @@ class StencilObject(abc.ABC):
         else:
             return max_domain
 
-    def _validate_args(self, field_args, param_args, domain, origin) -> None:
-        """Validate input arguments to _call_run.
+    def _validate_args(self, field_args, param_args, domain, origin) -> None:  # noqa: C901
+        """
+        Validate input arguments to _call_run.
 
         Raises
         -------
@@ -199,7 +206,6 @@ class StencilObject(abc.ABC):
             TypeError
                 If an incorrect field or parameter data type is passed.
         """
-
         assert isinstance(field_args, dict) and isinstance(param_args, dict)
 
         # validate domain sizes
@@ -209,7 +215,7 @@ class StencilObject(abc.ABC):
 
         try:
             domain = Shape(domain)
-        except:
+        except Exception:
             raise ValueError("Invalid 'domain' value ({})".format(domain))
 
         if not domain > Shape.zeros(domain_ndim):
@@ -300,7 +306,8 @@ class StencilObject(abc.ABC):
     def _call_run(
         self, field_args, parameter_args, domain, origin, *, validate_args=True, exec_info=None
     ) -> None:
-        """Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
+        """
+        Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
 
         Note that this function will always try to expand simple parameter values to
         complete data structures by repeating the same value as many times as needed.
@@ -352,7 +359,6 @@ class StencilObject(abc.ABC):
             ValueError
                 If invalid data or inconsistent options are specified.
         """
-
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
 
