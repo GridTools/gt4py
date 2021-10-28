@@ -113,7 +113,6 @@ repos:
       docs/gtc/conf.py |
       src/gt4py/__gtscript__.py |
       src/gt4py/__init__.py |
-      src/gt4py/definitions.py |
       src/gt4py/gtscript.py |
       src/gt4py/analysis/__init__.py |
       src/gt4py/analysis/infos.py |
