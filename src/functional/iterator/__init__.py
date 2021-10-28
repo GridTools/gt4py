@@ -6,7 +6,7 @@ from . import builtins, runtime, tracing
 __all__ = ["builtins", "runtime", "tracing"]
 
 from packaging.version import LegacyVersion, Version, parse
-from pkg_resources import DistributionNotFound, get_distribution
+from pkg_resources import DistributionNotFound, get_distribution  # type: ignore
 
 
 try:

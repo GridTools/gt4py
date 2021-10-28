@@ -1,5 +1,5 @@
 default_language_version:
-  python: python3.8
+  python: python3.10
 repos:
 # - repo: meta
 #   hooks:
@@ -7,7 +7,7 @@ repos:
 #   - id: check-useless-excludes
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v3.4.0
+  rev: v4.0.1
   hooks:
   - id: check-case-conflict
 #  - id: check-json
@@ -20,7 +20,7 @@ repos:
 #  - id: pretty-format-json
 
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  rev: v2.0.0
+  rev: v2.2.0
   hooks:
   - id: pretty-format-ini
     args: [--autofix]
@@ -75,7 +75,7 @@ repos:
 #     - pygments
 
 - repo: https://github.com/psf/black
-  rev: 20.8b1
+  rev: 21.9b0
   hooks:
   - id: black
 
@@ -86,12 +86,12 @@ repos:
     args: ['--application-directories=src:tests']
 
 - repo: https://github.com/pre-commit/mirrors-isort
-  rev: v5.7.0
+  rev: v5.9.3
   hooks:
   - id: isort
 
 - repo: https://gitlab.com/PyCQA/flake8
-  rev: 3.8.4
+  rev: 3.9.2
   hooks:
   - id: flake8
     additional_dependencies:
@@ -165,7 +165,7 @@ repos:
       )$
 
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v0.800
+  rev: v0.910-1
   hooks:
   - id: mypy
     exclude: |
