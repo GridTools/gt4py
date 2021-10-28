@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from abc import ABC, abstractmethod
-from typing import Callable, Protocol, Sequence, Type, Union
+from typing import Callable, Optional, Protocol, Sequence, Type, Union
 
 from eve.visitors import NodeVisitor
 from gtc import oir
@@ -72,8 +72,8 @@ class DefaultPipeline(OirPipeline):
     May only call existing passes and may not contain any pass logic itself.
     """
 
-    def __init__(self, *, skip: Sequence[PASS_T]):
-        self.skip = skip
+    def __init__(self, *, skip: Optional[Sequence[PASS_T]] = None):
+        self.skip = skip or []
 
     @staticmethod
     def all_steps() -> Sequence[PASS_T]:
@@ -94,18 +94,18 @@ class DefaultPipeline(OirPipeline):
         ]
 
     @property
-    def _executed_steps(self) -> Sequence[PASS_T]:
+    def steps(self) -> Sequence[PASS_T]:
         hash_skips = {hash_step(step) for step in self.skip}
         return [step for step in self.all_steps() if hash_step(step) not in hash_skips]
 
     def __hash__(self) -> int:
-        return hash(self._executed_steps)
+        return hash(self.steps)
 
     def __repr__(self) -> str:
-        return str([step.__name__ for step in self._executed_steps])
+        return str([step.__name__ for step in self.steps])
 
     def run(self, oir: oir.Stencil) -> oir.Stencil:
-        for step in self._executed_steps:
+        for step in self.steps:
             if isinstance(step, type) and issubclass(step, NodeVisitor):
                 oir = step().visit(oir)
             else:
