@@ -175,13 +175,6 @@ class StencilObject(abc.ABC):
                 field = field_args[name]
                 api_domain_mask = field_info.domain_mask
                 api_domain_ndim = field_info.domain_ndim
-                assert (
-                    not isinstance(field, gt_storage.storage.Storage)
-                    or tuple(field.mask)[:domain_ndim] == api_domain_mask
-                ), (
-                    f"Storage for '{name}' has domain mask '{field.mask}' but the API signature "
-                    f"expects '[{', '.join(field_info.axes)}]'"
-                )
                 upper_indices = field_info.boundary.upper_indices.filter_mask(api_domain_mask)
                 field_origin = Index.from_value(origin[name])
                 field_domain = tuple(
@@ -272,6 +265,15 @@ class StencilObject(abc.ABC):
                     raise ValueError(
                         f"Storage for '{name}' has {field.ndim} dimensions but the API signature "
                         f"expects {field_domain_ndim + len(field_info.data_dims)} ('{field_info.axes}[{field_info.data_dims}]')"
+                    )
+
+                if (
+                    isinstance(field, gt_storage.storage.Storage)
+                    and tuple(field.mask)[:domain_ndim] != field_domain_mask
+                ):
+                    raise ValueError(
+                        f"Storage for '{name}' has domain mask '{field.mask}' but the API signature "
+                        f"expects '[{', '.join(field_domain_mask)}]'"
                     )
 
                 min_origin = gt_utils.interpolate_mask(
