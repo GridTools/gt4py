@@ -33,15 +33,66 @@ from functional.ffront.parsers import (
 from functional.iterator.ir import FunCall, FunctionDefinition, Sym, SymRef
 
 
-def test_syntax_error():
+COPY_FUN_DEF = FunctionDefinition(
+    id="copy_field",
+    params=[Sym(id="inp")],
+    expr=FunCall(fun=SymRef(id="deref"), args=[SymRef(id="inp")]),
+)
+
+
+def test_invalid_syntax_error_emtpy_return():
+    """Field operator syntax errors point to the file, line and column."""
+    import inspect
+
     def wrong_syntax(inp):
         return
 
+    lineno = inspect.getsourcelines(wrong_syntax)[1] + 1
+
     with pytest.raises(
         FieldOperatorSyntaxError,
-        match=r"Invalid Field Operator Syntax: Empty return not allowed \(test_interface.py, line \d+\)",
+        match=(
+            r"Invalid Field Operator Syntax: "
+            rf"Empty return not allowed \(test_interface.py, line {lineno}\)"
+        ),
     ):
         _ = FieldOperatorParser.parse(wrong_syntax)
+
+
+def test_invalid_syntax_no_return():
+    """Field operators must end with a return statement."""
+
+    def no_return(inp):
+        tmp = inp  # noqa
+
+    with pytest.raises(
+        FieldOperatorSyntaxError,
+        match=r"Field operator must return a field expression on the last line!",
+    ):
+        _ = FieldOperatorParser.parse(no_return)
+
+
+def test_invalid_syntax_unpacking():
+    """For now, only single target assigns are allowed."""
+
+    def invalid_unpacking(inp1, inp2):
+        tmp1, tmp2 = inp1, inp2  # noqa
+        return tmp1
+
+    with pytest.raises(FieldOperatorSyntaxError, match=r"Unpacking not allowed!"):
+        _ = FieldOperatorParser.parse(invalid_unpacking)
+
+
+def test_invalid_assign_to_expr():
+    """Assigning to subscripts disallowed until a usecase can be found."""
+
+    def invalid_assign_to_expr(inp1, inp2):
+        tmp = inp1
+        tmp[-1] = inp2
+        return tmp
+
+    with pytest.raises(FieldOperatorSyntaxError, match=r"Can only assign to names!"):
+        _ = FieldOperatorParser.parse(invalid_assign_to_expr)
 
 
 def test_copy_lower():
@@ -51,9 +102,19 @@ def test_copy_lower():
     # parsing
     parsed = FieldOperatorParser.parse(copy_field)
     lowered = FieldOperatorLowering.parse(parsed)
-    assert isinstance(lowered, FunctionDefinition)
-    assert lowered == FunctionDefinition(
-        id="copy_field",
-        params=[Sym(id="inp")],
-        expr=FunCall(fun=SymRef(id="deref"), args=[SymRef(id="inp")]),
-    )
+    assert lowered == COPY_FUN_DEF
+    assert lowered.expr == COPY_FUN_DEF.expr
+
+
+def test_temp_assignment():
+    def copy_field(inp):
+        tmp = inp
+        inp = tmp
+        tmp2 = inp
+        return tmp2
+
+    parsed = FieldOperatorParser.parse(copy_field)
+    lowered = FieldOperatorLowering.parse(parsed)
+
+    assert lowered == COPY_FUN_DEF
+    assert lowered.expr == COPY_FUN_DEF.expr
