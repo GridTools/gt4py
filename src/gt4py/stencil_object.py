@@ -33,25 +33,15 @@ FieldType = Union[gt_storage.storage.Storage, np.ndarray]
 OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 
-class FrozenStencil:
-    def __init__(
-        self,
-        stencil_object: "StencilObject",
-        origin: Dict[str, Tuple[int, ...]],
-        domain: Tuple[int, ...],
-    ):
-        self.stencil_object = stencil_object
-        self.origin = origin
-        self.domain = domain
-
-        for name, field_info in self.stencil_object.field_info.items():
-            if name not in self.origin or len(self.origin[name]) != field_info.ndim:
-                raise ValueError(
-                    f"Origin {self.origin.get(name)} is not a {field_info.ndim}-dimensional integer tuple"
-                )
-
-    def __call__(self, *args, **kwargs):
-        return self.stencil_object(*args, **kwargs, origin=self.origin, domain=self.domain)
+def _compute_cache_key(field_args, parameter_args, domain, origin) -> int:
+    field_hashes = tuple(
+        hash(name) + hash(field.shape) + hash(field.default_origin)
+        for name, field in field_args.items()
+    )
+    parameter_hashes = tuple(hash(name) + hash(param) for name, param in parameter_args.items())
+    domain_hash = hash(domain)
+    origin_hash = hash(origin)
+    return hash((*field_hashes, *parameter_hashes, domain_hash, origin_hash))
 
 
 class StencilObject(abc.ABC):
@@ -68,16 +58,13 @@ class StencilObject(abc.ABC):
     _gt_id_: str
     definition_func: Callable[..., Any]
 
+    _last_key: Optional[int] = None
+    """Stores the last computed hash."""
+
     def __new__(cls, *args, **kwargs):
         if getattr(cls, "_instance", None) is None:
             cls._instance = object.__new__(cls)
         return cls._instance
-
-    def __setattr__(self, key, value) -> None:
-        raise AttributeError("Attempting a modification of an attribute in a frozen class")
-
-    def __delattr__(self, item) -> None:
-        raise AttributeError("Attempting a deletion of an attribute in a frozen class")
 
     def __eq__(self, other) -> bool:
         return type(self) == type(other)
@@ -436,13 +423,22 @@ class StencilObject(abc.ABC):
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
 
-        origin = self._normalize_origins(field_args, origin)
+        cache_key = _compute_cache_key(field_args, parameter_args, domain, origin)
+        if cache_key != self._last_key:
+            origin = self._normalize_origins(field_args, origin)
 
-        if domain is None:
-            domain = self._get_max_domain(field_args, origin)
+            if domain is None:
+                domain = self._get_max_domain(field_args, origin)
 
-        if validate_args:
-            self._validate_args(field_args, parameter_args, domain, origin)
+            if validate_args:
+                self._validate_args(field_args, parameter_args, domain, origin)
+
+            self._last_key = cache_key
+            self._last_origin = origin
+            self._last_domain = domain
+        else:
+            origin = self._last_origin
+            domain = self._last_domain
 
         self.run(
             _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
@@ -450,8 +446,3 @@ class StencilObject(abc.ABC):
 
         if exec_info is not None:
             exec_info["call_run_end_time"] = time.perf_counter()
-
-    def freeze(
-        self: "StencilObject", origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
-    ) -> FrozenStencil:
-        return FrozenStencil(self, origin, domain)
