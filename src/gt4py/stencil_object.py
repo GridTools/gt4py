@@ -33,6 +33,27 @@ FieldType = Union[gt_storage.storage.Storage, np.ndarray]
 OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 
+class FrozenStencil:
+    def __init__(
+        self,
+        stencil_object: "StencilObject",
+        origin: Dict[str, Tuple[int, ...]],
+        domain: Tuple[int, ...],
+    ):
+        self.stencil_object = stencil_object
+        self.origin = origin
+        self.domain = domain
+
+        for name, field_info in self.stencil_object.field_info.items():
+            if name not in self.origin or len(self.origin[name]) != field_info.ndim:
+                raise ValueError(
+                    f"Origin {self.origin.get(name)} is not a {field_info.ndim}-dimensional integer tuple"
+                )
+
+    def __call__(self, *args, **kwargs):
+        return self.stencil_object(*args, **kwargs, origin=self.origin, domain=self.domain)
+
+
 class StencilObject(abc.ABC):
     """Generic singleton implementation of a stencil function.
 
@@ -46,7 +67,6 @@ class StencilObject(abc.ABC):
     # Those attributes are added to the class at loading time:
     _gt_id_: str
     definition_func: Callable[..., Any]
-    last_key: Optional[int] = None
 
     def __new__(cls, *args, **kwargs):
         if getattr(cls, "_instance", None) is None:
@@ -148,8 +168,8 @@ class StencilObject(abc.ABC):
 
     def _get_max_domain(
         self,
-        origin: Dict[str, Tuple[int, ...]],
         field_args: Dict[str, Any],
+        origin: Dict[str, Tuple[int, ...]],
         *,
         squeeze: bool = True,
     ) -> Shape:
@@ -192,7 +212,13 @@ class StencilObject(abc.ABC):
         else:
             return max_domain
 
-    def _validate_args(self, field_args, param_args, domain, origin) -> None:  # noqa: C901
+    def _validate_args(  # noqa: C901
+        self,
+        field_args: Dict[str, FieldType],
+        param_args: Dict[str, Any],
+        domain: Tuple[int, ...],
+        origin: Dict[str, Tuple[int, ...]],
+    ) -> None:
         """
         Validate input arguments to _call_run.
 
@@ -290,7 +316,7 @@ class StencilObject(abc.ABC):
                         f"Origin for field {name} too small. Must be at least {min_origin}, is {field_domain_origin}"
                     )
 
-                spatial_domain = domain.filter_mask(field_domain_mask)
+                spatial_domain = Shape(domain).filter_mask(field_domain_mask)
                 upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
                 min_shape = tuple(
                     o + d + h for o, d, h in zip(field_domain_origin, spatial_domain, upper_indices)
@@ -311,7 +337,7 @@ class StencilObject(abc.ABC):
                     )
 
     def _normalize_origins(
-        self, origin, field_args: Dict[str, FieldType]
+        self, field_args: Dict[str, FieldType], origin: Optional[OriginType]
     ) -> Dict[str, Tuple[int, ...]]:
         origin = self._make_origin_dict(origin)
         all_origin = origin.get("_all_", None)
@@ -341,6 +367,7 @@ class StencilObject(abc.ABC):
 
                 else:
                     origin[name] = (0,) * field_info.ndim
+
         return origin
 
     def _call_run(
@@ -356,8 +383,8 @@ class StencilObject(abc.ABC):
         """
         Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
 
-        Note that this function will always try to expand simple parameter values to
-        complete data structures by repeating the same value as many times as needed.
+        Note that this function will always try to expand simple parameter values to complete
+        data structures by repeating the same value as many times as needed.
 
         Parameters
         ----------
@@ -409,10 +436,10 @@ class StencilObject(abc.ABC):
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
 
-        origin = self._normalize_origins(origin, field_args)
+        origin = self._normalize_origins(field_args, origin)
 
         if domain is None:
-            domain = self._get_max_domain(origin, field_args)
+            domain = self._get_max_domain(field_args, origin)
 
         if validate_args:
             self._validate_args(field_args, parameter_args, domain, origin)
@@ -423,3 +450,8 @@ class StencilObject(abc.ABC):
 
         if exec_info is not None:
             exec_info["call_run_end_time"] = time.perf_counter()
+
+    def freeze(
+        self: "StencilObject", origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
+    ) -> FrozenStencil:
+        return FrozenStencil(self, origin, domain)
