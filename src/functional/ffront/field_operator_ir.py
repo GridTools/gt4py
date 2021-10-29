@@ -14,7 +14,7 @@ class Expr(Node):
     ...
 
 
-class NamedExpr(Expr):
+class SymExpr(Expr):
     id: SymbolName  # noqa: A003
     expr: Expr
 

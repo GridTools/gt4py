@@ -64,7 +64,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     def visit_arguments(self, node: ast.arguments) -> foir.Sym:
         return [foir.Sym(id=arg.arg) for arg in node.args]
 
-    def visit_Assign(self, node: ast.Assign) -> foir.NamedExpr:
+    def visit_Assign(self, node: ast.Assign) -> foir.SymExpr:
         target = node.targets[0]  # can there be more than one element?
         if isinstance(target, ast.Tuple):
             raise FieldOperatorSyntaxError(
@@ -78,7 +78,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                 lineno=target.lineno,
                 offset=target.col_offset,
             )
-        return foir.NamedExpr(
+        return foir.SymExpr(
             id=target.id,
             expr=self.visit(node.value),
         )
@@ -109,34 +109,30 @@ class FieldOperatorParser(ast.NodeVisitor):
         )
 
 
-class NamedExpressionResolver(NodeTranslator):
+class SymExprResolver(NodeTranslator):
     @classmethod
     def parse(cls, nodes: List[foir.Expr], *, params: Optional[list[iir.Sym]] = None) -> foir.Expr:
         names: dict[str, foir.Expr] = {}
-        symtable = {sym.id: sym for sym in params} if params else {}
         parser = cls()
         for node in nodes[:-1]:
-            names.update(parser.visit(node, names=names, symtable=symtable))
-        return foir.Return(value=parser.visit(nodes[-1], names=names, symtable=symtable))
+            names.update(parser.visit(node, names=names))
+        return foir.Return(value=parser.visit(nodes[-1], names=names))
 
-    def visit_NamedExpr(
+    def visit_SymExpr(
         self,
-        node: foir.NamedExpr,
+        node: foir.SymExpr,
         *,
         names: Optional[dict[str, foir.Expr]] = None,
-        symtable: Optional[dict[str, iir.Sym]] = None,
     ) -> dict[str, iir.Expr]:
-        return {node.id: self.visit(node.expr, names=names, symtable=symtable)}
+        return {node.id: self.visit(node.expr, names=names)}
 
     def visit_Name(
         self,
         node: foir.Name,
         *,
         names: Optional[dict[str, foir.Expr]] = None,
-        symtable: Optional[dict[str, iir.Sym]],
     ):
         names = names or {}
-        symtable = symtable or {}
         if node.id in names:
             return names[node.id]
         return foir.SymRef(id=node.id)
@@ -156,7 +152,7 @@ class FieldOperatorLowering(NodeTranslator):
     def body_visit(
         self, exprs: List[foir.Expr], params: Optional[List[iir.Sym]] = None
     ) -> iir.Expr:
-        return self.visit(NamedExpressionResolver.parse(exprs))
+        return self.visit(SymExprResolver.parse(exprs))
 
     def visit_Return(self, node: foir.Return) -> iir.Expr:
         return self.visit(node.value)
