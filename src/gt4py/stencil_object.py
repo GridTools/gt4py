@@ -290,7 +290,7 @@ class StencilObject(abc.ABC):
                 ):
                     raise ValueError(
                         f"Storage for '{name}' has domain mask '{field.mask}' but the API signature "
-                        f"expects '[{', '.join(field_domain_mask)}]'"
+                        f"expects '[{', '.join(field_info.axes)}]'"
                     )
 
                 min_origin = gt_utils.interpolate_mask(
