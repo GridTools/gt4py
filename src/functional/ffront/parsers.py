@@ -62,6 +62,7 @@ class AssignmentTargetParser(ast.NodeVisitor):
 
 
 class AssignmentSourceParser(ast.NodeVisitor):
+    # TODO (ricoh): catch field operator calls that return multiple fields
     def __init__(self, n_targets: int):
         super().__init__()
         self.n_targets = n_targets
@@ -75,7 +76,7 @@ class AssignmentSourceParser(ast.NodeVisitor):
 
     def generic_visit(self, node) -> None:
         raise FieldOperatorSyntaxError(
-            "Invalid assignment target!",
+            "Invalid assignment source!",
             lineno=node.lineno,
             offset=node.col_offset,
         )
@@ -166,9 +167,6 @@ class FieldOperatorParser(ast.NodeVisitor):
                 expr=self.visit(node.value),
             )
         yield from []
-
-    def visit_List(self, node: ast.List) -> foir.List:
-        return foir.List(elts=node.elts)
 
     def visit_Return(self, node: ast.Return) -> Iterator[foir.Return]:
         if not node.value:
