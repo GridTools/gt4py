@@ -31,6 +31,10 @@ class Name(Expr):
     id: SymbolName  # noqa: A003
 
 
+class List(Expr):
+    elts: list[Expr]
+
+
 class FieldOperator(Node):
     id: SymbolName  # noqa: A003
     params: list[Sym]

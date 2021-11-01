@@ -17,7 +17,7 @@
 import ast
 import inspect
 import textwrap
-from typing import Callable, List, Optional
+from typing import Callable, Iterator, List, Optional, Union
 
 from eve import NodeTranslator
 from functional.ffront import field_operator_ir as foir
@@ -34,6 +34,76 @@ class FieldOperatorSyntaxError(SyntaxError):
         self.lineno = lineno
         self.offset = offset
         self.filename = filename
+
+
+class AssignmentTargetParser(ast.NodeVisitor):
+    @classmethod
+    def parse(cls, node: ast.AST) -> Iterator[ast.AST]:
+        yield from cls().visit(node)
+
+    def generic_visit(self, node) -> None:
+        raise FieldOperatorSyntaxError(
+            "Invalid assignment target!",
+            lineno=node.lineno,
+            offset=node.col_offset,
+        )
+
+    def visit_Name(self, node: ast.Name) -> Iterator[ast.Name]:
+        yield node
+
+    def visit_Tuple(self, node: ast.Tuple) -> Iterator[ast.AST]:
+        yield from self.visit_sequence(node)
+
+    def visit_List(self, node: ast.List) -> Iterator[ast.AST]:
+        yield from self.visit_sequence(node)
+
+    def visit_sequence(self, node: Union[ast.List, ast.Tuple]) -> Iterator[ast.AST]:
+        yield from node.elts
+
+
+class AssignmentSourceParser(ast.NodeVisitor):
+    def __init__(self, n_targets: int):
+        super().__init__()
+        self.n_targets = n_targets
+
+    @classmethod
+    def parse(cls, node: ast.AST, n_targets: int) -> Iterator[ast.AST]:
+        if n_targets == 1:
+            yield node
+        else:
+            yield from cls(n_targets=n_targets).visit(node)
+
+    def generic_visit(self, node) -> None:
+        raise FieldOperatorSyntaxError(
+            "Invalid assignment target!",
+            lineno=node.lineno,
+            offset=node.col_offset,
+        )
+
+    def visit_Name(self, node: ast.Name) -> Iterator[ast.Name]:
+        yield node
+
+    def visit_Tuple(self, node: ast.Tuple) -> Iterator[ast.AST]:
+        yield from self.visit_sequence(node)
+
+    def visit_List(self, node: ast.List) -> Iterator[ast.AST]:
+        yield from self.visit_sequence(node)
+
+    def visit_sequence(self, node: Union[ast.List, ast.Tuple]) -> Iterator[ast.AST]:
+        if len(node.elts) < self.n_targets:
+            raise FieldOperatorSyntaxError(
+                "Too few values to unpack!",
+                lineno=node.lineno,
+                offset=node.col_offset,
+            )
+        if len(node.elts) > self.n_targets:
+            raise FieldOperatorSyntaxError(
+                "Too many values to unpack!",
+                lineno=node.elts[self.n_targets].lineno,
+                offset=node.elts[self.n_targets].col_offset,
+            )
+
+        yield from node.elts
 
 
 class FieldOperatorParser(ast.NodeVisitor):
@@ -64,31 +134,48 @@ class FieldOperatorParser(ast.NodeVisitor):
     def visit_arguments(self, node: ast.arguments) -> foir.Sym:
         return [foir.Sym(id=arg.arg) for arg in node.args]
 
-    def visit_Assign(self, node: ast.Assign) -> foir.SymExpr:
-        target = node.targets[0]  # can there be more than one element?
-        if isinstance(target, ast.Tuple):
+    def visit_Assign(self, node: ast.Assign) -> Iterator[foir.SymExpr]:
+        if len(node.targets) == 1 and isinstance(target := node.targets[0], ast.Name):
+            yield foir.SymExpr(
+                id=target.id,
+                expr=self.visit(node.value),
+            )
+        else:
+            for target in node.targets:
+                subtargets = list(AssignmentTargetParser.parse(target))
+                subsources = list(
+                    AssignmentSourceParser.parse(node.value, n_targets=len(subtargets))
+                )
+                for sub_tgt, sub_src in zip(subtargets, subsources):
+                    # TODO (ricoh): maybe track types by creating an AnnAssign here
+                    new_assign = ast.Assign(targets=[sub_tgt], value=sub_src)
+                    ast.copy_location(new_assign, node)
+                    yield from self.visit(new_assign)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> Iterator[foir.SymExpr]:
+        # TODO (ricoh): track types here
+        if not isinstance(node.target, ast.Name):
             raise FieldOperatorSyntaxError(
-                "Unpacking not allowed!",
+                "Invalid assignment target!",
                 lineno=node.lineno,
                 offset=node.col_offset,
             )
-        if not isinstance(target, ast.Name):
-            raise FieldOperatorSyntaxError(
-                "Can only assign to names!",
-                lineno=target.lineno,
-                offset=target.col_offset,
+        if node.value:
+            yield foir.SymExpr(
+                id=node.target.id,
+                expr=self.visit(node.value),
             )
-        return foir.SymExpr(
-            id=target.id,
-            expr=self.visit(node.value),
-        )
+        yield from []
 
-    def visit_Return(self, node: ast.Return) -> foir.Return:
+    def visit_List(self, node: ast.List) -> foir.List:
+        return foir.List(elts=node.elts)
+
+    def visit_Return(self, node: ast.Return) -> Iterator[foir.Return]:
         if not node.value:
             raise FieldOperatorSyntaxError(
                 "Empty return not allowed", lineno=node.lineno, offset=node.col_offset
             )
-        return foir.Return(value=self.visit(node.value))
+        yield foir.Return(value=self.visit(node.value))
 
     def visit_stmt_list(self, nodes: List[ast.stmt]) -> List[foir.Expr]:
         if not isinstance(last_node := nodes[-1], ast.Return):
@@ -97,12 +184,15 @@ class FieldOperatorParser(ast.NodeVisitor):
                 lineno=last_node.lineno,
                 offset=last_node.col_offset,
             )
-        return [self.visit(node) for node in nodes]
+        return [new_node for node in nodes for new_node in [*self.visit(node)]]
 
     def visit_Name(self, node: ast.Name) -> foir.Name:
         return foir.Name(id=node.id)
 
     def generic_visit(self, node) -> None:
+        import astpretty
+
+        astpretty.pprint(node)
         raise FieldOperatorSyntaxError(
             lineno=node.lineno,
             offset=node.col_offset,
