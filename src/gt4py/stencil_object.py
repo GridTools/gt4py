@@ -34,14 +34,13 @@ OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 
 def _compute_cache_key(field_args, parameter_args, domain, origin) -> int:
-    field_hashes = tuple(
-        hash(name) + hash(field.shape) + hash(field.default_origin)
+    field_data = tuple(
+        name + str(field.shape) + str(field.default_origin)
         for name, field in field_args.items()
+        if field is not None
     )
-    parameter_hashes = tuple(hash(name) + hash(param) for name, param in parameter_args.items())
-    domain_hash = hash(domain)
-    origin_hash = hash(origin)
-    return hash((*field_hashes, *parameter_hashes, domain_hash, origin_hash))
+    parameter_data = tuple(parameter_args.keys())
+    return hash((*field_data, *parameter_data, str(domain), str(origin)))
 
 
 class StencilObject(abc.ABC):
@@ -58,8 +57,8 @@ class StencilObject(abc.ABC):
     _gt_id_: str
     definition_func: Callable[..., Any]
 
-    _last_key: Optional[int] = None
-    """Stores the last computed hash."""
+    _seen_domain_origin: Dict[int, Tuple[Tuple[int, ...], Dict[str, Tuple[int, ...]]]] = {}
+    """Stores domain/origin pairs that have been used by hash."""
 
     def __new__(cls, *args, **kwargs):
         if getattr(cls, "_instance", None) is None:
@@ -422,7 +421,7 @@ class StencilObject(abc.ABC):
             exec_info["call_run_start_time"] = time.perf_counter()
 
         cache_key = _compute_cache_key(field_args, parameter_args, domain, origin)
-        if cache_key != self._last_key:
+        if cache_key not in self._seen_domain_origin:
             origin = self._normalize_origins(field_args, origin)
 
             if domain is None:
@@ -431,12 +430,10 @@ class StencilObject(abc.ABC):
             if validate_args:
                 self._validate_args(field_args, parameter_args, domain, origin)
 
-            self._last_key = cache_key
-            self._last_origin = origin
-            self._last_domain = domain
+            self._seen_domain_origin[cache_key] = (domain, origin)
         else:
-            origin = self._last_origin
-            domain = self._last_domain
+            domain = self._seen_domain_origin[cache_key][0]
+            origin = self._seen_domain_origin[cache_key][1]
 
         self.run(
             _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
