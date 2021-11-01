@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Callable, Optional, Protocol, Sequence, Type, Union
 
 from eve.visitors import NodeVisitor
@@ -40,29 +40,21 @@ from gtc.passes.oir_optimizations.temporaries import (
 from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 
 
-PASS_T = Union[Callable[[oir.Stencil], oir.Stencil], Type[NodeVisitor]]
+PassT = Union[Callable[[oir.Stencil], oir.Stencil], Type[NodeVisitor]]
 
 
-class ClassMethodPass(Protocol):
-    __func__: Callable[[oir.Stencil], oir.Stencil]
-
-
-def hash_step(step: Callable) -> int:
-    return hash(step)
-
-
-class OirPipeline(ABC):
+class OirPipeline(Protocol):
     @abstractmethod
     def __hash__(self) -> int:
-        pass
+        raise NotImplementedError("Missing implementation of __hash__")
 
     @abstractmethod
     def __repr__(self) -> str:
-        pass
+        raise NotImplementedError("Missing implementation of __repr__")
 
     @abstractmethod
     def run(self, oir: oir.Stencil) -> oir.Stencil:
-        pass
+        raise NotImplementedError("Missing implementation of run")
 
 
 class DefaultPipeline(OirPipeline):
@@ -72,11 +64,11 @@ class DefaultPipeline(OirPipeline):
     May only call existing passes and may not contain any pass logic itself.
     """
 
-    def __init__(self, *, skip: Optional[Sequence[PASS_T]] = None):
+    def __init__(self, *, skip: Optional[Sequence[PassT]] = None):
         self.skip = skip or []
 
     @staticmethod
-    def all_steps() -> Sequence[PASS_T]:
+    def all_steps() -> Sequence[PassT]:
         return [
             graph_merge_horizontal_executions,
             AdjacentLoopMerging,
@@ -94,12 +86,11 @@ class DefaultPipeline(OirPipeline):
         ]
 
     @property
-    def steps(self) -> Sequence[PASS_T]:
-        hash_skips = {hash_step(step) for step in self.skip}
-        return [step for step in self.all_steps() if hash_step(step) not in hash_skips]
+    def steps(self) -> Sequence[PassT]:
+        return [step for step in self.all_steps() if step not in self.skip]
 
     def __hash__(self) -> int:
-        return hash(self.steps)
+        return hash(repr(self))
 
     def __repr__(self) -> str:
         return str([step.__name__ for step in self.steps])

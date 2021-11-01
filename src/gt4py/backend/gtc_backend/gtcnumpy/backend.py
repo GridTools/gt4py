@@ -128,20 +128,20 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         return self.make_module()
 
     def _make_npir(self) -> npir.Computation:
-        default_pipeline = DefaultPipeline(
-            skip=[
-                IJCacheDetection,
-                KCacheDetection,
-                PruneKCacheFills,
-                PruneKCacheFlushes,
-                FillFlushToLocalKCaches,
-            ]
-        )
         base_oir = GTIRToOIR().visit(self.builder.gtir)
-        oir = self.builder.options.backend_opts.get(
+        oir_pipeline = self.builder.options.backend_opts.get(
             "oir_pipeline",
-            default_pipeline,
-        ).run(base_oir)
+            DefaultPipeline(
+                skip=[
+                    IJCacheDetection,
+                    KCacheDetection,
+                    PruneKCacheFills,
+                    PruneKCacheFlushes,
+                    FillFlushToLocalKCaches,
+                ]
+            ),
+        )
+        oir = oir_pipeline.run(base_oir)
         return OirToNpir().visit(oir)
 
     @property
