@@ -27,6 +27,7 @@ import boltons.typeutils
 import pydantic
 import xxhash
 from boltons.typeutils import classproperty  # noqa: F401
+from pydantic import validator
 from pydantic import NegativeFloat, NegativeInt, PositiveFloat, PositiveInt  # noqa
 from pydantic import StrictBool as Bool  # noqa: F401
 from pydantic import StrictFloat as Float  # noqa: F401
@@ -34,7 +35,7 @@ from pydantic import StrictInt as Int  # noqa: F401
 from pydantic import StrictStr as Str
 from pydantic.types import ConstrainedStr
 
-from .typingx import Any, Callable, Generator, Type, Union
+from .typingx import Any, Callable, Generator, Optional, Tuple, Type, Union
 
 
 #: Marker value used to avoid confusion with `None`
@@ -179,3 +180,25 @@ class SourceLocation(pydantic.BaseModel):
     class Config:
         extra = "forbid"
         allow_mutation = False
+
+
+class SourceLocationGroup(pydantic.BaseModel):
+    """A group of merged source code locations (with optional info)."""
+
+    locations: Tuple[SourceLocation, ...]
+    context: Optional[Union[str, Tuple[str, ...]]]
+
+    def __init__(
+        self, *locations: SourceLocation, context: Optional[Union[str, Tuple[str, ...]]] = None
+    ) -> None:
+        super().__init__(locations=locations, context=context)
+
+    def __str__(self) -> str:
+        output = f"[{', '.join(str(loc) for loc in self.locations)}]"
+        return f"{output}#<{self.context}>" if self.context is not None else output
+
+    @validator("locations")
+    def non_empty_tuple(cls, v):
+        if not v:
+            raise ValueError("At least one location should be provided")
+        return v

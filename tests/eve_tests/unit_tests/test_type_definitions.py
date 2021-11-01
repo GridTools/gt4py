@@ -63,3 +63,25 @@ class TestSourceLocation:
     def test_str(self):
         loc = eve.type_definitions.SourceLocation(line=1, column=1, source="source")
         assert str(loc) == "<source: Line 1, Col 1>"
+
+
+class TestSourceLocationGroup:
+    def test_valid_locations(self):
+        loc1 = eve.type_definitions.SourceLocation(line=1, column=1, source="source")
+        loc2 = eve.type_definitions.SourceLocation(line=2, column=2, source="source_2")
+        eve.type_definitions.SourceLocationGroup(loc1)
+        eve.type_definitions.SourceLocationGroup(loc1, loc2)
+        eve.type_definitions.SourceLocationGroup(loc1, loc1, loc2, loc2, context="test context")
+
+    def test_invalid_locations(self):
+        with pytest.raises(pydantic.ValidationError):
+            eve.type_definitions.SourceLocationGroup()
+        loc1 = eve.type_definitions.SourceLocation(line=1, column=1, source="source")
+        with pytest.raises(pydantic.ValidationError):
+            eve.type_definitions.SourceLocationGroup(loc1, "loc2")
+
+    def test_str(self):
+        loc1 = eve.type_definitions.SourceLocation(line=1, column=1, source="source")
+        loc2 = eve.type_definitions.SourceLocation(line=2, column=2, source="source_2")
+        loc = eve.type_definitions.SourceLocationGroup(loc1, loc2, context="test context")
+        assert str(loc) == "[<source: Line 1, Col 1>, <source_2: Line 2, Col 2>]#<test context>"
