@@ -19,7 +19,7 @@ import collections.abc
 import sys
 import time
 import warnings
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Union, cast
 
 import numpy as np
 
@@ -160,8 +160,7 @@ class StencilObject(abc.ABC):
         *,
         squeeze: bool = True,
     ) -> Shape:
-        """
-        Return the maximum domain size possible.
+        """Return the maximum domain size possible.
 
         Parameters
         ----------
@@ -199,7 +198,7 @@ class StencilObject(abc.ABC):
         else:
             return max_domain
 
-    def _validate_args(  # noqa: C901
+    def _validate_args(  # noqa: C901  # Function is too complex
         self,
         field_args: Dict[str, FieldType],
         param_args: Dict[str, Any],
@@ -303,7 +302,7 @@ class StencilObject(abc.ABC):
                         f"Origin for field {name} too small. Must be at least {min_origin}, is {field_domain_origin}"
                     )
 
-                spatial_domain = Shape(domain).filter_mask(field_domain_mask)
+                spatial_domain = cast(Shape, domain).filter_mask(field_domain_mask)
                 upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
                 min_shape = tuple(
                     o + d + h for o, d, h in zip(field_domain_origin, spatial_domain, upper_indices)
@@ -367,8 +366,7 @@ class StencilObject(abc.ABC):
         validate_args: bool = True,
         exec_info: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """
-        Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
+        """Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
 
         Note that this function will always try to expand simple parameter values to complete
         data structures by repeating the same value as many times as needed.

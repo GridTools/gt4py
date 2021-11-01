@@ -34,7 +34,7 @@ from gt4py.utils.attrib import attribclass, attribkwclass, attribute
 class CartesianSpace:
     @enum.unique
     class Axis(enum.Enum):
-        I = 0  # noqa: E741
+        I = 0  # noqa: E741  # Do not use variables named 'I', 'O', or 'l'
         J = 1
         K = 2
 
@@ -510,8 +510,7 @@ class Boundary(FrameTuple):
 
 
 class Extent(FrameTuple):
-    """
-    Region defined by the smallest and the largest offsets.
+    """Region defined by the smallest and the largest offsets.
 
     Size of boundary regions are expressed as minimum and maximum relative offsets related
     to the computation position. For example the frame for a stencil accessing 3 elements
@@ -613,8 +612,7 @@ class Extent(FrameTuple):
 
 
 class CenteredExtent(Extent):
-    """
-    Region defined by the largest negative offset (or zero) and the largest positive offset (or zero).
+    """Region defined by the largest negative offset (or zero) and the largest positive offset (or zero).
 
     Size of boundary regions are expressed as minimum and maximum relative offsets related
     to the computation position. For example the frame for a stencil accessing 3 elements
