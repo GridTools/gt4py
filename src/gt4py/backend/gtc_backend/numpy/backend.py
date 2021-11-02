@@ -26,7 +26,7 @@ from gt4py.backend.debug_backend import (
 )
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.numpy import npir
-from gtc.numpy.npir_codegen import NpirGen
+from gtc.numpy.npir_codegen import NpirCodegen
 from gtc.numpy.oir_to_npir import OirToNpir
 from gtc.passes.oir_optimizations.caches import (
     FillFlushToLocalKCaches,
@@ -109,7 +109,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
             + ".py"
         )
 
-        source = NpirGen.apply(self.npir)
+        source = NpirCodegen.apply(self.npir)
         if self.builder.options.format_source:
             source = format_source("python", source)
 

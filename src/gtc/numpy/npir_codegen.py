@@ -26,7 +26,7 @@ from gtc import common
 from gtc.numpy import npir
 
 
-__all__ = ["NpirGen"]
+__all__ = ["NpirCodegen"]
 
 
 def op_delta_from_int(value: int) -> Tuple[str, str]:
@@ -149,7 +149,7 @@ class ExtentCalculator(NodeVisitor):
             )
 
 
-class NpirGen(TemplatedGenerator):
+class NpirCodegen(TemplatedGenerator):
     def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
         return f"np.{node.name.lower()}"
 
