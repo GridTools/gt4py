@@ -14,7 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Dict, List, Union, cast
+import numbers
+from typing import Any, Dict, List, Union, cast
 
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
@@ -29,6 +30,7 @@ from gt4py.ir.nodes import (
     BuiltinLiteral,
     Cast,
     ComputationBlock,
+    Expr,
     FieldDecl,
     FieldRef,
     If,
@@ -46,13 +48,6 @@ from gt4py.ir.nodes import (
 )
 from gtc import common, gtir
 from gtc.common import ExprKind
-
-
-def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:
-    i = offset["I"] if "I" in offset else 0
-    j = offset["J"] if "J" in offset else 0
-    k = offset["K"] if "K" in offset else 0
-    return gtir.CartesianOffset(i=i, j=j, k=k)
 
 
 class DefIRToGTIR(IRNodeVisitor):
@@ -128,9 +123,7 @@ class DefIRToGTIR(IRNodeVisitor):
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
         vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
         return gtir.Stencil(
-            name=node.name.split(".")[
-                -1
-            ],  # TODO probably definition IR should not contain '.' in the name
+            name=node.name,
             params=[
                 self.visit(f, all_params={**field_params, **scalar_params})
                 for f in node.api_signature
@@ -226,7 +219,7 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_FieldRef(self, node: FieldRef):
         return gtir.FieldAccess(
             name=node.name,
-            offset=transform_offset(node.offset),
+            offset=self.transform_offset(node.offset),
             data_index=[self.visit(index) for index in node.data_index],
         )
 
@@ -275,3 +268,14 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_VarDecl(self, node: VarDecl):
         # datatype conversion works via same ID
         return gtir.ScalarDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
+
+    def transform_offset(
+        self, offset: Dict[str, Union[int, Expr]], **kwargs: Any
+    ) -> Union[gtir.CartesianOffset, gtir.VariableKOffset]:
+        k_val = offset.get("K", 0)
+        if isinstance(k_val, numbers.Integral):
+            return gtir.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)
+        elif isinstance(k_val, Expr):
+            return gtir.VariableKOffset(k=self.visit(k_val, **kwargs))
+        else:
+            raise TypeError("Unrecognized vertical offset type")

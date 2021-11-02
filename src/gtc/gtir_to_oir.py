@@ -83,10 +83,15 @@ class GTIRToOIR(NodeTranslator):
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> oir.FieldAccess:
         return oir.FieldAccess(
             name=node.name,
-            offset=node.offset,
+            offset=self.visit(node.offset),
             data_index=self.visit(node.data_index),
             dtype=node.dtype,
         )
+
+    def visit_VariableKOffset(
+        self, node: gtir.VariableKOffset, **kwargs: Any
+    ) -> oir.VariableKOffset:
+        return oir.VariableKOffset(k=self.visit(node.k))
 
     def visit_ScalarAccess(self, node: gtir.ScalarAccess, **kwargs: Any) -> oir.ScalarAccess:
         return oir.ScalarAccess(name=node.name, dtype=node.dtype)
@@ -108,7 +113,7 @@ class GTIRToOIR(NodeTranslator):
         )
 
     def visit_Cast(self, node: gtir.Cast, **kwargs: Any) -> oir.Cast:
-        return oir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
+        return oir.Cast(dtype=node.dtype, expr=self.visit(node.expr))
 
     def visit_FieldDecl(self, node: gtir.FieldDecl, **kwargs: Any) -> oir.FieldDecl:
         return oir.FieldDecl(

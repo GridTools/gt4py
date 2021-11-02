@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gtc.common import DataType
-from gtc.passes.oir_optimizations.utils import Access, AccessCollector
+from gtc.passes.oir_optimizations.utils import AccessCollector, GeneralAccess
 
 from ...oir_utils import (
     AssignStmtFactory,
@@ -67,13 +67,13 @@ def test_access_collector():
         "mask": {(-1, -1, 1)},
     }
     ordered_accesses = [
-        Access(field="foo", offset=(1, 0, 0), is_write=False),
-        Access(field="tmp", offset=(0, 0, 0), is_write=True),
-        Access(field="tmp", offset=(0, 0, 0), is_write=False),
-        Access(field="bar", offset=(0, 0, 0), is_write=True),
-        Access(field="mask", offset=(-1, -1, 1), is_write=False),
-        Access(field="tmp", offset=(0, 1, 0), is_write=False),
-        Access(field="baz", offset=(0, 0, 0), is_write=True),
+        GeneralAccess(field="foo", offset=(1, 0, 0), is_write=False),
+        GeneralAccess(field="tmp", offset=(0, 0, 0), is_write=True),
+        GeneralAccess(field="tmp", offset=(0, 0, 0), is_write=False),
+        GeneralAccess(field="bar", offset=(0, 0, 0), is_write=True),
+        GeneralAccess(field="mask", offset=(-1, -1, 1), is_write=False),
+        GeneralAccess(field="tmp", offset=(0, 1, 0), is_write=False),
+        GeneralAccess(field="baz", offset=(0, 0, 0), is_write=True),
     ]
 
     result = AccessCollector.apply(testee)

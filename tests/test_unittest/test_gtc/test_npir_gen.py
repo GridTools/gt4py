@@ -361,7 +361,8 @@ def test_computation() -> None:
     print(result)
     match = re.match(
         (
-            r"import numpy as np\n\n\n"
+            r"import numpy as np\n"
+            r"import numbers\n+"
             r"def run\(\*, _domain_, _origin_\):\n"
             r"\n?"
             r"(    .*?\n)*"
