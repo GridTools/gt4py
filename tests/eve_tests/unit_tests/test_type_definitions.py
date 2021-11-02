@@ -84,4 +84,4 @@ class TestSourceLocationGroup:
         loc1 = eve.type_definitions.SourceLocation(line=1, column=1, source="source")
         loc2 = eve.type_definitions.SourceLocation(line=2, column=2, source="source_2")
         loc = eve.type_definitions.SourceLocationGroup(loc1, loc2, context="test context")
-        assert str(loc) == "[<source: Line 1, Col 1>, <source_2: Line 2, Col 2>]#<test context>"
+        assert str(loc) == "<#test context[<source: Line 1, Col 1>, <source_2: Line 2, Col 2>]>"

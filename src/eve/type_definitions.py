@@ -194,8 +194,9 @@ class SourceLocationGroup(pydantic.BaseModel):
         super().__init__(locations=locations, context=context)
 
     def __str__(self) -> str:
-        output = f"[{', '.join(str(loc) for loc in self.locations)}]"
-        return f"{output}#<{self.context}>" if self.context is not None else output
+        locs = ", ".join(str(loc) for loc in self.locations)
+        context = f"#{self.context}" if self.context else ""
+        return f"<{context}[{locs}]>"
 
     @validator("locations")
     def non_empty_tuple(cls, v):
