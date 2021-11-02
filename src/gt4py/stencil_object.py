@@ -18,9 +18,10 @@ import abc
 import collections.abc
 import sys
 import time
+import typing
 import warnings
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple, Union, cast
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -312,7 +313,7 @@ class StencilObject(abc.ABC):
                         f"Origin for field {name} too small. Must be at least {min_origin}, is {field_domain_origin}"
                     )
 
-                spatial_domain = cast(Shape, domain).filter_mask(field_domain_mask)
+                spatial_domain = typing.cast(Shape, domain).filter_mask(field_domain_mask)
                 upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
                 min_shape = tuple(
                     o + d + h for o, d, h in zip(field_domain_origin, spatial_domain, upper_indices)
