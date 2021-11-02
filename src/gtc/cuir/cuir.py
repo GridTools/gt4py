@@ -148,7 +148,9 @@ class IJExtent(LocNode):
         return cls(i=(0, 0), j=(0, 0))
 
     @classmethod
-    def from_offset(cls, offset: CartesianOffset) -> "IJExtent":
+    def from_offset(cls, offset: Union[CartesianOffset, VariableKOffset]) -> "IJExtent":
+        if isinstance(offset, VariableKOffset):
+            return cls(i=(0, 0), j=(0, 0))
         return cls(i=(offset.i, offset.i), j=(offset.j, offset.j))
 
     def union(*extents: "IJExtent") -> "IJExtent":
