@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import copy
 import itertools
 import typing
 from collections import OrderedDict
@@ -25,6 +26,78 @@ from eve.visitors import NodeTranslator
 
 from .. import common, oir
 from . import npir
+
+
+class AssignStmt(oir.AssignStmt):
+    """AssignStmt used in the lowering from oir to npir."""
+
+    horiz_mask: Optional[oir.HorizontalMask] = None
+
+
+class MaskStmt(oir.MaskStmt):
+    """MaskStmt used in the lowering from oir to npir."""
+
+    horiz_mask: Optional[oir.HorizontalMask] = None
+
+
+class HorizontalMaskInliner(NodeTranslator):
+    def __init__(self):
+        self.horiz_mask: Optional[oir.HorizontalMask] = None
+
+    @classmethod
+    def apply(cls, stencil: oir.Stencil) -> oir.Stencil:
+        transformer = cls()
+        return transformer.visit(copy.deepcopy(stencil))
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        return oir.Stencil(
+            name=node.name,
+            params=node.params,
+            vertical_loops=self.visit(node.vertical_loops, **kwargs),
+            declarations=node.declarations,
+        )
+
+    def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> oir.Expr:
+        if isinstance(node.left, oir.HorizontalMask):
+            self.horiz_mask = node.left
+            return node.right
+        elif isinstance(node.right, oir.HorizontalMask):
+            self.horiz_mask = node.right
+            return node.left
+        else:
+            return node
+
+    def visit_HorizontalMask(self, node: oir.HorizontalMask, **kwargs: Any) -> None:
+        self.horiz_mask = node
+
+    def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> AssignStmt:
+        return AssignStmt(left=node.left, right=node.right, horiz_mask=self.horiz_mask)
+
+    def visit_HorizontalExecution(
+        self, node: oir.HorizontalExecution, **kwargs: Any
+    ) -> oir.HorizontalExecution:
+        body = []
+        for stmt in node.body:
+            # NOTE(jdahm): The following assumes with horizontal(...) cannot be nested under MaskStmts, For, While, etc.
+            if isinstance(stmt, oir.MaskStmt):
+                # (Re)set horiz_mask to None before visit call
+                self.horiz_mask = None
+                mask_wout_regions = self.visit(stmt.mask, **kwargs)
+                stmts = [self.visit(sub_stmt, **kwargs) for sub_stmt in stmt.body]
+                if mask_wout_regions is None:
+                    # The mask was only a horizontal restriction, so inline the sub-stmts
+                    body.extend(stmts)
+                else:
+                    # This mask had more than a horizontal restriction
+                    body.append(
+                        MaskStmt(mask=mask_wout_regions, body=stmts, horiz_mask=self.horiz_mask)
+                    )
+                # (Re)set horiz_mask to None after visit call
+                self.horiz_mask = None
+            else:
+                body.append(self.visit(stmt, **kwargs))
+
+        return oir.HorizontalExecution(body=body, declarations=node.declarations)
 
 
 class OirToNpir(NodeTranslator):
@@ -49,7 +122,8 @@ class OirToNpir(NodeTranslator):
 
     contexts = (SymbolTableTrait.symtable_merger,)
 
-    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
+    def visit_Stencil(self, oir_node: oir.Stencil, **kwargs: Any) -> npir.Computation:
+        node = HorizontalMaskInliner.apply(oir_node)
         ctx = self.ComputationContext()
         vertical_passes = list(
             itertools.chain(
@@ -116,9 +190,12 @@ class OirToNpir(NodeTranslator):
             body=self.visit(node.body, ctx=ctx, **kwargs),
         )
 
+    def visit_HorizontalMask(self, node: oir.HorizontalMask, **kwargs: Any) -> npir.HorizontalMask:
+        return npir.HorizontalMask(i=node.i, j=node.j)
+
     def visit_MaskStmt(
         self,
-        node: oir.MaskStmt,
+        node: Union[MaskStmt, oir.MaskStmt],
         *,
         ctx: ComputationContext,
         parallel_k: bool,
@@ -135,15 +212,20 @@ class OirToNpir(NodeTranslator):
             )
             ctx.mask_temp_counter += 1
 
+        attrs = {}
+        if isinstance(node, MaskStmt):
+            attrs["horiz_mask"] = node.horiz_mask
+
         return npir.MaskBlock(
             mask=mask_expr,
             mask_name=mask_name,
             body=self.visit(node.body, ctx=ctx, parallel_k=parallel_k, mask=mask, **kwargs),
+            **attrs,
         )
 
     def visit_AssignStmt(
         self,
-        node: oir.AssignStmt,
+        node: Union[AssignStmt, oir.AssignStmt],
         *,
         ctx: Optional[ComputationContext] = None,
         mask: Optional[npir.VectorExpression] = None,
@@ -154,10 +236,16 @@ class OirToNpir(NodeTranslator):
             kwargs["symtable"].get(node.left.name, None), (oir.Temporary, oir.LocalScalar)
         ):
             ctx.ensure_temp_defined(node.left)
+
+        attrs = {}
+        if isinstance(node, AssignStmt):
+            attrs["horiz_mask"] = node.horiz_mask
+
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, is_lvalue=True, **kwargs),
             right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),
             mask=mask,
+            **attrs,
         )
 
     def visit_Cast(

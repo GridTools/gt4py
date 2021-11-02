@@ -26,12 +26,9 @@ CARTESIAN_PARALLEL_AXES = ("i", "j")
 
 
 def _overlap_along_axis(
-    extent: Tuple[int, int],
-    interval: common.HorizontalInterval,
+    extent: Tuple[int, int], interval: common.HorizontalInterval
 ) -> Optional[Tuple[int, int]]:
     """Return a tuple of the distances to the edge of the compute domain, if overlapping."""
-    LARGE_NUM = 10000
-
     if hasattr(interval.start, "level") and interval.start.level == common.LevelMarker.START:
         start_diff = extent[0] - interval.start.offset
     else:
@@ -49,8 +46,8 @@ def _overlap_along_axis(
         if interval.start.offset > extent[1]:
             return None
 
-    start_diff = min(start_diff, 0) if start_diff is not None else -LARGE_NUM
-    end_diff = max(end_diff, 0) if end_diff is not None else LARGE_NUM
+    start_diff = min(start_diff, 0) if start_diff is not None else -10000
+    end_diff = max(end_diff, 0) if end_diff is not None else 10000
     return (start_diff, end_diff)
 
 
@@ -61,12 +58,62 @@ def compute_extent_difference(extent: Extent, mask: common.HorizontalMask) -> Op
     unexecuted regions.
     """
     diffs = [
-        _overlap_along_axis(extent[i], interval) if interval else None
-        for i, interval in enumerate((mask.i, mask.j))
+        _overlap_along_axis(extent[i], interval) for i, interval in enumerate((mask.i, mask.j))
     ]
     if any(d is None for d in diffs):
         return None
     return Extent((diffs[0], diffs[1], (0, 0)))
+
+
+def _compute_relative_interval(
+    extent: Tuple[int, int], interval: common.HorizontalInterval
+) -> common.HorizontalInterval:
+    def compute_offset(
+        extent: Tuple[int, int], bound: Optional[common.AxisBound], start: bool = True
+    ) -> Tuple[common.LevelMarker, int]:
+        if bound:
+            if start:
+                if bound.level == common.LevelMarker.START:
+                    offset = max(0, bound.offset - extent[0])
+                else:
+                    offset = min(0, bound.offset - extent[1])
+            else:
+                if bound.level == common.LevelMarker.END:
+                    offset = min(0, bound.offset - extent[1])
+                else:
+                    offset = max(0, bound.offset - extent[0])
+        else:
+            offset = 0
+        return offset
+
+    return (
+        common.HorizontalInterval(
+            start=common.AxisBound(
+                level=interval.start.level if interval.start else common.LevelMarker.START,
+                offset=compute_offset(extent, interval.start, start=True),
+            ),
+            end=common.AxisBound(
+                level=interval.end.level if interval.end else common.LevelMarker.END,
+                offset=compute_offset(extent, interval.end, start=False),
+            ),
+        )
+        if _overlap_along_axis(extent, interval)
+        else None
+    )
+
+
+def compute_relative_mask(
+    extent: Extent, mask: common.HorizontalMask
+) -> Optional[common.HorizontalMask]:
+    """Compute a HorizontalMask relative to the compute extent in `extent`.
+
+    This is used in the numpy backend to compute HorizontalMask bounds relative to
+    the start/end bounds of each axis in the HorizontalBlock.
+    """
+    i_interval = _compute_relative_interval(extent[0], mask.i)
+    j_interval = _compute_relative_interval(extent[1], mask.j)
+
+    return common.HorizontalMask(i=i_interval, j=j_interval) if i_interval and j_interval else None
 
 
 def extent_from_offset(offset: common.CartesianOffset, use_k: bool = True) -> Extent:
