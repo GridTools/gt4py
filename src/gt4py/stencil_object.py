@@ -268,10 +268,7 @@ class StencilObject(abc.ABC):
                     )
 
                 # Check: data dimensions shape
-                if not all(
-                    field.shape[field_domain_ndim + i] == dim_size
-                    for i, dim_size in enumerate(field_info.data_dims)
-                ):
+                if field.shape[field_domain_ndim:] != field_info.data_dims:
                     raise ValueError(
                         f"Field '{name}' expects data dimensions {field_info.data_dims} but got {field.shape[field_domain_ndim:]}"
                     )
