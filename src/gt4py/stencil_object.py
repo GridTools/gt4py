@@ -474,7 +474,7 @@ class StencilObject(abc.ABC):
             exec_info["call_run_end_time"] = time.perf_counter()
 
     def freeze(
-        self: "StencilObject", origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
+        self: "StencilObject", *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
     ) -> FrozenStencil:
         """Return a StencilObject wrapper with a fixed domain and origin for each argument.
 
@@ -482,8 +482,8 @@ class StencilObject(abc.ABC):
         ----------
             origin: `dict`
                 The origin for each Field argument. These must be computed in a way
-                compatible with the algorithm in `StencilObject._normalize_origins` does.
-            domain: ``Sequence` of `int`
+                compatible with the algorithm in `StencilObject._normalize_origins`.
+            domain: `Sequence` of `int`
                 The compute domain shape for the frozen stencil.
 
         Returns
