@@ -39,8 +39,8 @@ class FieldOperatorSyntaxError(SyntaxError):
 def get_ast_from_func(func: Callable) -> ast.stmt:
     if inspect.getabsfile(func) == "<string>":
         raise ValueError(
-                         "Can not create field operator from a function that is not in a source file!"
-                         )
+            "Can not create field operator from a function that is not in a source file!"
+        )
     source = textwrap.dedent(inspect.getsource(func))
     return ast.parse(source).body[0]
 
