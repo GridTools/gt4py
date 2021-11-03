@@ -37,6 +37,8 @@ OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 @dataclass(frozen=True)
 class FrozenStencil:
+    """Stencil with pre-computed domain and origin for each field argument."""
+
     stencil_object: "StencilObject"
     origin: Dict[str, Tuple[int, ...]]
     domain: Tuple[int, ...]
@@ -45,11 +47,29 @@ class FrozenStencil:
         for name, field_info in self.stencil_object.field_info.items():
             if name not in self.origin or len(self.origin[name]) != field_info.ndim:
                 raise ValueError(
-                    f"Origin {self.origin.get(name)} is not a {field_info.ndim}-dimensional integer tuple"
+                    f"'{name}' origin {self.origin.get(name)} is not a {field_info.ndim}-dimensional integer tuple"
                 )
 
-    def __call__(self, *args, **kwargs):
-        return self.stencil_object(*args, **kwargs, origin=self.origin, domain=self.domain)
+    def __call__(self, **kwargs) -> None:
+        assert "origin" not in kwargs and "domain" not in kwargs
+        exec_info = kwargs.get("exec_info")
+
+        if exec_info is not None:
+            exec_info["call_run_start_time"] = time.perf_counter()
+
+        field_args = {name: kwargs[name] for name in self.stencil_object.field_info.keys()}
+        parameter_args = {name: kwargs[name] for name in self.stencil_object.parameter_info.keys()}
+
+        self.stencil_object.run(
+            _domain_=self.domain,
+            _origin_=self.origin,
+            exec_info=exec_info,
+            **field_args,
+            **parameter_args,
+        )
+
+        if exec_info is not None:
+            exec_info["call_run_end_time"] = time.perf_counter()
 
 
 class StencilObject(abc.ABC):
@@ -456,4 +476,22 @@ class StencilObject(abc.ABC):
     def freeze(
         self: "StencilObject", origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
     ) -> FrozenStencil:
+        """Return a StencilObject wrapper with a fixed domain and origin for each argument.
+
+        Parameters
+        ----------
+            origin: `dict`
+                The origin for each Field argument. These must be computed in a way
+                compatible with the algorithm in `StencilObject._normalize_origins` does.
+            domain: ``Sequence` of `int`
+                The compute domain shape for the frozen stencil.
+
+        Returns
+        -------
+            `FrozenStencil`
+                The stencil wrapper. This should be called with the regular stencil arguments,
+                but the field origins and domain cannot be changed. Note, no checking of origin
+                or domain occurs at call time so it is the users responsibility to ensure
+                correct usage.
+        """
         return FrozenStencil(self, origin, domain)
