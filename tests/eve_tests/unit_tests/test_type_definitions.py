@@ -79,18 +79,20 @@ class TestSourceLocation:
 
         ast_node = ast.parse("a = b + 1").body[0]
         loc = eve.type_definitions.SourceLocation.from_AST(ast_node, "source.py")
-        print("\n", ast_node.end_lineno)
-        print(loc)
 
         assert loc.line == ast_node.lineno
         assert loc.column == ast_node.col_offset + 1
         assert loc.source == "source.py"
+        assert loc.end_line == ast_node.end_lineno
+        assert loc.end_column == ast_node.end_col_offset + 1
 
         loc = eve.type_definitions.SourceLocation.from_AST(ast_node)
 
         assert loc.line == ast_node.lineno
         assert loc.column == ast_node.col_offset + 1
         assert loc.source == f"<ast.Assign at 0x{id(ast_node):x}>"
+        assert loc.end_line == ast_node.end_lineno
+        assert loc.end_column == ast_node.end_col_offset + 1
 
 
 class TestSourceLocationGroup:
