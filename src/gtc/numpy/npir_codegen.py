@@ -14,17 +14,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import functools
 import textwrap
-from typing import Any, Collection, Tuple, Union
+from dataclasses import dataclass, field
+from typing import Any, Collection, Dict, Tuple, Union
 
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
+from eve.visitors import NodeVisitor
 from gt4py.definitions import Extent
 from gtc import common
-from gtc.passes.gtir_legacy_extents import FIELD_EXT_T
-from gtc.python import npir
+from gtc.numpy import npir
 
 
-__all__ = ["NpirGen"]
+__all__ = ["NpirCodegen"]
 
 
 def op_delta_from_int(value: int) -> Tuple[str, str]:
@@ -52,16 +54,27 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
             if not isinstance(key, tuple):
                 key = (key, )
             for dim, idx in enumerate(key):
-                if self.offsets[dim] == 0:
-                    new_args.append(idx)
-                elif isinstance(idx, slice):
-                    start = 0 if idx.start is None else idx.start
-                    stop = -1 if idx.stop is None else idx.stop
+                offset = self.offsets[dim]
+                if isinstance(idx, slice):
+                    if idx.start is None or idx.stop is None:
+                        assert offset == 0
                     new_args.append(
-                        slice(start + self.offsets[dim], stop + self.offsets[dim], idx.step)
+                        slice(idx.start + offset, idx.stop + offset, idx.step) if offset else idx
                     )
                 else:
-                    new_args.append(idx + self.offsets[dim])
+                    new_args.append(idx + offset)
+            if not isinstance(new_args[2], (numbers.Integral, slice)):
+                assert isinstance(new_args[0], slice) and isinstance(new_args[1], slice)
+                new_args[:2] = np.broadcast_arrays(
+                    np.expand_dims(
+                        np.arange(new_args[0].start, new_args[0].stop),
+                        axis=tuple(i for i in range(self.field.ndim) if i != 0)
+                    ),
+                    np.expand_dims(
+                        np.arange(new_args[1].start, new_args[1].stop),
+                        axis=tuple(i for i in range(self.field.ndim) if i != 1)
+                    ),
+                )
             return tuple(new_args)
 
         def __getitem__(self, key):
@@ -73,7 +86,70 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
 )
 
 
-class NpirGen(TemplatedGenerator):
+VARIABLE_OFFSET_FUNCTION = textwrap.dedent(
+    """
+    def var_k_expr(expr, k):
+
+        k_indices = np.arange(expr.shape[2]) + k
+        all_nonk_axes = tuple(i for i in range(expr.ndim) if i != 2)
+        expanded_k_indices = np.expand_dims(k_indices, axis=all_nonk_axes)
+        return expanded_k_indices + expr
+    """
+)
+
+
+def slice_to_extent(acc: npir.FieldSlice) -> Extent:
+    return Extent(
+        (
+            [acc.i_offset.offset.value] * 2 if acc.i_offset else [0, 0],
+            [acc.j_offset.offset.value] * 2 if acc.j_offset else [0, 0],
+            [0, 0],
+        )
+    )
+
+
+HorizontalExtent = Tuple[Tuple[int, int], Tuple[int, int]]
+
+
+class ExtentCalculator(NodeVisitor):
+    @dataclass
+    class Context:
+        field_extents: Dict[str, Extent] = field(default_factory=dict)
+        block_extents: Dict[int, HorizontalExtent] = field(default_factory=dict)
+
+    def visit_Computation(self, node: npir.Computation):
+        ctx = self.Context()
+        for vertical_pass in reversed(node.vertical_passes):
+            self.visit(vertical_pass, ctx=ctx)
+        return ctx.field_extents, ctx.block_extents
+
+    def visit_VerticalPass(self, node: npir.VerticalPass, *, ctx: Context):
+        for block in reversed(node.body):
+            self.visit(block, ctx=ctx)
+
+    def visit_HorizontalBlock(self, node: npir.HorizontalBlock, *, ctx: Context):
+        writes = (
+            node.iter_tree()
+            .if_isinstance(npir.VectorAssign)
+            .getattr("left")
+            .if_isinstance(npir.FieldSlice)
+            .getattr("name")
+            .to_set()
+        )
+        extent = functools.reduce(
+            lambda ext, name: ext | ctx.field_extents.get(name, Extent.zeros()),
+            writes,
+            Extent.zeros(),
+        )
+        ctx.block_extents[id(node)] = extent
+
+        for acc in node.iter_tree().if_isinstance(npir.FieldSlice).to_list():
+            ctx.field_extents[acc.name] = ctx.field_extents.get(acc.name, Extent.zeros()).union(
+                extent + slice_to_extent(acc)
+            )
+
+
+class NpirCodegen(TemplatedGenerator):
     def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
         return f"np.{node.name.lower()}"
 
@@ -137,23 +213,37 @@ class NpirGen(TemplatedGenerator):
         "{name} = np.reshape({name}, ({shape}))\n_origin_['{name}'] = [{origin}]"
     )
 
+    def visit_VariableKOffset(
+        self, node: npir.VariableKOffset, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
+        return self.generic_visit(
+            node,
+            counter="k_" if kwargs["is_serial"] else "k",
+            var_offset=self.visit(node.k, **kwargs),
+        )
+
+    VariableKOffset = FormatTemplate("var_k_expr({var_offset}, {counter})")
+
     def visit_FieldSlice(
         self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, **kwargs: Any
     ) -> Union[str, Collection[str]]:
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
 
-        offset_str = ", ".join(self.visit(off, **kwargs) if off else ":" for off in offset)
+        offset_str = ", ".join(
+            self.visit(off, is_serial=is_serial, **kwargs) if off else ":" for off in offset
+        )
+
+        if node.data_index:
+            offset_str += ", " + ", ".join(self.visit(x, **kwargs) for x in node.data_index)
 
         if mask_acc and any(off is None for off in offset):
-            k_size = 1 if is_serial else "K - k"
+            k_size = "1" if is_serial else "K - k"
             arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I - i, J - j, {k_size}))"
         else:
             arr_expr = f"{node.name}_[{offset_str}]"
 
-        return self.generic_visit(node, arr_expr=arr_expr, mask_acc=mask_acc, **kwargs)
-
-    FieldSlice = FormatTemplate("{arr_expr}{mask_acc}")
+        return f"{arr_expr}{mask_acc}"
 
     def visit_EmptyTemp(
         self, node: npir.EmptyTemp, *, temp_name: str, **kwargs
@@ -178,9 +268,11 @@ class NpirGen(TemplatedGenerator):
         if isinstance(node.mask, npir.FieldSlice):
             mask_def = ""
         elif isinstance(node.mask, npir.BroadCast):
+            assert "is_serial" in kwargs
             mask_name = node.mask_name
             mask = self.visit(node.mask)
-            mask_def = f"{mask_name}_ = np.full((I - i, J - j, K - k), {mask})\n"
+            k_size = "1" if kwargs["is_serial"] else "K - k"
+            mask_def = f"{mask_name}_ = np.full((I - i, J - j, {k_size}), {mask})\n"
         else:
             mask_name = node.mask_name
             mask = self.visit(node.mask)
@@ -260,27 +352,24 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_HorizontalBlock(
-        self, node: npir.HorizontalBlock, **kwargs
+        self,
+        node: npir.HorizontalBlock,
+        *,
+        block_extents: Dict[int, HorizontalExtent] = None,
+        **kwargs: Any,
     ) -> Union[str, Collection[str]]:
-        lower, upper = [0, 0], [0, 0]
-
-        if extents := kwargs.get("field_extents"):
-            fields = set(node.iter_tree().if_isinstance(npir.FieldSlice).getattr("name"))
-            for field in fields:
-                # The extent of masks has not yet been collected but is always zero.
-                extents.setdefault(field, Extent.zeros())
-            lower[0] = min(extents[field].to_boundary()[0][0] for field in fields)
-            lower[1] = min(extents[field].to_boundary()[1][0] for field in fields)
-            upper[0] = min(extents[field].to_boundary()[0][1] for field in fields)
-            upper[1] = min(extents[field].to_boundary()[1][1] for field in fields)
-        return self.generic_visit(node, h_lower=lower, h_upper=upper, **kwargs)
+        ij_extent: Extent = (block_extents or {}).get(id(node), Extent.zeros())
+        boundary = ij_extent.to_boundary()
+        lower = (boundary[0][0], boundary[1][0])
+        upper = (boundary[0][1], boundary[1][1])
+        return self.generic_visit(node, lower=lower, upper=upper, **kwargs)
 
     HorizontalBlock = JinjaTemplate(
         textwrap.dedent(
             """\
             # --- begin horizontal block --
-            i, I = _di_ - {{ h_lower[0] }}, _dI_ + {{ h_upper[0] }}
-            j, J = _dj_ - {{ h_lower[1] }}, _dJ_ + {{ h_upper[1] }}
+            i, I = _di_ - {{ lower[0] }}, _dI_ + {{ upper[0] }}
+            j, J = _dj_ - {{ lower[1] }}, _dJ_ + {{ upper[1] }}
             {% for assign in body %}{{ assign }}
             {% endfor %}# --- end horizontal block --
 
@@ -289,14 +378,17 @@ class NpirGen(TemplatedGenerator):
     )
 
     def visit_Computation(
-        self, node: npir.Computation, *, field_extents: FIELD_EXT_T, **kwargs: Any
+        self, node: npir.Computation, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         signature = ["*", *node.params, "_domain_", "_origin_"]
-        kwargs["field_extents"] = field_extents
+        field_extents, block_extents = ExtentCalculator().visit(node)
         return self.generic_visit(
             node,
             signature=", ".join(signature),
             data_view_class=ORIGIN_CORRECTED_VIEW_CLASS,
+            var_offset_func=VARIABLE_OFFSET_FUNCTION,
+            field_extents=field_extents,
+            block_extents=block_extents,
             **kwargs,
         )
 
@@ -304,7 +396,7 @@ class NpirGen(TemplatedGenerator):
         textwrap.dedent(
             """\
             import numpy as np
-
+            import numbers
 
             def run({{ signature }}):
 
@@ -323,6 +415,8 @@ class NpirGen(TemplatedGenerator):
                 {% for pass in vertical_passes %}
                 {{ pass | indent(4) }}
                 {% endfor %}
+
+            {{ var_offset_func }}
             """
         )
     )

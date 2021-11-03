@@ -22,9 +22,9 @@ import itertools
 import numbers
 import sys
 import textwrap
+import time
 import types
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -1047,7 +1047,7 @@ class IRMaker(ast.NodeVisitor):
 
         return interval
 
-    def _visit_computation_node(self, node: ast.With) -> List[gt_ir.ComputationBlock]:
+    def _visit_computation_node(self, node: ast.With) -> gt_ir.ComputationBlock:
         loc = gt_ir.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
             f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
@@ -1094,30 +1094,16 @@ class IRMaker(ast.NodeVisitor):
         self.parsing_context = ParsingContext.CONTROL_FLOW
 
         if intervals_dicts:
-            results = [
-                gt_ir.ComputationBlock(
-                    interval=interval,
-                    iteration_order=iteration_order,
-                    body=gt_ir.BlockStmt(
-                        stmts=[
-                            gt_ir.HorizontalIf(
-                                intervals=intervals_dict, body=gt_ir.BlockStmt(stmts=stmts)
-                            )
-                        ]
-                    ),
-                )
+            stmts = [
+                gt_ir.HorizontalIf(intervals=intervals_dict, body=gt_ir.BlockStmt(stmts=stmts))
                 for intervals_dict in intervals_dicts
             ]
-        else:
-            results = [
-                gt_ir.ComputationBlock(
-                    interval=interval,
-                    iteration_order=iteration_order,
-                    body=gt_ir.BlockStmt(stmts=stmts),
-                )
-            ]
 
-        return results
+        return gt_ir.ComputationBlock(
+            interval=interval,
+            iteration_order=iteration_order,
+            body=gt_ir.BlockStmt(stmts=stmts),
+        )
 
     # Visitor methods
     # -- Special nodes --
@@ -1533,7 +1519,6 @@ class IRMaker(ast.NodeVisitor):
                     for intervals_dict in intervals_dicts
                 ]
             )
-
             return stmts
         else:
             # If we find nested `with` blocks flatten them, i.e. transform
@@ -1545,7 +1530,9 @@ class IRMaker(ast.NodeVisitor):
             #    ...
             # otherwise just parse the node
             if self.parsing_context == ParsingContext.CONTROL_FLOW and all(
-                isinstance(child_node, ast.With) for child_node in node.body
+                isinstance(child_node, ast.With)
+                and child_node.items[0].context_expr.func.id == "interval"
+                for child_node in node.body
             ):
                 # Ensure top level `with` specifies the iteration order
                 if not any(
@@ -1562,7 +1549,7 @@ class IRMaker(ast.NodeVisitor):
                     # Splice `withItems` of current/primary with statement into nested with
                     with_node.items.extend(node.items)
 
-                    compute_blocks.extend(self._visit_computation_node(with_node))
+                    compute_blocks.append(self._visit_computation_node(with_node))
 
                 # Validate block specification order
                 #  the nested computation blocks must be specified in their order of execution. The order of execution is
@@ -1578,16 +1565,16 @@ class IRMaker(ast.NodeVisitor):
 
                 return compute_blocks
             elif self.parsing_context == ParsingContext.CONTROL_FLOW:
-                return self._visit_computation_node(node)
+                return gt_utils.listify(self._visit_computation_node(node))
             else:
                 # Mixing nested `with` blocks with stmts not allowed
                 raise syntax_error
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> list:
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> List[gt_ir.ComputationBlock]:
         blocks = []
         docstring = ast.get_docstring(node)
         for stmt in node.body:
-            blocks.extend(gt_utils.listify(self.visit(stmt)))
+            blocks.extend(self.visit(stmt))
 
         if not all(isinstance(item, gt_ir.ComputationBlock) for item in blocks):
             raise GTScriptSyntaxError(
@@ -1643,7 +1630,7 @@ class GTScriptParser(ast.NodeVisitor):
         self.ast_root = ast.parse(self.source)
         self.options = options
         self.build_info = options.build_info
-        self.main_name = options.qualified_name
+        self.main_name = options.name
         self.definition_ir = None
         self.external_context = externals or {}
         self.resolved_externals = {}
@@ -2076,7 +2063,15 @@ class GTScriptFrontend(gt_frontend.Frontend):
 
     @classmethod
     def generate(cls, definition, externals, options):
+        if options.build_info is not None:
+            start_time = time.perf_counter()
+
         if not hasattr(definition, "_gtscript_"):
             cls.prepare_stencil_definition(definition, externals)
         translator = GTScriptParser(definition, externals=externals, options=options)
-        return translator.run()
+        definition_ir = translator.run()
+
+        if options.build_info is not None:
+            options.build_info["parse_time"] = time.perf_counter() - start_time
+
+        return definition_ir

@@ -33,7 +33,7 @@ from gtc.common import DataType
 from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion, oir_to_cuir
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
-from gtc.passes.oir_pipeline import OirPipeline
+from gtc.passes.oir_pipeline import DefaultPipeline
 
 
 if TYPE_CHECKING:
@@ -48,7 +48,11 @@ class GTCCudaExtGenerator:
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(skip=[NoFieldAccessPruning])
+        base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+        oir_pipeline = self.backend.builder.options.backend_opts.get(
+            "oir_pipeline", DefaultPipeline(skip=[NoFieldAccessPruning])
+        )
+        oir = oir_pipeline.run(base_oir)
         cuir = oir_to_cuir.OIRToCUIR().visit(oir)
         cuir = kernel_fusion.FuseKernels().visit(cuir)
         cuir = extent_analysis.ComputeExtents().visit(cuir)
@@ -142,6 +146,7 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     PYEXT_GENERATOR_CLASS = GTCCudaExtGenerator  # type: ignore
     MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
     GT_BACKEND_T = "gpu"
+    USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=True)

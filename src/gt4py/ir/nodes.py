@@ -93,7 +93,11 @@ storing a reference to the piece of source code which originated the node.
 
     Cast(expr: Expr, data_type: DataType)
 
-    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch
+    AxisPosition(axis: str, data_type: DataType)
+
+    AxisIndex(axis: str, endpt: LevelMarker, offset: int, data_type: DataType)
+
+    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch | AxisPosition | AxisIndex
 
     CompositeExpr   = UnaryOpExpr(op: UnaryOperator, arg: Expr)
                     | BinOpExpr(op: BinaryOperator, lhs: Expr, rhs: Expr)
@@ -214,6 +218,15 @@ class Location(Node):
 @attribclass
 class Axis(Node):
     name = attribute(of=str)
+
+
+@enum.unique
+class LevelMarker(enum.Enum):
+    START = 0
+    END = -1
+
+    def __str__(self):
+        return self.name
 
 
 @attribclass
@@ -391,6 +404,20 @@ class Cast(Expr):
     data_type = attribute(of=DataType)
     expr = attribute(of=Expr)
     loc = attribute(of=Location, optional=True)
+
+
+@attribclass
+class AxisPosition(Expr):
+    axis = attribute(of=str)
+    data_type = attribute(of=DataType, default=DataType.INT32)
+
+
+@attribclass
+class AxisIndex(Expr):
+    axis = attribute(of=str)
+    endpt = attribute(of=LevelMarker)
+    offset = attribute(of=int)
+    data_type = attribute(of=DataType, default=DataType.INT32)
 
 
 @enum.unique
@@ -646,15 +673,6 @@ class While(Statement):
 
 
 # ---- IR: computations ----
-@enum.unique
-class LevelMarker(enum.Enum):
-    START = 0
-    END = -1
-
-    def __str__(self):
-        return self.name
-
-
 @enum.unique
 class IterationOrder(enum.Enum):
     BACKWARD = -1

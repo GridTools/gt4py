@@ -123,16 +123,16 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> gtcpp.Temporary:
         return gtcpp.Temporary(name=node.name, dtype=node.dtype)
 
-    def visit_CartesianOffset(
-        self, node: common.CartesianOffset, **kwargs: Any
-    ) -> common.CartesianOffset:
-        return node
+    def visit_VariableKOffset(
+        self, node: oir.VariableKOffset, **kwargs: Any
+    ) -> gtcpp.VariableKOffset:
+        return gtcpp.VariableKOffset(k=self.visit(node.k, **kwargs))
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> gtcpp.AccessorRef:
         return gtcpp.AccessorRef(
             name=node.name,
             offset=self.visit(node.offset, **kwargs),
-            data_index=[self.visit(index, **kwargs) for index in node.data_index],
+            data_index=self.visit(node.data_index, **kwargs),
             dtype=node.dtype,
         )
 

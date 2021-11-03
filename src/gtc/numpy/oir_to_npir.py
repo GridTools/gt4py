@@ -150,7 +150,9 @@ class OirToNpir(NodeTranslator):
         **kwargs: Any,
     ) -> npir.VectorAssign:
         ctx = ctx or self.ComputationContext()
-        if isinstance(kwargs["symtable"].get(node.left.name, None), oir.Temporary):
+        if isinstance(
+            kwargs["symtable"].get(node.left.name, None), (oir.Temporary, oir.LocalScalar)
+        ):
             ctx.ensure_temp_defined(node.left)
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, is_lvalue=True, **kwargs),
@@ -185,14 +187,25 @@ class OirToNpir(NodeTranslator):
         dims = (
             decl.dimensions if (decl := kwargs["symtable"].get(node.name)) else (True, True, True)
         )
+        if isinstance(node.offset, common.CartesianOffset):
+            i_offset = npir.AxisOffset.i(node.offset.i) if dims[0] else None
+            j_offset = npir.AxisOffset.j(node.offset.j) if dims[1] else None
+            k_offset = npir.AxisOffset.k(node.offset.k, parallel=parallel_k) if dims[2] else None
+        else:
+            i_offset = npir.AxisOffset.i(0)
+            j_offset = npir.AxisOffset.j(0)
+            k_offset = npir.VariableKOffset(
+                k=self.visit(node.offset.k, ctx=ctx, parallel_k=parallel_k, **kwargs)
+            )
         return npir.FieldSlice(
             name=str(node.name),
-            i_offset=npir.AxisOffset.i(node.offset.i) if dims[0] else None,
-            j_offset=npir.AxisOffset.j(node.offset.j) if dims[1] else None,
-            k_offset=npir.AxisOffset.k(node.offset.k, parallel=parallel_k) if dims[2] else None,
+            i_offset=i_offset,
+            j_offset=j_offset,
+            k_offset=k_offset,
+            data_index=self.visit(node.data_index, ctx=ctx, parallel_k=parallel_k, **kwargs),
         )
 
-    def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs) -> npir.FieldDecl:
+    def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> npir.FieldDecl:
         return npir.FieldDecl(
             name=node.name,
             dtype=self.visit(node.dtype),
@@ -245,11 +258,20 @@ class OirToNpir(NodeTranslator):
         return literal
 
     def visit_ScalarAccess(
-        self, node: oir.ScalarAccess, *, broadcast: bool = False, **kwargs: Any
+        self,
+        node: oir.ScalarAccess,
+        *,
+        broadcast: bool = False,
+        ctx: Optional[ComputationContext] = None,
+        **kwargs: Any,
     ) -> Union[npir.BroadCast, npir.NamedScalar]:
-        name = npir.NamedScalar(
-            name=self.visit(node.name, **kwargs), dtype=self.visit(node.dtype, **kwargs)
-        )
+        ctx = ctx or self.ComputationContext()
+        if node.name in ctx.temp_defs:
+            name = npir.VectorTemp(name=self.visit(node.name, **kwargs))
+        else:
+            name = npir.NamedScalar(
+                name=self.visit(node.name, **kwargs), dtype=self.visit(node.dtype, **kwargs)
+            )
         if broadcast:
             return npir.BroadCast(expr=name, dtype=name.dtype)
         return name

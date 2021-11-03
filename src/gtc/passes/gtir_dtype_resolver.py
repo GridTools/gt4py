@@ -53,8 +53,8 @@ class _GTIRResolveAuto(NodeTranslator):
             symtable[node.name].dtype = kwargs["new_dtype"]
         return gtir.FieldAccess(
             name=node.name,
-            offset=node.offset,
-            data_index=node.data_index,
+            offset=self.visit(node.offset, symtable=symtable, **kwargs),
+            data_index=self.visit(node.data_index, symtable=symtable, **kwargs),
             dtype=symtable[node.name].dtype,
         )
 
@@ -88,14 +88,12 @@ class _GTIRPropagateDtypeToAccess(NodeTranslator):
 
     contexts = (SymbolTableTrait.symtable_merger,)
 
-    def visit_FieldAccess(
-        self, node: gtir.FieldAccess, *, symtable: Dict[str, Any], **kwargs: Any
-    ) -> gtir.FieldAccess:
+    def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> gtir.FieldAccess:
         return gtir.FieldAccess(
             name=node.name,
-            offset=node.offset,
-            data_index=[self.visit(index, symtable=symtable) for index in node.data_index],
-            dtype=symtable[node.name].dtype,
+            offset=self.visit(node.offset, **kwargs),
+            data_index=self.visit(node.data_index, **kwargs),
+            dtype=kwargs["symtable"][node.name].dtype,
         )
 
     def visit_ScalarAccess(

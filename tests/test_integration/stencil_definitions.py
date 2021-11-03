@@ -16,14 +16,32 @@
 
 import numpy as np
 
-import gt4py as gt
-from gt4py import analysis as gt_analysis
-from gt4py import backend as gt_backend
 from gt4py import gtscript
-from gt4py import ir as gt_ir
-from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
-from gt4py.definitions import Extent, StencilID
+from gt4py.gtscript import (
+    __INLINED,
+    BACKWARD,
+    FORWARD,
+    PARALLEL,
+    acos,
+    asin,
+    atan,
+    ceil,
+    computation,
+    cos,
+    exp,
+    floor,
+    interval,
+    isfinite,
+    isinf,
+    isnan,
+    log,
+    mod,
+    sin,
+    sqrt,
+    tan,
+    trunc,
+)
 
 
 REGISTRY = gt_utils.Registry()
@@ -307,7 +325,7 @@ def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3
     with computation(FORWARD), interval(2, None):
         if in_storage[0, 0, 0] < 0:
             local_var = 6
-            out_storage[0, 0, 0] = local_var + mid_storage
+            out_storage[0, 0, 0] = local_var
 
 
 @register

@@ -267,6 +267,12 @@ class StencilObject(abc.ABC):
                         f"expects {field_domain_ndim + len(field_info.data_dims)} ('{field_info.axes}[{field_info.data_dims}]')"
                     )
 
+                # Check: data dimensions shape
+                if field.shape[field_domain_ndim:] != field_info.data_dims:
+                    raise ValueError(
+                        f"Field '{name}' expects data dimensions {field_info.data_dims} but got {field.shape[field_domain_ndim:]}"
+                    )
+
                 min_origin = gt_utils.interpolate_mask(
                     field_info.boundary.lower_indices.filter_mask(field_domain_mask),
                     field_domain_mask,
