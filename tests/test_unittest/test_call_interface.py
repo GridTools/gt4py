@@ -438,6 +438,36 @@ class TestAxesMismatch:
             )
 
 
+class TestDataDimensions:
+    backend = "debug"
+
+    @pytest.fixture
+    def sample_stencil(self):
+        @gtscript.stencil(backend=self.backend)
+        def _stencil(
+            field_out: gtscript.Field[gtscript.IJK, (np.float64, (2,))],
+        ):
+            with computation(FORWARD), interval(...):
+                field_out[0, 0, 0][0] = 0.0
+                field_out[0, 0, 0][1] = 1.0
+
+        return _stencil
+
+    def test_mismatch(self, sample_stencil):
+        with pytest.raises(
+            ValueError, match="Field '.*' expects data dimensions \(2,\) but got \(3,\)"
+        ):
+            sample_stencil(
+                field_out=gt_storage.empty(
+                    shape=(3, 3, 1),
+                    mask=[True, True, True],
+                    dtype=(np.float64, (3,)),
+                    backend=self.backend,
+                    default_origin=(0, 0, 0),
+                )
+            )
+
+
 @pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
 def test_origin_unchanged(backend):
     @gtscript.stencil(backend=backend)
