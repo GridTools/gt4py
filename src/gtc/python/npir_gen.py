@@ -324,12 +324,10 @@ class NpirGen(TemplatedGenerator):
 
     For = JinjaTemplate(
         textwrap.dedent(
-            """
-        {% set body_indent = 4 %}
-        for {{ target_name}} in range({{ start }}, {{ end }}, {{ inc }}):
-            {% for stmt in body %}
-            {{ stmt | indent(body_indent, first=True) }}
-            {% endfor %}
+            """\
+        {% set body_indent = 4 %}for {{ target_name}} in range({{ start }}, {{ end }}, {{ inc }}):
+        {% for stmt in body %}{{ stmt | indent(body_indent, first=True) }}
+        {% endfor %}
         """
         )
     )

@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass, field
 from typing import Any, List
 
 from eve import NodeTranslator
@@ -22,73 +21,8 @@ from gtc import gtir, oir
 from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 
 
-def _create_mask(ctx: "GTIRToOIR.Context", name: str, cond: oir.Expr) -> oir.Temporary:
-    mask_field_decl = oir.Temporary(name=name, dtype=DataType.BOOL, dimensions=(True, True, True))
-    ctx.add_decl(mask_field_decl)
-    ctx.add_stmt(
-        oir.AssignStmt(
-            left=oir.FieldAccess(
-                name=mask_field_decl.name,
-                offset=CartesianOffset.zero(),
-                dtype=mask_field_decl.dtype,
-            ),
-            right=cond,
-        )
-    )
-    return mask_field_decl
-
-
 class GTIRToOIR(NodeTranslator):
-    @dataclass
-    class Context:
-        """
-        Context for Stmts.
-
-        `Stmt` nodes create `Temporary` nodes and `HorizontalExecution` nodes.
-        All visit()-methods for `Stmt` have no return value,
-        they attach their result to the Context object.
-        """
-
-        class ContextInScope:
-            def __init__(self, parent):
-                self.parent = parent
-                self.stmts = []
-
-            def add_stmt(self, stmt, declarations=None):
-                if declarations is not None:
-                    raise ValueError("Only possible at interval scope")
-                self.stmts.append(stmt)
-                return self
-
-            def add_decl(self, decl):
-                self.parent.add_decl(decl)
-                return self
-
-        decls: List[oir.Decl] = field(default_factory=list)
-        horizontal_executions: List[oir.HorizontalExecution] = field(default_factory=list)
-
-        def add_decl(self, decl: oir.Decl) -> "GTIRToOIR.Context":
-            self.decls.append(decl)
-            return self
-
-        def add_stmt(self, stmt, declarations=None) -> "GTIRToOIR.Context":
-            self.horizontal_executions.append(
-                oir.HorizontalExecution(body=[stmt], declarations=declarations or [])
-            )
-            return self
-
-        def new_scope(self) -> "ContextInScope":
-            return self.ContextInScope(self)
-
-    def visit_ParAssignStmt(
-        self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
-    ) -> None:
-        stmt = oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
-        if mask is not None:
-            # Wrap inside MaskStmt
-            stmt = oir.MaskStmt(body=[stmt], mask=mask)
-        ctx.add_stmt(stmt)
-
+    # --- Exprs ---
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> oir.FieldAccess:
         return oir.FieldAccess(
             name=node.name,
@@ -132,48 +66,103 @@ class GTIRToOIR(NodeTranslator):
             func=node.func, args=self.visit(node.args), dtype=node.dtype, kind=node.kind
         )
 
+    # --- Stmts ---
+    def visit_ParAssignStmt(
+        self,
+        node: gtir.ParAssignStmt,
+        *,
+        level: int,
+        mask: oir.Expr = None,
+        **kwargs: Any,
+    ) -> oir.AssignStmt:
+        stmt = oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
+        if mask is not None:
+            # Wrap inside MaskStmt
+            stmt = oir.MaskStmt(body=[stmt], mask=mask)
+        return stmt
+
+    def visit_For(
+        self, node: gtir.For, *, level: int, scalars: List[oir.ScalarDecl], **kwargs: Any
+    ) -> oir.For:
+        body_stmts = []
+        for stmt in node.body:
+            stmt_or_stmts = self.visit(stmt, level=level + 1, scalars=scalars, **kwargs)
+            if isinstance(stmt_or_stmts, oir.Stmt):
+                body_stmts.append(stmt_or_stmts)
+            else:
+                body_stmts.extend(stmt_or_stmts)
+        stmt = oir.For(
+            target_name=node.target.name,
+            start=self.visit(node.start),
+            end=self.visit(node.end),
+            inc=node.inc,
+            body=body_stmts,
+        )
+        scalars.append(oir.LocalScalar(name=node.target.name, dtype=node.target.dtype))
+        return stmt
+
     def visit_FieldIfStmt(
-        self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
-    ) -> None:
-        mask_field_decl = _create_mask(ctx, f"mask_{id(node)}", self.visit(node.cond))
+        self, node: gtir.FieldIfStmt, *, level: int, mask: oir.Expr = None, **kwargs: Any
+    ) -> List[oir.Stmt]:
+        mask_field_decl = oir.Temporary(
+            name=f"mask_{id(node)}", dtype=DataType.BOOL, dimensions=(True, True, True)
+        )
+        stmts = [
+            oir.AssignStmt(
+                left=oir.FieldAccess(
+                    name=mask_field_decl.name,
+                    offset=CartesianOffset.zero(),
+                    dtype=DataType.BOOL,
+                ),
+                right=self.visit(node.cond),
+            )
+        ]
+
         current_mask = oir.FieldAccess(
             name=mask_field_decl.name, offset=CartesianOffset.zero(), dtype=mask_field_decl.dtype
         )
         combined_mask = current_mask
         if mask:
             combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
-        self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx)
+        stmts.extend(
+            self.visit(node.true_branch.body, level=level + 1, mask=combined_mask, **kwargs)
+        )
 
         if node.false_branch:
             combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
             if mask:
                 combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
-            self.visit(
-                node.false_branch.body,
-                mask=combined_mask,
-                ctx=ctx,
+            stmts.extend(
+                self.visit(
+                    node.false_branch.body,
+                    level=level + 1,
+                    mask=combined_mask,
+                    **kwargs,
+                )
             )
+
+        return stmts
 
     # For now we represent ScalarIf (and FieldIf) both as masks on the HorizontalExecution.
     # This is not meant to be set in stone...
     def visit_ScalarIfStmt(
-        self, node: gtir.ScalarIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
-    ) -> None:
+        self, node: gtir.ScalarIfStmt, *, level: int, mask: oir.Expr = None, **kwargs: Any
+    ) -> List[oir.Stmt]:
         current_mask = self.visit(node.cond)
         combined_mask = current_mask
         if mask:
             combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=current_mask)
 
-        self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx)
+        stmts = self.visit(node.true_branch.body, mask=combined_mask, level=level + 1, **kwargs)
         if node.false_branch:
             combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
             if mask:
                 combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
-            self.visit(
-                node.false_branch.body,
-                mask=combined_mask,
-                ctx=ctx,
+            stmts.extend(
+                self.visit(node.false_branch.body, mask=combined_mask, level=level + 1, **kwargs)
             )
+
+        return stmts
 
     def visit_Interval(self, node: gtir.Interval, **kwargs: Any) -> oir.Interval:
         return oir.Interval(
@@ -181,50 +170,40 @@ class GTIRToOIR(NodeTranslator):
             end=self.visit(node.end),
         )
 
-    def visit_VerticalLoop(
-        self, node: gtir.VerticalLoop, *, ctx: Context, **kwargs: Any
-    ) -> oir.VerticalLoop:
-        ctx.horizontal_executions.clear()
-        self.visit(node.body, ctx=ctx)
+    # --- Control flow ---
+    def visit_VerticalLoop(self, node: gtir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
+        horiz_execs: List[oir.HorizontalExecution] = []
+        for stmt in node.body:
+            scalars: List[oir.ScalarDecl] = []
+            stmt_or_stmts = self.visit(stmt, level=0, scalars=scalars, **kwargs)
+            body = [stmt_or_stmts] if isinstance(stmt_or_stmts, oir.Stmt) else stmt_or_stmts
+            horiz_execs.append(oir.HorizontalExecution(body=body, declarations=scalars))
 
-        for temp in node.temporaries:
-            ctx.add_decl(
-                oir.Temporary(name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions)
-            )
+        kwargs["temps"] += [
+            oir.Temporary(name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions)
+            for temp in node.temporaries
+        ]
 
         return oir.VerticalLoop(
             loop_order=node.loop_order,
             sections=[
                 oir.VerticalLoopSection(
                     interval=self.visit(node.interval, **kwargs),
-                    horizontal_executions=ctx.horizontal_executions,
+                    horizontal_executions=horiz_execs,
                 )
             ],
             caches=[],
         )
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> oir.Stencil:
-        ctx = self.Context()
-        vertical_loops = self.visit(node.vertical_loops, ctx=ctx)
+        temps: List[oir.Temporary] = []
+        vertical_loops = self.visit(node.vertical_loops, temps=temps)
         return oir.Stencil(
             name=node.name,
             params=self.visit(node.params),
             vertical_loops=vertical_loops,
-            declarations=ctx.decls,
+            declarations=temps,
         )
 
     def visit_AxisPosition(self, node: gtir.AxisPosition) -> oir.AxisPosition:
         return oir.AxisPosition(axis=node.axis)
-
-    def visit_For(self, node: gtir.For, ctx: Context, **kwargs: Any) -> None:
-        scoped_ctx = ctx.new_scope()
-        self.visit(node.body, ctx=scoped_ctx, **kwargs)
-        stmt = oir.For(
-            target_name=node.target.name,
-            start=self.visit(node.start, **kwargs),
-            end=self.visit(node.end, **kwargs),
-            inc=node.inc,
-            body=scoped_ctx.stmts,
-        )
-        counter_decl = oir.LocalScalar(name=node.target.name, dtype=node.target.dtype)
-        ctx.add_stmt(stmt, declarations=[counter_decl])

@@ -27,6 +27,11 @@ class Expr(common.Expr):
     pass
 
 
+@eve.utils.noninstantiable
+class Stmt(common.Stmt):
+    pass
+
+
 class Literal(common.Literal, Expr):
     @validator("dtype")
     def is_defined(cls, dtype: common.DataType) -> common.DataType:
@@ -129,13 +134,13 @@ class VectorTernaryOp(common.TernaryOp[VectorExpression], VectorExpression):
     pass
 
 
-class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpression):
+class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], Stmt):
     left: VectorLValue
     right: VectorExpression
     mask: Optional[VectorExpression]
 
 
-class MaskBlock(common.Stmt):
+class MaskBlock(Stmt):
     mask: VectorExpression
     mask_name: str
     body: List[VectorAssign]
@@ -147,16 +152,16 @@ class AxisPosition(Expr):
     kind: common.ExprKind = common.ExprKind.SCALAR
 
 
-class For(common.Stmt, eve.SymbolTableTrait):
+class For(Stmt, eve.SymbolTableTrait):
     target_name: str
     start: Union[Expr, common.AxisBound]
     end: Union[Expr, common.AxisBound]
     inc: int
-    body: List[Union[VectorAssign, MaskBlock]]
+    body: List[Stmt]
 
 
 class HorizontalBlock(common.LocNode):
-    body: List[Union[VectorAssign, MaskBlock, For]]
+    body: List[Stmt]
 
 
 class VerticalPass(common.LocNode):
