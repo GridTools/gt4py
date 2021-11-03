@@ -41,11 +41,15 @@ class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class FieldAccess(common.FieldAccess[Expr], Expr):  # type: ignore
+class VariableKOffset(common.VariableKOffset[Expr]):
     pass
 
 
-class IJCacheAccess(common.FieldAccess[Expr], Expr):
+class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
+    pass
+
+
+class IJCacheAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
     ij_cache_is_different_from_field_access = True
 
     @validator("offset")
@@ -61,7 +65,7 @@ class IJCacheAccess(common.FieldAccess[Expr], Expr):
         return v
 
 
-class KCacheAccess(common.FieldAccess[Expr], Expr):
+class KCacheAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
     k_cache_is_different_from_field_access = True
 
     @validator("offset")
@@ -144,7 +148,9 @@ class IJExtent(LocNode):
         return cls(i=(0, 0), j=(0, 0))
 
     @classmethod
-    def from_offset(cls, offset: CartesianOffset) -> "IJExtent":
+    def from_offset(cls, offset: Union[CartesianOffset, VariableKOffset]) -> "IJExtent":
+        if isinstance(offset, VariableKOffset):
+            return cls(i=(0, 0), j=(0, 0))
         return cls(i=(offset.i, offset.i), j=(offset.j, offset.j))
 
     def union(*extents: "IJExtent") -> "IJExtent":
@@ -168,8 +174,9 @@ class KExtent(LocNode):
         return cls(k=(0, 0))
 
     @classmethod
-    def from_offset(cls, offset: CartesianOffset) -> "KExtent":
-        return cls(k=(offset.k, offset.k))
+    def from_offset(cls, offset: Union[CartesianOffset, VariableKOffset]) -> "KExtent":
+        MAX_OFFSET = 1000
+        return cls(k=(offset.k, offset.k)) if offset.k else cls(k=(-MAX_OFFSET, MAX_OFFSET))
 
     def union(*extents: "KExtent") -> "KExtent":
         return KExtent(k=(min(e.k[0] for e in extents), max(e.k[1] for e in extents)))

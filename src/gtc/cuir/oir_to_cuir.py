@@ -50,6 +50,11 @@ class OIRToCUIR(eve.NodeTranslator):
     def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> cuir.Temporary:
         return cuir.Temporary(name=node.name, dtype=node.dtype)
 
+    def visit_VariableKOffset(
+        self, node: common.VariableKOffset, **kwargs: Any
+    ) -> cuir.VariableKOffset:
+        return cuir.VariableKOffset(k=self.visit(node.k, **kwargs))
+
     def visit_FieldAccess(
         self,
         node: oir.FieldAccess,
@@ -66,25 +71,32 @@ class OIRToCUIR(eve.NodeTranslator):
             accessed_fields=accessed_fields,
             **kwargs,
         )
+        offset = self.visit(
+            node.offset,
+            ij_caches=ij_caches,
+            k_caches=k_caches,
+            accessed_fields=accessed_fields,
+            **kwargs,
+        )
         if node.name in ij_caches:
             return cuir.IJCacheAccess(
                 name=ij_caches[node.name].name,
-                offset=node.offset,
+                offset=offset,
                 dtype=node.dtype,
                 data_index=data_index,
             )
         if node.name in k_caches:
             return cuir.KCacheAccess(
                 name=k_caches[node.name].name,
-                offset=node.offset,
+                offset=offset,
                 dtype=node.dtype,
                 data_index=data_index,
             )
         accessed_fields.add(node.name)
         return cuir.FieldAccess(
             name=node.name,
-            offset=node.offset,
-            data_index=self.visit(node.data_index, **kwargs),
+            offset=offset,
+            data_index=data_index,
             dtype=node.dtype,
         )
 

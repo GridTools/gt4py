@@ -118,15 +118,12 @@ class DataType(IntEnum):
     FLOAT32 = 104
     FLOAT64 = 108
 
-    @property
     def isbool(self):
         return self == self.BOOL
 
-    @property
     def isinteger(self):
         return self in (self.INT8, self.INT32, self.INT64)
 
-    @property
     def isfloat(self):
         return self in (self.FLOAT32, self.FLOAT64)
 
@@ -293,6 +290,7 @@ class Literal(Node):
 StmtT = TypeVar("StmtT", bound=Stmt)
 ExprT = TypeVar("ExprT", bound=Expr)
 TargetT = TypeVar("TargetT", bound=Expr)
+VariableKOffsetT = TypeVar("VariableKOffsetT")
 
 
 class CartesianOffset(Node):
@@ -308,14 +306,27 @@ class CartesianOffset(Node):
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
+class VariableKOffset(GenericNode, Generic[ExprT]):
+    k: ExprT
+
+    def to_dict(self) -> Dict[str, Optional[int]]:
+        return {"i": 0, "j": 0, "k": None}
+
+    @validator("k")
+    def offset_expr_is_int(cls, k: Expr) -> List[Expr]:
+        if k.dtype is not None and not k.dtype.isinteger():
+            raise ValueError("Variable vertical index must be an integer expression")
+        return k
+
+
 class ScalarAccess(LocNode):
     name: SymbolRef
     kind = ExprKind.SCALAR
 
 
-class FieldAccess(GenericNode, Generic[ExprT]):
+class FieldAccess(GenericNode, Generic[ExprT, VariableKOffsetT]):
     name: SymbolRef
-    offset: CartesianOffset
+    offset: Union[CartesianOffset, VariableKOffsetT]
     data_index: List[ExprT] = []
     kind = ExprKind.FIELD
 
@@ -326,7 +337,7 @@ class FieldAccess(GenericNode, Generic[ExprT]):
     @validator("data_index")
     def data_index_exprs_are_int(cls, data_index: List[Expr]) -> List[Expr]:
         if data_index and any(
-            index.dtype is not None and not index.dtype.isinteger for index in data_index
+            index.dtype is not None and not index.dtype.isinteger() for index in data_index
         ):
             raise ValueError("Data indices must be integer expressions")
         return data_index
@@ -465,7 +476,7 @@ class TernaryOp(GenericNode, Generic[ExprT]):
     false_expr: ExprT
 
     @validator("cond")
-    def condition_is_boolean(cls, cond: ExprT) -> ExprT:
+    def condition_is_boolean(cls, cond: Expr) -> Expr:
         return verify_condition_is_boolean(cls, cond)
 
     @root_validator(pre=True)

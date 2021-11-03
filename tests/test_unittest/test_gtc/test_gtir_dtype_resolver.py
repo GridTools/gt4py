@@ -27,6 +27,7 @@ from .gtir_utils import (
     LiteralFactory,
     ParAssignStmtFactory,
     StencilFactory,
+    VariableKOffsetFactory,
     VerticalLoopFactory,
 )
 
@@ -78,6 +79,31 @@ def test_resolve_dtype_to_FieldAccess():
     resolve_dtype_and_validate(
         testee,
         {"field": A_ARITHMETIC_TYPE},
+    )
+
+
+def test_resolve_dtype_to_FieldAccess_variable():
+    testee = StencilFactory(
+        params=[
+            FieldDeclFactory(name="field_out", dtype=A_ARITHMETIC_TYPE),
+            FieldDeclFactory(name="field_in", dtype=A_ARITHMETIC_TYPE),
+            FieldDeclFactory(name="index", dtype=common.DataType.INT32),
+        ],
+        vertical_loops__0__body__0=ParAssignStmtFactory(
+            left__name="field_out",
+            left__dtype=None,
+            right__name="field_in",
+            right__dtype=None,
+            right__offset=VariableKOffsetFactory(k__name="index", k__dtype=None),
+        ),
+    )
+    resolve_dtype_and_validate(
+        testee,
+        {
+            "field_out": A_ARITHMETIC_TYPE,
+            "field_in": A_ARITHMETIC_TYPE,
+            "index": common.DataType.INT32,
+        },
     )
 
 
