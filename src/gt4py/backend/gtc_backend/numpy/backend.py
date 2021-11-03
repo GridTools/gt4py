@@ -25,6 +25,9 @@ from gt4py.backend.debug_backend import (
     debug_layout,
 )
 from gtc.gtir_to_oir import GTIRToOIR
+from gtc.numpy import npir
+from gtc.numpy.npir_codegen import NpirCodegen
+from gtc.numpy.oir_to_npir import OirToNpir
 from gtc.passes.oir_optimizations.caches import (
     FillFlushToLocalKCaches,
     IJCacheDetection,
@@ -33,9 +36,6 @@ from gtc.passes.oir_optimizations.caches import (
     PruneKCacheFlushes,
 )
 from gtc.passes.oir_pipeline import DefaultPipeline, OirPipeline
-from gtc.python import npir
-from gtc.python.npir_gen import NpirGen
-from gtc.python.oir_to_npir import OirToNpir
 
 
 if TYPE_CHECKING:
@@ -109,7 +109,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
             + ".py"
         )
 
-        source = NpirGen.apply(self.npir)
+        source = NpirCodegen.apply(self.npir)
         if self.builder.options.format_source:
             source = format_source("python", source)
 

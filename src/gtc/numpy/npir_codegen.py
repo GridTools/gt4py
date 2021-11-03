@@ -23,10 +23,10 @@ from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
 from eve.visitors import NodeVisitor
 from gt4py.definitions import Extent
 from gtc import common
-from gtc.python import npir
+from gtc.numpy import npir
 
 
-__all__ = ["NpirGen"]
+__all__ = ["NpirCodegen"]
 
 
 def op_delta_from_int(value: int) -> Tuple[str, str]:
@@ -149,7 +149,7 @@ class ExtentCalculator(NodeVisitor):
             )
 
 
-class NpirGen(TemplatedGenerator):
+class NpirCodegen(TemplatedGenerator):
     def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
         return f"np.{node.name.lower()}"
 
