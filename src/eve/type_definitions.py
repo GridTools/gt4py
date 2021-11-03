@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import ast
 import enum
 import functools
 import re
@@ -169,13 +170,53 @@ class SourceLocation(pydantic.BaseModel):
     line: PositiveInt
     column: PositiveInt
     source: Str
+    end_line: Optional[PositiveInt]
+    end_column: Optional[PositiveInt]
 
-    def __init__(self, line: int, column: int, source: str) -> None:
-        super().__init__(line=line, column=column, source=source)
+    @classmethod
+    def from_AST(cls, ast_node: ast.AST, source: Optional[str] = None) -> SourceLocation:
+        if (
+            not isinstance(ast_node, ast.AST)
+            or getattr(ast_node, "lineno", None) is None
+            or getattr(ast_node, "col_offset", None) is None
+        ):
+            raise ValueError(
+                f"Passed AST node '{ast_node}' does not contain a valid source location."
+            )
+        if source is None:
+            source = f"<ast.{type(ast_node).__name__} at 0x{id(ast_node):x}>"
+        return cls(
+            ast_node.lineno,
+            ast_node.col_offset + 1,
+            source,
+            end_line=ast_node.end_lineno,
+            end_column=ast_node.end_col_offset + 1 if ast_node.end_col_offset is not None else None,
+        )
+
+    def __init__(
+        self,
+        line: int,
+        column: int,
+        source: str,
+        *,
+        end_line: Optional[int] = None,
+        end_column: Optional[int] = None,
+    ) -> None:
+        assert end_column is None or end_line is not None
+        super().__init__(
+            line=line, column=column, source=source, end_line=end_line, end_column=end_column
+        )
 
     def __str__(self) -> str:
         src = self.source or ""
-        return f"<{src}: Line {self.line}, Col {self.column}>"
+
+        end_part = ""
+        if self.end_line is not None:
+            end_part += f" to Line {self.end_line}"
+        if self.end_column is not None:
+            end_part += f", Col {self.end_column}"
+
+        return f"<'{src}': Line {self.line}, Col {self.column}{end_part}>"
 
     class Config:
         extra = "forbid"
@@ -195,7 +236,7 @@ class SourceLocationGroup(pydantic.BaseModel):
 
     def __str__(self) -> str:
         locs = ", ".join(str(loc) for loc in self.locations)
-        context = f"#{self.context}" if self.context else ""
+        context = f"#{self.context}#" if self.context else ""
         return f"<{context}[{locs}]>"
 
     @validator("locations")

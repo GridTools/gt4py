@@ -54,21 +54,49 @@ def test_symbol_types():
 
 class TestSourceLocation:
     def test_valid_position(self):
-        eve.type_definitions.SourceLocation(line=1, column=1, source="source")
+        eve.type_definitions.SourceLocation(line=1, column=1, source="source.py")
 
     def test_invalid_position(self):
         with pytest.raises(pydantic.ValidationError):
-            eve.type_definitions.SourceLocation(line=1, column=-1, source="source")
+            eve.type_definitions.SourceLocation(line=1, column=-1, source="source.py")
 
     def test_str(self):
-        loc = eve.type_definitions.SourceLocation(line=1, column=1, source="source")
-        assert str(loc) == "<source: Line 1, Col 1>"
+        loc = eve.type_definitions.SourceLocation(line=1, column=1, source="dir/source.py")
+        assert str(loc) == "<'dir/source.py': Line 1, Col 1>"
+
+        loc = eve.type_definitions.SourceLocation(
+            line=1, column=1, source="dir/source.py", end_line=2
+        )
+        assert str(loc) == "<'dir/source.py': Line 1, Col 1 to Line 2>"
+
+        loc = eve.type_definitions.SourceLocation(
+            line=1, column=1, source="dir/source.py", end_line=2, end_column=2
+        )
+        assert str(loc) == "<'dir/source.py': Line 1, Col 1 to Line 2, Col 2>"
+
+    def test_construction_from_ast(self):
+        import ast
+
+        ast_node = ast.parse("a = b + 1").body[0]
+        loc = eve.type_definitions.SourceLocation.from_AST(ast_node, "source.py")
+        print("\n", ast_node.end_lineno)
+        print(loc)
+
+        assert loc.line == ast_node.lineno
+        assert loc.column == ast_node.col_offset + 1
+        assert loc.source == "source.py"
+
+        loc = eve.type_definitions.SourceLocation.from_AST(ast_node)
+
+        assert loc.line == ast_node.lineno
+        assert loc.column == ast_node.col_offset + 1
+        assert loc.source == f"<ast.Assign at 0x{id(ast_node):x}>"
 
 
 class TestSourceLocationGroup:
     def test_valid_locations(self):
-        loc1 = eve.type_definitions.SourceLocation(line=1, column=1, source="source")
-        loc2 = eve.type_definitions.SourceLocation(line=2, column=2, source="source_2")
+        loc1 = eve.type_definitions.SourceLocation(line=1, column=1, source="source1.py")
+        loc2 = eve.type_definitions.SourceLocation(line=2, column=2, source="source2.py")
         eve.type_definitions.SourceLocationGroup(loc1)
         eve.type_definitions.SourceLocationGroup(loc1, loc2)
         eve.type_definitions.SourceLocationGroup(loc1, loc1, loc2, loc2, context="test context")
@@ -76,12 +104,15 @@ class TestSourceLocationGroup:
     def test_invalid_locations(self):
         with pytest.raises(pydantic.ValidationError):
             eve.type_definitions.SourceLocationGroup()
-        loc1 = eve.type_definitions.SourceLocation(line=1, column=1, source="source")
+        loc1 = eve.type_definitions.SourceLocation(line=1, column=1, source="source.py")
         with pytest.raises(pydantic.ValidationError):
             eve.type_definitions.SourceLocationGroup(loc1, "loc2")
 
     def test_str(self):
-        loc1 = eve.type_definitions.SourceLocation(line=1, column=1, source="source")
-        loc2 = eve.type_definitions.SourceLocation(line=2, column=2, source="source_2")
-        loc = eve.type_definitions.SourceLocationGroup(loc1, loc2, context="test context")
-        assert str(loc) == "<#test context[<source: Line 1, Col 1>, <source_2: Line 2, Col 2>]>"
+        loc1 = eve.type_definitions.SourceLocation(line=1, column=1, source="source1.py")
+        loc2 = eve.type_definitions.SourceLocation(line=2, column=2, source="source2.py")
+        loc = eve.type_definitions.SourceLocationGroup(loc1, loc2, context="some context")
+        assert (
+            str(loc)
+            == "<#some context#[<'source1.py': Line 1, Col 1>, <'source2.py': Line 2, Col 2>]>"
+        )
