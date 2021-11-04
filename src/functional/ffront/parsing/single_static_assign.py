@@ -41,7 +41,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
             return a
 
         print(ast.unparse(
-            SingleStaticAssignPass().visit(
+            SingleStaticAssignPass.mutate_ast(
                 get_ast_from_func(foo)
             )
         ))
@@ -80,6 +80,10 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     class State:
         name_counter: dict[str, int] = field(default_factory=dict)
 
+    @classmethod
+    def mutate_ast(cls, node: ast.AST) -> ast.AST:
+        return cls().visit(node)
+
     def __init__(self):
         super().__init__()
         self.state = self.State()
@@ -89,6 +93,12 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         node.value = self.RhsRenamer(self.state).visit(node.value)
         # then update lhs to create new names
         node.targets = [self.visit(target) for target in node.targets]
+        return node
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
+        if node.value:
+            node.value = self.RhsRenamer(self.state).visit(node.value)
+        node.target = self.visit(node.target)
         return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
