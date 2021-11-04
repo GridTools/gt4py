@@ -37,6 +37,9 @@ V = TypeVar("V")
 T_contra = TypeVar("T_contra", contravariant=True)
 V_co = TypeVar("V_co", covariant=True)
 
+ZeroOrMore = Union[None, T, Tuple[T, ...]]
+OneOrMore = Union[T, Tuple[T, ...]]
+
 
 class NonDataDescriptor(Protocol[T_contra, V_co]):
     @overload
