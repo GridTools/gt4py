@@ -18,7 +18,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
 
         def visit_Name(self, node: ast.Name) -> ast.Name:
             if node.id in self.state.name_counter:
-                node.id = f"{node.id}_{self.state.name_counter[node.id]}"
+                node.id = f"{node.id}${self.state.name_counter[node.id]}"
             return node
 
     @dataclass
@@ -39,8 +39,8 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     def visit_Name(self, node: ast.Name) -> ast.Name:
         if node.id in self.state.name_counter:
             self.state.name_counter[node.id] += 1
-            node.id = f"{node.id}_{self.state.name_counter[node.id]}"
+            node.id = f"{node.id}${self.state.name_counter[node.id]}"
         else:
             self.state.name_counter[node.id] = 0
-            node.id = f"{node.id}_0"
+            node.id = f"{node.id}$0"
         return node
