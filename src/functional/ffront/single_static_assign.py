@@ -49,12 +49,12 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         """
         Rename right hand side names.
 
-        Only read from parent visitor state, can not modify.
+        Only read from parent visitor state, should not modify.
         """
 
         def __init__(self, state):
             super().__init__()
-            self.state = SingleStaticAssignPass.State(name_counter=state.name_counter.copy())
+            self.state = state
 
         def visit_Name(self, node: ast.Name) -> ast.Name:
             if node.id in self.state.name_counter:
