@@ -36,17 +36,21 @@ class FieldOperatorSyntaxError(SyntaxError):
         self.filename = filename
 
 
+def get_ast_from_func(func: Callable) -> ast.stmt:
+    if inspect.getabsfile(func) == "<string>":
+        raise ValueError(
+            "Can not create field operator from a function that is not in a source file!"
+        )
+    source = textwrap.dedent(inspect.getsource(func))
+    return ast.parse(source).body[0]
+
+
 class FieldOperatorParser(ast.NodeVisitor):
     @classmethod
     def parse(cls, func: Callable) -> foir.FieldOperator:
-        if inspect.getabsfile(func) == "<string>":
-            raise ValueError(
-                "Can not create field operator from a function that is not in a source file!"
-            )
-        source = textwrap.dedent(inspect.getsource(func))
         result = None
         try:
-            result = cls().visit(ast.parse(source).body[0])
+            result = cls().visit(get_ast_from_func(func))
         except SyntaxError as err:
             err.filename = inspect.getabsfile(func)
             err.lineno = (err.lineno or 1) + inspect.getsourcelines(func)[1] - 1
