@@ -18,7 +18,7 @@ import itertools
 import typing
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Tuple, Union
 
 from eve.traits import SymbolTableTrait
 from eve.visitors import NodeTranslator
@@ -40,11 +40,13 @@ class OirToNpir(NodeTranslator):
 
         mask_temp_counter: int = 0
 
-        def ensure_temp_defined(self, temp: Union[oir.FieldAccess, npir.FieldSlice]) -> None:
+        def ensure_temp_defined(
+            self, temp: Union[oir.FieldAccess, npir.FieldSlice], dimensions: Tuple[bool, bool, bool]
+        ) -> None:
             if temp.name not in self.temp_defs:
                 self.temp_defs[str(temp.name)] = npir.VectorAssign(
                     left=npir.VectorTemp(name=str(temp.name), dtype=temp.dtype),
-                    right=npir.EmptyTemp(dtype=temp.dtype),
+                    right=npir.EmptyTemp(dtype=temp.dtype, dimensions=dimensions),
                 )
 
     contexts = (SymbolTableTrait.symtable_merger,)
@@ -112,9 +114,7 @@ class OirToNpir(NodeTranslator):
         ctx: Optional[ComputationContext] = None,
         **kwargs: Any,
     ) -> npir.HorizontalBlock:
-        return npir.HorizontalBlock(
-            body=self.visit(node.body, ctx=ctx, **kwargs),
-        )
+        return npir.HorizontalBlock(body=self.visit(node.body, ctx=ctx, **kwargs))
 
     def visit_MaskStmt(
         self,
@@ -150,10 +150,9 @@ class OirToNpir(NodeTranslator):
         **kwargs: Any,
     ) -> npir.VectorAssign:
         ctx = ctx or self.ComputationContext()
-        if isinstance(
-            kwargs["symtable"].get(node.left.name, None), (oir.Temporary, oir.LocalScalar)
-        ):
-            ctx.ensure_temp_defined(node.left)
+        decl = kwargs["symtable"].get(node.left.name, None)
+        if isinstance(decl, (oir.Temporary, oir.LocalScalar)):
+            ctx.ensure_temp_defined(node.left, decl.dimensions)
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, is_lvalue=True, **kwargs),
             right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),

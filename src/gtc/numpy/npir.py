@@ -115,6 +115,7 @@ class VectorTemp(VectorExpression, VectorLValue):
 
 class EmptyTemp(VectorExpression):
     dtype: common.DataType
+    dimensions: Tuple[bool, bool, bool]
 
 
 class VectorArithmetic(common.BinaryOp[VectorExpression], VectorExpression):

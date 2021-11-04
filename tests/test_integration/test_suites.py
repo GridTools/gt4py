@@ -799,5 +799,7 @@ class TestVerticalReduction(gt_testing.StencilTestSuite):
             )
 
     def validation(field_in, field_out, *, domain, origin):
-        tmp = np.sum(field_in, axis=2)
-        field_out = tmp  # noqa: F841  # local variable 'field_out' is assigned to but never used
+        tmp = np.sum(field_in, axis=2)[:, :, np.newaxis]
+        field_out[:, :, :] = tmp[
+            :, :, :
+        ]  # noqa: F841  # local variable 'field_out' is assigned to but never used
