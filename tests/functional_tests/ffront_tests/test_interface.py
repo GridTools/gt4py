@@ -25,11 +25,9 @@ from __future__ import annotations
 
 import pytest
 
-from functional.ffront.parsers import (
-    FieldOperatorLowering,
-    FieldOperatorParser,
-    FieldOperatorSyntaxError,
-)
+from functional.ffront.parsing.field_operator_parser import FieldOperatorParser
+from functional.ffront.parsing.foir_to_itir import FieldOperatorLowering
+from functional.ffront.parsing.parsing import FieldOperatorSyntaxError
 from functional.iterator.ir import FunCall, FunctionDefinition, Sym, SymRef
 
 

@@ -3,7 +3,7 @@
 import ast
 import textwrap
 
-from functional.ffront.single_static_assign import SingleStaticAssignPass
+from functional.ffront.parsing.single_static_assign import SingleStaticAssignPass
 
 
 def ssaify_string(code: str) -> ast.AST:
