@@ -20,7 +20,7 @@ import pytest
 
 from gt4py import gtscript
 from gt4py import testing as gt_testing
-from gt4py.gtscript import PARALLEL, computation, interval
+from gt4py.gtscript import FORWARD, PARALLEL, computation, interval
 
 from ..definitions import INTERNAL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields
@@ -769,3 +769,35 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
 
     def validation(field_in, field_out, index, *, domain, origin):
         field_out[:, :, 1:] = field_in[:, :, (np.arange(field_in.shape[-1]) + index)[1:]]
+
+
+class TestVerticalReduction(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float32,
+        "field_out": np.float32,
+    }
+    domain_range = [(2, 2), (3, 3), (4, 5)]
+    backends = [backend for backend in INTERNAL_BACKENDS if backend.values[0] not in ["gtc:dace"]]
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        from __gtscript__ import IJ, Field
+
+        tmp: Field[IJ, np.float32] = 0.0
+        with computation(FORWARD), interval(...):
+            tmp += field_in
+        with computation(PARALLEL), interval(...):
+            field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                tmp
+            )
+
+    def validation(field_in, field_out, *, domain, origin):
+        tmp = np.sum(field_in, axis=2)
+        field_out = tmp  # noqa: F841  # local variable 'field_out' is assigned to but never used
