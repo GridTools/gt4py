@@ -21,9 +21,9 @@ def test_sequence():
     )
 
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0].strip() == "tmp_0 = 1"
-    assert lines[1].strip() == "tmp_1 = 2"
-    assert lines[2].strip() == "tmp_2 = 3"
+    assert lines[0].strip() == "tmp$0 = 1"
+    assert lines[1].strip() == "tmp$1 = 2"
+    assert lines[2].strip() == "tmp$2 = 3"
 
 
 def test_self_on_rhs():
@@ -35,8 +35,8 @@ def test_self_on_rhs():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0].strip() == "tmp_0 = 1"
-    assert lines[1].strip() == "tmp_1 = tmp_0 + 1"
+    assert lines[0].strip() == "tmp$0 = 1"
+    assert lines[1].strip() == "tmp$1 = tmp$0 + 1"
 
 
 def test_multi_assign():
@@ -47,7 +47,7 @@ def test_multi_assign():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0].strip() == "a_0 = a_1 = b_0 = a_2 = b_1 = 1"
+    assert lines[0].strip() == "a$0 = a$1 = b$0 = a$2 = b$1 = 1"
 
 
 def test_external_name_values():
@@ -59,8 +59,8 @@ def test_external_name_values():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0].strip() == "a_0 = inp"
-    assert lines[1].strip() == "a_1 = a_0 + inp"
+    assert lines[0].strip() == "a$0 = inp"
+    assert lines[1].strip() == "a$1 = a$0 + inp"
 
 
 def test_overwrite_external():
@@ -73,9 +73,9 @@ def test_overwrite_external():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0].strip() == "a_0 = inp"
-    assert lines[1].strip() == "inp_0 = a_0 + inp"
-    assert lines[2].strip() == "b_0 = inp_0"
+    assert lines[0].strip() == "a$0 = inp"
+    assert lines[1].strip() == "inp$0 = a$0 + inp"
+    assert lines[2].strip() == "b$0 = inp$0"
 
 
 def test_unpacking_swap():
@@ -88,6 +88,6 @@ def test_unpacking_swap():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0].strip() == "a_0 = 5"
-    assert lines[1].strip() == "b_0 = 1"
-    assert lines[2].strip() == "(b_1, a_1) = (a_0, b_0)"
+    assert lines[0].strip() == "a$0 = 5"
+    assert lines[1].strip() == "b$0 = 1"
+    assert lines[2].strip() == "(b$1, a$1) = (a$0, b$0)"
