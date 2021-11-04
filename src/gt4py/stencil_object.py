@@ -73,13 +73,45 @@ class FrozenStencil:
 
 
 class StencilObject(abc.ABC):
-    """Generic singleton implementation of a stencil function.
+    """Generic singleton implementation of a stencil callable.
 
-    This class is used as base class for the specific subclass generated
+    This class is used as base class for specific subclass generated
     at run-time for any stencil definition and a unique set of external symbols.
-    Instances of this class do not contain any information and thus it is
+    Instances of this class do not contain state and thus it is
     implemented as a singleton: only one instance per subclass is actually
     allocated (and it is immutable).
+
+    The callable interface is the same of the stencil definition function,
+    with some extra keyword arguments.
+
+    Keyword Arguments
+    ------------------
+    domain : `Sequence` of `int`, optional
+        Shape of the computation domain. If `None`, it will be used the
+        largest feasible domain according to the provided input fields
+        and origin values (`None` by default).
+
+    origin :  `[int * ndims]` or `{'field_name': [int * ndims]}`, optional
+        If a single offset is passed, it will be used for all fields.
+        If a `dict` is passed, there could be an entry for each field.
+        A special key *'_all_'* will represent the value to be used for all
+        the fields not explicitly defined. If `None` is passed or it is
+        not possible to assign a value to some field according to the
+        previous rule, the value will be inferred from the `boundary` attribute
+        of the `field_info` dict. Note that the function checks if the origin values
+        are at least equal to the `boundary` attribute of that field,
+        so a 0-based origin will only be acceptable for fields with
+        a 0-area support region.
+
+    exec_info : `dict`, optional
+        Dictionary used to store information about the stencil execution.
+        (`None` by default). If the dictionary contains the magic key
+        '__aggregate_data' and it evaluates to `True`, the dictionary is
+        populated with a nested dictionary per class containing different
+        performance statistics. These include the stencil calls count, the
+        cumulative time spent in all stencil calls, and the actual time spent
+        in carrying out the computations.
+
     """
 
     # Those attributes are added to the class at loading time:
@@ -420,31 +452,8 @@ class StencilObject(abc.ABC):
                 This parameter encapsulates `**kwargs` in the actual stencil subclass
                 by doing: `{name: value for name, value in kwargs.items()}`
 
-            domain : `Sequence` of `int`, optional
-                Shape of the computation domain. If `None`, it will be used the
-                largest feasible domain according to the provided input fields
-                and origin values (`None` by default).
-
-            origin :  `[int * ndims]` or {'field_name': [int * ndims]} , optional
-                If a single offset is passed, it will be used for all fields.
-                If a `dict` is passed, there could be an entry for each field.
-                A special key '_all_' will represent the value to be used for all
-                the fields not explicitly defined. If `None` is passed or it is
-                not possible to assign a value to some field according to the
-                previous rule, the value will be inferred from the global boundaries
-                of the field. Note that the function checks if the origin values
-                are at least equal to the `global_border` attribute of that field,
-                so a 0-based origin will only be acceptable for fields with
-                a 0-area support region.
-
-            exec_info : `dict`, optional
-                Dictionary used to store information about the stencil execution.
-                (`None` by default). If the dictionary contains the magic key
-                '__aggregate_data' and it evaluates to `True`, the dictionary is
-                populated with a nested dictionary per class containing different
-                performance statistics. These include the stencil calls count, the
-                cumulative time spent in all stencil calls, and the actual time spent
-                in carrying out the computations.
+        Check :class:`StencilObject` for a full specification of the `domain`,
+        `origin` and `exec_info` keyword arguments.
 
         Returns
         -------
@@ -481,10 +490,15 @@ class StencilObject(abc.ABC):
         Parameters
         ----------
             origin: `dict`
-                The origin for each Field argument. These must be computed in a way
-                compatible with the algorithm in `StencilObject._normalize_origins`.
+                The origin for each Field argument.
+
             domain: `Sequence` of `int`
                 The compute domain shape for the frozen stencil.
+
+        Notes
+        ------
+        Both `origin` and `domain` arguments should be compatible with the domain and origin
+        specification defined in :class:`StencilObject`.
 
         Returns
         -------
