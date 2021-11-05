@@ -790,6 +790,7 @@ class TestVerticalReduction(gt_testing.StencilTestSuite):
     def definition(field_in, field_out):
         from __gtscript__ import IJ, Field
 
+        # NOTE: tmp does not need a data_dim but it tests more code paths with it.
         tmp: Field[IJ, (np.float32, (2,))] = 0.0
         with computation(FORWARD), interval(...):
             tmp[0, 0][0] += field_in
