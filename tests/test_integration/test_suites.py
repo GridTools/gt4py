@@ -777,7 +777,7 @@ class TestVerticalReduction(gt_testing.StencilTestSuite):
         "field_out": np.float32,
     }
     domain_range = [(2, 2), (3, 3), (4, 5)]
-    backends = [backend for backend in INTERNAL_BACKENDS if backend.values[0] not in ["gtc:dace"]]
+    backends = [backend for backend in INTERNAL_BACKENDS if backend.values[0].startswith("gtc:")]
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
@@ -790,12 +790,12 @@ class TestVerticalReduction(gt_testing.StencilTestSuite):
     def definition(field_in, field_out):
         from __gtscript__ import IJ, Field
 
-        tmp: Field[IJ, np.float32] = 0.0
+        tmp: Field[IJ, (np.float32, (2,))] = 0.0
         with computation(FORWARD), interval(...):
-            tmp += field_in
+            tmp[0, 0][0] += field_in
         with computation(PARALLEL), interval(...):
             field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
-                tmp
+                tmp[0, 0][0]
             )
 
     def validation(field_in, field_out, *, domain, origin):

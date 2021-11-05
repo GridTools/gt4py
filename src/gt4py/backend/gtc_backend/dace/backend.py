@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type
 
 import dace
 
+import gt4py.utils as gt_utils
 from eve import NodeVisitor, codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
@@ -162,9 +163,30 @@ class DaCeComputationCodegen:
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
         for name, array in sdfg.arrays.items():
             if array.transient:
-                symbols[f"__{name}_K_stride"] = "1"
-                symbols[f"__{name}_J_stride"] = str(array.shape[2])
-                symbols[f"__{name}_I_stride"] = str(array.shape[1] * array.shape[2])
+                decl = gtir.symtable_[name]
+                layout_map = make_x86_layout_map(
+                    tuple([1 if d else 0 for d in decl.dimensions] + [1 for dim in decl.data_dims])
+                )
+                expanded_shape = gt_utils.interpolate_mask(
+                    array.shape, [m is not None for m in layout_map], default=None
+                )
+                index = 0
+                strides = []
+                # TODO (jdahm): This could use refactoring
+                while True:
+                    try:
+                        shape_index = layout_map.index(index)
+                        axis_size = expanded_shape[shape_index]
+                        symbol_name = (
+                            f"__{name}_{'IJK'[shape_index]}_stride"
+                            if shape_index < 3
+                            else f"__{name}_d{shape_index - 3}_stride"
+                        )
+                        symbols[symbol_name] = "*".join(strides) or "1"
+                        strides.append(str(axis_size))
+                        index += 1
+                    except Exception:
+                        break
             else:
                 dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
                 data_ndim = len(array.shape) - len(dims)

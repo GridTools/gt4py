@@ -185,7 +185,12 @@ class GTIRToOIR(NodeTranslator):
 
         for temp in node.temporaries:
             ctx.add_decl(
-                oir.Temporary(name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions)
+                oir.Temporary(
+                    name=temp.name,
+                    dtype=temp.dtype,
+                    dimensions=temp.dimensions,
+                    data_dims=temp.data_dims,
+                )
             )
 
         return oir.VerticalLoop(

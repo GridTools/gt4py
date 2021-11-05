@@ -387,7 +387,7 @@ class VarRef(Ref):
 class FieldRef(Ref):
     name = attribute(of=str)
     offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
-    data_index = attribute(of=ListOf[int], factory=list)
+    data_index = attribute(of=ListOf[Expr], factory=list)
     loc = attribute(of=Location, optional=True)
 
     @classmethod
@@ -948,6 +948,8 @@ class IRNodeVisitor:
 
         for key, value in items:
             self._visit(value, **kwargs)
+        else:
+            return node
 
 
 class IRNodeInspector:

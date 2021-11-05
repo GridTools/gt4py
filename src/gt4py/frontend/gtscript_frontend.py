@@ -713,6 +713,17 @@ class CompiledIfInliner(ast.NodeTransformer):
 def parse_annotation(
     node: ast.AnnAssign,
 ) -> Tuple[str, gt_ir.FieldDecl, Optional[gt_ir.ScalarLiteral]]:
+    def _parse_dtype(dtype_node) -> gt_ir.DataType:
+        dtype_name = gt_utils.meta.get_qualified_name_from_node(dtype_node)
+        # Assumption: "." in the qualified name implies this is a numpy dtype
+        if "." in dtype_name:
+            np_dtype_name = dtype_name.split(".")[-1]
+            dtype = gt_ir.DataType.NUMPY_TO_NATIVE_TYPE[np_dtype_name]
+        else:
+            # A python type specification
+            dtype = gt_ir.DataType.from_dtype(getattr(sys.modules["builtins"], dtype_name))
+        return dtype
+
     if not isinstance(node.target, ast.Name):
         raise TypeError("Annotation targets for temporaries should be ast.Name type")
     if not isinstance(node.annotation, ast.Subscript):
@@ -741,14 +752,11 @@ def parse_annotation(
         raise GTScriptSyntaxError(f"{type_name} requires at least one argument")
 
     if isinstance(dtype_node, (ast.Name, ast.Attribute)):
-        dtype_name = gt_utils.meta.get_qualified_name_from_node(dtype_node)
-        # Assumption: "." in the qualified name implies this is a numpy dtype
-        if "." in dtype_name:
-            np_dtype_name = dtype_name.split(".")[-1]
-            dtype = gt_ir.DataType.NUMPY_TO_NATIVE_TYPE[np_dtype_name]
-        else:
-            # A python type specification
-            dtype = gt_ir.DataType.from_dtype(getattr(sys.modules["builtins"], dtype_name))
+        dtype = _parse_dtype(dtype_node)
+        data_dims = []
+    elif isinstance(dtype_node, ast.Tuple):
+        dtype = _parse_dtype(dtype_node.elts[0])
+        data_dims = list(ast.literal_eval(dtype_node.elts[1]))
     else:
         raise NotImplementedError()
 
@@ -757,7 +765,7 @@ def parse_annotation(
         data_type=dtype,
         axes=list(axes),
         is_api=False,
-        data_dims=[],
+        data_dims=data_dims,
     )
 
     if hasattr(node, "value") and node.value is not None:
@@ -807,10 +815,13 @@ def make_init_computation(
         stmts.append(decl)
         if decl.data_dims:
             for index in itertools.product(*(range(i) for i in decl.data_dims)):
+                literal_index = [
+                    gt_ir.ScalarLiteral(value=i, data_type=gt_ir.DataType.INT32) for i in index
+                ]
                 stmts.append(
                     gt_ir.Assign(
                         target=gt_ir.FieldRef.at_center(
-                            name, axes=decl.axes, data_index=list(index)
+                            name, axes=decl.axes, data_index=literal_index
                         ),
                         value=temp_inits[name],
                     )
@@ -1206,7 +1217,7 @@ class IRMaker(ast.NodeVisitor):
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}
             elif isinstance(node.value, ast.Subscript):
                 result.data_index = [
-                    gt_ir.ScalarLiteral(value=value, data_type=gt_ir.DataType.INT64)
+                    gt_ir.ScalarLiteral(value=value, data_type=gt_ir.DataType.INT32)
                     if isinstance(value, numbers.Integral)
                     else value
                     for value in index
@@ -1430,12 +1441,13 @@ class IRMaker(ast.NodeVisitor):
         for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
             name, spatial_offset, data_index = self._parse_assign_target(t)
             is_temporary = name not in {name for name, field in self.fields.items() if field.is_api}
-            if spatial_offset and is_temporary:
-                raise GTScriptSyntaxError(
-                    message="No subscript allowed in assignment to temporaries",
-                    loc=gt_ir.Location.from_ast_node(t),
-                )
-            elif spatial_offset:
+            # NOTE (jdahm): This check has to be disabled in order to assign to data dims in temporaries.
+            # if spatial_offset and is_temporary:
+            #     raise GTScriptSyntaxError(
+            #         message="No subscript allowed in assignment to temporaries",
+            #         loc=gt_ir.Location.from_ast_node(t),
+            #     )
+            if spatial_offset:
                 if any(offset != 0 for offset in spatial_offset):
                     raise GTScriptSyntaxError(
                         message="Assignment to non-zero offsets is not supported.",

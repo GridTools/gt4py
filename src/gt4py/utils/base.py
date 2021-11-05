@@ -213,7 +213,7 @@ def interpolate_mask(seq: Sequence[Any], mask: Sequence[bool], default) -> Tuple
     >>> default = 0
     >>> a = (1, 2)
     >>> mask = (False, True, False, True)
-    >>> interpolate_mask(a, mask, 0)
+    >>> interpolate_mask(a, mask, default)
     (0, 1, 0, 2)
     """
     it = iter(seq)
