@@ -165,28 +165,19 @@ class DaCeComputationCodegen:
             if array.transient:
                 decl = gtir.symtable_[name]
                 layout_map = make_x86_layout_map(
-                    tuple([1 if d else 0 for d in decl.dimensions] + [1 for dim in decl.data_dims])
+                    tuple([1 if d else 0 for d in decl.dimensions] + [1] * len(decl.data_dims))
                 )
                 expanded_shape = gt_utils.interpolate_mask(
                     array.shape, [m is not None for m in layout_map], default=None
                 )
-                index = 0
                 strides = []
-                # TODO (jdahm): This could use refactoring
-                while True:
-                    try:
-                        shape_index = layout_map.index(index)
-                    except ValueError:
-                        break
-                    axis_size = expanded_shape[shape_index]
-                    symbol_name = (
-                        f"__{name}_{'IJK'[shape_index]}_stride"
-                        if shape_index < 3
-                        else f"__{name}_d{shape_index - 3}_stride"
+                for index in sorted([index for index in layout_map if index is not None]):
+                    shape_index = layout_map.index(index)
+                    str_index = (
+                        f"{'IJK'[shape_index]}" if shape_index < 3 else f"d{shape_index - 3}"
                     )
-                    symbols[symbol_name] = "*".join(strides) or "1"
-                    strides.append(str(axis_size))
-                    index += 1
+                    symbols[f"__{name}_{str_index}_stride"] = "*".join(strides) or "1"
+                    strides.append(str(expanded_shape[shape_index]))
             else:
                 dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
                 data_ndim = len(array.shape) - len(dims)
