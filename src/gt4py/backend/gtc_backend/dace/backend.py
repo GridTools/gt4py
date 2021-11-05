@@ -176,17 +176,17 @@ class DaCeComputationCodegen:
                 while True:
                     try:
                         shape_index = layout_map.index(index)
-                        axis_size = expanded_shape[shape_index]
-                        symbol_name = (
-                            f"__{name}_{'IJK'[shape_index]}_stride"
-                            if shape_index < 3
-                            else f"__{name}_d{shape_index - 3}_stride"
-                        )
-                        symbols[symbol_name] = "*".join(strides) or "1"
-                        strides.append(str(axis_size))
-                        index += 1
-                    except Exception:
+                    except ValueError:
                         break
+                    axis_size = expanded_shape[shape_index]
+                    symbol_name = (
+                        f"__{name}_{'IJK'[shape_index]}_stride"
+                        if shape_index < 3
+                        else f"__{name}_d{shape_index - 3}_stride"
+                    )
+                    symbols[symbol_name] = "*".join(strides) or "1"
+                    strides.append(str(axis_size))
+                    index += 1
             else:
                 dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
                 data_ndim = len(array.shape) - len(dims)
