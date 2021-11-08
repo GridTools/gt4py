@@ -53,7 +53,7 @@ def test_invalid_syntax_error_emtpy_return():
             rf"Empty return not allowed \(test_interface.py, line {lineno}\)"
         ),
     ):
-        _ = FieldOperatorParser.parse(wrong_syntax)
+        _ = FieldOperatorParser.apply(wrong_syntax)
 
 
 def test_invalid_syntax_no_return():
@@ -66,7 +66,7 @@ def test_invalid_syntax_no_return():
         FieldOperatorSyntaxError,
         match=r"Field operator must return a field expression on the last line!",
     ):
-        _ = FieldOperatorParser.parse(no_return)
+        _ = FieldOperatorParser.apply(no_return)
 
 
 def test_invalid_assign_to_expr():
@@ -78,7 +78,7 @@ def test_invalid_assign_to_expr():
         return tmp
 
     with pytest.raises(FieldOperatorSyntaxError, match=r"Can only assign to names!"):
-        _ = FieldOperatorParser.parse(invalid_assign_to_expr)
+        _ = FieldOperatorParser.apply(invalid_assign_to_expr)
 
 
 def test_copy_lower():
@@ -86,8 +86,8 @@ def test_copy_lower():
         return inp
 
     # ast_passes
-    parsed = FieldOperatorParser.parse(copy_field)
-    lowered = FieldOperatorLowering.parse(parsed)
+    parsed = FieldOperatorParser.apply(copy_field)
+    lowered = FieldOperatorLowering.apply(parsed)
     assert lowered == COPY_FUN_DEF
     assert lowered.expr == COPY_FUN_DEF.expr
 
@@ -99,8 +99,8 @@ def test_syntax_unpacking():
         tmp1, tmp2 = inp1, inp2  # noqa
         return tmp1
 
-    parsed = FieldOperatorParser.parse(unpacking)
-    lowered = FieldOperatorLowering.parse(parsed)
+    parsed = FieldOperatorParser.apply(unpacking)
+    lowered = FieldOperatorLowering.apply(parsed)
     assert lowered.expr == itir.FunCall(
         fun=itir.SymRef(id="tuple_get"),
         args=[
@@ -123,8 +123,8 @@ def test_temp_assignment():
         tmp2 = inp
         return tmp2
 
-    parsed = FieldOperatorParser.parse(copy_field)
-    lowered = FieldOperatorLowering.parse(parsed)
+    parsed = FieldOperatorParser.apply(copy_field)
+    lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered == COPY_FUN_DEF
     assert lowered.expr == COPY_FUN_DEF.expr

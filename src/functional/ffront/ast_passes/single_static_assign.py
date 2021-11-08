@@ -41,7 +41,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     ...     return a
 
     >>> print(ast.unparse(
-    ...     SingleStaticAssignPass.mutate_ast(
+    ...     SingleStaticAssignPass.apply(
     ...         get_ast_from_func(foo)
     ...     )
     ... ))
@@ -79,7 +79,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         name_counter: dict[str, int] = field(default_factory=dict)
 
     @classmethod
-    def mutate_ast(cls, node: ast.AST) -> ast.AST:
+    def apply(cls, node: ast.AST) -> ast.AST:
         return cls().visit(node)
 
     def __init__(self):

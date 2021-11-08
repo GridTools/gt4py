@@ -22,7 +22,7 @@ from functional.ffront.ast_passes.single_static_assign import SingleStaticAssign
 
 
 def ssaify_string(code: str) -> ast.AST:
-    return SingleStaticAssignPass.mutate_ast(ast.parse(textwrap.dedent(code)))
+    return SingleStaticAssignPass.apply(ast.parse(textwrap.dedent(code)))
 
 
 def test_sequence():

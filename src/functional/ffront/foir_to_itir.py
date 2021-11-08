@@ -33,13 +33,13 @@ class SymExprResolver(NodeTranslator):
     ...     tmp2 = tmp1
     ...     return tmp2
     >>>
-    >>> fieldop_foir_expr = SymExprResolver.parse(FieldOperatorParser.parse(fieldop).body)
+    >>> fieldop_foir_expr = SymExprResolver.apply(FieldOperatorParser.apply(fieldop).body)
     >>> fieldop_foir_expr
     Return(value=SymRef(id='inp'))
     """
 
     @classmethod
-    def parse(cls, nodes: List[foir.Expr], *, params: Optional[list[iir.Sym]] = None) -> foir.Expr:
+    def apply(cls, nodes: List[foir.Expr], *, params: Optional[list[iir.Sym]] = None) -> foir.Expr:
         names: dict[str, foir.Expr] = {}
         parser = cls()
         for node in nodes[:-1]:
@@ -75,8 +75,8 @@ class FieldOperatorLowering(NodeTranslator):
     >>> def fieldop(inp):
     ...    return inp
     >>>
-    >>> parsed = FieldOperatorParser.parse(fieldop)
-    >>> lowered = FieldOperatorLowering.parse(parsed)
+    >>> parsed = FieldOperatorParser.apply(fieldop)
+    >>> lowered = FieldOperatorLowering.apply(parsed)
     >>> type(lowered)
     <class 'functional.iterator.ir.FunctionDefinition'>
     >>> lowered.id
@@ -88,7 +88,7 @@ class FieldOperatorLowering(NodeTranslator):
     """
 
     @classmethod
-    def parse(cls, node: foir.FieldOperator) -> iir.FunctionDefinition:
+    def apply(cls, node: foir.FieldOperator) -> iir.FunctionDefinition:
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foir.FieldOperator) -> iir.FunctionDefinition:
@@ -100,7 +100,7 @@ class FieldOperatorLowering(NodeTranslator):
     def body_visit(
         self, exprs: List[foir.Expr], params: Optional[List[iir.Sym]] = None
     ) -> iir.Expr:
-        return self.visit(SymExprResolver.parse(exprs))
+        return self.visit(SymExprResolver.apply(exprs))
 
     def visit_Return(self, node: foir.Return) -> iir.Expr:
         return self.visit(node.value)

@@ -26,11 +26,11 @@ def getlines(node: ast.AST) -> list[str]:
 
 
 def separate_targets(code: str) -> ast.AST:
-    return SingleAssignTargetPass.mutate_ast(ast.parse(textwrap.dedent(code)))
+    return SingleAssignTargetPass.apply(ast.parse(textwrap.dedent(code)))
 
 
 def unpack_targets(code: str) -> ast.AST:
-    return UnpackedAssignPass.mutate_ast(ast.parse(textwrap.dedent(code)))
+    return UnpackedAssignPass.apply(ast.parse(textwrap.dedent(code)))
 
 
 def test_separate():
@@ -94,7 +94,7 @@ def test_nested_unpack():
 def test_nested_multi_target_unpack():
     """Unpacking after separating completely linearizes."""
     lines = getlines(
-        UnpackedAssignPass.mutate_ast(
+        UnpackedAssignPass.apply(
             separate_targets(
                 """
                 a = [b, c] = [d, e]

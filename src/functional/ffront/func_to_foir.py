@@ -40,7 +40,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     >>> def fieldop(inp):
     ...     return inp
 
-    >>> foir_tree = FieldOperatorParser.parse(fieldop)
+    >>> foir_tree = FieldOperatorParser.apply(fieldop)
     >>> foir_tree
     FieldOperator(id='fieldop', params=[Sym(id='inp')], body=[Return(value=Name(id='inp'))])
 
@@ -53,7 +53,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     ...     return tmp
     >>>
     >>> try:
-    ...     FieldOperatorParser.parse(wrong_syntax)
+    ...     FieldOperatorParser.apply(wrong_syntax)
     ... except FieldOperatorSyntaxError as err:
     ...     print(err.filename[-67:])
     ...     print(err.lineno)
@@ -64,13 +64,13 @@ class FieldOperatorParser(ast.NodeVisitor):
     """
 
     @classmethod
-    def parse(cls, func: FunctionType) -> foir.FieldOperator:
+    def apply(cls, func: FunctionType) -> foir.FieldOperator:
         result = None
         try:
             ast = get_ast_from_func(func)
-            ssa = SingleStaticAssignPass.mutate_ast(ast)
-            sat = SingleAssignTargetPass.mutate_ast(ssa)
-            las = UnpackedAssignPass.mutate_ast(sat)
+            ssa = SingleStaticAssignPass.apply(ast)
+            sat = SingleAssignTargetPass.apply(ssa)
+            las = UnpackedAssignPass.apply(sat)
             result = cls().visit(las)
         except SyntaxError as err:
             err.filename = inspect.getabsfile(func)

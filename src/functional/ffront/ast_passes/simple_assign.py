@@ -22,7 +22,7 @@ from typing import Iterator
 
 class NodeYielder(ast.NodeTransformer):
     @classmethod
-    def mutate_ast(cls, node: ast.AST) -> ast.AST:
+    def apply(cls, node: ast.AST) -> ast.AST:
         result = list(cls().visit(node))
         if len(result) != 1:
             raise ValueError("AST was split or lost during the pass. Use `.visit()` instead.")
@@ -66,7 +66,7 @@ class SingleAssignTargetPass(NodeYielder):
     ...     return a, b
     >>>
     >>> print(ast.unparse(
-    ...     SingleAssignTargetPass.mutate_ast(
+    ...     SingleAssignTargetPass.apply(
     ...         get_ast_from_func(foo)
     ...     )
     ... ))
@@ -105,7 +105,7 @@ class UnpackedAssignPass(NodeYielder):
     ...     return a1, b1
 
     >>> print(ast.unparse(
-    ...     UnpackedAssignPass.mutate_ast(
+    ...     UnpackedAssignPass.apply(
     ...         get_ast_from_func(foo)
     ...     )
     ... ))

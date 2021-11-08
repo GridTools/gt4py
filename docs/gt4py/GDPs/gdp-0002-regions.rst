@@ -179,7 +179,7 @@ Implementation
 
 The implementation in GT4Py involves
 
-1. Correctly parse ``with horizontal()`` in the frontend, and add ability for IRs to represent this computation
+1. Correctly apply ``with horizontal()`` in the frontend, and add ability for IRs to represent this computation
 2. Add parsing tests
 3. Add code generation support
 4. Code generation tests
