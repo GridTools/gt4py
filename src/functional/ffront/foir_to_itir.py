@@ -23,13 +23,28 @@ from functional.iterator import ir as iir
 
 
 class SymExprResolver(NodeTranslator):
+    """
+    Inline a sequence of assignments into a final return statement.
+
+    >>> from functional.ffront.func_to_foir import FieldOperatorParser
+    >>>
+    >>> def fieldop(inp):
+    ...     tmp1 = inp
+    ...     tmp2 = tmp1
+    ...     return tmp2
+    >>>
+    >>> fieldop_foir_expr = SymExprResolver.parse(FieldOperatorParser.parse(fieldop).body)
+    >>> fieldop_foir_expr
+    Return(value=SymRef(id='inp'))
+    """
+
     @classmethod
     def parse(cls, nodes: List[foir.Expr], *, params: Optional[list[iir.Sym]] = None) -> foir.Expr:
         names: dict[str, foir.Expr] = {}
         parser = cls()
         for node in nodes[:-1]:
             names.update(parser.visit(node, names=names))
-        return foir.Return(value=parser.visit(nodes[-1], names=names))
+        return foir.Return(value=parser.visit(nodes[-1].value, names=names))
 
     def visit_SymExpr(
         self,
@@ -52,6 +67,26 @@ class SymExprResolver(NodeTranslator):
 
 
 class FieldOperatorLowering(NodeTranslator):
+    """
+    Lower FieldOperator IR / AST (FOIR) to Iterator IR (ITIR).
+
+    >>> from functional.ffront.func_to_foir import FieldOperatorParser
+    >>>
+    >>> def fieldop(inp):
+    ...    return inp
+    >>>
+    >>> parsed = FieldOperatorParser.parse(fieldop)
+    >>> lowered = FieldOperatorLowering.parse(parsed)
+    >>> type(lowered)
+    <class 'functional.iterator.ir.FunctionDefinition'>
+    >>> lowered.id
+    'fieldop'
+    >>> lowered.params
+    [Sym(id='inp')]
+    >>> lowered.expr
+    FunCall(fun=SymRef(id='deref'), args=[SymRef(id='inp')])
+    """
+
     @classmethod
     def parse(cls, node: foir.FieldOperator) -> iir.FunctionDefinition:
         return cls().visit(node)

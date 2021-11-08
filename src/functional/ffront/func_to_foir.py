@@ -37,12 +37,30 @@ class FieldOperatorParser(ast.NodeVisitor):
     Parse a function into a Field Operator Internal Representation (FOIR), which can
     be lowered into Iterator IR (ITIR)
 
-        def fieldop(inp):
-            return inp
+    >>> def fieldop(inp):
+    ...     return inp
 
-        foir_tree = FieldOperatorParser.parse(fieldop)
+    >>> foir_tree = FieldOperatorParser.parse(fieldop)
+    >>> foir_tree
+    FieldOperator(id='fieldop', params=[Sym(id='inp')], body=[Return(value=Name(id='inp'))])
 
-        # foir_tree can now be lowered to ITIR
+
+    If a syntax error is encountered, it will point to the location in the source code.
+
+    >>> def wrong_syntax(inp):
+    ...     for i in range(10): # for is not part of the field operator syntax
+    ...         tmp = inp
+    ...     return tmp
+    >>>
+    >>> try:
+    ...     FieldOperatorParser.parse(wrong_syntax)
+    ... except FieldOperatorSyntaxError as err:
+    ...     print(err.filename[-67:])
+    ...     print(err.lineno)
+    ...     print(err.offset)
+    <doctest src.functional.ffront.func_to_foir.FieldOperatorParser[3]>
+    2
+    4
     """
 
     @classmethod

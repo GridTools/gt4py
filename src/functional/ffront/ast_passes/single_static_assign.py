@@ -31,27 +31,25 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     -------
     Function ``foo()`` in the following example keeps overwriting local variable ``a``
 
-        import ast
-        from functional.ffront.parsing.parsing import get_ast_from_func
+    >>> import ast
+    >>> from functional.ffront.func_to_foir import get_ast_from_func
 
-        def foo():
-            a = 1
-            a = 2 + a
-            a = 3 + a
-            return a
+    >>> def foo():
+    ...     a = 1
+    ...     a = 2 + a
+    ...     a = 3 + a
+    ...     return a
 
-        print(ast.unparse(
-            SingleStaticAssignPass.mutate_ast(
-                get_ast_from_func(foo)
-            )
-        ))
-
-        # This will print out
-
-        def foo():
-            a$0 = 1
-            a$1 = 2 + a$0
-            a$2 = 3 + a$1
+    >>> print(ast.unparse(
+    ...     SingleStaticAssignPass.mutate_ast(
+    ...         get_ast_from_func(foo)
+    ...     )
+    ... ))
+    def foo():
+        a$0 = 1
+        a$1 = 2 + a$0
+        a$2 = 3 + a$1
+        return a$2
 
     Note that each variable name is assigned only once and never updated / overwritten.
 

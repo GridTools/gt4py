@@ -58,26 +58,22 @@ class SingleAssignTargetPass(NodeYielder):
 
     Example
     -------
-    Usage:
-
-        import ast
-        from functional.ffront.parsing.parsing import get_ast_from_func
-
-        def foo():
-            a = b = 1
-            return a, b
-
-        print(ast.unparse(
-            SingleStaticAssignPass.mutate_ast(
-                get_ast_from_func(foo)
-            )
-        ))
-
-        # will print out:
-
-        def foo():
-            a = 1
-            b = 1
+    >>> import ast
+    >>> from functional.ffront.func_to_foir import get_ast_from_func
+    >>>
+    >>> def foo():
+    ...     a = b = 1
+    ...     return a, b
+    >>>
+    >>> print(ast.unparse(
+    ...     SingleAssignTargetPass.mutate_ast(
+    ...         get_ast_from_func(foo)
+    ...     )
+    ... ))
+    def foo():
+        a = 1
+        b = 1
+        return (a, b)
 
     """
 
@@ -99,33 +95,28 @@ class UnpackedAssignPass(NodeYielder):
 
     Example
     -------
-    Usage:
+    >>> import ast
+    >>> from functional.ffront.func_to_foir import get_ast_from_func
 
-        import ast
-        from functional.ffront.parsing.parsing import get_ast_from_func
+    >>> def foo():
+    ...     a0 = 1
+    ...     b0 = 5
+    ...     a1, b1 = b0, a0
+    ...     return a1, b1
 
-        def foo():
-            a0 = 1
-            b0 = 5
-            a1, b1 = b0, a0
-            return a1, b1
+    >>> print(ast.unparse(
+    ...     UnpackedAssignPass.mutate_ast(
+    ...         get_ast_from_func(foo)
+    ...     )
+    ... ))
+    def foo():
+        a0 = 1
+        b0 = 5
+        a1 = (b0, a0)[0]
+        b1 = (b0, a0)[1]
+        return (a1, b1)
 
-        print(ast.unparse(
-            UnpackAssignPass.mutate_ast(
-                get_ast_from_func(foo)
-            )
-        ))
-
-        # will print out:
-
-        def foo():
-            a0 = 1
-            b0 = 5
-            a1 = (b0, a0)[0]
-            b1 = (b0, a0)[1]
-            return a1, b1
-
-        # which would not have been equivalent had the input AST not been in SSA form.
+    which would not have been equivalent had the input AST not been in SSA form.
     """
 
     def visit_Assign(self, node: ast.Assign) -> Iterator[ast.Assign]:
