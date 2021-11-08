@@ -136,7 +136,7 @@ class UnpackedAssignPass(NodeYielder):
             new_assign = copy.copy(node)
             new_assign.targets = [subtarget]
             new_assign.value = ast.Subscript(
-                ctx=ast.Load(),  # <- for some reason this must be given for astpretty to work
+                ctx=ast.Load(),  # <- ctx is mandatory for ast.Subscript, Load() for rhs.
                 value=node.value,
                 slice=ast.Constant(value=index),
             )
