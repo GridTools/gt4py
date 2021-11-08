@@ -67,7 +67,7 @@ def ij_offset(request):
     yield request.param
 
 
-def make_offset(offset: Tuple[int, int, int]):
+def make_offset(offset: Tuple[int, int, Union[int, Expr]]):
     return {"I": offset[0], "J": offset[1], "K": offset[2]}
 
 
@@ -286,7 +286,7 @@ class TFieldRef(TObject):
         self,
         *,
         name: str,
-        offset: Tuple[int, int, int] = (0, 0, 0),
+        offset: Tuple[int, int, Union[int, Expr]] = (0, 0, 0),
         loc: Location = None,
         parent: TObject = None,
     ):

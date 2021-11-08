@@ -120,6 +120,14 @@ def test_field_ref(defir_to_gtir):
     assert field_access.offset.j == 3
     assert field_access.offset.k == 0
 
+    field_ref = TFieldRef(name="a", offset=(0, 0, TFieldRef(name="index").build())).build()
+    field_access = defir_to_gtir.visit_FieldRef(field_ref)
+    assert isinstance(field_access, gtir.FieldAccess)
+    assert field_access.name == "a"
+
+    assert isinstance(field_access.offset, gtir.VariableKOffset)
+    assert isinstance(field_access.offset.k, gtir.FieldAccess)
+
 
 def test_axis_interval(defir_to_gtir):
     axis_interval = AxisInterval(

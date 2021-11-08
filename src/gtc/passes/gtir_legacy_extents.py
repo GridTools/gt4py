@@ -15,9 +15,14 @@ def _iter_assigns(node: gtir.Stencil) -> XIterable[gtir.ParAssignStmt]:
     return node.iter_tree().if_isinstance(gtir.ParAssignStmt)
 
 
-def _ext_from_off(offset: gtir.CartesianOffset) -> Extent:
+def _ext_from_off(offset: Union[gtir.CartesianOffset, gtir.VariableKOffset]) -> Extent:
+    all_offsets = offset.to_dict()
     return Extent(
-        ((min(offset.i, 0), max(offset.i, 0)), (min(offset.j, 0), max(offset.j, 0)), (0, 0))
+        (
+            (min(all_offsets["i"], 0), max(all_offsets["i"], 0)),
+            (min(all_offsets["j"], 0), max(all_offsets["j"], 0)),
+            (0, 0),
+        )
     )
 
 

@@ -18,8 +18,10 @@ import abc
 import collections.abc
 import sys
 import time
+import typing
 import warnings
-from typing import Any, Callable, Dict, Optional, Tuple, Union, cast
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -43,14 +45,83 @@ def _compute_cache_key(field_args, parameter_args, domain, origin) -> int:
     return hash((*field_data, *parameter_data, str(domain), str(origin)))
 
 
-class StencilObject(abc.ABC):
-    """Generic singleton implementation of a stencil function.
+@dataclass(frozen=True)
+class FrozenStencil:
+    """Stencil with pre-computed domain and origin for each field argument."""
 
-    This class is used as base class for the specific subclass generated
+    stencil_object: "StencilObject"
+    origin: Dict[str, Tuple[int, ...]]
+    domain: Tuple[int, ...]
+
+    def __post_init__(self):
+        for name, field_info in self.stencil_object.field_info.items():
+            if name not in self.origin or len(self.origin[name]) != field_info.ndim:
+                raise ValueError(
+                    f"'{name}' origin {self.origin.get(name)} is not a {field_info.ndim}-dimensional integer tuple"
+                )
+
+    def __call__(self, **kwargs) -> None:
+        assert "origin" not in kwargs and "domain" not in kwargs
+        exec_info = kwargs.get("exec_info")
+
+        if exec_info is not None:
+            exec_info["call_run_start_time"] = time.perf_counter()
+
+        field_args = {name: kwargs[name] for name in self.stencil_object.field_info.keys()}
+        parameter_args = {name: kwargs[name] for name in self.stencil_object.parameter_info.keys()}
+
+        self.stencil_object.run(
+            _domain_=self.domain,
+            _origin_=self.origin,
+            exec_info=exec_info,
+            **field_args,
+            **parameter_args,
+        )
+
+        if exec_info is not None:
+            exec_info["call_run_end_time"] = time.perf_counter()
+
+
+class StencilObject(abc.ABC):
+    """Generic singleton implementation of a stencil callable.
+
+    This class is used as base class for specific subclass generated
     at run-time for any stencil definition and a unique set of external symbols.
-    Instances of this class do not contain any information and thus it is
+    Instances of this class do not contain state and thus it is
     implemented as a singleton: only one instance per subclass is actually
     allocated (and it is immutable).
+
+    The callable interface is the same of the stencil definition function,
+    with some extra keyword arguments.
+
+    Keyword Arguments
+    ------------------
+    domain : `Sequence` of `int`, optional
+        Shape of the computation domain. If `None`, it will be used the
+        largest feasible domain according to the provided input fields
+        and origin values (`None` by default).
+
+    origin :  `[int * ndims]` or `{'field_name': [int * ndims]}`, optional
+        If a single offset is passed, it will be used for all fields.
+        If a `dict` is passed, there could be an entry for each field.
+        A special key *'_all_'* will represent the value to be used for all
+        the fields not explicitly defined. If `None` is passed or it is
+        not possible to assign a value to some field according to the
+        previous rule, the value will be inferred from the `boundary` attribute
+        of the `field_info` dict. Note that the function checks if the origin values
+        are at least equal to the `boundary` attribute of that field,
+        so a 0-based origin will only be acceptable for fields with
+        a 0-area support region.
+
+    exec_info : `dict`, optional
+        Dictionary used to store information about the stencil execution.
+        (`None` by default). If the dictionary contains the magic key
+        '__aggregate_data' and it evaluates to `True`, the dictionary is
+        populated with a nested dictionary per class containing different
+        performance statistics. These include the stencil calls count, the
+        cumulative time spent in all stencil calls, and the actual time spent
+        in carrying out the computations.
+
     """
 
     # Those attributes are added to the class at loading time:
@@ -291,6 +362,12 @@ class StencilObject(abc.ABC):
                         f"expects '[{', '.join(field_info.axes)}]'"
                     )
 
+                # Check: data dimensions shape
+                if field.shape[field_domain_ndim:] != field_info.data_dims:
+                    raise ValueError(
+                        f"Field '{name}' expects data dimensions {field_info.data_dims} but got {field.shape[field_domain_ndim:]}"
+                    )
+
                 min_origin = gt_utils.interpolate_mask(
                     field_info.boundary.lower_indices.filter_mask(field_domain_mask),
                     field_domain_mask,
@@ -301,7 +378,7 @@ class StencilObject(abc.ABC):
                         f"Origin for field {name} too small. Must be at least {min_origin}, is {field_domain_origin}"
                     )
 
-                spatial_domain = cast(Shape, domain).filter_mask(field_domain_mask)
+                spatial_domain = typing.cast(Shape, domain).filter_mask(field_domain_mask)
                 upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
                 min_shape = tuple(
                     o + d + h for o, d, h in zip(field_domain_origin, spatial_domain, upper_indices)
@@ -382,31 +459,8 @@ class StencilObject(abc.ABC):
                 This parameter encapsulates `**kwargs` in the actual stencil subclass
                 by doing: `{name: value for name, value in kwargs.items()}`
 
-            domain : `Sequence` of `int`, optional
-                Shape of the computation domain. If `None`, it will be used the
-                largest feasible domain according to the provided input fields
-                and origin values (`None` by default).
-
-            origin :  `[int * ndims]` or {'field_name': [int * ndims]} , optional
-                If a single offset is passed, it will be used for all fields.
-                If a `dict` is passed, there could be an entry for each field.
-                A special key '_all_' will represent the value to be used for all
-                the fields not explicitly defined. If `None` is passed or it is
-                not possible to assign a value to some field according to the
-                previous rule, the value will be inferred from the global boundaries
-                of the field. Note that the function checks if the origin values
-                are at least equal to the `global_border` attribute of that field,
-                so a 0-based origin will only be acceptable for fields with
-                a 0-area support region.
-
-            exec_info : `dict`, optional
-                Dictionary used to store information about the stencil execution.
-                (`None` by default). If the dictionary contains the magic key
-                '__aggregate_data' and it evaluates to `True`, the dictionary is
-                populated with a nested dictionary per class containing different
-                performance statistics. These include the stencil calls count, the
-                cumulative time spent in all stencil calls, and the actual time spent
-                in carrying out the computations.
+        Check :class:`StencilObject` for a full specification of the `domain`,
+        `origin` and `exec_info` keyword arguments.
 
         Returns
         -------
@@ -432,8 +486,7 @@ class StencilObject(abc.ABC):
 
             self._seen_domain_origin[cache_key] = (domain, origin)
         else:
-            domain = self._seen_domain_origin[cache_key][0]
-            origin = self._seen_domain_origin[cache_key][1]
+            domain, origin = self._seen_domain_origin[cache_key]
 
         self.run(
             _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
@@ -441,3 +494,31 @@ class StencilObject(abc.ABC):
 
         if exec_info is not None:
             exec_info["call_run_end_time"] = time.perf_counter()
+
+    def freeze(
+        self: "StencilObject", *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
+    ) -> FrozenStencil:
+        """Return a StencilObject wrapper with a fixed domain and origin for each argument.
+
+        Parameters
+        ----------
+            origin: `dict`
+                The origin for each Field argument.
+
+            domain: `Sequence` of `int`
+                The compute domain shape for the frozen stencil.
+
+        Notes
+        ------
+        Both `origin` and `domain` arguments should be compatible with the domain and origin
+        specification defined in :class:`StencilObject`.
+
+        Returns
+        -------
+            `FrozenStencil`
+                The stencil wrapper. This should be called with the regular stencil arguments,
+                but the field origins and domain cannot be changed. Note, no checking of origin
+                or domain occurs at call time so it is the users responsibility to ensure
+                correct usage.
+        """
+        return FrozenStencil(self, origin, domain)

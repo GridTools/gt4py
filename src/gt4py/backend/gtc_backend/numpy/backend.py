@@ -25,10 +25,17 @@ from gt4py.backend.debug_backend import (
     debug_layout,
 )
 from gtc.gtir_to_oir import GTIRToOIR
-from gtc.passes.oir_pipeline import OirPipeline
-from gtc.python import npir
-from gtc.python.npir_gen import NpirGen
-from gtc.python.oir_to_npir import OirToNpir
+from gtc.numpy import npir
+from gtc.numpy.npir_codegen import NpirCodegen
+from gtc.numpy.oir_to_npir import OirToNpir
+from gtc.passes.oir_optimizations.caches import (
+    FillFlushToLocalKCaches,
+    IJCacheDetection,
+    KCacheDetection,
+    PruneKCacheFills,
+    PruneKCacheFlushes,
+)
+from gtc.passes.oir_pipeline import DefaultPipeline, OirPipeline
 
 
 if TYPE_CHECKING:
@@ -79,7 +86,9 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
     """NumPy backend using gtc."""
 
     name = "gtc:numpy"
-    options: ClassVar[Dict[str, Any]] = {}
+    options: ClassVar[Dict[str, Any]] = {
+        "oir_pipeline": {"versioning": True, "type": OirPipeline},
+    }
     storage_info = {
         "alignment": 1,
         "device": "cpu",
@@ -100,7 +109,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
             + ".py"
         )
 
-        source = NpirGen.apply(self.npir)
+        source = NpirCodegen.apply(self.npir)
         if self.builder.options.format_source:
             source = format_source("python", source)
 
@@ -119,7 +128,21 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         return self.make_module()
 
     def _make_npir(self) -> npir.Computation:
-        return OirToNpir().visit(OirPipeline(GTIRToOIR().visit(self.builder.gtir)).full())
+        base_oir = GTIRToOIR().visit(self.builder.gtir)
+        oir_pipeline = self.builder.options.backend_opts.get(
+            "oir_pipeline",
+            DefaultPipeline(
+                skip=[
+                    IJCacheDetection,
+                    KCacheDetection,
+                    PruneKCacheFills,
+                    PruneKCacheFlushes,
+                    FillFlushToLocalKCaches,
+                ]
+            ),
+        )
+        oir = oir_pipeline.run(base_oir)
+        return OirToNpir().visit(oir)
 
     @property
     def npir(self) -> npir.Computation:

@@ -345,7 +345,7 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
             for ln, _ in section.all_nodes_recursive()
             if isinstance(ln, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode))
         ):
-            access_collection: AccessCollector.Result = get_access_collection(he)
+            access_collection: AccessCollector.CartesianAccessCollection = get_access_collection(he)
 
             for name, offsets in access_collection.offsets().items():
                 off: Tuple[int, int, int]
@@ -534,7 +534,9 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
 
 class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
     def get_origins(self):
-        access_collection: AccessCollector.Result = get_access_collection(self.node)
+        access_collection: AccessCollector.CartesianAccessCollection = get_access_collection(
+            self.node
+        )
 
         origins = dict()
         for name, offsets in access_collection.offsets().items():
@@ -554,7 +556,9 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
 
     def get_innermost_memlets(self):
 
-        access_collection: AccessCollector.Result = get_access_collection(self.node)
+        access_collection: AccessCollector.CartesianAccessCollection = get_access_collection(
+            self.node
+        )
 
         in_memlets = dict()
         for name, offsets in access_collection.read_offsets().items():
