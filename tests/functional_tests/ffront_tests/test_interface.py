@@ -25,16 +25,15 @@ from __future__ import annotations
 
 import pytest
 
-from functional.ffront.parsing.field_operator_parser import FieldOperatorParser
-from functional.ffront.parsing.foir_to_itir import FieldOperatorLowering
-from functional.ffront.parsing.parsing import FieldOperatorSyntaxError
-from functional.iterator.ir import FunCall, FunctionDefinition, Sym, SymRef
+from functional.ffront.foir_to_itir import FieldOperatorLowering
+from functional.ffront.func_to_foir import FieldOperatorParser, FieldOperatorSyntaxError
+from functional.iterator import ir as itir
 
 
-COPY_FUN_DEF = FunctionDefinition(
+COPY_FUN_DEF = itir.FunctionDefinition(
     id="copy_field",
-    params=[Sym(id="inp")],
-    expr=FunCall(fun=SymRef(id="deref"), args=[SymRef(id="inp")]),
+    params=[itir.Sym(id="inp")],
+    expr=itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="inp")]),
 )
 
 
@@ -70,17 +69,6 @@ def test_invalid_syntax_no_return():
         _ = FieldOperatorParser.parse(no_return)
 
 
-def test_invalid_syntax_unpacking():
-    """For now, only single target assigns are allowed."""
-
-    def invalid_unpacking(inp1, inp2):
-        tmp1, tmp2 = inp1, inp2  # noqa
-        return tmp1
-
-    with pytest.raises(FieldOperatorSyntaxError, match=r"Unpacking not allowed!"):
-        _ = FieldOperatorParser.parse(invalid_unpacking)
-
-
 def test_invalid_assign_to_expr():
     """Assigning to subscripts disallowed until a usecase can be found."""
 
@@ -97,11 +85,35 @@ def test_copy_lower():
     def copy_field(inp):
         return inp
 
-    # parsing
+    # ast_passes
     parsed = FieldOperatorParser.parse(copy_field)
     lowered = FieldOperatorLowering.parse(parsed)
     assert lowered == COPY_FUN_DEF
     assert lowered.expr == COPY_FUN_DEF.expr
+
+
+def test_syntax_unpacking():
+    """For now, only single target assigns are allowed."""
+
+    def unpacking(inp1, inp2):
+        tmp1, tmp2 = inp1, inp2  # noqa
+        return tmp1
+
+    parsed = FieldOperatorParser.parse(unpacking)
+    lowered = FieldOperatorLowering.parse(parsed)
+    assert lowered.expr == itir.FunCall(
+        fun=itir.SymRef(id="tuple_get"),
+        args=[
+            itir.FunCall(
+                fun=itir.SymRef(id="make_tuple"),
+                args=[
+                    itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="inp1")]),
+                    itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="inp2")]),
+                ],
+            ),
+            itir.IntLiteral(value=0),
+        ],
+    )
 
 
 def test_temp_assignment():

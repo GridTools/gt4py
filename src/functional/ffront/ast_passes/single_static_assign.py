@@ -95,6 +95,10 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         node.targets = [self.visit(target) for target in node.targets]
         return node
 
+    def visit_Return(self, node: ast.Return) -> ast.Return:
+        node.value = self.RhsRenamer(self.state).visit(node.value) if node.value else None
+        return node
+
     def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
         if node.value:
             node.value = self.RhsRenamer(self.state).visit(node.value)

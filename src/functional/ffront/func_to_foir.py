@@ -14,18 +14,46 @@
 
 import ast
 import inspect
+import textwrap
+from types import FunctionType
 from typing import Callable, List
 
 from functional.ffront import field_operator_ir as foir
-from functional.ffront.parsing.parsing import FieldOperatorSyntaxError, get_ast_from_func
+from functional.ffront.ast_passes import (
+    SingleAssignTargetPass,
+    SingleStaticAssignPass,
+    UnpackedAssignPass,
+)
 
 
 class FieldOperatorParser(ast.NodeVisitor):
+    """
+    Parse field operator function definition from source code into FOIR.
+
+    Catch any Field Operator specific syntax errors and typing problems.
+
+    Example
+    -------
+    Parse a function into a Field Operator Internal Representation (FOIR), which can
+    be lowered into Iterator IR (ITIR)
+
+        def fieldop(inp):
+            return inp
+
+        foir_tree = FieldOperatorParser.parse(fieldop)
+
+        # foir_tree can now be lowered to ITIR
+    """
+
     @classmethod
-    def parse(cls, func: Callable) -> foir.FieldOperator:
+    def parse(cls, func: FunctionType) -> foir.FieldOperator:
         result = None
         try:
-            result = cls().visit(get_ast_from_func(func))
+            ast = get_ast_from_func(func)
+            ssa = SingleStaticAssignPass.mutate_ast(ast)
+            sat = SingleAssignTargetPass.mutate_ast(ssa)
+            las = UnpackedAssignPass.mutate_ast(sat)
+            result = cls().visit(las)
         except SyntaxError as err:
             err.filename = inspect.getabsfile(func)
             err.lineno = (err.lineno or 1) + inspect.getsourcelines(func)[1] - 1
@@ -40,7 +68,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             body=self.visit_stmt_list(node.body),
         )
 
-    def visit_arguments(self, node: ast.arguments) -> foir.Sym:
+    def visit_arguments(self, node: ast.arguments) -> list[foir.Sym]:
         return [foir.Sym(id=arg.arg) for arg in node.args]
 
     def visit_Assign(self, node: ast.Assign) -> foir.SymExpr:
@@ -61,6 +89,18 @@ class FieldOperatorParser(ast.NodeVisitor):
             id=target.id,
             expr=self.visit(node.value),
         )
+
+    def visit_Subscript(self, node: ast.Subscript) -> foir.Subscript:
+        if not isinstance(node.slice, ast.Constant):
+            raise FieldOperatorSyntaxError(
+                """Subscript slicing not allowed!""",
+                lineno=node.slice.lineno,
+                offset=node.slice.col_offset,
+            )
+        return foir.Subscript(expr=self.visit(node.value), index=node.slice.value)
+
+    def visit_Tuple(self, node: ast.Tuple) -> foir.Tuple:
+        return foir.Tuple(elts=[self.visit(item) for item in node.elts])
 
     def visit_Return(self, node: ast.Return) -> foir.Return:
         if not node.value:
@@ -86,3 +126,20 @@ class FieldOperatorParser(ast.NodeVisitor):
             lineno=node.lineno,
             offset=node.col_offset,
         )
+
+
+class FieldOperatorSyntaxError(SyntaxError):
+    def __init__(self, msg="", *, lineno=0, offset=0, filename=None):
+        self.msg = "Invalid Field Operator Syntax: " + msg
+        self.lineno = lineno
+        self.offset = offset
+        self.filename = filename
+
+
+def get_ast_from_func(func: Callable) -> ast.stmt:
+    if inspect.getabsfile(func) == "<string>":
+        raise ValueError(
+            "Can not create field operator from a function that is not in a source file!"
+        )
+    source = textwrap.dedent(inspect.getsource(func))
+    return ast.parse(source).body[0]

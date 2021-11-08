@@ -75,3 +75,12 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_SymRef(self, node: foir.SymRef) -> iir.FunCall:
         return iir.FunCall(fun=iir.SymRef(id="deref"), args=[iir.SymRef(id=node.id)])
+
+    def visit_Subscript(self, node: foir.Subscript) -> iir.FunCall:
+        return iir.FunCall(
+            fun=iir.SymRef(id="tuple_get"),
+            args=[self.visit(node.expr), iir.IntLiteral(value=node.index)],
+        )
+
+    def visit_Tuple(self, node: foir.Tuple) -> iir.FunCall:
+        return iir.FunCall(fun=iir.SymRef(id="make_tuple"), args=[self.visit(i) for i in node.elts])

@@ -16,9 +16,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+import re
+
+import eve
 from eve import Node
-from eve.traits import SymbolName
 from eve.type_definitions import SymbolRef
+
+
+class SymbolName(eve.traits.SymbolName):
+    regex = re.compile(r"^[a-zA-Z_][\w$]*$")
 
 
 class Sym(Node):
@@ -44,6 +50,15 @@ class Return(Expr):
 
 class Name(Expr):
     id: SymbolName  # noqa: A003
+
+
+class Subscript(Expr):
+    expr: Expr
+    index: int
+
+
+class Tuple(Expr):
+    elts: list[Expr]
 
 
 class FieldOperator(Node):

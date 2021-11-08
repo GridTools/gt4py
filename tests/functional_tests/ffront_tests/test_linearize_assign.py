@@ -18,7 +18,7 @@
 import ast
 import textwrap
 
-from functional.ffront.parsing.linear_assign import SingleAssignTargetPass, UnpackedAssignPass
+from functional.ffront.ast_passes.simple_assign import SingleAssignTargetPass, UnpackedAssignPass
 
 
 def getlines(node: ast.AST) -> list[str]:
