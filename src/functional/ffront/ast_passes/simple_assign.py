@@ -125,11 +125,11 @@ class UnpackedAssignPass(NodeYielder):
                 "AST contains multi target assigns. Please run `SingleAssignTargetPass` first."
             )
         if isinstance(target := node.targets[0], (ast.Tuple, ast.List)):
-            yield from self.unpack_assignment(node, targets=target.elts)
+            yield from self._unpack_assignment(node, targets=target.elts)
         else:
             yield node
 
-    def unpack_assignment(
+    def _unpack_assignment(
         self, node: ast.Assign, *, targets: list[ast.expr]  # targets passed here for typing
     ) -> Iterator[ast.Assign]:
         for index, subtarget in enumerate(targets):
