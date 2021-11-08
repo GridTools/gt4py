@@ -46,14 +46,21 @@ def or_(a, b):
     return a or b
 
 
+# class _tuple_wrapper:
+#     def __init__(self, tup) -> None:
+#         self.tup = tup
+
+
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
     return tup[i]
+    # return tup.tup[i]
 
 
 @builtins.make_tuple.register(EMBEDDED)
 def make_tuple(*args):
     return (*args,)
+    # return _tuple_wrapper((*args,))
 
 
 @builtins.lift.register(EMBEDDED)
@@ -557,19 +564,22 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                 state = init
                 if state is None:
                     state = _None()
-                cols = []
+                col = []
                 for i in _range:
                     state = scan_pass(
                         state, *map(shifted_scan_arg(i), iters)
                     )  # more generic scan returns state and result as 2 different things
-                    cols.append([*tupelize(state)])
-
-                cols = tuple(map(np.asarray, (map(list, zip(*cols)))))
-                # transpose to get tuple of columns as np array
+                    col.append(state)
 
                 if not is_forward:
-                    cols = tuple(map(np.flip, cols))
-                return cols
+                    col = np.flip(col)
+
+                if isinstance(col[0], tuple):
+                    # transpose to get tuple of columns as np array
+                    # TODO assert all entries in col have the same tuple size
+                    col = tuple(map(np.asarray, (map(list, zip(*col)))))
+
+                return col
 
             return impl
 
@@ -590,15 +600,21 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                 IndexError("Number of return values doesn't match number of output fields.")
 
             for r, out in zip(res, outs):
-                if column is None:
-                    ordered_indices = get_ordered_indices(out.axises, pos)
-                    out[ordered_indices] = r
-                else:
-                    colpos = pos.copy()
-                    for k in column.range:
-                        colpos[column.axis] = k
-                        ordered_indices = get_ordered_indices(out.axises, colpos)
-                        out[ordered_indices] = r[k]
+                if not isinstance(out, tuple):
+                    out = (out,)
+                    r = (r,)
+                # else:
+                #     assert all tuple elements have the same shape
+                for tup_index in range(len(out)):
+                    if column is None:
+                        ordered_indices = get_ordered_indices(out[tup_index].axises, pos)
+                        out[tup_index][ordered_indices] = r[tup_index]
+                    else:
+                        colpos = pos.copy()
+                        for k in column.range:
+                            colpos[column.axis] = k
+                            ordered_indices = get_ordered_indices(out[tup_index].axises, colpos)
+                            out[tup_index][ordered_indices] = r[tup_index][k]
 
     fun(*args)
 
