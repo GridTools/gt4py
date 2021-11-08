@@ -100,7 +100,11 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
         if node.value:
             node.value = self.RhsRenamer(self.state).visit(node.value)
-        node.target = self.visit(node.target)
+            node.target = self.visit(node.target)
+        elif isinstance(node.target, ast.Name):
+            target_id = node.target.id
+            node.target = self.visit(node.target)
+            self.state.name_counter[target_id] -= 1
         return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:

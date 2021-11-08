@@ -118,3 +118,18 @@ def test_annotated_assign():
         )
     ).splitlines()
     assert lines[0] == "a$0: int = 5"
+
+
+def test_empty_annotated_assign():
+    lines = ast.unparse(
+        ssaify_string(
+            """
+            a = 0
+            a: int
+            b = a
+            """
+        )
+    ).splitlines()
+    assert lines[0] == "a$0 = 0"
+    assert lines[1] == "a$1: int"
+    assert lines[2] == "b$0 = a$0"
