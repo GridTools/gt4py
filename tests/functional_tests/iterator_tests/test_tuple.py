@@ -23,16 +23,6 @@ def tuple_output(inp1, inp2):
     return make_tuple(make_tuple(deref(inp1), deref(inp2)))
 
 
-@fendef(offset_provider={})
-def tuple_output_fencil(x, y, z, out, inp1, inp2):
-    closure(
-        domain(named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)),
-        tuple_output,
-        [out],
-        [inp1, inp2],
-    )
-
-
 def test_tuple_output():
     # backend, validate = backend
     backend = None
@@ -52,10 +42,12 @@ def test_tuple_output():
         np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
     )
 
-    tuple_output_fencil(shape[0], shape[1], shape[2], out, inp1, inp2)
+    dom = domain(
+        named_range(IDim, 0, shape[0]),
+        named_range(JDim, 0, shape[1]),
+        named_range(KDim, 0, shape[2]),
+    )
+    tuple_output[dom](inp1, inp2, out=out, offset_provider={}, backend=backend)
     if validate:
         assert np.allclose(inp1, out[0])
         assert np.allclose(inp2, out[1])
-
-
-test_tuple_output()

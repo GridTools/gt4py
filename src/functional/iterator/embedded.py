@@ -46,21 +46,14 @@ def or_(a, b):
     return a or b
 
 
-# class _tuple_wrapper:
-#     def __init__(self, tup) -> None:
-#         self.tup = tup
-
-
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
     return tup[i]
-    # return tup.tup[i]
 
 
 @builtins.make_tuple.register(EMBEDDED)
 def make_tuple(*args):
     return (*args,)
-    # return _tuple_wrapper((*args,))
 
 
 @builtins.lift.register(EMBEDDED)

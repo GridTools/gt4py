@@ -79,6 +79,16 @@ class FundefDispatcher:
         else:
             return self.fun(*args)
 
+    def __getitem__(self, domain):
+        def implicit_fencil(*args, out, **kwargs):
+            @fendef
+            def impl(out, *inps):
+                closure(domain, self, [out], [*inps])
+
+            impl(out, *args, **kwargs)
+
+        return implicit_fencil
+
     @classmethod
     def register_hook(cls, hook):
         cls._hook = hook
