@@ -23,6 +23,8 @@ Basic Interface Tests
 """
 from __future__ import annotations
 
+import typing
+
 import pytest
 
 from functional.ffront.foast_to_itir import FieldOperatorLowering
@@ -122,6 +124,20 @@ def test_temp_assignment():
         inp = tmp
         tmp2 = inp
         return tmp2
+
+    parsed = FieldOperatorParser.apply(copy_field)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered == COPY_FUN_DEF
+    assert lowered.expr == COPY_FUN_DEF.expr
+
+
+def test_annotated_assignment():
+    Field = typing.TypeVar("Field")
+
+    def copy_field(inp: Field):
+        tmp: Field = inp
+        return tmp
 
     parsed = FieldOperatorParser.apply(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)

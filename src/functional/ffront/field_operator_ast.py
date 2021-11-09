@@ -35,17 +35,8 @@ class Expr(Node):
     ...
 
 
-class SymExpr(Expr):
-    id: SymbolName  # noqa: A003
-    expr: Expr
-
-
 class SymRef(Expr):
     id: SymbolRef  # noqa: A003
-
-
-class Return(Expr):
-    value: Expr
 
 
 class Name(Expr):
@@ -61,7 +52,20 @@ class Tuple(Expr):
     elts: list[Expr]
 
 
+class Stmt(Node):
+    ...
+
+
+class Assign(Stmt):
+    target: Name
+    value: Expr
+
+
+class Return(Stmt):
+    value: Expr
+
+
 class FieldOperator(Node):
     id: SymbolName  # noqa: A003
     params: list[Sym]
-    body: list[Expr]
+    body: list[Stmt]

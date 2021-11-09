@@ -40,8 +40,8 @@ class FieldOperatorParser(ast.NodeVisitor):
     >>> def fieldop(inp):
     ...     return inp
 
-    >>> foir_tree = FieldOperatorParser.apply(fieldop)
-    >>> foir_tree
+    >>> foast_tree = FieldOperatorParser.apply(fieldop)
+    >>> foast_tree
     FieldOperator(id='fieldop', params=[Sym(id='inp')], body=[Return(value=Name(id='inp'))])
 
 
@@ -55,10 +55,10 @@ class FieldOperatorParser(ast.NodeVisitor):
     >>> try:
     ...     FieldOperatorParser.apply(wrong_syntax)
     ... except FieldOperatorSyntaxError as err:
-    ...     print(err.filename[-67:])
+    ...     print(err.filename[-68:])
     ...     print(err.lineno)
     ...     print(err.offset)
-    <doctest src.functional.ffront.func_to_foir.FieldOperatorParser[3]>
+    <doctest src.functional.ffront.func_to_foast.FieldOperatorParser[3]>
     2
     4
     """
@@ -89,7 +89,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     def visit_arguments(self, node: ast.arguments) -> list[foast.Sym]:
         return [foast.Sym(id=arg.arg) for arg in node.args]
 
-    def visit_Assign(self, node: ast.Assign) -> foast.SymExpr:
+    def visit_Assign(self, node: ast.Assign) -> foast.Assign:
         target = node.targets[0]  # can there be more than one element?
         if isinstance(target, ast.Tuple):
             raise FieldOperatorSyntaxError(
@@ -103,9 +103,25 @@ class FieldOperatorParser(ast.NodeVisitor):
                 lineno=target.lineno,
                 offset=target.col_offset,
             )
-        return foast.SymExpr(
-            id=target.id,
-            expr=self.visit(node.value),
+        return foast.Assign(
+            target=foast.Name(id=target.id),
+            value=self.visit(node.value),
+        )
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> foast.Assign:
+        # TODO (ricoh): type checking
+        #
+        # if the annotation does not match the inferred type of value
+        # then raise raise an exception
+        if not isinstance(node.target, ast.Name):
+            raise FieldOperatorSyntaxError(
+                "Can only assign to names!",
+                lineno=node.target.lineno,
+                offset=node.target.col_offset,
+            )
+        return foast.Assign(
+            target=foast.Name(id=node.target.id),
+            value=self.visit(node.value) if node.value else None,
         )
 
     def visit_Subscript(self, node: ast.Subscript) -> foast.Subscript:

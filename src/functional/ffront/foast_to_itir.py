@@ -22,19 +22,19 @@ from functional.ffront import field_operator_ast as foast
 from functional.iterator import ir as iir
 
 
-class SymExprResolver(NodeTranslator):
+class AssignResolver(NodeTranslator):
     """
     Inline a sequence of assignments into a final return statement.
 
-    >>> from functional.ffront.func_to_foir import FieldOperatorParser
+    >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>>
     >>> def fieldop(inp):
     ...     tmp1 = inp
     ...     tmp2 = tmp1
     ...     return tmp2
     >>>
-    >>> fieldop_foir_expr = SymExprResolver.apply(FieldOperatorParser.apply(fieldop).body)
-    >>> fieldop_foir_expr
+    >>> fieldop_foast_expr = AssignResolver.apply(FieldOperatorParser.apply(fieldop).body)
+    >>> fieldop_foast_expr
     Return(value=SymRef(id='inp'))
     """
 
@@ -48,13 +48,13 @@ class SymExprResolver(NodeTranslator):
             names.update(parser.visit(node, names=names))
         return foast.Return(value=parser.visit(nodes[-1].value, names=names))
 
-    def visit_SymExpr(
+    def visit_Assign(
         self,
-        node: foast.SymExpr,
+        node: foast.Assign,
         *,
         names: Optional[dict[str, foast.Expr]] = None,
     ) -> dict[str, iir.Expr]:
-        return {node.id: self.visit(node.expr, names=names)}
+        return {node.target.id: self.visit(node.value, names=names)}
 
     def visit_Name(
         self,
@@ -72,7 +72,7 @@ class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator IR / AST (FOIR) to Iterator IR (ITIR).
 
-    >>> from functional.ffront.func_to_foir import FieldOperatorParser
+    >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>>
     >>> def fieldop(inp):
     ...    return inp
@@ -102,7 +102,7 @@ class FieldOperatorLowering(NodeTranslator):
     def body_visit(
         self, exprs: List[foast.Expr], params: Optional[List[iir.Sym]] = None
     ) -> iir.Expr:
-        return self.visit(SymExprResolver.apply(exprs))
+        return self.visit(AssignResolver.apply(exprs))
 
     def visit_Return(self, node: foast.Return) -> iir.Expr:
         return self.visit(node.value)
