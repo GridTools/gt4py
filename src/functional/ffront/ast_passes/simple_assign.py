@@ -35,7 +35,7 @@ class NodeYielder(ast.NodeTransformer):
         else:
             yield from result
 
-    def generic_visit(self, node: ast.AST) -> Iterator[ast.AST]:  # type: ignore
+    def generic_visit(self, node: ast.AST) -> Iterator[ast.AST]:  # type: ignore[override]
         """Override generic visit to deal with generators."""
         for field, old_value in ast.iter_fields(node):
             if isinstance(old_value, list):
