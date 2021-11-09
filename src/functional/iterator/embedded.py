@@ -163,15 +163,12 @@ def is_none(arg):
 
 @builtins.domain.register(EMBEDDED)
 def domain(*args):
-    domain = {}
-    for arg in args:
-        domain.update(arg)
-    return domain
+    return dict(args)
 
 
 @builtins.named_range.register(EMBEDDED)
 def named_range(tag, start, end):
-    return {tag: range(start, end)}
+    return (tag, range(start, end))
 
 
 @builtins.minus.register(EMBEDDED)
