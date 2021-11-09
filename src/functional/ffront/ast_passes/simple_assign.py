@@ -17,7 +17,7 @@
 
 import ast
 import copy
-from typing import Iterator
+from collections.abc import Iterator
 
 
 class NodeYielder(ast.NodeTransformer):
