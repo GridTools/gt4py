@@ -1,5 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+#
+# GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import ast
 from dataclasses import dataclass, field
 
@@ -16,27 +31,25 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     -------
     Function ``foo()`` in the following example keeps overwriting local variable ``a``
 
-        import ast
-        from functional.ffront.parsers import get_ast_from_func
+    >>> import ast
+    >>> from functional.ffront.func_to_foir import get_ast_from_func
 
-        def foo():
-            a = 1
-            a = 2 + a
-            a = 3 + a
-            return a
+    >>> def foo():
+    ...     a = 1
+    ...     a = 2 + a
+    ...     a = 3 + a
+    ...     return a
 
-        print(ast.unparse(
-            SingleStaticAssignPass().visit(
-                get_ast_from_func(foo)
-            )
-        ))
-
-        # This will print out
-
-        def foo():
-            a$0 = 1
-            a$1 = 2 + a$0
-            a$2 = 3 + a$1
+    >>> print(ast.unparse(
+    ...     SingleStaticAssignPass.apply(
+    ...         get_ast_from_func(foo)
+    ...     )
+    ... ))
+    def foo():
+        a$0 = 1
+        a$1 = 2 + a$0
+        a$2 = 3 + a$1
+        return a$2
 
     Note that each variable name is assigned only once and never updated / overwritten.
 
@@ -65,6 +78,10 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     class State:
         name_counter: dict[str, int] = field(default_factory=dict)
 
+    @classmethod
+    def apply(cls, node: ast.AST) -> ast.AST:
+        return cls().visit(node)
+
     def __init__(self):
         super().__init__()
         self.state = self.State()
@@ -74,6 +91,20 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         node.value = self.RhsRenamer(self.state).visit(node.value)
         # then update lhs to create new names
         node.targets = [self.visit(target) for target in node.targets]
+        return node
+
+    def visit_Return(self, node: ast.Return) -> ast.Return:
+        node.value = self.RhsRenamer(self.state).visit(node.value) if node.value else None
+        return node
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
+        if node.value:
+            node.value = self.RhsRenamer(self.state).visit(node.value)
+            node.target = self.visit(node.target)
+        elif isinstance(node.target, ast.Name):
+            target_id = node.target.id
+            node.target = self.visit(node.target)
+            self.state.name_counter[target_id] -= 1
         return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
