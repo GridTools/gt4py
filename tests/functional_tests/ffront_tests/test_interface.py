@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import pytest
 
-from functional.ffront.foir_to_itir import FieldOperatorLowering
-from functional.ffront.func_to_foir import FieldOperatorParser, FieldOperatorSyntaxError
+from functional.ffront.foast_to_itir import FieldOperatorLowering
+from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.iterator import ir as itir
 
 

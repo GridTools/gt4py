@@ -18,7 +18,7 @@ import textwrap
 from types import FunctionType
 from typing import Callable, List
 
-from functional.ffront import field_operator_ir as foir
+from functional.ffront import field_operator_ast as foast
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
@@ -64,7 +64,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     """
 
     @classmethod
-    def apply(cls, func: FunctionType) -> foir.FieldOperator:
+    def apply(cls, func: FunctionType) -> foast.FieldOperator:
         result = None
         try:
             ast = get_ast_from_func(func)
@@ -79,17 +79,17 @@ class FieldOperatorParser(ast.NodeVisitor):
 
         return result
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> foir.FieldOperator:
-        return foir.FieldOperator(
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> foast.FieldOperator:
+        return foast.FieldOperator(
             id=node.name,
             params=self.visit(node.args),
             body=self.visit_stmt_list(node.body),
         )
 
-    def visit_arguments(self, node: ast.arguments) -> list[foir.Sym]:
-        return [foir.Sym(id=arg.arg) for arg in node.args]
+    def visit_arguments(self, node: ast.arguments) -> list[foast.Sym]:
+        return [foast.Sym(id=arg.arg) for arg in node.args]
 
-    def visit_Assign(self, node: ast.Assign) -> foir.SymExpr:
+    def visit_Assign(self, node: ast.Assign) -> foast.SymExpr:
         target = node.targets[0]  # can there be more than one element?
         if isinstance(target, ast.Tuple):
             raise FieldOperatorSyntaxError(
@@ -103,31 +103,31 @@ class FieldOperatorParser(ast.NodeVisitor):
                 lineno=target.lineno,
                 offset=target.col_offset,
             )
-        return foir.SymExpr(
+        return foast.SymExpr(
             id=target.id,
             expr=self.visit(node.value),
         )
 
-    def visit_Subscript(self, node: ast.Subscript) -> foir.Subscript:
+    def visit_Subscript(self, node: ast.Subscript) -> foast.Subscript:
         if not isinstance(node.slice, ast.Constant):
             raise FieldOperatorSyntaxError(
                 """Subscript slicing not allowed!""",
                 lineno=node.slice.lineno,
                 offset=node.slice.col_offset,
             )
-        return foir.Subscript(expr=self.visit(node.value), index=node.slice.value)
+        return foast.Subscript(expr=self.visit(node.value), index=node.slice.value)
 
-    def visit_Tuple(self, node: ast.Tuple) -> foir.Tuple:
-        return foir.Tuple(elts=[self.visit(item) for item in node.elts])
+    def visit_Tuple(self, node: ast.Tuple) -> foast.Tuple:
+        return foast.Tuple(elts=[self.visit(item) for item in node.elts])
 
-    def visit_Return(self, node: ast.Return) -> foir.Return:
+    def visit_Return(self, node: ast.Return) -> foast.Return:
         if not node.value:
             raise FieldOperatorSyntaxError(
                 "Empty return not allowed", lineno=node.lineno, offset=node.col_offset
             )
-        return foir.Return(value=self.visit(node.value))
+        return foast.Return(value=self.visit(node.value))
 
-    def visit_stmt_list(self, nodes: List[ast.stmt]) -> List[foir.Expr]:
+    def visit_stmt_list(self, nodes: List[ast.stmt]) -> List[foast.Expr]:
         if not isinstance(last_node := nodes[-1], ast.Return):
             raise FieldOperatorSyntaxError(
                 msg="Field operator must return a field expression on the last line!",
@@ -136,8 +136,8 @@ class FieldOperatorParser(ast.NodeVisitor):
             )
         return [self.visit(node) for node in nodes]
 
-    def visit_Name(self, node: ast.Name) -> foir.Name:
-        return foir.Name(id=node.id)
+    def visit_Name(self, node: ast.Name) -> foast.Name:
+        return foast.Name(id=node.id)
 
     def generic_visit(self, node) -> None:
         raise FieldOperatorSyntaxError(
