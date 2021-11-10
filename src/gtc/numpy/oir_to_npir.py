@@ -41,7 +41,9 @@ class OirToNpir(NodeTranslator):
         mask_temp_counter: int = 0
 
         def ensure_temp_defined(
-            self, temp: Union[oir.FieldAccess, npir.FieldSlice], dimensions: Tuple[bool, bool, bool]
+            self,
+            temp: Union[oir.FieldAccess, npir.FieldSlice],
+            dimensions: Optional[Tuple[bool, bool, bool]] = None,
         ) -> None:
             if temp.name not in self.temp_defs:
                 self.temp_defs[str(temp.name)] = npir.VectorAssign(
@@ -151,7 +153,9 @@ class OirToNpir(NodeTranslator):
     ) -> npir.VectorAssign:
         ctx = ctx or self.ComputationContext()
         decl = kwargs["symtable"].get(node.left.name, None)
-        if isinstance(decl, (oir.Temporary, oir.LocalScalar)):
+        if isinstance(decl, oir.LocalScalar):
+            ctx.ensure_temp_defined(node.left)
+        elif isinstance(decl, oir.Temporary):
             ctx.ensure_temp_defined(node.left, decl.dimensions)
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, is_lvalue=True, **kwargs),

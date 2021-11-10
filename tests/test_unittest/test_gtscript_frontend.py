@@ -1112,31 +1112,6 @@ class TestAssignmentSyntax:
 
             parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-    def test_temporary(self):
-        with pytest.raises(
-            gt_frontend.GTScriptSyntaxError,
-            match="No subscript allowed in assignment to temporaries",
-        ):
-
-            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-                with computation(PARALLEL), interval(...):
-                    tmp[...] = in_field
-                    out_field = tmp
-
-            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
-
-        with pytest.raises(
-            gt_frontend.GTScriptSyntaxError,
-            match="No subscript allowed in assignment to temporaries",
-        ):
-
-            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-                with computation(PARALLEL), interval(...):
-                    tmp[0, 0, 0] = 2 * in_field
-                    out_field = tmp
-
-            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
-
     def test_augmented(self):
         def func(in_field: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
