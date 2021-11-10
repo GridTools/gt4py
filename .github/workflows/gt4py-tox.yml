@@ -35,7 +35,8 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
     - name: Test with tox
       run: |
-        pyversion_no_dot="${{ matrix.python-version }}"
-        pyversion_no_dot="${${pyversion_no_dot//./}:0:2}"
+        pyversion_no_dot=${{ matrix.python-version }}
+        pyversion_no_dot=${pyversion_no_dot//./}
+        pyversion_no_dot=${pyversion_no_dot:0:2}
         pip install tox clang-format
         tox -r -e py${pyversion_no_dot}-internal-cpu
