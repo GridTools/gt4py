@@ -20,18 +20,22 @@ import re
 
 import eve
 from eve import Node
-from eve.type_definitions import SymbolRef
+from eve.type_definitions import SourceLocation, StrEnum, SymbolRef
+
+
+class LocatedNode(Node):
+    location: SourceLocation
 
 
 class SymbolName(eve.traits.SymbolName):
     regex = re.compile(r"^[a-zA-Z_][\w$]*$")
 
 
-class Sym(Node):
+class Sym(LocatedNode):
     id: SymbolName  # noqa: A003
 
 
-class Expr(Node):
+class Expr(LocatedNode):
     ...
 
 
@@ -44,7 +48,7 @@ class Name(Expr):
 
 
 class Subscript(Expr):
-    expr: Expr
+    value: Expr
     index: int
 
 
@@ -52,7 +56,32 @@ class Tuple(Expr):
     elts: list[Expr]
 
 
-class Stmt(Node):
+class UnaryOperator(StrEnum):
+    PLUS = "plus"
+    MINUS = "minus"
+
+
+class UnaryOp(Expr):
+    op: UnaryOperator
+    operand: Expr
+
+
+class BinaryOperator(StrEnum):
+    PLUS = "plus"
+    MINUS = "minus"
+    MULT = "mult"
+    DIV = "div"
+    MOD = "mod"
+    POW = "pow"
+
+
+class BinOp(Expr):
+    op: BinaryOperator
+    left: Expr
+    righ: Expr
+
+
+class Stmt(LocatedNode):
     ...
 
 
@@ -65,7 +94,7 @@ class Return(Stmt):
     value: Expr
 
 
-class FieldOperator(Node):
+class FieldOperator(LocatedNode):
     id: SymbolName  # noqa: A003
     params: list[Sym]
     body: list[Stmt]

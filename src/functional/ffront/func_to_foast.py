@@ -18,6 +18,7 @@ import textwrap
 from types import FunctionType
 from typing import Callable, List
 
+from eve.type_definitions import SourceLocation
 from functional.ffront import field_operator_ast as foast
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
@@ -26,6 +27,8 @@ from functional.ffront.ast_passes import (
 )
 
 
+# TODO (ricoh): pass on source locations
+# TODO (ricoh): SourceLocation.source <- filename
 class FieldOperatorParser(ast.NodeVisitor):
     """
     Parse field operator function definition from source code into FOIR.
@@ -41,8 +44,8 @@ class FieldOperatorParser(ast.NodeVisitor):
     ...     return inp
 
     >>> foast_tree = FieldOperatorParser.apply(fieldop)
-    >>> foast_tree
-    FieldOperator(id='fieldop', params=[Sym(id='inp')], body=[Return(value=Name(id='inp'))])
+    >>> foast_tree  # doctest: +ELLIPSIS
+    FieldOperator(location=..., id='fieldop', params=[Sym(location=..., id='inp')], body=[Return(location=..., value=Name(location=..., id='inp'))])
 
 
     If a syntax error is encountered, it will point to the location in the source code.
@@ -55,13 +58,21 @@ class FieldOperatorParser(ast.NodeVisitor):
     >>> try:
     ...     FieldOperatorParser.apply(wrong_syntax)
     ... except FieldOperatorSyntaxError as err:
-    ...     print(err.filename[-68:])
+    ...     print(err.filename)  # doctest: +ELLIPSIS
     ...     print(err.lineno)
     ...     print(err.offset)
-    <doctest src.functional.ffront.func_to_foast.FieldOperatorParser[3]>
+    /...<doctest src.functional.ffront.func_to_foast.FieldOperatorParser[3]>
     2
     4
     """
+
+    def __init__(self, *, filename=None, source=None):
+        self.filename = filename
+        self.source = source
+        super().__init__()
+
+    def _getloc(self, node: ast.AST) -> SourceLocation:
+        return SourceLocation.from_AST(node, source=self.filename)
 
     @classmethod
     def apply(cls, func: FunctionType) -> foast.FieldOperator:
@@ -71,7 +82,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             ssa = SingleStaticAssignPass.apply(ast)
             sat = SingleAssignTargetPass.apply(ssa)
             las = UnpackedAssignPass.apply(sat)
-            result = cls().visit(las)
+            result = cls(filename=inspect.getabsfile(func)).visit(las)
         except SyntaxError as err:
             err.filename = inspect.getabsfile(func)
             err.lineno = (err.lineno or 1) + inspect.getsourcelines(func)[1] - 1
@@ -84,10 +95,11 @@ class FieldOperatorParser(ast.NodeVisitor):
             id=node.name,
             params=self.visit(node.args),
             body=self.visit_stmt_list(node.body),
+            location=self._getloc(node),
         )
 
     def visit_arguments(self, node: ast.arguments) -> list[foast.Sym]:
-        return [foast.Sym(id=arg.arg) for arg in node.args]
+        return [foast.Sym(id=arg.arg, location=self._getloc(arg)) for arg in node.args]
 
     def visit_Assign(self, node: ast.Assign) -> foast.Assign:
         target = node.targets[0]  # can there be more than one element?
@@ -104,8 +116,9 @@ class FieldOperatorParser(ast.NodeVisitor):
                 offset=target.col_offset,
             )
         return foast.Assign(
-            target=foast.Name(id=target.id),
+            target=foast.Name(id=target.id, location=self._getloc(target)),
             value=self.visit(node.value),
+            location=self._getloc(node),
         )
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> foast.Assign:
@@ -120,8 +133,9 @@ class FieldOperatorParser(ast.NodeVisitor):
                 offset=node.target.col_offset,
             )
         return foast.Assign(
-            target=foast.Name(id=node.target.id),
+            target=foast.Name(id=node.target.id, location=self._getloc(node.target)),
             value=self.visit(node.value) if node.value else None,
+            location=self._getloc(node),
         )
 
     def visit_Subscript(self, node: ast.Subscript) -> foast.Subscript:
@@ -131,17 +145,21 @@ class FieldOperatorParser(ast.NodeVisitor):
                 lineno=node.slice.lineno,
                 offset=node.slice.col_offset,
             )
-        return foast.Subscript(expr=self.visit(node.value), index=node.slice.value)
+        return foast.Subscript(
+            value=self.visit(node.value), index=node.slice.value, location=self._getloc(node)
+        )
 
     def visit_Tuple(self, node: ast.Tuple) -> foast.Tuple:
-        return foast.Tuple(elts=[self.visit(item) for item in node.elts])
+        return foast.Tuple(
+            elts=[self.visit(item) for item in node.elts], location=self._getloc(node)
+        )
 
     def visit_Return(self, node: ast.Return) -> foast.Return:
         if not node.value:
             raise FieldOperatorSyntaxError(
                 "Empty return not allowed", lineno=node.lineno, offset=node.col_offset
             )
-        return foast.Return(value=self.visit(node.value))
+        return foast.Return(value=self.visit(node.value), location=self._getloc(node))
 
     def visit_stmt_list(self, nodes: List[ast.stmt]) -> List[foast.Expr]:
         if not isinstance(last_node := nodes[-1], ast.Return):
@@ -153,7 +171,18 @@ class FieldOperatorParser(ast.NodeVisitor):
         return [self.visit(node) for node in nodes]
 
     def visit_Name(self, node: ast.Name) -> foast.Name:
-        return foast.Name(id=node.id)
+        return foast.Name(id=node.id, location=self._getloc(node))
+
+    def visit_UnaryOp(self, node: ast.UnaryOp) -> foast.UnaryOp:
+        return foast.UnaryOp(
+            op=self.visit(node.op), operand=self.visit(node.operand), location=self._getloc(node)
+        )
+
+    def visit_UAdd(self, node: ast.UAdd) -> foast.UnaryOperator:
+        return foast.UnaryOperator.PLUS
+
+    def visit_USub(self, node: ast.USub) -> foast.UnaryOperator:
+        return foast.UnaryOperator.MINUS
 
     def generic_visit(self, node) -> None:
         raise FieldOperatorSyntaxError(

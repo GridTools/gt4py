@@ -144,3 +144,27 @@ def test_annotated_assignment():
 
     assert lowered == COPY_FUN_DEF
     assert lowered.expr == COPY_FUN_DEF.expr
+
+
+def test_unary_ops():
+    def unary(inp):
+        tmp = +inp
+        tmp = -tmp
+        return tmp
+
+    parsed = FieldOperatorParser.apply(unary)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.expr == itir.FunCall(
+        fun=itir.SymRef(id="minus"),
+        args=[
+            itir.IntLiteral(value=0),
+            itir.FunCall(
+                fun=itir.SymRef(id="plus"),
+                args=[
+                    itir.IntLiteral(value=0),
+                    itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="inp")]),
+                ],
+            ),
+        ],
+    )

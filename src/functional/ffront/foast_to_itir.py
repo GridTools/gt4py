@@ -34,8 +34,8 @@ class AssignResolver(NodeTranslator):
     ...     return tmp2
     >>>
     >>> fieldop_foast_expr = AssignResolver.apply(FieldOperatorParser.apply(fieldop).body)
-    >>> fieldop_foast_expr
-    Return(value=SymRef(id='inp'))
+    >>> fieldop_foast_expr  # doctest: +ELLIPSIS
+    Return(location=..., value=SymRef(location=..., id='inp'))
     """
 
     @classmethod
@@ -46,7 +46,9 @@ class AssignResolver(NodeTranslator):
         parser = cls()
         for node in nodes[:-1]:
             names.update(parser.visit(node, names=names))
-        return foast.Return(value=parser.visit(nodes[-1].value, names=names))
+        return foast.Return(
+            value=parser.visit(nodes[-1].value, names=names), location=nodes[-1].location
+        )
 
     def visit_Assign(
         self,
@@ -65,7 +67,7 @@ class AssignResolver(NodeTranslator):
         names = names or {}
         if node.id in names:
             return names[node.id]
-        return foast.SymRef(id=node.id)
+        return foast.SymRef(id=node.id, location=node.location)
 
 
 class FieldOperatorLowering(NodeTranslator):
@@ -116,8 +118,14 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_Subscript(self, node: foast.Subscript) -> iir.FunCall:
         return iir.FunCall(
             fun=iir.SymRef(id="tuple_get"),
-            args=[self.visit(node.expr), iir.IntLiteral(value=node.index)],
+            args=[self.visit(node.value), iir.IntLiteral(value=node.index)],
         )
 
     def visit_Tuple(self, node: foast.Tuple) -> iir.FunCall:
         return iir.FunCall(fun=iir.SymRef(id="make_tuple"), args=[self.visit(i) for i in node.elts])
+
+    def visit_UnaryOp(self, node: foast.UnaryOp) -> iir.FunCall:
+        return iir.FunCall(
+            fun=iir.SymRef(id=node.op.value),
+            args=[iir.IntLiteral(value=0), self.visit(node.operand)],
+        )
