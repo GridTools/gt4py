@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -18,7 +18,6 @@ import types
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
-from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
 
 
@@ -27,6 +26,34 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     OP_TO_PYTHON = {
         **gt_ir.UnaryOperator.IR_OP_TO_PYTHON_SYMBOL,
         **gt_ir.BinaryOperator.IR_OP_TO_PYTHON_SYMBOL,
+    }
+
+    NATIVE_FUNC_TO_PYTHON = {
+        gt_ir.NativeFunction.ABS: "abs",
+        gt_ir.NativeFunction.MIN: "min",
+        gt_ir.NativeFunction.MAX: "max",
+        gt_ir.NativeFunction.MOD: "math.fmod",
+        gt_ir.NativeFunction.SIN: "math.sin",
+        gt_ir.NativeFunction.COS: "math.cos",
+        gt_ir.NativeFunction.TAN: "math.tan",
+        gt_ir.NativeFunction.ARCSIN: "math.asin",
+        gt_ir.NativeFunction.ARCCOS: "math.acos",
+        gt_ir.NativeFunction.ARCTAN: "math.atan",
+        gt_ir.NativeFunction.SQRT: "math.sqrt",
+        gt_ir.NativeFunction.EXP: "math.exp",
+        gt_ir.NativeFunction.LOG: "math.log",
+        gt_ir.NativeFunction.ISFINITE: "math.isfinite",
+        gt_ir.NativeFunction.ISINF: "math.isinf",
+        gt_ir.NativeFunction.ISNAN: "math.isnan",
+        gt_ir.NativeFunction.FLOOR: "math.floor",
+        gt_ir.NativeFunction.CEIL: "math.ceil",
+        gt_ir.NativeFunction.TRUNC: "math.trunc",
+    }
+
+    BUILTIN_TO_PYTHON = {
+        gt_ir.Builtin.NONE: "None",
+        gt_ir.Builtin.FALSE: "False",
+        gt_ir.Builtin.TRUE: "True",
     }
 
     def __init__(
@@ -56,6 +83,8 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         self.io_field_names = None
         self.param_names = None
 
+        self.var_refs_defined = set()
+
     def __call__(self, impl_node: gt_ir.Node, sources: gt_text.TextBlock):
         assert isinstance(impl_node, gt_ir.StencilImplementation)
         assert impl_node.domain.sequential_axis.name == gt_definitions.CartesianSpace.Axis.K.name
@@ -77,9 +106,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         #         self.k_splitters_value.extend(
         #             ["{}[{}]".format(item.name, i) for i in range(item.length)]
         #         )
-        self.k_splitters_value.append(
-            "{dom}[{idx}]".format(dom=self.domain_arg_name, idx=k_ax_idx)
-        )
+        self.k_splitters_value.append("{dom}[{idx}]".format(dom=self.domain_arg_name, idx=k_ax_idx))
 
         self.sources = sources
         self.visit(impl_node)
@@ -112,19 +139,25 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     def generic_visit(self, node: gt_ir.Node, **kwargs):
         raise RuntimeError("Invalid IR node: {}".format(node))
 
-    def visit_Decl(self, node: gt_ir.Decl):
+    def visit_Cast(self, node: gt_ir.Cast, **kwargs):
+        return self.visit(node.expr)
+
+    def visit_BuiltinLiteral(self, node: gt_ir.BuiltinLiteral, **kwargs):
+        return self.BUILTIN_TO_PYTHON[node.value]
+
+    def visit_Decl(self, node: gt_ir.Decl, **kwargs):
         raise NotImplementedError()
 
-    def visit_Statement(self, node: gt_ir.Statement):
+    def visit_Statement(self, node: gt_ir.Statement, **kwargs):
         raise NotImplementedError()
 
-    def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral):
+    def visit_ScalarLiteral(self, node: gt_ir.ScalarLiteral, **kwargs):
         return str(node.value)
 
-    def visit_FieldRef(self, node: gt_ir.FieldRef):
+    def visit_FieldRef(self, node: gt_ir.FieldRef, **kwargs):
         raise NotImplementedError()
 
-    def visit_VarRef(self, node: gt_ir.VarRef):
+    def visit_VarRef(self, node: gt_ir.VarRef, **kwargs):
         assert (
             node.name in self.block_info.symbols or node.name in self.param_names
         ), "Unknown variable '{}'".format(node.name)
@@ -136,40 +169,52 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
 
         return source
 
-    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr):
+    def visit_UnaryOpExpr(self, node: gt_ir.UnaryOpExpr, **kwargs):
         fmt = "({})" if isinstance(node.arg, gt_ir.CompositeExpr) else "{}"
         source = "{op} {expr}".format(
-            op=self.OP_TO_PYTHON[node.op], expr=fmt.format(self.visit(node.arg))
+            op=self.OP_TO_PYTHON[node.op], expr=fmt.format(self.visit(node.arg, **kwargs))
         )
 
         return source
 
-    def visit_BinOpExpr(self, node: gt_ir.BinOpExpr):
+    def visit_BinOpExpr(self, node: gt_ir.BinOpExpr, **kwargs):
         lhs_fmt = "({})" if isinstance(node.lhs, gt_ir.CompositeExpr) else "{}"
         rhs_fmt = "({})" if isinstance(node.rhs, gt_ir.CompositeExpr) else "{}"
         source = "{lhs} {op} {rhs}".format(
-            lhs=lhs_fmt.format(self.visit(node.lhs)),
+            lhs=lhs_fmt.format(self.visit(node.lhs, **kwargs)),
             op=self.OP_TO_PYTHON[node.op],
-            rhs=rhs_fmt.format(self.visit(node.rhs)),
+            rhs=rhs_fmt.format(self.visit(node.rhs, **kwargs)),
         )
 
         return source
 
-    def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr):
+    def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall, **kwargs):
+        call = self.NATIVE_FUNC_TO_PYTHON[node.func]
+        args = ",".join(self.visit(arg, **kwargs) for arg in node.args)
+        return f"{call}({args})"
+
+    def visit_TernaryOpExpr(self, node: gt_ir.TernaryOpExpr, **kwargs):
         then_fmt = "({})" if isinstance(node.then_expr, gt_ir.CompositeExpr) else "{}"
         else_fmt = "({})" if isinstance(node.else_expr, gt_ir.CompositeExpr) else "{}"
         source = "({then_expr} if {condition} else {else_expr})".format(
             condition=self.visit(node.condition),
-            then_expr=then_fmt.format(self.visit(node.then_expr)),
-            else_expr=else_fmt.format(self.visit(node.else_expr)),
+            then_expr=then_fmt.format(self.visit(node.then_expr, **kwargs)),
+            else_expr=else_fmt.format(self.visit(node.else_expr, **kwargs)),
         )
 
         return source
 
-    def visit_Assign(self, node: gt_ir.Assign):
-        lhs = self.visit(node.target)
-        rhs = self.visit(node.value)
+    def visit_Assign(self, node: gt_ir.Assign, **kwargs):
+        lhs = self.visit(node.target, **kwargs)
+        rhs = self.visit(node.value, **kwargs)
+
         source = "{lhs} = {rhs}".format(lhs=lhs, rhs=rhs)
+
+        # self.var_refs_defined is used in the numpy backend
+        if isinstance(node.target, gt_ir.VarRef) or (
+            hasattr(node.target, "expr") and isinstance(node.target.expr, gt_ir.VarRef)
+        ):
+            self.var_refs_defined.add(node.target.name)
 
         return source
         # if node.target.name in self.state["variables"]:
@@ -180,10 +225,10 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     # def visit_Return(self, node: gt_ir.Return):
     #     self.state["body_stmts"].append("return")
 
-    def visit_BlockStmt(self, node: gt_ir.BlockStmt):
+    def visit_BlockStmt(self, node: gt_ir.BlockStmt, **kwargs):
         body_sources = []
         for stmt in node.stmts:
-            stmt_source = self.visit(stmt)
+            stmt_source = self.visit(stmt, **kwargs)
             if isinstance(stmt_source, list):
                 body_sources.extend(stmt_source)
             else:
@@ -215,7 +260,13 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
     def visit_ApplyBlock(self, node: gt_ir.ApplyBlock):
         interval_definition = self.visit(node.interval)
         self.block_info.interval = interval_definition
-        self.block_info.symbols = set(node.local_symbols.keys())
+        self.block_info.symbols = node.local_symbols
+
+        self.block_info.variable_koffsets = set()
+        for ref_node in gt_ir.iter_nodes_of_type(node, gt_ir.FieldRef):
+            if isinstance(ref_node.offset.get(self.domain.sequential_axis.name, None), gt_ir.Expr):
+                self.block_info.variable_koffsets.add(ref_node.name)
+
         body_sources = self.visit(node.body)
 
         return interval_definition, body_sources
@@ -225,6 +276,7 @@ class PythonSourceGenerator(gt_ir.IRNodeVisitor):
         self.block_info.accessors = {accessor.symbol for accessor in node.accessors}
         self.block_info.iteration_order = iteration_order
         self.block_info.extent = node.compute_extent
+        self.var_refs_defined.clear()
 
         # Create regions and computations
         regions = []

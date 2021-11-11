@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -13,6 +13,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+from typing import Dict
 
 import numpy as np
 
@@ -70,10 +72,12 @@ def zeros(backend, default_origin, shape, dtype, mask=None, *, managed_memory=Fa
 def from_array(
     data, backend, default_origin, shape=None, dtype=None, mask=None, *, managed_memory=False
 ):
+    is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
+    xp = cp if is_cupy_array else np
     if shape is None:
-        shape = np.asarray(data).shape
+        shape = xp.asarray(data).shape
     if dtype is None:
-        dtype = np.asarray(data).dtype
+        dtype = xp.asarray(data).dtype
     storage = empty(
         shape=shape,
         dtype=dtype,
@@ -82,7 +86,7 @@ def from_array(
         mask=mask,
         managed_memory=managed_memory,
     )
-    if cp is not None and isinstance(data, cp.ndarray):
+    if is_cupy_array:
         if isinstance(storage, GPUStorage) or isinstance(storage, ExplicitlySyncedGPUStorage):
             tmp = storage_utils.gpu_view(storage)
             tmp[...] = data
@@ -98,22 +102,12 @@ class Storage(np.ndarray):
     """
     Storage class based on a numpy (CPU) or cupy (GPU) array, taking care of proper memory alignment, with additional
     information that is required by the backends.
-
-
-    Attributes
-    ----------
-    In addition to the attributes inherited, Storages have the following attributes:
-
-    backend: the backend identifier string of the storage
-
-    mask:iterable of booleans. Dimensions where the corresponding entry is `False` are ignored.
     """
 
     __array_subok__ = True
 
     def __new__(cls, shape, dtype, backend, default_origin, mask=None):
-        """"
-
+        """
         Parameters
         ----------
 
@@ -132,15 +126,16 @@ class Storage(np.ndarray):
             at call time.
             when calling a stencil and no origin is specified, the default_origin is used.
 
-        mask: list of booleans
-            False entries indicate that the corresponding dimension is masked, i.e. the storage
+        mask: list of bools or list of spatial axes
+            in a list of bools, ``False`` entries indicate that the corresponding dimension is masked, i.e. the storage
             has reduced dimension and reading and writing from offsets along this axis acces the same element.
+            In a list of spatial axes (IJK), a boolean mask will be generated with ``True`` entries for all
+            dimensions except for the missing spatial axes names.
         """
 
-        if mask is None:
-            mask = [True] * len(shape)
-        default_origin = storage_utils.normalize_default_origin(default_origin, mask)
-        shape = storage_utils.normalize_shape(shape, mask)
+        default_origin, shape, dtype, mask = storage_utils.normalize_storage_spec(
+            default_origin, shape, dtype, mask
+        )
 
         if not backend in gt_backend.REGISTRY:
             ValueError("Backend must be in {}.".format(gt_backend.REGISTRY))
@@ -148,9 +143,7 @@ class Storage(np.ndarray):
         alignment = gt_backend.from_name(backend).storage_info["alignment"]
         layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)
 
-        obj = cls._construct(
-            backend, np.dtype(dtype), default_origin, shape, alignment, layout_map
-        )
+        obj = cls._construct(backend, np.dtype(dtype), default_origin, shape, alignment, layout_map)
         obj._backend = backend
         obj.is_stencil_view = True
         obj._mask = mask
@@ -160,10 +153,16 @@ class Storage(np.ndarray):
 
     @property
     def backend(self):
+        """The backend identifier string of the storage."""
         return self._backend
 
     @property
     def mask(self):
+        """
+        Iterable of booleans.
+
+        Dimensions where the corresponding entry is `False` are ignored.
+        """
         return self._mask
 
     @property
@@ -221,19 +220,18 @@ class Storage(np.ndarray):
             return False
         # check strides
         stride = 0
-        if len(self.strides) < len(self.layout_map):
+        layout_map = [m for m in self.layout_map if m is not None]
+        if len(self.strides) < len(layout_map):
             return False
-        for dim in reversed(np.argsort(self.layout_map)):
+        for dim in reversed(np.argsort(layout_map)):
             if self.strides[dim] < stride:
                 return False
             stride = self.strides[dim]
-
         # check alignment
         if (
             self.ctypes.data + np.sum([o * s for o, s in zip(self.default_origin, self.strides)])
         ) % gt_backend.from_name(self.backend).storage_info["alignment"]:
             return False
-
         return True
 
     def _finalize_view(self, obj):
@@ -253,6 +251,8 @@ class Storage(np.ndarray):
 
 
 class GPUStorage(Storage):
+    _modified_storages: Dict[int, "GPUStorage"] = dict()
+
     @classmethod
     def _construct(cls, backend, dtype, default_origin, shape, alignment, layout_map):
 
@@ -264,6 +264,10 @@ class GPUStorage(Storage):
         obj._raw_buffer = raw_buffer
         obj.default_origin = default_origin
         return obj
+
+    @classmethod
+    def get_modified_storages(cls):
+        return list(cls._modified_storages.values())
 
     @property
     def __cuda_array_interface__(self):
@@ -277,8 +281,7 @@ class GPUStorage(Storage):
         # check that memory of field is within raw_buffer
         if (
             not self.ctypes.data >= self._raw_buffer.data.ptr
-            and self.ctypes.data + self.itemsize * (self.size - 1)
-            <= self._raw_buffer[-1:].data.ptr
+            and self.ctypes.data + self.itemsize * (self.size - 1) <= self._raw_buffer[-1:].data.ptr
         ):
             raise Exception("The buffers are in an inconsistent state.")
 
@@ -292,18 +295,25 @@ class GPUStorage(Storage):
     def gpu_view(self):
         return storage_utils.gpu_view(self)
 
+    def __getitem__(self, item):
+        self.device_to_host()
+        return super().__getitem__(item)
+
     def __setitem__(self, key, value):
         if hasattr(value, "__cuda_array_interface__"):
             gpu_view = storage_utils.gpu_view(self)
             gpu_view[key] = cp.asarray(value)
-            cp.cuda.Device(0).synchronize()
+            self._set_device_modified()
             return value
         else:
+            self.device_to_host()
+            if isinstance(value, GPUStorage):
+                value.device_to_host()
             return super().__setitem__(key, value)
 
     @property
     def _is_clean(self):
-        return True
+        return not self._is_device_modified
 
     @property
     def _is_host_modified(self):
@@ -311,16 +321,30 @@ class GPUStorage(Storage):
 
     @property
     def _is_device_modified(self):
-        return False
+        return any(np.may_share_memory(self, v) for v in GPUStorage._modified_storages.values())
 
     def _set_clean(self):
-        pass
+        if not self._is_clean:
+            for cand_id, cand in list(GPUStorage._modified_storages.items()):
+                if (
+                    cand._raw_buffer.data.ptr >= self._raw_buffer.data.ptr
+                    and cand._raw_buffer[-1:].data.ptr <= self._raw_buffer[-1:].data.ptr
+                ):
+                    del GPUStorage._modified_storages[cand_id]
 
     def _set_host_modified(self):
         pass
 
     def _set_device_modified(self):
-        pass
+        GPUStorage._modified_storages[id(self)] = self
+
+    def synchronize(self):
+        self.device_to_host()
+
+    def device_to_host(self, force=False):
+        if force or self._is_device_modified:
+            cp.cuda.Device(0).synchronize()
+            GPUStorage._modified_storages.clear()
 
 
 class CPUStorage(Storage):
@@ -515,7 +539,7 @@ class ExplicitlySyncedGPUStorage(Storage):
     def _finalize_view(self, base):
 
         if self.shape != base.shape or self.strides != base.strides:
-            offset = (base.ctypes.data - self.ctypes.data) + (
+            offset = (self.ctypes.data - base.ctypes.data) + (
                 self._device_field.data.ptr - self._device_raw_buffer.data.ptr
             )
             assert not offset % self.dtype.itemsize

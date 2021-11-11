@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -20,16 +20,12 @@ import pytest
 import gt4py.backend as gt_backend
 import gt4py.gtscript as gtscript
 import gt4py.storage as gt_storage
-from gt4py.gtscript import Field
+from gt4py.gtscript import Field, K
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS, INTERNAL_BACKENDS
-
-
-INTERNAL_CPU_BACKENDS = list(set(CPU_BACKENDS) & set(INTERNAL_BACKENDS))
+from ..definitions import INTERNAL_BACKENDS, INTERNAL_CPU_BACKENDS
 
 
-@gtscript.stencil(backend="numpy")
-def stencil(
+def base_stencil(
     field1: Field[np.float64],
     field2: Field[np.float64],
     field3: Field[np.float32],
@@ -42,85 +38,17 @@ def stencil(
         field3 = param * field2
 
 
-def test_assert_same_shape():
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
-    B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
-    )
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
-    stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
-
-    B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
-    )
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
-    stencil(
-        A,
-        B,
-        C,
-        param=3.0,
-        origin=dict(field1=(2, 2, 2), field2=(0, 0, 0), field3=(1, 1, 1)),
-        domain=(1, 1, 1),
-    )
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(5, 5, 5), default_origin=(0, 0, 0)
-    )
-    A = A[1:-1, 1:-1, 1:-1]
-    A.is_stencil_view = True
-    stencil(
-        A,
-        B,
-        C,
-        param=3.0,
-        origin=dict(field1=(2, 2, 2), field2=(0, 0, 0), field3=(1, 1, 1)),
-        domain=(1, 1, 1),
-    )
-
-    try:
-        C = gt_storage.ones(
-            backend="numpy", dtype=np.float32, shape=(5, 5, 5), default_origin=(0, 1, 0)
-        )
-        stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
-    except ValueError:
-        pass
-    else:
-        assert False
-
-    try:
-
-        C = gt_storage.ones(
-            backend="numpy", dtype=np.float32, shape=(5, 5, 5), default_origin=(0, 1, 0)
-        )
-        stencil(
-            A,
-            B,
-            C,
-            param=3.0,
-            origin=dict(field1=(2, 2, 2), field2=(0, 0, 0), field3=(1, 1, 1)),
-            domain=(1, 1, 1),
-        )
-    except ValueError:
-        pass
-    else:
-        assert False
-
-
 def test_origin_selection():
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
+    stencil = gtscript.stencil(definition=base_stencil, backend="numpy")
+
+    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
+
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
     assert A[1, 1, 1] == 4
@@ -130,9 +58,7 @@ def test_origin_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
+    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
@@ -148,9 +74,7 @@ def test_origin_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
+    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
@@ -167,16 +91,52 @@ def test_origin_selection():
     assert np.sum(np.asarray(C)) == 47
 
 
-def test_domain_selection():
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+def test_origin_k_fields(backend):
+    @gtscript.stencil(backend=backend, rebuild=True)
+    def k_to_ijk(outp: Field[np.float64], inp: Field[gtscript.K, np.float64]):
+        with computation(PARALLEL), interval(...):
+            outp = inp
+
+    origin = {"outp": (0, 0, 1), "inp": (2,)}
+    domain = (2, 2, 8)
+
+    data = np.arange(10, dtype=np.float64)
+    inp = gt_storage.from_array(
+        data=data,
+        shape=(10,),
+        default_origin=(0,),
+        dtype=np.float64,
+        mask=[False, False, True],
+        backend=backend,
     )
+    outp = gt_storage.zeros(
+        shape=(2, 2, 10), default_origin=(0, 0, 0), dtype=np.float64, backend=backend
+    )
+
+    k_to_ijk(outp, inp, origin=origin, domain=domain)
+
+    inp.device_to_host()
+    outp.device_to_host()
+    np.testing.assert_allclose(data, np.asarray(inp))
+    np.testing.assert_allclose(
+        np.broadcast_to(data[2:], shape=(2, 2, 8)), np.asarray(outp)[:, :, 1:-1]
+    )
+    np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, 0])
+    np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, -1])
+
+
+def test_domain_selection():
+    stencil = gtscript.stencil(definition=base_stencil, backend="numpy")
+
+    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
+
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
     assert A[1, 1, 1] == 4
@@ -186,9 +146,7 @@ def test_domain_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(
-        backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
-    )
+    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
@@ -256,12 +214,9 @@ def test_default_arguments(backend):
     np.testing.assert_equal(arg1, 196 * np.ones((3, 3, 3)))
     branch_false(arg1, arg2, arg3, par1=2.0, par3=2.0)
     np.testing.assert_equal(arg1, 56 * np.ones((3, 3, 3)))
-    try:
+
+    with pytest.raises((ValueError, AssertionError)):
         branch_false(arg1, arg2, par1=2.0, par3=2.0)
-    except ValueError:
-        pass
-    else:
-        assert False
 
     arg1 = gt_storage.ones(
         backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
@@ -281,12 +236,9 @@ def test_default_arguments(backend):
     np.testing.assert_equal(arg1, 100 * np.ones((3, 3, 3)))
     branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0, par3=3.0)
     np.testing.assert_equal(arg1, 60 * np.ones((3, 3, 3)))
-    try:
+
+    with pytest.raises((TypeError, AssertionError)):
         branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0)
-    except ValueError:
-        pass
-    else:
-        assert False
 
 
 @pytest.mark.parametrize("backend", INTERNAL_CPU_BACKENDS)
@@ -450,3 +402,99 @@ def test_exec_info(backend):
         assert "run_cpp_start_time" in exec_info
         assert "run_cpp_end_time" in exec_info
         assert exec_info["run_cpp_end_time"] > exec_info["run_cpp_start_time"]
+
+
+class TestAxesMismatch:
+    @pytest.fixture
+    def sample_stencil(self):
+        @gtscript.stencil(backend="debug")
+        def _stencil(
+            field_out: gtscript.Field[gtscript.IJ, np.float64],
+        ):
+            with computation(FORWARD), interval(...):
+                field_out = 1.0
+
+        return _stencil
+
+    def test_ndarray(self, sample_stencil):
+        with pytest.raises(
+            ValueError, match="Storage for '.*' has 3 dimensions but the API signature expects 2 .*"
+        ):
+            sample_stencil(field_out=np.ndarray((3, 3, 3), np.float64))
+
+    def test_storage(self, sample_stencil):
+        with pytest.raises(
+            Exception,
+            match="Storage for '.*' has domain mask '.*' but the API signature expects '\[I, J\]'",
+        ):
+            sample_stencil(
+                field_out=gt_storage.empty(
+                    shape=(3, 3),
+                    mask=[True, False, True],
+                    dtype=np.float64,
+                    backend="debug",
+                    default_origin=(0, 0),
+                )
+            )
+
+
+class TestDataDimensions:
+    backend = "debug"
+
+    @pytest.fixture
+    def sample_stencil(self):
+        @gtscript.stencil(backend=self.backend)
+        def _stencil(
+            field_out: gtscript.Field[gtscript.IJK, (np.float64, (2,))],
+        ):
+            with computation(FORWARD), interval(...):
+                field_out[0, 0, 0][0] = 0.0
+                field_out[0, 0, 0][1] = 1.0
+
+        return _stencil
+
+    def test_mismatch(self, sample_stencil):
+        with pytest.raises(
+            ValueError, match="Field '.*' expects data dimensions \(2,\) but got \(3,\)"
+        ):
+            sample_stencil(
+                field_out=gt_storage.empty(
+                    shape=(3, 3, 1),
+                    mask=[True, True, True],
+                    dtype=(np.float64, (3,)),
+                    backend=self.backend,
+                    default_origin=(0, 0, 0),
+                )
+            )
+
+
+@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+def test_origin_unchanged(backend):
+    @gtscript.stencil(backend=backend)
+    def calc_damp(outp: Field[float], inp: Field[K, float]):
+        with computation(FORWARD), interval(...):
+            outp = inp
+
+    outp = gt_storage.ones(
+        backend=backend,
+        default_origin=(1, 1, 1),
+        shape=(4, 4, 4),
+        dtype=float,
+        mask=[True, True, True],
+    )
+    inp = gt_storage.ones(
+        backend=backend,
+        default_origin=(1,),
+        shape=(4, 4, 4),
+        dtype=float,
+        mask=[False, False, True],
+    )
+
+    origin = {"_all_": (1, 1, 1), "inp": (1,)}
+    origin_ref = dict(origin)
+
+    calc_damp(outp, inp, origin=origin, domain=(3, 3, 3))
+
+    assert all(k in origin_ref for k in origin.keys())
+    assert all(k in origin for k in origin_ref.keys())
+    assert all(v is origin_ref[k] for k, v in origin.items())

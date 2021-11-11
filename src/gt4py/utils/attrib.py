@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -255,23 +255,19 @@ class AttributeClassLike:
 
 
 def attribclass(cls_or_none=None, **kwargs):
-    """Class decorator to convert a regular class into an `AttribClass`.
-    """
+    """Class decorator to convert a regular class into an `AttribClass`."""
 
     def validate(self):
-        """Validate this instance's data attributes.
-        """
+        """Validate this instance's data attributes."""
         attr.validate(self)
 
     def attributes(self):
-        """Generate a :class:`list` with this class' attribute names.
-        """
+        """Generate a :class:`list` with this class' attribute names."""
         result = [a.name for a in attr.fields(self.__class__)]
         return result
 
     def as_dict(self):
-        """Generate a :class:`dict` with this instance's data attributes.
-        """
+        """Generate a :class:`dict` with this instance's data attributes."""
         return attr.asdict(self)
 
     extra_members = dict(validate=validate, attributes=property(attributes), as_dict=as_dict)

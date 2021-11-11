@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -17,12 +17,14 @@
 # Disable isort to avoid circular imports
 # isort: off
 from .base import *
+from .module_generator import BaseModuleGenerator
 from . import python_generator
 
 # isort: on
 
 from .debug_backend import *
 from .gt_backends import *
+from .gtc_backend import *
 from .numpy_backend import *
 
 

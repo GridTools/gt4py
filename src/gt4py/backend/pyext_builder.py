@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -45,6 +45,7 @@ def get_gt_pyext_build_opts(
     add_profile_info: bool = False,
     uses_openmp: bool = True,
     uses_cuda: bool = False,
+    gt_version: int = 1,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
 
     include_dirs = [gt_config.build_settings["boost_include_path"]]
@@ -55,28 +56,43 @@ def get_gt_pyext_build_opts(
         cuda_arch = gt_config.build_settings["cuda_arch"] or compute_capability
         if not cuda_arch:
             raise RuntimeError("CUDA architecture could not be determined")
-        elif compute_capability and int(compute_capability) < int(cuda_arch):
+        if cuda_arch.startswith("sm_"):
+            cuda_arch = cuda_arch.replace("sm_", "")
+        if compute_capability and int(compute_capability) < int(cuda_arch):
             raise RuntimeError(
                 f"CUDA architecture {cuda_arch} exceeds compute capability {compute_capability}"
             )
     else:
         cuda_arch = ""
 
+    if gt_version == 1:
+        gt_include_path = gt_config.build_settings["gt_include_path"]
+    elif gt_version == 2:
+        gt_include_path = gt_config.build_settings["gt2_include_path"]
+    else:
+        raise RuntimeError(f"GridTools version {gt_version}.x is not supported")
+
+    import os
+
+    import dace
+
     extra_compile_args = dict(
         cxx=[
             "-std=c++14",
-            "-ftemplate-depth=800",
+            "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
             "-fvisibility=hidden",
             "-fPIC",
-            "-isystem{}".format(gt_config.build_settings["gt_include_path"]),
+            "-isystem{}".format(gt_include_path),
             "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
+            "-isystem{}".format(os.path.dirname(dace.__file__) + "/runtime/include/"),
             "-DBOOST_PP_VARIADICS",
             *extra_compile_args_from_config["cxx"],
         ],
         nvcc=[
             "-std=c++14",
+            "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
             "-arch=sm_{}".format(cuda_arch),
-            "-isystem={}".format(gt_config.build_settings["gt_include_path"]),
+            "-isystem={}".format(gt_include_path),
             "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
             "-DBOOST_PP_VARIADICS",
             "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
@@ -135,7 +151,11 @@ def get_gt_pyext_build_opts(
 # The following tells mypy to accept unpacking kwargs
 @overload
 def build_pybind_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str,
+    name: str,
+    sources: list,
+    build_path: str,
+    target_path: str,
+    **kwargs: str,
 ) -> Tuple[str, str]:
     pass
 
@@ -224,7 +244,11 @@ def build_pybind_ext(
 # The following tells mypy to accept unpacking kwargs
 @overload
 def build_pybind_cuda_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str,
+    name: str,
+    sources: list,
+    build_path: str,
+    target_path: str,
+    **kwargs: str,
 ) -> Tuple[str, str]:
     pass
 

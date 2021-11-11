@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -19,18 +19,49 @@
 
 import os
 import shutil
+from tempfile import mkdtemp
 
 import hypothesis as hyp
 import pytest
 
 from gt4py import config as gt_config
 
-
-# Delete cache folder
-shutil.rmtree(
-    os.path.join(gt_config.cache_settings["root_path"], gt_config.cache_settings["dir_name"]),
-    ignore_errors=True,
+from .analysis_setup import (
+    AnalysisPass,
+    build_iir_pass,
+    compute_extents_pass,
+    compute_used_symbols_pass,
+    constant_folding_pass,
+    demote_locals_pass,
+    init_pass,
+    merge_blocks_pass,
+    normalize_blocks_pass,
 )
+from .definition_setup import (
+    TAssign,
+    TComputationBlock,
+    TDefinition,
+    ij_offset,
+    ijk_domain,
+    iteration_order,
+    non_parallel_iteration_order,
+)
+
+
+# Setup cache folder
+pytest_gt_cache_dir = mkdtemp(prefix=".gt_cache_pytest_", dir=gt_config.cache_settings["root_path"])
+
+
+def pytest_sessionstart():
+    gt_config.cache_settings["dir_name"] = pytest_gt_cache_dir
+
+
+def pytest_sessionfinish(session):
+    if not session.config.option.keep_gtcache:
+        shutil.rmtree(pytest_gt_cache_dir, ignore_errors=True)
+    else:
+        print(f"\nNOTE: gt4py caches were retained at {pytest_gt_cache_dir}")
+
 
 # Ignore hidden folders and disabled tests
 collect_ignore_glob = [".*", "_disabled*"]
@@ -43,10 +74,10 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
-        "requires_cudatoolkit: mark tests that require compilation of CUDA stencils (assume cupy is installed)",
-    )
-    config.addinivalue_line(
-        "markers",
         "requires_gpu: mark tests that require a Nvidia GPU (assume cupy and cudatoolkit are installed)",
     )
     hyp.settings.load_profile("slow")
+
+
+def pytest_addoption(parser):
+    parser.addoption("--keep-gtcache", action="store_true", default=False, dest="keep_gtcache")

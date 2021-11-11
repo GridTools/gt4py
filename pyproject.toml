@@ -3,8 +3,8 @@ requires = ["setuptools>=40.8.0", "wheel", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.black]
-line-length = 99
-target_version = ['py36', 'py37', 'py38']
+line-length = 100
+target_version = ['py38']
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -20,3 +20,23 @@ exclude = '''
   | dist
 )/
 '''
+
+[tool.flakehell]  # Other options read from flake8 config in setup.cfg
+format = "colored"
+
+[tool.flakehell.plugins]
+flake8-bugbear = ["+*", "-B008"] # B008: Do not perform function calls in argument defaults
+flake8-builtins = ["+*"]
+flake8-darglint = ["-*", "-DAR"] # DAR: Disable dargling errors by default
+flake8-debugger = ["+*"]
+flake8-docstrings = ["+*", "-D1*"] # D1: Public code object needs docstring
+flake8-eradicate = ["+*"]
+flake8-mutable = ["+*"]
+flake8-rst-docstrings = ["+*"]
+mccabe = ["+*"]
+pycodestyle = ["+*",
+  "-E203", # Whitespace before ':' (black formatter breaks this sometimes)
+  "-E501", # Line too long (using Bugbear's B950 warning)
+  "-W503", # Line break occurred before a binary operator
+]
+pyflakes = ["+*"]

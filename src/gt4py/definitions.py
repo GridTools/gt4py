@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -17,21 +17,24 @@
 
 import collections
 import enum
+import functools
 import numbers
 import operator
+from dataclasses import dataclass
+from typing import Tuple
+
+import numpy
 
 from gt4py import utils as gt_utils
 from gt4py.utils.attrib import Any, AttributeClassLike
 from gt4py.utils.attrib import Dict as DictOf
-from gt4py.utils.attrib import List as ListOf
-from gt4py.utils.attrib import Tuple as TupleOf
 from gt4py.utils.attrib import attribclass, attribkwclass, attribute
 
 
 class CartesianSpace:
     @enum.unique
     class Axis(enum.Enum):
-        I = 0
+        I = 0  # noqa: E741  # Do not use variables named 'I', 'O', or 'l'
         J = 1
         K = 2
 
@@ -39,7 +42,7 @@ class CartesianSpace:
             return self.name
 
     names = [ax.name for ax in Axis]
-    ndims = len(names)
+    ndim = len(names)
 
 
 class NumericTuple(tuple):
@@ -47,37 +50,45 @@ class NumericTuple(tuple):
 
     __slots__ = ()
 
-    @classmethod
-    def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
-        assert all(isinstance(d, numbers.Number) for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+    _DEFAULT = 0
 
     @classmethod
-    def is_valid(cls, value, *, ndims=(1, CartesianSpace.ndims)):
+    def _check_value(cls, value, ndims):
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
+        assert all(isinstance(d, numbers.Number) for d in value)
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
+
+    @classmethod
+    def is_valid(cls, value, *, ndims=(1, None)):
         if isinstance(ndims, numbers.Integral):
             ndims = tuple([ndims] * 2)
-        elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
+        elif not isinstance(ndims, tuple) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
 
         try:
             cls._check_value(value, ndims)
-        except Exception as e:
+        except Exception:
             return False
         else:
             return True
 
     @classmethod
-    def zeros(cls, ndims=CartesianSpace.ndims):
+    def zeros(cls, ndims=CartesianSpace.ndim):
         return cls([0] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def ones(cls, ndims=CartesianSpace.ndims):
+    def ones(cls, ndims=CartesianSpace.ndim):
         return cls([1] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def from_k(cls, value, ndims=CartesianSpace.ndims):
+    def from_k(cls, value, ndims=CartesianSpace.ndim):
         return cls([value] * ndims, ndims=(ndims, ndims))
+
+    @classmethod
+    def from_mask(cls, seq, mask, default=None):
+        if default is None:
+            default = cls._DEFAULT
+        return cls(gt_utils.interpolate_mask(seq, mask, default))
 
     @classmethod
     def from_value(cls, value):
@@ -86,13 +97,15 @@ class NumericTuple(tuple):
         else:
             return cls.from_k(value)
 
-    def __new__(cls, sizes, *args, ndims=(1, 3)):
+    def __new__(cls, sizes, *args, ndims=None):
         if len(args) > 0:
             sizes = [sizes, *args]
 
-        if isinstance(ndims, int):
+        if ndims is None:
+            ndims = tuple([len(sizes)] * 2)
+        elif isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
-        elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
+        elif not isinstance(ndims, tuple) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
 
         try:
@@ -130,48 +143,56 @@ class NumericTuple(tuple):
         return self._apply(self._broadcast(other), operator.mul)
 
     def __floordiv__(self, other):
-        """"Element-wise integer division."""
+        """Element-wise integer division."""
         return self._apply(self._broadcast(other), operator.floordiv)
 
     def __and__(self, other):
-        """Element-wise intersection operation.
-        """
+        """Element-wise intersection operation."""
         return self._apply(other, min)
 
     def __or__(self, other):
-        """Element-wise union operation.
-        """
+        """Element-wise union operation."""
         return self._apply(other, max)
 
     def __lt__(self, other):
-        """Element-wise comparison.
-        """
-        return self._compare(self._broadcast(other), operator.lt)
+        """No element can be greater, but if any element is smaller, return True."""
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: -1 if a < b else (1 if a > b else 0),
+            lambda items: any(i < 0 for i in items) and not any(i > 0 for i in items),
+        )
 
     def __le__(self, other):
-        """Element-wise comparison.
-        """
-        return self._compare(self._broadcast(other), operator.le)
+        """Element-wise comparison."""
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: -1 if a < b else (1 if a > b else 0),
+            lambda items: all(i <= 0 for i in items),
+        )
 
     def __eq__(self, other):
-        """Element-wise comparison.
-        """
-        return self._compare(self._broadcast(other), operator.eq)
+        """Element-wise comparison."""
+        return self._compare(self._broadcast(other), operator.eq, all)
 
     def __ne__(self, other):
-        """Element-wise comparison.
-        """
-        return not self._compare(self._broadcast(other), operator.eq)
+        """Element-wise comparison."""
+        return not self._compare(self._broadcast(other), operator.eq, all)
 
     def __gt__(self, other):
-        """Element-wise comparison.
-        """
-        return self._compare(self._broadcast(other), operator.gt)
+        """No element can be smaller, but if any element is larger, return True."""
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: 1 if a > b else (-1 if a < b else 0),
+            lambda items: any(i > 0 for i in items) and not any(i < 0 for i in items),
+        )
 
     def __ge__(self, other):
-        """Element-wise comparison.
-        """
-        return self._compare(self._broadcast(other), operator.ge)
+        """Element-wise comparison."""
+        return self._compare(
+            self._broadcast(other),
+            lambda a, b: 1 if a > b else (-1 if a < b else 0),
+            lambda items: all(i >= 0 for i in items),
+        )
 
     def __repr__(self):
         return "{cls_name}({value})".format(
@@ -217,11 +238,14 @@ class NumericTuple(tuple):
 
         return value
 
-    def _compare(self, other, op):
+    def _compare(self, other, op, reduction_op):
         if len(self) != len(other):  # or not isinstance(other, type(self))
             raise ValueError("Incompatible instance '{obj}'".format(obj=other))
 
-        return all(op(a, b) for a, b in zip(self, other))
+        return reduction_op(op(a, b) for a, b in zip(self, other))
+
+    def filter_mask(self, mask):
+        return type(self)(gt_utils.filter_mask(self, mask))
 
 
 class Index(NumericTuple):
@@ -231,9 +255,9 @@ class Index(NumericTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(isinstance(d, numbers.Integral) for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
 
 class Shape(NumericTuple):
@@ -241,11 +265,13 @@ class Shape(NumericTuple):
 
     __slots__ = ()
 
+    _DEFAULT = 1
+
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(isinstance(d, numbers.Integral) and d >= 0 for d in value)
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
 
 class FrameTuple(tuple):
@@ -255,37 +281,37 @@ class FrameTuple(tuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2 and isinstance(r[0], numbers.Number) and isinstance(r[1], numbers.Number)
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def is_valid(cls, value, *, ndims=(1, CartesianSpace.ndims)):
+    def is_valid(cls, value, *, ndims=(1, None)):
         if isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
-        elif not isinstance(ndims, collections.abc.Sequence) or len(ndims) != 2:
+        elif not isinstance(ndims, tuple) or len(ndims) != 2:
             raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
 
         try:
             cls._check_value(value, ndims)
-        except Exception as e:
+        except Exception:
             return False
         else:
             return True
 
     @classmethod
-    def zeros(cls, ndims=CartesianSpace.ndims):
+    def zeros(cls, ndims=CartesianSpace.ndim):
         return cls([(0, 0)] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def ones(cls, ndims=CartesianSpace.ndims):
+    def ones(cls, ndims=CartesianSpace.ndim):
         return cls([(1, 1)] * ndims, ndims=(ndims, ndims))
 
     @classmethod
-    def from_k(cls, value_pair, ndims=CartesianSpace.ndims):
+    def from_k(cls, value_pair, ndims=CartesianSpace.ndim):
         return cls([value_pair] * ndims, ndims=(ndims, ndims))
 
     @classmethod
@@ -293,9 +319,12 @@ class FrameTuple(tuple):
         ndims = max(len(lower), len(upper))
         return cls([(lower[i], upper[i]) for i in range(ndims)], ndims=(ndims, ndims))
 
-    def __new__(cls, ranges, *args, ndims=(1, 3)):
+    def __new__(cls, ranges, *args, ndims=None):
         if len(args) > 0:
             ranges = [ranges, *args]
+
+        if ndims is None:
+            ndims = tuple([len(ranges)] * 2)
         try:
             cls._check_value(ranges, ndims=ndims)
         except Exception as e:
@@ -320,7 +349,6 @@ class FrameTuple(tuple):
 
     def __add__(self, other):
         """Element-wise addition."""
-        # return self._apply(other, lambda a, b: a + b)
         return self._apply(self._broadcast(other), lambda a, b: a + b)
 
     def __sub__(self, other):
@@ -328,43 +356,35 @@ class FrameTuple(tuple):
         return self._apply(self._broadcast(other), lambda a, b: a - b)
 
     def __and__(self, other):
-        """Element-wise intersection operation.
-        """
+        """Element-wise intersection operation."""
         return self._apply(other, min, min)
 
     def __or__(self, other):
-        """Element-wise union operation.
-        """
+        """Element-wise union operation."""
         return self._apply(other, max, max)
 
     def __lt__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.lt)
 
     def __le__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.le)
 
     def __eq__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.eq)
 
     def __ne__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return not self._compare(self._broadcast(other), operator.eq)
 
     def __gt__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.gt)
 
     def __ge__(self, other):
-        """Element-wise comparison.
-        """
+        """Element-wise comparison."""
         return self._compare(self._broadcast(other), operator.ge)
 
     def __repr__(self):
@@ -392,12 +412,16 @@ class FrameTuple(tuple):
         return all(d[0] == d[1] for d in self)
 
     @property
+    def is_zero(self):
+        return all(d[0] == d[1] == 0 for d in self)
+
+    @property
     def lower_indices(self):
-        return tuple(d[0] for d in self)
+        return NumericTuple(*(d[0] for d in self))
 
     @property
     def upper_indices(self):
-        return tuple(d[1] for d in self)
+        return NumericTuple(*(d[1] for d in self))
 
     def append(self, point):
         other = self.__class__([(i, i) for i in point])
@@ -460,13 +484,13 @@ class Boundary(FrameTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2 and isinstance(r[0], int) and isinstance(r[1], int)
             # and r[0] >= 0 and r[1] >= 0
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
     def from_offset(cls, offset):
@@ -486,8 +510,7 @@ class Boundary(FrameTuple):
 
 
 class Extent(FrameTuple):
-    """Stencil support: region defined by the smallest and the largest offsets in
-     a stencil pattern computation.
+    """Region defined by the smallest and the largest offsets.
 
     Size of boundary regions are expressed as minimum and maximum relative offsets related
     to the computation position. For example the frame for a stencil accessing 3 elements
@@ -500,7 +523,7 @@ class Extent(FrameTuple):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2
             and isinstance(r[0], (int, type(None)))
@@ -508,10 +531,10 @@ class Extent(FrameTuple):
             and (r[0] is None or r[1] is None or r[1] <= r[1])
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def empty(cls, ndims=CartesianSpace.ndims):
+    def empty(cls, ndims=CartesianSpace.ndim):
         return cls([(None, None)] * ndims)
 
     @classmethod
@@ -521,13 +544,11 @@ class Extent(FrameTuple):
         return cls([(i, i) for i in offset])
 
     def __and__(self, other):
-        """Intersection operation.
-        """
+        """Intersection operation."""
         return self._apply(other, max, min)
 
     def __or__(self, other):
-        """Union operation.
-        """
+        """Union operation."""
         return self._apply(other, min, max)
 
     def __lt__(self, other):
@@ -591,8 +612,7 @@ class Extent(FrameTuple):
 
 
 class CenteredExtent(Extent):
-    """Stencil support: region defined by the largest negative offset (or zero) and
-    the largest positive offset (or zero) in a stencil pattern computation.
+    """Region defined by the largest negative offset (or zero) and the largest positive offset (or zero).
 
     Size of boundary regions are expressed as minimum and maximum relative offsets related
     to the computation position. For example the frame for a stencil accessing 3 elements
@@ -604,15 +624,15 @@ class CenteredExtent(Extent):
 
     @classmethod
     def _check_value(cls, value, ndims):
-        assert isinstance(value, collections.abc.Sequence), "Invalid sequence"
+        assert isinstance(value, collections.abc.Collection), "Invalid collection"
         assert all(
             len(r) == 2 and isinstance(r[0], int) and isinstance(r[1], int) and r[0] <= 0 <= r[1]
             for r in value
         )
-        assert ndims[0] <= len(value) <= ndims[1]
+        assert ndims[0] <= len(value) and (ndims[1] is None or len(value) <= ndims[1])
 
     @classmethod
-    def empty(cls, ndims=CartesianSpace.ndims):
+    def empty(cls, ndims=CartesianSpace.ndim):
         return cls.zeros(ndims)
 
     @classmethod
@@ -626,30 +646,60 @@ class CenteredExtent(Extent):
 
 
 @enum.unique
-class AccessKind(enum.Enum):
-    READ_ONLY = 0
-    READ_WRITE = 1
+class AccessKind(enum.IntFlag):
+    NONE = 0
+    READ = 1
+    WRITE = 2
+    READ_WRITE = READ | WRITE
 
     def __str__(self):
         return self.name
 
 
-class DomainInfo(
-    collections.namedtuple("DomainInfoNamedTuple", ["parallel_axes", "sequential_axis", "ndims"])
-):
-    pass
+@dataclass(frozen=True)
+class DomainInfo:
+    parallel_axes: Tuple[str, ...]
+    sequential_axis: str
+    ndim: int
 
 
-class FieldInfo(collections.namedtuple("FieldInfoNamedTuple", ["access", "boundary", "dtype"])):
+@dataclass(frozen=True)
+class FieldInfo:
+    access: AccessKind
+    boundary: Boundary
+    axes: Tuple[str, ...]
+    data_dims: Tuple[int, ...]
+    dtype: numpy.dtype
+
     def __repr__(self):
-        result = "FieldInfo(access=AccessKind.{access}, boundary={boundary}, dtype={dtype})".format(
-            access=self.access.name, boundary=repr(self.boundary), dtype=repr(self.dtype)
+        return "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, data_dims={data_dims}, dtype={dtype})".format(
+            access=self.access.name,
+            boundary=repr(self.boundary),
+            axes=repr(self.axes),
+            data_dims=repr(self.data_dims),
+            dtype=repr(self.dtype),
         )
-        return result
+
+    @functools.cached_property
+    def domain_mask(self):
+        return tuple(axis in self.axes for axis in CartesianSpace.names)
+
+    @functools.cached_property
+    def domain_ndim(self):
+        return len(self.axes)
+
+    @functools.cached_property
+    def mask(self):
+        return (*self.domain_mask, *((True,) * len(self.data_dims)))
+
+    @functools.cached_property
+    def ndim(self):
+        return len(self.axes) + len(self.data_dims)
 
 
-class ParameterInfo(collections.namedtuple("ParameterInfoNamedTuple", ["dtype"])):
-    pass
+@dataclass(frozen=True)
+class ParameterInfo:
+    dtype: numpy.dtype
 
 
 @attribkwclass
@@ -658,6 +708,7 @@ class BuildOptions(AttributeClassLike):
 
     name = attribute(of=str)
     module = attribute(of=str)
+    format_source = attribute(of=bool, default=True)
     backend_opts = attribute(of=DictOf[str, Any], factory=dict)
     build_info = attribute(of=dict, optional=True)
     rebuild = attribute(of=bool, default=False)
@@ -671,7 +722,7 @@ class BuildOptions(AttributeClassLike):
     @property
     def shashed_id(self):
         result = gt_utils.shashed_id(
-            self.name, self.module, *tuple(sorted(self.backend_opts.items()))
+            self.name, self.module, self.format_source, *tuple(sorted(self.backend_opts.items()))
         )
 
         return result
@@ -704,42 +755,3 @@ class GTSpecificationError(GTError):
 class GTSemanticError(GTError):
     def __init__(self, message):
         super().__init__(message)
-
-
-def normalize_domain(domain):
-    if domain is not None:
-        domain = tuple(domain)
-    if not isinstance(domain, Shape):
-        if not Shape.is_valid(domain):
-            raise ValueError("Invalid 'domain' value ({})".format(domain))
-        domain = Shape(domain)
-
-    return domain
-
-
-def normalize_origin(origin):
-    if origin is not None:
-        origin = tuple(origin)
-        if isinstance(origin, numbers.Integral):
-            origin = Shape.from_k(int(origin))
-        elif isinstance(origin, collections.abc.Sequence) and Index.is_valid(origin):
-            origin = Shape.from_value(origin)
-        else:
-            raise ValueError("Invalid 'origin' value ({})".format(origin))
-
-    return origin
-
-
-def normalize_origin_mapping(origin_mapping):
-    origin_mapping = origin_mapping if origin_mapping is not None else {}
-    if isinstance(origin_mapping, collections.abc.Mapping):
-        origin_mapping = {
-            key: normalize_origin(value)
-            for key, value in gt_utils.normalize_mapping(
-                origin_mapping, key_types=[str], filter_none=True
-            ).items()
-        }
-    else:
-        origin_mapping = {"_all_": normalize_origin(origin_mapping)}
-
-    return origin_mapping

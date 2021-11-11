@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import TYPE_CHECKING, List
+
 import numpy as np
 
 from gt4py import backend as gt_backend
@@ -21,7 +23,12 @@ from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.utils import text as gt_text
 
+from .module_generator import BaseModuleGenerator
 from .python_generator import PythonSourceGenerator
+
+
+if TYPE_CHECKING:
+    from gt4py.stencil_builder import StencilBuilder
 
 
 class DebugSourceGenerator(PythonSourceGenerator):
@@ -56,9 +63,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         return source_lines
 
-    def make_temporary_field(
-        self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent
-    ):
+    def make_temporary_field(self, name: str, dtype: gt_ir.DataType, extent: gt_definitions.Extent):
         source_lines = super().make_temporary_field(name, dtype, extent)
         source_lines.extend(self._make_field_accessor(name, extent.to_boundary().lower_indices))
 
@@ -90,9 +95,7 @@ class DebugSourceGenerator(PythonSourceGenerator):
 
         # Create K for-loop: computation body is split in different vertical regions
         source_lines = []
-        regions = sorted(regions)
-        if iteration_order == gt_ir.IterationOrder.BACKWARD:
-            regions = reversed(regions)
+        assert sorted(regions, reverse=iteration_order == gt_ir.IterationOrder.BACKWARD) == regions
 
         for bounds, body_sources in regions:
             region_lines = self._make_regional_computation(iteration_order, bounds)
@@ -107,14 +110,23 @@ class DebugSourceGenerator(PythonSourceGenerator):
     # ---- Visitor handlers ----
     def visit_FieldRef(self, node: gt_ir.FieldRef):
         assert node.name in self.block_info.accessors
+
         index = []
-        for ax in self.domain.axes_names:
-            offset = "{:+d}".format(node.offset[ax]) if ax in node.offset else ""
+        for ax in self.impl_node.fields[node.name].axes:
+            if isinstance(node.offset[ax], gt_ir.Expr):
+                offset = f"+ {self.visit(node.offset[ax])}"
+            else:
+                offset = "{:+d}".format(node.offset[ax])
             index.append("{ax}{offset}".format(ax=ax, offset=offset))
 
+        index_str = f"({index[0]},)" if len(index) == 1 else ", ".join(index)
+
         source = "{name}{marker}[{index}]".format(
-            marker=self.origin_marker, name=node.name, index=", ".join(index)
+            marker=self.origin_marker, name=node.name, index=index_str
         )
+        if node.data_index:
+            index = [self.visit(index) for index in node.data_index]
+            source = f"{source}[{','.join(index)}]"
 
         return source
 
@@ -159,10 +171,59 @@ class DebugSourceGenerator(PythonSourceGenerator):
             body_sources.dedent()
         return ["".join([str(item) for item in line]) for line in body_sources.lines]
 
+    def _make_base_offset(self, bound: gt_ir.AxisBound, index: int) -> str:
+        if bound.level == gt_ir.LevelMarker.START:
+            return "{:d}".format(bound.offset)
+        else:
+            return "{:s}[{:d}] {:+d}".format(self.domain_arg_name, index, bound.offset)
 
-class DebugModuleGenerator(gt_backend.BaseModuleGenerator):
-    def __init__(self, backend_class):
-        super().__init__(backend_class)
+    def _create_horizontal_conditional(
+        self, axis_name: str, index: int, interval: gt_ir.AxisInterval
+    ) -> str:
+        extent = self.block_info.extent[index]
+        if (
+            interval.start.level == interval.end.level
+            and interval.start.offset == interval.end.offset - 1
+        ):
+            return f"{axis_name} == {self._make_base_offset(interval.start, index)}"
+        else:
+            conditions = ""
+            if interval.start.level != gt_ir.LevelMarker.START or interval.start.offset > extent[0]:
+                conditions.append(f"{axis_name} >= {self._make_base_offset(interval.start, index)}")
+            if interval.end.level != gt_ir.LevelMarker.END or interval.end.offset < extent[1]:
+                conditions.append(f"{axis_name} < {self._make_base_offset(interval.end, index)}")
+            return " and ".join(conditions)
+
+    def visit_HorizontalIf(self, node: gt_ir.HorizontalIf) -> List[str]:
+        source = gt_text.TextBlock()
+
+        conditions = [
+            self._create_horizontal_conditional(axis_name, index, node.intervals[axis_name])
+            for index, axis_name in enumerate(
+                (axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes)
+            )
+        ]
+
+        source.append("if " + " and ".join([cond for cond in conditions if cond != ""]) + ":")
+
+        source.indent()
+        for stmt in node.body.stmts:
+            source.extend(self.visit(stmt))
+
+        return ["".join([str(item) for item in line]) for line in source.lines]
+
+    def visit_While(self, node: gt_ir.While):
+        body_sources = gt_text.TextBlock()
+        body_sources.append("while {condition}:".format(condition=self.visit(node.condition)))
+        body_sources.indent()
+        for stmt in node.body.stmts:
+            body_sources.extend(self.visit(stmt))
+        return body_sources.text
+
+
+class DebugModuleGenerator(BaseModuleGenerator):
+    def __init__(self):
+        super().__init__()
         self.source_generator = DebugSourceGenerator(
             indent_size=self.TEMPLATE_INDENT_SIZE,
             origin_marker="_at",
@@ -192,9 +253,18 @@ class _Accessor:
 
     def generate_implementation(self):
         sources = gt_text.TextBlock(indent_size=self.TEMPLATE_INDENT_SIZE)
-        self.source_generator(self.implementation_ir, sources)
+        self.source_generator(self.builder.implementation_ir, sources)
 
         return sources.text
+
+    def generate_imports(self) -> str:
+        source = (
+            """
+import math
+"""
+            + super().generate_imports()
+        )
+        return source
 
 
 def debug_layout(mask):
@@ -224,6 +294,8 @@ class DebugBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin)
         "is_compatible_layout": debug_is_compatible_layout,
         "is_compatible_type": debug_is_compatible_type,
     }
+
     languages = {"computation": "python", "bindings": []}
 
     MODULE_GENERATOR_CLASS = DebugModuleGenerator
+    USE_LEGACY_TOOLCHAIN = True

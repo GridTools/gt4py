@@ -1,8 +1,10 @@
 ### Custom ####
+_build
 _local_
 
 ### GT4Py ####
 .gt_cache/
+.gt_cache_pytest_*/
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
@@ -77,8 +79,8 @@ target/
 .python-version
 
 # Environments
-.env
-.venv
+*.env
+*.venv
 env/
 venv/
 ENV/
@@ -104,3 +106,8 @@ venv.bak/
 
 # mkdocs documentation
 /site
+
+# DaCe
+*.sdfg
+.dace.conf
+.dacecache/

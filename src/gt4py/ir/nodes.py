@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -47,12 +47,8 @@ BinaryOperator enumeration (:class:`BinaryOperator`)
 
 NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
-    [`ABS`, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`, `SQRT`, `EXP`, `LOG`,
-    `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
-
-AccessIntent enumeration (:class:`AccessIntent`)
-    Access permissions
-    [`READ_ONLY`, `READ_WRITE`]
+    [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
+    `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
@@ -83,18 +79,25 @@ storing a reference to the piece of source code which originated the node.
 
     Axis(name: str)
 
-    Domain(parallel_axes: List[Axis], [sequential_axis: Axis, data_axes: List[Axis]])
-        # LatLonGrids -> parallel_axes: ["I", "J], sequential_axis: "K"
+    Domain(parallel_axes: List[Axis], [sequential_axis: Axis])
+        # LatLonGrids -> parallel_axes: ["I", "J"], sequential_axis: "K"
 
     Literal     = ScalarLiteral(value: Any (should match DataType), data_type: DataType)
                 | BuiltinLiteral(value: Builtin)
 
     Ref         = VarRef(name: str, [index: int])
-                | FieldRef(name: str, offset: Dict[str, int])
+                | FieldRef(name: str, offset: Dict[str, int | Expr])
+                # Horizontal indices must be ints
 
-    NativeFuncCall(func: NativeFunction, args: List[Expr])
+    NativeFuncCall(func: NativeFunction, args: List[Expr], data_type: DataType)
 
-    Expr        = Literal | Ref | NativeFuncCall | CompositeExpr | InvalidBranch
+    Cast(expr: Expr, data_type: DataType)
+
+    AxisPosition(axis: str, data_type: DataType)
+
+    AxisIndex(axis: str, endpt: LevelMarker, offset: int, data_type: DataType)
+
+    Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch | AxisPosition | AxisIndex
 
     CompositeExpr   = UnaryOpExpr(op: UnaryOperator, arg: Expr)
                     | BinOpExpr(op: BinaryOperator, lhs: Expr, rhs: Expr)
@@ -110,6 +113,8 @@ storing a reference to the piece of source code which originated the node.
     Statement   = Decl
                 | Assign(target: Ref, value: Expr)
                 | If(condition: expr, main_body: BlockStmt, else_body: BlockStmt)
+                | HorizontalIf(intervals: Dict[str, Interval], body: BlockStmt)
+                | While(condition: expr, body: BlockStmt)
                 | BlockStmt
 
     AxisBound(level: LevelMarker | VarRef, offset: int)
@@ -122,14 +127,13 @@ storing a reference to the piece of source code which originated the node.
         # start is included
         # end is excluded
 
-    ComputationBlock(interval: AxisInterval, order: IterationOrder, body: BlockStmt)
+    ComputationBlock(interval: AxisInterval, iteration_order: IterationOrder, body: BlockStmt)
 
     ArgumentInfo(name: str, is_keyword: bool, [default: Any])
 
     StencilDefinition(name: str,
                       domain: Domain,
                       api_signature: List[ArgumentInfo],
-                      domain: Domain,
                       api_fields: List[FieldDecl],
                       parameters: List[VarDecl],
                       computations: List[ComputationBlock],
@@ -142,7 +146,7 @@ Implementation IR
  ::
 
     Accessor    = ParameterAccessor(symbol: str)
-                | FieldAccessor(symbol: str, intent: AccessIntent, extent: Extent)
+                | FieldAccessor(symbol: str, intent: AccessKind, extent: Extent)
 
     ApplyBlock(interval: AxisInterval,
                local_symbols: Dict[str, VarDecl],
@@ -173,11 +177,13 @@ import collections
 import copy
 import enum
 import operator
+import sys
+from typing import Generator, Sequence, Type
 
 import numpy as np
 
 from gt4py import utils as gt_utils
-from gt4py.definitions import CartesianSpace, Extent, Index
+from gt4py.definitions import AccessKind, CartesianSpace, Extent, Index
 from gt4py.utils.attrib import Any as Any
 from gt4py.utils.attrib import Dict as DictOf
 from gt4py.utils.attrib import List as ListOf
@@ -214,11 +220,19 @@ class Axis(Node):
     name = attribute(of=str)
 
 
+@enum.unique
+class LevelMarker(enum.Enum):
+    START = 0
+    END = -1
+
+    def __str__(self):
+        return self.name
+
+
 @attribclass
 class Domain(Node):
     parallel_axes = attribute(of=ListOf[Axis])
     sequential_axis = attribute(of=Axis, optional=True)
-    data_axes = attribute(of=ListOf[Axis], optional=True)
 
     @classmethod
     def LatLonGrid(cls):
@@ -235,8 +249,6 @@ class Domain(Node):
         result = list(self.parallel_axes)
         if self.sequential_axis:
             result.append(self.sequential_axis)
-        if self.data_axes:
-            result.extend(self.data_axes)
         return result
 
     @property
@@ -244,16 +256,10 @@ class Domain(Node):
         return [ax.name for ax in self.axes]
 
     @property
-    def ndims(self):
-        return self.domain_ndims + self.data_ndims
-
-    @property
     def domain_ndims(self):
         return len(self.parallel_axes) + (1 if self.sequential_axis else 0)
 
-    @property
-    def data_ndims(self):
-        return len(self.data_axes) if self.data_axes else 0
+    ndims = domain_ndims
 
     def index(self, axis):
         if isinstance(axis, Axis):
@@ -279,15 +285,6 @@ class Builtin(enum.Enum):
             result = cls.FALSE
 
         return result
-
-    def __str__(self):
-        return self.name
-
-
-@enum.unique
-class AccessIntent(enum.Enum):
-    READ_ONLY = 0
-    READ_WRITE = 1
 
     def __str__(self):
         return self.name
@@ -391,38 +388,94 @@ class VarRef(Ref):
 @attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, int])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
+    data_index = attribute(of=ListOf[int], factory=list)
     loc = attribute(of=Location, optional=True)
+
+    @classmethod
+    def at_center(cls, name: str, axes: Sequence[str], loc=None):
+        return cls(name=name, offset={axis: 0 for axis in axes}, loc=loc)
+
+
+@attribclass
+class Cast(Expr):
+    data_type = attribute(of=DataType)
+    expr = attribute(of=Expr)
+    loc = attribute(of=Location, optional=True)
+
+
+@attribclass
+class AxisPosition(Expr):
+    axis = attribute(of=str)
+    data_type = attribute(of=DataType, default=DataType.INT32)
+
+
+@attribclass
+class AxisIndex(Expr):
+    axis = attribute(of=str)
+    endpt = attribute(of=LevelMarker)
+    offset = attribute(of=int)
+    data_type = attribute(of=DataType, default=DataType.INT32)
 
 
 @enum.unique
 class NativeFunction(enum.Enum):
     ABS = 1
-    MOD = 2
+    MIN = 2
+    MAX = 3
+    MOD = 4
 
-    SIN = 11
-    COS = 12
-    TAN = 13
-    ARCSIN = 14
-    ARCCOS = 15
-    ARCTAN = 16
+    SIN = 5
+    COS = 6
+    TAN = 7
+    ARCSIN = 8
+    ARCCOS = 9
+    ARCTAN = 10
 
-    SQRT = 21
-    EXP = 22
-    LOG = 23
+    SQRT = 11
+    EXP = 12
+    LOG = 13
 
-    ISFINITE = 101
-    ISINF = 102
-    ISNAN = 103
-    FLOOR = 111
-    CEIL = 112
-    TRUNC = 113
+    ISFINITE = 14
+    ISINF = 15
+    ISNAN = 16
+    FLOOR = 17
+    CEIL = 18
+    TRUNC = 19
+
+    @property
+    def arity(self):
+        return type(self).IR_OP_TO_NUM_ARGS[self]
+
+
+NativeFunction.IR_OP_TO_NUM_ARGS = {
+    NativeFunction.ABS: 1,
+    NativeFunction.MIN: 2,
+    NativeFunction.MAX: 2,
+    NativeFunction.MOD: 2,
+    NativeFunction.SIN: 1,
+    NativeFunction.COS: 1,
+    NativeFunction.TAN: 1,
+    NativeFunction.ARCSIN: 1,
+    NativeFunction.ARCCOS: 1,
+    NativeFunction.ARCTAN: 1,
+    NativeFunction.SQRT: 1,
+    NativeFunction.EXP: 1,
+    NativeFunction.LOG: 1,
+    NativeFunction.ISFINITE: 1,
+    NativeFunction.ISINF: 1,
+    NativeFunction.ISNAN: 1,
+    NativeFunction.FLOOR: 1,
+    NativeFunction.CEIL: 1,
+    NativeFunction.TRUNC: 1,
+}
 
 
 @attribclass
 class NativeFuncCall(Expr):
     func = attribute(of=NativeFunction)
     args = attribute(of=ListOf[Expr])
+    data_type = attribute(of=DataType)
     loc = attribute(of=Location, optional=True)
 
 
@@ -473,6 +526,7 @@ class BinaryOperator(enum.Enum):
     MUL = 3
     DIV = 4
     POW = 5
+    MOD = 6
 
     AND = 11
     OR = 12
@@ -499,6 +553,7 @@ BinaryOperator.IR_OP_TO_PYTHON_OP = {
     BinaryOperator.MUL: operator.mul,
     BinaryOperator.DIV: operator.truediv,
     BinaryOperator.POW: operator.pow,
+    BinaryOperator.MOD: operator.mod,
     # BinaryOperator.AND: lambda a, b: a and b,  # non short-circuit emulation
     # BinaryOperator.OR: lambda a, b: a or b,  # non short-circuit emulation
     BinaryOperator.LT: operator.lt,
@@ -515,6 +570,7 @@ BinaryOperator.IR_OP_TO_PYTHON_SYMBOL = {
     BinaryOperator.MUL: "*",
     BinaryOperator.DIV: "/",
     BinaryOperator.POW: "**",
+    BinaryOperator.MOD: "%",
     BinaryOperator.AND: "and",
     BinaryOperator.OR: "or",
     BinaryOperator.LT: "<",
@@ -563,6 +619,7 @@ class FieldDecl(Decl):
     data_type = attribute(of=DataType)
     axes = attribute(of=ListOf[str])
     is_api = attribute(of=bool)
+    data_dims = attribute(of=ListOf[int], factory=list)
     layout_id = attribute(of=str, default="_default_")
     loc = attribute(of=Location, optional=True)
 
@@ -599,14 +656,6 @@ class Assign(Statement):
 
 
 @attribclass
-class AugAssign(Statement):
-    target = attribute(of=Ref)
-    value = attribute(of=Expr)
-    op = attribute(of=BinaryOperator)
-    loc = attribute(of=Location, optional=True)
-
-
-@attribclass
 class If(Statement):
     condition = attribute(of=Expr)
     main_body = attribute(of=BlockStmt)
@@ -614,16 +663,14 @@ class If(Statement):
     loc = attribute(of=Location, optional=True)
 
 
+@attribclass
+class While(Statement):
+    condition = attribute(of=Expr)
+    body = attribute(of=BlockStmt)
+    loc = attribute(of=Location, optional=True)
+
+
 # ---- IR: computations ----
-@enum.unique
-class LevelMarker(enum.Enum):
-    START = 0
-    END = -1
-
-    def __str__(self):
-        return self.name
-
-
 @enum.unique
 class IterationOrder(enum.Enum):
     BACKWARD = -1
@@ -663,15 +710,6 @@ class AxisInterval(Node):
     loc = attribute(of=Location, optional=True)
 
     @classmethod
-    def full_interval(cls):
-        interval = cls(
-            start=AxisBound(level=LevelMarker.START, offset=0),
-            end=AxisBound(level=LevelMarker.END, offset=0),
-        )
-
-        return interval
-
-    @classmethod
     def full_interval(cls, order=IterationOrder.PARALLEL):
         if order != IterationOrder.BACKWARD:
             interval = cls(
@@ -685,6 +723,39 @@ class AxisInterval(Node):
             )
 
         return interval
+
+    @property
+    def is_single_index(self) -> bool:
+        if not isinstance(self.start, AxisBound) or not isinstance(self.end, AxisBound):
+            return False
+
+        return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
+
+    def disjoint_from(self, other: "AxisInterval") -> bool:
+        # This made-up constant must be larger than any LevelMarker.offset used
+        DOMAIN_SIZE: int = 1000
+
+        def get_offset(bound: AxisBound) -> int:
+            return (
+                0 + bound.offset if bound.level == LevelMarker.START else sys.maxsize + bound.offset
+            )
+
+        self_start = get_offset(self.start)
+        self_end = get_offset(self.end)
+
+        other_start = get_offset(other.start)
+        other_end = get_offset(other.end)
+
+        return not (self_start <= other_start < self_end) and not (
+            other_start <= self_start < other_end
+        )
+
+
+# TODO Find a better place for this in the file.
+@attribclass
+class HorizontalIf(Statement):
+    intervals = attribute(of=DictOf[str, AxisInterval])
+    body = attribute(of=BlockStmt)
 
 
 @attribclass
@@ -712,7 +783,8 @@ class StencilDefinition(Node):
     computations = attribute(of=ListOf[ComputationBlock])
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
-    docstring = attribute(of=str)
+    docstring = attribute(of=str, default="")
+    loc = attribute(of=Location, optional=True)
 
 
 # ---- Implementation IR (IIR) ----
@@ -732,7 +804,7 @@ class ParameterAccessor(Accessor):
 @attribclass
 class FieldAccessor(Accessor):
     symbol = attribute(of=str)
-    intent = attribute(of=AccessIntent)
+    intent = attribute(of=AccessKind)
     extent = attribute(of=Extent, default=Extent.zeros())
 
 
@@ -807,6 +879,18 @@ class StencilImplementation(IIRNode):
     externals = attribute(of=DictOf[str, Any], optional=True)
     sources = attribute(of=DictOf[str, str], optional=True)
     docstring = attribute(of=str)
+
+    @property
+    def has_effect(self):
+        """
+        Determine whether the stencil modifies any of its arguments.
+
+        Note that the only guarantee of this function is that the stencil has no effect if it returns ``false``. It
+        might however return true in cases where the optimization passes were not able to deduce this.
+        """
+        return self.multi_stages and not all(
+            arg_field in self.unreferenced for arg_field in self.arg_fields
+        )
 
     @property
     def arg_fields(self):
@@ -963,3 +1047,26 @@ class IRNodeDumper(IRNodeMapper):
 
 
 dump_ir = IRNodeDumper.apply
+
+
+def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None, None]:
+    """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
+
+    def recurse(node: Node) -> Generator[Node, None, None]:
+        for key, value in iter_attributes(node):
+            if isinstance(node, collections.abc.Iterable):
+                if isinstance(node, collections.abc.Mapping):
+                    children = node.values()
+                else:
+                    children = node
+            else:
+                children = gt_utils.listify(value)
+
+            for value in children:
+                if isinstance(value, Node):
+                    yield from recurse(value)
+
+            if isinstance(node, node_type):
+                yield node
+
+    yield from recurse(root_node)

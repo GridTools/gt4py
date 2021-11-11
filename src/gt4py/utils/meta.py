@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -24,6 +24,7 @@ import copy
 import inspect
 import operator
 import textwrap
+from typing import Union
 
 from .base import shashed_id
 
@@ -198,7 +199,9 @@ def get_qualified_name_from_node(name_or_attribute, *, as_list=False):
     return components if as_list else ".".join(components)
 
 
-class ASTPass(ast.NodeVisitor):
+class ASTPass:
+    """Clone of the ast.NodeVisitor that supports forwarding kwargs."""
+
     def __call__(self, func_or_source_or_ast):
         ast_root = get_ast(func_or_source_or_ast)
         return self.visit(ast_root)
@@ -221,6 +224,8 @@ class ASTPass(ast.NodeVisitor):
 
 
 class ASTTransformPass(ASTPass):
+    """Clone of the ast.NodeTransformer that supports forwarding kwargs."""
+
     def generic_visit(self, node, **kwargs):
         for field, old_value in ast.iter_fields(node):
             if isinstance(old_value, list):
@@ -302,14 +307,14 @@ class ASTEvaluator(ASTPass):
     def visit_Tuple(self, node: ast.Tuple):
         return tuple(self.visit(elem) for elem in node.elts)
 
-    def visit_UnaryOp(self, node):
+    def visit_UnaryOp(self, node: ast.UnaryOp):
         val = self.visit(node.operand)
         return self.AST_OP_TO_OP[type(node.op)](val)
 
-    def visit_BinOp(self, node):
+    def visit_BinOp(self, node: ast.BinOp):
         return self.AST_OP_TO_OP[type(node.op)](self.visit(node.left), self.visit(node.right))
 
-    def visit_BoolOp(self, node):
+    def visit_BoolOp(self, node: ast.BoolOp):
         # Use short-circuited evaluation of logical expressions
         condition = True if isinstance(node.op, ast.And) else False
         for value in node.values:
@@ -318,7 +323,13 @@ class ASTEvaluator(ASTPass):
 
         return condition
 
-    def visit_Compare(self, node):
+    def visit_Attribute(self, node: ast.Attribute):
+        qualified_name = get_qualified_name_from_node(node)
+        if qualified_name not in self.context:
+            raise ValueError(f"{qualified_name} not found in context")
+        return self.context[qualified_name]
+
+    def visit_Compare(self, node: ast.Compare):
         values = [self.visit(node.left)] + [self.visit(cmp) for cmp in node.comparators]
         comparisons = [
             self.AST_OP_TO_OP[type(op)](values[i], values[i + 1]) for i, op in enumerate(node.ops)

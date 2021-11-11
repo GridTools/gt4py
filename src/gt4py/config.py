@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -31,11 +31,18 @@ CUDA_ROOT: str = os.environ.get(
     "CUDA_HOME", os.environ.get("CUDA_PATH", os.path.abspath("/usr/local/cuda"))
 )
 
-GT_REPO_PATH: str = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "_external_src", "gridtools")
+
+GT_REPO_DIRNAME: str = "gridtools"
+GT_INCLUDE_PATH: str = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "_external_src", GT_REPO_DIRNAME, "include")
 )
 
-GT_INCLUDE_PATH: str = os.path.abspath(os.path.join(GT_REPO_PATH, "include"))
+GT2_REPO_DIRNAME: str = "gridtools2"
+GT2_INCLUDE_PATH: str = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "_external_src", GT2_REPO_DIRNAME, "include")
+)
+
+GT_CPP_TEMPLATE_DEPTH: int = 1024
 
 # Settings dict
 build_settings: Dict[str, Any] = {
@@ -45,6 +52,7 @@ build_settings: Dict[str, Any] = {
     "cuda_library_path": os.path.join(CUDA_ROOT, "lib64"),
     "cuda_arch": os.environ.get("CUDA_ARCH", None),
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
+    "gt2_include_path": os.environ.get("GT2_INCLUDE_PATH", GT2_INCLUDE_PATH),
     "openmp_cppflags": os.environ.get("OPENMP_CPPFLAGS", "-fopenmp").split(),
     "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", "-fopenmp").split(),
     "extra_compile_args": {
@@ -57,6 +65,7 @@ build_settings: Dict[str, Any] = {
     },
     "extra_link_args": [],
     "parallel_jobs": multiprocessing.cpu_count(),
+    "cpp_template_depth": os.environ.get("GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH),
 }
 
 cache_settings: Dict[str, Any] = {
@@ -65,3 +74,5 @@ cache_settings: Dict[str, Any] = {
 }
 
 code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}
+
+os.environ.setdefault("DACE_CONFIG", os.path.join(os.path.abspath("."), ".dace.conf"))

@@ -1,10 +1,31 @@
+# -*- coding: utf-8 -*-
+#
+# GT4Py - GridTools4Py - GridTools for Python
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Unit tests for the command line interface (CLI)."""
+
 import re
+import sys
 
 import pytest
 from click.testing import CliRunner
 
 from gt4py import backend, cli
+from gt4py.backend.base import CLIBackendMixin
+
+from ..definitions import OLD_INTERNAL_BACKENDS
 
 
 @pytest.fixture
@@ -13,19 +34,33 @@ def clirunner():
     yield CliRunner()
 
 
-@pytest.fixture(params=backend.REGISTRY.keys())
-def backend_name(request):
+@pytest.fixture(
+    params=[
+        *OLD_INTERNAL_BACKENDS,  # gtc backends require definition ir as input, for now we skip the tests
+        pytest.param(
+            "nocli",
+        ),
+    ],
+)
+def backend_name(request, nocli_backend):
     """Parametrize by backend name."""
     yield request.param
 
 
 @pytest.fixture
-def simple_stencil(tmp_path):
+def clean_imports():
+    impdata = [sys.path.copy(), sys.meta_path.copy(), sys.modules.copy()]
+    yield
+    sys.path, sys.meta_path, sys.modules = impdata
+
+
+@pytest.fixture
+def simple_stencil(tmp_path, clean_imports):
     """Provide a gtscript file with a simple stencil."""
-    module_file = tmp_path / "stencil.gtpy"
+    module_file = tmp_path / "stencil.gt.py"
     module_file.write_text(
         (
-            "## using-dsl: gtscript\n"
+            "# [GT] using-dsl: gtscript\n"
             "\n"
             "\n"
             "@lazy_stencil()\n"
@@ -50,7 +85,7 @@ class NonCliBackend(backend.Backend):
 
 
 @pytest.fixture
-def nocli_backend():
+def nocli_backend(scope="module"):
     """Temporarily register the nocli backend."""
     backend.register(NonCliBackend)
     yield
@@ -63,12 +98,17 @@ BACKEND_ROW_PATTERN_BY_NAME = {
     "gtx86": r"^\s*gtx86\s*c\+\+\s*python\s*Yes",
     "gtmc": r"^\s*gtmc\s*c\+\+\s*python\s*Yes",
     "gtcuda": r"^\s*gtcuda\s*cuda\s*python\s*Yes",
+    "gtc:gt:cpu_ifirst": r"^\s*gtc:gt:cpu_ifirst\s*c\+\+\s*python\s*Yes",
+    "gtc:gt:cpu_kfirst": r"^\s*gtc:gt:cpu_kfirst\s*c\+\+\s*python\s*Yes",
+    "gtc:gt:gpu": r"^\s*gtc:gt:gpu\s*c\+\+\s*python\s*Yes",
     "dawn:gtx86": r"^\s*dawn:gtx86\s*c\+\+\s*python\s*No",
     "dawn:gtmc": r"^\s*dawn:gtmc\s*c\+\+\s*python\s*No",
     "dawn:gtcuda": r"^\s*dawn:gtcuda\s*cuda\s*python\s*No",
     "dawn:naive": r"^\s*dawn:naive\s*c\+\+\s*python\s*No",
     "dawn:cxxopt": r"^\s*dawn:cxxopt\s*c\+\+\s*python\s*No",
     "dawn:cuda": r"^\s*dawn:cuda\s*cuda\s*python\s*No",
+    "gtc:numpy": r"^\s*gtc:numpy\s*python\s*python\s*Yes",
+    "nocli": r"^\s*nocli\s*\?\s*\?\s*No",
 }
 
 
@@ -80,139 +120,157 @@ def list_backends_line_pattern(backend_name):
 
 @pytest.fixture
 def backend_enabled(backend_name):
-    yield not backend_name.startswith("dawn")
-
-
-@pytest.fixture(params=[[], ["--list-backends"]])
-def options_for_silent(request, simple_stencil):
-    """These options combinations are tested to not print output when combined with --silent."""
-    yield request.param + [str(simple_stencil.absolute())]
+    yield issubclass(backend.from_name(backend_name), CLIBackendMixin)
 
 
 def test_list_backends(clirunner, list_backends_line_pattern):
-    """
-    Test the --list-backend flag of gtpyc.
-
-    Assumptions:
-
-        * cli.gtpyc is available (cli is importable)
-        * cli.gtpyc takes a --list-backends option
-        * The expected output line has been made available to the
-          :py:func`list_backends_line_pattern` fixture
-
-    Actions:
-
-        .. code-block:: bash
-
-            $ gtpyc --list-backends
-
-    Outcome:
-
-        gtpyc echos a table with a line per backend, listing the
-        primary and secondary language and CLI compatibility for each.
-
-    """
-    result = clirunner.invoke(cli.gtpyc, ["--list-backends"], catch_exceptions=False)
+    """Test the list-backend subcommand of gtpyc."""
+    result = clirunner.invoke(cli.gtpyc, ["list-backends"], catch_exceptions=False)
 
     assert result.exit_code == 0
-    assert re.findall(list_backends_line_pattern, result.output, re.MULTILINE)
+    assert re.findall(list_backends_line_pattern, result.output, re.MULTILINE), print(result.output)
 
 
-def test_silent(clirunner, options_for_silent):
-    """
-    Test the --silent flag.
-
-    Assumptions:
-
-        * The :py:func:`options_for_silent` fixture contains option / arg combinations that should
-          be silent.
-
-    Actions:
-
-        .. code-block:: bash
-
-            $ gtpyc --silent [<parametrized option1>, ...] <simple_stencil_path>
-
-    Outcome:
-
-        The stdout output is empty.
-    """
-    result = clirunner.invoke(cli.gtpyc, ["--silent"] + options_for_silent)
+def test_gen_silent(clirunner, simple_stencil, tmp_path):
+    """Test the --silent flag."""
+    result = clirunner.invoke(
+        cli.gtpyc,
+        [
+            "gen",
+            "--backend=debug",
+            "--output-path",
+            str(tmp_path / "test_gen_silent"),
+            "--silent",
+            str(simple_stencil.absolute()),
+        ],
+        catch_exceptions=False,
+    )
 
     assert result.exit_code == 0
     assert not result.output
 
 
-def test_missing_arg(clirunner):
-    """
-    Test when no input path argument is passed (and also not --list-backends).
-
-    Actions:
-
-        .. code-block:: bash
-
-            $ gtpyc --backend=debug
-
-    Outcome:
-
-        An error message warns the user that no input path was given. The command aborts with error
-        code 2.
-
-    """
-    result = clirunner.invoke(cli.gtpyc, [])
+def test_gen_missing_arg(clirunner):
+    """Test for error if no input path argument is passed to gen."""
+    result = clirunner.invoke(cli.gtpyc, ["gen", "--backend=debug"])
 
     assert result.exit_code == 2
-    assert "Missing argument '[INPUT_PATH]'." in result.output
+    assert "Missing argument 'INPUT_PATH'." in result.output
 
 
 def test_backend_choice(backend_name):
-    """
-    Test the :py:cls:`gt4py.cli.BackendChoice` class interface.
-    """
+    """Test the :py:class:`gt4py.cli.BackendChoice` class interface."""
     assert backend_name in cli.BackendChoice.get_backend_names()
 
 
-def test_unenabled_backend_choice(clirunner, nocli_backend, simple_stencil):
-    """
-    Test the --backend option when an unenabled backend name is passed.
-
-    The :py:func:`nocli_backend` fixture temporarily injects a dummy backend named "nocli", which
-    is not CLI enabled (and provides no functionality in fact).
-
-    Actions:
-
-        .. code-block:: bash
-
-            $ gtpyc --backend=nocli <simple_stencil_path>
-
-    Outcome:
-
-        An error message warns the user that the chosen backend is not enabled for CLI.
-        The command aborts with error code 2.
-
-    """
-    result = clirunner.invoke(cli.gtpyc, ["--backend=nocli", str(simple_stencil.absolute())])
+def test_gen_unenabled_backend_choice(clirunner, nocli_backend, simple_stencil, tmp_path):
+    """Test the --backend option when an unenabled backend name is passed."""
+    result = clirunner.invoke(
+        cli.gtpyc,
+        [
+            "gen",
+            "--backend=nocli",
+            str(simple_stencil.absolute()),
+            "--output-path",
+            str(tmp_path / "test_gen_unenabled"),
+        ],
+    )
 
     assert result.exit_code == 2
     assert re.findall(r".*Backend is not CLI-enabled\..*", result.output)
 
 
-def test_enabled_backend_choice(clirunner, simple_stencil, backend_name, backend_enabled):
-    """
-    Test an enabled backend.
-
-    Actions:
-
-        .. code-block:: bash
-
-            $ gtpyc --backend <parametrized backend_name> <simple_stencil path>
-
-    Outcome:
-
-        The command writes the computation source to the current directory.
-    """
+def test_gen_enabled_backend_choice(
+    clirunner, simple_stencil, backend_name, backend_enabled, tmp_path
+):
+    """Test if cli runs successfully or fails depending on a backend being enabled."""
     result = clirunner.invoke(
-        cli.gtpyc, ["--backend", backend_name, str(simple_stencil.absolute())]
+        cli.gtpyc,
+        [
+            "gen",
+            "--backend",
+            backend_name,
+            str(simple_stencil.absolute()),
+            "--output-path",
+            str(tmp_path / "test_gen_unenabled"),
+        ],
+        catch_exceptions=False,
     )
 
-    assert result.exit_code == 0 if backend_enabled else 2
+    if backend_enabled:
+        assert result.exit_code == 0
+
+
+def test_gen_gtx86(clirunner, simple_stencil, tmp_path):
+    """Only generate the c++ files."""
+    output_path = tmp_path / "test_gen_gtx86"
+    result = clirunner.invoke(
+        cli.gtpyc,
+        ["gen", f"--output-path={output_path}", "--backend=gtx86", str(simple_stencil)],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    src_path = output_path / "init_1_src"
+    src_files = [path.name for path in src_path.iterdir()]
+    assert set(["computation.hpp", "computation.cpp"]) == set(src_files), result.output
+
+
+def test_backend_option_order(clirunner, simple_stencil, tmp_path):
+    """Make sure the order in which --backend and --option are passed does not matter."""
+    output_path1 = tmp_path / "backend_first"
+    # putting the option after the backend should definitely check against the chosen backend
+    assert (
+        clirunner.invoke(
+            cli.gtpyc,
+            [
+                "gen",
+                f"--output-path={output_path1}",
+                "--backend=numpy",
+                "-O",
+                "ignore_np_errstate=True",
+                str(simple_stencil),
+            ],
+            catch_exceptions=False,
+        ).exit_code
+        == 0
+    )
+    # putting the option before the backend should still check against the right backend
+    assert (
+        clirunner.invoke(
+            cli.gtpyc,
+            [
+                "gen",
+                f"--output-path={output_path1}",
+                "-O",
+                "ignore_np_errstate=True",
+                "--backend=numpy",
+                str(simple_stencil),
+            ],
+            catch_exceptions=False,
+        ).exit_code
+        == 0
+    )
+
+
+def test_write_computation_src(tmp_path, simple_stencil):
+    builder = cli.GTScriptBuilder(
+        simple_stencil, output_path=tmp_path, backend=backend.from_name("debug")
+    )
+    toplevel = "test_write_computation_src"
+    test_src = {
+        toplevel: {
+            "include": {"header.hpp": "#pragma once"},
+            "src": {"main.cpp": "#include <header.hpp>"},
+        }
+    }
+    builder.write_computation_src(tmp_path, test_src)
+    top = tmp_path / toplevel
+    inc = top / "include"
+    header = inc / "header.hpp"
+    src = top / "src"
+    main = src / "main.cpp"
+    assert top.exists() and top.is_dir()
+    assert inc.exists() and inc.is_dir()
+    assert src.exists() and src.is_dir()
+    assert header.exists() and header.read_text() == test_src[toplevel]["include"]["header.hpp"]
+    assert main.exists() and main.read_text() == test_src[toplevel]["src"]["main.cpp"]

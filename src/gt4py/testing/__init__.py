@@ -2,7 +2,7 @@
 #
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2020, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -14,5 +14,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from .input_strategies import field, global_name, parameter
-from .suites import StencilTestSuite
+__all__ = ["field", "global_name", "none", "parameter", "StencilTestSuite"]
+try:
+    from .input_strategies import field, global_name, none, parameter
+    from .suites import StencilTestSuite
+except ModuleNotFoundError as e:
+    if "pytest" in str(e) or "hypothesis" in str(e):
+        raise RuntimeError(
+            "Missing 'testing' extra dependencies. Reinstall GT4Py as 'gt4py[testing]'"
+        ) from e
+    else:
+        raise e
