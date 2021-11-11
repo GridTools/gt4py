@@ -57,8 +57,9 @@ class Tuple(Expr):
 
 
 class UnaryOperator(StrEnum):
-    PLUS = "plus"
-    MINUS = "minus"
+    UADD = "plus"
+    USUB = "minus"
+    NOT = "not_"
 
 
 class UnaryOp(Expr):
@@ -67,18 +68,44 @@ class UnaryOp(Expr):
 
 
 class BinaryOperator(StrEnum):
-    PLUS = "plus"
-    MINUS = "minus"
-    MULT = "mult"
-    DIV = "div"
-    MOD = "mod"
-    POW = "pow"
+    ADD = "plus"
+    SUB = "minus"
+    MULT = "multiplies"
+    DIV = "divides"
 
 
 class BinOp(Expr):
     op: BinaryOperator
     left: Expr
-    righ: Expr
+    right: Expr
+
+
+class CompareOperator(StrEnum):
+    GT = "greater"
+    LT = "less"
+    EQ = "eq"
+
+
+class Compare(Expr):
+    op: CompareOperator
+    left: Expr
+    right: Expr
+
+
+class BoolOperator(StrEnum):
+    AND = "and_"
+    OR = "or_"
+
+
+class BoolOp(Expr):
+    op: BoolOperator
+    left: Expr
+    right: Expr
+
+
+class Call(Expr):
+    func: Expr
+    args: list[Expr]
 
 
 class Stmt(LocatedNode):

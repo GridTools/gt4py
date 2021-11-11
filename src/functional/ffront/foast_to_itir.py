@@ -125,7 +125,34 @@ class FieldOperatorLowering(NodeTranslator):
         return iir.FunCall(fun=iir.SymRef(id="make_tuple"), args=[self.visit(i) for i in node.elts])
 
     def visit_UnaryOp(self, node: foast.UnaryOp) -> iir.FunCall:
+        zero_arg = [iir.IntLiteral(value=0)] if node.op is not foast.UnaryOperator.NOT else []
         return iir.FunCall(
             fun=iir.SymRef(id=node.op.value),
-            args=[iir.IntLiteral(value=0), self.visit(node.operand)],
+            args=[*zero_arg, self.visit(node.operand)],
+        )
+
+    def visit_BinOp(self, node: foast.BinOp) -> iir.FunCall:
+        return iir.FunCall(
+            fun=iir.SymRef(id=node.op.value), args=[self.visit(node.left), self.visit(node.right)]
+        )
+
+    def visit_BoolOp(self, node: foast.BoolOp) -> iir.FunCall:
+        return iir.FunCall(
+            fun=iir.SymRef(id=node.op.value), args=[self.visit(node.left), self.visit(node.right)]
+        )
+
+    def visit_Compare(self, node: foast.Compare) -> iir.FunCall:
+        return iir.FunCall(
+            fun=iir.SymRef(id=node.op.value), args=[self.visit(node.left), self.visit(node.right)]
+        )
+
+    def visit_Call(self, node: foast.Call) -> iir.FunCall:
+        new_fun = (
+            iir.SymRef(id=node.func.id)
+            if isinstance(node.func, foast.SymRef)
+            else self.visit(node.func)
+        )
+        return iir.FunCall(
+            fun=new_fun,
+            args=[self.visit(arg) for arg in node.args],
         )

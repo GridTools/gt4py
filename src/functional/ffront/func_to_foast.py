@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import ast
+import copy
 import inspect
 import textwrap
 from types import FunctionType
@@ -179,10 +180,108 @@ class FieldOperatorParser(ast.NodeVisitor):
         )
 
     def visit_UAdd(self, node: ast.UAdd) -> foast.UnaryOperator:
-        return foast.UnaryOperator.PLUS
+        return foast.UnaryOperator.UADD
 
     def visit_USub(self, node: ast.USub) -> foast.UnaryOperator:
-        return foast.UnaryOperator.MINUS
+        return foast.UnaryOperator.USUB
+
+    def visit_Not(self, node: ast.Not) -> foast.UnaryOperator:
+        return foast.UnaryOperator.NOT
+
+    def visit_BinOp(self, node: ast.BinOp) -> foast.BinOp:
+        new_op = None
+        try:
+            new_op = self.visit(node.op)
+        except FieldOperatorSyntaxError as err:
+            err.lineno = node.lineno
+            err.offset = node.col_offset
+            raise err
+        return foast.BinOp(
+            op=new_op,
+            left=self.visit(node.left),
+            right=self.visit(node.right),
+            location=self._getloc(node),
+        )
+
+    def visit_Add(self, node: ast.Add) -> foast.BinaryOperator:
+        return foast.BinaryOperator.ADD
+
+    def visit_Sub(self, node: ast.Sub) -> foast.BinaryOperator:
+        return foast.BinaryOperator.SUB
+
+    def visit_Mult(self, node: ast.Mult) -> foast.BinaryOperator:
+        return foast.BinaryOperator.MULT
+
+    def visit_Div(self, node: ast.Div) -> foast.BinaryOperator:
+        return foast.BinaryOperator.DIV
+
+    def visit_Pow(self, node: ast.Pow) -> None:
+        raise FieldOperatorSyntaxError(
+            msg="`**` operator not supported!",
+        )
+
+    def visit_Mod(self, node: ast.Mod) -> None:
+        raise FieldOperatorSyntaxError(
+            msg="`%` operator not supported!",
+        )
+
+    def visit_BoolOp(self, node: ast.BoolOp) -> foast.BoolOp:
+        if len(node.values) == 2:
+            return foast.BoolOp(
+                op=self.visit(node.op),
+                left=self.visit(node.values[0]),
+                right=self.visit(node.values[1]),
+                location=self._getloc(node),
+            )
+        smaller_node = copy.copy(node)
+        smaller_node.values = node.values[1:]
+        return foast.BoolOp(
+            op=self.visit(node.op),
+            left=self.visit(node.values[0]),
+            right=self.visit(smaller_node),
+            location=self._getloc(node),
+        )
+
+    def visit_And(self, node: ast.And) -> foast.BoolOperator:
+        return foast.BoolOperator.AND
+
+    def visit_Or(self, node: ast.Or) -> foast.BoolOperator:
+        return foast.BoolOperator.OR
+
+    def visit_Compare(self, node: ast.Compare) -> foast.Compare:
+        if len(node.comparators) == 1:
+            return foast.Compare(
+                op=self.visit(node.ops[0]),
+                left=self.visit(node.left),
+                right=self.visit(node.comparators[0]),
+                location=self._getloc(node),
+            )
+        smaller_node = copy.copy(node)
+        smaller_node.comparators = node.comparators[1:]
+        smaller_node.ops = node.ops[1:]
+        smaller_node.left = node.comparators[0]
+        return foast.Compare(
+            op=self.visit(node.ops[0]),
+            left=self.visit(node.left),
+            right=self.visit(smaller_node),
+            location=self._getloc(node),
+        )
+
+    def visit_Gt(self, node: ast.Gt) -> foast.CompareOperator:
+        return foast.CompareOperator.GT
+
+    def visit_Lt(self, node: ast.Lt) -> foast.CompareOperator:
+        return foast.CompareOperator.LT
+
+    def visit_Eq(self, node: ast.Eq) -> foast.CompareOperator:
+        return foast.CompareOperator.EQ
+
+    def visit_Call(self, node: ast.Call) -> foast.CompareOperator:
+        return foast.Call(
+            func=self.visit(node.func),
+            args=[self.visit(arg) for arg in node.args],
+            location=self._getloc(node),
+        )
 
     def generic_visit(self, node) -> None:
         raise FieldOperatorSyntaxError(
