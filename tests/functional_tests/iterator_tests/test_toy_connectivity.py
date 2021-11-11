@@ -135,7 +135,7 @@ def test_sum_edges_to_vertices_reduce(backend):
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
-    sum_edges_to_vertices_reduce[domain(named_range(Vertex, 0, 9))](
+    sum_edges_to_vertices_reduce[{Vertex: range(0, 9)}](
         inp,
         out=out,
         backend=backend,
@@ -156,7 +156,7 @@ def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(backend):
     out = np_as_located_field(Cell)(np.zeros([9]))
     ref = np.asarray(list(v2e_arr[c[0]][0] for c in c2e_arr))
 
-    first_vertex_neigh_of_first_edge_neigh_of_cells[domain(named_range(Cell, 0, 9))](
+    first_vertex_neigh_of_first_edge_neigh_of_cells[{Cell, range(0, 9)}](
         inp,
         out=out,
         backend=backend,
