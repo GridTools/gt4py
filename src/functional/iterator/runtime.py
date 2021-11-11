@@ -1,6 +1,7 @@
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
+from functional.iterator import builtins
 from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
 
 
@@ -72,6 +73,31 @@ class FundefDispatcher:
     def __init__(self, fun) -> None:
         self.fun = fun
         self.__name__ = fun.__name__
+
+    def __getitem__(self, domain):
+        def implicit_fencil(*args, out, **kwargs):
+            @fendef
+            def impl(out, *inps):
+                dom = domain
+                if isinstance(dom, Callable):
+                    # if domain is expressed as calls to builtin `domain()` we need to pass it lazily
+                    # as dispatching needs to happen inside of the fencil
+                    dom = dom()
+                if isinstance(dom, dict):
+                    # if passed as a dict, we need to convert back to builtins for interpretation by the backends
+                    dom = builtins.domain(
+                        *tuple(
+                            map(
+                                lambda x: builtins.named_range(x[0], x[1].start, x[1].stop),
+                                dom.items(),
+                            )
+                        )
+                    )
+                closure(dom, self, [out], [*inps])
+
+            impl(out, *args, **kwargs)
+
+        return implicit_fencil
 
     def __call__(self, *args):
         if type(self)._hook:
