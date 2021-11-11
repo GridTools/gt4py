@@ -69,6 +69,36 @@ def compute_pnabla(pp, S_M, sign, vol):
     return pnabla_M / deref(vol)
 
 
+@fundef
+def pnabla(pp, S_MXX, S_MYY, sign, vol):
+    return make_tuple(compute_pnabla(pp, S_MXX, sign, vol), compute_pnabla(pp, S_MYY, sign, vol))
+
+
+# @fundef
+# def compute_zavgS2(pp, S_M):
+#     zavg = 0.5 * (deref(shift(E2V, 0)(pp)) + deref(shift(E2V, 1)(pp)))
+#     # zavg = 0.5 * reduce(lambda a, b: a + b, 0)(shift(E2V)(pp))
+#     # zavg = 0.5 * library.sum()(shift(E2V)(pp))
+#     return deref(tuple_get(0, S_M)) * zavg, deref(tuple_get(1, S_M)) * zavg
+
+
+# @fundef
+# def compute_pnabla2(pp, S_M, sign, vol):
+#     zavgS = lift(compute_zavgS)(pp, S_M)
+#     # pnabla_M = reduce(lambda a, b, c: a + b * c, 0)(shift(V2E)(zavgS), sign)
+#     # pnabla_M = library.sum(lambda a, b: a * b)(shift(V2E)(zavgS), sign)
+#     pnabla_M = make_tuple(
+#         library.dot(shift(V2E)(tuple_get(0, zavgS)), sign),
+#         library.dot(shift(V2E)(tuple_get(1, zavgS)), sign),
+#     )
+#     return tuple_get(0, pnabla_M) / deref(vol), tuple_get(1, pnabla_M) / deref(vol)
+
+
+# @fundef
+# def pnabla2(pp, S_MXX, S_MYY, sign, vol):
+#     return compute_pnabla2(pp, make_tuple(S_MXX, S_MYY), sign, vol)
+
+
 @fendef
 def nabla(
     n_nodes,
@@ -80,18 +110,11 @@ def nabla(
     sign,
     vol,
 ):
-    # TODO replace by single stencil which returns tuple
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
-        compute_pnabla,
-        [out_MXX],
-        [pp, S_MXX, sign, vol],
-    )
-    closure(
-        domain(named_range(Vertex, 0, n_nodes)),
-        compute_pnabla,
-        [out_MYY],
-        [pp, S_MYY, sign, vol],
+        pnabla,
+        [out_MXX, out_MYY],
+        [pp, S_MXX, S_MYY, sign, vol],
     )
 
 
