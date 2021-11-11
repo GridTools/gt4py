@@ -313,7 +313,7 @@ def closure(domain, stencil, outputs, inputs):
 
 
 def _make_param_names(fun, args):
-    """Expand *args parameter with remaining args"""
+    """Expand *args parameter with remaining args."""
     args = [*args]
     param_names = []
     for p in inspect.signature(fun).parameters.values():

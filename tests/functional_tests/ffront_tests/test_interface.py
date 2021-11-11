@@ -25,18 +25,15 @@ from __future__ import annotations
 
 import pytest
 
-from functional.ffront.parsers import (
-    FieldOperatorLowering,
-    FieldOperatorParser,
-    FieldOperatorSyntaxError,
-)
-from functional.iterator.ir import FunCall, FunctionDefinition, Sym, SymRef
+from functional.ffront.foir_to_itir import FieldOperatorLowering
+from functional.ffront.func_to_foir import FieldOperatorParser, FieldOperatorSyntaxError
+from functional.iterator import ir as itir
 
 
-COPY_FUN_DEF = FunctionDefinition(
+COPY_FUN_DEF = itir.FunctionDefinition(
     id="copy_field",
-    params=[Sym(id="inp")],
-    expr=FunCall(fun=SymRef(id="deref"), args=[SymRef(id="inp")]),
+    params=[itir.Sym(id="inp")],
+    expr=itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="inp")]),
 )
 
 
@@ -56,7 +53,7 @@ def test_invalid_syntax_error_emtpy_return():
             rf"Empty return not allowed \(test_interface.py, line {lineno}\)"
         ),
     ):
-        _ = FieldOperatorParser.parse(wrong_syntax)
+        _ = FieldOperatorParser.apply(wrong_syntax)
 
 
 def test_invalid_syntax_no_return():
@@ -69,18 +66,7 @@ def test_invalid_syntax_no_return():
         FieldOperatorSyntaxError,
         match=r"Field operator must return a field expression on the last line!",
     ):
-        _ = FieldOperatorParser.parse(no_return)
-
-
-def test_invalid_syntax_unpacking():
-    """For now, only single target assigns are allowed."""
-
-    def invalid_unpacking(inp1, inp2):
-        tmp1, tmp2 = inp1, inp2  # noqa
-        return tmp1
-
-    with pytest.raises(FieldOperatorSyntaxError, match=r"Unpacking not allowed!"):
-        _ = FieldOperatorParser.parse(invalid_unpacking)
+        _ = FieldOperatorParser.apply(no_return)
 
 
 def test_invalid_assign_to_expr():
@@ -92,18 +78,42 @@ def test_invalid_assign_to_expr():
         return tmp
 
     with pytest.raises(FieldOperatorSyntaxError, match=r"Can only assign to names!"):
-        _ = FieldOperatorParser.parse(invalid_assign_to_expr)
+        _ = FieldOperatorParser.apply(invalid_assign_to_expr)
 
 
 def test_copy_lower():
     def copy_field(inp):
         return inp
 
-    # parsing
-    parsed = FieldOperatorParser.parse(copy_field)
-    lowered = FieldOperatorLowering.parse(parsed)
+    # ast_passes
+    parsed = FieldOperatorParser.apply(copy_field)
+    lowered = FieldOperatorLowering.apply(parsed)
     assert lowered == COPY_FUN_DEF
     assert lowered.expr == COPY_FUN_DEF.expr
+
+
+def test_syntax_unpacking():
+    """For now, only single target assigns are allowed."""
+
+    def unpacking(inp1, inp2):
+        tmp1, tmp2 = inp1, inp2  # noqa
+        return tmp1
+
+    parsed = FieldOperatorParser.apply(unpacking)
+    lowered = FieldOperatorLowering.apply(parsed)
+    assert lowered.expr == itir.FunCall(
+        fun=itir.SymRef(id="tuple_get"),
+        args=[
+            itir.FunCall(
+                fun=itir.SymRef(id="make_tuple"),
+                args=[
+                    itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="inp1")]),
+                    itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="inp2")]),
+                ],
+            ),
+            itir.IntLiteral(value=0),
+        ],
+    )
 
 
 def test_temp_assignment():
@@ -113,8 +123,8 @@ def test_temp_assignment():
         tmp2 = inp
         return tmp2
 
-    parsed = FieldOperatorParser.parse(copy_field)
-    lowered = FieldOperatorLowering.parse(parsed)
+    parsed = FieldOperatorParser.apply(copy_field)
+    lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered == COPY_FUN_DEF
     assert lowered.expr == COPY_FUN_DEF.expr

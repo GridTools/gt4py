@@ -24,7 +24,7 @@ import pydantic
 import pytest
 
 import eve.utils
-from eve.utils import XIterator
+from eve.utils import XIterable
 
 
 def test_getitem_():
@@ -259,11 +259,11 @@ def test_xiter():
     from eve.utils import xiter
 
     it = xiter(range(6))
-    assert isinstance(it, XIterator)
+    assert isinstance(it, XIterable)
     assert list(it) == [0, 1, 2, 3, 4, 5]
 
     it = xiter([0, 1, 2, 3, 4, 5])
-    assert isinstance(it, XIterator)
+    assert isinstance(it, XIterable)
     assert list(it) == [0, 1, 2, 3, 4, 5]
 
 
