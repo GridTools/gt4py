@@ -415,3 +415,25 @@ def test_bool_or():
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
         ],
     )
+
+
+def test_bool_chain():
+    def bool_chain(a, b, c):
+        return a and b and c
+
+    parsed = FieldOperatorParser.apply(bool_chain)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.expr == itir.FunCall(
+        fun=AND,
+        args=[
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
+            itir.FunCall(
+                fun=AND,
+                args=[
+                    itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
+                    itir.FunCall(fun=DEREF, args=[itir.SymRef(id="c")]),
+                ],
+            ),
+        ],
+    )
