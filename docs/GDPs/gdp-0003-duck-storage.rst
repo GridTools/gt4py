@@ -4,7 +4,7 @@ GDP 3 — A New Storage Implementation using Duck Typing
 
 :Author: Linus Groner <linus.groner@cscs.ch>
 :Author: Enrique G. Paredes <enrique.gonzalez@cscs.ch>
-:Status: Draft
+:Status: Declined
 :Type: Feature
 :Created: 08-05-2020
 :Discussion PR: https://github.com/GridTools/gt4py/pull/28
@@ -743,6 +743,15 @@ for the best performance for a given backend could always be infered under these
 Further, approaches to implementation of these interfaces depend on the availability of third party
 libraries implementing the operations on a lower level. However, this can not be assumed to be
 extensible for upcoming hardware.
+
+No storages
+^^^^^^^^^^^
+
+Alternatively, instead of providing custom storages, a small set of utilities to facilitate
+allocation of buffers with properties desireable for performance can be provided. All operations
+on the data that are not in stencils are then to be performed in third party frameworks.
+Meta information like dimensionality, origins etc. can still be provided by an interface similar
+to the `__gt_data_interface__` described in this GDP. 
 
 Copyright
 ---------
