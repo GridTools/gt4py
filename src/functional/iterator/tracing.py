@@ -238,8 +238,10 @@ def make_node(o):
     raise NotImplementedError(f"Cannot handle {o}")
 
 
-def trace_function_call(fun):
-    body = fun(*list(_s(param) for param in inspect.signature(fun).parameters.keys()))
+def trace_function_call(fun, *, args=None):
+    if args is None:
+        args = (_s(param) for param in inspect.signature(fun).parameters.keys())
+    body = fun(*list(args))
     return make_node(body) if body is not None else None
 
 
@@ -310,20 +312,40 @@ def closure(domain, stencil, outputs, inputs):
     )
 
 
-def trace(fun):
+def _make_param_names(fun, args):
+    """Expand *args parameter with remaining args."""
+    args = [*args]
+    param_names = []
+    for p in inspect.signature(fun).parameters.values():
+        if (
+            p.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+            or p.kind == inspect.Parameter.POSITIONAL_ONLY
+        ):
+            args.pop(0)
+            param_names.append(p.name)
+        elif p.kind == inspect.Parameter.VAR_POSITIONAL:
+            for i in range(len(args)):
+                param_names.append(f"_var{i}")
+        else:
+            raise RuntimeError("Illegal parameter kind")
+    return param_names
+
+
+def trace(fun, args):
     with Tracer() as _:
-        trace_function_call(fun)
+        param_names = _make_param_names(fun, args)
+        trace_function_call(fun, args=(_s(p) for p in param_names))
 
         fencil = FencilDefinition(
             id=fun.__name__,
-            params=list(Sym(id=param) for param in inspect.signature(fun).parameters.keys()),
+            params=list(Sym(id=param) for param in param_names),
             closures=Tracer.closures,
         )
         return Program(function_definitions=Tracer.fundefs, fencil_definitions=[fencil], setqs=[])
 
 
 def fendef_tracing(fun, *args, **kwargs):
-    prog = trace(fun)
+    prog = trace(fun, args=args)
     execute_program(prog, *args, **kwargs)
 
 
