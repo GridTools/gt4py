@@ -113,9 +113,7 @@ repos:
       docs/gtc/conf.py |
       src/gt4py/__gtscript__.py |
       src/gt4py/__init__.py |
-      src/gt4py/definitions.py |
       src/gt4py/gtscript.py |
-      src/gt4py/stencil_object.py |
       src/gt4py/analysis/__init__.py |
       src/gt4py/analysis/infos.py |
       src/gt4py/analysis/passes.py |
@@ -137,11 +135,6 @@ repos:
       src/gt4py/utils/base.py |
       src/gt4py/utils/attrib.py |
       src/gt4py/utils/meta.py |
-      src/gtc_unstructured/frontend/gtscript.py |
-      src/gtc_unstructured/frontend/gtscript_to_gtir.py |
-      src/gtc_unstructured/frontend/gtscript_ast.py |
-      src/gtc_unstructured/frontend/ast_node_matcher.py |
-      src/gtc_unstructured/frontend/frontend.py |
       tests/conftest.py |
       tests/_disabled/test_iir/iir_stencil_definitions.py |
       tests/_disabled/test_iir/test_code_generation.py |
@@ -160,7 +153,6 @@ repos:
       tests/test_unittest/test_dawn_backends.py |
       tests/test_unittest/test_gtscript_frontend.py |
       tests/test_unittest/test_storage.py |
-      tests/gtc_unstructured_tests/.* |
       )$
 
 - repo: https://github.com/pre-commit/mirrors-mypy
@@ -183,10 +175,7 @@ repos:
       src/gt4py/frontend/gtscript_frontend.py |
       src/gt4py/ir/nodes.py |
       src/gt4py/ir/utils.py |
-      src/gt4py/stencil_object.py |
       src/gt4py/utils/meta.py |
-      src/gtc_unstructured/irs/nir_to_usid.py |
-      src/gtc_unstructured/irs/nir_passes/merge_neighbor_loops.py |
       tests/definitions.py |
       tests/eve_tests/definitions.py |
       tests/test_integration/stencil_definitions.py |
@@ -202,5 +191,4 @@ repos:
       tests/test_unittest/test_gtc/test_gtir_upcaster.py |
       tests/test_unittest/test_gtc/test_gtir_to_oir.py |
       tests/test_unittest/test_gtc/test_passes/test_legacy_extents.py |
-      tests/gtc_unstructured_tests/.* |
       )$
