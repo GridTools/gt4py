@@ -82,7 +82,7 @@ class FundefDispatcher:
                 if isinstance(dom, Callable):
                     # if domain is expressed as calls to builtin `domain()` we need to pass it lazily
                     # as dispatching needs to happen inside of the fencil
-                    dom = dom
+                    dom = dom()
                 if isinstance(dom, dict):
                     # if passed as a dict, we need to convert back to builtins for interpretation by the backends
                     dom = builtins.domain(
@@ -93,7 +93,6 @@ class FundefDispatcher:
                             )
                         )
                     )
-                # TODO support for more than one inp in tracing
                 closure(dom, self, [out], [*inps])
 
             impl(out, *args, **kwargs)
