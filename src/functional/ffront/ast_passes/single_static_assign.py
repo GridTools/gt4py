@@ -32,7 +32,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     Function ``foo()`` in the following example keeps overwriting local variable ``a``
 
     >>> import ast
-    >>> from functional.ffront.func_to_foir import get_ast_from_func
+    >>> from functional.ffront.func_to_foast import get_ast_from_func
 
     >>> def foo():
     ...     a = 1
