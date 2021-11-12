@@ -59,7 +59,7 @@ class SingleAssignTargetPass(NodeYielder):
     Example
     -------
     >>> import ast
-    >>> from functional.ffront.func_to_foir import get_ast_from_func
+    >>> from functional.ffront.func_to_foast import get_ast_from_func
     >>>
     >>> def foo():
     ...     a = b = 1
@@ -96,7 +96,7 @@ class UnpackedAssignPass(NodeYielder):
     Example
     -------
     >>> import ast
-    >>> from functional.ffront.func_to_foir import get_ast_from_func
+    >>> from functional.ffront.func_to_foast import get_ast_from_func
 
     >>> def foo():
     ...     a0 = 1

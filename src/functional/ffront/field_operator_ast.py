@@ -20,32 +20,27 @@ import re
 
 import eve
 from eve import Node
-from eve.type_definitions import SymbolRef
+from eve.type_definitions import SourceLocation, StrEnum, SymbolRef
+
+
+class LocatedNode(Node):
+    location: SourceLocation
 
 
 class SymbolName(eve.traits.SymbolName):
     regex = re.compile(r"^[a-zA-Z_][\w$]*$")
 
 
-class Sym(Node):
+class Sym(LocatedNode):
     id: SymbolName  # noqa: A003
 
 
-class Expr(Node):
+class Expr(LocatedNode):
     ...
-
-
-class SymExpr(Expr):
-    id: SymbolName  # noqa: A003
-    expr: Expr
 
 
 class SymRef(Expr):
     id: SymbolRef  # noqa: A003
-
-
-class Return(Expr):
-    value: Expr
 
 
 class Name(Expr):
@@ -53,7 +48,7 @@ class Name(Expr):
 
 
 class Subscript(Expr):
-    expr: Expr
+    value: Expr
     index: int
 
 
@@ -61,7 +56,63 @@ class Tuple(Expr):
     elts: list[Expr]
 
 
-class FieldOperator(Node):
+class UnaryOperator(StrEnum):
+    UADD = "plus"
+    USUB = "minus"
+    NOT = "not_"
+
+
+class UnaryOp(Expr):
+    op: UnaryOperator
+    operand: Expr
+
+
+class BinaryOperator(StrEnum):
+    ADD = "plus"
+    SUB = "minus"
+    MULT = "multiplies"
+    DIV = "divides"
+    BIT_AND = "and_"
+    BIT_OR = "or_"
+
+
+class BinOp(Expr):
+    op: BinaryOperator
+    left: Expr
+    right: Expr
+
+
+class CompareOperator(StrEnum):
+    GT = "greater"
+    LT = "less"
+    EQ = "eq"
+
+
+class Compare(Expr):
+    op: CompareOperator
+    left: Expr
+    right: Expr
+
+
+class Call(Expr):
+    func: Name
+    args: list[Expr]
+
+
+class Stmt(LocatedNode):
+    ...
+
+
+class Assign(Stmt):
+    target: Name
+    value: Expr
+
+
+class Return(Stmt):
+    value: Expr
+
+
+class FieldOperator(LocatedNode):
     id: SymbolName  # noqa: A003
     params: list[Sym]
-    body: list[Expr]
+    body: list[Stmt]
