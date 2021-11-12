@@ -32,13 +32,13 @@ from functional.ffront.ast_passes import (
 # TODO (ricoh): SourceLocation.source <- filename
 class FieldOperatorParser(ast.NodeVisitor):
     """
-    Parse field operator function definition from source code into FOIR.
+    Parse field operator function definition from source code into FOAST.
 
     Catch any Field Operator specific syntax errors and typing problems.
 
     Example
     -------
-    Parse a function into a Field Operator Internal Representation (FOIR), which can
+    Parse a function into a Field Operator AST (FOAST), which can
     be lowered into Iterator IR (ITIR)
 
     >>> def fieldop(inp):
@@ -126,7 +126,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         # TODO (ricoh): type checking
         #
         # if the annotation does not match the inferred type of value
-        # then raise raise an exception
+        # then raise an exception
         if not isinstance(node.target, ast.Name):
             raise FieldOperatorSyntaxError(
                 "Can only assign to names!",
@@ -225,28 +225,25 @@ class FieldOperatorParser(ast.NodeVisitor):
             msg="`%` operator not supported!",
         )
 
-    def visit_BoolOp(self, node: ast.BoolOp) -> foast.BoolOp:
-        if len(node.values) == 2:
-            return foast.BoolOp(
-                op=self.visit(node.op),
-                left=self.visit(node.values[0]),
-                right=self.visit(node.values[1]),
-                location=self._getloc(node),
-            )
-        smaller_node = copy.copy(node)
-        smaller_node.values = node.values[1:]
-        return foast.BoolOp(
-            op=self.visit(node.op),
-            left=self.visit(node.values[0]),
-            right=self.visit(smaller_node),
-            location=self._getloc(node),
-        )
+    def visit_BitAnd(self, node: ast.BitAnd) -> foast.BinaryOperator:
+        return foast.BinaryOperator.BIT_AND
 
-    def visit_And(self, node: ast.And) -> foast.BoolOperator:
-        return foast.BoolOperator.AND
+    def visit_BitOr(self, node: ast.BitOr) -> foast.BinaryOperator:
+        return foast.BinaryOperator.BIT_OR
 
-    def visit_Or(self, node: ast.Or) -> foast.BoolOperator:
-        return foast.BoolOperator.OR
+    def visit_BoolOp(self, node: ast.BoolOp) -> None:
+        try:
+            self.visit(node.op)
+        except FieldOperatorSyntaxError as err:
+            err.lineno = node.lineno
+            err.offset = node.col_offset
+            raise err
+
+    def visit_And(self, node: ast.And) -> None:
+        raise FieldOperatorSyntaxError(msg="`and` operator not allowed!")
+
+    def visit_Or(self, node: ast.Or) -> None:
+        raise FieldOperatorSyntaxError(msg="`or` operator not allowed!")
 
     def visit_Compare(self, node: ast.Compare) -> foast.Compare:
         if len(node.comparators) == 1:
@@ -277,8 +274,16 @@ class FieldOperatorParser(ast.NodeVisitor):
         return foast.CompareOperator.EQ
 
     def visit_Call(self, node: ast.Call) -> foast.CompareOperator:
+        new_func = self.visit(node.func)
+        if not isinstance(new_func, foast.Name):
+            raise FieldOperatorSyntaxError(
+                msg="functions can only be called directly!",
+                lineno=node.func.lineno,
+                offset=node.func.col_offset,
+            )
+
         return foast.Call(
-            func=self.visit(node.func),
+            func=new_func,
             args=[self.visit(arg) for arg in node.args],
             location=self._getloc(node),
         )

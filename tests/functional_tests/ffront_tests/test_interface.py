@@ -193,6 +193,20 @@ def test_call():
     )
 
 
+def test_call_expression():
+    def get_identity():
+        return lambda x: x
+
+    def call_expr(inp):
+        return get_identity()(inp)
+
+    with pytest.raises(
+        FieldOperatorSyntaxError,
+        match=r"functions can only be called directly!",
+    ):
+        _ = FieldOperatorParser.apply(call_expr)
+
+
 def test_unary_ops():
     def unary(inp):
         tmp = +inp
@@ -286,6 +300,38 @@ def test_binary_div():
 
     assert lowered.expr == itir.FunCall(
         fun=DIVIDES,
+        args=[
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
+        ],
+    )
+
+
+def test_binary_and():
+    def bit_and(a, b):
+        return a & b
+
+    parsed = FieldOperatorParser.apply(bit_and)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.expr == itir.FunCall(
+        fun=AND,
+        args=[
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
+        ],
+    )
+
+
+def test_binary_or():
+    def bit_or(a, b):
+        return a | b
+
+    parsed = FieldOperatorParser.apply(bit_or)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.expr == itir.FunCall(
+        fun=OR,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
@@ -389,51 +435,19 @@ def test_bool_and():
     def bool_and(a, b):
         return a and b
 
-    parsed = FieldOperatorParser.apply(bool_and)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    assert lowered.expr == itir.FunCall(
-        fun=AND,
-        args=[
-            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
-            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
-        ],
-    )
+    with pytest.raises(
+        FieldOperatorSyntaxError,
+        match=(r"`and` operator not allowed!"),
+    ):
+        _ = FieldOperatorParser.apply(bool_and)
 
 
 def test_bool_or():
     def bool_or(a, b):
         return a or b
 
-    parsed = FieldOperatorParser.apply(bool_or)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    assert lowered.expr == itir.FunCall(
-        fun=OR,
-        args=[
-            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
-            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
-        ],
-    )
-
-
-def test_bool_chain():
-    def bool_chain(a, b, c):
-        return a and b and c
-
-    parsed = FieldOperatorParser.apply(bool_chain)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    assert lowered.expr == itir.FunCall(
-        fun=AND,
-        args=[
-            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
-            itir.FunCall(
-                fun=AND,
-                args=[
-                    itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
-                    itir.FunCall(fun=DEREF, args=[itir.SymRef(id="c")]),
-                ],
-            ),
-        ],
-    )
+    with pytest.raises(
+        FieldOperatorSyntaxError,
+        match=(r"`or` operator not allowed!"),
+    ):
+        _ = FieldOperatorParser.apply(bool_or)

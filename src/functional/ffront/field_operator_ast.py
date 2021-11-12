@@ -72,6 +72,8 @@ class BinaryOperator(StrEnum):
     SUB = "minus"
     MULT = "multiplies"
     DIV = "divides"
+    BIT_AND = "and_"
+    BIT_OR = "or_"
 
 
 class BinOp(Expr):
@@ -92,19 +94,8 @@ class Compare(Expr):
     right: Expr
 
 
-class BoolOperator(StrEnum):
-    AND = "and_"
-    OR = "or_"
-
-
-class BoolOp(Expr):
-    op: BoolOperator
-    left: Expr
-    right: Expr
-
-
 class Call(Expr):
-    func: Expr
+    func: Name
     args: list[Expr]
 
 
