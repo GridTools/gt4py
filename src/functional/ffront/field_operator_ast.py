@@ -31,20 +31,20 @@ class SymbolName(eve.traits.SymbolName):
     regex = re.compile(r"^[a-zA-Z_][\w$]*$")
 
 
-class Sym(LocatedNode):
+class Symbol(LocatedNode):
     id: SymbolName  # noqa: A003
+
+
+class Field(Symbol):
+    ...
 
 
 class Expr(LocatedNode):
     ...
 
 
-class SymRef(Expr):
-    id: SymbolRef  # noqa: A003
-
-
 class Name(Expr):
-    id: SymbolName  # noqa: A003
+    id: SymbolRef  # noqa: A003
 
 
 class Subscript(Expr):
@@ -114,5 +114,5 @@ class Return(Stmt):
 
 class FieldOperator(LocatedNode):
     id: SymbolName  # noqa: A003
-    params: list[Sym]
+    params: list[Symbol]
     body: list[Stmt]
