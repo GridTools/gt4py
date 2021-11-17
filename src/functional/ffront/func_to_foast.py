@@ -44,7 +44,11 @@ class FieldOperatorParser(ast.NodeVisitor):
 
     >>> foast_tree = FieldOperatorParser.apply(fieldop)
     >>> foast_tree  # doctest: +ELLIPSIS
-    FieldOperator(location=..., id='fieldop', params=[Field(location=..., id='inp')], body=[Return(location=..., value=Name(location=..., id='inp'))])
+    FieldOperator(..., id='fieldop', ...)
+    >>> foast_tree.params  # doctest: +ELLIPSIS
+    [Field(..., id='inp')]
+    >>> foast_tree.body  # doctest: +ELLIPSIS
+    [Return(..., value=Name(..., id='inp'))]
 
 
     If a syntax error is encountered, it will point to the location in the source code.
@@ -60,7 +64,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     ...     print(err.filename)  # doctest: +ELLIPSIS
     ...     print(err.lineno)
     ...     print(err.offset)
-    /...<doctest src.functional.ffront.func_to_foast.FieldOperatorParser[3]>
+    /...<doctest src.functional.ffront.func_to_foast.FieldOperatorParser[...]>
     2
     4
     """

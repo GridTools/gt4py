@@ -96,7 +96,7 @@ class FieldOperatorLowering(NodeTranslator):
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
-        symtable: dict[str, foast.Symbol] = {}
+        symtable = node.symtable_
         params = self.visit(node.params, symtable=symtable)
         return itir.FunctionDefinition(
             id=node.id,
@@ -118,7 +118,6 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_Field(
         self, node: foast.Field, *, symtable: dict[str, foast.Symbol], **kwargs
     ) -> itir.Sym:
-        symtable[node.id] = node
         return itir.Sym(id=node.id)
 
     def visit_Name(

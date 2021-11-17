@@ -20,6 +20,7 @@ import re
 
 import eve
 from eve import Node
+from eve.traits import SymbolTableTrait
 from eve.type_definitions import SourceLocation, StrEnum, SymbolRef
 
 
@@ -112,7 +113,7 @@ class Return(Stmt):
     value: Expr
 
 
-class FieldOperator(LocatedNode):
+class FieldOperator(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
-    params: list[Symbol]
+    params: list[Field]
     body: list[Stmt]
