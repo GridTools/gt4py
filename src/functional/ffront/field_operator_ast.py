@@ -36,16 +36,50 @@ class Symbol(LocatedNode):
     id: SymbolName  # noqa: A003
 
 
-class Field(Symbol):
-    ...
-
-
 class Expr(LocatedNode):
     ...
 
 
 class Name(Expr):
     id: SymbolRef  # noqa: A003
+
+
+class Field(Symbol):
+    ...
+    # dimensions: list[Name]  # noqa
+    # dtype: Name  # noqa
+
+
+class Function(Symbol):
+    # proposal:
+    #
+    # signature sub-symbols must be named specifically, example:
+    # Function( # noqa
+    #     id="my_field_op" # noqa
+    #     returns=[ # noqa
+    #        Field(id="my_field_op$return#0, ...), # noqa
+    #        Field(id="my_field_op$return#1, ...), # noqa
+    #     ], # noqa
+    #     params=[ # noqa
+    #         Field(id=my_field_op$param#inp1, ...), # noqa
+    #         Field(id=my_field_op$param#inp2, ...), # noqa
+    #         ..., # noqa
+    #     ], # noqa
+    # ) # noqa
+    # That should make it possible to type check what is passed in and out
+    returns: list[Field]
+    params: list[Field]
+
+
+class TupleSym(Symbol):
+    # Similar naming would apply to the element symbols
+    # as for the Function signature symbols
+    elts: list[Symbol]
+
+
+class Constant(Expr):
+    value: str
+    dtype: Name
 
 
 class Subscript(Expr):
@@ -117,3 +151,4 @@ class FieldOperator(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[Field]
     body: list[Stmt]
+    # externals: list[Symbol]  # noqa

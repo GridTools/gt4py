@@ -119,7 +119,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                 offset=target.col_offset,
             )
         return foast.Assign(
-            target=foast.Name(id=target.id, location=self._getloc(target)),
+            target=foast.Field(id=target.id, location=self._getloc(target)),
             value=self.visit(node.value),
             location=self._getloc(node),
         )
