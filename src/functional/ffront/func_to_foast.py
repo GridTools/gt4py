@@ -28,8 +28,6 @@ from functional.ffront.ast_passes import (
 )
 
 
-# TODO (ricoh): pass on source locations
-# TODO (ricoh): SourceLocation.source <- filename
 class FieldOperatorParser(ast.NodeVisitor):
     """
     Parse field operator function definition from source code into FOAST.
@@ -46,7 +44,11 @@ class FieldOperatorParser(ast.NodeVisitor):
 
     >>> foast_tree = FieldOperatorParser.apply(fieldop)
     >>> foast_tree  # doctest: +ELLIPSIS
-    FieldOperator(location=..., id='fieldop', params=[Sym(location=..., id='inp')], body=[Return(location=..., value=Name(location=..., id='inp'))])
+    FieldOperator(..., id='fieldop', ...)
+    >>> foast_tree.params  # doctest: +ELLIPSIS
+    [Field(..., id='inp')]
+    >>> foast_tree.body  # doctest: +ELLIPSIS
+    [Return(..., value=Name(..., id='inp'))]
 
 
     If a syntax error is encountered, it will point to the location in the source code.
@@ -62,7 +64,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     ...     print(err.filename)  # doctest: +ELLIPSIS
     ...     print(err.lineno)
     ...     print(err.offset)
-    /...<doctest src.functional.ffront.func_to_foast.FieldOperatorParser[3]>
+    /...<doctest src.functional.ffront.func_to_foast.FieldOperatorParser[...]>
     2
     4
     """
@@ -91,7 +93,7 @@ class FieldOperatorParser(ast.NodeVisitor):
 
         return result
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> foast.FieldOperator:
+    def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
         return foast.FieldOperator(
             id=node.name,
             params=self.visit(node.args),
@@ -99,10 +101,10 @@ class FieldOperatorParser(ast.NodeVisitor):
             location=self._getloc(node),
         )
 
-    def visit_arguments(self, node: ast.arguments) -> list[foast.Sym]:
-        return [foast.Sym(id=arg.arg, location=self._getloc(arg)) for arg in node.args]
+    def visit_arguments(self, node: ast.arguments) -> list[foast.Field]:
+        return [foast.Field(id=arg.arg, location=self._getloc(arg)) for arg in node.args]
 
-    def visit_Assign(self, node: ast.Assign) -> foast.Assign:
+    def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # can there be more than one element?
         if isinstance(target, ast.Tuple):
             raise FieldOperatorSyntaxError(
@@ -117,12 +119,12 @@ class FieldOperatorParser(ast.NodeVisitor):
                 offset=target.col_offset,
             )
         return foast.Assign(
-            target=foast.Name(id=target.id, location=self._getloc(target)),
+            target=foast.Field(id=target.id, location=self._getloc(target)),
             value=self.visit(node.value),
             location=self._getloc(node),
         )
 
-    def visit_AnnAssign(self, node: ast.AnnAssign) -> foast.Assign:
+    def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
         # TODO (ricoh): type checking
         #
         # if the annotation does not match the inferred type of value
@@ -139,7 +141,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             location=self._getloc(node),
         )
 
-    def visit_Subscript(self, node: ast.Subscript) -> foast.Subscript:
+    def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.Subscript:
         if not isinstance(node.slice, ast.Constant):
             raise FieldOperatorSyntaxError(
                 """Subscript slicing not allowed!""",
@@ -150,12 +152,12 @@ class FieldOperatorParser(ast.NodeVisitor):
             value=self.visit(node.value), index=node.slice.value, location=self._getloc(node)
         )
 
-    def visit_Tuple(self, node: ast.Tuple) -> foast.Tuple:
+    def visit_Tuple(self, node: ast.Tuple, **kwargs) -> foast.Tuple:
         return foast.Tuple(
             elts=[self.visit(item) for item in node.elts], location=self._getloc(node)
         )
 
-    def visit_Return(self, node: ast.Return) -> foast.Return:
+    def visit_Return(self, node: ast.Return, **kwargs) -> foast.Return:
         if not node.value:
             raise FieldOperatorSyntaxError(
                 "Empty return not allowed", lineno=node.lineno, offset=node.col_offset
@@ -171,24 +173,24 @@ class FieldOperatorParser(ast.NodeVisitor):
             )
         return [self.visit(node) for node in nodes]
 
-    def visit_Name(self, node: ast.Name) -> foast.Name:
+    def visit_Name(self, node: ast.Name, **kwargs) -> foast.Name:
         return foast.Name(id=node.id, location=self._getloc(node))
 
-    def visit_UnaryOp(self, node: ast.UnaryOp) -> foast.UnaryOp:
+    def visit_UnaryOp(self, node: ast.UnaryOp, **kwargs) -> foast.UnaryOp:
         return foast.UnaryOp(
             op=self.visit(node.op), operand=self.visit(node.operand), location=self._getloc(node)
         )
 
-    def visit_UAdd(self, node: ast.UAdd) -> foast.UnaryOperator:
+    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> foast.UnaryOperator:
         return foast.UnaryOperator.UADD
 
-    def visit_USub(self, node: ast.USub) -> foast.UnaryOperator:
+    def visit_USub(self, node: ast.USub, **kwargs) -> foast.UnaryOperator:
         return foast.UnaryOperator.USUB
 
-    def visit_Not(self, node: ast.Not) -> foast.UnaryOperator:
+    def visit_Not(self, node: ast.Not, **kwargs) -> foast.UnaryOperator:
         return foast.UnaryOperator.NOT
 
-    def visit_BinOp(self, node: ast.BinOp) -> foast.BinOp:
+    def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
         new_op = None
         try:
             new_op = self.visit(node.op)
@@ -203,35 +205,35 @@ class FieldOperatorParser(ast.NodeVisitor):
             location=self._getloc(node),
         )
 
-    def visit_Add(self, node: ast.Add) -> foast.BinaryOperator:
+    def visit_Add(self, node: ast.Add, **kwargs) -> foast.BinaryOperator:
         return foast.BinaryOperator.ADD
 
-    def visit_Sub(self, node: ast.Sub) -> foast.BinaryOperator:
+    def visit_Sub(self, node: ast.Sub, **kwargs) -> foast.BinaryOperator:
         return foast.BinaryOperator.SUB
 
-    def visit_Mult(self, node: ast.Mult) -> foast.BinaryOperator:
+    def visit_Mult(self, node: ast.Mult, **kwargs) -> foast.BinaryOperator:
         return foast.BinaryOperator.MULT
 
-    def visit_Div(self, node: ast.Div) -> foast.BinaryOperator:
+    def visit_Div(self, node: ast.Div, **kwargs) -> foast.BinaryOperator:
         return foast.BinaryOperator.DIV
 
-    def visit_Pow(self, node: ast.Pow) -> None:
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> None:
         raise FieldOperatorSyntaxError(
             msg="`**` operator not supported!",
         )
 
-    def visit_Mod(self, node: ast.Mod) -> None:
+    def visit_Mod(self, node: ast.Mod, **kwargs) -> None:
         raise FieldOperatorSyntaxError(
             msg="`%` operator not supported!",
         )
 
-    def visit_BitAnd(self, node: ast.BitAnd) -> foast.BinaryOperator:
+    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> foast.BinaryOperator:
         return foast.BinaryOperator.BIT_AND
 
-    def visit_BitOr(self, node: ast.BitOr) -> foast.BinaryOperator:
+    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> foast.BinaryOperator:
         return foast.BinaryOperator.BIT_OR
 
-    def visit_BoolOp(self, node: ast.BoolOp) -> None:
+    def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
         try:
             self.visit(node.op)
         except FieldOperatorSyntaxError as err:
@@ -239,13 +241,13 @@ class FieldOperatorParser(ast.NodeVisitor):
             err.offset = node.col_offset
             raise err
 
-    def visit_And(self, node: ast.And) -> None:
+    def visit_And(self, node: ast.And, **kwargs) -> None:
         raise FieldOperatorSyntaxError(msg="`and` operator not allowed!")
 
-    def visit_Or(self, node: ast.Or) -> None:
+    def visit_Or(self, node: ast.Or, **kwargs) -> None:
         raise FieldOperatorSyntaxError(msg="`or` operator not allowed!")
 
-    def visit_Compare(self, node: ast.Compare) -> foast.Compare:
+    def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
         if len(node.comparators) == 1:
             return foast.Compare(
                 op=self.visit(node.ops[0]),
@@ -264,16 +266,16 @@ class FieldOperatorParser(ast.NodeVisitor):
             location=self._getloc(node),
         )
 
-    def visit_Gt(self, node: ast.Gt) -> foast.CompareOperator:
+    def visit_Gt(self, node: ast.Gt, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.GT
 
-    def visit_Lt(self, node: ast.Lt) -> foast.CompareOperator:
+    def visit_Lt(self, node: ast.Lt, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.LT
 
-    def visit_Eq(self, node: ast.Eq) -> foast.CompareOperator:
+    def visit_Eq(self, node: ast.Eq, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.EQ
 
-    def visit_Call(self, node: ast.Call) -> foast.CompareOperator:
+    def visit_Call(self, node: ast.Call, **kwargs) -> foast.CompareOperator:
         new_func = self.visit(node.func)
         if not isinstance(new_func, foast.Name):
             raise FieldOperatorSyntaxError(

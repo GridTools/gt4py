@@ -35,7 +35,7 @@ class AssignResolver(NodeTranslator):
     >>>
     >>> fieldop_foast_expr = AssignResolver.apply(FieldOperatorParser.apply(fieldop).body)
     >>> fieldop_foast_expr  # doctest: +ELLIPSIS
-    Return(location=..., value=SymRef(location=..., id='inp'))
+    Return(location=..., value=Name(location=..., id='inp'))
     """
 
     @classmethod
@@ -67,7 +67,7 @@ class AssignResolver(NodeTranslator):
         names = names or {}
         if node.id in names:
             return names[node.id]
-        return foast.SymRef(id=node.id, location=node.location)
+        return node
 
 
 class FieldOperatorLowering(NodeTranslator):
@@ -95,64 +95,76 @@ class FieldOperatorLowering(NodeTranslator):
     def apply(cls, node: foast.FieldOperator) -> itir.FunctionDefinition:
         return cls().visit(node)
 
-    def visit_FieldOperator(self, node: foast.FieldOperator) -> itir.FunctionDefinition:
-        params = self.visit(node.params)
+    def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
+        symtable = node.symtable_
+        params = self.visit(node.params, symtable=symtable)
         return itir.FunctionDefinition(
-            id=node.id, params=params, expr=self.body_visit(node.body, params=params)
+            id=node.id,
+            params=params,
+            expr=self.body_visit(node.body, params=params, symtable=symtable),
         )
 
     def body_visit(
-        self, exprs: List[foast.Expr], params: Optional[List[itir.Sym]] = None
+        self,
+        exprs: List[foast.Expr],
+        params: Optional[List[itir.Sym]] = None,
+        **kwargs,
     ) -> itir.Expr:
-        return self.visit(AssignResolver.apply(exprs))
+        return self.visit(AssignResolver.apply(exprs), **kwargs)
 
-    def visit_Return(self, node: foast.Return) -> itir.Expr:
-        return self.visit(node.value)
+    def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:
+        return self.visit(node.value, **kwargs)
 
-    def visit_Sym(self, node: foast.Sym) -> itir.Sym:
+    def visit_Field(
+        self, node: foast.Field, *, symtable: dict[str, foast.Symbol], **kwargs
+    ) -> itir.Sym:
         return itir.Sym(id=node.id)
 
-    def visit_SymRef(self, node: foast.SymRef) -> itir.FunCall:
-        return itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id=node.id)])
-
-    def visit_Name(self, node: foast.Name) -> itir.SymRef:
+    def visit_Name(
+        self, node: foast.Name, *, symtable: dict[str, foast.Symbol], **kwargs
+    ) -> itir.SymRef:
+        if node.id in symtable:
+            if isinstance(symtable[node.id], foast.Field):
+                return itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id=node.id)])
         return itir.SymRef(id=node.id)
 
-    def visit_Subscript(self, node: foast.Subscript) -> itir.FunCall:
+    def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
         return itir.FunCall(
             fun=itir.SymRef(id="tuple_get"),
-            args=[self.visit(node.value), itir.IntLiteral(value=node.index)],
+            args=[self.visit(node.value, **kwargs), itir.IntLiteral(value=node.index)],
         )
 
-    def visit_Tuple(self, node: foast.Tuple) -> itir.FunCall:
+    def visit_Tuple(self, node: foast.Tuple, **kwargs) -> itir.FunCall:
         return itir.FunCall(
-            fun=itir.SymRef(id="make_tuple"), args=[self.visit(i) for i in node.elts]
+            fun=itir.SymRef(id="make_tuple"), args=[self.visit(i, **kwargs) for i in node.elts]
         )
 
-    def visit_UnaryOp(self, node: foast.UnaryOp) -> itir.FunCall:
+    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         zero_arg = [itir.IntLiteral(value=0)] if node.op is not foast.UnaryOperator.NOT else []
         return itir.FunCall(
             fun=itir.SymRef(id=node.op.value),
-            args=[*zero_arg, self.visit(node.operand)],
+            args=[*zero_arg, self.visit(node.operand, **kwargs)],
         )
 
-    def visit_BinOp(self, node: foast.BinOp) -> itir.FunCall:
+    def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
         return itir.FunCall(
-            fun=itir.SymRef(id=node.op.value), args=[self.visit(node.left), self.visit(node.right)]
+            fun=itir.SymRef(id=node.op.value),
+            args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
 
-    def visit_Compare(self, node: foast.Compare) -> itir.FunCall:
+    def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
         return itir.FunCall(
-            fun=itir.SymRef(id=node.op.value), args=[self.visit(node.left), self.visit(node.right)]
+            fun=itir.SymRef(id=node.op.value),
+            args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
 
-    def visit_Call(self, node: foast.Call) -> itir.FunCall:
+    def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         new_fun = (
             itir.SymRef(id=node.func.id)
-            if isinstance(node.func, foast.SymRef)
-            else self.visit(node.func)
+            if isinstance(node.func, foast.Name)
+            else self.visit(node.func, **kwargs)
         )
         return itir.FunCall(
             fun=new_fun,
-            args=[self.visit(arg) for arg in node.args],
+            args=[self.visit(arg, **kwargs) for arg in node.args],
         )
