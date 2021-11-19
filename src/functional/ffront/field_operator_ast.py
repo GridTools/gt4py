@@ -19,8 +19,11 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
+import types
+from typing import Any, Optional
 
+import numpy as np
+import numpy.typing as npt
 
 import eve
 from eve import Node
@@ -40,14 +43,51 @@ class ScalarKind(IntEnum):
     FLOAT32 = 1032
     FLOAT64 = 1064
 
+    @staticmethod
+    def from_numpy(value: npt.DTypeLike) -> ScalarKind:
+        try:
+            dt = np.dtype(value)
+            if dt.shape == () and dt.fields is None:
+                return ScalarKind.__DTYPE_TO_KIND[dt.base.type]
+
+            raise common.GTValueError(f"Non-trivial dtypes like '{value}' are not yet supported")
+
+        except TypeError as err:
+            raise common.GTTypeError(f"Invalid type definition ({value})") from err
+
+
+ScalarKind.__DTYPE_TO_KIND = types.MappingProxyType(
+    {
+        np.bool_: ScalarKind.BOOL,
+        np.int32: ScalarKind.INT32,
+        np.int64: ScalarKind.INT64,
+        np.float32: ScalarKind.FLOAT32,
+        np.float64: ScalarKind.FLOAT64,
+    }
+)
+
 
 class Type(Node):
-    ...
+    @staticmethod
+    def from_python(value: Any) -> Type:
+        match value:
+            case bool(), int(), float(), np.generic():
+                return Type.from_python(type(value))
+            case type() as t if issubclass(t, (bool, int, float, np.generic)):
+                return ScalarKind.from_dtype(value)
+            case tuple() as tuple_value:
+                return TupleType(types=[DataType.from_python(t) for t in tuple_value])
+            case types.FunctionType():
+                args = []
+                kwargs = []
+                returns = []
+                return FunctionType(args, kwargs, returns)
+            case _:
+                raise common.GTValueError(f"Impossible to map '{value}' value to a ScalarKind")
 
 
 class DataType(Type):
     ...
-
 
 class ScalarType(DataType):
     kind: ScalarKind
