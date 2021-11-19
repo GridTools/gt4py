@@ -49,7 +49,11 @@ class LocalAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class AccessorRef(common.FieldAccess[Expr], Expr):  # type: ignore
+class VariableKOffset(common.VariableKOffset[Expr]):
+    pass
+
+
+class AccessorRef(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
     pass
 
 
@@ -155,8 +159,11 @@ class GTExtent(LocNode):
                 j=(min(self.j[0], offset.j), max(self.j[1], offset.j)),
                 k=(min(self.k[0], offset.k), max(self.k[1], offset.k)),
             )
+        elif isinstance(offset, VariableKOffset):
+            MAX_OFFSET = 1000
+            return GTExtent(i=self.i, j=self.j, k=(-MAX_OFFSET, MAX_OFFSET))
         else:
-            raise AssertionError("Can only add CartesianOffsets")
+            raise AssertionError(f"Unrecognized offset type: {type(offset)}")
 
 
 class GTAccessor(LocNode):

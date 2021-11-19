@@ -40,6 +40,7 @@ from .gtir_utils import (
     ParAssignStmtFactory,
     ScalarAccessFactory,
     StencilFactory,
+    VariableKOffsetFactory,
     VerticalLoopFactory,
     WhileFactory,
 )
@@ -231,4 +232,15 @@ def test_while_with_accumulated_extents():
                 ParAssignStmtFactory(left__name="a", right__name="b", right__offset__i=1),
                 ParAssignStmtFactory(left__name="b", right__name="a"),
             ],
+        )
+
+
+def test_variable_k_offset_in_access():
+    # Integer expressions are OK
+    FieldAccessFactory(offset=VariableKOffsetFactory())
+
+    # ... but others are not
+    with pytest.raises(ValueError, match="must be an integer expression"):
+        FieldAccessFactory(
+            offset=VariableKOffsetFactory(k=FieldAccessFactory(dtype=DataType.FLOAT32))
         )

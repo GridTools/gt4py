@@ -36,7 +36,7 @@ from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
-from gtc.passes.oir_pipeline import OirPipeline
+from gtc.passes.oir_pipeline import DefaultPipeline
 
 
 if TYPE_CHECKING:
@@ -51,13 +51,12 @@ class GTCDaCeExtGenerator:
 
     def __call__(self, definition_ir: StencilDefinition) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(
-            skip=[
-                MaskStmtMerging,
-                MaskInlining,
-                FillFlushToLocalKCaches,
-            ]
+        base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+        oir_pipeline = self.backend.builder.options.backend_opts.get(
+            "oir_pipeline",
+            DefaultPipeline(skip=[MaskStmtMerging, MaskInlining, FillFlushToLocalKCaches]),
         )
+        oir = oir_pipeline.run(base_oir)
         sdfg = OirSDFGBuilder().visit(oir)
         sdfg.expand_library_nodes(recursive=True)
         sdfg.apply_strict_transformations(validate=True)

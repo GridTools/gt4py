@@ -48,7 +48,11 @@ class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class FieldAccess(common.FieldAccess[Expr], Expr):  # type: ignore
+class VariableKOffset(common.VariableKOffset[Expr]):
+    pass
+
+
+class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
     pass
 
 

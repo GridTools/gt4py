@@ -25,6 +25,7 @@ Open GDPs (under consideration)
 
    gdp-0002-regions
 
+
 Provisional GDPs (provisionally accepted; interface may change)
 ---------------------------------------------------------------
 
@@ -60,3 +61,5 @@ Declined GDPs
 
 .. toctree::
    :maxdepth: 1
+
+   gdp-0003-duck-storage
