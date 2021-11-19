@@ -163,6 +163,19 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         body_code = [indent + b for b in body_code]
         return "\n".join([mask_str] + body_code)
 
+    def visit_While(self, node: oir.While, **kwargs):
+        body = self.visit(node.body, **kwargs)
+        cond = self.visit(node.cond, is_target=False, **kwargs)
+
+        init = "num_iter = 0"
+        max_iter = 10000
+        cond += f" and (num_iter < {max_iter})"
+        body.append("num_iter += 1")
+
+        indent = " " * 4
+        delim = f"\n{indent}"
+        return f"{init}\nwhile {cond}:\n{indent}{delim.join(body)}"
+
     class RemoveCastInIndexVisitor(eve.NodeTranslator):
         def visit_FieldAccess(self, node: oir.FieldAccess):
             if node.data_index:
