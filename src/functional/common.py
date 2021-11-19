@@ -47,6 +47,10 @@ class Backend:
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
 
+    # TODO : proper definition and implementation
+    def generate_operator(self, ir):
+        return ir
+
 
 class GTError:
     """Base class for GridTools exceptions.

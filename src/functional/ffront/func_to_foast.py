@@ -15,14 +15,25 @@
 from __future__ import annotations
 
 import ast
+import collections
 import copy
 import inspect
+import numbers
+import symtable
 import textwrap
 import types
-from typing import Optional
+import typing
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any, Literal, Optional, Union
+
+import numpy as np
+import numpy.typing as npt
+
 
 from eve.type_definitions import SourceLocation
 from functional import common
+from functional.common import Backend, FieldOperator
 from functional.ffront import field_operator_ast as foast
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
@@ -33,6 +44,183 @@ from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduc
 from functional.ffront.type_parser import FieldOperatorTypeParser
 
 
+SourceDefinition = collections.namedtuple(
+    "SourceDefinition", ["source", "filename", "starting_line"], defaults=("<string>", 1)
+)
+
+
+def field_operator(
+    definition: Union[
+        types.FunctionType, SourceDefinition, str, tuple[str, str], tuple[str, str, int], None
+    ] = None,
+    *,
+    backend: Backend,
+    externals: Mapping[str, Any] | None = None,
+) -> FieldOperator:
+    """
+    Create a new GT4Py FieldOperator from the definition.
+
+    Args:
+        definition: Field operator definition. It can be either a Python function object,
+            a source code string, which may be provided together with a virtual filename and
+            a starting line number, which will used in syntax error messages.
+
+    Keyword Args:
+        backend: ``Backend`` object used for the implementation.
+        externals: Extra symbol definitions used in the generation.
+
+    Note:
+        The values of ``externals`` symbols will only be evaluated during the generation
+        of the new field operator. Subsequent changes in the associated values will not be
+        caught by the generated ``FieldOperator`` instance.
+
+    Returns:
+        A backend-specific ``FieldOperator`` implementing the provided definition.
+
+    """
+
+    func = None
+    if callable(definition):
+        func = definition
+        source_definition = get_source_definition(definition)
+    elif isinstance(definition, str):
+        source_definition = SourceDefinition(definition)
+    elif isinstance(definition, tuple) and 2 <= len(definition) <= 3:
+        source_definition = SourceDefinition(*definition)
+    else:
+        raise common.GTValueError(f"Invalid field operator definition ({definition})")
+
+    externals_dict = {**externals} if isinstance(externals, Mapping) else {}
+
+    ir = FieldOperatorParser.apply(func, source_definition, externals=externals_dict)
+
+    return backend.generate_operator(ir)
+
+
+def get_source_definition(func: Callable) -> SourceDefinition:
+    try:
+        filename = inspect.getabsfile(func) or "<string>"
+        source = textwrap.dedent(inspect.getsource(func))
+        starting_line = inspect.getabsfile(func)[1] if not filename.endswith("<string>") else 1
+    except OSError as err:
+        if filename.endswith("<string>"):
+            message = "Can not create field operator from a function that is not in a source file!"
+        else:
+            message = f"Can not get source code of passed function ({func})"
+        raise ValueError(message) from err
+
+    return SourceDefinition(source, filename, starting_line)
+
+
+SymbolNames = collections.namedtuple(
+    "SymbolNames", ["args", "all_locals", "all_globals", "all_nonlocals", "explicit_nonlocals"]
+)
+
+
+def get_symbol_names(source: str, filename: str) -> SymbolNames:
+    try:
+        mod_st = symtable.symtable(source, filename, "exec")
+    except SyntaxError as err:
+        raise common.GTValueError(
+            f"Unexpected error when parsing provided source code (\n{source}\n)"
+        ) from err
+
+    assert mod_st.get_type() == "module"
+    if len(children := mod_st.get_children()) != 1:
+        raise common.GTValueError(
+            f"Sources with multiple function definitions are not yet supported (\n{source}\n)"
+        )
+
+    func_st = children[0]
+    if func_st.get_frees() or func_st.get_nonlocals():
+        raise common.GTValueError(
+            f"Sources with function closures are not yet supported (\n{source}\n)"
+        )
+
+    arg_names = set(func_st.get_parameters())
+    local_names = set(func_st.get_locals())
+    global_names = set(func_st.get_globals())
+    nonlocal_names = set(func_st.get_frees())
+    explicit_nonlocal_names = set(func_st.get_nonlocals())
+
+    return SymbolNames(
+        arg_names, local_names, global_names, nonlocal_names, explicit_nonlocal_names
+    )
+
+
+def collect_embedded_externals(func):
+    _nonlocals, globals, _builtins, _unbound = inspect.getclosurevars(func)
+    return globals
+
+
+# def make_symbol(name: str, value: Any) -> foast.Symbol:
+#     symbol_type = make_type(value)
+#     match value:
+#         case str() | numbers.Number() | tuple():
+#             assert isinstance(symbol_type, foast.DataType)
+#             return foast.DataSymbol(id=name, type=symbol_type, origin=copy.deepcopy(value))
+#         case types.FunctionType:
+#             return foast.Function(id=name, type=symbol_type, origin=value, body=[])
+#         case _:
+#             raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
+
+
+# def make_type(value: Any) -> foast.SymbolType:
+#     match value:
+#         case bool(), int(), float(), np.generic():
+#             return make_type(type(value))
+#         case type() as t if issubclass(t, (bool, int, float, np.generic)):
+#             return foast.ScalarType(kind=make_scalar_kind(value))
+#         case tuple() as tuple_value:
+#             return foast.TupleType(types=[make_type(t) for t in tuple_value])
+#         case common.Field():
+#             return foast.FieldType(..., foast.ScalarKind.FLOAT64)
+#         case types.FunctionType():
+#             args = []
+#             kwargs = []
+#             returns = []
+#             return foast.FunctionType(args, kwargs, returns)
+#         case other:
+#             if other.__module__ == "typing":
+#                 return make_type(other.__origin__)
+
+#     raise common.GTTypeError(f"Impossible to map '{value}' value to a SymbolType")
+
+
+# def make_scalar_kind(value: npt.DTypeLike) -> foast.ScalarKind:
+#     try:
+#         dt = np.dtype(value)
+#     except TypeError as err:
+#         raise common.GTTypeError(f"Invalid scalar type definition ({value})") from err
+
+#     if dt.shape == () and dt.fields is None:
+#         match dt:
+#             case np.bool_:
+#                 return foast.ScalarKind.BOOL
+#             case np.int32:
+#                 return foast.ScalarKind.INT32
+#             case np.int64:
+#                 return foast.ScalarKind.INT64
+#             case np.float32:
+#                 return foast.ScalarKind.FLOAT32
+#             case np.float64:
+#                 return foast.ScalarKind.FLOAT64
+#             case _:
+#                 raise common.GTTypeError(f"Impossible to map '{value}' value to a ScalarKind")
+#     else:
+#         raise common.GTTypeError(f"Non-trivial dtypes like '{value}' are not yet supported")
+
+
+@dataclass
+class SymbolsNamespace:
+    args: list[str]
+    locals: list[str]
+    globals: list[str]
+    externals: dict[str, any]
+
+
+# TODO (ricoh): pass on source locations
+# TODO (ricoh): SourceLocation.source <- filename
 class FieldOperatorParser(ast.NodeVisitor):
     """
     Parse field operator function definition from source code into FOAST.
@@ -107,6 +295,8 @@ class FieldOperatorParser(ast.NodeVisitor):
         )
         err.lineno = (err.lineno or 1) + self.starting_line - 1
         return err
+
+    # ir = FieldOperatorParser.apply(func, source_definition, externals=externals_dict)
 
     @classmethod
     def apply(
