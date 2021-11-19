@@ -16,12 +16,57 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from __future__ import annotations
+
 import re
+from typing import Optional
+
 
 import eve
 from eve import Node
 from eve.traits import SymbolTableTrait
-from eve.type_definitions import SourceLocation, StrEnum, SymbolRef
+from eve.type_definitions import IntEnum, SourceLocation, StrEnum, SymbolRef
+from functional import common
+
+
+class Dimension(Node):
+    name: str
+
+
+class ScalarKind(IntEnum):
+    BOOL = 1
+    INT32 = 32
+    INT64 = 64
+    FLOAT32 = 1032
+    FLOAT64 = 1064
+
+
+class Type(Node):
+    ...
+
+
+class DataType(Type):
+    ...
+
+
+class ScalarType(DataType):
+    kind: ScalarKind
+    shape: Optional[list[int]] = None
+
+
+class TupleType(DataType):
+    types: list[DataType]
+
+
+class FieldType(DataType):
+    dims: list[Dimension] | Ellipsis
+    dtype: ScalarType
+
+
+class FunctionType(Type):
+    args: list[DataType]
+    kwargs: dict[str, DataType]
+    returns: DataType
 
 
 class LocatedNode(Node):
@@ -36,18 +81,8 @@ class Symbol(LocatedNode):
     id: SymbolName  # noqa: A003
 
 
-class Expr(LocatedNode):
-    ...
-
-
-class Name(Expr):
-    id: SymbolRef  # noqa: A003
-
-
-class Field(Symbol):
-    ...
-    # dimensions: list[Name]  # noqa
-    # dtype: Name  # noqa
+class DataSymbol(Symbol):
+    type: DataType
 
 
 class Function(Symbol):
@@ -67,19 +102,21 @@ class Function(Symbol):
     #     ], # noqa
     # ) # noqa
     # That should make it possible to type check what is passed in and out
-    returns: list[Field]
-    params: list[Field]
+    type: FunctionType
+    body: list[Stmt]
 
 
-class TupleSym(Symbol):
-    # Similar naming would apply to the element symbols
-    # as for the Function signature symbols
-    elts: list[Symbol]
+class Expr(LocatedNode):
+    type: Optional[Type] = None
 
 
-class Constant(Expr):
-    value: str
-    dtype: Name
+class Name(Expr):
+    id: SymbolRef  # noqa: A003
+
+
+# class Constant(Expr):
+#     value: str
+#     dtype: Name
 
 
 class Subscript(Expr):
@@ -87,7 +124,7 @@ class Subscript(Expr):
     index: int
 
 
-class Tuple(Expr):
+class TupleExpr(Expr):
     elts: list[Expr]
 
 

@@ -25,11 +25,16 @@ from __future__ import annotations
 
 import inspect
 import typing
+from functional.common import Backend
 
 import pytest
 
 from functional.ffront.foast_to_itir import FieldOperatorLowering
-from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
+from functional.ffront.func_to_foast import (
+    field_operator,
+    FieldOperatorParser,
+    FieldOperatorSyntaxError,
+)
 from functional.iterator import ir as itir
 from functional.iterator.builtins import (
     and_,
@@ -72,22 +77,32 @@ COPY_FUN_DEF = itir.FunctionDefinition(
 )
 
 
-def test_invalid_syntax_error_emtpy_return():
+def test_field_operator_decorator():
     """Field operator syntax errors point to the file, line and column."""
 
+    def copy_field(inp):
+        return inp
+
+    field_operator(definition=copy_field, backend=Backend())
+
+
+# --- Parsing ---
+def test_invalid_syntax_error_empty_return():
+    """Field operator syntax errors point to the file, line and column."""
+
+    source = """
     def wrong_syntax(inp):
         return
-
-    lineno = inspect.getsourcelines(wrong_syntax)[1] + 1
+    """
 
     with pytest.raises(
         FieldOperatorSyntaxError,
         match=(
             r"Invalid Field Operator Syntax: "
-            rf"Empty return not allowed \(test_interface.py, line {lineno}\)"
+            r"Empty return not allowed \(<string>, line 3\)"
         ),
     ):
-        _ = FieldOperatorParser.apply(wrong_syntax)
+        _ = FieldOperatorParser.apply(source)
 
 
 def test_invalid_syntax_no_return():
