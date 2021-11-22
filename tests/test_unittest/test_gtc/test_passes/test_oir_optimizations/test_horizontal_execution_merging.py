@@ -160,14 +160,20 @@ def test_on_the_fly_merging_repeated():
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="tmp")]),
             HorizontalExecutionFactory(
-                body=[AssignStmtFactory(left__name="out1", right__name="tmp")]
+                body=[
+                    AssignStmtFactory(
+                        left__name="tmp_offset", right__name="tmp", right__offset__i=1
+                    )
+                ]
             ),
-            HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="tmp")]),
             HorizontalExecutionFactory(
-                body=[AssignStmtFactory(left__name="out2", right__name="tmp")]
+                body=[AssignStmtFactory(left__name="out", right__name="tmp_offset")]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="out2", right__name="tmp_offset")]
             ),
         ],
-        declarations=[TemporaryFactory(name="tmp")],
+        declarations=[TemporaryFactory(name="tmp"), TemporaryFactory(name="tmp_offset")],
     )
     transformed = OnTheFlyMerging().visit(testee)
     hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
