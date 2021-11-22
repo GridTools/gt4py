@@ -293,9 +293,12 @@ class DaCeComputationCodegen:
         fmt = "dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
         return [
             fmt.format(
-                sdfg_id=sdfg.sdfg_id, name=name, dtype=array.dtype.ctype, size=array.total_size
+                sdfg_id=transients_sdfg.sdfg_id,
+                name=name,
+                dtype=array.dtype.ctype,
+                size=array.total_size,
             )
-            for _, name, array in sdfg.arrays_recursive()
+            for transients_sdfg, name, array in sdfg.arrays_recursive()
             if array.transient and array.lifetime == dace.AllocationLifetime.Persistent
         ]
 
