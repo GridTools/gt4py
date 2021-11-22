@@ -160,6 +160,16 @@ class TaskletCodegen(codegen.TemplatedGenerator):
             ]
         )
 
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs):
+        mask_str = ""
+        indent = ""
+        if node.mask is not None:
+            mask_str = f"if {self.visit(node.mask, is_target=False, **kwargs)}:"
+            indent = "    "
+        body_code = self.visit(node.body, targets=kwargs["targets"])
+        body_code = [indent + b for b in body_code]
+        return "\n".join([mask_str] + body_code)
+
     class RemoveCastInIndexVisitor(eve.NodeTranslator):
         def visit_FieldAccess(self, node: oir.FieldAccess):
             if node.data_index:
