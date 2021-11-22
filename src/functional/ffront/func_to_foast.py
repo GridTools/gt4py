@@ -18,12 +18,17 @@ import ast
 import collections
 import copy
 import inspect
+import numbers
 import symtable
 import textwrap
 import types
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Optional
+
+import numpy as np
+import numpy.typing as npt
+
 
 from eve.type_definitions import SourceLocation
 from functional import common
@@ -36,53 +41,6 @@ from functional.ffront.ast_passes import (
 )
 
 
-SymbolNames = collections.namedtuple("SymbolNames", ["args", "locals", "globals"])
-
-
-def extract_symbol_names(source: str, filename: str) -> SymbolNames:
-    try:
-        mod_st = symtable.symtable(source, filename, "exec")
-    except SyntaxError as err:
-        raise common.GTValueError(
-            f"Unexpected error when parsing provided source code (\n{source}\n)"
-        ) from err
-
-    assert mod_st.get_type() == "module"
-    if len(children := mod_st.get_children()) != 1:
-        raise common.GTValueError(
-            f"Sources with multiple function definitions are not yet supported (\n{source}\n)"
-        )
-
-    func_st = children[0]
-    if func_st.get_frees() or func_st.get_nonlocals():
-        raise common.GTValueError(
-            f"Sources with function closures are not yet supported (\n{source}\n)"
-        )
-
-    arg_names = func_st.get_parameters()
-    local_names = func_st.get_locals()
-    global_names = func_st.get_globals()
-
-    return SymbolNames(arg_names, local_names, global_names)
-
-
-def collect_embedded_externals(func):
-    _nonlocals, globals, _builtins, _unbound = inspect.getclosurevars(func)
-    return globals
-
-
-def make_symbols_from_values(definitions: dict[str, Any]) -> dict[str, foast.Symbol]:
-    symbols = {}
-    for name, value in definitions.items():
-        match value:
-            case int:
-                symbol = foast.DataSymbol()
-            case float:
-                symbol = foast.DataSymbol()
-        
-        symbols[name] = symbol
-
-    return symbols
 
 
 def field_operator(
@@ -137,7 +95,9 @@ def field_operator(
     if missing := (set(global_names.globals) - set(externals_dict.keys())):
         raise common.GTValueError(f"Missing definitions for some external symbols ({missing})")
 
-    symbols = SymbolDefinitions()
+    symbols = SymbolsNamespace(
+        args=arg_names, locals=local_names, globals=global_names, externals=externals_dict
+    )
 
     return FieldOperatorParser.apply(source, filename, starting_line, symbols=symbols)
 
@@ -157,11 +117,105 @@ def get_source_and_info(func: Callable) -> tuple[str, str, int]:
     return source, filename, starting_line
 
 
+SymbolNames = collections.namedtuple("SymbolNames", ["args", "locals", "globals"])
+
+
+def extract_symbol_names(source: str, filename: str) -> SymbolNames:
+    try:
+        mod_st = symtable.symtable(source, filename, "exec")
+    except SyntaxError as err:
+        raise common.GTValueError(
+            f"Unexpected error when parsing provided source code (\n{source}\n)"
+        ) from err
+
+    assert mod_st.get_type() == "module"
+    if len(children := mod_st.get_children()) != 1:
+        raise common.GTValueError(
+            f"Sources with multiple function definitions are not yet supported (\n{source}\n)"
+        )
+
+    func_st = children[0]
+    if func_st.get_frees() or func_st.get_nonlocals():
+        raise common.GTValueError(
+            f"Sources with function closures are not yet supported (\n{source}\n)"
+        )
+
+    arg_names = func_st.get_parameters()
+    local_names = func_st.get_locals()
+    global_names = func_st.get_globals()
+
+    return SymbolNames(arg_names, local_names, global_names)
+
+
+def collect_embedded_externals(func):
+    _nonlocals, globals, _builtins, _unbound = inspect.getclosurevars(func)
+    return globals
+
+
+# def make_symbol(name: str, value: Any) -> foast.Symbol:
+#     symbol_type = make_type(value)
+#     match value:
+#         case str() | numbers.Number() | tuple():
+#             assert isinstance(symbol_type, foast.DataType)
+#             return foast.DataSymbol(id=name, type=symbol_type, origin=copy.deepcopy(value))
+#         case types.FunctionType:
+#             return foast.Function(id=name, type=symbol_type, origin=value, body=[])
+#         case _:
+#             raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
+
+
+# def make_type(value: Any) -> foast.SymbolType:
+#     match value:
+#         case bool(), int(), float(), np.generic():
+#             return make_type(type(value))
+#         case type() as t if issubclass(t, (bool, int, float, np.generic)):
+#             return foast.ScalarType(kind=make_scalar_kind(value))
+#         case tuple() as tuple_value:
+#             return foast.TupleType(types=[make_type(t) for t in tuple_value])
+#         case common.Field():
+#             return foast.FieldType(..., foast.ScalarKind.FLOAT64)
+#         case types.FunctionType():
+#             args = []
+#             kwargs = []
+#             returns = []
+#             return foast.FunctionType(args, kwargs, returns)
+#         case other:
+#             if other.__module__ == "typing":
+#                 return make_type(other.__origin__)
+        
+#     raise common.GTTypeError(f"Impossible to map '{value}' value to a SymbolType")
+
+
+# def make_scalar_kind(value: npt.DTypeLike) -> foast.ScalarKind:
+#     try:
+#         dt = np.dtype(value)
+#     except TypeError as err:
+#         raise common.GTTypeError(f"Invalid scalar type definition ({value})") from err
+
+#     if dt.shape == () and dt.fields is None:
+#         match dt:
+#             case np.bool_:
+#                 return foast.ScalarKind.BOOL
+#             case np.int32: 
+#                 return foast.ScalarKind.INT32
+#             case np.int64: 
+#                 return foast.ScalarKind.INT64
+#             case np.float32: 
+#                 return foast.ScalarKind.FLOAT32
+#             case np.float64: 
+#                 return foast.ScalarKind.FLOAT64
+#             case _:
+#                 raise common.GTTypeError(f"Impossible to map '{value}' value to a ScalarKind")
+#     else:
+#         raise common.GTTypeError(f"Non-trivial dtypes like '{value}' are not yet supported")            
+
+
 @dataclass
-class SymbolDefinitions:
-    args: dict[str, foast.Symbol]
-    locals: dict[str, foast.Symbol]
-    globals: dict[str, foast.Symbol]
+class SymbolsNamespace:
+    args: list[str]
+    locals: list[str]
+    globals: list[str]
+    externals: dict[str, any]
 
 
 # TODO (ricoh): pass on source locations
@@ -212,7 +266,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     starting_line: int
 
     def __init__(
-        self, *, source: str, filename: str, starting_line: int, symbols: SymbolDefinitions
+        self, *, source: str, filename: str, starting_line: int, symbols: SymbolsNamespace
     ) -> None:
         self.source = source
         self.filename = filename
