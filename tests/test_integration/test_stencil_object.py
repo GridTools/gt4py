@@ -17,11 +17,13 @@
 """Integration tests for StencilObjects."""
 
 import time
+from typing import Any, Dict
 
 import pytest
 
 from gt4py import gtscript
 from gt4py import storage as gt_storage
+from gt4py.gtscript import PARALLEL, Field, computation, interval
 
 
 @pytest.fixture
@@ -31,9 +33,7 @@ def backend() -> str:
 
 def test_stencil_object_cache(backend: str):
     @gtscript.stencil(backend=backend)
-    def stencil(
-        in_field: gtscript.Field[float], out_field: gtscript.Field[float], *, offset: float
-    ):
+    def stencil(in_field: Field[float], out_field: Field[float], *, offset: float):
         with computation(PARALLEL), interval(...):
             out_field = in_field + offset
 
@@ -45,30 +45,21 @@ def test_stencil_object_cache(backend: str):
         backend=backend, default_origin=(0, 0, 0), shape=shape, dtype=float
     )
 
-    exec_info = {}
-    start_time = time.perf_counter()
-    stencil(in_storage, out_storage, offset=1.0, exec_info=exec_info)
-    end_time = time.perf_counter()
-    run_time = exec_info["run_end_time"] - exec_info["run_start_time"]
-    base_time = end_time - start_time - run_time
+    def runit(*args, **kwargs) -> float:
+        exec_info: Dict[str, Any] = {}
+        start_time: float = time.perf_counter()
+        stencil(*args, **kwargs, exec_info=exec_info)
+        end_time: float = time.perf_counter()
+        run_time: float = exec_info["run_end_time"] - exec_info["run_start_time"]
+        return end_time - start_time - run_time
 
-    start_time = time.perf_counter()
-    stencil(in_storage, out_storage, offset=1.0, exec_info=exec_info)
-    end_time = time.perf_counter()
-    run_time = exec_info["run_end_time"] - exec_info["run_start_time"]
-    fast_time = end_time - start_time - run_time
-
+    base_time = runit(in_storage, out_storage, offset=1.0)
+    fast_time = runit(in_storage, out_storage, offset=1.0)
     assert fast_time < base_time
 
     # When an origin changes, it needs to recompute more, so the time should increase
     out_storage = gt_storage.ones(
         backend=backend, default_origin=(1, 0, 0), shape=shape, dtype=float
     )
-
-    start_time = time.perf_counter()
-    stencil(in_storage, out_storage, offset=1.0, exec_info=exec_info)
-    end_time = time.perf_counter()
-    run_time = exec_info["run_end_time"] - exec_info["run_start_time"]
-    third_time = end_time - start_time - run_time
-
+    third_time = runit(in_storage, out_storage, offset=1.0)
     assert third_time > fast_time
