@@ -21,7 +21,8 @@ import time
 import typing
 import warnings
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from pickle import dumps
+from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -37,12 +38,11 @@ OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 def _compute_cache_key(field_args, parameter_args, domain, origin) -> int:
     field_data = tuple(
-        name + str(field.shape) + str(field.default_origin)
+        (name, field.shape, field.default_origin)
         for name, field in field_args.items()
         if field is not None
     )
-    parameter_data = tuple(parameter_args.keys())
-    return hash((*field_data, *parameter_data, str(domain), str(origin)))
+    return hash((*field_data, *parameter_args.keys(), dumps(domain), dumps(origin)))
 
 
 @dataclass(frozen=True)
@@ -128,13 +128,20 @@ class StencilObject(abc.ABC):
     _gt_id_: str
     definition_func: Callable[..., Any]
 
-    _seen_domain_origin: Dict[int, Tuple[Tuple[int, ...], Dict[str, Tuple[int, ...]]]] = {}
+    _domain_origin_cache: ClassVar[Dict[int, Tuple[Tuple[int, ...], Dict[str, Tuple[int, ...]]]]]
     """Stores domain/origin pairs that have been used by hash."""
 
     def __new__(cls, *args, **kwargs):
         if getattr(cls, "_instance", None) is None:
             cls._instance = object.__new__(cls)
+            cls._domain_origin_cache = {}
         return cls._instance
+
+    def __setattr__(self, key, value) -> None:
+        raise AttributeError("Attempting a modification of an attribute in a frozen class")
+
+    def __delattr__(self, item) -> None:
+        raise AttributeError("Attempting a deletion of an attribute in a frozen class")
 
     def __eq__(self, other) -> bool:
         return type(self) == type(other)
@@ -475,7 +482,7 @@ class StencilObject(abc.ABC):
             exec_info["call_run_start_time"] = time.perf_counter()
 
         cache_key = _compute_cache_key(field_args, parameter_args, domain, origin)
-        if cache_key not in self._seen_domain_origin:
+        if cache_key not in self._domain_origin_cache:
             origin = self._normalize_origins(field_args, origin)
 
             if domain is None:
@@ -484,9 +491,9 @@ class StencilObject(abc.ABC):
             if validate_args:
                 self._validate_args(field_args, parameter_args, domain, origin)
 
-            self._seen_domain_origin[cache_key] = (domain, origin)
+            type(self)._domain_origin_cache[cache_key] = (domain, origin)
         else:
-            domain, origin = self._seen_domain_origin[cache_key]
+            domain, origin = type(self)._domain_origin_cache[cache_key]
 
         self.run(
             _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
