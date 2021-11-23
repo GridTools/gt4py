@@ -35,7 +35,9 @@ def test_stencil_object_cache(backend: str):
     @gtscript.stencil(backend=backend)
     def stencil(in_field: Field[float], out_field: Field[float], *, offset: float):
         with computation(PARALLEL), interval(...):
-            out_field = in_field + offset
+            out_field = (  # noqa: F841 # local variable 'out_field' is assigned to but never used
+                in_field + offset
+            )
 
     shape = (4, 4, 4)
     in_storage = gt_storage.ones(
