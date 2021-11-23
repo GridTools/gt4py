@@ -673,6 +673,47 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
             )
         return {k: str(v) for k, v in inner_subsets.items()}
 
+    def tile_domain_symbols(self, nsdfg):
+        tile_sizes = self.node.tile_sizes or self.default_tile_sizes
+        for node, state in nsdfg.sdfg.all_nodes_recursive():
+            if isinstance(node, HorizontalExecutionLibraryNode):
+                node.sym_domain = [
+                    dace.symbolic.pystr_to_symbolic(f"min({tile_sizes[0]},__I-tile_i)"),
+                    dace.symbolic.pystr_to_symbolic(f"min({tile_sizes[1]},__J-tile_j)"),
+                ]
+                node.sym_origin = [dace.symbol("tile_i"), dace.symbol("tile_i")]
+
+            elif isinstance(node, dace.nodes.MapEntry):
+                # HE already expanded
+                for i, maprange in enumerate(node.range.ranges):
+                    lrange = []
+                    for limit in maprange:
+                        limit = limit.replace(
+                            dace.symbol("__I"),
+                            dace.symbolic.pystr_to_symbolic(f"min({tile_sizes[0]},__I-tile_i)"),
+                        )
+                        limit = limit.replace(
+                            dace.symbol("__J"),
+                            dace.symbolic.pystr_to_symbolic(f"min({tile_sizes[1]},__J-tile_j)"),
+                        )
+                        lrange.append(limit)
+                    node.range[i] = tuple(lrange)
+            else:
+                continue
+
+            parent_sdfg = state.parent
+            while parent_sdfg is not None:
+                if "tile_i" in parent_sdfg.free_symbols and "tile_i" not in parent_sdfg.symbols:
+                    parent_sdfg.add_symbol("tile_i", dace.int32)
+                    if parent_sdfg.parent_nsdfg_node is not None:
+                        parent_sdfg.parent_nsdfg_node.symbol_mapping["tile_i"] = "tile_i"
+
+                if "tile_j" in parent_sdfg.free_symbols and "tile_j" not in parent_sdfg.symbols:
+                    parent_sdfg.add_symbol("tile_j", dace.int32)
+                    if parent_sdfg.parent_nsdfg_node is not None:
+                        parent_sdfg.parent_nsdfg_node.symbol_mapping["tile_j"] = "tile_j"
+                parent_sdfg = parent_sdfg.parent_sdfg
+
     def device_map(self, nsdfg):
         self.res_state.add_node(nsdfg)
 
@@ -729,45 +770,7 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
                 external_memlet=dace.Memlet.simple(name, subset_all),
                 scope_connector=name,
             )
-
-        for node, state in nsdfg.sdfg.all_nodes_recursive():
-            if isinstance(node, HorizontalExecutionLibraryNode):
-                node.sym_domain = [
-                    dace.symbolic.pystr_to_symbolic(f"min({tile_sizes[0]},__I-tile_i)"),
-                    dace.symbolic.pystr_to_symbolic(f"min({tile_sizes[1]},__J-tile_j)"),
-                ]
-                node.sym_origin = [dace.symbol("tile_i"), dace.symbol("tile_i")]
-
-            elif isinstance(node, dace.nodes.MapEntry):
-                # HE already expanded
-                for i, maprange in enumerate(node.range.ranges):
-                    lrange = []
-                    for limit in maprange:
-                        limit = limit.replace(
-                            dace.symbol("__I"),
-                            dace.symbolic.pystr_to_symbolic(f"min({tile_sizes[0]},__I-tile_i)"),
-                        )
-                        limit = limit.replace(
-                            dace.symbol("__J"),
-                            dace.symbolic.pystr_to_symbolic(f"min({tile_sizes[1]},__J-tile_j)"),
-                        )
-                        lrange.append(limit)
-                    node.range[i] = tuple(lrange)
-            else:
-                continue
-
-            parent_sdfg = state.parent
-            while parent_sdfg is not None:
-                if "tile_i" in parent_sdfg.free_symbols and "tile_i" not in parent_sdfg.symbols:
-                    parent_sdfg.add_symbol("tile_i", dace.int32)
-                    if parent_sdfg.parent_nsdfg_node is not None:
-                        parent_sdfg.parent_nsdfg_node.symbol_mapping["tile_i"] = "tile_i"
-
-                if "tile_j" in parent_sdfg.free_symbols and "tile_j" not in parent_sdfg.symbols:
-                    parent_sdfg.add_symbol("tile_j", dace.int32)
-                    if parent_sdfg.parent_nsdfg_node is not None:
-                        parent_sdfg.parent_nsdfg_node.symbol_mapping["tile_j"] = "tile_j"
-                parent_sdfg = parent_sdfg.parent_sdfg
+        self.tile_domain_symbols(nsdfg)
 
 
 class SequentialBlockLoopExpander(BlockVerticalLoopExpander):
