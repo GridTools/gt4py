@@ -42,16 +42,16 @@ class NameUniqifier(NodeTranslator):
             d.name: new_symbol_name(d.name) for d in node.declarations if d.name in ctx.used_names
         }
 
-        ctx.used_names |= {d.name for d in node.declarations}
         dtypes = {d.name: d.dtype for d in node.declarations if d.name in name_map}
+        declarations = {
+            d.name: d
+            if d.name not in name_map
+            else oir.LocalScalar(name=name_map[d.name], dtype=dtypes[d.name])
+            for d in node.declarations
+        }
+        ctx.used_names |= set(declarations.keys())
         return oir.HorizontalExecution(
-            body=self.visit(node.body, name_map=name_map),
-            declarations=[
-                d
-                if d.name not in name_map
-                else oir.LocalScalar(name=name_map[d.name], dtype=dtypes[d.name])
-                for d in node.declarations
-            ],
+            body=self.visit(node.body, name_map=name_map), declarations=list(declarations.values())
         )
 
     def visit_ScalarAccess(

@@ -155,7 +155,26 @@ def test_on_the_fly_merging_field_read_later():
     assert len(hexecs) == 2
 
 
-def test_on_the_fly_merging_repeated():
+def test_on_the_fly_merging_multiple():
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="tmp")]),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="out1", right__name="tmp")]
+            ),
+            HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="tmp")]),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="out2", right__name="tmp")]
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
+    )
+    transformed = OnTheFlyMerging().visit(testee)
+    hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs) == 2
+
+
+def test_on_the_fly_merging_nested():
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="tmp")]),
