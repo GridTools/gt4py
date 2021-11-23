@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from eve import NodeTranslator, SymbolTableTrait
 from gtc import common, oir
@@ -30,7 +30,7 @@ class NameUniqifier(NodeTranslator):
 
     @classmethod
     def apply(
-        cls, vertical_loops: List[oir.VerticalLoop], skip_names: Sequence[str]
+        cls, vertical_loops: List[oir.VerticalLoop], skip_names: Set[str]
     ) -> List[oir.VerticalLoop]:
         return cls().visit(vertical_loops, ctx=cls.Context(used_names=skip_names))
 
