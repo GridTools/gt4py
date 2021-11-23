@@ -15,12 +15,50 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from eve import NodeTranslator, SymbolTableTrait
 from gtc import common, oir
 
 from .utils import AccessCollector, symbol_name_creator
+
+
+class NameUniqifier(NodeTranslator):
+    @dataclass
+    class Context:
+        used_names: Set[str]
+
+    @classmethod
+    def apply(
+        cls, vertical_loops: List[oir.VerticalLoop], skip_names: Sequence[str]
+    ) -> List[oir.VerticalLoop]:
+        return cls().visit(vertical_loops, ctx=cls.Context(used_names=skip_names))
+
+    def visit_HorizontalExecution(
+        self, node: oir.HorizontalExecution, *, ctx: "Context"
+    ) -> oir.HorizontalExecution:
+        new_symbol_name = symbol_name_creator(ctx.used_names)
+        name_map = {
+            d.name: new_symbol_name(d.name) for d in node.declarations if d.name in ctx.used_names
+        }
+
+        ctx.used_names |= {d.name for d in node.declarations}
+        dtypes = {d.name: d.dtype for d in node.declarations if d.name in name_map}
+        return oir.HorizontalExecution(
+            body=self.visit(node.body, name_map=name_map),
+            declarations=[
+                d
+                if d.name not in name_map
+                else oir.LocalScalar(name=name_map[d.name], dtype=dtypes[d.name])
+                for d in node.declarations
+            ],
+        )
+
+    def visit_ScalarAccess(
+        self, node: oir.ScalarAccess, *, name_map: Dict[str, str]
+    ) -> oir.ScalarAccess:
+        name = name_map[node.name] if node.name in name_map else node.name
+        return oir.ScalarAccess(name=name, dtype=node.dtype)
 
 
 @dataclass
@@ -212,9 +250,14 @@ class OnTheFlyMerging(NodeTranslator):
             access_collection = AccessCollector.apply(vl)
             protected_fields |= access_collection.fields()
         accessed = AccessCollector.apply(vertical_loops).fields()
+        declarations = [d for d in node.declarations if d.name in accessed]
+        vertical_loops = NameUniqifier.apply(
+            vertical_loops,
+            skip_names={d.name for d in declarations} | {p.name for p in node.params},
+        )
         return oir.Stencil(
             name=node.name,
             params=node.params,
             vertical_loops=vertical_loops,
-            declarations=[d for d in node.declarations if d.name in accessed],
+            declarations=declarations,
         )
