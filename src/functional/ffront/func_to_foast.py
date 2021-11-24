@@ -29,7 +29,6 @@ from typing import Any, Literal, Optional
 import numpy as np
 import numpy.typing as npt
 
-
 from eve.type_definitions import SourceLocation
 from functional import common
 from functional.common import Backend, FieldOperator
@@ -39,8 +38,6 @@ from functional.ffront.ast_passes import (
     SingleStaticAssignPass,
     UnpackedAssignPass,
 )
-
-
 
 
 def field_operator(
@@ -182,7 +179,7 @@ def collect_embedded_externals(func):
 #         case other:
 #             if other.__module__ == "typing":
 #                 return make_type(other.__origin__)
-        
+
 #     raise common.GTTypeError(f"Impossible to map '{value}' value to a SymbolType")
 
 
@@ -196,18 +193,18 @@ def collect_embedded_externals(func):
 #         match dt:
 #             case np.bool_:
 #                 return foast.ScalarKind.BOOL
-#             case np.int32: 
+#             case np.int32:
 #                 return foast.ScalarKind.INT32
-#             case np.int64: 
+#             case np.int64:
 #                 return foast.ScalarKind.INT64
-#             case np.float32: 
+#             case np.float32:
 #                 return foast.ScalarKind.FLOAT32
-#             case np.float64: 
+#             case np.float64:
 #                 return foast.ScalarKind.FLOAT64
 #             case _:
 #                 raise common.GTTypeError(f"Impossible to map '{value}' value to a ScalarKind")
 #     else:
-#         raise common.GTTypeError(f"Non-trivial dtypes like '{value}' are not yet supported")            
+#         raise common.GTTypeError(f"Non-trivial dtypes like '{value}' are not yet supported")
 
 
 @dataclass
@@ -500,8 +497,16 @@ class FieldOperatorParser(ast.NodeVisitor):
 
 
 class FieldOperatorSyntaxError(common.GTSyntaxError):
-    def __init__(self, msg="", *, lineno=0, offset=0, filename=None):
-        self.msg = "Invalid Field Operator Syntax: " + msg
-        self.lineno = lineno
-        self.offset = offset
-        self.filename = filename
+    def __init__(
+        self,
+        msg="",
+        *,
+        lineno=0,
+        offset=0,
+        filename=None,
+        end_lineno=None,
+        end_offset=None,
+        text=None,
+    ):
+        msg = "Invalid Field Operator Syntax: " + msg
+        super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))

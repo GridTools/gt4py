@@ -18,7 +18,6 @@
 
 from __future__ import annotations
 
-import numbers
 import re
 import typing
 from typing import Any, Literal, Optional, Union
@@ -27,7 +26,6 @@ import eve
 from eve import Node
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import IntEnum, SourceLocation, StrEnum, SymbolRef
-from functional import common
 
 
 class Dimension(Node):
@@ -65,7 +63,7 @@ class TupleType(DataType):
 
 
 class FieldType(DataType):
-    dims: Union[list[Dimension], Literal[Ellipsis]]
+    dims: Union[list[Dimension], Literal[Ellipsis]]  # type: ignore[valid-type,misc]
     dtype: ScalarType
 
 
@@ -98,24 +96,9 @@ class FieldSymbol(DataSymbol):
 
 
 class Function(Symbol):
-    # proposal:
-    #
-    # signature sub-symbols must be named specifically, example:
-    # Function( # noqa
-    #     id="my_field_op" # noqa
-    #     returns=[ # noqa
-    #        Field(id="my_field_op$return#0, ...), # noqa
-    #        Field(id="my_field_op$return#1, ...), # noqa
-    #     ], # noqa
-    #     params=[ # noqa
-    #         Field(id=my_field_op$param#inp1, ...), # noqa
-    #         Field(id=my_field_op$param#inp2, ...), # noqa
-    #         ..., # noqa
-    #     ], # noqa
-    # ) # noqa
-    # That should make it possible to type check what is passed in and out
     type: FunctionType
-    body: list[Stmt]
+    params: list[FieldType]
+    returns: list[FieldType]
 
 
 class Expr(LocatedNode):
