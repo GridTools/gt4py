@@ -44,6 +44,10 @@ class SymbolType(Node):
     ...
 
 
+class DeferredSymbolType(SymbolType):
+    ...
+
+
 class SymbolTypeVariable(SymbolType):
     id: str
     bound: typing.Type[SymbolType]
@@ -58,6 +62,10 @@ class ScalarType(DataType):
     shape: Optional[list[int]] = None
 
 
+class DeferredScalarType(ScalarType):
+    kind: Optional[ScalarKind] = None
+
+
 class TupleType(DataType):
     types: list[DataType]
 
@@ -65,6 +73,11 @@ class TupleType(DataType):
 class FieldType(DataType):
     dims: Union[list[Dimension], Literal[Ellipsis]]  # type: ignore[valid-type,misc]
     dtype: ScalarType
+
+
+class DeferredFieldType(FieldType):
+    dims: Optional[Dimension] = None
+    dtype: Optional[DeferredScalarType] = None
 
 
 class FunctionType(SymbolType):
@@ -84,7 +97,7 @@ class SymbolName(eve.traits.SymbolName):
 class Symbol(LocatedNode):
     id: SymbolName  # noqa: A003
     type: SymbolType
-    origin: Any
+    origin: Any = None
 
 
 class DataSymbol(Symbol):
@@ -171,7 +184,7 @@ class Stmt(LocatedNode):
 
 
 class Assign(Stmt):
-    target: Name
+    target: Symbol
     value: Expr
 
 

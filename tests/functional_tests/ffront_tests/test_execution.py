@@ -14,6 +14,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from typing import Generic, TypeVar
+
 import numpy as np
 
 from functional.ffront.foast_to_itir import FieldOperatorLowering
@@ -74,16 +76,24 @@ def program_from_fop(
     )
 
 
+DimsType = TypeVar("DimsType")
+DType = TypeVar("DType")
+
+
+class Field(Generic[DimsType, DType]):
+    ...
+
+
 def test_copy():
     size = 10
     IDim = CartesianAxis("IDim")
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
-    def copy(inp):
+    def copy(inp: Field[[IDim], "float64"]):
         return inp
 
-    copy_foast = FieldOperatorParser.apply(copy)
+    copy_foast = FieldOperatorParser.apply_to_func(copy)
     copy_fundef = FieldOperatorLowering.apply(copy_foast)
     copy_program = program_from_fop(node=copy_fundef, out_names=["out"], dim=IDim, size=size)
 

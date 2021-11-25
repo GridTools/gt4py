@@ -19,6 +19,9 @@ import ast
 from dataclasses import dataclass, field
 
 
+_BUILTINS = ["Field", "Int", "Int32", "Int64", "Float", "Float32", "Float64"]
+
+
 class SingleStaticAssignPass(ast.NodeTransformer):
     """
     Rename variables in assignments to avoid overwriting.
@@ -31,8 +34,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     -------
     Function ``foo()`` in the following example keeps overwriting local variable ``a``
 
-    >>> import ast
-    >>> from functional.ffront.func_to_foast import get_ast_from_func
+    >>> import ast, inspect
 
     >>> def foo():
     ...     a = 1
@@ -42,7 +44,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
 
     >>> print(ast.unparse(
     ...     SingleStaticAssignPass.apply(
-    ...         get_ast_from_func(foo)
+    ...         ast.parse(inspect.getsource(foo))
     ...     )
     ... ))
     def foo():
@@ -108,7 +110,9 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
-        if node.id in self.state.name_counter:
+        if node.id.capitalize() in _BUILTINS:
+            return node
+        elif node.id in self.state.name_counter:
             self.state.name_counter[node.id] += 1
             node.id = f"{node.id}${self.state.name_counter[node.id]}"
         else:

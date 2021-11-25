@@ -74,6 +74,8 @@ def _get_field_args(node: ast.Tuple) -> dict:
 
 class FieldOperatorTypeParser(NodeTranslator):
     """
+    Parse type annotations into FOAST types.
+
     >>> import ast
     >>> test1 = ast.parse("test1: Field[..., float64]").body[0]
     >>> FieldOperatorTypeParser.apply(test1.annotation)  # doctest: +ELLIPSIS
@@ -125,13 +127,18 @@ class FieldOperatorTypeParser(NodeTranslator):
             return node.value
 
     def make_Field(self, argument: ast.Tuple) -> foast.FieldType:
+        if argument is None:
+            raise _make_type_error(argument, "Field type requires arguments!")
         dims: Union[Ellipsis, list[foast.Dimension]] = Ellipsis  # type: ignore[valid-type]
         if isinstance(argument.elts[0], (ast.Tuple, ast.List)):
             dims = [foast.Dimension(name=self.visit(dim)) for dim in argument.elts[0].elts]
         elif isinstance(argument.elts[0], ast.Ellipsis):
             dims = Ellipsis
+        elif (dim_arg := self.visit(argument.elts[0])) is Ellipsis:
+            dims = dim_arg
         else:
             raise _make_type_error(argument, "Field type dimension argument must be list or `...`!")
+        assert isinstance(st := self.visit(argument.elts[1]), foast.ScalarType), st
         return foast.FieldType(dims=dims, dtype=self.visit(argument.elts[1]))
 
     def make_Tuple(self, argument: ast.Tuple) -> foast.TupleType:

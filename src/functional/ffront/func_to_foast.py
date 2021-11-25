@@ -38,6 +38,7 @@ from functional.ffront.ast_passes import (
     SingleStaticAssignPass,
     UnpackedAssignPass,
 )
+from functional.ffront.type_parser import FieldOperatorTypeParser
 
 
 def field_operator(
@@ -228,27 +229,26 @@ class FieldOperatorParser(ast.NodeVisitor):
     Parse a function into a Field Operator AST (FOAST), which can
     be lowered into Iterator IR (ITIR)
 
-    >>> def fieldop(inp):
+    >>> def fieldop(inp: Field[..., float64]):
     ...     return inp
-
-    >>> foast_tree = FieldOperatorParser.apply(fieldop)
+    >>> foast_tree = FieldOperatorParser.apply_to_func(fieldop)
     >>> foast_tree  # doctest: +ELLIPSIS
     FieldOperator(..., id='fieldop', ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
-    [Field(..., id='inp')]
+    [FieldSymbol(..., id='inp', ...)]
     >>> foast_tree.body  # doctest: +ELLIPSIS
     [Return(..., value=Name(..., id='inp'))]
 
 
     If a syntax error is encountered, it will point to the location in the source code.
 
-    >>> def wrong_syntax(inp):
+    >>> def wrong_syntax(inp: Field[..., int]):
     ...     for i in range(10): # for is not part of the field operator syntax
     ...         tmp = inp
     ...     return tmp
     >>>
     >>> try:
-    ...     FieldOperatorParser.apply(wrong_syntax)
+    ...     FieldOperatorParser.apply_to_func(wrong_syntax)
     ... except FieldOperatorSyntaxError as err:
     ...     print(err.filename)  # doctest: +ELLIPSIS
     ...     print(err.lineno)
@@ -263,12 +263,16 @@ class FieldOperatorParser(ast.NodeVisitor):
     starting_line: int
 
     def __init__(
-        self, *, source: str, filename: str, starting_line: int, symbols: SymbolsNamespace
+        self,
+        *,
+        source: str,
+        filename: str,
+        starting_line: int,
+        symbols: Optional[SymbolsNamespace] = None,
     ) -> None:
         self.source = source
         self.filename = filename
         self.starting_line = starting_line
-        self.symbols = symbols
         super().__init__()
 
     def _getloc(self, node: ast.AST) -> SourceLocation:
@@ -284,13 +288,31 @@ class FieldOperatorParser(ast.NodeVisitor):
             ssa = SingleStaticAssignPass.apply(definition_ast)
             sat = SingleAssignTargetPass.apply(ssa)
             las = UnpackedAssignPass.apply(sat)
-            result = cls(source=source, filename=filename, starting_line=starting_line).visit(las)
+            result = cls(
+                source=source,
+                filename=filename,
+                starting_line=starting_line,
+            ).visit(las)
         except SyntaxError as err:
             err.filename = filename
             err.lineno = (err.lineno or 1) + starting_line - 1
             raise err
 
         return result
+
+    @classmethod
+    def apply_to_func(cls, func: types.FunctionType) -> foast.FieldOperator:
+        def get_src(func: types.FunctionType) -> str:
+            if inspect.getabsfile(func) == "<string>":
+                raise ValueError(
+                    "Can not create field operator from a function that is not in a source file!"
+                )
+            return textwrap.dedent(inspect.getsource(func))
+
+        source = get_src(func)
+        return cls.apply(
+            source, filename=inspect.getabsfile(func), starting_line=inspect.getsourcelines(func)[1]
+        )
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
         return foast.FieldOperator(
@@ -300,8 +322,18 @@ class FieldOperatorParser(ast.NodeVisitor):
             location=self._getloc(node),
         )
 
-    def visit_arguments(self, node: ast.arguments) -> list[foast.Field]:
-        return [foast.Field(id=arg.arg, location=self._getloc(arg)) for arg in node.args]
+    def visit_arguments(self, node: ast.arguments) -> list[foast.FieldSymbol]:
+        return [self.visit_arg(arg) for arg in node.args]
+
+    def visit_arg(self, node: ast.arg) -> foast.FieldSymbol:
+        new_type = FieldOperatorTypeParser.apply(node.annotation)
+        if new_type is None:
+            raise FieldOperatorSyntaxError(
+                "Untyped parameters not allowed!",
+                lineno=node.lineno,
+                offset=node.col_offset,
+            )
+        return foast.FieldSymbol(id=node.arg, location=self._getloc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # can there be more than one element?
@@ -317,9 +349,14 @@ class FieldOperatorParser(ast.NodeVisitor):
                 lineno=target.lineno,
                 offset=target.col_offset,
             )
+        new_value = self.visit(node.value)
         return foast.Assign(
-            target=foast.Field(id=target.id, location=self._getloc(target)),
-            value=self.visit(node.value),
+            target=foast.FieldSymbol(
+                id=target.id,
+                location=self._getloc(target),
+                type=foast.DeferredFieldType(),
+            ),
+            value=new_value,
             location=self._getloc(node),
         )
 
@@ -328,6 +365,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         #
         # if the annotation does not match the inferred type of value
         # then raise an exception
+        # -> only store the type here and write an additional checking pass
         if not isinstance(node.target, ast.Name):
             raise FieldOperatorSyntaxError(
                 "Can only assign to names!",
@@ -335,7 +373,11 @@ class FieldOperatorParser(ast.NodeVisitor):
                 offset=node.target.col_offset,
             )
         return foast.Assign(
-            target=foast.Name(id=node.target.id, location=self._getloc(node.target)),
+            target=foast.FieldSymbol(
+                id=node.target.id,
+                location=self._getloc(node.target),
+                type=FieldOperatorTypeParser.apply(node.annotation),
+            ),
             value=self.visit(node.value) if node.value else None,
             location=self._getloc(node),
         )
