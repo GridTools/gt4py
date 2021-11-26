@@ -45,11 +45,11 @@ class SymbolType(Node):
 
 
 class DeferredSymbolType(SymbolType):
-    ...
+    constraint: typing.Optional[typing.Type[SymbolType]]
 
 
 class SymbolTypeVariable(SymbolType):
-    id: str
+    id: str  # noqa A003
     bound: typing.Type[SymbolType]
 
 
@@ -62,10 +62,6 @@ class ScalarType(DataType):
     shape: Optional[list[int]] = None
 
 
-class DeferredScalarType(ScalarType):
-    kind: Optional[ScalarKind] = None
-
-
 class TupleType(DataType):
     types: list[DataType]
 
@@ -73,11 +69,6 @@ class TupleType(DataType):
 class FieldType(DataType):
     dims: Union[list[Dimension], Literal[Ellipsis]]  # type: ignore[valid-type,misc]
     dtype: ScalarType
-
-
-class DeferredFieldType(FieldType):
-    dims: Optional[Dimension] = None
-    dtype: Optional[DeferredScalarType] = None
 
 
 class FunctionType(SymbolType):
@@ -96,35 +87,35 @@ class SymbolName(eve.traits.SymbolName):
 
 class Symbol(LocatedNode):
     id: SymbolName  # noqa: A003
-    type: SymbolType
+    type: SymbolType  # noqa A003
     origin: Any = None
 
 
 class DataSymbol(Symbol):
-    type: DataType
+    type: Union[DataType, DeferredSymbolType]  # noqa A003
 
 
 class FieldSymbol(DataSymbol):
-    type: FieldType
+    type: Union[FieldType, DeferredSymbolType]  # noqa A003
 
 
 class Function(Symbol):
-    type: FunctionType
+    type: FunctionType  # noqa A003
     params: list[FieldType]
     returns: list[FieldType]
 
 
 class Expr(LocatedNode):
-    type: Optional[SymbolType] = None
+    type: Optional[SymbolType] = None  # noqa A003
 
 
 class Name(Expr):
     id: SymbolRef  # noqa: A003
 
 
-# class Constant(Expr):
-#     value: str
-#     dtype: Name
+class Constant(Expr):
+    value: str
+    dtype: Union[DataType, str]
 
 
 class Subscript(Expr):

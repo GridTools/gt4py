@@ -27,13 +27,9 @@ class AssignResolver(NodeTranslator):
     Inline a sequence of assignments into a final return statement.
 
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
-    >>> from typing import TypeVar, Generic
+    >>> from functional.common import Field
     >>>
-    >>> DimsType = TypeVar("DimsType")
-    >>> DType = TypeVar("DType")
     >>> float64 = float
-    >>>
-    >>> class Field(Generic[DimsType, DType]): ...
     >>>
     >>> def fieldop(inp: Field[..., "float64"]):
     ...     tmp1 = inp
@@ -82,13 +78,9 @@ class FieldOperatorLowering(NodeTranslator):
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
 
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
-    >>> from typing import TypeVar, Generic
+    >>> from functional.common import Field
     >>>
-    >>> DimsType = TypeVar("DimsType")
-    >>> DType = TypeVar("DType")
     >>> float64 = float
-    >>>
-    >>> class Field(Generic[DimsType, DType]): ...
     >>>
     >>> def fieldop(inp: Field[..., "float64"]):
     ...    return inp

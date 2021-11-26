@@ -23,18 +23,11 @@ Basic Interface Tests
 """
 from __future__ import annotations
 
-import inspect
-import typing
-
 import pytest
 
-from functional.common import Backend
+from functional.common import Field
 from functional.ffront.foast_to_itir import FieldOperatorLowering
-from functional.ffront.func_to_foast import (
-    FieldOperatorParser,
-    FieldOperatorSyntaxError,
-    field_operator,
-)
+from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.type_parser import FieldOperatorTypeError
 from functional.iterator import ir as itir
 from functional.iterator.builtins import (
@@ -71,23 +64,15 @@ AND = itir.SymRef(id=and_.fun.__name__)
 OR = itir.SymRef(id=or_.fun.__name__)
 
 
+float64 = float
+int64 = int
+
+
 COPY_FUN_DEF = itir.FunctionDefinition(
     id="copy_field",
     params=[itir.Sym(id="inp")],
     expr=itir.FunCall(fun=DEREF, args=[itir.SymRef(id="inp")]),
 )
-
-
-Field = typing.TypeVar("Field")
-
-
-def test_field_operator_decorator():
-    """Field operator syntax errors point to the file, line and column."""
-
-    def copy_field(inp: Field[..., "float64"]):
-        return inp
-
-    field_operator(definition=copy_field, backend=Backend())
 
 
 # --- Parsing ---
@@ -101,7 +86,7 @@ def test_invalid_syntax_error_empty_return():
         FieldOperatorSyntaxError,
         match=(
             r"Invalid Field Operator Syntax: "
-            r"Empty return not allowed \(test_interface.py, line 98\)"
+            r"Empty return not allowed \(test_interface.py, line 86\)"
         ),
     ):
         _ = FieldOperatorParser.apply_to_func(wrong_syntax)

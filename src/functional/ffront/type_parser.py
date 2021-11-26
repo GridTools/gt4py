@@ -77,6 +77,7 @@ class FieldOperatorTypeParser(NodeTranslator):
     Parse type annotations into FOAST types.
 
     >>> import ast
+    >>>
     >>> test1 = ast.parse("test1: Field[..., float64]").body[0]
     >>> FieldOperatorTypeParser.apply(test1.annotation)  # doctest: +ELLIPSIS
     FieldType(dims=Ellipsis, dtype=ScalarType(kind=<ScalarKind.FLOAT64: ...>, shape=None))

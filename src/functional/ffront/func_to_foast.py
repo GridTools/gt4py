@@ -15,23 +15,13 @@
 from __future__ import annotations
 
 import ast
-import collections
 import copy
 import inspect
-import numbers
-import symtable
 import textwrap
 import types
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
-from typing import Any, Literal, Optional
-
-import numpy as np
-import numpy.typing as npt
 
 from eve.type_definitions import SourceLocation
 from functional import common
-from functional.common import Backend, FieldOperator
 from functional.ffront import field_operator_ast as foast
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
@@ -41,183 +31,6 @@ from functional.ffront.ast_passes import (
 from functional.ffront.type_parser import FieldOperatorTypeParser
 
 
-def field_operator(
-    definition: types.FunctionType | str | tuple[str, str] | tuple[str, str, int] | None = None,
-    *,
-    backend: Backend,
-    externals: dict[str, Any] | Sequence[dict[str, Any]] | Literal["embedded"] | None = "embedded",
-) -> FieldOperator:
-    """
-    Create a GT4Py FieldOperator from the passed function.
-
-    Args:
-        function: Definition function.
-
-    Keyword Args:
-        backend: GT4Py backend
-        externals: Variable length argument list.
-            Defaults to ``None``.
-
-    Returns:
-        A backend-specific FieldOperator implementing the definition function.
-    """
-
-    func = None
-    if callable(definition):
-        func = definition
-        source, filename, starting_line = get_source_and_info(definition)
-    elif isinstance(definition, str):
-        source, filename = definition, "<string>", 1
-    elif isinstance(definition, Sequence) and 2 <= (def_length := len(definition)) <= 3:
-        if def_length == 2:
-            source, filename, starting_line = *definition, 1
-        else:
-            source, filename, starting_line = definition
-    else:
-        raise common.GTValueError(f"Invalid field operator definition ({definition})")
-
-    arg_names, local_names, global_names = extract_symbol_names(source, filename)
-
-    externals_dict = {}
-    if externals == "embedded":
-        if not func:
-            raise common.GTValueError(
-                f"Embedded externals can only be used when using a function object as operator definition."
-            )
-        externals_dict.update(collect_embedded_externals(func))
-    elif isinstance(externals, Mapping):
-        externals_dict.update(externals)
-    elif isinstance(externals, Sequence):
-        externals_dict.update(collections.ChainMap(*externals))
-
-    if missing := (set(global_names.globals) - set(externals_dict.keys())):
-        raise common.GTValueError(f"Missing definitions for some external symbols ({missing})")
-
-    symbols = SymbolsNamespace(
-        args=arg_names, locals=local_names, globals=global_names, externals=externals_dict
-    )
-
-    return FieldOperatorParser.apply(source, filename, starting_line, symbols=symbols)
-
-
-def get_source_and_info(func: Callable) -> tuple[str, str, int]:
-    try:
-        filename = inspect.getabsfile(func) or "<string>"
-        source = textwrap.dedent(inspect.getsource(func))
-        starting_line = inspect.getabsfile(func)[1] if not filename.endswith("<string>") else 1
-    except OSError as err:
-        if filename.endswith("<string>"):
-            message = "Can not create field operator from a function that is not in a source file!"
-        else:
-            message = f"Can not get source code of passed function ({func})"
-        raise ValueError(message) from err
-
-    return source, filename, starting_line
-
-
-SymbolNames = collections.namedtuple("SymbolNames", ["args", "locals", "globals"])
-
-
-def extract_symbol_names(source: str, filename: str) -> SymbolNames:
-    try:
-        mod_st = symtable.symtable(source, filename, "exec")
-    except SyntaxError as err:
-        raise common.GTValueError(
-            f"Unexpected error when parsing provided source code (\n{source}\n)"
-        ) from err
-
-    assert mod_st.get_type() == "module"
-    if len(children := mod_st.get_children()) != 1:
-        raise common.GTValueError(
-            f"Sources with multiple function definitions are not yet supported (\n{source}\n)"
-        )
-
-    func_st = children[0]
-    if func_st.get_frees() or func_st.get_nonlocals():
-        raise common.GTValueError(
-            f"Sources with function closures are not yet supported (\n{source}\n)"
-        )
-
-    arg_names = func_st.get_parameters()
-    local_names = func_st.get_locals()
-    global_names = func_st.get_globals()
-
-    return SymbolNames(arg_names, local_names, global_names)
-
-
-def collect_embedded_externals(func):
-    _nonlocals, globals, _builtins, _unbound = inspect.getclosurevars(func)
-    return globals
-
-
-# def make_symbol(name: str, value: Any) -> foast.Symbol:
-#     symbol_type = make_type(value)
-#     match value:
-#         case str() | numbers.Number() | tuple():
-#             assert isinstance(symbol_type, foast.DataType)
-#             return foast.DataSymbol(id=name, type=symbol_type, origin=copy.deepcopy(value))
-#         case types.FunctionType:
-#             return foast.Function(id=name, type=symbol_type, origin=value, body=[])
-#         case _:
-#             raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
-
-
-# def make_type(value: Any) -> foast.SymbolType:
-#     match value:
-#         case bool(), int(), float(), np.generic():
-#             return make_type(type(value))
-#         case type() as t if issubclass(t, (bool, int, float, np.generic)):
-#             return foast.ScalarType(kind=make_scalar_kind(value))
-#         case tuple() as tuple_value:
-#             return foast.TupleType(types=[make_type(t) for t in tuple_value])
-#         case common.Field():
-#             return foast.FieldType(..., foast.ScalarKind.FLOAT64)
-#         case types.FunctionType():
-#             args = []
-#             kwargs = []
-#             returns = []
-#             return foast.FunctionType(args, kwargs, returns)
-#         case other:
-#             if other.__module__ == "typing":
-#                 return make_type(other.__origin__)
-
-#     raise common.GTTypeError(f"Impossible to map '{value}' value to a SymbolType")
-
-
-# def make_scalar_kind(value: npt.DTypeLike) -> foast.ScalarKind:
-#     try:
-#         dt = np.dtype(value)
-#     except TypeError as err:
-#         raise common.GTTypeError(f"Invalid scalar type definition ({value})") from err
-
-#     if dt.shape == () and dt.fields is None:
-#         match dt:
-#             case np.bool_:
-#                 return foast.ScalarKind.BOOL
-#             case np.int32:
-#                 return foast.ScalarKind.INT32
-#             case np.int64:
-#                 return foast.ScalarKind.INT64
-#             case np.float32:
-#                 return foast.ScalarKind.FLOAT32
-#             case np.float64:
-#                 return foast.ScalarKind.FLOAT64
-#             case _:
-#                 raise common.GTTypeError(f"Impossible to map '{value}' value to a ScalarKind")
-#     else:
-#         raise common.GTTypeError(f"Non-trivial dtypes like '{value}' are not yet supported")
-
-
-@dataclass
-class SymbolsNamespace:
-    args: list[str]
-    locals: list[str]
-    globals: list[str]
-    externals: dict[str, any]
-
-
-# TODO (ricoh): pass on source locations
-# TODO (ricoh): SourceLocation.source <- filename
 class FieldOperatorParser(ast.NodeVisitor):
     """
     Parse field operator function definition from source code into FOAST.
@@ -229,6 +42,8 @@ class FieldOperatorParser(ast.NodeVisitor):
     Parse a function into a Field Operator AST (FOAST), which can
     be lowered into Iterator IR (ITIR)
 
+    >>> from functional.common import Field
+    >>> float64 = float
     >>> def fieldop(inp: Field[..., float64]):
     ...     return inp
     >>> foast_tree = FieldOperatorParser.apply_to_func(fieldop)
@@ -268,7 +83,6 @@ class FieldOperatorParser(ast.NodeVisitor):
         source: str,
         filename: str,
         starting_line: int,
-        symbols: Optional[SymbolsNamespace] = None,
     ) -> None:
         self.source = source
         self.filename = filename
@@ -354,7 +168,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             target=foast.FieldSymbol(
                 id=target.id,
                 location=self._getloc(target),
-                type=foast.DeferredFieldType(),
+                type=foast.DeferredSymbolType(constraint=foast.FieldType),
             ),
             value=new_value,
             location=self._getloc(node),
