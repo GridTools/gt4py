@@ -16,7 +16,6 @@
 
 """Integration tests for StencilObjects."""
 
-import time
 from typing import Any, Dict
 
 import pytest
@@ -49,11 +48,10 @@ def test_stencil_object_cache(backend: str):
 
     def runit(*args, **kwargs) -> float:
         exec_info: Dict[str, Any] = {}
-        start_time: float = time.perf_counter()
         stencil(*args, **kwargs, exec_info=exec_info)
-        end_time: float = time.perf_counter()
         run_time: float = exec_info["run_end_time"] - exec_info["run_start_time"]
-        return end_time - start_time - run_time
+        call_time: float = exec_info["call_run_end_time"] - exec_info["call_run_start_time"]
+        return call_time - run_time
 
     base_time = runit(in_storage, out_storage, offset=1.0)
     fast_time = runit(in_storage, out_storage, offset=1.0)

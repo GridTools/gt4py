@@ -42,7 +42,7 @@ def _compute_cache_key(field_args, parameter_args, domain, origin) -> int:
         for name, field in field_args.items()
         if field is not None
     )
-    return hash((*field_data, *parameter_args.keys(), dumps(domain), dumps(origin)))
+    return hash((field_data, *parameter_args.keys(), dumps(domain), dumps(origin)))
 
 
 @dataclass(frozen=True)
