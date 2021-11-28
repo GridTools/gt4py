@@ -37,8 +37,9 @@ OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 
 def _compute_cache_key(field_args, parameter_args, domain, origin) -> int:
+    # field.default_origin is computed using getattr to support numpy.ndarray.
     field_data = tuple(
-        (name, field.shape, field.default_origin)
+        (name, field.shape, getattr(field, "default_origin", (0, 0, 0)))
         for name, field in field_args.items()
         if field is not None
     )
