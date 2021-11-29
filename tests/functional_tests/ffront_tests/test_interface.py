@@ -86,7 +86,7 @@ def test_invalid_syntax_error_empty_return():
         FieldOperatorSyntaxError,
         match=(
             r"Invalid Field Operator Syntax: "
-            r"Empty return not allowed \(test_interface.py, line 86\)"
+            r"Empty return not allowed \(test_interface.py, line 83\)"
         ),
     ):
         _ = FieldOperatorParser.apply_to_func(wrong_syntax)

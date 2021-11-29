@@ -19,6 +19,7 @@ import copy
 import inspect
 import textwrap
 import types
+from typing import Optional
 
 from eve.type_definitions import SourceLocation
 from functional import common
@@ -92,6 +93,13 @@ class FieldOperatorParser(ast.NodeVisitor):
     def _getloc(self, node: ast.AST) -> SourceLocation:
         return SourceLocation.from_AST(node, source=self.filename)
 
+    def _make_syntax_error(self, node: ast.AST, *, message: str = "") -> FieldOperatorSyntaxError:
+        err = FieldOperatorSyntaxError.from_ast_node(
+            node, msg=message, filename=self.filename, text=self.source
+        )
+        err.lineno = (err.lineno or 1) + self.starting_line - 1
+        return err
+
     @classmethod
     def apply(
         cls, source: str, filename: str = "<string>", starting_line: int = 1
@@ -108,8 +116,10 @@ class FieldOperatorParser(ast.NodeVisitor):
                 starting_line=starting_line,
             ).visit(las)
         except SyntaxError as err:
-            err.filename = filename
-            err.lineno = (err.lineno or 1) + starting_line - 1
+            if not err.filename:
+                err.filename = filename
+            if not isinstance(err, FieldOperatorSyntaxError):
+                err.lineno = (err.lineno or 1) + starting_line - 1
             raise err
 
         return result
@@ -142,27 +152,15 @@ class FieldOperatorParser(ast.NodeVisitor):
     def visit_arg(self, node: ast.arg) -> foast.FieldSymbol:
         new_type = FieldOperatorTypeParser.apply(node.annotation)
         if new_type is None:
-            raise FieldOperatorSyntaxError(
-                "Untyped parameters not allowed!",
-                lineno=node.lineno,
-                offset=node.col_offset,
-            )
+            raise self._make_syntax_error(node, message="Untyped parameters not allowed!")
         return foast.FieldSymbol(id=node.arg, location=self._getloc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # can there be more than one element?
         if isinstance(target, ast.Tuple):
-            raise FieldOperatorSyntaxError(
-                "Unpacking not allowed!",
-                lineno=node.lineno,
-                offset=node.col_offset,
-            )
+            raise self._make_syntax_error(node, message="Unpacking not allowed!")
         if not isinstance(target, ast.Name):
-            raise FieldOperatorSyntaxError(
-                "Can only assign to names!",
-                lineno=target.lineno,
-                offset=target.col_offset,
-            )
+            raise self._make_syntax_error(node, message="Can only assign to names!")
         new_value = self.visit(node.value)
         return foast.Assign(
             target=foast.FieldSymbol(
@@ -181,11 +179,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         # then raise an exception
         # -> only store the type here and write an additional checking pass
         if not isinstance(node.target, ast.Name):
-            raise FieldOperatorSyntaxError(
-                "Can only assign to names!",
-                lineno=node.target.lineno,
-                offset=node.target.col_offset,
-            )
+            raise self._make_syntax_error(node, message="Can only assign to names!")
         return foast.Assign(
             target=foast.FieldSymbol(
                 id=node.target.id,
@@ -198,11 +192,7 @@ class FieldOperatorParser(ast.NodeVisitor):
 
     def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.Subscript:
         if not isinstance(node.slice, ast.Constant):
-            raise FieldOperatorSyntaxError(
-                """Subscript slicing not allowed!""",
-                lineno=node.slice.lineno,
-                offset=node.slice.col_offset,
-            )
+            raise self._make_syntax_error(node, message="""Subscript slicing not allowed!""")
         return foast.Subscript(
             value=self.visit(node.value), index=node.slice.value, location=self._getloc(node)
         )
@@ -214,17 +204,13 @@ class FieldOperatorParser(ast.NodeVisitor):
 
     def visit_Return(self, node: ast.Return, **kwargs) -> foast.Return:
         if not node.value:
-            raise FieldOperatorSyntaxError(
-                "Empty return not allowed", lineno=node.lineno, offset=node.col_offset
-            )
+            raise self._make_syntax_error(node, message="Empty return not allowed")
         return foast.Return(value=self.visit(node.value), location=self._getloc(node))
 
     def visit_stmt_list(self, nodes: list[ast.stmt]) -> list[foast.Expr]:
         if not isinstance(last_node := nodes[-1], ast.Return):
-            raise FieldOperatorSyntaxError(
-                msg="Field operator must return a field expression on the last line!",
-                lineno=last_node.lineno,
-                offset=last_node.col_offset,
+            raise self._make_syntax_error(
+                last_node, message="Field operator must return a field expression on the last line!"
             )
         return [self.visit(node) for node in nodes]
 
@@ -333,10 +319,8 @@ class FieldOperatorParser(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call, **kwargs) -> foast.CompareOperator:
         new_func = self.visit(node.func)
         if not isinstance(new_func, foast.Name):
-            raise FieldOperatorSyntaxError(
-                msg="functions can only be called directly!",
-                lineno=node.func.lineno,
-                offset=node.func.col_offset,
+            raise self._make_syntax_error(
+                node.func, message="functions can only be called directly!"
             )
 
         return foast.Call(
@@ -346,10 +330,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         )
 
     def generic_visit(self, node) -> None:
-        raise FieldOperatorSyntaxError(
-            lineno=node.lineno,
-            offset=node.col_offset,
-        )
+        raise self._make_syntax_error(node)
 
 
 class FieldOperatorSyntaxError(common.GTSyntaxError):
@@ -357,12 +338,30 @@ class FieldOperatorSyntaxError(common.GTSyntaxError):
         self,
         msg="",
         *,
-        lineno=0,
-        offset=0,
-        filename=None,
-        end_lineno=None,
-        end_offset=None,
-        text=None,
+        lineno: int = 0,
+        offset: int = 0,
+        filename: Optional[str] = None,
+        end_lineno: int = None,
+        end_offset: int = None,
+        text: Optional[str] = None,
     ):
         msg = "Invalid Field Operator Syntax: " + msg
         super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
+
+    @classmethod
+    def from_ast_node(
+        cls,
+        node: ast.AST,
+        *,
+        msg: str = "",
+        filename: Optional[str] = None,
+        text: Optional[str] = None,
+    ):
+        return cls(
+            msg,
+            lineno=node.lineno,
+            offset=node.col_offset,
+            filename=filename,
+            end_lineno=node.end_lineno,
+            end_offset=node.end_col_offset,
+        )
