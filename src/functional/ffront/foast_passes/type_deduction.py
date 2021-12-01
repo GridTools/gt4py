@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 # GT4Py Project - GridTools Framework
@@ -31,6 +30,34 @@ def is_complete_type(fo_type: foast.DataType) -> bool:
     return False
 
 
+def check_type_refinement(node: foast.Expr, new: foast.DataType) -> None:
+    old = node.type
+    if old is None:
+        return
+    if is_complete_type(old):
+        if old != new:
+            warnings.warn(
+                FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=(
+                        "type inconsistency: expression was deduced to be "
+                        f"of type {new}, instead of the expected type {old}"
+                    ),
+                )
+            )
+    elif isinstance(old, foast.DeferredSymbolType) and old.constraint is not None:
+        if not isinstance(new, old.constraint) or isinstance(new, foast.DeferredSymbolType):
+            warnings.warn(
+                FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=(
+                        "type inconsistency: expression was deduced to be "
+                        f"of type {new}, instead a {type(old)} type was expected."
+                    ),
+                )
+            )
+
+
 class FieldOperatorTypeDeduction(NodeTranslator):
     """Deduce and check types of FOAST expressions and symbols."""
 
@@ -59,6 +86,24 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
         symbol = symtable[node.id]
         return foast.Name(id=node.id, type=symbol.type, location=node.location)
+
+    def visit_Assign(self, node: foast.Assign, **kwargs) -> foast.Assign:
+        new_value = node.value
+        if not is_complete_type(node.value.type):
+            new_value = self.visit(node.value, **kwargs)
+        new_target = self.visit(node.target, refine_type=new_value.type, **kwargs)
+        return foast.Assign(target=new_target, value=new_value, location=node.location)
+
+    def visit_FieldSymbol(
+        self, node: foast.FieldSymbol, refine_type: Optional[foast.FieldType] = None, **kwargs
+    ) -> foast.FieldSymbol:
+        symtable = kwargs.get("symtable", {})
+        if refine_type:
+            check_type_refinement(node, refine_type)
+            new_node = foast.FieldSymbol(id=node.id, type=refine_type, location=node.location)
+            symtable[new_node.id] = new_node
+            return new_node
+        return node
 
 
 class FieldOperatorTypeDeductionError(SyntaxError, SyntaxWarning):

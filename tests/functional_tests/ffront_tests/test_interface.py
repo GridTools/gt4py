@@ -27,6 +27,7 @@ import pytest
 
 import functional.ffront.field_operator_ast as foast
 from functional.common import Field
+from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.type_parser import FieldOperatorTypeError
@@ -87,7 +88,7 @@ def test_invalid_syntax_error_empty_return():
         FieldOperatorSyntaxError,
         match=(
             r"Invalid Field Operator Syntax: "
-            r"Empty return not allowed \(test_interface.py, line 84\)"
+            r"Empty return not allowed \(test_interface.py, line 85\)"
         ),
     ):
         _ = FieldOperatorParser.apply_to_func(wrong_syntax)
@@ -200,6 +201,11 @@ def test_temp_assignment():
         return tmp2
 
     parsed = FieldOperatorParser.apply_to_func(copy_field)
+
+    assert parsed.symtable_["tmp$0"].type == foast.FieldType(
+        dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
+    )
+
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered == COPY_FUN_DEF
@@ -216,6 +222,15 @@ def test_annotated_assignment():
 
     assert lowered == COPY_FUN_DEF
     assert lowered.expr == COPY_FUN_DEF.expr
+
+
+def test_clashing_annotated_assignment():
+    def clashing(inp: Field[..., "float64"]):
+        tmp: Field[..., "int64"] = inp
+        return tmp
+
+    with pytest.warns(FieldOperatorTypeDeductionError, match=r"type inconsistency"):
+        _ = FieldOperatorParser.apply_to_func(clashing)
 
 
 def test_call():
