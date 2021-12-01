@@ -20,6 +20,7 @@ from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, Typ
 
 from eve import NodeVisitor
 from eve.concepts import TreeNode
+from eve.traits import SymbolTableTrait
 from eve.utils import XIterable, xiter
 from gtc import oir
 
@@ -161,7 +162,7 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
 
     def increment_string_suffix(s: str) -> str:
         if not s[-1].isnumeric():
-            return s + "0"
+            return s + "_tmp_0"
         return re.sub(r"[0-9]+$", lambda n: str(int(n.group()) + 1), s)
 
     def new_symbol_name(name: str) -> str:
@@ -171,3 +172,12 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
         return name
 
     return new_symbol_name
+
+
+def collect_symbol_names(node: TreeNode) -> Set[str]:
+    return (
+        node.iter_tree()
+        .if_isinstance(SymbolTableTrait)
+        .getattr("symtable_")
+        .reduce(lambda names, symtable: names.union(symtable.keys()), init=set())
+    )
