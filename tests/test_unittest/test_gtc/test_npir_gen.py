@@ -361,7 +361,7 @@ def test_computation() -> None:
     match = re.match(
         (
             r"import numpy as np\n"
-            r"import scipy\n"
+            r"import scipy.special\n"
             r"import numbers\n+"
             r"def run\(\*, _domain_, _origin_\):\n"
             r"\n?"

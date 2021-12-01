@@ -396,7 +396,7 @@ class NpirCodegen(TemplatedGenerator):
         textwrap.dedent(
             """\
             import numpy as np
-            import scipy
+            import scipy.special
             import numbers
 
             def run({{ signature }}):
