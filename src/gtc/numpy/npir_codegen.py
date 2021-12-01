@@ -396,6 +396,7 @@ class NpirCodegen(TemplatedGenerator):
         textwrap.dedent(
             """\
             import numpy as np
+            import scipy
             import numbers
 
             def run({{ signature }}):
@@ -425,11 +426,13 @@ class NpirCodegen(TemplatedGenerator):
         self, node: common.NativeFunction, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         if node == common.NativeFunction.MIN:
-            return "minimum"
+            return "np.minimum"
         elif node == common.NativeFunction.MAX:
-            return "maximum"
+            return "np.maximum"
         elif node == common.NativeFunction.POW:
-            return "power"
-        return self.generic_visit(node, **kwargs)
+            return "np.power"
+        elif node == common.NativeFunction.GAMMA:
+            return "scipy.special.gamma"
+        return "np." + self.generic_visit(node, **kwargs)
 
-    NativeFuncCall = FormatTemplate("np.{func}({', '.join(arg for arg in args)})")
+    NativeFuncCall = FormatTemplate("{func}({', '.join(arg for arg in args)})")

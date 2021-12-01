@@ -42,12 +42,20 @@ MATH_BUILTINS = {
     "sin",
     "cos",
     "tan",
+    "sinh",
+    "cosh",
+    "tanh",
     "asin",
     "acos",
     "atan",
+    "asinh",
+    "acosh",
+    "atanh",
     "sqrt",
     "exp",
     "log",
+    "gamma",
+    "cbrt",
     "isfinite",
     "isinf",
     "isnan",
@@ -666,6 +674,36 @@ def atan(x):
     pass
 
 
+def sinh(x):
+    """Return the hyperbolic sine of x radians"""
+    pass
+
+
+def cosh(x):
+    """Return the hyperbolic cosine of x radians."""
+    pass
+
+
+def tanh(x):
+    """Return the hyperbolic tangent of x radians."""
+    pass
+
+
+def asinh(x):
+    """return the inverse hyperbolic sine of x, in radians."""
+    pass
+
+
+def acosh(x):
+    """Return the inverse hyperbolic cosine of x, in radians."""
+    pass
+
+
+def atanh(x):
+    """Return the inverse hyperbolic tangent of x, in radians."""
+    pass
+
+
 def sqrt(x):
     """Return the square root of x."""
     pass
@@ -678,6 +716,16 @@ def exp(x):
 
 def log(x):
     """Return the natural logarithm of x (to base e)."""
+    pass
+
+
+def gamma(x):
+    """Return the gamma function of x."""
+    pass
+
+
+def cbrt(x):
+    """Return the cubic root of x."""
     pass
 
 
