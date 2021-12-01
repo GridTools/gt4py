@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import pytest
 
+import functional.ffront.field_operator_ast as foast
 from functional.common import Field
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
@@ -86,7 +87,7 @@ def test_invalid_syntax_error_empty_return():
         FieldOperatorSyntaxError,
         match=(
             r"Invalid Field Operator Syntax: "
-            r"Empty return not allowed \(test_interface.py, line 83\)"
+            r"Empty return not allowed \(test_interface.py, line 84\)"
         ),
     ):
         _ = FieldOperatorParser.apply_to_func(wrong_syntax)
@@ -116,6 +117,19 @@ def test_mistyped_arg():
         match=r"Field type requires arguments! \(.*\)",
     ):
         _ = FieldOperatorParser.apply_to_func(mistyped)
+
+
+def test_return_type():
+    """Return type annotation should be stored on the FieldOperator."""
+
+    def rettype(inp: Field[..., float64]) -> Field[..., float64]:
+        return inp
+
+    parsed = FieldOperatorParser.apply_to_func(rettype)
+
+    assert parsed.body[-1].value.type == foast.FieldType(
+        dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
+    )
 
 
 def test_invalid_syntax_no_return():

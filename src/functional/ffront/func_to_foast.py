@@ -29,6 +29,7 @@ from functional.ffront.ast_passes import (
     SingleStaticAssignPass,
     UnpackedAssignPass,
 )
+from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.ffront.type_parser import FieldOperatorTypeParser
 
 
@@ -91,7 +92,14 @@ class FieldOperatorParser(ast.NodeVisitor):
         super().__init__()
 
     def _getloc(self, node: ast.AST) -> SourceLocation:
-        return SourceLocation.from_AST(node, source=self.filename)
+        loc = SourceLocation.from_AST(node, source=self.filename)
+        return SourceLocation(
+            line=loc.line + self.starting_line - 1,
+            column=loc.column,
+            source=loc.source,
+            end_line=loc.end_line + self.starting_line - 1,
+            end_column=loc.end_column,
+        )
 
     def _make_syntax_error(self, node: ast.AST, *, message: str = "") -> FieldOperatorSyntaxError:
         err = FieldOperatorSyntaxError.from_ast_node(
@@ -122,7 +130,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                 err.lineno = (err.lineno or 1) + starting_line - 1
             raise err
 
-        return result
+        return FieldOperatorTypeDeduction.apply(result)
 
     @classmethod
     def apply_to_func(cls, func: types.FunctionType) -> foast.FieldOperator:
