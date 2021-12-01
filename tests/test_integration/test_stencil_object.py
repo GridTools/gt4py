@@ -25,11 +25,7 @@ from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, Field, computation, interval
 
 
-@pytest.fixture
-def backend() -> str:
-    return "gtc:numpy"
-
-
+@pytest.mark.parametrize("backend", ["gtc:numpy"])
 def test_stencil_object_cache(backend: str):
     @gtscript.stencil(backend=backend)
     def stencil(in_field: Field[float], out_field: Field[float], *, offset: float):
