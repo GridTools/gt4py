@@ -239,3 +239,4 @@ def test_on_the_fly_merging_localscalars():
     transformed = OnTheFlyMerging().visit(testee)
     hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
     assert len(hexecs) == 1
+    assert len(hexecs[0].declarations) == 3
