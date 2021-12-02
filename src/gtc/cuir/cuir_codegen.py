@@ -134,7 +134,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         NativeFunction.EXP: "std::exp",
         NativeFunction.LOG: "std::log",
         NativeFunction.GAMMA: "std::tgamma",
-        NativeFunction.GAMMA: "std::cbrt",
+        NativeFunction.CBRT: "std::cbrt",
         NativeFunction.ISFINITE: "std::isfinite",
         NativeFunction.ISINF: "std::isinf",
         NativeFunction.ISNAN: "std::isnan",
