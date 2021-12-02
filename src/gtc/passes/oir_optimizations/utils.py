@@ -162,7 +162,7 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
 
     def increment_string_suffix(s: str) -> str:
         if not s[-1].isnumeric():
-            return s + "_tmp_0"
+            return s + "_gen_0"
         return re.sub(r"[0-9]+$", lambda n: str(int(n.group()) + 1), s)
 
     def new_symbol_name(name: str) -> str:

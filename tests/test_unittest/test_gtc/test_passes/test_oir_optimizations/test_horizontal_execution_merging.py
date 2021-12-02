@@ -222,6 +222,7 @@ def test_on_the_fly_merging_localscalars():
                     AssignStmtFactory(
                         left=ScalarAccessFactory(name="scalar_tmp"),
                         right__name="in",
+                        right__offset__i=1,
                     ),
                     AssignStmtFactory(
                         left__name="out",

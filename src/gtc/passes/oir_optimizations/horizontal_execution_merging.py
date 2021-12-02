@@ -20,7 +20,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from eve import NodeTranslator, SymbolTableTrait
 from gtc import common, oir
 
-from .utils import AccessCollector, symbol_name_creator
+from .utils import AccessCollector, collect_symbol_names, symbol_name_creator
 
 
 @dataclass
@@ -61,6 +61,15 @@ class OnTheFlyMerging(NodeTranslator):
             if key in offset_symbol_map:
                 return oir.ScalarAccess(name=offset_symbol_map[key], dtype=node.dtype)
         return self.generic_visit(node, **kwargs)
+
+    def visit_ScalarAccess(
+        self, node: oir.ScalarAccess, *, scalar_map: Dict[str, str], **kwargs: Any
+    ):
+        if node.name in scalar_map:
+            name = scalar_map[node.name]
+        else:
+            name = node.name
+        return oir.ScalarAccess(name=name, dtype=node.dtype)
 
     def _merge(
         self,
@@ -122,6 +131,7 @@ class OnTheFlyMerging(NodeTranslator):
         ):
             return [first] + self._merge(others, symtable, new_symbol_name, protected_fields)
 
+        first_scalars = {decl.name for decl in first.declarations}
         writes = first_accesses.write_fields()
         others_otf = []
         for horizontal_execution in others:
@@ -141,18 +151,44 @@ class OnTheFlyMerging(NodeTranslator):
                 others_otf.append(horizontal_execution)
                 continue
 
+            duplicated_locals = first_scalars & {
+                decl.name for decl in horizontal_execution.declarations
+            }
+            scalar_map = {name: new_symbol_name(name) for name in duplicated_locals}
+
             offset_symbol_map = {
                 (name, o): new_symbol_name(name) for name in writes for o in read_offsets
             }
 
+            # Build up the declarations map of the new horizontal execution
+            from_later = [
+                d for d in horizontal_execution.declarations if d.name not in duplicated_locals
+            ]
+            from_first = [
+                d
+                for d in first.declarations
+                if d not in horizontal_execution.declarations or d.name in duplicated_locals
+            ]
+            renamed_locals_in_later = [
+                oir.LocalScalar(
+                    name=new_name, dtype={**symtable, **first.symtable_}[old_name].dtype
+                )
+                for old_name, new_name in scalar_map.items()
+            ]
+            new_locals = [
+                oir.LocalScalar(
+                    name=new_name, dtype={**symtable, **first.symtable_}[old_name].dtype
+                )
+                for (old_name, _), new_name in offset_symbol_map.items()
+            ]
+
             merged = oir.HorizontalExecution(
-                body=self.visit(horizontal_execution.body, offset_symbol_map=offset_symbol_map),
-                declarations=horizontal_execution.declarations
-                + [
-                    oir.LocalScalar(name=new_name, dtype=symtable[old_name].dtype)
-                    for (old_name, _), new_name in offset_symbol_map.items()
-                ]
-                + [d for d in first.declarations if d not in horizontal_execution.declarations],
+                body=self.visit(
+                    horizontal_execution.body,
+                    offset_symbol_map=offset_symbol_map,
+                    scalar_map=scalar_map,
+                ),
+                declarations=from_later + from_first + renamed_locals_in_later + new_locals,
             )
             for offset in read_offsets:
                 merged.body = (
@@ -160,7 +196,7 @@ class OnTheFlyMerging(NodeTranslator):
                         first.body,
                         shift=offset,
                         offset_symbol_map=offset_symbol_map,
-                        symtable=symtable,
+                        scalar_map={},
                     )
                     + merged.body
                 )
@@ -199,12 +235,13 @@ class OnTheFlyMerging(NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         vertical_loops: List[oir.VerticalLoop] = []
         protected_fields = set(n.name for n in node.params)
+        all_names = collect_symbol_names(node)
         for vl in reversed(node.vertical_loops):
             vertical_loops.insert(
                 0,
                 self.visit(
                     vl,
-                    new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
+                    new_symbol_name=symbol_name_creator(all_names),
                     protected_fields=protected_fields,
                     **kwargs,
                 ),
