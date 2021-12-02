@@ -64,7 +64,7 @@ class OnTheFlyMerging(NodeTranslator):
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, *, scalar_map: Dict[str, str], **kwargs: Any
-    ):
+    ) -> oir.ScalarAccess:
         if node.name in scalar_map:
             name = scalar_map[node.name]
         else:
@@ -160,27 +160,31 @@ class OnTheFlyMerging(NodeTranslator):
                 (name, o): new_symbol_name(name) for name in writes for o in read_offsets
             }
 
-            # Build up the declarations map of the new horizontal execution
-            from_later = [
+            # 4 contributions to the new declarations list
+            decls_from_later = [
                 d for d in horizontal_execution.declarations if d.name not in duplicated_locals
             ]
-            from_first = [
+            decls_from_first = [
                 d
                 for d in first.declarations
                 if d not in horizontal_execution.declarations or d.name in duplicated_locals
             ]
-            renamed_locals_in_later = [
+            decls_renamed_locals_in_later = [
                 oir.LocalScalar(
                     name=new_name, dtype={**symtable, **first.symtable_}[old_name].dtype
                 )
                 for old_name, new_name in scalar_map.items()
             ]
-            new_locals = [
+            new_decls = [
                 oir.LocalScalar(
                     name=new_name, dtype={**symtable, **first.symtable_}[old_name].dtype
                 )
                 for (old_name, _), new_name in offset_symbol_map.items()
             ]
+
+            declarations = (
+                decls_from_later + decls_from_first + decls_renamed_locals_in_later + new_decls
+            )
 
             merged = oir.HorizontalExecution(
                 body=self.visit(
@@ -188,7 +192,7 @@ class OnTheFlyMerging(NodeTranslator):
                     offset_symbol_map=offset_symbol_map,
                     scalar_map=scalar_map,
                 ),
-                declarations=from_later + from_first + renamed_locals_in_later + new_locals,
+                declarations=declarations,
             )
             for offset in read_offsets:
                 merged.body = (
