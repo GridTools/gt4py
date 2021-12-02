@@ -62,4 +62,4 @@ def test_stencil_object_cache(backend: str):
 
     # When the cache is cleared, everything is recomputed and the time will increase
     cleaned_cache_time = runit(in_storage, out_storage, offset=1.0)
-    assert cleaned_cache_time > fast_time    
+    assert cleaned_cache_time > fast_time
