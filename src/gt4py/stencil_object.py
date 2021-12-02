@@ -530,3 +530,12 @@ class StencilObject(abc.ABC):
                 correct usage.
         """
         return FrozenStencil(self, origin, domain)
+
+    def clean_call_args_cache(self: "StencilObject") -> None:
+        """Clean the argument cache.
+
+        Returns
+        -------
+            None
+        """
+        type(self)._domain_origin_cache.clear()
