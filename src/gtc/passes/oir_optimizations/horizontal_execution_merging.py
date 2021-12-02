@@ -161,6 +161,7 @@ class OnTheFlyMerging(NodeTranslator):
             }
 
             # 4 contributions to the new declarations list
+            combined_symtable = {**symtable, **first.symtable_}
             decls_from_later = [
                 d for d in horizontal_execution.declarations if d.name not in duplicated_locals
             ]
@@ -170,15 +171,11 @@ class OnTheFlyMerging(NodeTranslator):
                 if d not in horizontal_execution.declarations or d.name in duplicated_locals
             ]
             decls_renamed_locals_in_later = [
-                oir.LocalScalar(
-                    name=new_name, dtype={**symtable, **first.symtable_}[old_name].dtype
-                )
+                oir.LocalScalar(name=new_name, dtype=combined_symtable[old_name].dtype)
                 for old_name, new_name in scalar_map.items()
             ]
             new_decls = [
-                oir.LocalScalar(
-                    name=new_name, dtype={**symtable, **first.symtable_}[old_name].dtype
-                )
+                oir.LocalScalar(name=new_name, dtype=combined_symtable[old_name].dtype)
                 for (old_name, _), new_name in offset_symbol_map.items()
             ]
 
