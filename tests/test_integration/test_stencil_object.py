@@ -54,8 +54,13 @@ def test_stencil_object_cache(backend: str):
     assert fast_time < base_time
 
     # When an origin changes, it needs to recompute more, so the time should increase
-    out_storage = gt_storage.ones(
+    other_out_storage = gt_storage.ones(
         backend=backend, default_origin=(1, 0, 0), shape=shape, dtype=float
     )
-    third_time = runit(in_storage, out_storage, offset=1.0)
-    assert third_time > fast_time
+    other_origin_time = runit(in_storage, other_out_storage, offset=1.0)
+    assert other_origin_time > fast_time
+    
+    # When the cache is cleared everything is recomputed again, so the time will increase
+    cleaned_cache_time = runit(in_storage, out_storage, offset=1.0)
+    assert cleaned_cache_time > fast_time    
+    
