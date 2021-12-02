@@ -21,7 +21,8 @@ import time
 import typing
 import warnings
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from pickle import dumps
+from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -33,6 +34,16 @@ from gt4py.definitions import DomainInfo, FieldInfo, Index, ParameterInfo, Shape
 
 FieldType = Union[gt_storage.storage.Storage, np.ndarray]
 OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
+
+
+def _compute_cache_key(field_args, parameter_args, domain, origin) -> int:
+    # field.default_origin is computed using getattr to support numpy.ndarray.
+    field_data = tuple(
+        (name, field.shape, getattr(field, "default_origin", (0, 0, 0)))
+        for name, field in field_args.items()
+        if field is not None
+    )
+    return hash((field_data, *parameter_args.keys(), dumps(domain), dumps(origin)))
 
 
 @dataclass(frozen=True)
@@ -118,9 +129,13 @@ class StencilObject(abc.ABC):
     _gt_id_: str
     definition_func: Callable[..., Any]
 
+    _domain_origin_cache: ClassVar[Dict[int, Tuple[Tuple[int, ...], Dict[str, Tuple[int, ...]]]]]
+    """Stores domain/origin pairs that have been used by hash."""
+
     def __new__(cls, *args, **kwargs):
         if getattr(cls, "_instance", None) is None:
             cls._instance = object.__new__(cls)
+            cls._domain_origin_cache = {}
         return cls._instance
 
     def __setattr__(self, key, value) -> None:
@@ -467,13 +482,19 @@ class StencilObject(abc.ABC):
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
 
-        origin = self._normalize_origins(field_args, origin)
+        cache_key = _compute_cache_key(field_args, parameter_args, domain, origin)
+        if cache_key not in self._domain_origin_cache:
+            origin = self._normalize_origins(field_args, origin)
 
-        if domain is None:
-            domain = self._get_max_domain(field_args, origin)
+            if domain is None:
+                domain = self._get_max_domain(field_args, origin)
 
-        if validate_args:
-            self._validate_args(field_args, parameter_args, domain, origin)
+            if validate_args:
+                self._validate_args(field_args, parameter_args, domain, origin)
+
+            type(self)._domain_origin_cache[cache_key] = (domain, origin)
+        else:
+            domain, origin = type(self)._domain_origin_cache[cache_key]
 
         self.run(
             _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
@@ -509,3 +530,12 @@ class StencilObject(abc.ABC):
                 correct usage.
         """
         return FrozenStencil(self, origin, domain)
+
+    def clean_call_args_cache(self: "StencilObject") -> None:
+        """Clean the argument cache.
+
+        Returns
+        -------
+            None
+        """
+        type(self)._domain_origin_cache.clear()
