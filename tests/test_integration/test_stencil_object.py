@@ -61,5 +61,8 @@ def test_stencil_object_cache(backend: str):
     assert other_origin_time > fast_time
 
     # When the cache is cleared, everything is recomputed and the time will increase
+    assert len(stencil._domain_origin_cache) > 0
+    stencil.clean_call_args_cache()
+    assert len(stencil._domain_origin_cache) == 0
     cleaned_cache_time = runit(in_storage, out_storage, offset=1.0)
     assert cleaned_cache_time > fast_time
