@@ -135,7 +135,7 @@ class FieldOperatorTypeParser(NodeTranslator):
 
         dims: Union[Ellipsis, list[foast.Dimension]] = Ellipsis  # type: ignore[valid-type]
 
-        match dim_arg:  # type: ignore
+        match dim_arg:
             case ast.Tuple() | ast.List():
                 dims = [foast.Dimension(name=self.visit(dim)) for dim in argument.elts[0].elts]
             case ast.Ellipsis():

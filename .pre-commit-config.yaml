@@ -171,6 +171,8 @@ repos:
   - id: mypy
     exclude: |
       (?x)^(
+      src/functional/ffront/type_parser.py | # until mypy supports match
+      src/functional/ffront/foast_passes/type_deduction.py | # until mypy supports match
       docs/gt4py/conf.py |
       docs/gtc/conf.py |
       docs/eve/conf.py |
