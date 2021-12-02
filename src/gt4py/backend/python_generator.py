@@ -16,8 +16,6 @@
 
 import types
 
-from numpy import set_printoptions
-
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
 from gt4py.utils import text as gt_text

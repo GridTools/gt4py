@@ -292,12 +292,4 @@ def test_assign_to_ik_fwd():
 
 
 def test_loop_mask():
-    StencilFactory(
-        vertical_loops__0=VerticalLoopFactory(
-            sections=[
-                VerticalLoopSectionFactory(
-                    horizontal_executions=[HorizontalExecutionFactory(body=[WhileFactory()])]
-                )
-            ],
-        ),
-    )
+    StencilFactory(vertical_loops__0__sections__0__horizontal_executions__0__body__0=WhileFactory())

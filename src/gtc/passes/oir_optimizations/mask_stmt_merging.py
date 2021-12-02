@@ -36,10 +36,7 @@ class MaskStmtMerging(NodeTranslator):
                     & AccessCollector.apply(stmt.mask, is_write=False).fields()
                 )
             ):
-                merged[-1] = oir.MaskStmt(
-                    mask=merged[-1].mask,
-                    body=merged[-1].body + stmt.body,
-                )
+                merged[-1] = oir.MaskStmt(mask=merged[-1].mask, body=merged[-1].body + stmt.body)
             else:
                 merged.append(stmt)
         return merged

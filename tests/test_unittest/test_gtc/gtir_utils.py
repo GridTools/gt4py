@@ -102,8 +102,8 @@ class WhileFactory(factory.Factory):
     class Meta:
         model = gtir.While
 
-    cond = factory.SubFactory(BinaryOpFactory, dtype=common.DataType.BOOL)
-    body = []
+    cond = factory.SubFactory(FieldAccessFactory, dtype=common.DataType.BOOL)
+    body = factory.List([factory.SubFactory(ParAssignStmtFactory)])
 
 
 class IntervalFactory(factory.Factory):

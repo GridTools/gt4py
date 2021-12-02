@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numbers
-from typing import Any, Dict, List, Union, cast
+from typing import Any, Dict, List, Tuple, Union, cast
 
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
@@ -132,9 +132,7 @@ class DefIRToGTIR(IRNodeVisitor):
             vertical_loops=vertical_loops,
         )
 
-    def visit_ArgumentInfo(
-        self, node: ArgumentInfo, all_params: Dict[str, Union[gtir.Decl]]
-    ) -> Union[gtir.Decl]:
+    def visit_ArgumentInfo(self, node: ArgumentInfo, all_params: Dict[str, gtir.Decl]) -> gtir.Decl:
         return all_params[node.name]
 
     def visit_ComputationBlock(self, node: ComputationBlock) -> gtir.VerticalLoop:
@@ -249,19 +247,19 @@ class DefIRToGTIR(IRNodeVisitor):
             body=self.visit(node.body),
         )
 
-    def visit_VarRef(self, node: VarRef, **kwargs):
+    def visit_VarRef(self, node: VarRef, **kwargs) -> gtir.ScalarAccess:
         return gtir.ScalarAccess(name=node.name)
 
-    def visit_AxisInterval(self, node: AxisInterval):
+    def visit_AxisInterval(self, node: AxisInterval) -> Tuple[gtir.AxisBound, gtir.AxisBound]:
         return self.visit(node.start), self.visit(node.end)
 
-    def visit_AxisBound(self, node: AxisBound):
+    def visit_AxisBound(self, node: AxisBound) -> gtir.AxisBound:
         # TODO(havogt) add support VarRef
         return gtir.AxisBound(
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
         )
 
-    def visit_FieldDecl(self, node: FieldDecl):
+    def visit_FieldDecl(self, node: FieldDecl) -> gtir.FieldDecl:
         dimension_names = ["I", "J", "K"]
         dimensions = [dim in node.axes for dim in dimension_names]
         # datatype conversion works via same ID
@@ -272,7 +270,7 @@ class DefIRToGTIR(IRNodeVisitor):
             data_dims=node.data_dims,
         )
 
-    def visit_VarDecl(self, node: VarDecl):
+    def visit_VarDecl(self, node: VarDecl) -> gtir.ScalarDecl:
         # datatype conversion works via same ID
         return gtir.ScalarDecl(name=node.name, dtype=common.DataType(int(node.data_type.value)))
 
