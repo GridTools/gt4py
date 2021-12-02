@@ -115,7 +115,7 @@ def test_mistyped_arg():
 
     with pytest.raises(
         FieldOperatorTypeError,
-        match=r"Field type requires arguments! \(.*\)",
+        match=r"Field type requires two arguments, got 0! \(.*\)",
     ):
         _ = FieldOperatorParser.apply_to_func(mistyped)
 

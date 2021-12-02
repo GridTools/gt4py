@@ -14,19 +14,20 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import warnings
-from typing import Optional
+from typing import Optional, TypeGuard
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator
 
 
-def is_complete_type(fo_type: foast.DataType) -> bool:
-    if fo_type is None:
-        return False
-    elif isinstance(fo_type, foast.DeferredSymbolType):
-        return False
-    elif isinstance(fo_type, foast.SymbolType):
-        return True
+def is_complete_type(fo_type: foast.SymbolType) -> TypeGuard[foast.SymbolType]:
+    match fo_type:
+        case None:
+            return False
+        case foast.DeferredSymbolType():
+            return False
+        case foast.SymbolType():
+            return True
     return False
 
 

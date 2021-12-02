@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 # GT4Py Project - GridTools Framework
@@ -107,20 +106,20 @@ class FieldOperatorTypeParser(NodeTranslator):
         return cls().visit(node)
 
     def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.SymbolType:
-        return self.visit(node.value, argument=node.slice)
+        return self.visit(node.value, argument=node.slice, **kwargs)
 
     def visit_Name(
         self, node: ast.Name, *, argument: Optional[ast.AST] = None, **kwargs
     ) -> Union[foast.SymbolType, str]:
-        maker = getattr(self, f"make_{node.id.capitalize()}", None)
+        maker = getattr(self, f"make_{node.id}", None)
         if maker is None:
             # TODO (ricoh): pull in type from external name
             return node.id
         return maker(argument)
 
-    def visit_Constant(self, node: ast.Constant) -> Any:
+    def visit_Constant(self, node: ast.Constant, **kwargs) -> Any:
         if isinstance(node.value, str):
-            maker = getattr(self, f"make_{node.value.capitalize()}", None)
+            maker = getattr(self, f"make_{node.value}", None)
             if maker is None:
                 return node.value
             return maker(argument=None)
@@ -128,40 +127,54 @@ class FieldOperatorTypeParser(NodeTranslator):
             return node.value
 
     def make_Field(self, argument: ast.Tuple) -> foast.FieldType:
-        if argument is None:
-            raise _make_type_error(argument, "Field type requires arguments!")
+        if not isinstance(argument, ast.Tuple) or len(argument.elts) != 2:
+            nargs = len(getattr(argument, "elts", []))
+            raise _make_type_error(argument, f"Field type requires two arguments, got {nargs}!")
+
+        dim_arg, dtype_arg = argument.elts
+
         dims: Union[Ellipsis, list[foast.Dimension]] = Ellipsis  # type: ignore[valid-type]
-        if isinstance(argument.elts[0], (ast.Tuple, ast.List)):
-            dims = [foast.Dimension(name=self.visit(dim)) for dim in argument.elts[0].elts]
-        elif isinstance(argument.elts[0], ast.Ellipsis):
-            dims = Ellipsis
-        elif (dim_arg := self.visit(argument.elts[0])) is Ellipsis:
-            dims = dim_arg
-        else:
-            raise _make_type_error(argument, "Field type dimension argument must be list or `...`!")
-        assert isinstance(st := self.visit(argument.elts[1]), foast.ScalarType), st
-        return foast.FieldType(dims=dims, dtype=self.visit(argument.elts[1]))
+
+        match dim_arg:  # type: ignore
+            case ast.Tuple() | ast.List():
+                dims = [foast.Dimension(name=self.visit(dim)) for dim in argument.elts[0].elts]
+            case ast.Ellipsis():
+                dims = Ellipsis
+            case _:
+                dims = self.visit(dim_arg)
+                if dims is not Ellipsis:
+                    raise _make_type_error(
+                        argument.elts[0], "Field type dimension argument must be list or `...`!"
+                    )
+
+        dtype = self.visit(dtype_arg)
+        if not isinstance(dtype, foast.ScalarType):
+            raise _make_type_error(dtype_arg, "Field type dtype argument must be a scalar type!")
+        return foast.FieldType(dims=dims, dtype=dtype)
 
     def make_Tuple(self, argument: ast.Tuple) -> foast.TupleType:
         return foast.TupleType(types=[self.visit(element) for element in argument.elts])
 
-    def make_Int32(self, argument: None = None) -> foast.ScalarType:
+    def make_tuple(self, argument: ast.Tuple) -> foast.TupleType:
+        return self.make_Tuple(argument)
+
+    def make_int32(self, argument: None = None) -> foast.ScalarType:
         return foast.ScalarType(kind=foast.ScalarKind.INT32)
 
-    def make_Int64(self, argument: None = None) -> foast.ScalarType:
+    def make_int64(self, argument: None = None) -> foast.ScalarType:
         return foast.ScalarType(kind=foast.ScalarKind.INT64)
 
-    def make_Int(self, argument: None = None) -> foast.ScalarType:
-        return self.make_Int32()
+    def make_int(self, argument: None = None) -> foast.ScalarType:
+        return self.make_int32()
 
-    def make_Bool(self, argument: None = None) -> foast.ScalarType:
+    def make_bool(self, argument: None = None) -> foast.ScalarType:
         return foast.ScalarType(kind=foast.ScalarKind.BOOL)
 
-    def make_Float32(self, argument: None = None) -> foast.ScalarType:
+    def make_float32(self, argument: None = None) -> foast.ScalarType:
         return foast.ScalarType(kind=foast.ScalarKind.FLOAT32)
 
-    def make_Float64(self, argument: None = None) -> foast.ScalarType:
+    def make_float64(self, argument: None = None) -> foast.ScalarType:
         return foast.ScalarType(kind=foast.ScalarKind.FLOAT64)
 
-    def make_Float(self, argument: None = None) -> foast.ScalarType:
-        return self.make_Float64()
+    def make_float(self, argument: None = None) -> foast.ScalarType:
+        return self.make_float64()

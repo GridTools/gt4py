@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 # GT4Py Project - GridTools Framework
@@ -18,8 +17,7 @@
 import ast
 from dataclasses import dataclass, field
 
-
-_BUILTINS = ["Field", "Int", "Int32", "Int64", "Float", "Float32", "Float64"]
+from functional.ffront.builtins import TYPE_BUILTIN_NAMES
 
 
 class SingleStaticAssignPass(ast.NodeTransformer):
@@ -110,7 +108,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
-        if node.id.capitalize() in _BUILTINS:
+        if node.id in TYPE_BUILTIN_NAMES:
             return node
         elif node.id in self.state.name_counter:
             self.state.name_counter[node.id] += 1
