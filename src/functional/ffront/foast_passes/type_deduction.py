@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2014-2021, ETH Zurich
@@ -21,7 +19,7 @@ from eve import NodeTranslator, SymbolTableTrait
 from functional.common import GTSyntaxError
 
 
-def is_complete_type(fo_type: foast.SymbolType) -> TypeGuard[foast.SymbolType]:
+def is_complete_symbol_type(fo_type: foast.SymbolType) -> TypeGuard[foast.SymbolType]:
     match fo_type:
         case None:
             return False
@@ -36,7 +34,7 @@ def check_type_refinement(node: foast.Expr, new: foast.DataType) -> None:
     old = node.type
     if old is None:
         return
-    if is_complete_type(old):
+    if is_complete_symbol_type(old):
         if old != new:
             warnings.warn(
                 FieldOperatorTypeDeductionError.from_foast_node(
@@ -92,7 +90,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
     def visit_Assign(self, node: foast.Assign, **kwargs) -> foast.Assign:
         new_value = node.value
-        if not is_complete_type(node.value.type):
+        if not is_complete_symbol_type(node.value.type):
             new_value = self.visit(node.value, **kwargs)
         new_target = self.visit(node.target, refine_type=new_value.type, **kwargs)
         return foast.Assign(target=new_target, value=new_value, location=node.location)
