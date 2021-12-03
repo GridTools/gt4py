@@ -220,7 +220,9 @@ def test_while_without_boolean_condition():
 
 
 def test_while_with_accumulated_extents():
-    with pytest.raises(ValueError, match=r"Field written with read offsets in while loop"):
+    with pytest.raises(
+        ValueError, match=r"Illegal write and read with horizontal offset detected for.*"
+    ):
         WhileFactory(
             cond=BinaryOpFactory(
                 left__name="a",
