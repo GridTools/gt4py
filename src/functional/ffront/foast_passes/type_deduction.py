@@ -77,7 +77,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
     def visit_Name(self, node: foast.Name, **kwargs) -> foast.Name:
         symtable = kwargs["symtable"]
-        if node.id not in symtable:
+        if node.id not in symtable or symtable[node.id].type is None:
             warnings.warn(  # TODO (ricoh): raise this instead (requires externals)
                 FieldOperatorTypeDeductionError.from_foast_node(
                     node, msg=f"Undeclared symbol {node.id}"
@@ -106,6 +106,28 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             return new_node
         return node
 
+    def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
+        new_value = self.visit(node.value, **kwargs)
+        new_type = None
+        match new_value.type:
+            case foast.TupleType(types=types) | foast.FunctionType(
+                returns=foast.TupleType(types=types)
+            ):
+                new_type = types[node.index]
+            case _:
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    new_value, msg="Could not deduce type of subscript expression!"
+                )
+
+        return foast.Subscript(
+            value=new_value, index=node.index, type=new_type, location=node.location
+        )
+
+    def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> foast.TupleExpr:
+        new_elts = self.visit(node.elts, **kwargs)
+        new_type = foast.TupleType(types=[element.type for element in new_elts])
+        return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
+
 
 class FieldOperatorTypeDeductionError(GTSyntaxError, SyntaxWarning):
     def __init__(
@@ -128,8 +150,6 @@ class FieldOperatorTypeDeductionError(GTSyntaxError, SyntaxWarning):
         node: foast.LocatedNode,
         *,
         msg: str = "",
-        filename: Optional[str] = None,
-        text: Optional[str] = None,
     ):
         return cls(
             msg,
