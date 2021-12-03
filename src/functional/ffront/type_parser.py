@@ -18,10 +18,11 @@ import ast
 from typing import Any, Optional, Union
 
 from eve import NodeTranslator
+from functional.common import GTSyntaxError
 from functional.ffront import field_operator_ast as foast
 
 
-class FieldOperatorTypeError(SyntaxError):
+class FieldOperatorTypeError(GTSyntaxError):
     def __init__(
         self,
         msg="",

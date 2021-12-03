@@ -17,7 +17,8 @@ import warnings
 from typing import Optional, TypeGuard
 
 import functional.ffront.field_operator_ast as foast
-from eve import NodeTranslator
+from eve import NodeTranslator, SymbolTableTrait
+from functional.common import GTSyntaxError
 
 
 def is_complete_type(fo_type: foast.SymbolType) -> TypeGuard[foast.SymbolType]:
@@ -62,12 +63,13 @@ def check_type_refinement(node: foast.Expr, new: foast.DataType) -> None:
 class FieldOperatorTypeDeduction(NodeTranslator):
     """Deduce and check types of FOAST expressions and symbols."""
 
+    contexts = (SymbolTableTrait.symtable_merger,)
+
     @classmethod
     def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> foast.FieldOperator:
-        kwargs["symtable"] = kwargs.get("symtable", node.symtable_)
         return foast.FieldOperator(
             id=node.id,
             params=self.visit(node.params, **kwargs),
@@ -76,7 +78,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         )
 
     def visit_Name(self, node: foast.Name, **kwargs) -> foast.Name:
-        symtable = kwargs.get("symtable", {})
+        symtable = kwargs["symtable"]
         if node.id not in symtable:
             warnings.warn(  # TODO (ricoh): raise this instead (requires externals)
                 FieldOperatorTypeDeductionError.from_foast_node(
@@ -98,7 +100,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     def visit_FieldSymbol(
         self, node: foast.FieldSymbol, refine_type: Optional[foast.FieldType] = None, **kwargs
     ) -> foast.FieldSymbol:
-        symtable = kwargs.get("symtable", {})
+        symtable = kwargs["symtable"]
         if refine_type:
             check_type_refinement(node, refine_type)
             new_node = foast.FieldSymbol(id=node.id, type=refine_type, location=node.location)
@@ -107,7 +109,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         return node
 
 
-class FieldOperatorTypeDeductionError(SyntaxError, SyntaxWarning):
+class FieldOperatorTypeDeductionError(GTSyntaxError, SyntaxWarning):
     def __init__(
         self,
         msg="",
