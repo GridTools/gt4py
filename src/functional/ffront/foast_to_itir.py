@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
 # GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2014-2021, ETH Zurich
@@ -27,13 +24,16 @@ class AssignResolver(NodeTranslator):
     Inline a sequence of assignments into a final return statement.
 
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
+    >>> from functional.common import Field
     >>>
-    >>> def fieldop(inp):
+    >>> float64 = float
+    >>>
+    >>> def fieldop(inp: Field[..., "float64"]):
     ...     tmp1 = inp
     ...     tmp2 = tmp1
     ...     return tmp2
     >>>
-    >>> fieldop_foast_expr = AssignResolver.apply(FieldOperatorParser.apply(fieldop).body)
+    >>> fieldop_foast_expr = AssignResolver.apply(FieldOperatorParser.apply_to_func(fieldop).body)
     >>> fieldop_foast_expr  # doctest: +ELLIPSIS
     Return(location=..., value=Name(location=..., id='inp'))
     """
@@ -75,11 +75,14 @@ class FieldOperatorLowering(NodeTranslator):
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
 
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
+    >>> from functional.common import Field
     >>>
-    >>> def fieldop(inp):
+    >>> float64 = float
+    >>>
+    >>> def fieldop(inp: Field[..., "float64"]):
     ...    return inp
     >>>
-    >>> parsed = FieldOperatorParser.apply(fieldop)
+    >>> parsed = FieldOperatorParser.apply_to_func(fieldop)
     >>> lowered = FieldOperatorLowering.apply(parsed)
     >>> type(lowered)
     <class 'functional.iterator.ir.FunctionDefinition'>
@@ -115,8 +118,8 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:
         return self.visit(node.value, **kwargs)
 
-    def visit_Field(
-        self, node: foast.Field, *, symtable: dict[str, foast.Symbol], **kwargs
+    def visit_FieldSymbol(
+        self, node: foast.FieldSymbol, *, symtable: dict[str, foast.Symbol], **kwargs
     ) -> itir.Sym:
         return itir.Sym(id=node.id)
 
@@ -124,7 +127,7 @@ class FieldOperatorLowering(NodeTranslator):
         self, node: foast.Name, *, symtable: dict[str, foast.Symbol], **kwargs
     ) -> itir.SymRef:
         if node.id in symtable:
-            if isinstance(symtable[node.id], foast.Field):
+            if isinstance(symtable[node.id], foast.FieldSymbol):
                 return itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id=node.id)])
         return itir.SymRef(id=node.id)
 
@@ -134,7 +137,7 @@ class FieldOperatorLowering(NodeTranslator):
             args=[self.visit(node.value, **kwargs), itir.IntLiteral(value=node.index)],
         )
 
-    def visit_Tuple(self, node: foast.Tuple, **kwargs) -> itir.FunCall:
+    def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
         return itir.FunCall(
             fun=itir.SymRef(id="make_tuple"), args=[self.visit(i, **kwargs) for i in node.elts]
         )

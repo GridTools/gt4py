@@ -75,9 +75,10 @@ repos:
 #     - pygments
 
 - repo: https://github.com/psf/black
-  rev: 21.9b0
+  rev: 21.11b1
   hooks:
   - id: black
+    args: [--target-version, py310]
 
 - repo: https://github.com/asottile/seed-isort-config
   rev: v2.2.0
@@ -170,6 +171,8 @@ repos:
   - id: mypy
     exclude: |
       (?x)^(
+      src/functional/ffront/type_parser.py | # until mypy supports match
+      src/functional/ffront/foast_passes/type_deduction.py | # until mypy supports match
       docs/gt4py/conf.py |
       docs/gtc/conf.py |
       docs/eve/conf.py |

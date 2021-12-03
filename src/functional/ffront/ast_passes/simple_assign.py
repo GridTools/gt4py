@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
 # GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2014-2021, ETH Zurich
@@ -58,8 +55,7 @@ class SingleAssignTargetPass(NodeYielder):
 
     Example
     -------
-    >>> import ast
-    >>> from functional.ffront.func_to_foast import get_ast_from_func
+    >>> import ast, inspect
     >>>
     >>> def foo():
     ...     a = b = 1
@@ -67,7 +63,7 @@ class SingleAssignTargetPass(NodeYielder):
     >>>
     >>> print(ast.unparse(
     ...     SingleAssignTargetPass.apply(
-    ...         get_ast_from_func(foo)
+    ...         ast.parse(inspect.getsource(foo))
     ...     )
     ... ))
     def foo():
@@ -95,8 +91,7 @@ class UnpackedAssignPass(NodeYielder):
 
     Example
     -------
-    >>> import ast
-    >>> from functional.ffront.func_to_foast import get_ast_from_func
+    >>> import ast, inspect
 
     >>> def foo():
     ...     a0 = 1
@@ -106,7 +101,7 @@ class UnpackedAssignPass(NodeYielder):
 
     >>> print(ast.unparse(
     ...     UnpackedAssignPass.apply(
-    ...         get_ast_from_func(foo)
+    ...         ast.parse(inspect.getsource(foo))
     ...     )
     ... ))
     def foo():
