@@ -161,7 +161,7 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
     """
 
     def increment_string_suffix(s: str) -> str:
-        if not s[-1].isnumeric():
+        if not re.match(r".+_gen_[0-9]+", s):
             return s + "_gen_0"
         return re.sub(r"[0-9]+$", lambda n: str(int(n.group()) + 1), s)
 
