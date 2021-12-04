@@ -37,7 +37,6 @@ from .typingx import (
     Set,
     Tuple,
     TypedDict,
-    TypeVar,
     Union,
     no_type_check,
 )
@@ -116,11 +115,10 @@ class FrozenModel(pydantic.BaseModel):
 _EVE_NODE_INTERNAL_SUFFIX = "__"
 _EVE_NODE_IMPL_SUFFIX = "_"
 
-AnyNode = TypeVar("AnyNode", bound="BaseNode")
 ValueNode = Union[bool, bytes, int, float, str, IntEnum, StrEnum]
-LeafNode = Union[AnyNode, ValueNode]
+LeafNode = Union["BaseNode", ValueNode]
 CollectionNode = Union[List[LeafNode], Dict[Any, LeafNode], Set[LeafNode]]
-TreeNode = Union[AnyNode, CollectionNode]
+TreeNode = Union["BaseNode", CollectionNode]
 
 
 class NodeMetaclass(pydantic.main.ModelMetaclass):
