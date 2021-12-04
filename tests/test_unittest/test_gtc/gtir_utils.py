@@ -37,7 +37,7 @@ class FieldAccessFactory(factory.Factory):
 
     name = identifier(gtir.FieldAccess)
     offset = factory.SubFactory(CartesianOffsetFactory)
-    data_index: List[gtir.Expr] = []
+    data_index: List[gtir.Expr] = factory.List([])
     dtype = common.DataType.FLOAT32
 
 
@@ -77,7 +77,7 @@ class BlockStmtFactory(factory.Factory):
     class Meta:
         model = gtir.BlockStmt
 
-    body = []
+    body: List[gtir.Stmt] = factory.List([factory.SubFactory(ParAssignStmtFactory)])
 
 
 class FieldIfStmtFactory(factory.Factory):

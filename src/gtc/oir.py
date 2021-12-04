@@ -189,7 +189,7 @@ class VerticalLoopSection(LocNode):
 class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
     sections: List[VerticalLoopSection]
-    caches: List[CacheDesc]
+    caches: List[CacheDesc] = []
 
     @validator("sections")
     def nonempty_loop(cls, v: List[VerticalLoopSection]) -> List[VerticalLoopSection]:

@@ -276,10 +276,10 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def transform_offset(
         self, offset: Dict[str, Union[int, Expr]], **kwargs: Any
-    ) -> Union[gtir.CartesianOffset, gtir.VariableKOffset]:
+    ) -> Union[common.CartesianOffset, gtir.VariableKOffset]:
         k_val = offset.get("K", 0)
         if isinstance(k_val, numbers.Integral):
-            return gtir.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)
+            return common.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)
         elif isinstance(k_val, Expr):
             return gtir.VariableKOffset(k=self.visit(k_val, **kwargs))
         else:
