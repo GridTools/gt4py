@@ -116,3 +116,19 @@ def test_multicopy():
 
     assert np.allclose(a, c)
     assert np.allclose(b, d)
+
+
+def test_arithmetic():
+    size = 10
+    IDim = CartesianAxis("IDim")
+    a = np_as_located_field(IDim)(np.ones((size)))
+    b = np_as_located_field(IDim)(np.ones((size)) * 2)
+    c = np_as_located_field(IDim)(np.zeros((size)))
+
+    def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+        return inp1 + inp2
+
+    program = program_from_func(arithmetic, out_names=["c"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, c, offset_provider={})
+
+    assert np.allclose(a.array() + b.array(), c)
