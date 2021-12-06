@@ -44,5 +44,16 @@ class MaskStmtMerging(NodeTranslator):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution) -> oir.HorizontalExecution:
         return oir.HorizontalExecution(body=self._merge(node.body), declarations=node.declarations)
 
+    # Stmt node types with lists of Stmts within them:
+
     def visit_MaskStmt(self, node: oir.MaskStmt) -> oir.MaskStmt:
         return oir.MaskStmt(mask=node.mask, body=self._merge(node.body))
+
+    def visit_While(self, node: oir.While) -> oir.While:
+        body_nodes = []
+        for stmt in node.body:
+            if isinstance(stmt, oir.MaskStmt) and node.cond == stmt.mask:
+                body_nodes.extend(stmt.body)
+            else:
+                body_nodes.append(stmt)
+        return oir.While(cond=self.visit(node.cond), body=self.visit(body_nodes))
