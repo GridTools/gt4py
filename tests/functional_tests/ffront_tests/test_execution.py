@@ -14,10 +14,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Generic, TypeVar
-
 import numpy as np
 
+from functional.ffront.builtins import Field, float64
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator import ir as itir
@@ -76,12 +75,13 @@ def program_from_fop(
     )
 
 
-DimsType = TypeVar("DimsType")
-DType = TypeVar("DType")
-
-
-class Field(Generic[DimsType, DType]):
-    ...
+def program_from_func(func, out_names: list[str], dim: CartesianAxis, size: int) -> itir.Program:
+    return program_from_fop(
+        node=FieldOperatorLowering.apply(FieldOperatorParser.apply_to_func(func)),
+        out_names=out_names,
+        dim=dim,
+        size=size,
+    )
 
 
 def test_copy():
@@ -90,13 +90,29 @@ def test_copy():
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
-    def copy(inp: Field[[IDim], "float64"]):
+    def copy(inp: Field[[IDim], float64]):
         return inp
 
-    copy_foast = FieldOperatorParser.apply_to_func(copy)
-    copy_fundef = FieldOperatorLowering.apply(copy_foast)
-    copy_program = program_from_fop(node=copy_fundef, out_names=["out"], dim=IDim, size=size)
+    copy_program = program_from_func(copy, out_names=["out"], dim=IDim, size=size)
 
     roundtrip.executor(copy_program, a, b, offset_provider={})
 
     assert np.allclose(a, b)
+
+
+def test_multicopy():
+    size = 10
+    IDim = CartesianAxis("IDim")
+    a = np_as_located_field(IDim)(np.ones((size)))
+    b = np_as_located_field(IDim)(np.ones((size)) * 3)
+    c = np_as_located_field(IDim)(np.zeros((size)))
+    d = np_as_located_field(IDim)(np.zeros((size)))
+
+    def multicopy(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+        return inp1, inp2
+
+    program = program_from_func(multicopy, out_names=["c", "d"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, c, d, offset_provider={})
+
+    assert np.allclose(a, c)
+    assert np.allclose(b, d)
