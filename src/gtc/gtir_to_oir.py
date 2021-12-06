@@ -99,6 +99,7 @@ class GTIRToOIR(NodeTranslator):
         mask_field_decl = oir.Temporary(
             name=f"mask_{id(node)}", dtype=DataType.BOOL, dimensions=(True, True, True)
         )
+        kwargs["temps"].append(mask_field_decl)
         stmts = [
             oir.AssignStmt(
                 left=oir.FieldAccess(
@@ -157,7 +158,7 @@ class GTIRToOIR(NodeTranslator):
         horiz_execs: List[oir.HorizontalExecution] = []
         for stmt in node.body:
             scalars: List[oir.ScalarDecl] = []
-            stmt_or_stmts = self.visit(stmt, scalars=scalars)
+            stmt_or_stmts = self.visit(stmt, scalars=scalars, temps=temps)
             body = [stmt_or_stmts] if isinstance(stmt_or_stmts, oir.Stmt) else stmt_or_stmts
             horiz_execs.append(oir.HorizontalExecution(body=body, declarations=scalars))
 
