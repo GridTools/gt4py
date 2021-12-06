@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from functional.ffront import field_operator_ast as foast
-from functional.ffront.builtins import Field, float64
+from functional.ffront.builtins import Field, float64, int64
 from functional.ffront.func_to_foast import FieldOperatorParser
 
 
@@ -31,4 +31,23 @@ def test_unpack_assign():
     )
     assert parsed.symtable_["tmp_b$0"].type == foast.FieldType(
         dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
+    )
+
+
+def test_assign_tuple():
+    def temp_tuple(a: Field[..., float64], b: Field[..., int64]):
+        tmp = a, b
+        return tmp
+
+    parsed = FieldOperatorParser.apply_to_func(temp_tuple)
+
+    assert parsed.symtable_["tmp$0"].type == foast.TupleType(
+        types=[
+            foast.FieldType(
+                dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
+            ),
+            foast.FieldType(
+                dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.INT64, shape=None)
+            ),
+        ]
     )

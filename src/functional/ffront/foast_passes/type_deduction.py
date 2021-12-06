@@ -106,6 +106,17 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             return new_node
         return node
 
+    def visit_TupleSymbol(
+        self, node: foast.TupleSymbol, refine_type: Optional[foast.TupleType] = None, **kwargs
+    ) -> foast.TupleSymbol:
+        symtable = kwargs["symtable"]
+        if refine_type:
+            check_type_refinement(node, refine_type)
+            new_node = foast.TupleSymbol(id=node.id, type=refine_type, location=node.location)
+            symtable[new_node.id] = new_node
+            return new_node
+        return node
+
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
         new_type = None

@@ -164,17 +164,22 @@ class FieldOperatorParser(ast.NodeVisitor):
         return foast.FieldSymbol(id=node.arg, location=self._getloc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
-        target = node.targets[0]  # can there be more than one element?
+        target = node.targets[0]  # there is only one element after assignment passes
         if isinstance(target, ast.Tuple):
             raise self._make_syntax_error(node, message="Unpacking not allowed!")
         if not isinstance(target, ast.Name):
             raise self._make_syntax_error(node, message="Can only assign to names!")
         new_value = self.visit(node.value)
+        target_symbol_type = foast.FieldSymbol
+        constraint_type = foast.FieldType
+        if isinstance(new_value, foast.TupleExpr):
+            target_symbol_type = foast.TupleSymbol
+            constraint_type = foast.TupleType
         return foast.Assign(
-            target=foast.FieldSymbol(
+            target=target_symbol_type(
                 id=target.id,
                 location=self._getloc(target),
-                type=foast.DeferredSymbolType(constraint=foast.FieldType),
+                type=foast.DeferredSymbolType(constraint=constraint_type),
             ),
             value=new_value,
             location=self._getloc(node),
@@ -207,7 +212,9 @@ class FieldOperatorParser(ast.NodeVisitor):
 
     def visit_Tuple(self, node: ast.Tuple, **kwargs) -> foast.TupleExpr:
         return foast.TupleExpr(
-            elts=[self.visit(item) for item in node.elts], location=self._getloc(node)
+            elts=[self.visit(item) for item in node.elts],
+            location=self._getloc(node),
+            type=foast.DeferredSymbolType(constraint=foast.TupleType),
         )
 
     def visit_Return(self, node: ast.Return, **kwargs) -> foast.Return:

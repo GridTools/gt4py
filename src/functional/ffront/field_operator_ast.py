@@ -96,6 +96,10 @@ class FieldSymbol(DataSymbol):
     type: Union[FieldType, DeferredSymbolType]  # noqa A003
 
 
+class TupleSymbol(DataSymbol):
+    type: Union[TupleType, DeferredSymbolType]  # noqa A003
+
+
 class Function(Symbol):
     type: FunctionType  # noqa A003
     params: list[FieldType]

@@ -182,7 +182,7 @@ def test_syntax_unpacking():
         fun=itir.SymRef(id="tuple_get"),
         args=[
             itir.FunCall(
-                fun=itir.SymRef(id="make_tuple"),
+                fun=MAKE_TUPLE,
                 args=[
                     itir.FunCall(fun=DEREF, args=[itir.SymRef(id="inp1")]),
                     itir.FunCall(fun=DEREF, args=[itir.SymRef(id="inp2")]),
@@ -245,6 +245,25 @@ def test_call():
 
     assert lowered.expr == itir.FunCall(
         fun=itir.SymRef(id="identity"), args=[itir.FunCall(fun=DEREF, args=[itir.SymRef(id="inp")])]
+    )
+
+
+def test_temp_tuple():
+    """returning a temp tuple should work."""
+
+    def temp_tuple(a: Field[..., float64], b: Field[..., int64]):
+        tmp = a, b
+        return tmp
+
+    parsed = FieldOperatorParser.apply_to_func(temp_tuple)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.expr == itir.FunCall(
+        fun=MAKE_TUPLE,
+        args=[
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
+        ],
     )
 
 
