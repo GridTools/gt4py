@@ -93,7 +93,7 @@ def test_copy():
     def copy(inp: Field[[IDim], "float64"]):
         return inp
 
-    copy_foast = FieldOperatorParser.apply_to_func(copy)
+    copy_foast = FieldOperatorParser.apply_to_function(copy)
     copy_fundef = FieldOperatorLowering.apply(copy_foast)
     copy_program = program_from_fop(node=copy_fundef, out_names=["out"], dim=IDim, size=size)
 

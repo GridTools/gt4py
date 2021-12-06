@@ -91,7 +91,7 @@ def test_invalid_syntax_error_empty_return():
             r"Empty return not allowed \(test_interface.py, line 85\)"
         ),
     ):
-        _ = FieldOperatorParser.apply_to_func(wrong_syntax)
+        _ = FieldOperatorParser.apply_to_function(wrong_syntax)
 
 
 def test_untyped_arg():
@@ -104,7 +104,7 @@ def test_untyped_arg():
         FieldOperatorSyntaxError,
         match=r"Untyped parameters not allowed! \(.*\)",
     ):
-        _ = FieldOperatorParser.apply_to_func(untyped)
+        _ = FieldOperatorParser.apply_to_function(untyped)
 
 
 def test_mistyped_arg():
@@ -117,7 +117,7 @@ def test_mistyped_arg():
         FieldOperatorTypeError,
         match=r"Field type requires two arguments, got 0! \(.*\)",
     ):
-        _ = FieldOperatorParser.apply_to_func(mistyped)
+        _ = FieldOperatorParser.apply_to_function(mistyped)
 
 
 def test_return_type():
@@ -126,7 +126,7 @@ def test_return_type():
     def rettype(inp: Field[..., float64]) -> Field[..., float64]:
         return inp
 
-    parsed = FieldOperatorParser.apply_to_func(rettype)
+    parsed = FieldOperatorParser.apply_to_function(rettype)
 
     assert parsed.body[-1].value.type == foast.FieldType(
         dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
@@ -143,7 +143,7 @@ def test_invalid_syntax_no_return():
         FieldOperatorSyntaxError,
         match=r"Field operator must return a field expression on the last line! \(.*\)",
     ):
-        _ = FieldOperatorParser.apply_to_func(no_return)
+        _ = FieldOperatorParser.apply_to_function(no_return)
 
 
 def test_invalid_assign_to_expr():
@@ -155,7 +155,7 @@ def test_invalid_assign_to_expr():
         return tmp
 
     with pytest.raises(FieldOperatorSyntaxError, match=r"Can only assign to names! \(.*\)"):
-        _ = FieldOperatorParser.apply_to_func(invalid_assign_to_expr)
+        _ = FieldOperatorParser.apply_to_function(invalid_assign_to_expr)
 
 
 def test_copy_lower():
@@ -163,7 +163,7 @@ def test_copy_lower():
         return inp
 
     # ast_passes
-    parsed = FieldOperatorParser.apply_to_func(copy_field)
+    parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
     assert lowered == COPY_FUN_DEF
     assert lowered.expr == COPY_FUN_DEF.expr
@@ -176,7 +176,7 @@ def test_syntax_unpacking():
         tmp1, tmp2 = inp1, inp2  # noqa
         return tmp1
 
-    parsed = FieldOperatorParser.apply_to_func(unpacking)
+    parsed = FieldOperatorParser.apply_to_function(unpacking)
     lowered = FieldOperatorLowering.apply(parsed)
     assert lowered.expr == itir.FunCall(
         fun=itir.SymRef(id="tuple_get"),
@@ -200,7 +200,7 @@ def test_temp_assignment():
         tmp2 = inp
         return tmp2
 
-    parsed = FieldOperatorParser.apply_to_func(copy_field)
+    parsed = FieldOperatorParser.apply_to_function(copy_field)
 
     assert parsed.symtable_["tmp$0"].type == foast.FieldType(
         dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
@@ -217,7 +217,7 @@ def test_annotated_assignment():
         tmp: Field[..., "float64"] = inp
         return tmp
 
-    parsed = FieldOperatorParser.apply_to_func(copy_field)
+    parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered == COPY_FUN_DEF
@@ -230,7 +230,7 @@ def test_clashing_annotated_assignment():
         return tmp
 
     with pytest.warns(FieldOperatorTypeDeductionError, match=r"type inconsistency"):
-        _ = FieldOperatorParser.apply_to_func(clashing)
+        _ = FieldOperatorParser.apply_to_function(clashing)
 
 
 def test_call():
@@ -240,7 +240,7 @@ def test_call():
     def call(inp: Field[..., "float64"]):
         return identity(inp)
 
-    parsed = FieldOperatorParser.apply_to_func(call)
+    parsed = FieldOperatorParser.apply_to_function(call)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -259,7 +259,7 @@ def test_call_expression():
         FieldOperatorSyntaxError,
         match=r"functions can only be called directly! \(.*\)",
     ):
-        _ = FieldOperatorParser.apply_to_func(call_expr)
+        _ = FieldOperatorParser.apply_to_function(call_expr)
 
 
 def test_unary_ops():
@@ -268,7 +268,7 @@ def test_unary_ops():
         tmp = -tmp
         return tmp
 
-    parsed = FieldOperatorParser.apply_to_func(unary)
+    parsed = FieldOperatorParser.apply_to_function(unary)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -290,7 +290,7 @@ def test_unary_not():
     def unary_not(cond: Field[..., "bool"]):
         return not cond
 
-    parsed = FieldOperatorParser.apply_to_func(unary_not)
+    parsed = FieldOperatorParser.apply_to_function(unary_not)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -302,7 +302,7 @@ def test_binary_plus():
     def plus(a: Field[..., "float64"], b: Field[..., "float64"]):
         return a + b
 
-    parsed = FieldOperatorParser.apply_to_func(plus)
+    parsed = FieldOperatorParser.apply_to_function(plus)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -318,7 +318,7 @@ def test_binary_mult():
     def mult(a: Field[..., "float64"], b: Field[..., "float64"]):
         return a * b
 
-    parsed = FieldOperatorParser.apply_to_func(mult)
+    parsed = FieldOperatorParser.apply_to_function(mult)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -334,7 +334,7 @@ def test_binary_minus():
     def minus(a: Field[..., "float64"], b: Field[..., "float64"]):
         return a - b
 
-    parsed = FieldOperatorParser.apply_to_func(minus)
+    parsed = FieldOperatorParser.apply_to_function(minus)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -350,7 +350,7 @@ def test_binary_div():
     def division(a: Field[..., "float64"], b: Field[..., "float64"]):
         return a / b
 
-    parsed = FieldOperatorParser.apply_to_func(division)
+    parsed = FieldOperatorParser.apply_to_function(division)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -366,7 +366,7 @@ def test_binary_and():
     def bit_and(a: Field[..., "bool"], b: Field[..., "bool"]):
         return a & b
 
-    parsed = FieldOperatorParser.apply_to_func(bit_and)
+    parsed = FieldOperatorParser.apply_to_function(bit_and)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -382,7 +382,7 @@ def test_binary_or():
     def bit_or(a: Field[..., "bool"], b: Field[..., "bool"]):
         return a | b
 
-    parsed = FieldOperatorParser.apply_to_func(bit_or)
+    parsed = FieldOperatorParser.apply_to_function(bit_or)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -402,7 +402,7 @@ def test_binary_pow():
         FieldOperatorSyntaxError,
         match=(r"`\*\*` operator not supported!"),
     ):
-        _ = FieldOperatorParser.apply_to_func(power)
+        _ = FieldOperatorParser.apply_to_function(power)
 
 
 def test_binary_mod():
@@ -413,14 +413,14 @@ def test_binary_mod():
         FieldOperatorSyntaxError,
         match=(r"`%` operator not supported!"),
     ):
-        _ = FieldOperatorParser.apply_to_func(power)
+        _ = FieldOperatorParser.apply_to_function(power)
 
 
 def test_compare_gt():
     def comp_gt(a: Field[..., "float64"], b: Field[..., "float64"]):
         return a > b
 
-    parsed = FieldOperatorParser.apply_to_func(comp_gt)
+    parsed = FieldOperatorParser.apply_to_function(comp_gt)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -436,7 +436,7 @@ def test_compare_lt():
     def comp_lt(a: Field[..., "float64"], b: Field[..., "float64"]):
         return a < b
 
-    parsed = FieldOperatorParser.apply_to_func(comp_lt)
+    parsed = FieldOperatorParser.apply_to_function(comp_lt)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -452,7 +452,7 @@ def test_compare_eq():
     def comp_eq(a: Field[..., "int64"], b: Field[..., "int64"]):
         return a == b
 
-    parsed = FieldOperatorParser.apply_to_func(comp_eq)
+    parsed = FieldOperatorParser.apply_to_function(comp_eq)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -468,7 +468,7 @@ def test_compare_chain():
     def compare_chain(a: Field[..., "float64"], b: Field[..., "float64"], c: Field[..., "float64"]):
         return a > b > c
 
-    parsed = FieldOperatorParser.apply_to_func(compare_chain)
+    parsed = FieldOperatorParser.apply_to_function(compare_chain)
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.expr == itir.FunCall(
@@ -494,7 +494,7 @@ def test_bool_and():
         FieldOperatorSyntaxError,
         match=(r"`and` operator not allowed!"),
     ):
-        _ = FieldOperatorParser.apply_to_func(bool_and)
+        _ = FieldOperatorParser.apply_to_function(bool_and)
 
 
 def test_bool_or():
@@ -505,4 +505,4 @@ def test_bool_or():
         FieldOperatorSyntaxError,
         match=(r"`or` operator not allowed!"),
     ):
-        _ = FieldOperatorParser.apply_to_func(bool_or)
+        _ = FieldOperatorParser.apply_to_function(bool_or)
