@@ -128,7 +128,7 @@ class Storage(np.ndarray):
 
         mask: list of bools or list of spatial axes
             in a list of bools, ``False`` entries indicate that the corresponding dimension is masked, i.e. the storage
-            has reduced dimension and reading and writing from offsets along this axis acces the same element.
+            has reduced dimension and reading and writing from offsets along this axis access the same element.
             In a list of spatial axes (IJK), a boolean mask will be generated with ``True`` entries for all
             dimensions except for the missing spatial axes names.
         """
@@ -206,6 +206,11 @@ class Storage(np.ndarray):
                 if not isinstance(obj, Storage) and not isinstance(obj, _ViewableNdarray):
                     raise RuntimeError(
                         "Meta information can not be inferred when creating Storage views from other classes than Storage."
+                    )
+                if len(self.shape) != len(obj.shape):
+                    raise RuntimeError(
+                        "Dimension reducing slicing storages is not supported. Use `Storage.data` to retrieve a "
+                        "slicable numpy array and create a new storage from it with proper metadata."
                     )
                 self.__dict__ = {**obj.__dict__, **self.__dict__}
                 self.is_stencil_view = False
