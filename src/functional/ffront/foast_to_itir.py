@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Optional
+from typing import Iterator, Optional, Union
 
 from eve import NodeTranslator
 from functional.ffront import field_operator_ast as foast
@@ -40,7 +40,7 @@ class AssignResolver(NodeTranslator):
 
     @classmethod
     def apply(
-        cls, nodes: List[foast.Expr], *, params: Optional[list[itir.Sym]] = None
+        cls, nodes: list[foast.Expr], *, params: Optional[list[itir.Sym]] = None
     ) -> foast.Expr:
         names: dict[str, foast.Expr] = {}
         parser = cls()
@@ -109,8 +109,8 @@ class FieldOperatorLowering(NodeTranslator):
 
     def body_visit(
         self,
-        exprs: List[foast.Expr],
-        params: Optional[List[itir.Sym]] = None,
+        exprs: list[foast.Expr],
+        params: Optional[list[itir.Sym]] = None,
         **kwargs,
     ) -> itir.Expr:
         return self.visit(AssignResolver.apply(exprs), **kwargs)
@@ -126,9 +126,8 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_Name(
         self, node: foast.Name, *, symtable: dict[str, foast.Symbol], **kwargs
     ) -> itir.SymRef:
-        if node.id in symtable:
-            if isinstance(symtable[node.id], foast.FieldSymbol):
-                return itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id=node.id)])
+        if isinstance(node.type, foast.FieldType) and not kwargs.get("noderef", False):
+            return itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id=node.id)])
         return itir.SymRef(id=node.id)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
@@ -161,7 +160,34 @@ class FieldOperatorLowering(NodeTranslator):
             args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
 
+    def _make_shift_args(
+        self, node: foast.Subscript, **kwargs
+    ) -> tuple[itir.OffsetLiteral, itir.IntLiteral]:
+        return (itir.OffsetLiteral(value=node.value.id), itir.IntLiteral(value=node.index))
+
+    def _gen_shift_args(
+        self, args: list[foast.Subscript], **kwargs
+    ) -> Iterator[Union[itir.OffsetLiteral, itir.IntLiteral]]:
+        for arg in args:
+            name, offset = self._make_shift_args(arg)
+            yield name
+            yield offset
+
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        # enable field( offset[int] ) notation
+        if isinstance(node.func.type, foast.FieldType):
+            return itir.FunCall(
+                fun=itir.SymRef(id="deref"),
+                args=[
+                    itir.FunCall(
+                        fun=itir.FunCall(
+                            fun=itir.SymRef(id="shift"),
+                            args=[*self._gen_shift_args(node.args)],
+                        ),
+                        args=[self.visit(node.func, noderef=True, **kwargs)],
+                    )
+                ],
+            )
         new_fun = (
             itir.SymRef(id=node.func.id)
             if isinstance(node.func, foast.Name)

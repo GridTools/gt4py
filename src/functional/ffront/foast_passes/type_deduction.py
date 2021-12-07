@@ -120,6 +120,10 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
         new_type = None
+        if kwargs.get("in_shift", False):
+            return foast.Subscript(
+                value=new_value, index=node.index, type=foast.OffsetType(), location=node.location
+            )
         match new_value.type:
             case foast.TupleType(types=types) | foast.FunctionType(
                 returns=foast.TupleType(types=types)
@@ -138,6 +142,15 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         new_elts = self.visit(node.elts, **kwargs)
         new_type = foast.TupleType(types=[element.type for element in new_elts])
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
+
+    def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
+        new_func = self.visit(node.func, **kwargs)
+        if isinstance(new_func.type, foast.FieldType):
+            new_args = self.visit(node.args, in_shift=True, **kwargs)
+            return foast.Call(func=new_func, args=new_args, location=node.location)
+        return foast.Call(
+            func=new_func, args=self.visit(node.args, **kwargs), location=node.location
+        )
 
 
 class FieldOperatorTypeDeductionError(GTSyntaxError, SyntaxWarning):

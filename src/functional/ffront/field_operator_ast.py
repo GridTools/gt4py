@@ -50,6 +50,10 @@ class SymbolTypeVariable(SymbolType):
     bound: typing.Type[SymbolType]
 
 
+class OffsetType(SymbolType):
+    ...
+
+
 class DataType(SymbolType):
     ...
 

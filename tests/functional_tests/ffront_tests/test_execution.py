@@ -22,7 +22,7 @@ from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator import ir as itir
 from functional.iterator.backends import roundtrip
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import CartesianAxis
+from functional.iterator.runtime import CartesianAxis, offset
 
 
 def make_domain(dim_name: str, lower: int, upper: int) -> itir.FunCall:
@@ -93,9 +93,9 @@ def test_copy():
     def copy(inp: Field[[IDim], float64]):
         return inp
 
-    copy_program = program_from_func(copy, out_names=["out"], dim=IDim, size=size)
+    program = program_from_func(copy, out_names=["out"], dim=IDim, size=size)
 
-    roundtrip.executor(copy_program, a, b, offset_provider={})
+    roundtrip.executor(program, a, b, offset_provider={})
 
     assert np.allclose(a, b)
 
@@ -132,3 +132,19 @@ def test_arithmetic():
     roundtrip.executor(program, a, b, c, offset_provider={})
 
     assert np.allclose(a.array() + b.array(), c)
+
+
+def test_shift():
+    size = 10
+    IDim = CartesianAxis("IDim")
+    Ioff = offset("Ioff")
+    a = np_as_located_field(IDim)(np.arange(size + 1))
+    b = np_as_located_field(IDim)(np.zeros((size)))
+
+    def shift_by_one(inp: Field[[IDim], float64]):
+        return inp(Ioff[1])
+
+    program = program_from_func(shift_by_one, out_names=["b"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, offset_provider={"Ioff": IDim})
+
+    assert np.allclose(b.array(), np.arange(1, 11))
