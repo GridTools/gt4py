@@ -237,18 +237,19 @@ class OnTheFlyMerging(NodeTranslator):
         vertical_loops: List[oir.VerticalLoop] = []
         protected_fields = set(n.name for n in node.params)
         all_names = collect_symbol_names(node)
-        for vl in reversed(node.vertical_loops):
-            vertical_loops.insert(
-                0,
-                self.visit(
-                    vl,
-                    new_symbol_name=symbol_name_creator(all_names),
-                    protected_fields=protected_fields,
-                    **kwargs,
-                ),
+        vertical_loops = [
+            *reversed(
+                [
+                    self.visit(
+                        vl,
+                        new_symbol_name=symbol_name_creator(all_names),
+                        protected_fields=protected_fields,
+                        **kwargs,
+                    )
+                    for vl in reversed(node.vertical_loops)
+                ]
             )
-            access_collection = AccessCollector.apply(vl)
-            protected_fields |= access_collection.fields()
+        ]
         accessed = AccessCollector.apply(vertical_loops).fields()
         return oir.Stencil(
             name=node.name,

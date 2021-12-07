@@ -30,6 +30,10 @@ OffsetT = TypeVar("OffsetT")
 GeneralOffsetTuple = Tuple[int, int, Optional[int]]
 
 
+digits_at_end_pattern = re.compile(r"[0-9]+$")
+generated_name_pattern = re.compile(r".+_gen_[0-9]+")
+
+
 @dataclass(frozen=True)
 class GenericAccess(Generic[OffsetT]):
     field: str
@@ -161,9 +165,9 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
     """
 
     def increment_string_suffix(s: str) -> str:
-        if not re.match(r".+_gen_[0-9]+", s):
+        if not generated_name_pattern.match(s):
             return s + "_gen_0"
-        return re.sub(r"[0-9]+$", lambda n: str(int(n.group()) + 1), s)
+        return digits_at_end_pattern.sub(lambda n: str(int(n.group()) + 1), s)
 
     def new_symbol_name(name: str) -> str:
         while name in used_names:
