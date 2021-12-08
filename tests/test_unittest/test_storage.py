@@ -944,7 +944,7 @@ def test_sum_gpu():
         shape=shape,
     )
 
-    q1[i1 : i2 + 1, jslice, 0] = cp.sum(q2[i1 : i2 + 1, jslice, :], axis=2)
+    q1[i1 : i2 + 1, jslice, 0] = cp.sum(q2.data[i1 : i2 + 1, jslice, :], axis=2)
 
 
 @pytest.mark.requires_gpu

@@ -208,7 +208,8 @@ The ``default_origin`` parameter plays two roles:
    the grid point with the lowest index where a value is written.
 
 .. note::
-    Slicing a storage with reduced dimension, e.g. `field_a[:, :, 0]`, is not supported.
+    Slicing a storage with reduced dimension, e.g. `field_a[:, :, 0]`, is not supported. Use `Stoage.data` to retrieve
+    a slicable array, e.g. `field_a.data[:, :, 0]`, and create a new storage from it if needed.
 
 --------------------------
 Computations and Intervals
