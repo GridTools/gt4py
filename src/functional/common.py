@@ -17,10 +17,8 @@ from __future__ import annotations
 import abc
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any,  Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
-
-MISSING_FILENAME = "<string>"
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
@@ -43,7 +41,6 @@ class Field(Protocol[DimsT, DT]):
 class GTInfo:
     definition: Any
     ir: Any
-
 
 
 class FieldOperator(abc.ABC):

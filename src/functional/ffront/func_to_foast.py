@@ -34,7 +34,7 @@ import numpy.typing as npt
 from eve import visitors
 from eve.type_definitions import SourceLocation
 from functional import common
-from functional.ffront import field_operator_ast as foast
+from functional.ffront import fbuiltins, field_operator_ast as foast
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
@@ -272,11 +272,6 @@ class FieldOperatorParser(visitors.ASTNodeVisitor):
     ) -> foast.FieldOperator:
         source, filename, starting_line = source_definition
         if closure_vars:
-            if closure_vars.nonlocals:
-                raise common.GTValueError(
-                    "References to non-local symbols ar enot yet supported "
-                    f"(found: {closure_vars.nonlocals.keys()})"
-                )
             if closure_vars.unbound:
                 raise common.GTValueError(
                     f"Closure contains references to undefined or forward-defined values ({closure_vars.unbound})"
@@ -316,15 +311,16 @@ class FieldOperatorParser(visitors.ASTNodeVisitor):
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
         symbol_names = SymbolNames.from_source(self.source, self.filename)
-        if symbol_names.globals:
+        global_names = set(symbol_names.globals) - set(fbuiltins.TYPE_BUILTIN_NAMES)
+        if global_names:
             if not self.closure_vars or (
-                missing_defs := (set(symbol_names.globals) - set(self.closure_vars.globals.keys()))
+                missing_defs := (global_names - set(self.closure_vars.globals.keys()))
             ):
                 raise common.GTValueError(f"Missing global symbol definitions: {missing_defs}")
 
         closure_symbols = [
             _make_symbol_from_value(name, self.closure_vars.globals[name], foast.Namespace.CLOSURE)
-            for name in symbol_names.globals
+            for name in global_names
         ]
         return foast.FieldOperator(
             id=node.name,
