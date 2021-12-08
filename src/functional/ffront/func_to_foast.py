@@ -15,25 +15,25 @@
 from __future__ import annotations
 
 import ast
-import collections
 import copy
+import functools
 import inspect
-import numbers
 import symtable
 import textwrap
 import types
 import typing
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, Literal, Optional, Union
+from inspect import ClosureVars
+from typing import Any, Optional
 
 import numpy as np
 import numpy.typing as npt
 
 
+from eve import visitors
 from eve.type_definitions import SourceLocation
 from functional import common
-from functional.common import Backend, FieldOperator, GTValueError
 from functional.ffront import field_operator_ast as foast
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
@@ -47,75 +47,32 @@ from functional.ffront.type_parser import FieldOperatorTypeParser
 MISSING_FILENAME = "<string>"
 
 
-def field_operator(
-    definition: Union[
-        types.FunctionType, SourceDefinition, str, tuple[str, str], tuple[str, str, int], None
-    ] = None,
-    *,
-    backend: Backend,
-    externals: Mapping[str, Any] | None = None,
-) -> FieldOperator:
-    """
-    Create a new GT4Py FieldOperator from the definition.
-
-    Args:
-        definition: Field operator definition. It can be either a Python function object or
-            a source code string (optionally provided together with a virtual filename and
-            a starting line number, which will used in syntax error messages).
-
-    Keyword Args:
-        backend: ``Backend`` object used for the implementation.
-        externals: Extra symbol definitions used in the generation.
-
-    Note:
-        The values of ``externals`` symbols will only be evaluated during the generation
-        of the new field operator. Subsequent changes in the associated values will not be
-        caught by the generated ``FieldOperator`` instance.
-
-    Returns:
-        A backend-specific ``FieldOperator`` implementing the provided definition.
-
-    """
-
-    externals_dict = {**externals} if isinstance(externals, Mapping) else {}
-
-    if callable(definition):
-        ir = FieldOperatorParser.apply_to_function(definition)
-    else:
-        if isinstance(definition, str):
-            source_definition = SourceDefinition(definition)
-        elif isinstance(definition, tuple) and 2 <= len(definition) <= 3:
-            source_definition = SourceDefinition(*definition)
-        else:
-            raise common.GTValueError(f"Invalid field operator definition ({definition})")
-
-        ir = FieldOperatorParser.apply(
-            source_definition, closure_vars=None, externals=externals_dict
-        )
-
-    return backend.generate_operator(ir)
-
-
-def _make_symbol(name: str, value: Any) -> foast.Symbol:
-    symbol_type = _make_type(value)
-    match value:
-        case str() | numbers.Number() | tuple():
-            assert isinstance(symbol_type, foast.DataType)
-            return foast.DataSymbol(id=name, type=symbol_type, origin=copy.deepcopy(value))
-        case types.FunctionType:
-            return foast.Function(id=name, type=symbol_type, origin=value, body=[])
+def _make_symbol_from_value(name: str, value: Any, namespace: foast.Namespace) -> foast.Symbol:
+    symbol_type = _make_type_from_value(value)
+    match symbol_type:
+        case foast.ScalarType() | foast.TupleType():
+            return foast.DataSymbol(
+                id=name,
+                type=symbol_type,
+                namespace=namespace,
+                location=SourceLocation.empty_location(),
+            )
+        case foast.FunctionType():
+            return foast.Function(
+                id=name, type=symbol_type, namespace=namespace, params=[], returns=[]
+            )
         case _:
             raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
 
 
-def _make_type(value: Any) -> foast.SymbolType:
+def _make_type_from_value(value: Any) -> foast.SymbolType:
     match value:
-        case bool(), int(), float(), np.generic():
-            return _make_type(type(value))
+        case bool() | int() | float() | np.generic():
+            return _make_type_from_value(type(value))
         case type() as t if issubclass(t, (bool, int, float, np.generic)):
-            return foast.ScalarType(kind=_make_scalar_kind(value))
+            return foast.ScalarType(kind=_make_scalar_kind_from_value(value))
         case tuple() as tuple_value:
-            return foast.TupleType(types=[_make_type(t) for t in tuple_value])
+            return foast.TupleType(types=[_make_type_from_value(t) for t in tuple_value])
         case common.Field():
             return foast.FieldType(..., foast.ScalarKind.FLOAT64)
         case types.FunctionType():
@@ -124,12 +81,12 @@ def _make_type(value: Any) -> foast.SymbolType:
             returns = []
             return foast.FunctionType(args, kwargs, returns)
         case other if other.__module__ == "typing":
-            return _make_type(other.__origin__)
+            return _make_type_from_value(other.__origin__)
         case _:
             raise common.GTTypeError(f"Impossible to map '{value}' value to a SymbolType")
 
 
-def _make_scalar_kind(value: npt.DTypeLike) -> foast.ScalarKind:
+def _make_scalar_kind_from_value(value: npt.DTypeLike) -> foast.ScalarKind:
     try:
         dt = np.dtype(value)
     except TypeError as err:
@@ -153,7 +110,8 @@ def _make_scalar_kind(value: npt.DTypeLike) -> foast.ScalarKind:
         raise common.GTTypeError(f"Non-trivial dtypes like '{value}' are not yet supported")
 
 
-class SourceDefinition(typing.NamedTuple):
+@dataclass(frozen=True)
+class SourceDefinition:
     source: str
     filename: str = MISSING_FILENAME
     starting_line: int = 1
@@ -163,24 +121,39 @@ class SourceDefinition(typing.NamedTuple):
         try:
             filename = inspect.getabsfile(func) or MISSING_FILENAME
             source = textwrap.dedent(inspect.getsource(func))
-            starting_line = inspect.getsourcelines(func)[1] if not filename.endswith(MISSING_FILENAME) else 1
+            starting_line = (
+                inspect.getsourcelines(func)[1] if not filename.endswith(MISSING_FILENAME) else 1
+            )
         except OSError as err:
             if filename.endswith(MISSING_FILENAME):
-                message = "Can not create field operator from a function that is not in a source file!"
+                message = (
+                    "Can not create field operator from a function that is not in a source file!"
+                )
             else:
                 message = f"Can not get source code of passed function ({func})"
             raise ValueError(message) from err
 
         return SourceDefinition(source, filename, starting_line)
 
+    def __iter__(self) -> Iterator[tuple[str]]:
+        yield self.source
+        yield self.filename
+        yield self.starting_line
 
-class SymbolNames(typing.NamedTuple):
-    args: tuple[str, ...]
+
+@dataclass(frozen=True)
+class SymbolNames:
+    params: tuple[str, ...]
     locals: tuple[str, ...]
+    imported: tuple[str, ...]
     globals: tuple[str, ...]
 
+    @functools.cached_property
+    def all_locals(self) -> tuple[str]:
+        return self.params + self.locals + self.imported
+
     @staticmethod
-    def from_source(source: str, filename: str=MISSING_FILENAME) -> SymbolNames:
+    def from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
         try:
             mod_st = symtable.symtable(source, filename, "exec")
         except SyntaxError as err:
@@ -200,16 +173,32 @@ class SymbolNames(typing.NamedTuple):
                 f"Sources with function closures are not yet supported (\n{source}\n)"
             )
 
-        arg_names = set(func_st.get_parameters())
-        local_names = set(func_st.get_locals())
+        param_names = set()
+        imported_names = set()
+        local_names = set()
+        for name in func_st.get_locals():
+            if (s := func_st.lookup(name)).is_imported():
+                imported_names.add(name)
+            elif s.is_parameter:
+                param_names.add(name)
+            else:
+                local_names.add()
+
         global_names = set(func_st.get_globals())
 
-        return SymbolNames(arg_names, local_names, global_names)
+        return SymbolNames(param_names, local_names, imported_names, global_names)
+
+    def __iter__(self) -> Iterator[tuple[str]]:
+        yield self.params
+        yield self.locals
+        yield self.imported
+        yield self.globals
 
 
 # TODO (ricoh): pass on source locations
 # TODO (ricoh): SourceLocation.source <- filename
-class FieldOperatorParser(ast.NodeVisitor):
+@dataclass(frozen=True, kw_only=True)
+class FieldOperatorParser(visitors.ASTNodeVisitor):
     """
     Parse field operator function definition from source code into FOAST.
 
@@ -254,18 +243,8 @@ class FieldOperatorParser(ast.NodeVisitor):
     source: str
     filename: str
     starting_line: int
-
-    def __init__(
-        self,
-        *,
-        source: str,
-        filename: str,
-        starting_line: int,
-    ) -> None:
-        self.source = source
-        self.filename = filename
-        self.starting_line = starting_line
-        super().__init__()
+    closure_vars: ClosureVars
+    externals_defs: dict[str, Any]
 
     def _getloc(self, node: ast.AST) -> SourceLocation:
         loc = SourceLocation.from_AST(node, source=self.filename)
@@ -278,7 +257,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         )
 
     def _make_syntax_error(self, node: ast.AST, *, message: str = "") -> FieldOperatorSyntaxError:
-        err = FieldOperatorSyntaxError.from_ast_node(
+        err = FieldOperatorSyntaxError.from_AST(
             node, msg=message, filename=self.filename, text=self.source
         )
         err.lineno = (err.lineno or 1) + self.starting_line - 1
@@ -288,34 +267,20 @@ class FieldOperatorParser(ast.NodeVisitor):
     def apply(
         cls,
         source_definition: SourceDefinition,
-        closure_vars: Optional[inspect.ClosureVars] = None,
-        externals: Optional[dict[str, Any]] = None,
+        closure_vars: Optional[ClosureVars] = None,
+        externals_defs: Optional[dict[str, Any]] = None,
     ) -> foast.FieldOperator:
         source, filename, starting_line = source_definition
         if closure_vars:
             if closure_vars.nonlocals:
                 raise common.GTValueError(
-                    f"Functions with closures are not yet supported (\n{source}\n)"
+                    "References to non-local symbols ar enot yet supported "
+                    f"(found: {closure_vars.nonlocals.keys()})"
                 )
             if closure_vars.unbound:
                 raise common.GTValueError(
-                    f"Found references to undefined or forward-defined values ({closure_vars.unbound})"
+                    f"Closure contains references to undefined or forward-defined values ({closure_vars.unbound})"
                 )
-
-        symbol_names = SymbolNames.from_source(source, filename)
-        if symbol_names.globals:
-            if not closure_vars or (
-                missing_defs := (set(symbol_names.globals) - set(closure_vars.globals.keys()))
-            ):
-                raise GTValueError(f"Missing global symbold definitions: {missing_defs}")
-
-        embedded_definitions = {
-            name: _make_symbol(name, closure_vars.globals[name])
-            for name in symbol_names.globals
-        }
-        external_definitions = {
-            name: _make_symbol(name, value) for name, value in externals.items()
-        }
 
         result = None
         try:
@@ -327,6 +292,8 @@ class FieldOperatorParser(ast.NodeVisitor):
                 source=source,
                 filename=filename,
                 starting_line=starting_line,
+                closure_vars=closure_vars,
+                externals_defs=externals_defs,
             ).visit(las)
         except SyntaxError as err:
             if not err.filename:
@@ -348,12 +315,42 @@ class FieldOperatorParser(ast.NodeVisitor):
         return cls.apply(source_definition, closure_vars, externals)
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
+        symbol_names = SymbolNames.from_source(self.source, self.filename)
+        if symbol_names.globals:
+            if not self.closure_vars or (
+                missing_defs := (set(symbol_names.globals) - set(self.closure_vars.globals.keys()))
+            ):
+                raise common.GTValueError(f"Missing global symbol definitions: {missing_defs}")
+
+        closure_symbols = [
+            _make_symbol_from_value(name, self.closure_vars.globals[name], foast.Namespace.CLOSURE)
+            for name in symbol_names.globals
+        ]
         return foast.FieldOperator(
             id=node.name,
             params=self.visit(node.args),
             body=self.visit_stmt_list(node.body),
+            closure=closure_symbols,
             location=self._getloc(node),
         )
+
+    def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> None:
+        assert node.module == "__externals__"
+
+        symbols = []
+        for alias in node.names:
+            if alias.name not in self.externals_defs:
+                raise self._make_syntax_error(
+                    node, message="Missing imported symbol '{alias.name}'"
+                )
+
+            symbols.append(
+                _make_symbol_from_value(
+                    alias.asname, self.externals_defs[alias.name], foast.Namespace.EXTERNAL
+                )
+            )
+
+        return foast.ExternalImport(symbols=symbols)
 
     def visit_arguments(self, node: ast.arguments) -> list[foast.FieldSymbol]:
         return [self.visit_arg(arg) for arg in node.args]
@@ -558,7 +555,7 @@ class FieldOperatorSyntaxError(common.GTSyntaxError):
         super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
 
     @classmethod
-    def from_ast_node(
+    def from_AST(
         cls,
         node: ast.AST,
         *,

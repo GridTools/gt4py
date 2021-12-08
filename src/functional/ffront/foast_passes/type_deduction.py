@@ -72,6 +72,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             id=node.id,
             params=self.visit(node.params, **kwargs),
             body=self.visit(node.body, **kwargs),
+            closure=self.visit(node.closure, **kwargs),
             location=node.location,
         )
 
