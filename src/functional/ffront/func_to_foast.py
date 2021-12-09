@@ -347,7 +347,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         # code of the function, and thus all non-local symbols are classified as 'global'.
         # However, 'closure_refs' comes from inspecting the live function object, which might
         # have not been defined at a global scope, and therefore actual symbol values could appear
-        # be looked up in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
+        # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
         defs = self.closure_refs.globals | self.closure_refs.nonlocals
         closure = [
             _make_symbol_from_value(name, defs[name], foast.Namespace.CLOSURE)
