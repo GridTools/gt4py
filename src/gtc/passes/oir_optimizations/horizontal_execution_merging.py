@@ -103,9 +103,17 @@ class OnTheFlyMerging(NodeTranslator):
                 nf.ARCSIN,
                 nf.ARCCOS,
                 nf.ARCTAN,
+                nf.SINH,
+                nf.COSH,
+                nf.TANH,
+                nf.ARCSINH,
+                nf.ARCCOSH,
+                nf.ARCTANH,
                 nf.SQRT,
                 nf.EXP,
                 nf.LOG,
+                nf.GAMMA,
+                nf.CBRT,
             }
             calls = first.iter_tree().if_isinstance(oir.NativeFuncCall).getattr("func")
             return any(call in expensive_calls for call in calls)
