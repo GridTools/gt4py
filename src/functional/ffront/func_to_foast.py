@@ -29,11 +29,11 @@ from typing import Any, Optional
 import numpy as np
 import numpy.typing as npt
 
-
 from eve import visitors
 from eve.type_definitions import SourceLocation
 from functional import common
-from functional.ffront import fbuiltins, field_operator_ast as foast
+from functional.ffront import fbuiltins
+from functional.ffront import field_operator_ast as foast
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
@@ -149,10 +149,10 @@ class SourceDefinition:
 @dataclass(frozen=True)
 class SymbolNames:
     params: tuple[str, ...]
-    locals: tuple[str, ...]
+    locals: tuple[str, ...]  # noqa: A003  # shadowing a python builtin
     imported: tuple[str, ...]
     nonlocals: tuple[str, ...]
-    globals: tuple[str, ...]
+    globals: tuple[str, ...]  # noqa: A003  # shadowing a python builtin
 
     @functools.cached_property
     def all_locals(self) -> tuple[str]:
@@ -329,8 +329,8 @@ class FieldOperatorParser(visitors.ASTNodeVisitor):
         # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
         # code of the function, and thus all non-local symbols are classified as 'global'.
         # However, 'closure_vars' comes from inspecting the live function object, which might
-        # have not be defined at a global scope, and therefore we need to lookup for symbol
-        # values in both 'closure_vars.globals' and 'self.closure_vars.nonlocals' members.
+        # have not been defined at a global scope, and therefore actual symbol values could appear
+        # be looked up in both 'closure_vars.globals' and 'self.closure_vars.nonlocals'.
         if missing_defs := (self.closure_vars.unbound - (global_names | nonlocal_names)):
             raise common.GTValueError(f"Missing reference definitions: {missing_defs}")
 

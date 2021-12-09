@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 import typing
-from typing import Any, Literal, Optional, Union
+from typing import Literal, Optional, Union
 
 import eve
 from eve import Node
