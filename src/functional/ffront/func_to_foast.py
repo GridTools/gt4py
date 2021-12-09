@@ -44,15 +44,14 @@ from functional.ffront.type_parser import FieldOperatorTypeParser
 MISSING_FILENAME = "<string>"
 
 
-def _make_symbol_from_value(name: str, value: Any, namespace: foast.Namespace) -> foast.Symbol:
+def _make_symbol_from_value(
+    name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
+) -> foast.Symbol:
     symbol_type = _make_symbol_type_from_value(value)
     match symbol_type:
         case foast.ScalarType() | foast.TupleType():
             return foast.DataSymbol(
-                id=name,
-                type=symbol_type,
-                namespace=namespace,
-                location=SourceLocation.empty_location(),
+                id=name, type=symbol_type, namespace=namespace, location=location
             )
         case foast.FunctionType():
             return foast.Function(
@@ -61,7 +60,7 @@ def _make_symbol_from_value(name: str, value: Any, namespace: foast.Namespace) -
                 namespace=namespace,
                 params=[],
                 returns=[],
-                location=SourceLocation.empty_location(),
+                location=location,
             )
         case _:
             raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
@@ -278,7 +277,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     closure_refs: ClosureRefs
     externals_defs: dict[str, Any]
 
-    def _getloc(self, node: ast.AST) -> SourceLocation:
+    def _make_loc(self, node: ast.AST) -> SourceLocation:
         loc = SourceLocation.from_AST(node, source=self.filename)
         return SourceLocation(
             line=loc.line + self.starting_line - 1,
@@ -349,7 +348,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
         defs = self.closure_refs.globals | self.closure_refs.nonlocals
         closure = [
-            _make_symbol_from_value(name, defs[name], foast.Namespace.CLOSURE)
+            _make_symbol_from_value(name, defs[name], foast.Namespace.CLOSURE, self._make_loc(node))
             for name in global_names | nonlocal_names
         ]
 
@@ -358,7 +357,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             params=self.visit(node.args),
             body=self.visit_stmt_list(node.body),
             closure=closure,
-            location=self._getloc(node),
+            location=self._make_loc(node),
         )
 
     def visit_Import(self, node: ast.Import, **kwargs) -> None:
@@ -383,10 +382,11 @@ class FieldOperatorParser(ast.NodeVisitor):
                     alias.asname or alias.name,
                     self.externals_defs[alias.name],
                     foast.Namespace.EXTERNAL,
+                    location=self._make_loc(node),
                 )
             )
 
-        return foast.ExternalImport(symbols=symbols, location=self._getloc(node))
+        return foast.ExternalImport(symbols=symbols, location=self._make_loc(node))
 
     def visit_arguments(self, node: ast.arguments) -> list[foast.FieldSymbol]:
         return [self.visit_arg(arg) for arg in node.args]
@@ -395,7 +395,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         new_type = FieldOperatorTypeParser.apply(node.annotation)
         if new_type is None:
             raise self._make_syntax_error(node, message="Untyped parameters not allowed!")
-        return foast.FieldSymbol(id=node.arg, location=self._getloc(node), type=new_type)
+        return foast.FieldSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # can there be more than one element?
@@ -407,11 +407,11 @@ class FieldOperatorParser(ast.NodeVisitor):
         return foast.Assign(
             target=foast.FieldSymbol(
                 id=target.id,
-                location=self._getloc(target),
+                location=self._make_loc(target),
                 type=foast.DeferredSymbolType(constraint=foast.FieldType),
             ),
             value=new_value,
-            location=self._getloc(node),
+            location=self._make_loc(node),
         )
 
     def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
@@ -425,29 +425,29 @@ class FieldOperatorParser(ast.NodeVisitor):
         return foast.Assign(
             target=foast.FieldSymbol(
                 id=node.target.id,
-                location=self._getloc(node.target),
+                location=self._make_loc(node.target),
                 type=FieldOperatorTypeParser.apply(node.annotation),
             ),
             value=self.visit(node.value) if node.value else None,
-            location=self._getloc(node),
+            location=self._make_loc(node),
         )
 
     def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.Subscript:
         if not isinstance(node.slice, ast.Constant):
             raise self._make_syntax_error(node, message="""Subscript slicing not allowed!""")
         return foast.Subscript(
-            value=self.visit(node.value), index=node.slice.value, location=self._getloc(node)
+            value=self.visit(node.value), index=node.slice.value, location=self._make_loc(node)
         )
 
     def visit_Tuple(self, node: ast.Tuple, **kwargs) -> foast.TupleExpr:
         return foast.TupleExpr(
-            elts=[self.visit(item) for item in node.elts], location=self._getloc(node)
+            elts=[self.visit(item) for item in node.elts], location=self._make_loc(node)
         )
 
     def visit_Return(self, node: ast.Return, **kwargs) -> foast.Return:
         if not node.value:
             raise self._make_syntax_error(node, message="Empty return not allowed")
-        return foast.Return(value=self.visit(node.value), location=self._getloc(node))
+        return foast.Return(value=self.visit(node.value), location=self._make_loc(node))
 
     def visit_stmt_list(self, nodes: list[ast.stmt]) -> list[foast.Expr]:
         if not isinstance(last_node := nodes[-1], ast.Return):
@@ -457,11 +457,11 @@ class FieldOperatorParser(ast.NodeVisitor):
         return [self.visit(node) for node in nodes]
 
     def visit_Name(self, node: ast.Name, **kwargs) -> foast.Name:
-        return foast.Name(id=node.id, location=self._getloc(node))
+        return foast.Name(id=node.id, location=self._make_loc(node))
 
     def visit_UnaryOp(self, node: ast.UnaryOp, **kwargs) -> foast.UnaryOp:
         return foast.UnaryOp(
-            op=self.visit(node.op), operand=self.visit(node.operand), location=self._getloc(node)
+            op=self.visit(node.op), operand=self.visit(node.operand), location=self._make_loc(node)
         )
 
     def visit_UAdd(self, node: ast.UAdd, **kwargs) -> foast.UnaryOperator:
@@ -485,7 +485,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             op=new_op,
             left=self.visit(node.left),
             right=self.visit(node.right),
-            location=self._getloc(node),
+            location=self._make_loc(node),
         )
 
     def visit_Add(self, node: ast.Add, **kwargs) -> foast.BinaryOperator:
@@ -536,7 +536,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                 op=self.visit(node.ops[0]),
                 left=self.visit(node.left),
                 right=self.visit(node.comparators[0]),
-                location=self._getloc(node),
+                location=self._make_loc(node),
             )
         smaller_node = copy.copy(node)
         smaller_node.comparators = node.comparators[1:]
@@ -546,7 +546,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             op=self.visit(node.ops[0]),
             left=self.visit(node.left),
             right=self.visit(smaller_node),
-            location=self._getloc(node),
+            location=self._make_loc(node),
         )
 
     def visit_Gt(self, node: ast.Gt, **kwargs) -> foast.CompareOperator:
@@ -568,7 +568,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         return foast.Call(
             func=new_func,
             args=[self.visit(arg) for arg in node.args],
-            location=self._getloc(node),
+            location=self._make_loc(node),
         )
 
     def generic_visit(self, node) -> None:
