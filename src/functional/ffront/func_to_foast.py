@@ -21,7 +21,6 @@ import inspect
 import symtable
 import textwrap
 import types
-import typing
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from inspect import ClosureVars
@@ -48,7 +47,7 @@ MISSING_FILENAME = "<string>"
 
 
 def _make_symbol_from_value(name: str, value: Any, namespace: foast.Namespace) -> foast.Symbol:
-    symbol_type = _make_type_from_value(value)
+    symbol_type = _make_symbol_type_from_value(value)
     match symbol_type:
         case foast.ScalarType() | foast.TupleType():
             return foast.DataSymbol(
@@ -59,29 +58,34 @@ def _make_symbol_from_value(name: str, value: Any, namespace: foast.Namespace) -
             )
         case foast.FunctionType():
             return foast.Function(
-                id=name, type=symbol_type, namespace=namespace, params=[], returns=[]
+                id=name,
+                type=symbol_type,
+                namespace=namespace,
+                params=[],
+                returns=[],
+                location=SourceLocation.empty_location(),
             )
         case _:
             raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
 
 
-def _make_type_from_value(value: Any) -> foast.SymbolType:
+def _make_symbol_type_from_value(value: Any) -> foast.SymbolType:
     match value:
         case bool() | int() | float() | np.generic():
-            return _make_type_from_value(type(value))
+            return _make_symbol_type_from_value(type(value))
         case type() as t if issubclass(t, (bool, int, float, np.generic)):
             return foast.ScalarType(kind=_make_scalar_kind_from_value(value))
         case tuple() as tuple_value:
-            return foast.TupleType(types=[_make_type_from_value(t) for t in tuple_value])
+            return foast.TupleType(types=[_make_symbol_type_from_value(t) for t in tuple_value])
         case common.Field():
             return foast.FieldType(..., foast.ScalarKind.FLOAT64)
         case types.FunctionType():
             args = []
-            kwargs = []
-            returns = []
-            return foast.FunctionType(args, kwargs, returns)
+            kwargs = {}
+            returns = _make_symbol_type_from_value(float)
+            return foast.FunctionType(args=args, kwargs=kwargs, returns=returns)
         case other if other.__module__ == "typing":
-            return _make_type_from_value(other.__origin__)
+            return _make_symbol_type_from_value(other.__origin__)
         case _:
             raise common.GTTypeError(f"Impossible to map '{value}' value to a SymbolType")
 
@@ -136,6 +140,7 @@ class SourceDefinition:
         return SourceDefinition(source, filename, starting_line)
 
     def __iter__(self) -> Iterator[tuple[str]]:
+        # For tuple unpacking
         yield self.source
         yield self.filename
         yield self.starting_line
@@ -146,6 +151,7 @@ class SymbolNames:
     params: tuple[str, ...]
     locals: tuple[str, ...]
     imported: tuple[str, ...]
+    nonlocals: tuple[str, ...]
     globals: tuple[str, ...]
 
     @functools.cached_property
@@ -168,10 +174,6 @@ class SymbolNames:
             )
 
         func_st = children[0]
-        if func_st.get_frees() or func_st.get_nonlocals():
-            raise common.GTValueError(
-                f"Sources with function closures are not yet supported (\n{source}\n)"
-            )
 
         param_names = set()
         imported_names = set()
@@ -184,14 +186,26 @@ class SymbolNames:
             else:
                 local_names.add()
 
-        global_names = set(func_st.get_globals())
+        # symtable returns regular free/non-local variables in 'get_frees()' and free variables
+        # introduced with the 'nonlocal' statement in 'get_nonlocals()'
+        nonlocal_names = set(func_st.get_frees()) | set(func_st.get_nonlocals())
 
-        return SymbolNames(param_names, local_names, imported_names, global_names)
+        global_names = set(func_st.get_globals()) - set(fbuiltins.TYPE_BUILTIN_NAMES)
+
+        return SymbolNames(
+            params=param_names,
+            locals=local_names,
+            imported=imported_names,
+            nonlocals=nonlocal_names,
+            globals=global_names,
+        )
 
     def __iter__(self) -> Iterator[tuple[str]]:
+        # For tuple unpacking
         yield self.params
         yield self.locals
         yield self.imported
+        yield self.nonlocals
         yield self.globals
 
 
@@ -267,7 +281,7 @@ class FieldOperatorParser(visitors.ASTNodeVisitor):
     def apply(
         cls,
         source_definition: SourceDefinition,
-        closure_vars: Optional[ClosureVars] = None,
+        closure_vars: ClosureVars,
         externals_defs: Optional[dict[str, Any]] = None,
     ) -> foast.FieldOperator:
         source, filename, starting_line = source_definition
@@ -310,23 +324,27 @@ class FieldOperatorParser(visitors.ASTNodeVisitor):
         return cls.apply(source_definition, closure_vars, externals)
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
-        symbol_names = SymbolNames.from_source(self.source, self.filename)
-        global_names = set(symbol_names.globals) - set(fbuiltins.TYPE_BUILTIN_NAMES)
-        if global_names:
-            if not self.closure_vars or (
-                missing_defs := (global_names - set(self.closure_vars.globals.keys()))
-            ):
-                raise common.GTValueError(f"Missing global symbol definitions: {missing_defs}")
+        _, _, _, nonlocal_names, global_names = SymbolNames.from_source(self.source, self.filename)
 
-        closure_symbols = [
-            _make_symbol_from_value(name, self.closure_vars.globals[name], foast.Namespace.CLOSURE)
-            for name in global_names
+        # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
+        # code of the function, and thus all non-local symbols are classified as 'global'.
+        # However, 'closure_vars' comes from inspecting the live function object, which might
+        # have not be defined at a global scope, and therefore we need to lookup for symbol
+        # values in both 'closure_vars.globals' and 'self.closure_vars.nonlocals' members.
+        if missing_defs := (self.closure_vars.unbound - (global_names | nonlocal_names)):
+            raise common.GTValueError(f"Missing reference definitions: {missing_defs}")
+
+        defs = self.closure_vars.globals | self.closure_vars.nonlocals
+        closure = [
+            _make_symbol_from_value(name, defs[name], foast.Namespace.CLOSURE)
+            for name in global_names | nonlocal_names
         ]
+
         return foast.FieldOperator(
             id=node.name,
             params=self.visit(node.args),
             body=self.visit_stmt_list(node.body),
-            closure=closure_symbols,
+            closure=closure,
             location=self._getloc(node),
         )
 
