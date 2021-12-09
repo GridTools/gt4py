@@ -46,7 +46,8 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
     """\
     class ShimmedView:
         def __init__(self, field, offsets):
-            self.field = field
+            # use a numpy array here to avoid dimension reducing slicing of storages, which is prohibited and not needed
+            self.field = field.view(np.ndarray)
             self.offsets = offsets
 
         def shim_key(self, key):
@@ -78,7 +79,7 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
             return tuple(new_args)
 
         def __getitem__(self, key):
-            return self.field.data.__getitem__(self.shim_key(key))
+            return self.field.__getitem__(self.shim_key(key))
 
         def __setitem__(self, key, value):
             return self.field.__setitem__(self.shim_key(key), value)
