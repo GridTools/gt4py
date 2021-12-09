@@ -112,6 +112,14 @@ class ItirShiftFactory(ItirFunCallFactory):
         name = "shift"
 
 
+def _call_is_shift(call: foast.Call) -> bool:
+    return isinstance(call.func.type, foast.FieldType)
+
+
+def _name_is_field(name: foast.Name) -> bool:
+    return isinstance(name.type, foast.FieldType)
+
+
 class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
@@ -168,7 +176,7 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_Name(
         self, node: foast.Name, *, symtable: dict[str, foast.Symbol], **kwargs
     ) -> itir.SymRef:
-        if isinstance(node.type, foast.FieldType) and not kwargs.get("noderef", False):
+        if _name_is_field(node) and not kwargs.get("noderef", False):
             return ItirDerefFactory(args__0=itir.SymRef(id=node.id))
         return itir.SymRef(id=node.id)
 
@@ -216,8 +224,8 @@ class FieldOperatorLowering(NodeTranslator):
             yield offset
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        # handle field( offset[int] ) notation
-        if isinstance(node.func.type, foast.FieldType):
+        # handle field( offset[int] ) shift notation
+        if _call_is_shift(node):
             return ItirDerefFactory(
                 args__0=ItirFunCallFactory(
                     fun=ItirShiftFactory(args=list(self._gen_shift_args(node.args))),
@@ -227,8 +235,8 @@ class FieldOperatorLowering(NodeTranslator):
         # handle other function calls
         new_fun = (
             itir.SymRef(id=node.func.id)
-            if isinstance(node.func, foast.Name)
-            else self.visit(node.func, **kwargs)
+            if isinstance(node.func, foast.Name)  # name called, e.g. my_fieldop(a, b)
+            else self.visit(node.func, **kwargs)  # expression called, e.g. local_op[...](a, b)
         )
         return ItirFunCallFactory(
             fun=new_fun,
