@@ -209,7 +209,6 @@ class SymbolNames:
         # symtable returns regular free (or non-local) variables in 'get_frees()' and
         # the free variables introduced with the 'nonlocal' statement in 'get_nonlocals()'
         nonlocal_names = set(func_st.get_frees()) | set(func_st.get_nonlocals())
-
         global_names = set(func_st.get_globals()) - set(fbuiltins.ALL_BUILTIN_NAMES)
 
         return SymbolNames(
@@ -362,7 +361,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             location=self._getloc(node),
         )
 
-    def visit_Import(self, node: ast.Impor, **kwargs) -> None:
+    def visit_Import(self, node: ast.Import, **kwargs) -> None:
         self._make_syntax_error(
             node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
         )
@@ -379,7 +378,6 @@ class FieldOperatorParser(ast.NodeVisitor):
                 raise self._make_syntax_error(
                     node, message="Missing imported symbol '{alias.name}'"
                 )
-
             symbols.append(
                 _make_symbol_from_value(
                     alias.asname or alias.name,
