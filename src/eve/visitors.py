@@ -19,13 +19,10 @@
 
 from __future__ import annotations
 
-import ast
 import collections.abc
 import contextlib
 import copy
-import inspect
 import operator
-import textwrap
 
 from . import concepts, iterators, utils
 from .concepts import NOTHING
@@ -305,61 +302,3 @@ class NodeMutator(NodeVisitor):
                     set_op(result, key, new_value)
 
         return result
-
-
-class ASTNodeVisitor:
-    """Clone of :class:`ast.NodeVisitor` forwarding args and kwargs."""
-
-    @classmethod
-    def apply(cls, func_or_source_or_ast: Union[Callable, str, ast.AST, list[ast.AST]]):
-        if callable(func_or_source_or_ast):
-            func_or_source_or_ast = inspect.getsource(func_or_source_or_ast)
-        if isinstance(func_or_source_or_ast, str):
-            func_or_source_or_ast = ast.parse(textwrap.dedent(func_or_source_or_ast))
-        if isinstance(func_or_source_or_ast, (ast.AST, list)):
-            ast_root = func_or_source_or_ast
-        else:
-            raise ValueError(f"Impossible to get AST definition of {func_or_source_or_ast}")
-        return cls().visit(ast_root)
-
-    def visit(self, node, **kwargs):
-        """Visit a node."""
-        method = "visit_" + node.__class__.__name__
-        visitor = getattr(self, method, self.generic_visit)
-        return visitor(node, **kwargs)
-
-    def generic_visit(self, node, **kwargs):
-        """Called if no explicit visitor function exists for a node."""  # noqa D004  # Not imperative mood
-        for _field, value in ast.iter_fields(node):
-            if isinstance(value, list):
-                for item in value:
-                    if isinstance(item, ast.AST):
-                        self.visit(item, **kwargs)
-            elif isinstance(value, ast.AST):
-                self.visit(value, **kwargs)
-
-
-class ASTNodeTransformer(ASTNodeVisitor):
-    """Clone of :class:`ast.NodeTransformer` forwarding args and kwargs."""
-
-    def generic_visit(self, node, **kwargs):
-        for field, old_value in ast.iter_fields(node):
-            if isinstance(old_value, list):
-                new_values = []
-                for value in old_value:
-                    if isinstance(value, ast.AST):
-                        value = self.visit(value, **kwargs)
-                        if value is None:
-                            continue
-                        elif not isinstance(value, ast.AST):
-                            new_values.extend(value)
-                            continue
-                    new_values.append(value)
-                old_value[:] = new_values
-            elif isinstance(old_value, ast.AST):
-                new_node = self.visit(old_value, **kwargs)
-                if new_node is None:
-                    delattr(node, field)
-                else:
-                    setattr(node, field, new_node)
-        return node
