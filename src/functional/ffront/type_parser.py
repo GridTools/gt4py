@@ -74,6 +74,8 @@ class FieldOperatorTypeParser(NodeTranslator):
     """
     Parse type annotations into FOAST types.
 
+    Examples
+    --------
     >>> import ast
     >>>
     >>> test1 = ast.parse("test1: Field[..., float64]").body[0]
@@ -154,8 +156,7 @@ class FieldOperatorTypeParser(NodeTranslator):
     def make_Tuple(self, argument: ast.Tuple) -> foast.TupleType:
         return foast.TupleType(types=[self.visit(element) for element in argument.elts])
 
-    def make_tuple(self, argument: ast.Tuple) -> foast.TupleType:
-        return self.make_Tuple(argument)
+    make_tuple = make_Tuple
 
     def make_int32(self, argument: None = None) -> foast.ScalarType:
         return foast.ScalarType(kind=foast.ScalarKind.INT32)

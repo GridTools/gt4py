@@ -74,6 +74,8 @@ class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
 
+    Examples
+    --------
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> from functional.common import Field
     >>>

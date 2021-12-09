@@ -44,70 +44,72 @@ from functional.ffront.type_parser import FieldOperatorTypeParser
 MISSING_FILENAME = "<string>"
 
 
-def _make_symbol_from_value(
-    name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
-) -> foast.Symbol:
-    symbol_type = _make_symbol_type_from_value(value)
-    match symbol_type:
-        case foast.ScalarType() | foast.TupleType():
-            return foast.DataSymbol(
-                id=name, type=symbol_type, namespace=namespace, location=location
-            )
-        case foast.FunctionType():
-            return foast.Function(
-                id=name,
-                type=symbol_type,
-                namespace=namespace,
-                params=[],
-                returns=[],
-                location=location,
-            )
-        case _:
-            raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
-
-
-def _make_symbol_type_from_value(value: Any) -> foast.SymbolType:
-    match value:
-        case bool() | int() | float() | np.generic():
-            return _make_symbol_type_from_value(type(value))
-        case type() as t if issubclass(t, (bool, int, float, np.generic)):
-            return foast.ScalarType(kind=_make_scalar_kind_from_value(value))
-        case tuple() as tuple_value:
-            return foast.TupleType(types=[_make_symbol_type_from_value(t) for t in tuple_value])
-        case types.FunctionType():
-            # TODO (egparedes): recover the function signature from FieldOperator
-            args = []
-            kwargs = {}
-            returns = _make_symbol_type_from_value(float)
-            return foast.FunctionType(args=args, kwargs=kwargs, returns=returns)
-        case other if other.__module__ == "typing":
-            return _make_symbol_type_from_value(other.__origin__)
-        case _:
-            raise common.GTTypeError(f"Impossible to map '{value}' value to a SymbolType")
-
-
-def _make_scalar_kind_from_value(value: npt.DTypeLike) -> foast.ScalarKind:
+def make_source_definition_from_function(func: Callable) -> SourceDefinition:
     try:
-        dt = np.dtype(value)
-    except TypeError as err:
-        raise common.GTTypeError(f"Invalid scalar type definition ({value})") from err
+        filename = inspect.getabsfile(func) or MISSING_FILENAME
+        source = textwrap.dedent(inspect.getsource(func))
+        starting_line = (
+            inspect.getsourcelines(func)[1] if not filename.endswith(MISSING_FILENAME) else 1
+        )
+    except OSError as err:
+        if filename.endswith(MISSING_FILENAME):
+            message = "Can not create field operator from a function that is not in a source file!"
+        else:
+            message = f"Can not get source code of passed function ({func})"
+        raise ValueError(message) from err
 
-    if dt.shape == () and dt.fields is None:
-        match dt:
-            case np.bool_:
-                return foast.ScalarKind.BOOL
-            case np.int32:
-                return foast.ScalarKind.INT32
-            case np.int64:
-                return foast.ScalarKind.INT64
-            case np.float32:
-                return foast.ScalarKind.FLOAT32
-            case np.float64:
-                return foast.ScalarKind.FLOAT64
-            case _:
-                raise common.GTTypeError(f"Impossible to map '{value}' value to a ScalarKind")
-    else:
-        raise common.GTTypeError(f"Non-trivial dtypes like '{value}' are not yet supported")
+    return SourceDefinition(source, filename, starting_line)
+
+
+def make_closure_refs_from_function(func: Callable) -> SourceDefinition:
+    nonlocals, globals, inspect_builtins, inspect_unbound = inspect.getclosurevars(func)
+    unbound = set(inspect_builtins.keys()) | inspect_unbound
+    # python builtins are not ffront.builtins
+    builtins = unbound & set(fbuiltins.ALL_BUILTIN_NAMES)
+    unbound -= builtins
+
+    return ClosureRefs(nonlocals, globals, builtins, unbound)
+
+
+def symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
+    try:
+        mod_st = symtable.symtable(source, filename, "exec")
+    except SyntaxError as err:
+        raise common.GTValueError(
+            f"Unexpected error when parsing provided source code (\n{source}\n)"
+        ) from err
+
+    assert mod_st.get_type() == "module"
+    if len(children := mod_st.get_children()) != 1:
+        raise common.GTValueError(
+            f"Sources with multiple function definitions are not yet supported (\n{source}\n)"
+        )
+
+    func_st = children[0]
+
+    param_names = set()
+    imported_names = set()
+    local_names = set()
+    for name in func_st.get_locals():
+        if (s := func_st.lookup(name)).is_imported():
+            imported_names.add(name)
+        elif s.is_parameter:
+            param_names.add(name)
+        else:
+            local_names.add()
+
+    # symtable returns regular free (or non-local) variables in 'get_frees()' and
+    # the free variables introduced with the 'nonlocal' statement in 'get_nonlocals()'
+    nonlocal_names = set(func_st.get_frees()) | set(func_st.get_nonlocals())
+    global_names = set(func_st.get_globals()) - set(fbuiltins.ALL_BUILTIN_NAMES)
+
+    return SymbolNames(
+        params=param_names,
+        locals=local_names,
+        imported=imported_names,
+        nonlocals=nonlocal_names,
+        globals=global_names,
+    )
 
 
 @dataclass(frozen=True)
@@ -116,29 +118,12 @@ class SourceDefinition:
     filename: str = MISSING_FILENAME
     starting_line: int = 1
 
-    @staticmethod
-    def from_function(func: Callable) -> SourceDefinition:
-        try:
-            filename = inspect.getabsfile(func) or MISSING_FILENAME
-            source = textwrap.dedent(inspect.getsource(func))
-            starting_line = (
-                inspect.getsourcelines(func)[1] if not filename.endswith(MISSING_FILENAME) else 1
-            )
-        except OSError as err:
-            if filename.endswith(MISSING_FILENAME):
-                message = (
-                    "Can not create field operator from a function that is not in a source file!"
-                )
-            else:
-                message = f"Can not get source code of passed function ({func})"
-            raise ValueError(message) from err
-
-        return SourceDefinition(source, filename, starting_line)
-
     def __iter__(self) -> Iterator[tuple[str, ...]]:
         yield self.source
         yield self.filename
         yield self.starting_line
+
+    from_function = staticmethod(make_source_definition_from_function)
 
 
 @dataclass(frozen=True)
@@ -148,21 +133,13 @@ class ClosureRefs:
     builtins: dict[str, Any]
     unbound: tuple[str, ...]
 
-    @staticmethod
-    def from_function(func: Callable) -> SourceDefinition:
-        nonlocals, globals, inspect_builtins, inspect_unbound = inspect.getclosurevars(func)
-        unbound = set(inspect_builtins.keys()) | inspect_unbound
-        # python builtins are not ffront.builtins
-        builtins = unbound & set(fbuiltins.ALL_BUILTIN_NAMES)
-        unbound -= builtins
-
-        return ClosureRefs(nonlocals, globals, builtins, unbound)
-
     def __iter__(self) -> Iterator[Union[dict[str, Any], tuple[str, ...]]]:
         yield self.nonlocals
         yield self.globals
         yield self.builtins
         yield self.unbound
+
+    from_function = staticmethod(make_closure_refs_from_function)
 
 
 @dataclass(frozen=True)
@@ -177,53 +154,14 @@ class SymbolNames:
     def all_locals(self) -> tuple[str]:
         return self.params + self.locals + self.imported
 
-    @staticmethod
-    def from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
-        try:
-            mod_st = symtable.symtable(source, filename, "exec")
-        except SyntaxError as err:
-            raise common.GTValueError(
-                f"Unexpected error when parsing provided source code (\n{source}\n)"
-            ) from err
-
-        assert mod_st.get_type() == "module"
-        if len(children := mod_st.get_children()) != 1:
-            raise common.GTValueError(
-                f"Sources with multiple function definitions are not yet supported (\n{source}\n)"
-            )
-
-        func_st = children[0]
-
-        param_names = set()
-        imported_names = set()
-        local_names = set()
-        for name in func_st.get_locals():
-            if (s := func_st.lookup(name)).is_imported():
-                imported_names.add(name)
-            elif s.is_parameter:
-                param_names.add(name)
-            else:
-                local_names.add()
-
-        # symtable returns regular free (or non-local) variables in 'get_frees()' and
-        # the free variables introduced with the 'nonlocal' statement in 'get_nonlocals()'
-        nonlocal_names = set(func_st.get_frees()) | set(func_st.get_nonlocals())
-        global_names = set(func_st.get_globals()) - set(fbuiltins.ALL_BUILTIN_NAMES)
-
-        return SymbolNames(
-            params=param_names,
-            locals=local_names,
-            imported=imported_names,
-            nonlocals=nonlocal_names,
-            globals=global_names,
-        )
-
     def __iter__(self) -> Iterator[tuple[str, ...]]:
         yield self.params
         yield self.locals
         yield self.imported
         yield self.nonlocals
         yield self.globals
+
+    from_source = staticmethod(symbol_names_from_source)
 
 
 # TODO (ricoh): pass on source locations
@@ -348,7 +286,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
         defs = self.closure_refs.globals | self.closure_refs.nonlocals
         closure = [
-            _make_symbol_from_value(name, defs[name], foast.Namespace.CLOSURE, self._make_loc(node))
+            foast.Symbol.from_value(name, defs[name], foast.Namespace.CLOSURE, self._make_loc(node))
             for name in global_names | nonlocal_names
         ]
 
@@ -378,7 +316,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                     node, message="Missing imported symbol '{alias.name}'"
                 )
             symbols.append(
-                _make_symbol_from_value(
+                foast.Symbol.from_value(
                     alias.asname or alias.name,
                     self.externals_defs[alias.name],
                     foast.Namespace.EXTERNAL,
