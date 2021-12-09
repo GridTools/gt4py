@@ -14,6 +14,8 @@
 
 from typing import Iterator, Optional, Union
 
+import factory
+
 from eve import NodeTranslator
 from functional.ffront import field_operator_ast as foast
 from functional.iterator import ir as itir
@@ -68,6 +70,46 @@ class AssignResolver(NodeTranslator):
         if node.id in names:
             return names[node.id]
         return node
+
+
+class ItirSymRefFactory(factory.Factory):
+    class Meta:
+        model = itir.SymRef
+
+
+class ItirFunCallFactory(factory.Factory):
+    """
+    Readability enhancing shortcut for itir.FunCall constructor.
+
+    Usage:
+    ------
+
+    >>> ItirFunCallFactory(name="plus")
+    FunCall(fun=SymRef(id='plus'), args=[])
+    """
+
+    class Meta:
+        model = itir.FunCall
+
+    class Params:
+        name: Optional[str] = None
+
+    fun = factory.LazyAttribute(lambda obj: ItirSymRefFactory(id=obj.name))
+    args = factory.List([])
+
+
+class ItirDerefFactory(ItirFunCallFactory):
+    """Readability enhancing shortcut constructing deref itir builtins."""
+
+    class Params:
+        name = "deref"
+
+
+class ItirShiftFactory(ItirFunCallFactory):
+    """Readability enhancing shortcut constructing shift itir builtins."""
+
+    class Params:
+        name = "shift"
 
 
 class FieldOperatorLowering(NodeTranslator):
@@ -127,36 +169,36 @@ class FieldOperatorLowering(NodeTranslator):
         self, node: foast.Name, *, symtable: dict[str, foast.Symbol], **kwargs
     ) -> itir.SymRef:
         if isinstance(node.type, foast.FieldType) and not kwargs.get("noderef", False):
-            return itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id=node.id)])
+            return ItirDerefFactory(args__0=itir.SymRef(id=node.id))
         return itir.SymRef(id=node.id)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
-        return itir.FunCall(
-            fun=itir.SymRef(id="tuple_get"),
+        return ItirFunCallFactory(
+            name="tuple_get",
             args=[self.visit(node.value, **kwargs), itir.IntLiteral(value=node.index)],
         )
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
-        return itir.FunCall(
-            fun=itir.SymRef(id="make_tuple"), args=[self.visit(i, **kwargs) for i in node.elts]
+        return ItirFunCallFactory(
+            name="make_tuple", args=[self.visit(i, **kwargs) for i in node.elts]
         )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         zero_arg = [itir.IntLiteral(value=0)] if node.op is not foast.UnaryOperator.NOT else []
-        return itir.FunCall(
-            fun=itir.SymRef(id=node.op.value),
+        return ItirFunCallFactory(
+            name=node.op.value,
             args=[*zero_arg, self.visit(node.operand, **kwargs)],
         )
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
-        return itir.FunCall(
-            fun=itir.SymRef(id=node.op.value),
+        return ItirFunCallFactory(
+            name=node.op.value,
             args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
-        return itir.FunCall(
-            fun=itir.SymRef(id=node.op.value),
+        return ItirFunCallFactory(
+            name=node.op.value,
             args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
 
@@ -174,26 +216,21 @@ class FieldOperatorLowering(NodeTranslator):
             yield offset
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        # enable field( offset[int] ) notation
+        # handle field( offset[int] ) notation
         if isinstance(node.func.type, foast.FieldType):
-            return itir.FunCall(
-                fun=itir.SymRef(id="deref"),
-                args=[
-                    itir.FunCall(
-                        fun=itir.FunCall(
-                            fun=itir.SymRef(id="shift"),
-                            args=[*self._gen_shift_args(node.args)],
-                        ),
-                        args=[self.visit(node.func, noderef=True, **kwargs)],
-                    )
-                ],
+            return ItirDerefFactory(
+                args__0=ItirFunCallFactory(
+                    fun=ItirShiftFactory(args=list(self._gen_shift_args(node.args))),
+                    args__0=self.visit(node.func, noderef=True, **kwargs),
+                )
             )
+        # handle other function calls
         new_fun = (
             itir.SymRef(id=node.func.id)
             if isinstance(node.func, foast.Name)
             else self.visit(node.func, **kwargs)
         )
-        return itir.FunCall(
+        return ItirFunCallFactory(
             fun=new_fun,
-            args=[self.visit(arg, **kwargs) for arg in node.args],
+            args=self.visit(node.args, **kwargs),
         )

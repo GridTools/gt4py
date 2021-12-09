@@ -78,7 +78,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     def visit_Name(self, node: foast.Name, **kwargs) -> foast.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
-            warnings.warn(  # TODO (ricoh): raise this instead (requires externals)
+            warnings.warn(  # TODO(ricoh): raise this instead (requires externals)
                 FieldOperatorTypeDeductionError.from_foast_node(
                     node, msg=f"Undeclared symbol {node.id}"
                 )

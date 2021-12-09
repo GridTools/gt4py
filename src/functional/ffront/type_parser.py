@@ -112,7 +112,7 @@ class FieldOperatorTypeParser(NodeTranslator):
     ) -> Union[foast.SymbolType, str]:
         maker = getattr(self, f"make_{node.id}", None)
         if maker is None:
-            # TODO (ricoh): pull in type from external name
+            # TODO(ricoh): pull in type from external name
             return node.id
         return maker(argument)
 

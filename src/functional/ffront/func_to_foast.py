@@ -186,11 +186,6 @@ class FieldOperatorParser(ast.NodeVisitor):
         )
 
     def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
-        # TODO (ricoh): type checking
-        #
-        # if the annotation does not match the inferred type of value
-        # then raise an exception
-        # -> only store the type here and write an additional checking pass
         if not isinstance(node.target, ast.Name):
             raise self._make_syntax_error(node, message="Can only assign to names!")
         return foast.Assign(
