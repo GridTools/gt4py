@@ -21,6 +21,7 @@ from functional.ffront import field_operator_ast as foast
 from functional.iterator import ir as itir
 
 
+# TODO(ricoh): make compatible with (field + field)(shift[x]) syntax
 class AssignResolver(NodeTranslator):
     """
     Inline a sequence of assignments into a final return statement.
@@ -174,9 +175,14 @@ class FieldOperatorLowering(NodeTranslator):
         return itir.Sym(id=node.id)
 
     def visit_Name(
-        self, node: foast.Name, *, symtable: dict[str, foast.Symbol], **kwargs
+        self,
+        node: foast.Name,
+        *,
+        symtable: dict[str, foast.Symbol],
+        noderef: bool = False,
+        **kwargs,
     ) -> itir.SymRef:
-        if _name_is_field(node) and not kwargs.get("noderef", False):
+        if _name_is_field(node) and not noderef:
             return ItirDerefFactory(args__0=itir.SymRef(id=node.id))
         return itir.SymRef(id=node.id)
 
@@ -187,9 +193,7 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
-        return ItirFunCallFactory(
-            name="make_tuple", args=[self.visit(i, **kwargs) for i in node.elts]
-        )
+        return ItirFunCallFactory(name="make_tuple", args=self.visit(node.elts, **kwargs))
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         zero_arg = [itir.IntLiteral(value=0)] if node.op is not foast.UnaryOperator.NOT else []

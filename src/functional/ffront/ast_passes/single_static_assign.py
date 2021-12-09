@@ -14,6 +14,7 @@
 
 import ast
 from dataclasses import dataclass, field
+from typing import Optional
 
 from functional.ffront.builtins import TYPE_BUILTIN_NAMES
 
@@ -83,6 +84,16 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     def __init__(self):
         super().__init__()
         self.state = self.State()
+
+    def generic_visit(self, node: ast.AST) -> ast.AST:
+        """Never visit annotations."""
+        annotation: Optional[ast.AST] = getattr(node, "annotation", None)
+        if annotation:
+            node.annotation = None
+        result = super().generic_visit(node)
+        if annotation:
+            result.annotation = annotation
+        return result
 
     def visit_Assign(self, node: ast.Assign) -> ast.Assign:
         # first update rhs names to reference the latest version

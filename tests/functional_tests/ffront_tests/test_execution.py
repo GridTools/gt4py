@@ -148,3 +148,22 @@ def test_shift():
     roundtrip.executor(program, a, b, offset_provider={"Ioff": IDim})
 
     assert np.allclose(b.array(), np.arange(1, 11))
+
+
+def test_auto_lift():
+    """Shifting the result of an addition should work by auto-lifting the addition expression."""
+    size = 10
+    IDim = CartesianAxis("IDim")
+    Ioff = offset("Ioff")
+    a = np_as_located_field(IDim)(np.arange(size + 1))
+    b = np_as_located_field(IDim)(np.ones((size + 1)) * 2)
+    c = np_as_located_field(IDim)(np.zeros((size)))
+
+    def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+        tmp = inp1 + inp2
+        return tmp(Ioff[1])
+
+    program = program_from_func(arithmetic, out_names=["c"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, c, offset_provider={"Ioff": IDim})
+
+    assert np.allclose(a.array[1:] + b[1:], c)
