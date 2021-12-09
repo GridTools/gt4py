@@ -211,7 +211,7 @@ class NpirCodegen(TemplatedGenerator):
         return self.generic_visit(node, shape=shape, origin=origin, **kwargs)
 
     FieldDecl = FormatTemplate(
-        "{name} = np.reshape({name}, ({shape}))\n_origin_['{name}'] = [{origin}]"
+        "{name} = np.reshape({name}.view(np.ndarray), ({shape}))\n_origin_['{name}'] = [{origin}]"
     )
 
     def visit_VariableKOffset(
