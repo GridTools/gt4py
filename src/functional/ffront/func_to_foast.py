@@ -23,13 +23,11 @@ import textwrap
 import types
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from inspect import ClosureVars
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import numpy as np
 import numpy.typing as npt
 
-from eve import visitors
 from eve.type_definitions import SourceLocation
 from functional import common
 from functional.ffront import fbuiltins
@@ -77,9 +75,8 @@ def _make_symbol_type_from_value(value: Any) -> foast.SymbolType:
             return foast.ScalarType(kind=_make_scalar_kind_from_value(value))
         case tuple() as tuple_value:
             return foast.TupleType(types=[_make_symbol_type_from_value(t) for t in tuple_value])
-        case common.Field():
-            return foast.FieldType(..., foast.ScalarKind.FLOAT64)
         case types.FunctionType():
+            # TODO (egparedes): recover the function signature from FieldOperator
             args = []
             kwargs = {}
             returns = _make_symbol_type_from_value(float)
@@ -139,11 +136,34 @@ class SourceDefinition:
 
         return SourceDefinition(source, filename, starting_line)
 
-    def __iter__(self) -> Iterator[tuple[str]]:
-        # For tuple unpacking
+    def __iter__(self) -> Iterator[tuple[str, ...]]:
         yield self.source
         yield self.filename
         yield self.starting_line
+
+
+@dataclass(frozen=True)
+class ClosureRefs:
+    nonlocals: dict[str, Any]
+    globals: dict[str, Any]  # noqa: A003  # shadowing a python builtin
+    builtins: dict[str, Any]
+    unbound: tuple[str, ...]
+
+    @staticmethod
+    def from_function(func: Callable) -> SourceDefinition:
+        nonlocals, globals, inspect_builtins, inspect_unbound = inspect.getclosurevars(func)
+        unbound = set(inspect_builtins.keys()) | inspect_unbound
+        # python builtins are not ffront.builtins
+        builtins = unbound & set(fbuiltins.ALL_BUILTIN_NAMES)
+        unbound -= builtins
+
+        return ClosureRefs(nonlocals, globals, builtins, unbound)
+
+    def __iter__(self) -> Iterator[Union[dict[str, Any], tuple[str, ...]]]:
+        yield self.nonlocals
+        yield self.globals
+        yield self.builtins
+        yield self.unbound
 
 
 @dataclass(frozen=True)
@@ -186,11 +206,11 @@ class SymbolNames:
             else:
                 local_names.add()
 
-        # symtable returns regular free/non-local variables in 'get_frees()' and free variables
-        # introduced with the 'nonlocal' statement in 'get_nonlocals()'
+        # symtable returns regular free (or non-local) variables in 'get_frees()' and
+        # the free variables introduced with the 'nonlocal' statement in 'get_nonlocals()'
         nonlocal_names = set(func_st.get_frees()) | set(func_st.get_nonlocals())
 
-        global_names = set(func_st.get_globals()) - set(fbuiltins.TYPE_BUILTIN_NAMES)
+        global_names = set(func_st.get_globals()) - set(fbuiltins.ALL_BUILTIN_NAMES)
 
         return SymbolNames(
             params=param_names,
@@ -200,8 +220,7 @@ class SymbolNames:
             globals=global_names,
         )
 
-    def __iter__(self) -> Iterator[tuple[str]]:
-        # For tuple unpacking
+    def __iter__(self) -> Iterator[tuple[str, ...]]:
         yield self.params
         yield self.locals
         yield self.imported
@@ -212,7 +231,7 @@ class SymbolNames:
 # TODO (ricoh): pass on source locations
 # TODO (ricoh): SourceLocation.source <- filename
 @dataclass(frozen=True, kw_only=True)
-class FieldOperatorParser(visitors.ASTNodeVisitor):
+class FieldOperatorParser(ast.NodeVisitor):
     """
     Parse field operator function definition from source code into FOAST.
 
@@ -257,7 +276,7 @@ class FieldOperatorParser(visitors.ASTNodeVisitor):
     source: str
     filename: str
     starting_line: int
-    closure_vars: ClosureVars
+    closure_refs: ClosureRefs
     externals_defs: dict[str, Any]
 
     def _getloc(self, node: ast.AST) -> SourceLocation:
@@ -281,16 +300,10 @@ class FieldOperatorParser(visitors.ASTNodeVisitor):
     def apply(
         cls,
         source_definition: SourceDefinition,
-        closure_vars: ClosureVars,
+        closure_refs: ClosureRefs,
         externals_defs: Optional[dict[str, Any]] = None,
     ) -> foast.FieldOperator:
         source, filename, starting_line = source_definition
-        if closure_vars:
-            if closure_vars.unbound:
-                raise common.GTValueError(
-                    f"Closure contains references to undefined or forward-defined values ({closure_vars.unbound})"
-                )
-
         result = None
         try:
             definition_ast = ast.parse(textwrap.dedent(source)).body[0]
@@ -301,7 +314,7 @@ class FieldOperatorParser(visitors.ASTNodeVisitor):
                 source=source,
                 filename=filename,
                 starting_line=starting_line,
-                closure_vars=closure_vars,
+                closure_refs=closure_refs,
                 externals_defs=externals_defs,
             ).visit(las)
         except SyntaxError as err:
@@ -320,21 +333,22 @@ class FieldOperatorParser(visitors.ASTNodeVisitor):
         externals: Optional[dict[str, Any]] = None,
     ) -> foast.FieldOperator:
         source_definition = SourceDefinition.from_function(func)
-        closure_vars = inspect.getclosurevars(func)
-        return cls.apply(source_definition, closure_vars, externals)
+        closure_refs = ClosureRefs.from_function(func)
+        return cls.apply(source_definition, closure_refs, externals)
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
-        _, _, _, nonlocal_names, global_names = SymbolNames.from_source(self.source, self.filename)
+        _, _, imported_names, nonlocal_names, global_names = SymbolNames.from_source(
+            self.source, self.filename
+        )
+        if missing_defs := (self.closure_refs.unbound - imported_names):
+            raise common.GTValueError(f"Missing reference definitions: {missing_defs}")
 
         # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
         # code of the function, and thus all non-local symbols are classified as 'global'.
-        # However, 'closure_vars' comes from inspecting the live function object, which might
+        # However, 'closure_refs' comes from inspecting the live function object, which might
         # have not been defined at a global scope, and therefore actual symbol values could appear
-        # be looked up in both 'closure_vars.globals' and 'self.closure_vars.nonlocals'.
-        if missing_defs := (self.closure_vars.unbound - (global_names | nonlocal_names)):
-            raise common.GTValueError(f"Missing reference definitions: {missing_defs}")
-
-        defs = self.closure_vars.globals | self.closure_vars.nonlocals
+        # be looked up in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
+        defs = self.closure_refs.globals | self.closure_refs.nonlocals
         closure = [
             _make_symbol_from_value(name, defs[name], foast.Namespace.CLOSURE)
             for name in global_names | nonlocal_names
@@ -348,8 +362,16 @@ class FieldOperatorParser(visitors.ASTNodeVisitor):
             location=self._getloc(node),
         )
 
+    def visit_Import(self, node: ast.Impor, **kwargs) -> None:
+        self._make_syntax_error(
+            node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
+        )
+
     def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> None:
-        assert node.module == "__externals__"
+        if node.module not in fbuiltins.MODULE_BUILTIN_NAMES:
+            self._make_syntax_error(
+                node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
+            )
 
         symbols = []
         for alias in node.names:
@@ -360,11 +382,13 @@ class FieldOperatorParser(visitors.ASTNodeVisitor):
 
             symbols.append(
                 _make_symbol_from_value(
-                    alias.asname, self.externals_defs[alias.name], foast.Namespace.EXTERNAL
+                    alias.asname or alias.name,
+                    self.externals_defs[alias.name],
+                    foast.Namespace.EXTERNAL,
                 )
             )
 
-        return foast.ExternalImport(symbols=symbols)
+        return foast.ExternalImport(symbols=symbols, location=self._getloc(node))
 
     def visit_arguments(self, node: ast.arguments) -> list[foast.FieldSymbol]:
         return [self.visit_arg(arg) for arg in node.args]

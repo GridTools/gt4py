@@ -506,3 +506,49 @@ def test_bool_or():
         match=(r"`or` operator not allowed!"),
     ):
         _ = FieldOperatorParser.apply_to_function(bool_or)
+
+
+# --- External symbols ---
+def test_closure_symbols():
+    import numpy as np
+
+    nonlocal_unused = 0
+    nonlocal_float = 2.3
+    nonlocal_np_scalar = np.float32(3.4)
+
+    def operator_with_refs(inp: Field[..., "float64"]):
+        a = inp + nonlocal_float
+        b = a + nonlocal_np_scalar
+        return b
+
+    parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
+    assert parsed.symtable_["nonlocal_float"].type == foast.ScalarType(
+        kind=foast.ScalarKind.FLOAT64, shape=None
+    )
+    assert parsed.symtable_["nonlocal_np_scalar"].type == foast.ScalarType(
+        kind=foast.ScalarKind.FLOAT32, shape=None
+    )
+    assert "nonlocal_unused" not in parsed.symtable_
+
+
+def test_external_symbols():
+    import numpy as np
+
+    def operator_with_externals(inp: Field[..., "float64"]):
+        from __externals__ import ext_float, ext_np_scalar
+
+        a = inp + ext_float
+        b = a + ext_np_scalar
+        return b
+
+    parsed = FieldOperatorParser.apply_to_function(
+        operator_with_externals,
+        externals=dict(ext_float=2.3, ext_np_scalar=np.float32(3.4), ext_unused=0),
+    )
+    assert parsed.symtable_["ext_float"].type == foast.ScalarType(
+        kind=foast.ScalarKind.FLOAT64, shape=None
+    )
+    assert parsed.symtable_["ext_np_scalar"].type == foast.ScalarType(
+        kind=foast.ScalarKind.FLOAT32, shape=None
+    )
+    assert "ext_unused" not in parsed.symtable_
