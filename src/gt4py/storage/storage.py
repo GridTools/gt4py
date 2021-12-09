@@ -207,7 +207,7 @@ class Storage(np.ndarray):
                     raise RuntimeError(
                         "Meta information can not be inferred when creating Storage views from other classes than Storage."
                     )
-                if len(self.shape) != len(obj.shape):
+                if self.ndim != obj.ndim and self.ndim != 0:
                     raise RuntimeError(
                         "Dimension reducing slicing storages is not supported. Use `Storage.data` to retrieve a "
                         "slicable numpy array and create a new storage from it with proper metadata."
