@@ -17,7 +17,7 @@
 from typing import Any, List
 
 from eve import NodeTranslator
-from gtc import gtir, oir
+from gtc import gtir, oir, utils
 from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 
 
@@ -158,9 +158,9 @@ class GTIRToOIR(NodeTranslator):
         horiz_execs: List[oir.HorizontalExecution] = []
         for stmt in node.body:
             scalars: List[oir.ScalarDecl] = []
-            stmt_or_stmts = self.visit(stmt, scalars=scalars, temps=temps)
-            body = [stmt_or_stmts] if isinstance(stmt_or_stmts, oir.Stmt) else stmt_or_stmts
-            horiz_execs.append(oir.HorizontalExecution(body=body, declarations=scalars))
+            ret = self.visit(stmt, scalars=scalars, temps=temps)
+            stmts = utils.flatten_list([ret] if isinstance(ret, oir.Stmt) else ret)
+            horiz_execs.append(oir.HorizontalExecution(body=stmts, declarations=scalars))
 
         temps += [
             oir.Temporary(name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions)
