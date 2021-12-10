@@ -159,11 +159,11 @@ def test_auto_lift():
     b = np_as_located_field(IDim)(np.ones((size + 1)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
-    def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    def auto_lift(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
         tmp = inp1 + inp2
         return tmp(Ioff[1])
 
-    program = program_from_func(arithmetic, out_names=["c"], dim=IDim, size=size)
+    program = program_from_func(auto_lift, out_names=["c"], dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, offset_provider={"Ioff": IDim})
 
-    assert np.allclose(a.array[1:] + b[1:], c)
+    assert np.allclose(a[1:] + b[1:], c)

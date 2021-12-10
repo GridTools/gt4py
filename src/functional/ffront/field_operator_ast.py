@@ -171,7 +171,7 @@ class Compare(Expr):
 
 
 class Call(Expr):
-    func: Name
+    func: Expr
     args: list[Expr]
 
 

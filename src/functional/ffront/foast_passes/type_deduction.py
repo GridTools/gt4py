@@ -200,7 +200,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         new_type = self._deduce_binop_type(
             node.op, parent=self, left_type=new_left.type, right_type=new_right.type
         )
-        print(new_type)
         return foast.BinOp(
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
@@ -279,7 +278,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)
-        print(new_func.type)
         if isinstance(new_func.type, foast.FieldType):
             new_args = self.visit(node.args, in_shift=True, **kwargs)
             return foast.Call(func=new_func, args=new_args, location=node.location)
