@@ -19,8 +19,11 @@ from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMe
 
 from ...oir_utils import (
     AssignStmtFactory,
+    BinaryOpFactory,
     HorizontalExecutionFactory,
+    LocalScalarFactory,
     NativeFuncCallFactory,
+    ScalarAccessFactory,
     StencilFactory,
     TemporaryFactory,
     VerticalLoopFactory,
@@ -172,3 +175,43 @@ def test_on_the_fly_merging_repeated():
     transformed = OnTheFlyMerging().visit(testee)
     hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
     assert len(hexecs) == 2
+
+
+def test_on_the_fly_merging_localscalars():
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(
+                        left=ScalarAccessFactory(name="scalar_tmp"),
+                        right__name="in",
+                    ),
+                    AssignStmtFactory(
+                        left__name="tmp", right=ScalarAccessFactory(name="scalar_tmp")
+                    ),
+                ],
+                declarations=[LocalScalarFactory(name="scalar_tmp")],
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(
+                        left=ScalarAccessFactory(name="scalar_tmp"),
+                        right__name="in",
+                        right__offset__i=1,
+                    ),
+                    AssignStmtFactory(
+                        left__name="out",
+                        right=BinaryOpFactory(
+                            left=ScalarAccessFactory(name="scalar_tmp"), right__name="tmp"
+                        ),
+                    ),
+                ],
+                declarations=[LocalScalarFactory(name="scalar_tmp")],
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
+    )
+    transformed = OnTheFlyMerging().visit(testee)
+    hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs) == 1
+    assert len(hexecs[0].declarations) == 3
