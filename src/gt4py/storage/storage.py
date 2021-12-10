@@ -209,8 +209,8 @@ class Storage(np.ndarray):
                     )
                 if self.ndim != obj.ndim and self.ndim != 0:
                     raise RuntimeError(
-                        "Dimension reducing slicing storages is not supported. Use `Storage.data` to retrieve a "
-                        "slicable numpy array and create a new storage from it with proper metadata."
+                        "Dimension reducing slicing storages is not supported. Use `Storage.to_numpy()` to retrieve a "
+                        "slicable numpy array and create a new storage from it with proper metadata if neccessary."
                     )
                 self.__dict__ = {**obj.__dict__, **self.__dict__}
                 self.is_stencil_view = False
@@ -380,7 +380,12 @@ class CPUStorage(Storage):
 
     @property
     def data(self):
-        return self.view(np.ndarray)
+        return np.asarray(self)
+
+    def to_numpy(self, copy=False):
+        if copy:
+            return copy.deepcopy(self.data)
+        return self.data
 
     def copy(self):
         res = super().copy()
@@ -431,6 +436,18 @@ class ExplicitlySyncedGPUStorage(Storage):
     @property
     def data(self):
         return self._device_field
+
+    def to_numpy(self, copy=False):
+        self.synchronize()
+        if copy:
+            return copy.deepcopy(np.asarray(self))
+        return np.asarray(self)
+
+    def to_copy(self, copy=False):
+        self.synchronize()
+        if copy:
+            return copy.deepcopy(cp.asarray(self))
+        return self.view(cp.asarray(self))
 
     def synchronize(self):
         if self._is_host_modified:
