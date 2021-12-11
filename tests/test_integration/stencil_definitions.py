@@ -24,13 +24,19 @@ from gt4py.gtscript import (
     FORWARD,
     PARALLEL,
     acos,
+    acosh,
     asin,
+    asinh,
     atan,
+    atanh,
+    cbrt,
     ceil,
     computation,
     cos,
+    cosh,
     exp,
     floor,
+    gamma,
     interval,
     isfinite,
     isinf,
@@ -38,8 +44,10 @@ from gt4py.gtscript import (
     log,
     mod,
     sin,
+    sinh,
     sqrt,
     tan,
+    tanh,
     trunc,
 )
 
@@ -117,10 +125,18 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         acos_res = acos(cos_res)
         tan_res = tan(acos_res)
         atan_res = atan(tan_res)
-        sqrt_res = afunc(atan_res)
+        sinh_res = sinh(atan_res)
+        asinh_res = asinh(sinh_res)
+        cosh_res = cosh(asinh_res)
+        acosh_res = acosh(cosh_res)
+        tanh_res = tanh(acosh_res)
+        atanh_res = atanh(tanh_res)
+        sqrt_res = afunc(atanh_res)
         exp_res = exp(sqrt_res)
         log_res = log(exp_res)
-        floor_res = floor(log_res)
+        gamma_res = gamma(log_res)
+        cbrt_res = cbrt(gamma_res)
+        floor_res = floor(cbrt_res)
         ceil_res = ceil(floor_res)
         trunc_res = trunc(ceil_res)
         field_a = (
