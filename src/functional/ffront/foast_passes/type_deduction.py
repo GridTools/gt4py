@@ -288,6 +288,35 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                 msg=f"Incompatible type(s) for operator '{self._binop_to_str(op)}': {left.type}, {right.type}!",
             )
 
+    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
+        new_operand = self.visit(node.operand, **kwargs)
+        if not self._unaryop_type_compatible(op=node.op, operand_type=new_operand.type):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible type for unary operator '{self._unaryop_to_str(node.op)}': {new_operand.type}!",
+            )
+        return foast.UnaryOp(
+            op=node.op, operand=new_operand, location=node.location, type=new_operand.type
+        )
+
+    def _unaryop_type_compatible(
+        self, op: foast.UnaryOperator, operand_type: foast.FieldType
+    ) -> bool:
+        operand_ti = TypeInfo(operand_type)
+        if op in [foast.UnaryOperator.UADD, foast.UnaryOperator.USUB]:
+            return operand_ti.is_arithmetic_compatible
+        elif op is foast.UnaryOperator.NOT:
+            return operand_ti.is_logics_compatible
+
+    def _unaryop_to_str(self, op: foast.UnaryOperator):
+        match op:
+            case foast.UnaryOperator.UADD:
+                return "+"
+            case foast.UnaryOperator.USUB:
+                return "-"
+            case foast.UnaryOperator.NOT:
+                return "not"
+
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> foast.TupleExpr:
         new_elts = self.visit(node.elts, **kwargs)
         new_type = foast.TupleType(types=[element.type for element in new_elts])

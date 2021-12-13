@@ -64,7 +64,10 @@ def test_adding_bool():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=r"Incompatible type\(s\) for operator '\+': Field\[\.\.\., dtype=bool\], Field\[\.\.\., dtype=bool\]!",
+        match=(
+            r"Incompatible type\(s\) for operator '\+': "
+            r"Field\[\.\.\., dtype=bool\], Field\[\.\.\., dtype=bool\]!"
+        ),
     ):
         _ = FieldOperatorParser.apply_to_func(add_bools)
 
@@ -75,6 +78,31 @@ def test_bitopping_float():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=r"Incompatible type\(s\) for operator '\&': Field\[\.\.\., dtype=float64\], Field\[\.\.\., dtype=float64\]!",
+        match=(
+            r"Incompatible type\(s\) for operator '\&': "
+            r"Field\[\.\.\., dtype=float64\], Field\[\.\.\., dtype=float64\]!"
+        ),
     ):
         _ = FieldOperatorParser.apply_to_func(float_bitop)
+
+
+def test_signing_bool():
+    def sign_bool(a: Field[..., bool]):
+        return -a
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=r"Incompatible type for unary operator '\-': Field\[\.\.\., dtype=bool\]!",
+    ):
+        _ = FieldOperatorParser.apply_to_func(sign_bool)
+
+
+def test_notting_int():
+    def not_int(a: Field[..., int64]):
+        return not a
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=r"Incompatible type for unary operator 'not': Field\[\.\.\., dtype=int64\]!",
+    ):
+        _ = FieldOperatorParser.apply_to_func(not_int)
