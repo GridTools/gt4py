@@ -151,7 +151,7 @@ def test_shift():
 
 
 def test_auto_lift():
-    """Shifting the result of an addition should work by auto-lifting the addition expression."""
+    """Shifting the result of an addition should work by shifting the operands instead."""
     size = 10
     IDim = CartesianAxis("IDim")
     Ioff = offset("Ioff")

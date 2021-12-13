@@ -12,8 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import pytest
+
 from functional.ffront import field_operator_ast as foast
 from functional.ffront.builtins import Field, float64, int64
+from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
 
 
@@ -51,3 +54,27 @@ def test_assign_tuple():
             ),
         ]
     )
+
+
+def test_adding_bool():
+    """Expect an error (or at least a warnign) when using arithmetic on bools."""
+
+    def add_bools(a: Field[..., bool], b: Field[..., bool]):
+        return a + b
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=r"Incompatible type\(s\) for operator '\+': Field\[\.\.\., dtype=bool\], Field\[\.\.\., dtype=bool\]!",
+    ):
+        _ = FieldOperatorParser.apply_to_func(add_bools)
+
+
+def test_bitopping_float():
+    def float_bitop(a: Field[..., float], b: Field[..., float]):
+        return a & b
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=r"Incompatible type\(s\) for operator '\&': Field\[\.\.\., dtype=float64\], Field\[\.\.\., dtype=float64\]!",
+    ):
+        _ = FieldOperatorParser.apply_to_func(float_bitop)

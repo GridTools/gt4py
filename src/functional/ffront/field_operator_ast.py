@@ -28,6 +28,9 @@ from eve.type_definitions import IntEnum, SourceLocation, StrEnum, SymbolRef
 class Dimension(Node):
     name: str
 
+    def __str__(self):
+        return self.name
+
 
 class ScalarKind(IntEnum):
     BOOL = 1
@@ -53,6 +56,9 @@ class SymbolTypeVariable(SymbolType):
 class OffsetType(SymbolType):
     ...
 
+    def __str__(self):
+        return f"Offset[{self.id}]"
+
 
 class DataType(SymbolType):
     ...
@@ -62,20 +68,39 @@ class ScalarType(DataType):
     kind: ScalarKind
     shape: Optional[list[int]] = None
 
+    def __str__(self):
+        kind_str = self.kind.name.lower()
+        if self.shape is None:
+            return kind_str
+        return f"{kind_str}{self.shape}"
+
 
 class TupleType(DataType):
     types: list[DataType]
+
+    def __str__(self):
+        return f"tuple{self.types}"
 
 
 class FieldType(DataType):
     dims: Union[list[Dimension], Literal[Ellipsis]]  # type: ignore[valid-type,misc]
     dtype: ScalarType
 
+    def __str__(self):
+        dims = "..." if self.dims is Ellipsis else str(self.dims)
+        return f"Field[{dims}, dtype={self.dtype}]"
+
 
 class FunctionType(SymbolType):
     args: list[DataType]
     kwargs: dict[str, DataType]
     returns: DataType
+
+    def __str__(self):
+        arg_strs = [str(arg) for arg in self.args]
+        kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs]
+        args_str = ", ".join(*arg_strs, *kwarg_strs)
+        return f"({args_str}) -> {self.returns}"
 
 
 class LocatedNode(Node):

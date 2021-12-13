@@ -198,7 +198,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         new_left = self.visit(node.left, **kwargs)
         new_right = self.visit(node.right, **kwargs)
         new_type = self._deduce_binop_type(
-            node.op, parent=self, left_type=new_left.type, right_type=new_right.type
+            node.op, parent=node, left_type=new_left.type, right_type=new_right.type
         )
         return foast.BinOp(
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
@@ -227,6 +227,21 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                 op, parent=parent, left_type=left_type, right_type=right_type, **kwargs
             )
 
+    def _binop_to_str(self, op: foast.BinaryOperator) -> str:
+        match op:
+            case foast.BinaryOperator.ADD:
+                return "+"
+            case foast.BinaryOperator.SUB:
+                return "-"
+            case foast.BinaryOperator.MULT:
+                return "*"
+            case foast.BinaryOperator.DIV:
+                return "/"
+            case foast.BinaryOperator.BIT_AND:
+                return "&"
+            case foast.BinaryOperator.BIT_OR:
+                return "|"
+
     def _deduce_arithmetic_binop_type(
         self,
         op: foast.BinaryOperator,
@@ -246,7 +261,8 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             return left.type
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                parent, f"Incompatible types for operator ({op}), {left.type}, {right.type}"
+                parent,
+                msg=f"Incompatible type(s) for operator '{self._binop_to_str(op)}': {left.type}, {right.type}!",
             )
 
     def _deduce_logical_binop_type(
@@ -268,7 +284,8 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             return left.type
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                parent, f"Incompatible types for operator ({op}), {left.type}, {right.type}"
+                parent,
+                msg=f"Incompatible type(s) for operator '{self._binop_to_str(op)}': {left.type}, {right.type}!",
             )
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> foast.TupleExpr:
