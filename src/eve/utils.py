@@ -23,7 +23,6 @@ import collections.abc
 import enum
 import functools
 import hashlib
-import inspect
 import itertools
 import operator
 import pickle
