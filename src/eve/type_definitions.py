@@ -193,10 +193,6 @@ class SourceLocation(pydantic.BaseModel):
             end_column=ast_node.end_col_offset + 1 if ast_node.end_col_offset is not None else None,
         )
 
-    @classmethod
-    def empty_location(cls) -> SourceLocation:
-        return cls.construct(line=0, column=0, source="", end_line=0, end_column=0)
-
     def __init__(
         self,
         line: int,
