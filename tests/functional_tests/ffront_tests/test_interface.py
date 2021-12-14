@@ -234,10 +234,10 @@ def test_clashing_annotated_assignment():
 
 
 def test_call():
-    def identity(x: Field[..., "float64"]):
+    def identity(x: Field[..., "float64"]) -> Field[..., "float64"]:
         return x
 
-    def call(inp: Field[..., "float64"]):
+    def call(inp: Field[..., "float64"]) -> Field[..., "float64"]:
         return identity(inp)
 
     parsed = FieldOperatorParser.apply_to_function(call)
