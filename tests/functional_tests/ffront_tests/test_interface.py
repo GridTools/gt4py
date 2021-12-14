@@ -30,7 +30,7 @@ from functional.common import Field
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
-from functional.ffront.type_parser import FieldOperatorTypeError
+from functional.ffront.symbol_makers import FieldOperatorTypeError
 from functional.iterator import ir as itir
 from functional.iterator.builtins import (
     and_,

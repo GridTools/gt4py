@@ -25,8 +25,9 @@ DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
 DT = TypeVar("DT", bound="DType")
 
 
+@dataclass(frozen=True)
 class Dimension:
-    ...
+    name: str
 
 
 class DType:

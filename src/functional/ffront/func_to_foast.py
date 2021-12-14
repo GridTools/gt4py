@@ -31,6 +31,7 @@ import numpy.typing as npt
 from eve.type_definitions import SourceLocation
 from functional import common
 from functional.ffront import fbuiltins
+from functional.ffront import symbol_makers
 from functional.ffront import field_operator_ast as foast
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
@@ -38,7 +39,6 @@ from functional.ffront.ast_passes import (
     UnpackedAssignPass,
 )
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.type_parser import FieldOperatorTypeParser
 
 
 MISSING_FILENAME = "<string>"
@@ -180,11 +180,11 @@ class FieldOperatorParser(ast.NodeVisitor):
 
     >>> from functional.common import Field
     >>> float64 = float
-    >>> def fieldop(inp: Field[..., float64]):
+    >>> def field_op(inp: Field[..., float64]):
     ...     return inp
-    >>> foast_tree = FieldOperatorParser.apply_to_func(fieldop)
+    >>> foast_tree = FieldOperatorParser.apply_to_func(field_op)
     >>> foast_tree  # doctest: +ELLIPSIS
-    FieldOperator(..., id='fieldop', ...)
+    FieldOperator(..., id='field_op', ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
     [FieldSymbol(..., id='inp', ...)]
     >>> foast_tree.body  # doctest: +ELLIPSIS
@@ -286,7 +286,9 @@ class FieldOperatorParser(ast.NodeVisitor):
         # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
         defs = self.closure_refs.globals | self.closure_refs.nonlocals
         closure = [
-            foast.Symbol.from_value(name, defs[name], foast.Namespace.CLOSURE, self._make_loc(node))
+            symbol_makers.make_symbol_from_value(
+                name, defs[name], foast.Namespace.CLOSURE, self._make_loc(node)
+            )
             for name in global_names | nonlocal_names
         ]
 
@@ -316,7 +318,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                     node, message="Missing imported symbol '{alias.name}'"
                 )
             symbols.append(
-                foast.Symbol.from_value(
+                symbol_makers.make_symbol_from_value(
                     alias.asname or alias.name,
                     self.externals_defs[alias.name],
                     foast.Namespace.EXTERNAL,
@@ -330,7 +332,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> foast.FieldSymbol:
-        new_type = FieldOperatorTypeParser.apply(node.annotation)
+        new_type = symbol_makers.make_symbol_type_from_AST_annotation(node.annotation)
         if new_type is None:
             raise self._make_syntax_error(node, message="Untyped parameters not allowed!")
         return foast.FieldSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
@@ -364,7 +366,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             target=foast.FieldSymbol(
                 id=node.target.id,
                 location=self._make_loc(node.target),
-                type=FieldOperatorTypeParser.apply(node.annotation),
+                type=symbol_makers.make_symbol_type_from_AST_annotation(node.annotation),
             ),
             value=self.visit(node.value) if node.value else None,
             location=self._make_loc(node),

@@ -13,85 +13,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from __future__ import annotations
-
 import re
-import types
 import typing
-from typing import Any, Literal, Optional, Union
-
-import numpy as np
-import numpy.typing as npt
+from typing import Literal, Optional, Union
 
 import eve
 from eve import Node
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import IntEnum, SourceLocation, StrEnum, SymbolRef
-from functional import common
-
-
-def make_scalar_kind_from_value(value: npt.DTypeLike) -> ScalarKind:
-    try:
-        dt = np.dtype(value)
-    except TypeError as err:
-        raise common.GTTypeError(f"Invalid scalar type definition ({value})") from err
-
-    if dt.shape == () and dt.fields is None:
-        match dt:
-            case np.bool_:
-                return ScalarKind.BOOL
-            case np.int32:
-                return ScalarKind.INT32
-            case np.int64:
-                return ScalarKind.INT64
-            case np.float32:
-                return ScalarKind.FLOAT32
-            case np.float64:
-                return ScalarKind.FLOAT64
-            case _:
-                raise common.GTTypeError(f"Impossible to map '{value}' value to a ScalarKind")
-    else:
-        raise common.GTTypeError(f"Non-trivial dtypes like '{value}' are not yet supported")
-
-
-def make_symbol_type_from_value(value: Any) -> SymbolType:
-    match value:
-        case bool() | int() | float() | np.generic():
-            return make_symbol_type_from_value(type(value))
-        case type() as t if issubclass(t, (bool, int, float, np.generic)):
-            return ScalarType(kind=make_scalar_kind_from_value(value))
-        case tuple() as tuple_value:
-            return TupleType(types=[make_symbol_type_from_value(t) for t in tuple_value])
-        case types.FunctionType():
-            # TODO (egparedes): recover the function signature from FieldOperator
-            args = []
-            kwargs = {}
-            returns = make_symbol_type_from_value(float)
-            return FunctionType(args=args, kwargs=kwargs, returns=returns)
-        case other if other.__module__ == "typing":
-            return make_symbol_type_from_value(other.__origin__)
-        case _:
-            raise common.GTTypeError(f"Impossible to map '{value}' value to a SymbolType")
-
-
-def make_symbol_from_value(
-    name: str, value: Any, namespace: Namespace, location: SourceLocation
-) -> Symbol:
-    symbol_type = make_symbol_type_from_value(value)
-    match symbol_type:
-        case ScalarType() | TupleType():
-            return DataSymbol(id=name, type=symbol_type, namespace=namespace, location=location)
-        case FunctionType():
-            return Function(
-                id=name,
-                type=symbol_type,
-                namespace=namespace,
-                params=[],
-                returns=[],
-                location=location,
-            )
-        case _:
-            raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
 
 
 class Namespace(StrEnum):
@@ -107,8 +36,6 @@ class ScalarKind(IntEnum):
     FLOAT32 = 1032
     FLOAT64 = 1064
 
-    from_value = staticmethod(make_scalar_kind_from_value)
-
 
 class Dimension(Node):
     name: str
@@ -116,8 +43,6 @@ class Dimension(Node):
 
 class SymbolType(Node):
     ...
-
-    from_value = staticmethod(make_symbol_type_from_value)
 
 
 class DeferredSymbolType(SymbolType):
@@ -165,8 +90,6 @@ class Symbol(LocatedNode):
     id: SymbolName  # noqa: A003
     type: SymbolType  # noqa A003
     namespace: Namespace = Namespace.LOCAL
-
-    from_value = staticmethod(make_symbol_from_value)
 
 
 class DataSymbol(Symbol):
