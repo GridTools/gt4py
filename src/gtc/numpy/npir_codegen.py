@@ -435,7 +435,7 @@ class NpirCodegen(TemplatedGenerator):
             return "scipy.special.gamma"
         return "np." + self.generic_visit(node, **kwargs)
 
-    NativeFuncCall = FormatTemplate("np.{func}({', '.join(arg for arg in args)})")
+    NativeFuncCall = FormatTemplate("{func}({', '.join(arg for arg in args)})")
 
     While = JinjaTemplate(
         textwrap.dedent(
