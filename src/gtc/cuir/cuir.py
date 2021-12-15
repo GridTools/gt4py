@@ -176,7 +176,9 @@ class KExtent(LocNode):
     @classmethod
     def from_offset(cls, offset: Union[CartesianOffset, VariableKOffset]) -> "KExtent":
         MAX_OFFSET = 1000
-        return cls(k=(offset.k, offset.k)) if offset.k else cls(k=(-MAX_OFFSET, MAX_OFFSET))
+        if isinstance(offset, VariableKOffset):
+            return cls(k=(-MAX_OFFSET, MAX_OFFSET))
+        return cls(k=(offset.k, offset.k))
 
     def union(*extents: "KExtent") -> "KExtent":
         return KExtent(k=(min(e.k[0] for e in extents), max(e.k[1] for e in extents)))
