@@ -163,7 +163,7 @@ class Interval(LocNode):
         return cls(start=AxisBound.start(), end=AxisBound.end())
 
 
-class HorizontalExecution(LocNode):
+class HorizontalExecution(LocNode, SymbolTableTrait):
     body: List[Stmt]
     declarations: List[LocalScalar]
 

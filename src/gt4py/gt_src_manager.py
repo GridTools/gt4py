@@ -25,7 +25,7 @@ import gt4py.config as gt_config
 
 _DEFAULT_GRIDTOOLS_VERSION = 1
 # TODO: GT2 release with CUDA SID adapter
-_GRIDTOOLS_GIT_BRANCHES = {1: "release_v1.1", 2: "master"}
+_GRIDTOOLS_GIT_BRANCHES = {1: "v1.1.4", 2: "v2.1.0"}
 _GRIDTOOLS_INCLUDE_PATHS = {
     1: gt_config.build_settings["gt_include_path"],
     2: gt_config.build_settings["gt2_include_path"],

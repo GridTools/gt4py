@@ -20,7 +20,7 @@ from typing import Any, Callable, Dict, Set, Union
 from eve import NodeTranslator, SymbolTableTrait
 from gtc import oir
 
-from .utils import AccessCollector, symbol_name_creator
+from .utils import AccessCollector, collect_symbol_names, symbol_name_creator
 
 
 class TemporariesToScalarsBase(NodeTranslator):
@@ -78,12 +78,13 @@ class TemporariesToScalarsBase(NodeTranslator):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         tmps_to_replace = kwargs["tmps_to_replace"]
+        all_names = collect_symbol_names(node)
         return oir.Stencil(
             name=node.name,
             params=node.params,
             vertical_loops=self.visit(
                 node.vertical_loops,
-                new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
+                new_symbol_name=symbol_name_creator(all_names),
                 **kwargs,
             ),
             declarations=[d for d in node.declarations if d.name not in tmps_to_replace],
