@@ -422,28 +422,37 @@ class AxisIndex(Expr):
 
 @enum.unique
 class NativeFunction(enum.Enum):
-    ABS = 1
-    MIN = 2
-    MAX = 3
-    MOD = 4
+    ABS = enum.auto()
+    MIN = enum.auto()
+    MAX = enum.auto()
+    MOD = enum.auto()
 
-    SIN = 5
-    COS = 6
-    TAN = 7
-    ARCSIN = 8
-    ARCCOS = 9
-    ARCTAN = 10
+    SIN = enum.auto()
+    COS = enum.auto()
+    TAN = enum.auto()
+    ARCSIN = enum.auto()
+    ARCCOS = enum.auto()
+    ARCTAN = enum.auto()
 
-    SQRT = 11
-    EXP = 12
-    LOG = 13
+    SINH = enum.auto()
+    COSH = enum.auto()
+    TANH = enum.auto()
+    ARCSINH = enum.auto()
+    ARCCOSH = enum.auto()
+    ARCTANH = enum.auto()
 
-    ISFINITE = 14
-    ISINF = 15
-    ISNAN = 16
-    FLOOR = 17
-    CEIL = 18
-    TRUNC = 19
+    SQRT = enum.auto()
+    EXP = enum.auto()
+    LOG = enum.auto()
+    GAMMA = enum.auto()
+    CBRT = enum.auto()
+
+    ISFINITE = enum.auto()
+    ISINF = enum.auto()
+    ISNAN = enum.auto()
+    FLOOR = enum.auto()
+    CEIL = enum.auto()
+    TRUNC = enum.auto()
 
     @property
     def arity(self):
@@ -461,9 +470,17 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.ARCSIN: 1,
     NativeFunction.ARCCOS: 1,
     NativeFunction.ARCTAN: 1,
+    NativeFunction.SINH: 1,
+    NativeFunction.COSH: 1,
+    NativeFunction.TANH: 1,
+    NativeFunction.ARCSINH: 1,
+    NativeFunction.ARCCOSH: 1,
+    NativeFunction.ARCTANH: 1,
     NativeFunction.SQRT: 1,
     NativeFunction.EXP: 1,
     NativeFunction.LOG: 1,
+    NativeFunction.GAMMA: 1,
+    NativeFunction.CBRT: 1,
     NativeFunction.ISFINITE: 1,
     NativeFunction.ISINF: 1,
     NativeFunction.ISNAN: 1,

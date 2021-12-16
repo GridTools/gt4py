@@ -31,6 +31,7 @@ gt_default_origin, gt_options
 import time
 
 import numpy as np
+import scipy.special
 from numpy import dtype
 {{ imports }}
 

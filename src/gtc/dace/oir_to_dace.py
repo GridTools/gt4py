@@ -371,6 +371,7 @@ class BaseOirSDFGBuilder(ABC):
     def build(cls, name, stencil: Stencil, nodes: List[dace.nodes.LibraryNode]):
         builder = cls(name, stencil, nodes)
         for n in nodes:
+            builder.add_node(n)
             builder.add_write_after_write_edges(n)
             builder.add_read_edges(n)
             builder.add_write_edges(n)

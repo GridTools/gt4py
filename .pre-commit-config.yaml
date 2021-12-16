@@ -79,12 +79,6 @@ repos:
   hooks:
   - id: black
 
-- repo: https://github.com/asottile/seed-isort-config
-  rev: v2.2.0
-  hooks:
-  - id: seed-isort-config
-    args: ['--application-directories=src:tests']
-
 - repo: https://github.com/pre-commit/mirrors-isort
   rev: v5.7.0
   hooks:
