@@ -87,7 +87,9 @@ class FieldType(DataType):
     dtype: ScalarType
 
     def __str__(self):
-        dims = "..." if self.dims is Ellipsis else str(self.dims)
+        dims = (
+            "..." if self.dims is Ellipsis else "[" + ", ".join(dim.name for dim in self.dims) + "]"
+        )
         return f"Field[{dims}, dtype={self.dtype}]"
 
 

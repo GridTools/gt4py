@@ -14,6 +14,7 @@
 
 import pytest
 
+from functional.common import Dimension
 from functional.ffront import field_operator_ast as foast
 from functional.ffront.builtins import Field, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
@@ -70,6 +71,24 @@ def test_adding_bool():
         ),
     ):
         _ = FieldOperatorParser.apply_to_func(add_bools)
+
+
+def test_binop_nonmatching_dims():
+    """Binary operations can only work when both fields have the same dimensions."""
+    X = Dimension()
+    Y = Dimension()
+
+    def nonmatching(a: Field[[X], float64], b: Field[[Y], float64]):
+        return a + b
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=(
+            r"Incompatible type\(s\) for operator '\+': "
+            r"Field\[\[X\], dtype=float64\], Field\[\[Y\], dtype=float64\]!"
+        ),
+    ):
+        _ = FieldOperatorParser.apply_to_func(nonmatching)
 
 
 def test_bitopping_float():

@@ -134,6 +134,39 @@ def test_arithmetic():
     assert np.allclose(a.array() + b.array(), c)
 
 
+def test_bit_logic():
+    size = 10
+    IDim = CartesianAxis("IDim")
+    a = np_as_located_field(IDim)(np.full((size), True))
+    b_data = np.full((size), True)
+    b_data[5] = False
+    b = np_as_located_field(IDim)(b_data)
+    c = np_as_located_field(IDim)(np.full((size), False))
+
+    def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]):
+        return inp1 & inp2
+
+    program = program_from_func(bit_and, out_names=["c"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, c, offset_provider={})
+
+    assert np.allclose(a.array() & b.array(), c)
+
+
+def test_unary_neg():
+    size = 10
+    IDim = CartesianAxis("IDim")
+    a = np_as_located_field(IDim)(np.ones((size)))
+    b = np_as_located_field(IDim)(np.zeros((size)))
+
+    def uneg(inp: Field[[IDim], int]):
+        return -inp
+
+    program = program_from_func(uneg, out_names=["b"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, offset_provider={})
+
+    assert np.allclose(b, np.full((size), -1))
+
+
 def test_shift():
     size = 10
     IDim = CartesianAxis("IDim")
@@ -150,7 +183,7 @@ def test_shift():
     assert np.allclose(b.array(), np.arange(1, 11))
 
 
-def test_auto_lift():
+def test_fold_shifts():
     """Shifting the result of an addition should work by shifting the operands instead."""
     size = 10
     IDim = CartesianAxis("IDim")
