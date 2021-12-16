@@ -21,6 +21,7 @@ import inspect
 import symtable
 import textwrap
 import types
+import typing
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, Optional, Union
@@ -36,6 +37,7 @@ from functional.ffront import field_operator_ast as foast
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
+    StringifyAnnotationsPass,
     UnpackedAssignPass,
 )
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
@@ -44,7 +46,7 @@ from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduc
 MISSING_FILENAME = "<string>"
 
 
-def make_source_definition_from_function(func: Callable) -> SourceDefinition:
+def _make_source_definition_from_function(func: Callable) -> SourceDefinition:
     try:
         filename = inspect.getabsfile(func) or MISSING_FILENAME
         source = textwrap.dedent(inspect.getsource(func))
@@ -61,17 +63,18 @@ def make_source_definition_from_function(func: Callable) -> SourceDefinition:
     return SourceDefinition(source, filename, starting_line)
 
 
-def make_closure_refs_from_function(func: Callable) -> SourceDefinition:
+def _make_closure_refs_from_function(func: Callable) -> SourceDefinition:
     nonlocals, globals, inspect_builtins, inspect_unbound = inspect.getclosurevars(func)
+    # python builtins returned by getclosurevars() are not ffront.builtins
     unbound = set(inspect_builtins.keys()) | inspect_unbound
-    # python builtins are not ffront.builtins
     builtins = unbound & set(fbuiltins.ALL_BUILTIN_NAMES)
     unbound -= builtins
+    annotations = typing.get_type_hints(func)
 
-    return ClosureRefs(nonlocals, globals, builtins, unbound)
+    return ClosureRefs(nonlocals, globals, annotations, builtins, unbound)
 
 
-def symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
+def _make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
     try:
         mod_st = symtable.symtable(source, filename, "exec")
     except SyntaxError as err:
@@ -119,27 +122,25 @@ class SourceDefinition:
     starting_line: int = 1
 
     def __iter__(self) -> Iterator[tuple[str, ...]]:
-        yield self.source
-        yield self.filename
-        yield self.starting_line
+        yield from iter((self.source, self.filename, self.starting_line))
 
-    from_function = staticmethod(make_source_definition_from_function)
+    from_function = staticmethod(_make_source_definition_from_function)
 
 
 @dataclass(frozen=True)
 class ClosureRefs:
     nonlocals: dict[str, Any]
     globals: dict[str, Any]  # noqa: A003  # shadowing a python builtin
+    annotations: dict[str, Any]
     builtins: dict[str, Any]
     unbound: tuple[str, ...]
 
     def __iter__(self) -> Iterator[Union[dict[str, Any], tuple[str, ...]]]:
-        yield self.nonlocals
-        yield self.globals
-        yield self.builtins
-        yield self.unbound
+        yield from iter(
+            (self.nonlocals, self.globals, self.annotations, self.builtins, self.unbound)
+        )
 
-    from_function = staticmethod(make_closure_refs_from_function)
+    from_function = staticmethod(_make_closure_refs_from_function)
 
 
 @dataclass(frozen=True)
@@ -155,13 +156,9 @@ class SymbolNames:
         return self.params + self.locals + self.imported
 
     def __iter__(self) -> Iterator[tuple[str, ...]]:
-        yield self.params
-        yield self.locals
-        yield self.imported
-        yield self.nonlocals
-        yield self.globals
+        yield from iter((self.params, self.locals, self.imported, self.nonlocals, self.globals))
 
-    from_source = staticmethod(symbol_names_from_source)
+    from_source = staticmethod(_make_symbol_names_from_source)
 
 
 # TODO (ricoh): pass on source locations
@@ -242,7 +239,9 @@ class FieldOperatorParser(ast.NodeVisitor):
         source, filename, starting_line = source_definition
         result = None
         try:
-            definition_ast = ast.parse(textwrap.dedent(source)).body[0]
+            definition_ast = StringifyAnnotationsPass.apply(
+                ast.parse(textwrap.dedent(source)).body[0]
+            )
             ssa = SingleStaticAssignPass.apply(definition_ast)
             sat = SingleAssignTargetPass.apply(ssa)
             las = UnpackedAssignPass.apply(sat)
@@ -332,9 +331,9 @@ class FieldOperatorParser(ast.NodeVisitor):
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> foast.FieldSymbol:
-        new_type = symbol_makers.make_symbol_type_from_AST_annotation(node.annotation)
-        if new_type is None:
+        if (annotation := self.closure_refs.annotations.get(node.arg, None)) is None:
             raise self._make_syntax_error(node, message="Untyped parameters not allowed!")
+        new_type = symbol_makers.make_symbol_type_from_typing(annotation)
         return foast.FieldSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:

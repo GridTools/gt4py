@@ -14,15 +14,18 @@
 
 import ast
 import builtins
+import collections.abc
 import inspect
+import sys
 import types
 import typing
-from typing import Any, Optional, Union
+from typing import Any, Collection, Optional, Union
 
 import numpy as np
 import numpy.typing as npt
 
 from eve import NodeTranslator
+from eve import typingx
 from eve.type_definitions import SourceLocation
 
 from functional import common
@@ -55,38 +58,39 @@ def make_scalar_kind(dtype: npt.DTypeLike) -> foast.ScalarKind:
 
 
 def make_symbol_type(value: Any) -> foast.SymbolType:
-    if isinstance(value, (type, types.GenericAlias)) or type(value).__module__ == "typing":
-        return make_symbol_type_from_typing(value)
-    elif isinstance(value, ast.AST):
-        return make_symbol_type_from_AST_annotation(value)
-    else:
-        return make_symbol_type_from_value(value)
+    if not (isinstance(value, (type, types.GenericAlias)) or type(value).__module__ == "typing"):
+        value = typingx.get_typing(value)
+    return make_symbol_type_from_typing(value)
 
 
 def make_symbol_type_from_typing(value: type) -> foast.SymbolType:
     if isinstance(value, type) and issubclass(value, (bool, int, float, np.generic)):
         return foast.ScalarType(kind=make_scalar_kind(value))
-    elif isinstance(value, types.GenericAlias) or type(value).__module__ == "typing":
-        origin = typing.get_origin(value)
-        if origin == tuple:
-            return foast.TupleType(
-                types=[make_symbol_type_from_typing(arg) for arg in typing.get_args(value)]
-            )
-        elif origin == common.Field:
-            args = typing.get_args(value)
+
+    origin = (
+        typing.get_origin(value)
+        if isinstance(value, types.GenericAlias) or type(value).__module__ == "typing"
+        else value
+    )
+    args = typing.get_args(value)
+
+    match origin:
+        case builtins.tuple:
+            if not args:
+                raise common.GTTypeError(f"Tuple type requires at least one argument!")
+            return foast.TupleType(types=[make_symbol_type_from_typing(arg) for arg in args])
+
+        case common.Field:
             if len(args) != 2:
                 raise common.GTTypeError(f"Field type requires two arguments, got {len(args)}!")
 
+            dims: Union[Ellipsis, list[foast.Dimension]] = []
             dim_arg, dtype_arg = args
-            dims: Union[Ellipsis, list[foast.Dimension]] = Ellipsis  # type: ignore[valid-type]
-
             if isinstance(dim_arg, list):
                 for d in dim_arg:
-                    if isinstance(d, common.Dimension):
-                        dims.append(foast.Dimension(name=d.name))
-                    else:
+                    if not isinstance(d, common.Dimension):
                         raise common.GTTypeError(f"Invalid field dimension definition '{d}'")
-
+                    dims.append(foast.Dimension(name=d.name))
             elif dim_arg is Ellipsis:
                 dims = dim_arg
             else:
@@ -99,53 +103,52 @@ def make_symbol_type_from_typing(value: type) -> foast.SymbolType:
                 )
             return foast.FieldType(dims=dims, dtype=dtype)
 
+        case collections.abc.Callable:
+            return ...
+
     raise GTTypeError(f"'{value}' type is not supported")
 
 
-def make_symbol_type_from_AST_annotation(value: type) -> foast.SymbolType:
-    return FieldOperatorTypeParser.apply(value)
+# def make_symbol_type_from_value(value: Any) -> foast.SymbolType:
+#     match value:
+#         case bool() | int() | float() | np.generic():
+#             return foast.ScalarType(kind=make_scalar_kind(type(value)))
+#         case tuple() as tuple_value:
+#             return foast.TupleType(types=[make_symbol_type_from_value(t) for t in tuple_value])
+#         case types.FunctionType():
+#             # TODO (egparedes): recover the function signature from FieldOperator when possible
+#             sig = inspect.signature(value)
+#             if sig.return_annotation is inspect.Signature.empty:
+#                 raise GTTypeError(
+#                     f"Referenced function '{value}' does not contain proper type annotations"
+#                 )
+#             returns = make_symbol_type_from_typing(sig.return_annotation)
 
+#             args = []
+#             kwargs = []
+#             for p in sig.parameters.values():
+#                 if p.annotation is inspect.Signature.empty:
+#                     raise GTTypeError(
+#                         f"Referenced function '{value}' does not contain proper type annotations"
+#                     )
 
-def make_symbol_type_from_value(value: Any) -> foast.SymbolType:
-    match value:
-        case bool() | int() | float() | np.generic():
-            return foast.ScalarType(kind=make_scalar_kind(type(value)))
-        case tuple() as tuple_value:
-            return foast.TupleType(types=[make_symbol_type_from_value(t) for t in tuple_value])
-        case types.FunctionType():
-            # TODO (egparedes): recover the function signature from FieldOperator when possible
-            sig = inspect.signature(value)
-            if sig.return_annotation is inspect.Signature.empty:
-                raise GTTypeError(
-                    f"Referenced function '{value}' does not contain proper type annotations"
-                )
-            returns = make_symbol_type_from_typing(sig.return_annotation)
+#                 if p.kind in (
+#                     inspect.Parameter.POSITIONAL_ONLY,
+#                     inspect.Parameter.POSITIONAL_OR_KEYWORD,
+#                 ):
+#                     args.append(make_symbol_type_from_typing(p.annotation))
+#                 elif p.kind == inspect.Parameter.KEYWORD_ONLY:
+#                     kwargs.append(make_symbol_type_from_typing(p.annotation))
 
-            args = []
-            kwargs = []
-            for p in sig.parameters.values():
-                if p.annotation is inspect.Signature.empty:
-                    raise GTTypeError(
-                        f"Referenced function '{value}' does not contain proper type annotations"
-                    )
-
-                if p.kind in (
-                    inspect.Parameter.POSITIONAL_ONLY,
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                ):
-                    args.append(make_symbol_type_from_typing(p.annotation))
-                elif p.kind == inspect.Parameter.KEYWORD_ONLY:
-                    kwargs.append(make_symbol_type_from_typing(p.annotation))
-
-            return foast.FunctionType(args=args, kwargs=kwargs, returns=returns)
-        case _:
-            raise common.GTTypeError(f"Impossible to map '{value}' value to a SymbolType")
+#             return foast.FunctionType(args=args, kwargs=kwargs, returns=returns)
+#         case _:
+#             raise common.GTTypeError(f"Impossible to map '{value}' value to a SymbolType")
 
 
 def make_symbol_from_value(
     name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
 ) -> foast.Symbol:
-    symbol_type = make_symbol_type_from_value(value)
+    symbol_type = make_symbol_type(value)
     if isinstance(symbol_type, foast.DataType):
         return foast.DataSymbol(id=name, type=symbol_type, namespace=namespace, location=location)
     elif isinstance(symbol_type, foast.FunctionType):
@@ -187,109 +190,109 @@ def _make_type_error(node, msg) -> FieldOperatorTypeError:
     )
 
 
-class FieldOperatorTypeParser(NodeTranslator):
-    """Parse type annotations into FOAST types.
+# class FieldOperatorTypeParser(NodeTranslator):
+#     """Parse type annotations into FOAST types.
 
-    It expects to receive the AST node of an annotation.
+#     It expects to receive the AST node of an annotation.
 
-    Examples
-    --------
-    >>> import ast
-    >>>
-    >>> test1 = ast.parse("test1: Field[..., float64]").body[0]
-    >>> FieldOperatorTypeParser.apply(test1.annotation)  # doctest: +ELLIPSIS
-    FieldType(dims=Ellipsis, dtype=ScalarType(kind=<ScalarKind.FLOAT64: ...>, shape=None))
+#     Examples
+#     --------
+#     >>> import ast
+#     >>>
+#     >>> test1 = ast.parse("test1: Field[..., float64]").body[0]
+#     >>> FieldOperatorTypeParser.apply(test1.annotation)  # doctest: +ELLIPSIS
+#     FieldType(dims=Ellipsis, dtype=ScalarType(kind=<ScalarKind.FLOAT64: ...>, shape=None))
 
-    >>> test2 = ast.parse("test2: Field[['Foo'], 'int32']").body[0]
-    >>> FieldOperatorTypeParser.apply(test2.annotation)  # doctest: +ELLIPSIS
-    FieldType(dims=[Dimension(name='Foo')], dtype=ScalarType(kind=<ScalarKind.INT32: ...>, shape=None))
+#     >>> test2 = ast.parse("test2: Field[['Foo'], 'int32']").body[0]
+#     >>> FieldOperatorTypeParser.apply(test2.annotation)  # doctest: +ELLIPSIS
+#     FieldType(dims=[Dimension(name='Foo')], dtype=ScalarType(kind=<ScalarKind.INT32: ...>, shape=None))
 
-    >>> test3 = ast.parse("test3: Field['foo', bool]").body[0]
-    >>> try:
-    ...     FieldOperatorTypeParser.apply(test3.annotation)
-    ... except FieldOperatorTypeError as err:
-    ...     print(err.msg)
-    Invalid Type Declaration: Field type dimension argument must be list or `...`!
+#     >>> test3 = ast.parse("test3: Field['foo', bool]").body[0]
+#     >>> try:
+#     ...     FieldOperatorTypeParser.apply(test3.annotation)
+#     ... except FieldOperatorTypeError as err:
+#     ...     print(err.msg)
+#     Invalid Type Declaration: Field type dimension argument must be list or `...`!
 
-    >>> test4 = ast.parse("test4: int").body[0]
-    >>> FieldOperatorTypeParser.apply(test4.annotation)  # doctest: +ELLIPSIS
-    ScalarType(kind=<ScalarKind.INT32: ...>, shape=None)
+#     >>> test4 = ast.parse("test4: int").body[0]
+#     >>> FieldOperatorTypeParser.apply(test4.annotation)  # doctest: +ELLIPSIS
+#     ScalarType(kind=<ScalarKind.INT32: ...>, shape=None)
 
-    >>> test5 = ast.parse("test5: tuple[Field[[X, Y, Z], float32], Field[[U, V], int64]]").body[0]
-    >>> FieldOperatorTypeParser.apply(test5.annotation)  # doctest: +ELLIPSIS
-    TupleType(types=[FieldType(...), FieldType(...)])
-    """
+#     >>> test5 = ast.parse("test5: tuple[Field[[X, Y, Z], float32], Field[[U, V], int64]]").body[0]
+#     >>> FieldOperatorTypeParser.apply(test5.annotation)  # doctest: +ELLIPSIS
+#     TupleType(types=[FieldType(...), FieldType(...)])
+#     """
 
-    @classmethod
-    def apply(cls, node: ast.AST) -> foast.SymbolType:
-        return cls().visit(node)
+#     @classmethod
+#     def apply(cls, node: ast.AST) -> foast.SymbolType:
+#         return cls().visit(node)
 
-    def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.SymbolType:
-        return self.visit(node.value, argument=node.slice, **kwargs)
+#     def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.SymbolType:
+#         return self.visit(node.value, argument=node.slice, **kwargs)
 
-    def visit_Name(
-        self, node: ast.Name, *, argument: Optional[ast.AST] = None, **kwargs
-    ) -> Union[foast.SymbolType, str]:
-        maker = getattr(self, f"make_{node.id}", None)
-        if maker is None:
-            # TODO (ricoh): pull in type from external name
-            return node.id
-        return maker(argument)
+#     def visit_Name(
+#         self, node: ast.Name, *, argument: Optional[ast.AST] = None, **kwargs
+#     ) -> Union[foast.SymbolType, str]:
+#         maker = getattr(self, f"make_{node.id}", None)
+#         if maker is None:
+#             # TODO (ricoh): pull in type from external name
+#             return node.id
+#         return maker(argument)
 
-    def visit_Constant(self, node: ast.Constant, **kwargs) -> Any:
-        if isinstance(node.value, str) and (maker := getattr(self, f"make_{node.value}", None)):
-            return maker(argument=None)
-        else:
-            return node.value
+#     def visit_Constant(self, node: ast.Constant, **kwargs) -> Any:
+#         if isinstance(node.value, str) and (maker := getattr(self, f"make_{node.value}", None)):
+#             return maker(argument=None)
+#         else:
+#             return node.value
 
-    def make_Field(self, argument: ast.Tuple) -> foast.FieldType:
-        if not isinstance(argument, ast.Tuple) or len(argument.elts) != 2:
-            nargs = len(getattr(argument, "elts", []))
-            raise _make_type_error(argument, f"Field type requires two arguments, got {nargs}!")
+#     def make_Field(self, argument: ast.Tuple) -> foast.FieldType:
+#         if not isinstance(argument, ast.Tuple) or len(argument.elts) != 2:
+#             nargs = len(getattr(argument, "elts", []))
+#             raise _make_type_error(argument, f"Field type requires two arguments, got {nargs}!")
 
-        dim_arg, dtype_arg = argument.elts
+#         dim_arg, dtype_arg = argument.elts
 
-        dims: Union[Ellipsis, list[foast.Dimension]] = Ellipsis  # type: ignore[valid-type]
+#         dims: Union[Ellipsis, list[foast.Dimension]] = Ellipsis  # type: ignore[valid-type]
 
-        match dim_arg:
-            case ast.Tuple() | ast.List():
-                dims = [foast.Dimension(name=self.visit(dim)) for dim in argument.elts[0].elts]
-            case ast.Ellipsis():
-                dims = Ellipsis
-            case _:
-                dims = self.visit(dim_arg)
-                if dims is not Ellipsis:
-                    raise _make_type_error(
-                        argument.elts[0], "Field type dimension argument must be list or `...`!"
-                    )
+#         match dim_arg:
+#             case ast.Tuple() | ast.List():
+#                 dims = [foast.Dimension(name=self.visit(dim)) for dim in argument.elts[0].elts]
+#             case ast.Ellipsis():
+#                 dims = Ellipsis
+#             case _:
+#                 dims = self.visit(dim_arg)
+#                 if dims is not Ellipsis:
+#                     raise _make_type_error(
+#                         argument.elts[0], "Field type dimension argument must be list or `...`!"
+#                     )
 
-        dtype = self.visit(dtype_arg)
-        if not isinstance(dtype, foast.ScalarType):
-            raise _make_type_error(dtype_arg, "Field type dtype argument must be a scalar type!")
-        return foast.FieldType(dims=dims, dtype=dtype)
+#         dtype = self.visit(dtype_arg)
+#         if not isinstance(dtype, foast.ScalarType):
+#             raise _make_type_error(dtype_arg, "Field type dtype argument must be a scalar type!")
+#         return foast.FieldType(dims=dims, dtype=dtype)
 
-    def make_Tuple(self, argument: ast.Tuple) -> foast.TupleType:
-        return foast.TupleType(types=[self.visit(element) for element in argument.elts])
+#     def make_Tuple(self, argument: ast.Tuple) -> foast.TupleType:
+#         return foast.TupleType(types=[self.visit(element) for element in argument.elts])
 
-    make_tuple = make_Tuple
+#     make_tuple = make_Tuple
 
-    def make_int32(self, argument: None = None) -> foast.ScalarType:
-        return foast.ScalarType(kind=make_scalar_kind("int32"))
+#     def make_int32(self, argument: None = None) -> foast.ScalarType:
+#         return foast.ScalarType(kind=make_scalar_kind("int32"))
 
-    def make_int64(self, argument: None = None) -> foast.ScalarType:
-        return foast.ScalarType(kind=make_scalar_kind("int64"))
+#     def make_int64(self, argument: None = None) -> foast.ScalarType:
+#         return foast.ScalarType(kind=make_scalar_kind("int64"))
 
-    def make_int(self, argument: None = None) -> foast.ScalarType:
-        return foast.ScalarType(kind=make_scalar_kind("int"))
+#     def make_int(self, argument: None = None) -> foast.ScalarType:
+#         return foast.ScalarType(kind=make_scalar_kind("int"))
 
-    def make_bool(self, argument: None = None) -> foast.ScalarType:
-        return foast.ScalarType(kind=make_scalar_kind("bool"))
+#     def make_bool(self, argument: None = None) -> foast.ScalarType:
+#         return foast.ScalarType(kind=make_scalar_kind("bool"))
 
-    def make_float32(self, argument: None = None) -> foast.ScalarType:
-        return foast.ScalarType(kind=make_scalar_kind("float32"))
+#     def make_float32(self, argument: None = None) -> foast.ScalarType:
+#         return foast.ScalarType(kind=make_scalar_kind("float32"))
 
-    def make_float64(self, argument: None = None) -> foast.ScalarType:
-        return foast.ScalarType(kind=make_scalar_kind("float64"))
+#     def make_float64(self, argument: None = None) -> foast.ScalarType:
+#         return foast.ScalarType(kind=make_scalar_kind("float64"))
 
-    def make_float(self, argument: None = None) -> foast.ScalarType:
-        return foast.ScalarType(kind=make_scalar_kind("float"))
+#     def make_float(self, argument: None = None) -> foast.ScalarType:
+#         return foast.ScalarType(kind=make_scalar_kind("float"))

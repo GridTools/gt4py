@@ -21,7 +21,7 @@ Basic Interface Tests
             arctan(), sqrt(), exp(), log(), isfinite(), isinf(), isnan(), floor(), ceil(), trunc()
     - evaluation test cases
 """
-from __future__ import annotations
+#from __future__ import annotations
 
 import pytest
 
