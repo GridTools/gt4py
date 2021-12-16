@@ -99,7 +99,7 @@ class GTIRToOIR(NodeTranslator):
         mask_field_decl = oir.Temporary(
             name=f"mask_{id(node)}", dtype=DataType.BOOL, dimensions=(True, True, True)
         )
-        kwargs["temps"].append(mask_field_decl)
+        kwargs["temps"] = kwargs.get("temps", []) + [mask_field_decl]
         stmts = [
             oir.AssignStmt(
                 left=oir.FieldAccess(
