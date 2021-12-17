@@ -144,7 +144,7 @@ class GTIRToOIR(NodeTranslator):
         if mask:
             combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=current_mask)
 
-        stmts = self.visit(node.true_branch.body, mask=combined_mask, **kwargs)
+        stmts = self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx, **kwargs)
         if node.false_branch:
             combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
             if mask:

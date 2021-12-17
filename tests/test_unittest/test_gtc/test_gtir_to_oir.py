@@ -68,7 +68,7 @@ def test_visit_gtir_Stencil():
 
 def test_visit_FieldIfStmt():
     testee = FieldIfStmtFactory(true_branch__body__0=ParAssignStmtFactory())
-    mask_stmts = GTIRToOIR().visit(testee)
+    mask_stmts = GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
     assert len(mask_stmts) == 2
     assert "mask" in mask_stmts[0].left.name
@@ -78,12 +78,12 @@ def test_visit_FieldIfStmt():
 
 def test_visit_FieldIfStmt_nesting():
     testee = FieldIfStmtFactory(true_branch__body__0=FieldIfStmtFactory())
-    GTIRToOIR().visit(testee)
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
 
 def test_visit_ScalarIfStmt():
     testee = ScalarIfStmtFactory()
-    GTIRToOIR().visit(testee)
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
 
 def test_visit_Assign_VariableKOffset():
